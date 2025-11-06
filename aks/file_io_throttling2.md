@@ -127,7 +127,7 @@ kubectl exec -it <pod-name> -- cat /proc/mounts | grep nfs
 
 **PV/PVC에서 Mount 옵션 추가**:
 
-StorageClass 수정:
+StorageClass 수정 ([Kubernetes StorageClass 공식 문서](https://kubernetes.io/docs/concepts/storage/storage-classes/)):
 ```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -147,7 +147,12 @@ mountOptions:
   - actimeo=30         # attribute cache 30초
 ```
 
-기존 PVC 재생성 (데이터 백업 필수):
+> **참고**: 
+> - [Kubernetes StorageClass mountOptions](https://kubernetes.io/docs/concepts/storage/storage-classes/#mount-options)
+> - [NetApp Trident Backend Configuration](https://docs.netapp.com/us-en/trident/trident-use/ontap-nas.html)
+> - [Linux NFS Mount Options](https://man7.org/linux/man-pages/man5/nfs.5.html)
+
+기존 PVC 재생성 (데이터 백업 필수) ([Kubernetes PVC 공식 문서](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)):
 ```bash
 # 1. 현재 PVC 정보 백업
 kubectl get pvc <pvc-name> -o yaml > pvc-backup.yaml
@@ -165,7 +170,7 @@ kubectl scale deployment <deployment-name> --replicas=<원래값>
 
 #### 2. NFS 통계 및 성능 분석
 
-**Pod 내에서 NFS 통계 확인**:
+**Pod 내에서 NFS 통계 확인** ([Kubernetes Debug 공식 문서](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/)):
 ```bash
 # NFS 클라이언트 통계
 kubectl exec -it <pod-name> -- nfsstat -c
@@ -177,7 +182,7 @@ kubectl exec -it <pod-name> -- cat /proc/self/mountstats | grep -A 50 "device.*n
 kubectl exec -it <pod-name> -- nfsstat -rc
 ```
 
-**Node에서 I/O 대기 분석**:
+**Node에서 I/O 대기 분석** ([Kubernetes Debug Node 공식 문서](https://kubernetes.io/docs/tasks/debug/debug-cluster/kubectl-node-debug/)):
 ```bash
 # Node에 접속 (privileged)
 kubectl debug node/<node-name> -it --image=ubuntu
@@ -192,7 +197,7 @@ dmesg | grep -i nfs
 
 #### 3. Pod Resource Limits 조정
 
-CPU throttling 완화:
+CPU throttling 완화 ([Kubernetes Resource Management 공식 문서](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)):
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -210,9 +215,11 @@ spec:
         memory: "4Gi"
 ```
 
+> **참고**: [AKS의 컨테이너 리소스 관리](https://learn.microsoft.com/azure/aks/concepts-clusters-workloads#resource-reservations)
+
 #### 4. NetApp Files CSI Driver 업데이트
 
-최신 버전으로 업그레이드:
+최신 버전으로 업그레이드 ([NetApp Trident 설치 가이드](https://docs.netapp.com/us-en/trident/trident-get-started/kubernetes-deploy.html)):
 ```bash
 # 현재 Trident 버전 확인
 kubectl get tridentversions -n trident
@@ -227,11 +234,15 @@ helm upgrade netapp-trident netapp-trident/trident-operator \
 kubectl apply -f https://github.com/NetApp/trident/releases/download/v24.02.0/bundle_pre_1_25.yaml
 ```
 
+> **참고**: 
+> - [NetApp Trident Operator 설치](https://docs.netapp.com/us-en/trident/trident-get-started/kubernetes-deploy-operator.html)
+> - [AKS와 NetApp Trident 통합](https://learn.microsoft.com/azure/aks/azure-netapp-files)
+
 ### 🚀 중장기 개선 방안
 
 #### 1. NetApp Files 성능 티어 업그레이드
 
-Azure Portal에서 성능 티어 변경:
+Azure Portal에서 성능 티어 변경 ([Azure NetApp Files 서비스 수준](https://learn.microsoft.com/azure/azure-netapp-files/azure-netapp-files-service-levels)):
 ```bash
 # Azure CLI로 확인
 az netappfiles volume show \
@@ -250,11 +261,14 @@ az netappfiles volume update \
   --service-level Premium
 ```
 
-참고: [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
+> **참고**: 
+> - [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
+> - [Azure NetApp Files 성능 고려 사항](https://learn.microsoft.com/azure/azure-netapp-files/azure-netapp-files-performance-considerations)
+> - [Azure CLI netappfiles 명령](https://learn.microsoft.com/cli/azure/netappfiles/volume)
 
 #### 2. Local Cache 레이어 추가
 
-임시 로컬 볼륨을 write buffer로 활용:
+임시 로컬 볼륨을 write buffer로 활용 ([Kubernetes Volumes 공식 문서](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir)):
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -278,18 +292,25 @@ spec:
       sizeLimit: 1Gi
 ```
 
+> **참고**: 
+> - [Kubernetes emptyDir 볼륨](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir)
+> - [AKS 임시 볼륨](https://learn.microsoft.com/azure/aks/concepts-storage#ephemeral-volumes)
+
 **주의**: 애플리케이션이 `/mnt/cache`를 활용하도록 설정 필요 (개발팀 협업)
 
 #### 3. 아키텍처 개선 (개발팀 협업 필요)
 
 NFS 의존도를 낮추는 대안:
 - **대안 1**: Azure Service Bus / RabbitMQ로 비동기 처리
+  - [Azure Service Bus](https://learn.microsoft.com/azure/service-bus-messaging/service-bus-messaging-overview)
 - **대안 2**: Azure Blob Storage 직접 쓰기
+  - [Azure Blob Storage](https://learn.microsoft.com/azure/storage/blobs/storage-blobs-introduction)
 - **대안 3**: 시계열 DB (Azure Data Explorer, InfluxDB)
+  - [Azure Data Explorer](https://learn.microsoft.com/azure/data-explorer/data-explorer-overview)
 
 ### 📋 진단 체크리스트
 
-문제 해결 전 다음 사항을 확인:
+문제 해결 전 다음 사항을 확인 ([Kubernetes Troubleshooting](https://kubernetes.io/docs/tasks/debug/)):
 
 ```bash
 # 1. 현재 mount 옵션 확인
@@ -313,16 +334,37 @@ kubectl get storageclass -o yaml
 kubectl get pv -o wide
 ```
 
+> **참고**: 
+> - [AKS 문제 해결](https://learn.microsoft.com/azure/aks/troubleshooting)
+> - [Kubernetes 디버깅 가이드](https://kubernetes.io/docs/tasks/debug/debug-application/)
+
 ***
 
 ## 참고 자료
 
-- [Azure NetApp Files 성능 고려사항](https://learn.microsoft.com/azure/azure-netapp-files/performance-considerations-smb)
+### Azure 공식 문서
+- [Azure NetApp Files 개요](https://learn.microsoft.com/azure/azure-netapp-files/azure-netapp-files-introduction)
+- [Azure NetApp Files 성능 고려사항](https://learn.microsoft.com/azure/azure-netapp-files/azure-netapp-files-performance-considerations)
 - [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
-- [NFS CSI Driver for Kubernetes](https://github.com/kubernetes-csi/csi-driver-nfs)
-- [NetApp Trident Documentation](https://docs.netapp.com/us-en/trident/index.html)
-- [Linux NFS Performance Tuning](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/managing_file_systems/mounting-nfs-shares_managing-file-systems#nfs-performance-tuning_mounting-nfs-shares)
+- [AKS에서 Azure NetApp Files 사용](https://learn.microsoft.com/azure/aks/azure-netapp-files)
+- [AKS 스토리지 개념](https://learn.microsoft.com/azure/aks/concepts-storage)
+- [AKS 문제 해결](https://learn.microsoft.com/azure/aks/troubleshooting)
+
+### Kubernetes 공식 문서
+- [Kubernetes Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
 - [Kubernetes StorageClass](https://kubernetes.io/docs/concepts/storage/storage-classes/)
+- [Kubernetes Resource Management](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- [Kubernetes Debugging](https://kubernetes.io/docs/tasks/debug/)
+
+### NetApp 공식 문서
+- [NetApp Trident Documentation](https://docs.netapp.com/us-en/trident/index.html)
+- [NetApp Trident Backend Configuration](https://docs.netapp.com/us-en/trident/trident-use/ontap-nas.html)
+- [NetApp Trident 설치 가이드](https://docs.netapp.com/us-en/trident/trident-get-started/kubernetes-deploy.html)
+
+### 기타 참고 자료
+- [NFS CSI Driver for Kubernetes](https://github.com/kubernetes-csi/csi-driver-nfs)
+- [Linux NFS Mount Options](https://man7.org/linux/man-pages/man5/nfs.5.html)
+- [Linux NFS Performance Tuning (Red Hat)](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/managing_file_systems/mounting-nfs-shares_managing-file-systems#nfs-performance-tuning_mounting-nfs-shares)
 
 ***
 
