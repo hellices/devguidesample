@@ -60,9 +60,9 @@ AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트�
    - NFS 마운트 환경에서 커널의 페이지 캐시 동작으로 인한 local disk 활동
    - Write-back cache로 인한 지연 전파
 
-3. **비동기 처리 한계**
-   - Async pool의 작업 큐가 포화 상태에 도달
-   - Node.js 이벤트 루프 블로킹 가능성
+3. **Pod Resource 제약**
+   - CPU/Memory limits 설정으로 인한 throttling
+   - NFS mount 옵션 미최적화
 
 ***
 
@@ -80,10 +80,10 @@ AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트�
   - IOPS 및 latency 메트릭 분석
   - Premium vs Standard 티어 비교
 
-- [ ] **Node.js 애플리케이션 코드 리뷰**
-  - Async pool 크기 및 queue 처리 방식 검증
-  - File write 패턴 분석 (버퍼링, batch write 가능 여부)
-  - `fs.writeFile` vs `fs.createWriteStream` 비교
+- [ ] **PV/PVC 설정 검토**
+  - 현재 StorageClass 확인
+  - Mount 옵션 검증
+  - Access Mode 및 Reclaim Policy 확인
 
 ### ⚠️ 우선 순위 중간
 
@@ -110,109 +110,230 @@ AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트�
 
 ## 조치 방안
 
+> **참고**: 애플리케이션 코드 수정 권한이 없는 경우를 가정하여, 인프라 레벨에서 적용 가능한 방안을 중심으로 작성되었습니다.
+
 ### 🔧 즉시 적용 가능한 개선
 
 #### 1. NFS Mount 옵션 최적화
 
 **현재 설정 확인**:
 ```bash
+# Pod 내에서 현재 마운트 옵션 확인
 kubectl exec -it <pod-name> -- mount | grep nfs
+
+# 또는 특정 마운트 상세 정보
+kubectl exec -it <pod-name> -- cat /proc/mounts | grep nfs
 ```
 
-**권장 옵션**:
+**PV/PVC에서 Mount 옵션 추가**:
+
+StorageClass 수정:
 ```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: netapp-nfs-optimized
+provisioner: csi.trident.netapp.io
+parameters:
+  backendType: "ontap-nas"
 mountOptions:
   - nfsvers=4.1
-  - rsize=1048576
-  - wsize=1048576
-  - hard
-  - timeo=600
-  - retrans=2
-  - noresvport
+  - rsize=1048576      # 1MB read buffer
+  - wsize=1048576      # 1MB write buffer
+  - hard               # hard mount (재시도)
+  - timeo=600          # 60초 timeout
+  - retrans=2          # 재전송 2회
+  - noresvport         # 비특권 포트 사용
+  - actimeo=30         # attribute cache 30초
 ```
 
-#### 2. NetApp Files CSI Driver 업데이트
-
-최신 버전으로 업그레이드 및 성능 관련 기능 활성화:
+기존 PVC 재생성 (데이터 백업 필수):
 ```bash
+# 1. 현재 PVC 정보 백업
+kubectl get pvc <pvc-name> -o yaml > pvc-backup.yaml
+
+# 2. Pod 중지
+kubectl scale deployment <deployment-name> --replicas=0
+
+# 3. PVC 삭제 및 재생성 (새 StorageClass 사용)
+kubectl delete pvc <pvc-name>
+kubectl apply -f pvc-new.yaml
+
+# 4. Pod 재시작
+kubectl scale deployment <deployment-name> --replicas=<원래값>
+```
+
+#### 2. NFS 통계 및 성능 분석
+
+**Pod 내에서 NFS 통계 확인**:
+```bash
+# NFS 클라이언트 통계
+kubectl exec -it <pod-name> -- nfsstat -c
+
+# NFS 마운트별 상세 통계
+kubectl exec -it <pod-name> -- cat /proc/self/mountstats | grep -A 50 "device.*nfs"
+
+# RPC 통계 확인 (재전송, timeout 등)
+kubectl exec -it <pod-name> -- nfsstat -rc
+```
+
+**Node에서 I/O 대기 분석**:
+```bash
+# Node에 접속 (privileged)
+kubectl debug node/<node-name> -it --image=ubuntu
+
+# iostat 설치 및 실행
+apt-get update && apt-get install -y sysstat
+iostat -x 5
+
+# NFS 관련 커널 메시지
+dmesg | grep -i nfs
+```
+
+#### 3. Pod Resource Limits 조정
+
+CPU throttling 완화:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+spec:
+  containers:
+  - name: nodejs-app
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "2Gi"
+      limits:
+        cpu: "2000m"      # 더 높은 burst 허용
+        memory: "4Gi"
+```
+
+#### 4. NetApp Files CSI Driver 업데이트
+
+최신 버전으로 업그레이드:
+```bash
+# 현재 Trident 버전 확인
+kubectl get tridentversions -n trident
+
+# Helm으로 업그레이드
+helm repo update
 helm upgrade netapp-trident netapp-trident/trident-operator \
   --namespace trident \
   --set enableACP=true
-```
 
-#### 3. Node.js 애플리케이션 개선
-
-**버퍼링 전략 적용**:
-```javascript
-const { createWriteStream } = require('fs');
-const { pipeline } = require('stream/promises');
-
-// ✅ Stream 기반 버퍼링 쓰기
-const writeStream = createWriteStream('/mnt/nfs/data.log', {
-  flags: 'a',
-  highWaterMark: 64 * 1024 // 64KB 버퍼
-});
-
-async function writeData(data) {
-  return new Promise((resolve, reject) => {
-    writeStream.write(data + '\n', (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-```
-
-**Batch Write 적용**:
-```javascript
-const writeQueue = [];
-const BATCH_SIZE = 100;
-const FLUSH_INTERVAL = 5000; // 5초
-
-setInterval(() => {
-  if (writeQueue.length > 0) {
-    const batch = writeQueue.splice(0, BATCH_SIZE);
-    fs.appendFile('/mnt/nfs/data.log', batch.join('\n') + '\n');
-  }
-}, FLUSH_INTERVAL);
+# 또는 kubectl로 설치
+kubectl apply -f https://github.com/NetApp/trident/releases/download/v24.02.0/bundle_pre_1_25.yaml
 ```
 
 ### 🚀 중장기 개선 방안
 
 #### 1. NetApp Files 성능 티어 업그레이드
 
-- **Standard** → **Premium** 이동 고려
-- 처리량 한계 증대 (최대 4.5GiB/s)
-- 참고: [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
+Azure Portal에서 성능 티어 변경:
+```bash
+# Azure CLI로 확인
+az netappfiles volume show \
+  --resource-group <rg-name> \
+  --account-name <account-name> \
+  --pool-name <pool-name> \
+  --name <volume-name> \
+  --query "serviceLevel"
 
-#### 2. Write Cache 레이어 추가
+# Standard → Premium 업그레이드
+az netappfiles volume update \
+  --resource-group <rg-name> \
+  --account-name <account-name> \
+  --pool-name <pool-name> \
+  --name <volume-name> \
+  --service-level Premium
+```
 
-로컬 SSD를 캐시로 활용:
+참고: [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
+
+#### 2. Local Cache 레이어 추가
+
+임시 로컬 볼륨을 write buffer로 활용:
 ```yaml
-volumes:
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+spec:
+  containers:
+  - name: nodejs-app
+    volumeMounts:
+    - name: nfs-volume
+      mountPath: /mnt/nfs
+    - name: local-cache
+      mountPath: /mnt/cache     # 임시 버퍼
+  volumes:
+  - name: nfs-volume
+    persistentVolumeClaim:
+      claimName: netapp-pvc
   - name: local-cache
     emptyDir:
-      medium: Memory
+      medium: Memory            # 메모리 기반 (빠름)
       sizeLimit: 1Gi
 ```
 
-#### 3. 아키텍처 개선
+**주의**: 애플리케이션이 `/mnt/cache`를 활용하도록 설정 필요 (개발팀 협업)
 
-- **대안 1**: 메시지 큐 도입 (Azure Service Bus, RabbitMQ)
-- **대안 2**: 시계열 DB 사용 (Azure Data Explorer, InfluxDB)
-- **대안 3**: Blob Storage 직접 쓰기 (Azure Blob SDK)
+#### 3. 아키텍처 개선 (개발팀 협업 필요)
+
+NFS 의존도를 낮추는 대안:
+- **대안 1**: Azure Service Bus / RabbitMQ로 비동기 처리
+- **대안 2**: Azure Blob Storage 직접 쓰기
+- **대안 3**: 시계열 DB (Azure Data Explorer, InfluxDB)
+
+### 📋 진단 체크리스트
+
+문제 해결 전 다음 사항을 확인:
+
+```bash
+# 1. 현재 mount 옵션 확인
+kubectl exec -it <pod-name> -- mount | grep nfs
+
+# 2. NFS 에러 확인
+kubectl exec -it <pod-name> -- dmesg | grep -i nfs
+
+# 3. Pod CPU throttling 확인
+kubectl describe pod <pod-name> | grep -i throttl
+
+# 4. NetApp Files 메트릭 확인 (Azure Portal)
+# - Throughput (MB/s)
+# - IOPS
+# - Latency (ms)
+
+# 5. StorageClass 확인
+kubectl get storageclass -o yaml
+
+# 6. PV 상태 확인
+kubectl get pv -o wide
+```
 
 ***
 
 ## 참고 자료
 
 - [Azure NetApp Files 성능 고려사항](https://learn.microsoft.com/azure/azure-netapp-files/performance-considerations-smb)
+- [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
 - [NFS CSI Driver for Kubernetes](https://github.com/kubernetes-csi/csi-driver-nfs)
-- [Node.js Stream API](https://nodejs.org/api/stream.html)
+- [NetApp Trident Documentation](https://docs.netapp.com/us-en/trident/index.html)
 - [Linux NFS Performance Tuning](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/managing_file_systems/mounting-nfs-shares_managing-file-systems#nfs-performance-tuning_mounting-nfs-shares)
+- [Kubernetes StorageClass](https://kubernetes.io/docs/concepts/storage/storage-classes/)
 
 ***
 
 ## 결론
 
-NetApp Files 용량 증설 후에도 CPU 급증과 I/O 대기 현상이 지속되는 것은 **NFS 클라이언트 설정**, **애플리케이션 I/O 패턴**, **NetApp Files 성능 티어** 등 복합적인 요인에 기인합니다. 단계별 분석과 최적화를 통해 근본 원인을 파악하고 개선해야 합니다.
+NetApp Files 용량 증설 후에도 CPU 급증과 I/O 대기 현상이 지속되는 것은 **NFS 클라이언트 설정**, **NFS mount 옵션**, **NetApp Files 성능 티어** 등 인프라 레벨의 복합적인 요인에 기인합니다. 
+
+애플리케이션 코드 수정 없이 인프라 레벨에서 개선할 수 있는 방안:
+1. **NFS mount 옵션 최적화** (rsize/wsize 증가, timeout 조정)
+2. **NetApp Files 성능 티어 업그레이드** (Standard → Premium)
+3. **Pod resource limits 조정** (CPU throttling 완화)
+4. **CSI Driver 업데이트** (최신 성능 개선 적용)
+
+추가적인 성능 개선이 필요한 경우 애플리케이션 팀과 협력하여 I/O 패턴 최적화를 검토할 수 있습니다.
