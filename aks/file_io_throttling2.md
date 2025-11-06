@@ -75,11 +75,6 @@ AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트�
   - Mount 옵션 분석 (`nfsvers`, `rsize`, `wsize`, `hard/soft`, `timeo`, `retrans`)
   - Connection pool 관련 파라미터 확인
 
-- [ ] **NetApp Files 서비스 티어 및 성능 검증**
-  - 현재 할당된 처리량(throughput) 한계 확인
-  - IOPS 및 latency 메트릭 분석
-  - Premium vs Standard 티어 비교
-
 - [ ] **PV/PVC 설정 검토**
   - 현재 StorageClass 확인
   - Mount 옵션 검증
@@ -95,16 +90,23 @@ AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트�
   - CPU/Memory limits 적절성 검토
   - Throttling 발생 여부 확인 (`kubectl top`, `metrics-server`)
 
-- [ ] **Node 레벨 성능 분석**
-  - `iostat`, `vmstat` 메트릭 수집
-  - 다른 Pod들의 I/O 영향도 분석
+### 📊 Datadog 모니터링 중점 메트릭
 
-### 📊 모니터링 강화
+다음 Datadog 메트릭을 집중 모니터링:
 
-- [ ] **메트릭 대시보드 구성**
-  - NFS 성능 메트릭 (latency, throughput, errors)
-  - Pod 레벨 I/O wait 시간
-  - Node 레벨 disk I/O 통계
+- **NFS 클라이언트 성능**:
+  - `system.io.w_await`: Write I/O 대기 시간 (급증 시 NFS 병목)
+  - `system.io.r_await`: Read I/O 대기 시간
+  - `system.io.util`: I/O 디바이스 사용률
+
+- **Pod/Container 레벨**:
+  - `kubernetes.cpu.usage.total`: CPU 사용률 (급증 패턴)
+  - `kubernetes.cpu.throttled.seconds`: CPU throttling 발생 여부
+  - `kubernetes.filesystem.usage`: 파일시스템 사용률
+
+- **프로세스 상태**:
+  - `system.cpu.iowait`: I/O 대기로 인한 CPU 대기 시간
+  - Process state가 'D' (uninterruptible sleep) 상태인 프로세스 수
 
 ***
 
@@ -112,22 +114,11 @@ AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트�
 
 > **참고**: 애플리케이션 코드 수정 권한이 없는 경우를 가정하여, 인프라 레벨에서 적용 가능한 방안을 중심으로 작성되었습니다.
 
-### 🔧 즉시 적용 가능한 개선
+### 🔧 핵심 개선 방안
 
 #### 1. NFS Mount 옵션 최적화
 
-**현재 설정 확인**:
-```bash
-# Pod 내에서 현재 마운트 옵션 확인
-kubectl exec -it <pod-name> -- mount | grep nfs
-
-# 또는 특정 마운트 상세 정보
-kubectl exec -it <pod-name> -- cat /proc/mounts | grep nfs
-```
-
-**PV/PVC에서 Mount 옵션 추가**:
-
-StorageClass 수정 ([Kubernetes StorageClass 공식 문서](https://kubernetes.io/docs/concepts/storage/storage-classes/)):
+**StorageClass 수정** ([Kubernetes 공식 문서](https://kubernetes.io/docs/concepts/storage/storage-classes/)):
 ```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -140,203 +131,64 @@ mountOptions:
   - nfsvers=4.1
   - rsize=1048576      # 1MB read buffer
   - wsize=1048576      # 1MB write buffer
-  - hard               # hard mount (재시도)
-  - timeo=600          # 60초 timeout
-  - retrans=2          # 재전송 2회
-  - noresvport         # 비특권 포트 사용
-  - actimeo=30         # attribute cache 30초
+  - hard
+  - timeo=600          # 600 deciseconds (60초) timeout
+  - retrans=2
+  - noresvport
 ```
 
-> **참고**: 
-> - [Kubernetes StorageClass mountOptions](https://kubernetes.io/docs/concepts/storage/storage-classes/#mount-options)
-> - [NetApp Trident Backend Configuration](https://docs.netapp.com/us-en/trident/trident-use/ontap-nas.html)
-> - [Linux NFS Mount Options](https://man7.org/linux/man-pages/man5/nfs.5.html)
+> **참고**: [NetApp Trident Backend Configuration](https://docs.netapp.com/us-en/trident/trident-use/ontap-nas.html)
 
-기존 PVC 재생성 (데이터 백업 필수) ([Kubernetes PVC 공식 문서](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)):
+**PVC 재생성 절차**:
 ```bash
-# 1. 현재 PVC 정보 백업
 kubectl get pvc <pvc-name> -o yaml > pvc-backup.yaml
-
-# 2. Pod 중지
 kubectl scale deployment <deployment-name> --replicas=0
-
-# 3. PVC 삭제 및 재생성 (새 StorageClass 사용)
 kubectl delete pvc <pvc-name>
-kubectl apply -f pvc-new.yaml
-
-# 4. Pod 재시작
-kubectl scale deployment <deployment-name> --replicas=<원래값>
+kubectl apply -f pvc-new.yaml  # 새 StorageClass 사용
+kubectl scale deployment <deployment-name> --replicas=<original-replicas>
 ```
 
-#### 2. NFS 통계 및 성능 분석
+#### 2. Pod Resource Limits 조정
 
-**Pod 내에서 NFS 통계 확인** ([Kubernetes Debug 공식 문서](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/)):
+CPU throttling 완화 ([Kubernetes 공식 문서](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)):
+```yaml
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "2Gi"
+  limits:
+    cpu: "2000m"      # burst 허용
+    memory: "4Gi"
+```
+
+#### 3. NFS 클라이언트 통계 확인
+
 ```bash
 # NFS 클라이언트 통계
 kubectl exec -it <pod-name> -- nfsstat -c
 
-# NFS 마운트별 상세 통계
-kubectl exec -it <pod-name> -- cat /proc/self/mountstats | grep -A 50 "device.*nfs"
-
-# RPC 통계 확인 (재전송, timeout 등)
+# RPC 재전송 확인
 kubectl exec -it <pod-name> -- nfsstat -rc
+
+# 마운트 통계
+kubectl exec -it <pod-name> -- cat /proc/self/mountstats | grep -A 20 "device.*nfs"
 ```
-
-**Node에서 I/O 대기 분석** ([Kubernetes Debug Node 공식 문서](https://kubernetes.io/docs/tasks/debug/debug-cluster/kubectl-node-debug/)):
-```bash
-# Node에 접속 (privileged)
-kubectl debug node/<node-name> -it --image=ubuntu
-
-# iostat 설치 및 실행
-apt-get update && apt-get install -y sysstat
-iostat -x 5
-
-# NFS 관련 커널 메시지
-dmesg | grep -i nfs
-```
-
-#### 3. Pod Resource Limits 조정
-
-CPU throttling 완화 ([Kubernetes Resource Management 공식 문서](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)):
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-pod
-spec:
-  containers:
-  - name: nodejs-app
-    resources:
-      requests:
-        cpu: "1000m"
-        memory: "2Gi"
-      limits:
-        cpu: "2000m"      # 더 높은 burst 허용
-        memory: "4Gi"
-```
-
-> **참고**: [AKS의 컨테이너 리소스 관리](https://learn.microsoft.com/azure/aks/concepts-clusters-workloads#resource-reservations)
-
-#### 4. NetApp Files CSI Driver 업데이트
-
-최신 버전으로 업그레이드 ([NetApp Trident 설치 가이드](https://docs.netapp.com/us-en/trident/trident-get-started/kubernetes-deploy.html)):
-```bash
-# 현재 Trident 버전 확인
-kubectl get tridentversions -n trident
-
-# Helm으로 업그레이드
-helm repo update
-helm upgrade netapp-trident netapp-trident/trident-operator \
-  --namespace trident \
-  --set enableACP=true
-
-# 또는 kubectl로 설치
-kubectl apply -f https://github.com/NetApp/trident/releases/download/v24.02.0/bundle_pre_1_25.yaml
-```
-
-> **참고**: 
-> - [NetApp Trident Operator 설치](https://docs.netapp.com/us-en/trident/trident-get-started/kubernetes-deploy-operator.html)
-> - [AKS와 NetApp Trident 통합](https://learn.microsoft.com/azure/aks/azure-netapp-files)
-
-### 🚀 중장기 개선 방안
-
-#### 1. NetApp Files 성능 티어 업그레이드
-
-Azure Portal에서 성능 티어 변경 ([Azure NetApp Files 서비스 수준](https://learn.microsoft.com/azure/azure-netapp-files/azure-netapp-files-service-levels)):
-```bash
-# Azure CLI로 확인
-az netappfiles volume show \
-  --resource-group <rg-name> \
-  --account-name <account-name> \
-  --pool-name <pool-name> \
-  --name <volume-name> \
-  --query "serviceLevel"
-
-# Standard → Premium 업그레이드
-az netappfiles volume update \
-  --resource-group <rg-name> \
-  --account-name <account-name> \
-  --pool-name <pool-name> \
-  --name <volume-name> \
-  --service-level Premium
-```
-
-> **참고**: 
-> - [Azure NetApp Files 성능 벤치마크](https://learn.microsoft.com/azure/azure-netapp-files/performance-benchmarks-linux)
-> - [Azure NetApp Files 성능 고려 사항](https://learn.microsoft.com/azure/azure-netapp-files/azure-netapp-files-performance-considerations)
-> - [Azure CLI netappfiles 명령](https://learn.microsoft.com/cli/azure/netappfiles/volume)
-
-#### 2. Local Cache 레이어 추가
-
-임시 로컬 볼륨을 write buffer로 활용 ([Kubernetes Volumes 공식 문서](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir)):
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: app-pod
-spec:
-  containers:
-  - name: nodejs-app
-    volumeMounts:
-    - name: nfs-volume
-      mountPath: /mnt/nfs
-    - name: local-cache
-      mountPath: /mnt/cache     # 임시 버퍼
-  volumes:
-  - name: nfs-volume
-    persistentVolumeClaim:
-      claimName: netapp-pvc
-  - name: local-cache
-    emptyDir:
-      medium: Memory            # 메모리 기반 (빠름)
-      sizeLimit: 1Gi
-```
-
-> **참고**: 
-> - [Kubernetes emptyDir 볼륨](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir)
-> - [AKS 임시 볼륨](https://learn.microsoft.com/azure/aks/concepts-storage#ephemeral-volumes)
-
-**주의**: 애플리케이션이 `/mnt/cache`를 활용하도록 설정 필요 (개발팀 협업)
-
-#### 3. 아키텍처 개선 (개발팀 협업 필요)
-
-NFS 의존도를 낮추는 대안:
-- **대안 1**: Azure Service Bus / RabbitMQ로 비동기 처리
-  - [Azure Service Bus](https://learn.microsoft.com/azure/service-bus-messaging/service-bus-messaging-overview)
-- **대안 2**: Azure Blob Storage 직접 쓰기
-  - [Azure Blob Storage](https://learn.microsoft.com/azure/storage/blobs/storage-blobs-introduction)
-- **대안 3**: 시계열 DB (Azure Data Explorer, InfluxDB)
-  - [Azure Data Explorer](https://learn.microsoft.com/azure/data-explorer/data-explorer-overview)
 
 ### 📋 진단 체크리스트
-
-문제 해결 전 다음 사항을 확인 ([Kubernetes Troubleshooting](https://kubernetes.io/docs/tasks/debug/)):
 
 ```bash
 # 1. 현재 mount 옵션 확인
 kubectl exec -it <pod-name> -- mount | grep nfs
 
-# 2. NFS 에러 확인
-kubectl exec -it <pod-name> -- dmesg | grep -i nfs
-
-# 3. Pod CPU throttling 확인
+# 2. CPU throttling 확인
 kubectl describe pod <pod-name> | grep -i throttl
 
-# 4. NetApp Files 메트릭 확인 (Azure Portal)
-# - Throughput (MB/s)
-# - IOPS
-# - Latency (ms)
+# 3. StorageClass 확인
+kubectl get storageclass <sc-name> -o yaml
 
-# 5. StorageClass 확인
-kubectl get storageclass -o yaml
-
-# 6. PV 상태 확인
-kubectl get pv -o wide
+# 4. NFS 에러 확인
+kubectl exec -it <pod-name> -- dmesg | grep -i nfs
 ```
-
-> **참고**: 
-> - [AKS 문제 해결](https://learn.microsoft.com/azure/aks/troubleshooting)
-> - [Kubernetes 디버깅 가이드](https://kubernetes.io/docs/tasks/debug/debug-application/)
 
 ***
 
@@ -370,12 +222,9 @@ kubectl get pv -o wide
 
 ## 결론
 
-NetApp Files 용량 증설 후에도 CPU 급증과 I/O 대기 현상이 지속되는 것은 **NFS 클라이언트 설정**, **NFS mount 옵션**, **NetApp Files 성능 티어** 등 인프라 레벨의 복합적인 요인에 기인합니다. 
+NetApp Files 용량 증설 이후에도 CPU 급증과 I/O 대기가 지속되는 경우, **NFS 클라이언트 설정**과 **Pod resource limits** 조정으로 개선 가능합니다.
 
-애플리케이션 코드 수정 없이 인프라 레벨에서 개선할 수 있는 방안:
-1. **NFS mount 옵션 최적화** (rsize/wsize 증가, timeout 조정)
-2. **NetApp Files 성능 티어 업그레이드** (Standard → Premium)
-3. **Pod resource limits 조정** (CPU throttling 완화)
-4. **CSI Driver 업데이트** (최신 성능 개선 적용)
-
-추가적인 성능 개선이 필요한 경우 애플리케이션 팀과 협력하여 I/O 패턴 최적화를 검토할 수 있습니다.
+**핵심 조치사항**:
+1. NFS mount 옵션 최적화 (rsize/wsize 1MB, timeo 조정)
+2. Pod CPU limits 증가 (throttling 완화)
+3. Datadog에서 `system.io.w_await`, `kubernetes.cpu.throttled.seconds` 모니터링
