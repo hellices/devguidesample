@@ -6,39 +6,6 @@
 
 이 저장소는 한국 지역에서 발생하는 다양한 Azure 관련 기술 이슈와 솔루션을 체계적으로 정리하고 공유하기 위한 목적으로 만들어졌습니다. Microsoft CSA 팀이 고객 지원 과정에서 경험한 실제 사례와 베스트 프랙티스를 문서화하여, 팀원들 간의 지식 공유와 빠른 문제 해결을 돕습니다.
 
-## 📂 저장소 구조
-
-```
-devguidesample/
-├── aks/              # Azure Kubernetes Service 관련 가이드
-├── architect/        # Azure 아키텍처 설계 및 최적화 가이드
-├── cosmosdb/         # Azure Cosmos DB 관련 가이드
-├── develop/          # 개발 베스트 프랙티스 및 이슈 해결
-└── mysql/            # Azure Database for MySQL 관련 가이드
-```
-
-### 주요 카테고리
-
-- **AKS (Azure Kubernetes Service)**
-  - Pod 분산 및 스케줄링 전략
-  - 파일 I/O 성능 최적화
-  - Agent Pool 구성 및 관리
-
-- **Architect**
-  - 응답 속도 최적화를 위한 아키텍처 고려사항
-  - APIM 성능 및 제약사항
-
-- **CosmosDB**
-  - Node.js 클라이언트 사용 가이드
-  - 쿼리 성능 최적화
-
-- **Develop**
-  - Node.js 서버 CPU 오버헤드 분석 및 개선
-  - 파일 I/O 관련 성능 이슈
-
-- **MySQL**
-  - Read/Write 라우팅 구성
-
 ## 🎯 활용 플랜
 
 ### 1. 지식 베이스로 활용
@@ -99,9 +66,6 @@ devguidesample/
 - [Microsoft Learn](https://learn.microsoft.com/ko-kr/)
 - [Azure Documentation](https://docs.microsoft.com/ko-kr/azure/)
 - [Azure Architecture Center](https://learn.microsoft.com/ko-kr/azure/architecture/)
-
-## 📄 라이선스
-
 이 저장소의 내용은 Microsoft CSA 팀 내부 지식 공유를 목적으로 합니다.
 
 ---
