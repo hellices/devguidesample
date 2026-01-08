@@ -209,10 +209,10 @@ ping <다른-pod-ip>
 
 ## 📚 참고 링크
 
-- [AKS Network Concepts - CNI Overlay](https://learn.microsoft.com/ko-kr/azure/aks/concepts-network)
-- [Azure CNI Overlay Networking](https://learn.microsoft.com/ko-kr/azure/aks/azure-cni-overlay)
-- [Configure Azure CNI Overlay](https://learn.microsoft.com/ko-kr/azure/aks/configure-azure-cni-overlay)
-- [Network Security Groups (NSG)](https://learn.microsoft.com/ko-kr/azure/virtual-network/network-security-groups-overview)
-- [Kubernetes Network Policies in AKS](https://learn.microsoft.com/ko-kr/azure/aks/use-network-policies)
+- [AKS Network Concepts - CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/concepts-network)
+- [Azure CNI Overlay Networking](https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay)
+- [Configure Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-overlay)
+- [Network Security Groups (NSG)](https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview)
+- [Kubernetes Network Policies in AKS](https://learn.microsoft.com/en-us/azure/aks/use-network-policies)
 
 ***
