@@ -141,7 +141,7 @@ az network nsg rule create \
   --resource-group $RG_NAME \
   --nsg-name $NSG_NAME \
   --name Allow-Pod-to-Pod \
-  --priority 1001 \
+  --priority 1002 \
   --source-address-prefixes 100.64.0.0/16 \
   --destination-address-prefixes 100.64.0.0/16 \
   --destination-port-ranges '*' \
@@ -215,10 +215,10 @@ ping <다른-pod-ip>
 
 ## 📚 참고 링크
 
-- [AKS Network Concepts - CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/concepts-network)
-- [Azure CNI Overlay Networking](https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay)
-- [Configure Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-overlay)
-- [Network Security Groups (NSG)](https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview)
-- [Kubernetes Network Policies in AKS](https://learn.microsoft.com/en-us/azure/aks/use-network-policies)
+*   [AKS Network Concepts - CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/concepts-network)
+*   [Azure CNI Overlay Networking](https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay)
+*   [Configure Azure CNI Overlay](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-overlay)
+*   [Network Security Groups (NSG)](https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview)
+*   [Kubernetes Network Policies in AKS](https://learn.microsoft.com/en-us/azure/aks/use-network-policies)
 
 ***
