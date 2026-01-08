@@ -86,7 +86,11 @@ az aks show \
 | **Source IP**     | `10.240.0.0/16` (Node 서브넷) |
 | **Destination**   | IP Addresses                |
 | **Destination IP**| `100.64.0.0/16` (Pod CIDR)  |
-| **Priority**      | 1000                        |
+| **Service**       | Custom                      |
+| **Destination port ranges** | `*` (또는 필요한 포트)         |
+| **Protocol**      | Any                         |
+| **Action**        | Allow                       |
+| **Priority**      | 1001                        |
 | **Name**          | Allow-Node-to-Pod           |
 
 ***
@@ -116,7 +120,7 @@ az network nsg rule create \
   --resource-group $RG_NAME \
   --nsg-name $NSG_NAME \
   --name Allow-Node-to-Pod \
-  --priority 1000 \
+  --priority 1001 \
   --source-address-prefixes 10.240.0.0/16 \
   --destination-address-prefixes 100.64.0.0/16 \
   --destination-port-ranges '*' \
@@ -177,11 +181,13 @@ ping <다른-pod-ip>
 노드 풀마다 서브넷이 다르면 각각의 서브넷 CIDR을 NSG에 추가해야 합니다:
 
 ```bash
-# 노드 풀1: 10.240.0.0/24
-# 노드 풀2: 10.240.1.0/24
+# 예시: 멀티 노드 풀 환경
+# 노드 풀1 서브넷: 10.240.0.0/24
+# 노드 풀2 서브넷: 10.240.1.0/24
 # Pod CIDR: 100.64.0.0/16
 
 # 각 노드 풀 서브넷 ↔ Pod CIDR 간 규칙 생성 필요
+# 또는 더 큰 CIDR 범위(예: 10.240.0.0/16)로 통합하여 규칙 관리 단순화 가능
 ```
 
 ### 3. Kubernetes Network Policy와의 관계
