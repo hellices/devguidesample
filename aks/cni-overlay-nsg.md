@@ -57,7 +57,7 @@ az aks show \
 
 ***
 
-### 2. NSG 규칙 추가 (Pod → Node 통신 허용)
+### 2. NSG 규칙 추가 (Node ↔ Pod 통신 허용)
 
 #### Azure Portal 방식
 
@@ -140,7 +140,7 @@ Pod 간 직접 통신이 필요한 경우:
 az network nsg rule create \
   --resource-group $RG_NAME \
   --nsg-name $NSG_NAME \
-  --name Allow-Pod-to-Pod \
+  --name Allow-Pod-to-Pod-Inbound \
   --priority 1002 \
   --source-address-prefixes 100.64.0.0/16 \
   --destination-address-prefixes 100.64.0.0/16 \
@@ -148,7 +148,22 @@ az network nsg rule create \
   --direction Inbound \
   --access Allow \
   --protocol '*'
+
+# Pod 간 통신 허용 (Outbound)
+az network nsg rule create \
+  --resource-group $RG_NAME \
+  --nsg-name $NSG_NAME \
+  --name Allow-Pod-to-Pod-Outbound \
+  --priority 1002 \
+  --source-address-prefixes 100.64.0.0/16 \
+  --destination-address-prefixes 100.64.0.0/16 \
+  --destination-port-ranges '*' \
+  --direction Outbound \
+  --access Allow \
+  --protocol '*'
 ```
+
+> **참고**: Azure NSG의 기본 아웃바운드 규칙은 일반적으로 VNet 내부로의 아웃바운드 트래픽을 허용합니다. 그러나 **아웃바운드 트래픽도 NSG로 제한**하고 있는 엄격한 환경이라면 위와 같이 Inbound와 Outbound 규칙을 모두 추가해야 합니다.
 
 ***
 
@@ -203,13 +218,24 @@ ping <다른-pod-ip>
 
 ### 권장 NSG 규칙 구성 (CNI Overlay 환경)
 
-| Priority | Name                     | Source           | Destination      | Ports | Action |
-| -------- | ------------------------ | ---------------- | ---------------- | ----- | ------ |
-| 100      | Allow-AzureLoadBalancer  | AzureLoadBalancer | *                | *     | Allow  |
-| 1000     | Allow-Pod-to-Node        | 100.64.0.0/16    | 10.240.0.0/16    | *     | Allow  |
-| 1001     | Allow-Node-to-Pod        | 10.240.0.0/16    | 100.64.0.0/16    | *     | Allow  |
-| 1002     | Allow-Pod-to-Pod         | 100.64.0.0/16    | 100.64.0.0/16    | *     | Allow  |
-| 4000     | Deny-All-Inbound         | *                | *                | *     | Deny   |
+#### Inbound 규칙
+
+| Priority | Name                     | Direction | Source            | Destination      | Ports | Action |
+| -------- | ------------------------ | --------- | ----------------- | ---------------- | ----- | ------ |
+| 100      | Allow-AzureLoadBalancer  | Inbound   | AzureLoadBalancer | *                | *     | Allow  |
+| 1000     | Allow-Pod-to-Node        | Inbound   | 100.64.0.0/16     | 10.240.0.0/16    | *     | Allow  |
+| 1001     | Allow-Node-to-Pod        | Inbound   | 10.240.0.0/16     | 100.64.0.0/16    | *     | Allow  |
+| 1002     | Allow-Pod-to-Pod         | Inbound   | 100.64.0.0/16     | 100.64.0.0/16    | *     | Allow  |
+| 4000     | Deny-All-Inbound         | Inbound   | *                 | *                | *     | Deny   |
+
+#### Outbound 규칙
+
+| Priority | Name                     | Direction | Source            | Destination      | Ports | Action |
+| -------- | ------------------------ | --------- | ----------------- | ---------------- | ----- | ------ |
+| 1001     | Allow-Node-to-Pod        | Outbound  | 10.240.0.0/16     | 100.64.0.0/16    | *     | Allow  |
+| 1002     | Allow-Pod-to-Pod         | Outbound  | 100.64.0.0/16     | 100.64.0.0/16    | *     | Allow  |
+| 1003     | Allow-Pod-to-Node        | Outbound  | 100.64.0.0/16     | 10.240.0.0/16    | *     | Allow  |
+| 4001     | Deny-All-Outbound        | Outbound  | *                 | *                | *     | Deny   |
 
 ***
 
