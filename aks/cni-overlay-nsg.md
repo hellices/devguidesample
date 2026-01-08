@@ -154,7 +154,7 @@ az network nsg rule create \
   --resource-group $RG_NAME \
   --nsg-name $NSG_NAME \
   --name Allow-Pod-to-Pod-Outbound \
-  --priority 1002 \
+  --priority 1003 \
   --source-address-prefixes 100.64.0.0/16 \
   --destination-address-prefixes 100.64.0.0/16 \
   --destination-port-ranges '*' \
