@@ -91,7 +91,7 @@ Kubernetes Service의 Load Balancer가 Public IP를 생성하지 않도록 설�
 **Networking 탭:**
 - **Network configuration**: Azure CNI 또는 kubenet
 - **Private cluster**: ✅ Enable
-- **Private DNS Zone**: 자동 생성 또는 기존 Zone 선택
+- **Private DNS Zone**: **System** 선택 (권장 - 자동 생성 및 VNet 연결)
 - **API server accessibility**: Private
 - **Outbound type**: User-defined routing
 
@@ -107,8 +107,10 @@ Kubernetes Service의 Load Balancer가 Public IP를 생성하지 않도록 설�
 
 1. **Virtual Network (VNet)**: 기존 VNet 필요
 2. **Subnet**: AKS 노드용 Subnet 생성
-3. **Private DNS Zone**: Private DNS 영역 (자동 생성 가능)
+3. **Private DNS Zone**: Private DNS 영역 (**System 모드 권장** - 자동 생성 및 VNet 연결)
 4. **Bastion 또는 Jump Box**: Private cluster 접근용
+
+> ⚠️ **중요**: Private DNS Zone을 "System"으로 설정하면 Azure가 자동으로 DNS Zone을 생성하고 VNet에 연결합니다. Custom 또는 None 모드는 DNS 해석 실패(NXDOMAIN) 오류를 발생시킬 수 있습니다.
 
 ### ✅ 접근 방법
 
@@ -170,6 +172,126 @@ az network public-ip list --resource-group MC_myRG_myAKS_region --output table
   "privateDNSZone": "/subscriptions/.../privateDnsZones/..."
 }
 ```
+
+***
+
+## 🔧 트러블슈팅: Private DNS Zone 연결 문제
+
+### ❌ 문제 증상
+
+Private AKS 클러스터 생성 시 다음과 같은 오류가 발생할 수 있습니다:
+
+```
+VM has reported a failure when processing extension 'vmssCSE'
+Error: NXDOMAIN - server can't find [cluster-name].privatelink.[region].azmk8s.io
+API server connection check code: 52
+```
+
+**원인**: AKS 노드가 Private DNS Zone에 등록된 API 서버 FQDN을 해석하지 못함
+
+### ✅ 해결 방법
+
+#### 1️⃣ Private DNS Zone VNet Link 확인
+
+Private DNS Zone이 AKS가 배포된 VNet에 연결되어 있는지 확인:
+
+```bash
+# Private DNS Zone 목록 확인
+az network private-dns zone list --resource-group MC_myRG_myAKS_region --output table
+
+# VNet Link 확인
+az network private-dns link vnet list \
+  --resource-group MC_myRG_myAKS_region \
+  --zone-name [private-dns-zone-name] \
+  --output table
+```
+
+#### 2️⃣ 포털에서 Private DNS Zone 설정 확인
+
+**AKS 클러스터 생성 시:**
+
+1. **Networking** 탭으로 이동
+2. **Private cluster** 섹션에서:
+   - ✅ **Enable private cluster** 체크
+   - **Private DNS Zone** 옵션 선택:
+     - **System** (권장): Azure가 자동으로 DNS Zone 생성 및 연결
+     - **Custom**: 기존 Private DNS Zone 사용 (주의: 반드시 VNet Link 설정 필요)
+     - **None**: DNS Zone 생성하지 않음 (비권장)
+
+**권장 설정**:
+```
+Private Cluster:
+├─ Enable private cluster: ✅ Yes
+├─ Private DNS Zone: System (자동 관리)
+└─ Enable private cluster public FQDN: ❌ No
+```
+
+#### 3️⃣ 기존 VNet에 Private DNS Zone 연결
+
+만약 Custom DNS Zone을 사용하거나 이미 생성된 클러스터의 경우:
+
+**포털 방법:**
+1. **Azure Portal** → **Private DNS zones** 검색
+2. AKS용 Private DNS Zone 선택 (예: `privatelink.koreacentral.azmk8s.io`)
+3. 왼쪽 메뉴에서 **Virtual network links** 선택
+4. **+ Add** 클릭
+5. 설정:
+   - **Link name**: 식별 가능한 이름 (예: `aks-vnet-link`)
+   - **Virtual network**: AKS 노드가 배포된 VNet 선택
+   - **Enable auto registration**: 필요한 경우 체크
+6. **OK** 클릭
+
+**CLI 방법:**
+```bash
+# VNet Link 생성
+az network private-dns link vnet create \
+  --resource-group MC_myRG_myAKS_region \
+  --zone-name privatelink.koreacentral.azmk8s.io \
+  --name aks-vnet-link \
+  --virtual-network /subscriptions/{subscription-id}/resourceGroups/{vnet-rg}/providers/Microsoft.Network/virtualNetworks/{vnet-name} \
+  --registration-enabled false
+```
+
+#### 4️⃣ DNS 해석 테스트
+
+VNet 내부의 VM에서 DNS 해석 테스트:
+
+```bash
+# Private DNS 해석 확인
+nslookup [cluster-name].[cluster-id].privatelink.koreacentral.azmk8s.io
+
+# 또는
+dig [cluster-name].[cluster-id].privatelink.koreacentral.azmk8s.io
+
+# 예상 결과: Private IP 주소 반환 (예: 10.x.x.x)
+```
+
+#### 5️⃣ VNet DNS 설정 확인
+
+VNet의 DNS 서버 설정이 올바른지 확인:
+
+**포털 방법:**
+1. **Virtual networks** → 해당 VNet 선택
+2. **DNS servers** 선택
+3. 설정 확인:
+   - **Default (Azure-provided)**: Azure DNS 사용 (권장)
+   - **Custom**: 사용자 지정 DNS 서버 (Private DNS Zone 포워딩 필요)
+
+**Custom DNS 사용 시 추가 구성:**
+- DNS 서버가 Azure Private DNS (`168.63.129.16`)로 포워딩하도록 설정 필요
+
+### 🔄 재생성이 필요한 경우
+
+다음 상황에서는 클러스터 재생성 고려:
+
+1. Private DNS Zone을 "None"으로 설정하여 생성한 경우
+2. 잘못된 Custom DNS Zone을 지정한 경우
+3. VNet Link 문제를 해결할 수 없는 경우
+
+**재생성 시 권장 설정:**
+- Private DNS Zone: **System** 선택
+- VNet 및 Subnet 사전 준비
+- 올바른 네트워킹 구성 확인
 
 ***
 
