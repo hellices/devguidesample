@@ -6,15 +6,19 @@
 |------|-----|
 | AKS 클러스터 | `aks-rubicon-koreacentral-01` (Private Cluster) |
 | 리소스 그룹 | `rg-rubicon-koreacentral-01` |
+| PRD 리소스 그룹 | `rg-rubicon-koreacentral-prd-01` |
 | 구독 | `f752aff6-b20c-4973-b32b-0a60ba2c6764` |
 | 리전 | Korea Central |
-| VNet | `vnet-rubicon-koreacentral-01` |
-| AKS 서브넷 | `aks-subnet` |
-| PE 서브넷 | `pe-subnet` |
+| VNet (기존) | `vnet-rubicon-koreacentral-01` (`10.0.0.0/10`) |
+| VNet (PRD) | `vnet-rubicon-koreacentral-prd-01` (`10.100.0.0/16`) |
+| AKS 서브넷 | `aks-subnet` (`10.1.0.0/24`) |
+| PE 서브넷 | `pe-subnet` (`10.2.0.0/22`) |
+| Azure Firewall | `fw-rubicon-koreacentral-prd-01` (Private IP: `10.100.0.4`) |
 | Azure Monitor Workspace | `azuremonitor-workspace-rubicon-krc-01` |
 | Managed Grafana | `grafanaworkspacerubicon` |
 | 노드 Taint | `workload=general:NoSchedule`, `CriticalAddonsOnly=true:NoSchedule` |
 | 네트워크 특성 | **폐쇄망** (방화벽 TLS Inspection, 아웃바운드 제한) |
+| DNS 구성 | 양쪽 VNet → Firewall DNS Proxy (`10.100.0.4`) → Azure DNS |
 
 ---
 
@@ -68,8 +72,20 @@ flowchart TB
     PE --- AMPLS_SCOPE
     DCE --> AMW
     AMW --> GRAFANA
-    DNS -.->|"VNet 연결됨"| AKS
+    DNS -.->|"PRD VNet에 링크됨"| AKS
 
+    subgraph NET["네트워크 / DNS"]
+        EXISTING_VNET["vnet-rubicon-koreacentral-01<br/>10.0.0.0/10"]
+        PRD_VNET["vnet-rubicon-koreacentral-prd-01<br/>10.100.0.0/16"]
+        FIREWALL["Azure Firewall<br/>fw-rubicon-koreacentral-prd-01<br/>DNS Proxy: 10.100.0.4"]
+        EXISTING_VNET <-->|"VNet Peering"| PRD_VNET
+        PRD_VNET --- FIREWALL
+        FIREWALL -->|"DNS Proxy → Azure DNS"| DNS
+    end
+
+    style FIREWALL fill:#FF5722,color:#fff
+    style EXISTING_VNET fill:#607D8B,color:#fff
+    style PRD_VNET fill:#795548,color:#fff
     style APP fill:#4CAF50,color:#fff
     style COLLECTOR fill:#FF9800,color:#fff
     style AMA_DEPLOY fill:#2196F3,color:#fff
@@ -234,15 +250,30 @@ kubectl apply -f otel-collector.yaml
 
 ### 3.4 Private DNS Zone 확인
 
-AMPLS 생성 시 자동으로 5개 DNS Zone이 생성되고 VNet에 연결됨:
+AMPLS 생성 시 자동으로 5개 DNS Zone이 생성됨.
 
-| Private DNS Zone | 용도 |
-|---|---|
-| `privatelink.monitor.azure.com` | 메트릭 수집 엔드포인트 |
-| `privatelink.ods.opinsights.azure.com` | ODS 데이터 채널 |
-| `privatelink.oms.opinsights.azure.com` | OMS 포털 |
-| `privatelink.agentsvc.azure-automation.net` | 에이전트 서비스 |
-| `privatelink.blob.core.windows.net` | Blob 스토리지 |
+> **⚠️ VNet 링크 변경 (2026-02-23)**
+> DNS 중앙 관리를 위해 모든 Private DNS Zone의 VNet 링크를 기존 VNet에서 PRD VNet으로 이전함.
+> Firewall DNS Proxy가 PRD VNet에 있으므로, DNS Zone도 PRD VNet에 링크되어야 Azure DNS가 Private IP를 반환함.
+
+| Private DNS Zone | 용도 | VNet 링크 |
+|---|---|---|
+| `privatelink.monitor.azure.com` | 메트릭 수집 엔드포인트 | `vnet-rubicon-koreacentral-prd-01` |
+| `privatelink.ods.opinsights.azure.com` | ODS 데이터 채널 | `vnet-rubicon-koreacentral-prd-01` |
+| `privatelink.oms.opinsights.azure.com` | OMS 포털 | `vnet-rubicon-koreacentral-prd-01` |
+| `privatelink.agentsvc.azure-automation.net` | 에이전트 서비스 | `vnet-rubicon-koreacentral-prd-01` |
+| `privatelink.blob.core.windows.net` | Blob 스토리지 | `vnet-rubicon-koreacentral-prd-01` |
+| `*.privatelink.koreacentral.azmk8s.io` | AKS API Server | `vnet-rubicon-koreacentral-prd-01` |
+| `privatelink.redis.azure.net` | Redis Cache | `vnet-rubicon-koreacentral-prd-01` |
+
+**DNS 해석 경로:**
+```
+VM/AKS Pod → Firewall DNS Proxy (10.100.0.4) → Azure DNS (168.63.129.16)
+                                                    ↓
+                                        Private DNS Zone (PRD VNet 링크)
+                                                    ↓
+                                        Private IP 반환 (10.2.0.x)
+```
 
 **DNS 해석 확인:**
 ```bash
@@ -454,9 +485,109 @@ kubectl rollout restart ds/ama-metrics-node -n kube-system
 
 ---
 
-## 6. 향후 고려사항
+## 6. PRD VNet + Firewall DNS Proxy 구성 (2026-02-23)
 
-### 6.1 Option A 전환 (직접 Remote Write)
+### 6.1 배경 및 목적
+
+DNS를 PRD 환경에서 중앙 관리하기 위해 별도의 PRD VNet을 생성하고, Azure Firewall DNS Proxy를 통해 모든 DNS 쿼리를 PRD에서 처리하도록 구성.
+
+### 6.2 구성 요소
+
+| 리소스 | 이름 | 설정 |
+|---|---|---|
+| Resource Group | `rg-rubicon-koreacentral-prd-01` | Korea Central |
+| VNet | `vnet-rubicon-koreacentral-prd-01` | `10.100.0.0/16` |
+| Subnet (Firewall) | `AzureFirewallSubnet` | `10.100.0.0/26` |
+| Subnet (Default) | `default` | `10.100.1.0/24` |
+| Azure Firewall | `fw-rubicon-koreacentral-prd-01` | Standard SKU, DNS Proxy 활성화 |
+| Firewall Private IP | `10.100.0.4` | DNS Proxy 엔드포인트 |
+| Public IP | `pip-fw-rubicon-koreacentral-prd-01` | Standard SKU |
+
+### 6.3 네트워크 구성
+
+**VNet Peering (양방향 Connected):**
+
+| Peering 이름 | 방향 | 설정 |
+|---|---|---|
+| `peer-to-prd-01` | 기존 VNet → PRD VNet | AllowVNetAccess, AllowForwardedTraffic |
+| `peer-to-existing-01` | PRD VNet → 기존 VNet | AllowVNetAccess, AllowForwardedTraffic |
+
+**DNS 서버 설정 (양쪽 VNet 모두):**
+```
+Custom DNS Server: 10.100.0.4 (Firewall DNS Proxy)
+```
+
+**Firewall Network Rule:**
+
+| Rule Collection | Rule | Protocol | Source | Destination | Port |
+|---|---|---|---|---|---|
+| `Net-Allow-DNS` | `Allow-DNS` | UDP, TCP | `10.0.0.0/10`, `10.100.0.0/16` | `*` | `53` |
+
+### 6.4 DNS 흐름
+
+```mermaid
+flowchart TB
+    VM["VM / AKS Pod<br/>(vnet-rubicon-koreacentral-01)"] -->|"DNS Query"| RESOLVER["systemd-resolved<br/>127.0.0.53"]
+    RESOLVER -->|"Forward to<br/>Custom DNS: 10.100.0.4"| FW["Azure Firewall<br/>DNS Proxy<br/>(vnet-rubicon-koreacentral-prd-01)"]
+    FW -->|"Forward"| AZURE_DNS["Azure DNS<br/>168.63.129.16"]
+    AZURE_DNS -->|"Private DNS Zone<br/>(PRD VNet에 링크됨)"| PRIVATE_IP["Private IP 반환<br/>10.2.0.x / 10.1.0.4"]
+
+    style FW fill:#FF5722,color:#fff
+    style AZURE_DNS fill:#2196F3,color:#fff
+    style PRIVATE_IP fill:#4CAF50,color:#fff
+```
+
+### 6.5 Private DNS Zone VNet 링크 이전
+
+기존 VNet(`vnet-rubicon-koreacentral-01`)에 연결되어 있던 모든 Private DNS Zone 링크를 PRD VNet으로 이전.
+
+**이전 대상:**
+- AMPLS 관련 5개 Zone (`privatelink.monitor.azure.com` 등)
+- AKS Private DNS Zone (`*.privatelink.koreacentral.azmk8s.io`)
+- Redis Private DNS Zone (`privatelink.redis.azure.net`)
+
+**이전 명령 예시:**
+```bash
+# PRD VNet에 링크 추가
+az network private-dns link vnet create \
+  --name "link-to-prd-vnet" \
+  --zone-name "<zone-name>" \
+  --resource-group "<zone-rg>" \
+  --virtual-network "/subscriptions/.../vnet-rubicon-koreacentral-prd-01" \
+  --registration-enabled false
+
+# 기존 VNet 링크 제거
+az network private-dns link vnet delete \
+  --name "<old-link-name>" \
+  --zone-name "<zone-name>" \
+  --resource-group "<zone-rg>" \
+  --yes
+```
+
+### 6.6 AMPLS/DCE 영향
+
+Firewall DNS Proxy 구성 후에도 AMPLS/DCE는 영향 없음:
+- Private Endpoint(`pe-ampls-rubicon-krc-01`)는 기존 VNet의 `pe-subnet`에 그대로 위치
+- DNS 해석 경로만 변경: VM → Firewall(10.100.0.4) → Azure DNS → Private DNS Zone(PRD VNet 링크) → Private IP(10.2.0.x)
+- 데이터 경로(ama-metrics → PE → Azure Monitor)는 변경 없음
+
+### 6.7 VM DNS 적용
+
+VNet DNS 설정 변경 후 VM에 반영하려면 DHCP lease 갱신 필요:
+```bash
+# Ubuntu/systemd-networkd 환경
+sudo networkctl reconfigure eth0
+
+# 확인
+resolvectl status eth0
+# Current DNS Server: 10.100.0.4 ✅
+```
+
+---
+
+## 7. 향후 고려사항
+
+### 7.1 Option A 전환 (직접 Remote Write)
 
 현재 Option B (ama-metrics 스크래핑)로 동작 중이나, 향후 확장성을 위해 OTel Collector에서 직접 `prometheusremotewrite` exporter로 DCE에 전송하는 방식으로 전환 가능.
 
@@ -469,14 +600,14 @@ exporters:
       authenticator: azure_auth
 ```
 
-### 6.2 Application Insights 연동
+### 7.2 Application Insights 연동
 
 현재는 Prometheus 메트릭만 설정. 향후 App Insights 연동 시:
 - AMPLS에 Application Insights 리소스 추가
 - OTel Collector에 `azuremonitor` exporter 추가
 - 추가 Private DNS Zone 필요할 수 있음
 
-### 6.3 AMPLS 제한 사항
+### 7.3 AMPLS 제한 사항
 
 - 구독당 AMPLS 5개 제한
 - AMPLS당 Private Endpoint 10개 제한
