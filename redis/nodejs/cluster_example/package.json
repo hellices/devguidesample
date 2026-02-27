@@ -1,0 +1,14 @@
+{
+  "name": "redis-cluster-example",
+  "version": "1.0.0",
+  "description": "Azure Managed Redis cluster info test with @redis/client v5",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@redis/client": "^5.9.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  }
+}
