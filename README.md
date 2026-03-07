@@ -27,7 +27,7 @@
 
 ### 새로운 가이드 추가하기
 
-1. 적절한 카테고리 폴더 선택 (aks, cosmosdb, mysql, develop, architect)
+1. 적절한 카테고리 폴더 선택 (aks, automation, cosmosdb, mysql, develop, architect)
 2. 필요시 하위 폴더 생성 (예: `nodejs/`, `python/` 등)
 3. Markdown 파일 작성 시 다음 항목 포함 권장:
    - 문제 상황 설명
