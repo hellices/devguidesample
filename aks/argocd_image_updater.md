@@ -1,29 +1,10 @@
-# ArgoCD Image Updater + ACR on AKS 설정 가이드
+# ✅ ArgoCD Image Updater + ACR on AKS 설정 가이드
 
-> AKS에서 ArgoCD Image Updater v2를 사용하여 Azure Container Registry(ACR)의 이미지 태그를 자동으로 감지하고 업데이트하는 전체 과정을 정리한 문서.
+**AKS에서 ArgoCD Image Updater v2를 사용하여 Azure Container Registry(ACR)의 이미지 태그를 자동으로 감지하고 업데이트하는 전체 과정을 정리한 문서.**
 
----
+***
 
-## 목차
-
-- [전제 조건](#전제-조건)
-- [전체 아키텍처](#전체-아키텍처)
-- [Step 1: ArgoCD 설치](#step-1-argocd-설치)
-- [Step 2: ArgoCD Image Updater 설치](#step-2-argocd-image-updater-설치)
-- [Step 3: Managed Identity 생성 및 ACR 역할 부여](#step-3-managed-identity-생성-및-acr-역할-부여)
-- [Step 4: Workload Identity Federation 설정](#step-4-workload-identity-federation-설정)
-- [Step 5: ACR 인증 스크립트 ConfigMap 생성](#step-5-acr-인증-스크립트-configmap-생성)
-- [Step 6: registries.conf 설정](#step-6-registriesconf-설정)
-- [Step 7: ServiceAccount 패치](#step-7-serviceaccount-패치)
-- [Step 8: Deployment 패치](#step-8-deployment-패치)
-- [Step 9: ImageUpdater CR 생성](#step-9-imageupdater-cr-생성)
-- [검증 방법](#검증-방법)
-- [디버깅 가이드](#디버깅-가이드)
-- [블로그 Option 1 vs 공식 문서 비교](#블로그-option-1-vs-공식-문서-비교)
-
----
-
-## 전제 조건
+## 📌 전제 조건
 
 | 항목 | 요구사항 |
 |---|---|
@@ -51,9 +32,9 @@ az aks update \
   --enable-workload-identity
 ```
 
----
+***
 
-## 전체 아키텍처
+## 📌 전체 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -90,9 +71,9 @@ az aks update \
 
 인증 흐름: **Federated Token → AAD Access Token → ACR Refresh Token**
 
----
+***
 
-## Step 1: ArgoCD 설치
+## ✅ Step 1: ArgoCD 설치
 
 ```bash
 kubectl create namespace argocd
@@ -112,9 +93,9 @@ kubectl get pods -n argocd
 > kubectl set image deployment/argocd-redis redis=redis:8.2.3-alpine -n argocd
 > ```
 
----
+***
 
-## Step 2: ArgoCD Image Updater 설치
+## ✅ Step 2: ArgoCD Image Updater 설치
 
 ```bash
 kubectl apply -n argocd \
@@ -129,9 +110,9 @@ kubectl apply -n argocd \
 kubectl get pods -n argocd | grep image-updater
 ```
 
----
+***
 
-## Step 3: Managed Identity 생성 및 ACR 역할 부여
+## ✅ Step 3: Managed Identity 생성 및 ACR 역할 부여
 
 Image Updater 전용 Managed Identity를 생성하고 ACR에 `AcrPull` 역할을 부여한다.
 
@@ -172,9 +153,9 @@ az role assignment list \
   --output table
 ```
 
----
+***
 
-## Step 4: Workload Identity Federation 설정
+## ✅ Step 4: Workload Identity Federation 설정
 
 Kubernetes ServiceAccount를 Azure Managed Identity에 연결하는 Federated Credential을 생성한다.
 
@@ -213,9 +194,9 @@ az identity federated-credential show \
 # Subject: system:serviceaccount:argocd:argocd-image-updater-controller
 ```
 
----
+***
 
-## Step 5: ACR 인증 스크립트 ConfigMap 생성
+## ✅ Step 5: ACR 인증 스크립트 ConfigMap 생성
 
 공식 문서에 기반한 auth 스크립트. Workload Identity의 Federated Token을 이용해 ACR Refresh Token을 발급받는다.
 
@@ -257,9 +238,9 @@ kubectl apply -f argocd-image-updater-auth.yaml
 3. ACR `/oauth2/exchange` 호출 → ACR Refresh Token 획득
 4. `username:password` 형식으로 출력 → Image Updater가 Docker auth로 사용
 
----
+***
 
-## Step 6: registries.conf 설정
+## ✅ Step 6: registries.conf 설정
 
 ```bash
 kubectl patch configmap argocd-image-updater-config -n argocd --type merge -p '{
@@ -270,12 +251,12 @@ kubectl patch configmap argocd-image-updater-config -n argocd --type merge -p '{
 ```
 
 핵심 설정값:
-- `credentials: ext:/app/auth/auth.sh` — 외부 스크립트를 통한 인증
-- `credsexpire: 1h` — 토큰 캐시 만료 시간 (ACR 토큰 유효기간에 맞춤)
+*   `credentials: ext:/app/auth/auth.sh` — 외부 스크립트를 통한 인증
+*   `credsexpire: 1h` — 토큰 캐시 만료 시간 (ACR 토큰 유효기간에 맞춤)
 
----
+***
 
-## Step 7: ServiceAccount 패치
+## ✅ Step 7: ServiceAccount 패치
 
 ```bash
 kubectl patch sa argocd-image-updater-controller -n argocd --type merge -p '{
@@ -297,9 +278,9 @@ kubectl patch sa argocd-image-updater-controller -n argocd --type merge -p '{
 kubectl get sa argocd-image-updater-controller -n argocd -o yaml | grep -A5 "annotations\|labels"
 ```
 
----
+***
 
-## Step 8: Deployment 패치
+## ✅ Step 8: Deployment 패치
 
 auth 스크립트 볼륨 마운트, ACR_NAME 환경변수, Workload Identity 라벨을 추가한다.
 
@@ -352,9 +333,9 @@ auth.sh 스크립트 마운트 확인:
 kubectl exec -n argocd deployment/argocd-image-updater-controller -- ls -la /app/auth/
 ```
 
----
+***
 
-## Step 9: ImageUpdater CR 생성
+## ✅ Step 9: ImageUpdater CR 생성
 
 Image Updater v2는 **CRD 기반**으로 동작한다. Application annotation 방식이 아닌 `ImageUpdater` CR을 생성해야 한다.
 
@@ -388,9 +369,9 @@ spec:
 | `argocd` | ArgoCD Application의 spec을 직접 패치 (Git 변경 없음, 테스트에 적합) |
 | `git` | Git repo에 커밋하여 변경 반영 (프로덕션 권장) |
 
----
+***
 
-## 검증 방법
+## ✅ 검증 방법
 
 ### 1. ACR에 테스트 이미지 준비
 
@@ -427,9 +408,9 @@ kubectl get deployment <DEPLOY_NAME> -n <NAMESPACE> \
   -o jsonpath='{.spec.template.spec.containers[0].image}'
 ```
 
----
+***
 
-## 디버깅 가이드
+## 🔍 디버깅 가이드
 
 ### 디버그 로그 활성화
 
@@ -468,10 +449,10 @@ az role assignment list --assignee "<PRINCIPAL_ID>" --scope "<ACR_ID>" --output 
 ```
 
 **흔한 원인:**
-- `attach-acr`만 했을 경우 → kubelet identity만 권한 있음, Image Updater Pod은 별도 인증 필요
-- SA에 `azure.workload.identity/client-id` annotation 누락
-- Deployment에 `azure.workload.identity/use: "true"` label 누락
-- Federated Credential의 subject가 SA 이름과 불일치
+*   `attach-acr`만 했을 경우 → kubelet identity만 권한 있음, Image Updater Pod은 별도 인증 필요
+*   SA에 `azure.workload.identity/client-id` annotation 누락
+*   Deployment에 `azure.workload.identity/use: "true"` label 누락
+*   Federated Credential의 subject가 SA 이름과 불일치
 
 ### 오류 2: `skipping app of type 'Directory' because it's not of supported source type`
 
@@ -557,9 +538,9 @@ kubectl get pod -n argocd -l app.kubernetes.io/name=argocd-image-updater \
 kubectl rollout restart deployment argocd-image-updater-controller -n argocd
 ```
 
----
+***
 
-## attach-acr 방식이 동작하지 않는 이유
+## 📌 attach-acr 방식이 동작하지 않는 이유
 
 `az aks update --attach-acr`로 kubelet identity에 AcrPull을 부여하면 Image Updater도 자연스럽게 ACR에 접근할 수 있을 것 같지만, 실제로는 **동작하지 않는다**.
 
@@ -572,9 +553,9 @@ kubectl rollout restart deployment argocd-image-updater-controller -n argocd
 
 `attach-acr`은 노드의 컨테이너 런타임(containerd)이 이미지를 pull할 때만 유효하다. Image Updater는 Pod 내에서 ACR의 REST API(`/v2/.../tags/list`)를 직접 호출하므로 kubelet identity의 권한을 상속받지 못한다. 따라서 **Workload Identity + 외부 스크립트** 방식으로 Pod 수준의 인증을 별도 구성해야 한다.
 
----
+***
 
-## 네트워크 요구사항: Azure Firewall 환경에서의 아웃바운드 허용
+## 📌 네트워크 요구사항: Azure Firewall 환경에서의 아웃바운드 허용
 
 auth.sh 스크립트는 토큰 교환 과정에서 다음 두 엔드포인트를 호출한다:
 
@@ -615,12 +596,14 @@ Source:       <AKS_SUBNET_CIDR>
 | `login.microsoftonline.com` | **불가** | **필수** (AKS 필수 아웃바운드) |
 | `<ACR>.azurecr.io` | 가능 | ACR Private Endpoint 미사용 시 필요 |
 
----
+***
 
-## 참고 링크
+## 📚 참고 링크
 
-- [공식 문서: Configuring Azure Container Registry](https://argocd-image-updater.readthedocs.io/en/stable/configuration/registries/#configuring-azure-container-registry-with)
-- [Image Updater v2 GitHub](https://github.com/argoproj-labs/argocd-image-updater)
-- [Azure Workload Identity 문서](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview)
-- [AKS 필수 아웃바운드 네트워크 규칙](https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress)
-- [Azure Firewall을 사용한 AKS 아웃바운드 트래픽 제어](https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic)
+*   [공식 문서: Configuring Azure Container Registry](https://argocd-image-updater.readthedocs.io/en/stable/configuration/registries/#configuring-azure-container-registry-with)
+*   [Image Updater v2 GitHub](https://github.com/argoproj-labs/argocd-image-updater)
+*   [Azure Workload Identity 문서](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview)
+*   [AKS 필수 아웃바운드 네트워크 규칙](https://learn.microsoft.com/en-us/azure/aks/outbound-rules-control-egress)
+*   [Azure Firewall을 사용한 AKS 아웃바운드 트래픽 제어](https://learn.microsoft.com/en-us/azure/aks/limit-egress-traffic)
+
+***
