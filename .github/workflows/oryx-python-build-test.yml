@@ -1,0 +1,32 @@
+name: Oryx Python 3.11 Build Test
+
+on:
+  push:
+    paths:
+      - 'oryx-test/**'
+      - '.github/workflows/oryx-python-build-test.yml'
+  workflow_dispatch:
+
+jobs:
+  oryx-build:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/oryx/build:debian-bullseye
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Oryx build Python 3.11
+        run: |
+          oryx build ./oryx-test \
+            --platform python \
+            --platform-version 3.11
+
+      - name: Verify build output
+        run: |
+          echo "=== Build output ==="
+          ls -la ./oryx-test/
+          echo "=== Python version check ==="
+          python3 --version || true
+          echo "=== Installed packages ==="
+          cat ./oryx-test/requirements.txt
