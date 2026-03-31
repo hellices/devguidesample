@@ -281,6 +281,95 @@ az aks nodepool update \
 
 ***
 
+## 🛠️ 실무 개선 예시 — 배포된 HPA에 추가할 요소
+
+아래는 실제 운영 중인 HPA에서 자주 발견되는 기본 구성과, 여기에 추가하면 안정성과 반응성이 개선되는 설정입니다.
+
+### 현재 배포된 기본 구성 (개선 전)
+
+```yaml
+spec:
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80   # ⚠️ 임계값이 높아 스케일 아웃 대응이 늦을 수 있음
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80   # ⚠️ 메모리는 GC 전까지 해제 안 됨 — scaleDown 안정화 필요
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: prd-kr-helixa-rubicon
+  # ⚠️ behavior 블록 없음 → 기본값(scaleDown 300s, scaleUp 0s)에 의존
+```
+
+### 개선된 구성 (추가 요소 포함)
+
+```yaml
+spec:
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60   # ✅ 60~70%로 낮춰 트래픽 급증 시 여유 확보
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70   # ✅ 메모리는 더 보수적으로 설정
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: prd-kr-helixa-rubicon
+  behavior:                        # ✅ behavior 블록 명시 — 기본값 의존 제거
+    scaleUp:
+      stabilizationWindowSeconds: 0    # 스케일 아웃은 즉시 반응 (기본값과 동일, 명시 권장)
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60            # 60초마다 최대 2개씩 증가 → 갑작스러운 과스케일 방지
+        - type: Percent
+          value: 50
+          periodSeconds: 60            # 또는 현재 Pod 수의 50% 이하로 증가 (더 빠른 쪽 선택)
+      selectPolicy: Max                # 위 두 policy 중 큰 값 선택
+    scaleDown:
+      stabilizationWindowSeconds: 300  # ✅ 5분간 최고 권장값 유지 → 플래핑 방지 (현재 상태: ScaleDownStabilized 발동 중)
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60            # 60초마다 최대 10%씩 감소 → 급격한 스케일 인 방지
+```
+
+### 주요 개선 포인트 요약
+
+| 항목 | 현재 | 개선 후 | 이유 |
+|------|------|---------|------|
+| **CPU 임계값** | 80% | 60~70% | 임계값 도달 시 이미 성능 저하 가능성 있음 |
+| **메모리 임계값** | 80% | 70% | 메모리는 GC 전까지 반환 안 됨 → 보수적으로 설정 |
+| **`behavior.scaleUp`** | 미설정 (기본 0s) | 명시 + 증가 속도 제한 | 순간 트래픽 스파이크로 과스케일 방지 |
+| **`behavior.scaleDown`** | 미설정 (기본 300s) | 명시 300s + 10% 제한 | `ScaleDownStabilized` 이미 발동 중 → 명시 권장 |
+| **`maxReplicas`** | 8 | 트래픽 패턴에 따라 재검토 | 현재 CPU 47% 기준으로 여유 있으나 피크 시 부족할 수 있음 |
+
+> 💡 **현재 상태 (`status.conditions`) 읽는 법**
+> - `ScaleDownStabilized: True` → HPA가 스케일 인을 원하지만 안정화 윈도우로 대기 중. `behavior.scaleDown.stabilizationWindowSeconds`를 명시하면 동작이 더 예측 가능해집니다.
+> - `ScalingLimited: False` (reason: `DesiredWithinRange`) → 현재 replica 수가 min/max 범위 내에 있음. 정상 상태.
+> - CPU `averageUtilization: 47` vs 임계값 80% → 현재 여유 있음. 단, 피크 시 80% 도달 후 스케일 아웃까지 시간 지연 발생 가능.
+
+***
+
 ## 🔍 Best Practice 정리
 
 | 항목 | 권장 사항 |
