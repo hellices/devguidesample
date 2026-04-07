@@ -171,6 +171,25 @@ pid_filename /tmp/squid/squid.pid
 *   `acl mylocal`의 IP는 실제 VM의 내부 IP로 변경
 *   Squid는 CONNECT 메서드를 허용하여 HTTPS 터널링을 지원
 
+**Squid 설치 및 실행**
+
+```bash
+# Squid 설치
+sudo apt-get install -y squid
+
+# 로그 및 PID 디렉토리 생성
+mkdir -p /tmp/squid
+
+# 설정 파일을 지정하여 Squid 실행
+squid -f /path/to/squid.conf
+
+# 실행 확인
+squid -f /path/to/squid.conf -k check
+```
+
+*   `/path/to/squid.conf`는 실제 설정 파일 경로로 변경
+*   `-k check` 옵션으로 설정 파일 유효성을 사전에 검증 가능
+
 ***
 
 ## **구성 요약**
