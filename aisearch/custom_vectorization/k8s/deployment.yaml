@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bge-m3-embedding
+  labels:
+    app: bge-m3-embedding
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bge-m3-embedding
+  template:
+    metadata:
+      labels:
+        app: bge-m3-embedding
+    spec:
+      containers:
+        - name: embedding-api
+          image: acrcustomvec01.azurecr.io/bge-m3-embedding:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+            limits:
+              cpu: "2"
+              memory: "6Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bge-m3-embedding
+spec:
+  type: ClusterIP
+  selector:
+    app: bge-m3-embedding
+  ports:
+    - port: 80
+      targetPort: 8000

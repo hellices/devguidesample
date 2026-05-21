@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bge-m3-embedding-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - embed.<INGRESS_IP>.nip.io       # kubectl get svc -n ingress-nginx 으로 확인한 IP
+      secretName: bge-m3-tls
+  rules:
+    - host: embed.<INGRESS_IP>.nip.io     # 위와 동일한 IP
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bge-m3-embedding
+                port:
+                  number: 80
