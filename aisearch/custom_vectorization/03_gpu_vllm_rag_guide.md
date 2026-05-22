@@ -49,7 +49,8 @@ Push Pipeline (Job/CronJob, CPU 노드)
 
 - Push Pipeline이 vLLM API를 직접 호출 → **어댑터 불필요**
 - 동시성, 배치 크기, 파이프라이닝 모두 내 코드가 제어
-- 시간 제한 없음, `degreeOfParallelism` 상한 없음
+- 인덱서 실행 시간 제한 없음, `degreeOfParallelism` 상한 없음
+- 단, Push API 자체 제약은 존재: 요청당 최대 1,000건/16MB, [throttling](https://learn.microsoft.com/en-us/azure/search/search-limits-quotas-capacity#throttling-limits) 적용
 
 ### 검색 흐름 (하이브리드 검색)
 
@@ -67,6 +68,8 @@ AI Search
 
 - 쿼리 시점에는 AI Search가 Custom Vectorizer를 호출 → **Adapter 필요** (AI Search 계약 변환)
 - 쿼리 1건 벡터화 ~10ms, 병목이 아님
+
+> ⚠️ **Vectorizer 에러 처리**: Custom Vectorizer 엔드포인트가 에러/경고를 반환해도 [AI Search는 쿼리 응답에 노출하지 않는다](https://learn.microsoft.com/en-us/azure/search/vector-search-vectorizer-custom-web-api). vLLM/Adapter 장애 시 벡터 검색이 조용히 실패하므로, 엔드포인트 헬스체크와 별도 모니터링이 필수다.
 
 ---
 
@@ -120,7 +123,7 @@ curl -X PUT "$SEARCH_URL/indexes/prod-chunk-idx?api-version=2024-07-01" \
 
 ## 2. Push API 파이프라인
 
-인덱서 대신 Push API로 적재한다. 인덱서의 구조적 한계(deg≤10, 순차 배치, 2h 제한)를 우회하여 GPU 활용률을 극대화한다. ([상세 비교](01_custom_embedding_guide.md))
+인덱서 대신 Push API로 적재한다. 인덱서의 구조적 한계(deg≤10, 순차 배치, 공용 2h/전용 24h 제한)를 우회하여 GPU 활용률을 극대화한다. ([상세 비교](01_custom_embedding_guide.md))
 
 파이프라인 흐름: **데이터 소스 → PIC 청킹(vLLM-chunk) → 임베딩(vLLM-embed) → Push API(AI Search)**
 
@@ -609,7 +612,7 @@ vLLM은 PyTorch 기반이라 **Qwen3 아키텍처를 HuggingFace 가중치에서
 | Indexer | vLLM Custom WebApiSkill (3×T4) | 2,739 | 18.92 | deg≤10, 순차 배치로 GPU 30~40%만 활용 |
 
 - Push API가 Indexer 대비 **2배** 빠르다. Indexer의 `degreeOfParallelism` 상한(10)이 병목.
-- Push API는 2시간 실행 제한이 없으므로 대량 적재에 적합하다.
+- Push API는 인덱서 실행 시간 제한(공용 2h / 전용 24h)이 없으므로 대량 적재에 적합하다. 단, 요청당 1,000건/16MB 배치 제한과 throttling은 적용된다.
 
 ### 서빙 엔진: vLLM vs TEI
 
