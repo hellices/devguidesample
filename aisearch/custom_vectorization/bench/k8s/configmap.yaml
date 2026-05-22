@@ -1,0 +1,23 @@
+# Shared env ConfigMap — common across all bench Jobs
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bench-env
+data:
+  SEARCH_URL: "https://ais-aiplay-krc-01.search.windows.net"
+  VLLM_EMBED_URL: "http://vllm-embedding-svc:8081"
+  EMBED_SKILL_URI: "https://embed.20.249.162.81.nip.io/api/embed"
+  STORAGE_ACCOUNT: "saidxtest44159"
+  STORAGE_RG: "rg-aiplay-krc-01"
+  BLOB_CONTAINER: "bench-docs"
+  EMBED_MODEL: "Qwen/Qwen3-Embedding-4B"
+  VECTOR_DIM: "2560"
+  STORAGE_RESOURCE_ID: "/subscriptions/b219ebf4-b544-46b1-b7ce-9c9b25ea826c/resourceGroups/rg-aiplay-krc-01/providers/Microsoft.Storage/storageAccounts/saidxtest44159"
+---
+# Secret — API key (create manually: kubectl create secret generic bench-secrets --from-literal=SEARCH_API_KEY=xxx)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: bench-secrets
+# stringData:
+#   SEARCH_API_KEY: "<your-key>"

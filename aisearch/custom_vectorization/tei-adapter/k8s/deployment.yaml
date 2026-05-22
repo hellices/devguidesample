@@ -1,0 +1,86 @@
+# TEI (Text Embeddings Inference) + Adapter
+# TEI handles model inference, Adapter translates AI Search Custom Web API contract
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tei-bge-m3
+  labels:
+    app: tei-bge-m3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tei-bge-m3
+  template:
+    metadata:
+      labels:
+        app: tei-bge-m3
+    spec:
+      containers:
+        # TEI — embedding inference server
+        - name: tei
+          # CPU: ghcr.io/huggingface/text-embeddings-inference:cpu-1.7
+          # GPU (T4/L4):  ghcr.io/huggingface/text-embeddings-inference:1.7-turing
+          # GPU (A100/H100): ghcr.io/huggingface/text-embeddings-inference:1.7
+          image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.7
+          args:
+            - --model-id=BAAI/bge-m3
+            - --port=8080
+            - --max-batch-tokens=65536
+            - --max-client-batch-size=32
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 30
+
+        # Adapter — AI Search contract translation (sidecar)
+        - name: adapter
+          image: acrcustomvec01.azurecr.io/tei-adapter:latest
+          env:
+            - name: TEI_URL
+              value: "http://localhost:8080"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tei-bge-m3
+spec:
+  type: ClusterIP
+  selector:
+    app: tei-bge-m3
+  ports:
+    - name: adapter
+      port: 80
+      targetPort: 8000

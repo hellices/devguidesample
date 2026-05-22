@@ -1,0 +1,37 @@
+# Push API full benchmark — embed all 9280 docs via vLLM + push to AI Search
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bench-push
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bench
+          image: acrcustomvec01.azurecr.io/bench-runner:latest
+          args: ["push"]
+          envFrom:
+            - configMapRef:
+                name: bench-env
+          env:
+            - name: SEARCH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bench-secrets
+                  key: SEARCH_API_KEY
+            - name: RUN_ID
+              value: "run1"
+            # Override from bench-concurrency results:
+            - name: EMBED_BATCH
+              value: "32"
+            - name: CONCURRENCY
+              value: "30"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"

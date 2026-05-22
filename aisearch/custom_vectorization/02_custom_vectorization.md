@@ -12,7 +12,7 @@
 | 검증 모델 | [BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3), [Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) |
 | 호스팅 | FastAPI 서버를 Container Apps (TLS 자동) 또는 AKS + cert-manager (Let's Encrypt)로 HTTPS 노출 |
 | 핵심 검증 | Custom Web API Skill(인덱싱) + Custom Web API Vectorizer(쿼리) 동작 확인 |
-| 모델 비교 | [BGE-M3 vs Qwen3-Embedding-0.6B](bge_m3_vs_qwen3_comparison.md) |
+| 모델 비교 | [BGE-M3 vs Qwen3-Embedding-0.6B](ref_bge_m3_vs_qwen3_comparison.md) |
 | 인덱서 결과 | 5건 처리 / 0건 실패 |
 
 ---
@@ -68,13 +68,22 @@ Azure Blob Storage    →    Indexer    →    Custom Web API Skill    →    BG
 
 ```
 aisearch/custom_vectorization/
-├── custom_vectorization.md         # 본 문서
-├── bge_m3_vs_qwen3_comparison.md   # BGE-M3 vs Qwen3 검색 품질 비교
+├── 02_custom_vectorization.md         # 본 문서 (CPU 기본 가이드)
+├── 03_gpu_vllm_rag_guide.md           # GPU vLLM RAG 가이드 (Push API 적재 + 하이브리드 검색)
+├── ref_bge_m3_vs_qwen3_comparison.md   # BGE-M3 vs Qwen3 검색 품질 비교
+├── 01_custom_embedding_guide.md  # Custom 임베딩 적재 가이드 (SKU 선택부터 서빙 엔진까지)
+├── ref_chunking_strategies_research.md  # RAG 청킹 전략 리서치 (7가지 전략 비교)
 ├── architecture.excalidraw         # 아키텍처 다이어그램 (소스)
 ├── embedding-api/
 │   ├── app.py                     # FastAPI 서버 (Custom Web API Skill 계약 구현)
 │   ├── Dockerfile                 # 임베딩 모델을 빌드 타임에 다운로드
 │   └── requirements.txt           # Python 의존성
+├── tei-adapter/                    # TEI 기반 프로덕션 서빙 (선택)
+│   ├── app.py                     # AI Search 계약 ↔ TEI 변환 어댑터
+│   ├── Dockerfile                 # 경량 이미지 (~50MB, 모델 없음)
+│   ├── requirements.txt           # httpx, fastapi
+│   └── k8s/
+│       └── deployment.yaml        # TEI + Adapter sidecar 매니페스트
 ├── k8s/
 │   ├── deployment.yaml            # AKS Deployment + Service (ClusterIP) 매니페스트
 │   ├── cluster-issuer.yaml        # Let's Encrypt ClusterIssuer
@@ -759,10 +768,119 @@ curl -X POST "$SEARCH_URL/indexes/sample-chunk-idx/docs/search?api-version=2024-
 | 4 | SplitSkill `maximumPageLength`가 토큰이 아닌 문자 수 기준 | 임베딩 모델 토큰 제한(BGE-M3: 8192 토큰)과 단위가 다름 | 영문 기준 ~4자/토큰으로 환산하여 여유있게 설정 (예: 2000자 ≈ 500토큰) |
 
 ---
+## 🚀 프로덕션 전환: TEI (Text Embeddings Inference)
 
+대규모 인덱싱(수만 건 이상)이나 동시 쿼리가 많아지면, `sentence-transformers` 기반 서빙을 HuggingFace의 [TEI](https://github.com/huggingface/text-embeddings-inference)로 교체하여 처리량을 높일 수 있다. TEI는 Rust로 작성된 임베딩 전용 추론 서버로, dynamic batching, Flash Attention, 양자화를 기본 지원한다.
+
+### sentence-transformers → TEI 전환 시 차이
+
+TEI가 sentence-transformers보다 유리한 구조적 이유(GIL 우회, dynamic batching, GPU 최적화)는 [Custom 임베딩 적재 가이드 — 서빙 엔진 비교](01_custom_embedding_guide.md#3-gpu-임베딩-서빙-엔진-tei-vs-vllm) 참고. 아래는 이 가이드(CPU 기본 구성) 기준의 실용적 차이:
+
+| | sentence-transformers (현재) | TEI |
+|---|---|---|
+| 처리량 (CPU, 동일 하드웨어) | ~10 req/s | ~30-50 req/s |
+| 이미지 크기 | ~3GB (모델 포함) | ~2GB (TEI) + ~50MB (어댑터) |
+| 적합 시점 | 문서 수천 건 이하, 비정기 인덱싱 | 수만 건+, 동시 쿼리 다수 |
+
+### 아키텍처
+
+TEI의 API 형식(`/embed`)은 AI Search Custom Web API Skill 계약과 다르므로, 경량 어댑터(sidecar)로 변환한다.
+
+```
+AI Search → Ingress (HTTPS) → Adapter (:8000) → TEI (:8080)
+                                  ↑ 계약 변환만         ↑ 추론 담당
+                                  ~50MB, 모델 없음      Rust, 고성능
+```
+
+Adapter와 TEI를 **같은 Pod의 sidecar**로 구성하면 네트워크 홉 없이 `localhost`로 통신한다.
+
+### 1. 어댑터 이미지 빌드
+
+어댑터는 모델을 포함하지 않으므로 빌드가 빠르다 (~30초).
+
+```bash
+az acr build --registry acrcustomvec01 \
+  --image tei-adapter:latest \
+  --file tei-adapter/Dockerfile \
+  tei-adapter/
+```
+
+### 2. TEI + Adapter 배포
+
+`tei-adapter/k8s/deployment.yaml`은 TEI와 Adapter를 sidecar 패턴으로 같은 Pod에 배포한다.
+
+```bash
+kubectl apply -f tei-adapter/k8s/deployment.yaml
+```
+
+TEI 컨테이너는 시작 시 HuggingFace Hub에서 모델을 다운로드한다. Air-gapped 환경이면 모델을 PVC에 미리 배치하고 `--model-id=/models/bge-m3`로 로컬 경로를 지정한다.
+
+#### GPU 사용 시
+
+`deployment.yaml`에서 TEI 이미지와 리소스를 변경한다:
+
+```yaml
+# GPU 이미지 (T4/L4)
+image: ghcr.io/huggingface/text-embeddings-inference:1.7-turing
+# GPU 이미지 (A100/H100)
+# image: ghcr.io/huggingface/text-embeddings-inference:1.7
+resources:
+  limits:
+    nvidia.com/gpu: 1
+```
+
+### 3. Ingress 연결
+
+기존 `k8s/ingress.yaml`에서 backend 서비스를 `tei-bge-m3`으로 변경하면 AI Search 스킬셋/벡터라이저의 URI 수정 없이 전환 가능하다.
+
+```yaml
+# ingress.yaml 변경 (서비스 이름만 교체)
+backend:
+  service:
+    name: tei-bge-m3    # 기존: bge-m3-embedding
+    port:
+      number: 80
+```
+
+```bash
+kubectl apply -f k8s/ingress.yaml
+```
+
+### 4. 동작 확인
+
+```bash
+# Health check (TEI 상태 포함)
+curl -s https://embed.{IP}.nip.io/health
+# {"status":"ok","tei_status":200}
+
+# 임베딩 테스트 (AI Search 계약 형식 — 기존과 동일)
+curl -s -X POST https://embed.{IP}.nip.io/api/embed \
+  -H "Content-Type: application/json" \
+  -d '{"values":[{"recordId":"1","data":{"text":"test"}}]}'
+```
+
+AI Search 스킬셋/벡터라이저의 URI가 동일하므로, **인덱서를 재실행하면 TEI를 통해 벡터가 생성**된다.
+
+### 5. 롤백
+
+Ingress의 backend 서비스를 `bge-m3-embedding`으로 되돌리면 즉시 sentence-transformers 기반으로 롤백된다.
+
+### ⚠️ TEI 전환 시 주의사항
+
+| # | 증상 | 원인 | 해결 |
+|---|------|------|------|
+| 1 | TEI 컨테이너가 OOMKilled | BGE-M3 로딩에 ~3.5GB 필요 | memory limit 8Gi 이상 설정 |
+| 2 | TEI 시작 후 /health 502 | 모델 다운로드 + 로딩 시간 (~2분) | `initialDelaySeconds: 60` 이상 |
+| 3 | Adapter가 TEI보다 먼저 Ready | TEI가 아직 모델 로딩 중 | Adapter의 `/health`가 TEI 상태를 확인하므로 readiness 자동 연동 |
+| 4 | 벡터 차원이 달라짐 | TEI 기본값과 모델 설정 차이 | TEI `--model-id`가 동일 모델(`BAAI/bge-m3`)인지 확인 |
+
+---
 ## �📋 관련 문서
 
-- [BGE-M3 vs Qwen3-Embedding-0.6B 비교](bge_m3_vs_qwen3_comparison.md) — 동일 파이프라인에서의 검색 품질 비교 결과
+- [GPU vLLM RAG 가이드](03_gpu_vllm_rag_guide.md) — T4 GPU에서 vLLM + Push API 대량 적재 + 하이브리드 검색 + 리랭킹
+- [BGE-M3 vs Qwen3-Embedding-0.6B 비교](ref_bge_m3_vs_qwen3_comparison.md) — 동일 파이프라인에서의 검색 품질 비교 결과
+- [Custom 임베딩 적재 가이드](01_custom_embedding_guide.md) — SKU 선택부터 서빙 엔진까지 의사결정 가이드
+- [청킹 전략 리서치](ref_chunking_strategies_research.md) — 7가지 최신 RAG 청킹 전략 비교 분석
 
 ## 📋 참고
 
@@ -774,3 +892,4 @@ curl -X POST "$SEARCH_URL/indexes/sample-chunk-idx/docs/search?api-version=2024-
 - [AI Search Managed Identity로 Blob 연결](https://learn.microsoft.com/en-us/azure/search/search-howto-managed-identities-storage)
 - [Index Projections (1:N 청크 매핑)](https://learn.microsoft.com/en-us/azure/search/index-projections-concept-intro)
 - [SplitSkill (Built-in 텍스트 분할)](https://learn.microsoft.com/en-us/azure/search/cognitive-search-skill-textsplit)
+- [Text Embeddings Inference (TEI)](https://github.com/huggingface/text-embeddings-inference)
