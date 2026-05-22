@@ -503,7 +503,264 @@ az acr build --registry acrcustomvec01 \
 
 ---
 
-## 📋 관련 문서
+## � Custom Chunking 적용
+
+기본 구성에서는 문서 전체를 하나의 벡터로 변환한다. 문서가 길면 임베딩 토큰 제한에 걸리거나 검색 정밀도가 떨어진다. **Chunking**을 적용하면 문서를 작은 조각으로 분할하여 각각 독립된 벡터로 인덱싱하므로, 긴 문서에서도 관련 구간을 정밀하게 검색할 수 있다.
+
+AI Search에서 Chunking을 적용하는 두 가지 방식을 다룬다:
+
+| | Option A: Built-in SplitSkill | Option B: Custom Web API Skill |
+|---|---|---|
+| 구현 | AI Search 기본 제공 스킬 | FastAPI `/api/chunk` 엔드포인트 |
+| 커스터마이징 | `maximumPageLength`, `pageOverlapLength`, `textSplitMode` | 자유 (sentence boundary, regex, semantic 등) |
+| 코드 변경 | 없음 | `app.py`에 엔드포인트 추가 |
+| 적합 사례 | 빠른 적용, 단순 분할 | 도메인 특화 분할 로직, 다국어 sentence split 등 |
+
+두 방식 모두 **Index Projections**을 사용하여 1개 원본 문서 → N개 청크 인덱스 레코드 매핑을 처리한다.
+
+### 공통: 청크 인덱스 스키마
+
+청크 단위 인덱싱을 위해 인덱스 스키마를 변경한다. `parent_id` 필드로 원본 문서를 추적한다.
+
+```bash
+curl -X PUT "$SEARCH_URL/indexes/sample-chunk-idx?api-version=2024-07-01" \
+  -H "Content-Type: application/json" -H "api-key: $KEY" \
+  -d '{
+    "name": "sample-chunk-idx",
+    "fields": [
+      {"name": "chunk_id", "type": "Edm.String", "key": true, "filterable": true},
+      {"name": "parent_id", "type": "Edm.String", "filterable": true},
+      {"name": "title", "type": "Edm.String", "searchable": true, "filterable": true},
+      {"name": "chunk", "type": "Edm.String", "searchable": true},
+      {"name": "chunkVector", "type": "Collection(Edm.Single)", "searchable": true,
+       "dimensions": 1024, "vectorSearchProfile": "bge-m3-profile"}
+    ],
+    "vectorSearch": {
+      "algorithms": [{"name": "hnsw-algo", "kind": "hnsw",
+        "hnswParameters": {"m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine"}}],
+      "profiles": [{"name": "bge-m3-profile", "algorithm": "hnsw-algo",
+        "vectorizer": "bge-m3-vectorizer"}],
+      "vectorizers": [{
+        "name": "bge-m3-vectorizer",
+        "kind": "customWebApi",
+        "customWebApiParameters": {
+          "uri": "'$EMBED_URL'/api/embed",
+          "httpMethod": "POST"
+        }
+      }]
+    }
+  }'
+```
+
+### Option A. Built-in SplitSkill
+
+AI Search가 기본 제공하는 `#Microsoft.Skills.Text.SplitSkill`을 사용한다. 코드 변경 없이 스킬셋 정의만으로 적용 가능하다.
+
+#### 스킬셋
+
+SplitSkill → Custom Web API Embedding Skill 순서로 파이프라인을 구성한다. SplitSkill이 문서를 `pages` 배열로 분할하고, Embedding Skill이 각 `page`를 벡터로 변환한다.
+
+```bash
+curl -X PUT "$SEARCH_URL/skillsets/bge-m3-chunk-builtin-skillset?api-version=2024-07-01" \
+  -H "Content-Type: application/json" -H "api-key: $KEY" \
+  -d '{
+    "name": "bge-m3-chunk-builtin-skillset",
+    "skills": [
+      {
+        "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
+        "name": "text-split",
+        "context": "/document",
+        "inputs": [{"name": "text", "source": "/document/content"}],
+        "outputs": [{"name": "textItems", "targetName": "chunks"}],
+        "textSplitMode": "pages",
+        "maximumPageLength": 500,
+        "pageOverlapLength": 100
+      },
+      {
+        "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+        "name": "bge-m3-embedding-skill",
+        "uri": "'$EMBED_URL'/api/embed",
+        "httpMethod": "POST",
+        "timeout": "PT60S",
+        "batchSize": 10,
+        "context": "/document/chunks/*",
+        "inputs": [{"name": "text", "source": "/document/chunks/*"}],
+        "outputs": [{"name": "vector", "targetName": "chunkVector"}]
+      }
+    ]
+  }'
+```
+
+> 📌 `textSplitMode`는 `"pages"` (문자 수 기반) 또는 `"sentences"` (문장 단위) 중 선택한다. `maximumPageLength`는 문자 수 기준이다.
+
+#### 인덱서 (Index Projections)
+
+`indexProjections`를 사용하여 스킬셋이 생성한 청크 배열을 개별 인덱스 레코드로 매핑한다. `projectionMode: "generatedKeyAsId"`는 AI Search가 `chunk_id`를 자동 생성하도록 한다.
+
+```bash
+curl -X PUT "$SEARCH_URL/indexers/sample-chunk-builtin-indexer?api-version=2024-07-01" \
+  -H "Content-Type: application/json" -H "api-key: $KEY" \
+  -d '{
+    "name": "sample-chunk-builtin-indexer",
+    "dataSourceName": "sample-docs-ds",
+    "targetIndexName": "sample-chunk-idx",
+    "skillsetName": "bge-m3-chunk-builtin-skillset",
+    "fieldMappings": [
+      {"sourceFieldName": "metadata_storage_name", "targetFieldName": "title"}
+    ],
+    "outputFieldMappings": [],
+    "parameters": {"configuration": {"parsingMode": "default"}},
+    "indexProjections": {
+      "selectors": [{
+        "targetIndexName": "sample-chunk-idx",
+        "parentKeyFieldName": "parent_id",
+        "sourceContext": "/document/chunks/*",
+        "mappings": [
+          {"name": "chunk", "source": "/document/chunks/*"},
+          {"name": "chunkVector", "source": "/document/chunks/*/chunkVector"},
+          {"name": "title", "source": "/document/metadata_storage_name"}
+        ]
+      }],
+      "parameters": {"projectionMode": "generatedKeyAsId"}
+    }
+  }'
+```
+
+### Option B. Custom Web API Skill (직접 구현)
+
+문장 경계(sentence boundary) 기반 분할, 정규식 기반 분할, 도메인 특화 로직 등 SplitSkill로 커버되지 않는 경우 Custom Web API Skill로 청킹을 직접 구현한다.
+
+#### API 엔드포인트
+
+`embedding-api/app.py`에 `/api/chunk` 엔드포인트를 추가한다. 문장 경계에서 overlap을 적용하는 방식으로 구현되어 있다.
+
+```python
+@app.post("/api/chunk")
+def chunk(req: SkillRequest):
+    """Custom Web API Skill contract endpoint for text chunking.
+
+    Input  data field: {"text": "...", "chunkSize": 500, "overlap": 100}
+    Output data field: {"chunks": ["chunk1", "chunk2", ...]}
+    """
+    results = []
+    for v in req.values:
+        text = v.data.get("text", "")
+        size = v.data.get("chunkSize", CHUNK_SIZE)
+        ovlp = v.data.get("overlap", CHUNK_OVERLAP)
+        chunks = _split_text(text, chunk_size=size, overlap=ovlp)
+        results.append({
+            "recordId": v.recordId,
+            "data": {"chunks": chunks},
+            "errors": None,
+            "warnings": None,
+        })
+    return {"values": results}
+```
+
+청킹 로직(`_split_text`)은 문장 종결 부호(`.!?`)에서 분리한 뒤, `chunk_size` 문자 이내로 greedy하게 묶고, `overlap` 문자만큼 이전 청크의 꼬리를 단어 경계에 맞춰 다음 청크로 넘긴다. 문장 부호가 없는 텍스트는 단어 경계 기반으로 fallback 분할한다. 환경변수 `CHUNK_SIZE`(기본 500), `CHUNK_OVERLAP`(기본 100)으로 기본값을 제어하거나, 요청마다 `chunkSize`/`overlap` 필드로 오버라이드할 수 있다.
+
+> 💡 도메인 특화 요구사항이 있으면 `_split_text`를 교체한다. 예: Markdown heading 기준 분할, 코드 블록 보존, LangChain `RecursiveCharacterTextSplitter` 사용 등.
+
+#### 스킬셋
+
+Custom Chunking Skill → Custom Embedding Skill 순서로 파이프라인을 구성한다.
+
+```bash
+curl -X PUT "$SEARCH_URL/skillsets/bge-m3-chunk-custom-skillset?api-version=2024-07-01" \
+  -H "Content-Type: application/json" -H "api-key: $KEY" \
+  -d '{
+    "name": "bge-m3-chunk-custom-skillset",
+    "skills": [
+      {
+        "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+        "name": "custom-chunk-skill",
+        "uri": "'$EMBED_URL'/api/chunk",
+        "httpMethod": "POST",
+        "timeout": "PT30S",
+        "batchSize": 10,
+        "context": "/document",
+        "inputs": [{"name": "text", "source": "/document/content"}],
+        "outputs": [{"name": "chunks", "targetName": "chunks"}]
+      },
+      {
+        "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+        "name": "bge-m3-embedding-skill",
+        "uri": "'$EMBED_URL'/api/embed",
+        "httpMethod": "POST",
+        "timeout": "PT60S",
+        "batchSize": 10,
+        "context": "/document/chunks/*",
+        "inputs": [{"name": "text", "source": "/document/chunks/*"}],
+        "outputs": [{"name": "vector", "targetName": "chunkVector"}]
+      }
+    ]
+  }'
+```
+
+#### 인덱서 (Index Projections)
+
+Built-in SplitSkill 방식과 동일한 Index Projections 구조를 사용한다.
+
+```bash
+curl -X PUT "$SEARCH_URL/indexers/sample-chunk-custom-indexer?api-version=2024-07-01" \
+  -H "Content-Type: application/json" -H "api-key: $KEY" \
+  -d '{
+    "name": "sample-chunk-custom-indexer",
+    "dataSourceName": "sample-docs-ds",
+    "targetIndexName": "sample-chunk-idx",
+    "skillsetName": "bge-m3-chunk-custom-skillset",
+    "fieldMappings": [
+      {"sourceFieldName": "metadata_storage_name", "targetFieldName": "title"}
+    ],
+    "outputFieldMappings": [],
+    "parameters": {"configuration": {"parsingMode": "default"}},
+    "indexProjections": {
+      "selectors": [{
+        "targetIndexName": "sample-chunk-idx",
+        "parentKeyFieldName": "parent_id",
+        "sourceContext": "/document/chunks/*",
+        "mappings": [
+          {"name": "chunk", "source": "/document/chunks/*"},
+          {"name": "chunkVector", "source": "/document/chunks/*/chunkVector"},
+          {"name": "title", "source": "/document/metadata_storage_name"}
+        ]
+      }],
+      "parameters": {"projectionMode": "generatedKeyAsId"}
+    }
+  }'
+```
+
+### 청크 검색 검증
+
+청크 인덱스에 대해 벡터 검색을 수행한다. 문서 단위 검색과 달리 관련 구간만 반환되므로 검색 정밀도가 높다.
+
+```bash
+curl -X POST "$SEARCH_URL/indexes/sample-chunk-idx/docs/search?api-version=2024-07-01" \
+  -H "Content-Type: application/json" -H "api-key: $KEY" \
+  -d '{
+    "count": true, "select": "title, chunk, parent_id",
+    "vectorQueries": [{
+      "kind": "text",
+      "text": "How does Azure handle container orchestration?",
+      "fields": "chunkVector", "k": 5
+    }]
+  }'
+```
+
+`parent_id`로 원본 문서를 추적할 수 있고, `chunk` 필드에는 해당 구간의 텍스트만 포함된다.
+
+### ⚠️ Chunking 관련 주의사항
+
+| # | 증상 | 원인 | 해결 |
+|---|------|------|------|
+| 1 | 인덱서 실행 후 인덱스에 레코드가 생성되지 않음 | `indexProjections`가 누락되거나 `sourceContext`가 청크 배열과 불일치 | `sourceContext`를 `/document/chunks/*`로 정확히 지정 |
+| 2 | Embedding Skill에서 빈 텍스트 입력 | 청크 스킬의 output `targetName`과 Embedding Skill의 `context`/`source` 경로 불일치 | 청크 output의 `targetName`이 `chunks`이면 source는 `/document/chunks/*` |
+| 3 | `projectionMode` 미설정 시 key 충돌 | 여러 청크가 동일한 원본 문서 key를 사용하려 함 | `"projectionMode": "generatedKeyAsId"` 설정 |
+| 4 | SplitSkill `maximumPageLength`가 토큰이 아닌 문자 수 기준 | 임베딩 모델 토큰 제한(BGE-M3: 8192 토큰)과 단위가 다름 | 영문 기준 ~4자/토큰으로 환산하여 여유있게 설정 (예: 2000자 ≈ 500토큰) |
+
+---
+
+## �📋 관련 문서
 
 - [BGE-M3 vs Qwen3-Embedding-0.6B 비교](bge_m3_vs_qwen3_comparison.md) — 동일 파이프라인에서의 검색 품질 비교 결과
 
@@ -515,3 +772,5 @@ az acr build --registry acrcustomvec01 \
 - [BAAI/bge-m3 모델](https://huggingface.co/BAAI/bge-m3)
 - [Qwen/Qwen3-Embedding-0.6B 모델](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B)
 - [AI Search Managed Identity로 Blob 연결](https://learn.microsoft.com/en-us/azure/search/search-howto-managed-identities-storage)
+- [Index Projections (1:N 청크 매핑)](https://learn.microsoft.com/en-us/azure/search/index-projections-concept-intro)
+- [SplitSkill (Built-in 텍스트 분할)](https://learn.microsoft.com/en-us/azure/search/cognitive-search-skill-textsplit)
