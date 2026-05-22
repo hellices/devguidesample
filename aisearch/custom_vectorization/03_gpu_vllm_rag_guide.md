@@ -69,6 +69,8 @@ AI Search
 - 쿼리 시점에는 AI Search가 Custom Vectorizer를 호출 → **Adapter 필요** (AI Search 계약 변환)
 - 쿼리 1건 벡터화 ~10ms, 병목이 아님
 
+> ⚠️ **Vectorizer는 항상 1건씩 호출한다**: Skill은 `batchSize`로 다수 레코드를 배치 전송하지만, [Vectorizer는 `values` 배열에 항상 1건만 담아 보낸다](https://learn.microsoft.com/en-us/azure/search/vector-search-vectorizer-custom-web-api). 어댑터 코드는 배치를 지원하되 실제 쿼리 시점에는 단건 호출만 받는다.
+
 > ⚠️ **Vectorizer 에러 처리**: Custom Vectorizer 엔드포인트가 에러/경고를 반환해도 [AI Search는 쿼리 응답에 노출하지 않는다](https://learn.microsoft.com/en-us/azure/search/vector-search-vectorizer-custom-web-api). vLLM/Adapter 장애 시 벡터 검색이 조용히 실패하므로, 엔드포인트 헬스체크와 별도 모니터링이 필수다.
 
 ---
@@ -574,7 +576,7 @@ curl localhost:8081/metrics | grep -E "vllm:(num_requests|gpu_cache)"
 | vLLM + BGE-M3 | 0.57B 모델에서 PyTorch overhead가 크다 (23.85 c/s) |
 | TEI + BGE-M3 | **51.11 c/s로 가장 빠르지만**, MTEB 성능이 Qwen3-4B 대비 낮아 품질·속도 트레이드오프 |
 | vLLM + Qwen3-Embedding-8B | 8B(16GB)이면 T4 VRAM 전체를 소비, 청킹 LLM 공간 없음 |
-| sentence-transformers | GIL 병목, GPU dynamic batching 미지원 ([상세](01_custom_embedding_guide.md)) |
+| sentence-transformers | 서버 레벨 dynamic batching 미지원, Python 단일 프로세스 동시성 제한 ([상세](01_custom_embedding_guide.md)) |
 
 vLLM은 PyTorch 기반이라 **Qwen3 아키텍처를 HuggingFace 가중치에서 직접 로딩** 가능하다. TEI(Rust/candle)는 모델별 커널을 별도 구현해야 하므로 신규 아키텍처 지원이 늦다. 단, BERT 계열(BGE-M3)에서는 TEI가 2.1배 빠르다 ([Appendix B](#appendix-b-성능-벤치마크) 참고).
 
