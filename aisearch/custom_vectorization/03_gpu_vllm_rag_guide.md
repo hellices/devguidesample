@@ -169,6 +169,34 @@ kubectl describe node <gpu-node> | grep nvidia.com/gpu
 # nvidia.com/gpu:  1
 ```
 
+### GPU Time-Slicing 설정
+
+한 Pod 내 두 컨테이너(vllm-embed, vllm-chunk)가 각각 `nvidia.com/gpu: 1`을 요청하므로, 물리 GPU 1장을 2장으로 광고해야 한다:
+
+```bash
+# NVIDIA device plugin ConfigMap (gpu-sharing)
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nvidia-device-plugin
+  namespace: kube-system
+data:
+  config: |
+    version: v1
+    sharing:
+      timeSlicing:
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 2
+EOF
+
+# device plugin DaemonSet 재시작
+kubectl rollout restart daemonset -n kube-system nvidia-device-plugin-daemonset
+```
+
+재시작 후 노드의 `nvidia.com/gpu` capacity가 2로 변경된다. vLLM이 `--gpu-memory-utilization`으로 VRAM 사용량을 직접 제어하므로 OOM 없이 안전하게 공유된다.
+
 ---
 
 ## 4. GPU Pod 배포
@@ -278,8 +306,14 @@ spec:
             - name: HF_HOME
               value: /models
           resources:
-            requests: { cpu: "1", memory: "4Gi" }
-            limits:   { cpu: "2", memory: "8Gi" }
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+              nvidia.com/gpu: 1      # time-slicing 필수 (아래 Note 참고)
+            limits:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu: 1
           volumeMounts:
             - name: model-cache
               mountPath: /models
