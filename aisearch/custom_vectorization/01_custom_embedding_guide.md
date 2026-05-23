@@ -133,26 +133,7 @@ AI Search의 [Push API](https://learn.microsoft.com/en-us/azure/search/search-wh
 
 #### 아키텍처 비교
 
-```
-Indexer (Pull):                      Push API:
-┌──────────────┐                     ┌──────────────────────────────┐
-│  AI Search   │                     │  내 코드 (Python Pipeline)    │
-│  Indexer     │ ← 인덱서가 주도      │                              │ ← 내가 주도
-│              │                     │  Source → Chunk → Embed      │
-│  deg: 10     │                     │  → Push to Index             │
-│  순차 배치    │                     │                              │
-│  2h/24h 제한  │                     │  동시성: 자유 (Semaphore 등)  │
-└──────┴───────┘                     │  시간 제한: 없음              │
-                                     │  배치: 1,000건/16MB, throttling  │
-       │ HTTP                        │  파이프라이닝: ✅             │
-       ▼                             └──────────┬───────────────────┘
-┌──────────────┐                                │ HTTP POST
-│  GPU 엔드포인트│                                ▼
-│  /api/embed  │                     ┌──────────────────────────────┐
-│  /api/chunk  │                     │  AI Search Index             │
-└──────────────┘                     │  POST /indexes/{idx}/docs/index
-                                     └──────────────────────────────┘
-```
+![Indexer vs Push API](indexer_vs_pushapi.png)
 
 #### Push API 성능이 높은 이유
 
