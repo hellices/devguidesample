@@ -1,0 +1,13 @@
+{
+  "name": "db-cutover-simulation",
+  "version": "1.0.0",
+  "description": "MySQL DNS Cutover 무중단 전환 시뮬레이션",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "cutover": "node scripts/cutover.js"
+  },
+  "dependencies": {
+    "mysql2": "^3.9.0"
+  }
+}

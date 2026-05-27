@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: db-sim
+---
+# Secret 은 02-setup-db.ps1 에서 kubectl create secret 으로 생성/갱신
+# (deployment.yaml 에 포함하지 않음 — 실행 시 동적 값 사용)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crud-worker
+  namespace: db-sim
+  labels:
+    app: crud-worker
+spec:
+  replicas: 50
+  selector:
+    matchLabels:
+      app: crud-worker
+  template:
+    metadata:
+      labels:
+        app: crud-worker
+    spec:
+      containers:
+        - name: crud-worker
+          image: REPLACE_ACR/db-sim-app:latest
+          envFrom:
+            - secretRef:
+                name: db-secret
+          env:
+            - name: WORKERS
+              value: "5"
+            - name: LOOP_MS
+              value: "20"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          # 다운타임 감지를 위해 liveness probe 없이 실행 (재시작 없이 로그 관찰)
