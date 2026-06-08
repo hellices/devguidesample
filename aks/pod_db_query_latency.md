@@ -3,13 +3,13 @@
 DB 쿼리 응답이 **30ms를 초과하면 fail 처리**되는 시나리오에서,
 지연의 원인을 단계별로 좁혀가는 방법.
 
-![Architecture](pod_db_query_latency.png)
+![Architecture](./pod_db_query_latency/pod_db_query_latency.png)
 
 ## 현재 상황: 메트릭 분석
 
 ### DB 쿼리 지연
 
-![MySQL query latency](01_query_latency.png)
+![MySQL query latency](./pod_db_query_latency/01_query_latency.png)
 
 | 메트릭 | 관측 값 | 판단 |
 |---|---|---|
@@ -21,7 +21,7 @@ P95는 SLA 내인데 P99부터 30ms를 넘고, max는 300ms까지 치솟는다.
 
 ### Pod 런타임 상태
 
-![Pod runtime metrics](02_pod_runtime.png)
+![Pod runtime metrics](./pod_db_query_latency/02_pod_runtime.png)
 
 | 메트릭 | 관측 값 |
 |---|---|
@@ -140,6 +140,50 @@ nohup kubectl logs -f <POD> -n <NS> -c debugger-XXXXX \
 | 1 | CPU limit 제거 후 P99 변화 | 내려감 → throttling 대응 |
 | 2 | pool 확대 후 P99 변화 | 내려감 → pool 설정 조정 |
 | 3 | ss RTT 측정 | 높음 → 네트워크 경로 조사, 정상 → 쿼리/DB 쪽 조사 |
+
+---
+
+## 적용 결과: CPU limit 2 core 상향
+
+Step 1 가설 검증 — `limits.cpu`를 `1` → `2`로 상향하고 `requests.cpu`는 `1` 유지.
+QoS는 Guaranteed → **Burstable** 로 강등. Appendix [C.5](#c5-권장-조치) 옵션 A(`req=lim=2`)와 옵션 B(`req=500m / lim=2`)의 중간 형태로, 노드 capacity 부담을 늘리지 않으면서 burst 천장만 2배 확보하는 선택.
+
+```yaml
+resources:
+  requests:
+    cpu: "1"       # 유지
+    memory: 1Gi
+  limits:
+    cpu: "2"       # 1 → 2
+    memory: 1Gi
+```
+
+![Deployment YAML (cpu limit 2)](./pod_db_query_latency/result_01.png)
+
+### 변화 전후 비교
+
+![APM endpoint latency after change](./pod_db_query_latency/result_02.png)
+
+![Pod runtime after change](./pod_db_query_latency/result_pod_runtime.png)
+
+| 지표 | Before (limit 1 core) | After (limit 2 core) | 판정 |
+|---|---|---|---|
+| `container.cpu.throttled` (time) | **100~200 ms/s** 상시 | 평상시 **< 2 ms**, 일시 peak 7 ms | 약 30배 감소 |
+| query **P99** | 20~90 ms | **5~8 ms** | **30 ms SLA 내** |
+| query **P99.9 / max** | ~300 ms | 평상시 10~20 ms, peak ~28 ms | 약 10배 감소 |
+| query **P95** | 3.5~6 ms | 3.49 ms | 변화 없음 (원래 정상) |
+| event loop delay P95 | 100~600 μs | 20~50 μs | 안정화 |
+| GC pause P95 | 1~2 ms | 5~8 ms | **소폭 증가** (아래 참고) |
+| heap used | ~128 MB | ~110 MB | 변화 없음 |
+
+P99가 SLA(30 ms) 내로 안정화되고 max도 ~28 ms로 떨어져 **fail 처리 구간이 사라짐**. throttle이 거의 사라졌으므로 Appendix [C.3.2 / C.3.4](#c32-수정된-가설)의 가설 — "burst가 1 core quota를 자주 초과해 큐가 누적되며 tail이 비선형으로 증폭된다" — 가 본 케이스의 지배적 원인이었음이 확인됨.
+
+### 관전 포인트
+
+- **Step 2(connection pool) / Step 3(network RTT) 진행 불필요** — Step 1에서 인과가 확정됨.
+- **Burstable로 강등됨** — 노드 압박 시 eviction 우선순위가 Guaranteed보다 낮아짐. 본 환경은 노드 capacity 여유가 충분해 자원 효율을 택한 형태. 노드가 자주 압박 상태가 되는 환경이면 옵션 A(`req=lim=2`)로 Guaranteed 유지가 안전.
+- **GC pause P95가 소폭 증가 (1~2 ms → 5~8 ms)** — heap usage는 비슷한데 GC 시간만 늘었다. limit 상향으로 V8 GC worker가 더 적극적으로 CPU를 잡을 수 있게 된 영향으로 보임 (이전엔 GC worker도 quota에 막혀 짧게 잘려 실행되던 것이 풀린 것). tail latency에는 영향 없는 수준이라 무시.
+- **CPU throttled가 0이 아님 (peak 7 ms)** — 가끔 burst가 2 core까지도 닿는다는 신호. 현재 SLA에는 무관하지만 추가 부하 증가 시 다시 P99에 영향 줄 수 있어 모니터링 유지 필요.
 
 ---
 
