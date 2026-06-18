@@ -91,6 +91,13 @@ az netappfiles account create \
 ```
 
 ### 1.2 용량 풀 생성 (Premium)
+### 1.2 용량 풀 생성
+
+> **Service level은 Premium 전용이 아닙니다.** Object REST API(버킷)는 service level
+> (Standard/Premium/Ultra) 제한이 없으며, 성능 요구에 맞게 고르면 됩니다. 아래는 Premium 예시이고
+> 비용을 줄이려면 `--service-level Standard`로 충분합니다.
+> 단, 버킷은 **cache 볼륨에선 미지원**이고 **빈 볼륨이 아닌(데이터가 있는) 볼륨**이어야 합니다.
+
 ```bash
 az netappfiles pool create \
   --resource-group <RESOURCE_GROUP> \
