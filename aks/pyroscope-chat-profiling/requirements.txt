@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Pyroscope profiling
+pyroscope-io==1.0.9
+
+# Azure AI
+azure-ai-inference==1.0.0b9
+azure-identity==1.14.0
+azure-core==1.29.5

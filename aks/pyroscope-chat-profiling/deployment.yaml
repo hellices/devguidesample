@@ -1,0 +1,128 @@
+# AI Foundry Chat API + Pyroscope profiling on AKS
+#
+# app.py is mounted from a ConfigMap. Create it first:
+#   kubectl create configmap chat-app \
+#     --from-file=app.py -n ai-foundry-chat \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#
+# Then: kubectl apply -f deployment.yaml
+# (deploy.sh automates both steps.)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-foundry-chat
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-foundry-chat
+  namespace: ai-foundry-chat
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-foundry-chat
+  namespace: ai-foundry-chat
+  labels:
+    app: ai-foundry-chat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-foundry-chat
+  template:
+    metadata:
+      labels:
+        app: ai-foundry-chat
+    spec:
+      serviceAccountName: ai-foundry-chat
+      # initContainer installs deps into a shared volume so the app
+      # container can run the ConfigMap-mounted app.py without a custom image.
+      initContainers:
+      - name: deps
+        image: python:3.11-slim
+        command:
+        - sh
+        - -c
+        - |
+          pip install --no-cache-dir --target /deps \
+            fastapi uvicorn[standard] pydantic \
+            pyroscope-io \
+            azure-ai-inference azure-identity azure-core
+        volumeMounts:
+        - name: deps
+          mountPath: /deps
+      containers:
+      - name: chat-api
+        image: python:3.11-slim
+        imagePullPolicy: IfNotPresent
+        workingDir: /app
+        command: ["python", "app.py"]
+        env:
+        - name: PYTHONPATH
+          value: /deps
+        - name: PYROSCOPE_SERVER
+          value: "http://pyroscope.observability.svc.cluster.local.:4040"
+        - name: AI_FOUNDRY_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: ai-foundry-creds
+              key: endpoint
+              optional: true
+        - name: AI_FOUNDRY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-foundry-creds
+              key: api_key
+              optional: true
+        ports:
+        - name: http
+          containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        - name: deps
+          mountPath: /deps
+      volumes:
+      - name: app-code
+        configMap:
+          name: chat-app
+          defaultMode: 0755
+      - name: deps
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-foundry-chat
+  namespace: ai-foundry-chat
+  labels:
+    app: ai-foundry-chat
+spec:
+  type: ClusterIP
+  selector:
+    app: ai-foundry-chat
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
