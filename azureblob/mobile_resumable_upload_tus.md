@@ -12,19 +12,13 @@
 
 ## 해결책
 
-핵심은 두 줄:
-
 - **client ↔ server**: **tus.io 1.0.0 프로토콜** — chunk 단위 PATCH + HEAD 로 권위 offset 재동기화. 모바일은 TUSKit / tus-android-client / tus-js-client 그대로 사용 (백그라운드 task·재시도·망 전환·재부팅 후 resume 까지 SDK 가 처리)
 - **server ↔ blob**: 요청 InputStream 을 그대로 `BinaryData.fromStream(in, length)` → `BlockBlobClient.stageBlock(...)`. **chunk 1개를 한 번에 들고 있는 객체가 경로상 없음** → 동시 PATCH N 개라도 힙 ≈ N × ~64 KB. tus 의 "chunk → finalize" 가 Block Blob 의 "stage block + commit block list" 와 1:1 대응이라 별도 변환 레이어 불필요
 
-이 두 줄에서 따라오는 결과:
+추가:
 
-- **무상태**: PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산 → 어떤 파드가 받든 동일 결과. Redis 같은 외부 세션 저장소 **필요 없음** (대규모에서 latency/비용 최적화를 원하면 *캐시로* 끼울 수는 있음 — "알아둘 점" 참고). 시나리오 C 가 다른 JVM 으로 검증
+- **무상태**: PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산 → 어떤 파드가 받든 동일 결과. Redis 같은 외부 세션 저장소 필요 없음 (대규모에서 latency/비용 최적화를 원하면 *캐시로* 끼울 수는 있음 — "알아둘 점" 참고). 시나리오 C 가 다른 JVM 으로 검증
 - **재시도 위치 이동**: stream 이 non-replayable 이라 Azure SDK 의 transient retry 는 꺼지지만, 그게 정확히 **클라이언트 HEAD → PATCH 루프**가 담당하는 일 — 시나리오 D 로 검증
-
-이 샘플 한정 설정 (핵심 설계와 무관):
-
-- **인증**: 보안 정책상 account key 차단이 필요해서 `DefaultAzureCredential` (로컬: AzureCliCredential, AKS: Workload Identity) 로 맞춘 것. 필요 없으면 connection string 방식으로 바꿔도 위 설계는 그대로 동작
 
 ## 아키텍처
 
