@@ -17,7 +17,7 @@
 
 추가:
 
-- **무상태**: PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산 → 어떤 파드가 받든 동일 결과. Redis 같은 외부 세션 저장소 필요 없음 (대규모에서 latency/비용 최적화를 원하면 *캐시로* 끼울 수는 있음 — "알아둘 점" 참고). 시나리오 C 가 다른 JVM 으로 검증
+- **무상태**: PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산 → 어떤 파드가 받든 동일 결과. 시나리오 C 가 다른 JVM 으로 검증. 지금은 진행 상태를 모두 Blob 에서 관리하지만, 어차피 이 서비스가 사용자 세션을 Redis 로 관리한다면 업로드 진행 상태도 같은 Redis 에 캐시해 성능을 끌어올릴 여지가 있음 — "알아둘 점" 참고
 - **재시도 위치 이동**: stream 이 non-replayable 이라 Azure SDK 의 transient retry 는 꺼지지만, 그게 정확히 **클라이언트 HEAD → PATCH 루프**가 담당하는 일 — 시나리오 D 로 검증
 
 ## 아키텍처
