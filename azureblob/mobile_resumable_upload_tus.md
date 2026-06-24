@@ -1,8 +1,24 @@
 # Spring Boot Resumable Upload — tus.io ↔ Azure Block Blob
 
-모바일 클라이언트가 끊김 후 이어 올리는 시나리오를 검증하기 위한 샘플.
-HTTP 레벨은 **tus 1.0.0 프로토콜**, 스토리지 레벨은 **Azure Block Blob의 Put Block / Commit Block List**.
-서버는 완전 무상태 — 진행 상태는 모두 Azure가 보관한다.
+모바일에서 50 MB급 파일을 끊김 후 이어 올리는 시나리오를, 서버는 무상태로 유지한 채 Azure Block Blob 으로 풀어낸 샘플.
+
+## 요건
+
+- 모바일 클라이언트(iOS / Android)가 수십 MB 파일 업로드. 셀룰러↔WiFi 전환, 백그라운드 진입, OS suspend, 앱 강제 종료가 발생해도 **처음부터 다시 보내지 않고 끊긴 지점부터 이어 올리기**
+- iOS / Android 양쪽 표준 SDK를 그대로 써야 함 — 클라이언트 커스텀 구현 회피
+- 서버는 수평 확장 가능해야 함 — 같은 업로드의 다음 PATCH 가 다른 파드에 가도 동일하게 동작
+- 진행 상태를 서버 메모리·디스크에 들고 있지 않기 — 파드 재시작·교체 시 손실 없음
+- Storage Account key 사용 금지 — Entra ID(개발 시 az login, AKS 에선 Workload Identity)로만 접근
+- PATCH body 가 힙에 누적되지 않을 것 — 50 MB × 동시 N 업로드가 와도 JVM 메모리 폭증 없음
+
+## 해결책 (한 줄씩)
+
+- **HTTP**: **tus.io 1.0.0 프로토콜**. TUSKit / tus-android-client / tus-js-client 가 백그라운드 task·재시도·망 전환·재부팅 후 resume 까지 다 처리. 서버는 사양만 맞추면 됨
+- **스토리지**: Azure Block Blob 의 **stage block + commit block list**. tus 의 "chunk → finalize" 와 1:1 대응 — 별도 변환 레이어 불필요
+- **무상태 서버**: 외부 세션 저장소(Redis 등) 없음. PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산. 어떤 파드가 받든 동일 결과 → 시나리오 C 가 다른 JVM 으로 검증
+- **End-to-end streaming**: `req.getInputStream()` → `BinaryData.fromStream(in, length)` 그대로 SDK 에 전달. chunk 전체를 들고 있는 객체가 경로상 **없음**. 동시 PATCH N 개라도 힙 ≈ N × ~64 KB (Tomcat read buffer + Netty pooled chunk)
+- **재시도 위치 이동**: stream 이 non-replayable 이라 Azure SDK 의 transient retry 는 꺼지지만, 그게 정확히 **클라이언트의 HEAD → PATCH 루프**가 담당하는 일 — 시나리오 D 로 검증
+- **인증**: `DefaultAzureCredential`. 로컬 개발은 `AzureCliCredential`, AKS 에선 Workload Identity 가 자동으로 끼워짐. Storage Account 는 `--allow-shared-key-access false` 로 키 자체를 막아둠
 
 ## 검증 결과 요약
 
