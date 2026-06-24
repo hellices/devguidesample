@@ -288,28 +288,6 @@ committed blob id=<UUID> size=52428800
   - **단 source of truth는 그대로 Azure로 두고 Redis는 캐시로만 사용.** MISS 시 `listBlocks`로 fallback해서 Redis에 재적재. Redis 장애가 데이터 무결성을 깨지 않음. 시나리오 C(서버 재시작)도 그대로 작동
   - 코드 변경 폭은 작음 — `TusUploadService.status` / `appendChunk` 에 HGETALL / HINCRBY 두 줄과 try-fallback만 추가
 
-## 파일 구성
-
-```
-azureblob/
-├── mobile_resumable_upload_tus.md                # 이 문서
-└── spring-resumable-upload/                      # 샘플 구현
-    ├── architecture.excalidraw                   # 구성 다이어그램
-    ├── pom.xml
-    ├── src/main/java/com/example/upload/
-    │   ├── UploadApplication.java
-    │   ├── config/BlobConfig.java                # DefaultAzureCredential
-    │   └── tus/
-    │       ├── TusFilter.java                    # version 협상 + Tus-Resumable
-    │       ├── TusController.java                # OPTIONS / POST / HEAD / PATCH / DELETE
-    │       └── TusUploadService.java             # Azure block staging/commit
-    ├── src/main/resources/application.yml
-    └── scripts/
-        ├── make-test-file.sh
-        ├── tus_client.py                         # 모바일 SDK 흉내 (HEAD-then-PATCH)
-        └── verify-blob.sh                        # az download + cmp
-```
-
 ## 모바일 SDK 연동 참고
 
 | 플랫폼 | SDK | 핵심 사용법 |
