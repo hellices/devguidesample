@@ -296,12 +296,13 @@ committed blob id=<UUID> size=52428800
 - **chunk 크기 선택.** 기본 1 MiB는 모바일 셀룰러 환경(끊김 시 손실 최소화)에 맞춘 값. WiFi/유선 환경이면 `--chunk-size $((4*1024*1024))` 같이 늘리면 PATCH 횟수가 줄어 throughput이 올라간다. block 수 제한(50,000)과 끊김 손실의 trade-off.
 - **메타데이터 보존**: `commitBlockList` 는 metadata를 덮어쓰므로, 최종 commit 시 POST에서 저장해둔 `x_tus_*` 메타를 다시 넘겨준다 (TusUploadService.appendChunk).
 - **TLS / 인증 / CORS**: 이 샘플은 평문 HTTP, 익명 접근. 운영에서는 HTTPS + Spring Security + 모바일 앱 인증(Entra ID, Firebase Auth, JWT 등) 필요.
-- **다중 파드 확장**: 외부 상태(Redis 등) 불필요. id가 곧 blob 이름이고 진행 상태는 Azure가 보관 — 어떤 파드가 PATCH를 받든 `listBlocks(UNCOMMITTED)` 로 오프셋을 다시 계산한다. 시나리오 C가 "다른 JVM" 케이스로 이를 입증.
+- **다중 파드 확장**: 외부 상태(Redis 등) 불필요. id가 곧 blob 이름이고 진행 상태는 Azure가 보관 — 어떤 파드가 PATCH를 받든 `listBlocks(UNCOMMITTED)` 로 오프셋을 다시 계산한다 (Azure Blob 의 strong read-after-write consistency 에 의존). 시나리오 C가 "다른 JVM" 케이스로 이를 입증.
 - **성능 최적화 옵션 — Redis 캐시 도입.** 정확성/단순성 측면에선 현재 설계로 충분하지만, 대규모(예: 200K MAU 수준)에서 latency·storage transaction 비용을 더 줄이려면 Redis를 **캐시 계층**으로 끼울 수 있다.
   - 현재: HEAD/PATCH 1회당 `getProperties` + `listBlocks` (Azure RTT 2회, p99 30~50 ms)
   - Redis 추가 시: `HGETALL upload:{id}` 1 RTT(~1 ms) + 성공 후 `HINCRBY offset`. Azure metadata 호출 1회 절감
   - 200K MAU × 1.5 업로드/일 × 50 chunk 기준 storage transaction 비용 ~$400/월 → ~$0 (Redis Basic C1 ~$50/월 추가)
   - **단 source of truth는 그대로 Azure로 두고 Redis는 캐시로만 사용.** MISS 시 `listBlocks`로 fallback해서 Redis에 재적재. Redis 장애가 데이터 무결성을 깨지 않음. 시나리오 C(서버 재시작)도 그대로 작동
+  - **commit 직후 캐시 무효화 필요** — `commitBlockList` 성공 시 Redis `upload:{id}` 키 `DEL`. 그래야 같은 id 로 완료된 업로드에 대해 stale offset 이 올라오지 않음
   - 코드 변경 폭은 작음 — `TusUploadService.status` / `appendChunk` 에 HGETALL / HINCRBY 두 줄과 try-fallback만 추가
 
 ## 모바일 SDK 연동 참고
