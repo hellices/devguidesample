@@ -1,13 +1,13 @@
 # Spring Boot Resumable Upload — tus.io ↔ Azure Block Blob
 
-모바일 사용자 약 20만 명 규모, 일반 50 MB · 최대 200 MB 파일을 끊김 후 이어 올리되, 파드 OOM 없이 Azure Block Blob 으로 자연스럽게 흘려가게 만든 샘플.
+모바일 사용자 약 20만 명 규모, 일반 50 MB · 최대 200 MB 파일을 끊김 후 이어 올리되, 파드 OOM 없이 Azure Block Blob 으로 자연스럽게 흘러가게 만든 샘플.
 
 ## 요건
 
 - **사용자 규모**: 모바일 사용자 약 20만 명. 다수가 동시에 업로드 시도 — 파드당 수십~수백 동시 PATCH 가능성
 - **파일 크기**: 일반 50 MB, 최대 200 MB. 모바일 업로드 패턴상 1 MiB chunk 구조면 50~200개 PATCH/파일
 - **모바일 끊김 / 이어 올리기**: 셀룰러↔WiFi 전환, 백그라운드 진입, OS suspend, 앱 강제 종료가 발생해도 처음부터 다시 보내지 않고 끊긴 지점부터 이어 올린다. iOS / Android 표준 SDK 그대로 사용 (클라이언트 커스텀 구현 회피)
-- **파드 OOM 방지**: 동시 N 개의 PATCH 가 들어와도 chunk 전체(수 MB~수십 MB)를 힙에 들고 있지 않아야 함. JVM 메모리는 동시 접속 수와 무관하게 작은 자구만 유지
+- **파드 OOM 방지**: 동시 N 개의 PATCH 가 들어와도 chunk 전체(수 MB~수십 MB)를 힙에 들고 있지 않아야 함. JVM 메모리는 동시 접속 수와 무관하게 작은 버퍼만 유지
 - **Azure Blob 으로 자연스러운 업로드**: 서버가 chunk 를 임시 버퍼링으로 재조립하지 않고, 클라이언트 chunk 가 그대로 Blob block 으로 1:1 매핑되어 흘러가야 함
 
 ## 해결책
@@ -235,7 +235,7 @@ python3 tus_client.py upload --file test-50mb.bin --stop-after 25
 
 # 터미널 1 (클라이언트, 서버 재시작 후)
 python3 tus_client.py head --id <UUID>
-# → 여전히 offset=20971520 (서버는 처음 보지만 Azure가 기억)
+# → 여전히 offset=26214400 (서버는 처음 보지만 Azure가 기억)
 
 python3 tus_client.py upload --file test-50mb.bin --id <UUID>
 ./verify-blob.sh test-50mb.bin <UUID>
