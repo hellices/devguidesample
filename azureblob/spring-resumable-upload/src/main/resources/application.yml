@@ -1,0 +1,23 @@
+server:
+  port: 8080
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
+
+spring:
+  servlet:
+    multipart:
+      enabled: false
+  mvc:
+    async:
+      request-timeout: 300000
+
+azure:
+  storage:
+    account-name: ${AZURE_STORAGE_ACCOUNT}
+    container: ${AZURE_STORAGE_CONTAINER:uploads}
+
+logging:
+  level:
+    com.azure.core.http.policy.HttpLoggingPolicy: INFO
+    com.example.upload: INFO
