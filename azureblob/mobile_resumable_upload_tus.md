@@ -10,17 +10,22 @@
 - **파드 OOM 방지**: 동시 N 개의 PATCH 가 들어와도 chunk 전체(수 MB~수십 MB)를 힙에 들고 있지 않아야 함. JVM 메모리는 동시 접속 수와 무관하게 작은 자구만 유지
 - **Azure Blob 으로 자연스러운 업로드**: 서버가 chunk 를 임시 버퍼링으로 재조립하지 않고, 클라이언트 chunk 가 그대로 Blob block 으로 1:1 매핑되어 흘러가야 함
 - **무상태 서버**: 진행 상태를 서버 메모리/디스크나 별도 세션 저장소(Redis 등)에 두지 않음 — 파드 재시작·교체 / HPA scale / 업로드 중 다른 파드로 라우팅 되어도 손실 없음
-- **Entra ID 전용**: Storage Account key 사용 금지 — AKS 에서는 Workload Identity, 로컬 개발에서는 `az login`
 
-## 해결책 (한 줄씩)
+## 해결책
 
-- **HTTP**: **tus.io 1.0.0 프로토콜**. TUSKit / tus-android-client / tus-js-client 가 백그라운드 task·재시도·망 전환·재부팅 후 resume 까지 다 처리. 서버는 사양만 맞추면 됨
-- **스토리지**: Azure Block Blob 의 **stage block + commit block list**. tus 의 "chunk → finalize" 와 1:1 대응 — 별도 변환 레이어 불필요
-- **무상태 서버**: 외부 세션 저장소(Redis 등) 없음. PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산. 어떤 파드가 받든 동일 결과 → 시나리오 C 가 다른 JVM 으로 검증
-- **End-to-end streaming**: `req.getInputStream()` → `BinaryData.fromStream(in, length)` 그대로 SDK 에 전달. chunk 전체를 들고 있는 객체가 경로상 **없음**. 동시 PATCH N 개라도 힙 ≈ N × ~64 KB (Tomcat read buffer + Netty pooled chunk)
-- **재시도 위치 이동**: stream 이 non-replayable 이라 Azure SDK 의 transient retry 는 꺼지지만, 그게 정확히 **클라이언트의 HEAD → PATCH 루프**가 담당하는 일 — 시나리오 D 로 검증
-- **인증**: `DefaultAzureCredential`. 로컬 개발은 `AzureCliCredential`, AKS 에선 Workload Identity 가 자동으로 끼워짐. Storage Account 는 `--allow-shared-key-access false` 로 키 자체를 막아둠
+핵심은 두 줄:
 
+- **client ↔ server**: **tus.io 1.0.0 프로토콜** — chunk 단위 PATCH + HEAD 로 권위 offset 재동기화. 모바일은 TUSKit / tus-android-client / tus-js-client 그대로 사용 (백그라운드 task·재시도·망 전환·재부팅 후 resume 까지 SDK 가 처리)
+- **server ↔ blob**: 요청 InputStream 을 그대로 `BinaryData.fromStream(in, length)` → `BlockBlobClient.stageBlock(...)`. **chunk 1개를 한 번에 들고 있는 객체가 경로상 없음** → 동시 PATCH N 개라도 힙 ≈ N × ~64 KB. tus 의 "chunk → finalize" 가 Block Blob 의 "stage block + commit block list" 와 1:1 대응이라 별도 변환 레이어 불필요
+
+이 두 줄에서 따라오는 결과:
+
+- **무상태**: PATCH 1개 = staged block 1개. 진행 offset 은 매 요청마다 `listBlocks(UNCOMMITTED)` 로 Azure 에서 다시 계산 → 어떤 파드가 받든 동일 결과. Redis 같은 외부 세션 저장소 **필요 없음** (대규모에서 latency/비용 최적화를 원하면 *캐시로* 끼울 수는 있음 — "알아둘 점" 참고). 시나리오 C 가 다른 JVM 으로 검증
+- **재시도 위치 이동**: stream 이 non-replayable 이라 Azure SDK 의 transient retry 는 꺼지지만, 그게 정확히 **클라이언트 HEAD → PATCH 루프**가 담당하는 일 — 시나리오 D 로 검증
+
+이 샘플 한정 설정 (핵심 설계와 무관):
+
+- **인증**: 보안 정책상 account key 차단이 필요해서 `DefaultAzureCredential` (로컬: AzureCliCredential, AKS: Workload Identity) 로 맞춘 것. 필요 없으면 connection string 방식으로 바꿔도 위 설계는 그대로 동작
 
 ## 아키텍처
 
