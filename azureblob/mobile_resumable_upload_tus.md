@@ -1,15 +1,16 @@
 # Spring Boot Resumable Upload — tus.io ↔ Azure Block Blob
 
-모바일에서 50 MB급 파일을 끊김 후 이어 올리는 시나리오를, 서버는 무상태로 유지한 채 Azure Block Blob 으로 풀어낸 샘플.
+모바일 사용자 약 20만 명 규모, 일반 50 MB · 최대 200 MB 파일을 끊김 후 이어 올리되, 파드 OOM 없이 Azure Block Blob 으로 자연스럽게 흘려가게 만든 샘플.
 
 ## 요건
 
-- 모바일 클라이언트(iOS / Android)가 수십 MB 파일 업로드. 셀룰러↔WiFi 전환, 백그라운드 진입, OS suspend, 앱 강제 종료가 발생해도 **처음부터 다시 보내지 않고 끊긴 지점부터 이어 올리기**
-- iOS / Android 양쪽 표준 SDK를 그대로 써야 함 — 클라이언트 커스텀 구현 회피
-- 서버는 수평 확장 가능해야 함 — 같은 업로드의 다음 PATCH 가 다른 파드에 가도 동일하게 동작
-- 진행 상태를 서버 메모리·디스크에 들고 있지 않기 — 파드 재시작·교체 시 손실 없음
-- Storage Account key 사용 금지 — Entra ID(개발 시 az login, AKS 에선 Workload Identity)로만 접근
-- PATCH body 가 힙에 누적되지 않을 것 — 50 MB × 동시 N 업로드가 와도 JVM 메모리 폭증 없음
+- **사용자 규모**: 모바일 사용자 약 20만 명. 다수가 동시에 업로드 시도 — 파드당 수십~수백 동시 PATCH 가능성
+- **파일 크기**: 일반 50 MB, 최대 200 MB. 모바일 업로드 패턴상 1 MiB chunk 구조면 50~200개 PATCH/파일
+- **모바일 끊김 / 이어 올리기**: 셀룰러↔WiFi 전환, 백그라운드 진입, OS suspend, 앱 강제 종료가 발생해도 처음부터 다시 보내지 않고 끊긴 지점부터 이어 올린다. iOS / Android 표준 SDK 그대로 사용 (클라이언트 커스텀 구현 회피)
+- **파드 OOM 방지**: 동시 N 개의 PATCH 가 들어와도 chunk 전체(수 MB~수십 MB)를 힙에 들고 있지 않아야 함. JVM 메모리는 동시 접속 수와 무관하게 작은 자구만 유지
+- **Azure Blob 으로 자연스러운 업로드**: 서버가 chunk 를 임시 버퍼링으로 재조립하지 않고, 클라이언트 chunk 가 그대로 Blob block 으로 1:1 매핑되어 흘러가야 함
+- **무상태 서버**: 진행 상태를 서버 메모리/디스크나 별도 세션 저장소(Redis 등)에 두지 않음 — 파드 재시작·교체 / HPA scale / 업로드 중 다른 파드로 라우팅 되어도 손실 없음
+- **Entra ID 전용**: Storage Account key 사용 금지 — AKS 에서는 Workload Identity, 로컬 개발에서는 `az login`
 
 ## 해결책 (한 줄씩)
 
@@ -20,17 +21,6 @@
 - **재시도 위치 이동**: stream 이 non-replayable 이라 Azure SDK 의 transient retry 는 꺼지지만, 그게 정확히 **클라이언트의 HEAD → PATCH 루프**가 담당하는 일 — 시나리오 D 로 검증
 - **인증**: `DefaultAzureCredential`. 로컬 개발은 `AzureCliCredential`, AKS 에선 Workload Identity 가 자동으로 끼워짐. Storage Account 는 `--allow-shared-key-access false` 로 키 자체를 막아둠
 
-## 검증 결과 요약
-
-| 항목 | 동작 | 실측 (50 MB / 1 MiB chunk / `-Xmx256m`) |
-|---|---|---|
-| 메모리 streaming | PATCH body가 힙에 누적되지 않음 | 50개 PATCH 동안 RSS 변화 -8 MB (누적 0) |
-| chunk 단위 resume | 받은 chunk는 다시 안 받음 | stop-after 20 → resume 시 PATCH 30개만 전송 |
-| 서버 무상태 | 서버 재시작·교체에도 진행 상태 보존 | PID 41650 → 45078 (다른 JVM)에서 offset 26214400부터 이어 올림 |
-| 자동 재시도 | client가 HEAD로 권위 offset 재동기화 후 같은 chunk 재전송 | fail-on-patch 10 → "50 chunks over 51 attempts" |
-| 표준 프로토콜 | TUSKit / tus-android-client / tus-js-client 같은 기성 SDK와 무조건 호환 | — |
-| Entra ID 전용 | account key 비활성화 (`--allow-shared-key-access false`) 상태 동작 | DefaultAzureCredential → AzureCliCredential |
-| 바이트 정확성 | commit 후 `verify-blob.sh` 의 `cmp` 통과 | 4 시나리오 모두 통과 |
 
 ## 아키텍처
 
@@ -286,6 +276,18 @@ committed blob id=<UUID> size=52428800
 </details>
 
 핵심: **fault 직후 HEAD가 마지막 성공 offset을 반환** — 서버는 실패한 chunk를 기록하지도, 잘못 기록하지도 않았다. 재시도 시 동일 offset으로 다시 PATCH하면 새 block index에 stage 되어 정상 commit.
+
+## 검증 결과 요약
+
+| 항목 | 동작 | 실측 (50 MB / 1 MiB chunk / `-Xmx256m`) |
+|---|---|---|
+| 메모리 streaming | PATCH body가 힙에 누적되지 않음 | 50개 PATCH 동안 RSS 변화 -8 MB (누적 0) |
+| chunk 단위 resume | 받은 chunk는 다시 안 받음 | stop-after 20 → resume 시 PATCH 30개만 전송 |
+| 서버 무상태 | 서버 재시작·교체에도 진행 상태 보존 | PID 41650 → 45078 (다른 JVM)에서 offset 26214400부터 이어 올림 |
+| 자동 재시도 | client가 HEAD로 권위 offset 재동기화 후 같은 chunk 재전송 | fail-on-patch 10 → "50 chunks over 51 attempts" |
+| 표준 프로토콜 | TUSKit / tus-android-client / tus-js-client 같은 기성 SDK와 무조건 호환 | — |
+| Entra ID 전용 | account key 비활성화 (`--allow-shared-key-access false`) 상태 동작 | DefaultAzureCredential → AzureCliCredential |
+| 바이트 정확성 | commit 후 `verify-blob.sh` 의 `cmp` 통과 | 4 시나리오 모두 통과 |
 
 ## 알아둘 점
 
