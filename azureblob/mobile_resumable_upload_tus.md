@@ -4,6 +4,18 @@
 HTTP 레벨은 **tus 1.0.0 프로토콜**, 스토리지 레벨은 **Azure Block Blob의 Put Block / Commit Block List**.
 서버는 완전 무상태 — 진행 상태는 모두 Azure가 보관한다.
 
+## 검증 결과 요약
+
+| 항목 | 동작 | 실측 (50 MB / 1 MiB chunk / `-Xmx256m`) |
+|---|---|---|
+| 메모리 streaming | PATCH body가 힙에 누적되지 않음 | 50개 PATCH 동안 RSS 변화 -8 MB (누적 0) |
+| chunk 단위 resume | 받은 chunk는 다시 안 받음 | stop-after 20 → resume 시 PATCH 30개만 전송 |
+| 서버 무상태 | 서버 재시작·교체에도 진행 상태 보존 | PID 41650 → 45078 (다른 JVM)에서 offset 26214400부터 이어 올림 |
+| 자동 재시도 | client가 HEAD로 권위 offset 재동기화 후 같은 chunk 재전송 | fail-on-patch 10 → "50 chunks over 51 attempts" |
+| 표준 프로토콜 | TUSKit / tus-android-client / tus-js-client 같은 기성 SDK와 무조건 호환 | — |
+| Entra ID 전용 | account key 비활성화 (`--allow-shared-key-access false`) 상태 동작 | DefaultAzureCredential → AzureCliCredential |
+| 바이트 정확성 | commit 후 `verify-blob.sh` 의 `cmp` 통과 | 4 시나리오 모두 통과 |
+
 ## 아키텍처
 
 ![Architecture — Mobile (tus 1.0.0) ▸ AKS Pods ▸ Azure Blob](spring-resumable-upload/architecture.png)
@@ -258,18 +270,6 @@ committed blob id=<UUID> size=52428800
 </details>
 
 핵심: **fault 직후 HEAD가 마지막 성공 offset을 반환** — 서버는 실패한 chunk를 기록하지도, 잘못 기록하지도 않았다. 재시도 시 동일 offset으로 다시 PATCH하면 새 block index에 stage 되어 정상 commit.
-
-## 핵심 검증 포인트
-
-| 항목 | 동작 | 실측 (50 MB / 1 MiB chunk / `-Xmx256m`) |
-|---|---|---|
-| 메모리 streaming | PATCH body가 힙에 누적되지 않음 | 50개 PATCH 동안 RSS 변화 -8 MB (누적 0) |
-| chunk 단위 resume | 받은 chunk는 다시 안 받음 | stop-after 20 → resume 시 PATCH 30개만 전송 |
-| 서버 무상태 | 서버 재시작·교체에도 진행 상태 보존 | PID 41650 → 45078 (다른 JVM)에서 offset 26214400부터 이어 올림 |
-| 자동 재시도 | client가 HEAD로 권위 offset 재동기화 후 같은 chunk 재전송 | fail-on-patch 10 → "50 chunks over 51 attempts" |
-| 표준 프로토콜 | TUSKit / tus-android-client / tus-js-client 같은 기성 SDK와 무조건 호환 | — |
-| Entra ID 전용 | account key 비활성화 (`--allow-shared-key-access false`) 상태 동작 | DefaultAzureCredential → AzureCliCredential |
-| 바이트 정확성 | commit 후 `verify-blob.sh` 의 `cmp` 통과 | 4 시나리오 모두 통과 |
 
 ## 알아둘 점
 
