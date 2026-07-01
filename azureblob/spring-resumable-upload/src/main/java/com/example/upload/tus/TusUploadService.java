@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +111,11 @@ public class TusUploadService {
             return currentOffset;
         }
 
-        int blockIndex = blocks.getUncommittedBlocks().size();
-        String blockId = encodeBlockId(blockIndex);
+        // Deterministic, offset-derived block id: a given offset always maps to the same
+        // block id no matter which pod serves the PATCH or how the client retries. A duplicate
+        // in-flight PATCH therefore re-stages identical bytes to the same block (idempotent),
+        // instead of racing for a count-derived index that could collide across chunk sizes.
+        String blockId = encodeBlockId(currentOffset);
         // Stream the request body straight to Azure (no full-chunk buffering in heap).
         // BinaryData.fromStream(stream, length) marks the payload as non-replayable, so the
         // SDK retry policy short-circuits — client-side retry (HEAD + re-PATCH) is responsible
@@ -120,10 +124,15 @@ public class TusUploadService {
 
         long newOffset = currentOffset + length;
         if (newOffset == uploadLength) {
-            List<String> allIds = new ArrayList<>(blockIndex + 1);
-            for (int i = 0; i <= blockIndex; i++) allIds.add(encodeBlockId(i));
+            // Commit the staged blocks ordered by their encoded offset. Reconstructing from the
+            // pre-staging list plus this final block avoids an extra listBlocks round-trip and
+            // stays correct even if chunk sizes varied across the upload.
+            List<String> orderedIds = new ArrayList<>();
+            for (Block b : blocks.getUncommittedBlocks()) orderedIds.add(b.getName());
+            orderedIds.add(blockId);
+            orderedIds.sort(Comparator.comparingLong(TusUploadService::decodeOffset));
             BlockBlobCommitBlockListOptions commitOpts =
-                    new BlockBlobCommitBlockListOptions(allIds)
+                    new BlockBlobCommitBlockListOptions(orderedIds)
                             .setMetadata(props.getMetadata());
             client.commitBlockListWithResponse(commitOpts, null, null);
         }
@@ -155,9 +164,16 @@ public class TusUploadService {
                 .mapToLong(Block::getSizeLong).sum();
     }
 
-    static String encodeBlockId(int index) {
-        String raw = BLOCK_ID_PREFIX + String.format("%08d", index);
+    // Fixed-width, offset-derived block id: all ids in one upload share the same length,
+    // satisfying Azure's equal-length block id constraint. 12 digits covers > 900 GiB.
+    static String encodeBlockId(long offset) {
+        String raw = BLOCK_ID_PREFIX + String.format("%012d", offset);
         return Base64.getEncoder().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+    }
+
+    static long decodeOffset(String blockId) {
+        String raw = new String(Base64.getDecoder().decode(blockId), StandardCharsets.UTF_8);
+        return Long.parseLong(raw.substring(BLOCK_ID_PREFIX.length()));
     }
 
     public record Status(long length, long offset, String metadata) {}

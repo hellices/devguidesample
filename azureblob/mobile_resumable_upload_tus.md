@@ -50,7 +50,7 @@
 
 ### Block ID 매핑
 
-각 PATCH = 1개 staged block. block id = `base64("block-" + 8자리 zero-padded index)`. 모든 block id 길이가 동일해야 한다는 Azure 제약을 충족.
+각 PATCH = 1개 staged block. block id = `base64("block-" + 12자리 zero-padded offset)` — **인덱스(개수)가 아니라 offset 에서 결정론적으로 파생**한다. 같은 offset 은 어떤 파드가 받든, 클라이언트가 어떻게 재시도하든 항상 같은 block id 로 매핑되므로, 인플라이트 재시도로 동일 PATCH 두 건이 동시에 실행돼도 **같은 바이트를 같은 block 에 다시 stage(멱등)** 할 뿐 경쟁이 결과를 바꾸지 않는다. offset 을 고정 자리수(12자리, ~900 GiB 커버)로 zero-pad 하므로 모든 block id 길이가 동일해야 한다는 Azure 제약도 충족. commit 시엔 staged block 들을 block id 에 인코딩된 offset 순으로 정렬해 `commitBlockList` 에 넘기므로 chunk 크기가 중간에 바뀌어도 정상 조립된다.
 
 ### Edge cases
 
@@ -291,13 +291,13 @@ committed blob id=<UUID> size=52428800
 
 - **Uncommitted block TTL은 7일.** 그 사이 commit이 없으면 staged block GC. 즉 resume window가 7일.
 - **단일 blob 최대 50,000 blocks.** 1 MiB chunk면 ~50 GiB, 4 MiB chunk면 ~200 GiB까지 1 blob 가능. 50 MB 테스트는 신경 쓸 일 없음.
-- **Concurrent PATCH on same upload는 지원하지 않음** — tus 사양상 PATCH는 순차다. 동일 upload-id에 동시 PATCH 두 개가 들어오면 offset 충돌(409)이 난다. 동일 파일을 병렬화하려면 `concatenation` 확장이 필요한데 이 샘플엔 없음.
+- **Concurrent PATCH on same upload는 지원하지 않음** — tus 사양상 PATCH는 순차다. 서로 다른 chunk 가 동시에 들어오면 `Upload-Offset` 검사가 뒤엣것을 409로 막는다. 모바일에서 흔한 케이스(응답 유실 → 같은 chunk 재시도 → 원 요청과 인플라이트 충돌)는 offset 기반 결정론적 block id 덕에 **같은 바이트를 같은 block 에 다시 stage 하는 멱등 연산**이 되어 안전하다 — 따라서 분산 락은 불필요하고(무상태성·성능 유지) 낭비되는 건 중복 `stageBlock` 트랜잭션 1회뿐. 동일 파일을 진짜 병렬로 올리려면 `concatenation` 확장이 필요한데 이 샘플엔 없음.
 - **PATCH는 end-to-end streaming.** `req.getInputStream()` 을 그대로 `BinaryData.fromStream(in, length)` 로 SDK에 넘긴다. chunk 전체를 들고 있는 객체는 없음. 대신 stream이 non-replayable 이므로 Azure SDK의 transient retry 가 비활성화된다 — **재시도는 클라이언트의 HEAD→PATCH 루프가 담당**한다 (시나리오 D가 정확히 이 경로를 검증).
-- **chunk 크기 선택.** 기본 1 MiB는 모바일 셀룰러 환경(끊김 시 손실 최소화)에 맞춘 값. WiFi/유선 환경이면 `--chunk-size $((4*1024*1024))` 같이 늘리면 PATCH 횟수가 줄어 throughput이 올라간다. block 수 제한(50,000)과 끊김 손실의 trade-off.
+- **chunk 크기 선택 = 1순위 비용 레버.** Azure Storage 비용은 데이터 전송보다 **Put/Stage Block 같은 쓰기(Class A) 트랜잭션 수**가 지배적이다. 기본 1 MiB는 모바일 셀룰러 환경(끊김 시 손실 최소화)에 맞춘 값이지만, 4 MiB로 올리면 200 MB 파일 기준 PATCH가 200회 → 50회로 **75% 감소**하고 읽기(`listBlocks`)·쓰기(`stageBlock`) 트랜잭션이 함께 1/4로 줄어 인프라 비용이 확실하게 75% 절감된다. Background Task 환경에서도 4 MiB는 무난. `--chunk-size $((4*1024*1024))`. block 수 제한(50,000)과 끊김 시 재전송 손실의 trade-off이므로, **Redis 도입보다 먼저 검토할 것** (Redis는 읽기 트랜잭션만 줄이고 쓰기는 못 줄인다).
 - **메타데이터 보존**: `commitBlockList` 는 metadata를 덮어쓰므로, 최종 commit 시 POST에서 저장해둔 `x_tus_*` 메타를 다시 넘겨준다 (TusUploadService.appendChunk).
 - **TLS / 인증 / CORS**: 이 샘플은 평문 HTTP, 익명 접근. 운영에서는 HTTPS + Spring Security + 모바일 앱 인증(Entra ID, Firebase Auth, JWT 등) 필요.
 - **다중 파드 확장**: 외부 상태(Redis 등) 불필요. id가 곧 blob 이름이고 진행 상태는 Azure가 보관 — 어떤 파드가 PATCH를 받든 `listBlocks(UNCOMMITTED)` 로 오프셋을 다시 계산한다 (Azure Blob 의 strong read-after-write consistency 에 의존). 시나리오 C가 "다른 JVM" 케이스로 이를 입증.
-- **성능 최적화 옵션 — Redis 캐시 도입.** 정확성/단순성 측면에선 현재 설계로 충분하지만, 대규모(예: 200K MAU 수준)에서 latency·storage transaction 비용을 더 줄이려면 Redis를 **캐시 계층**으로 끼울 수 있다.
+- **성능 최적화 옵션 — Redis 캐시 도입 (2순위, chunk 상향 이후).** chunk 크기 상향으로 트랜잭션 모수를 먼저 깎은 뒤 남는 건 읽기 트랜잭션의 p99 레이턴시다. Redis는 **쓰기 트랜잭션을 줄이지 못하므로**(실제 바이트는 그대로 `stageBlock` 해야 함) 비용 절감 효과는 읽기(`listBlocks`/`getProperties`)분에 한정된다. 대규모(예: 200K MAU 수준)에서 이 읽기 latency 와 읽기 트랜잭션을 더 줄이려면 Redis를 **advisory 캐시 계층**으로 끼울 수 있다.
   - 현재: HEAD/PATCH 1회당 `getProperties` + `listBlocks` (Azure RTT 2회, p99 30~50 ms)
   - Redis 추가 시: `HGETALL upload:{id}` 1 RTT(~1 ms) + 성공 후 `HINCRBY offset`. Azure metadata 호출 1회 절감
   - 200K MAU × 1.5 업로드/일 × 50 chunk 기준 storage transaction 비용 ~$400/월 → ~$0 (Redis Basic C1 ~$50/월 추가)
