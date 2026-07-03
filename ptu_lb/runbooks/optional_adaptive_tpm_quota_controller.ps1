@@ -72,7 +72,9 @@ $ErrorActionPreference = "Stop"
 # --- Reserved 총량 파생값 (합산 불변식의 기준) ---------------------------------
 $TotalCapacityUnits = [int]($ReservedTotalTpm / $TpmPerCapacityUnit)                          # =20
 $MinCapacity = [int][math]::Max(1, [math]::Ceiling($TotalCapacityUnits * $MinCapacityRatio))  # =5
-$MaxCapacity = $TotalCapacityUnits - $MinCapacity                                             # =15 (2리전 가정)
+# 리전 최대 = 총량 − 나머지 리전 최소 보장 합. 2리전 기본값(=TOTAL−MIN)이며
+# N리전 확장 시에는 Get-RegionMax 로 (n-1)*MIN 을 차감해 일반화한다.
+$MaxCapacity = $TotalCapacityUnits - $MinCapacity                                             # 2리전 기본값 =15
 
 # 리전 -> Foundry 계정/배포 매핑 (Reserved 총량을 두 리전이 공유)
 $Regions = [ordered]@{
@@ -107,6 +109,27 @@ function Get-CloudTable {
 function Clamp {
     param([int]$Value, [int]$Min, [int]$Max)
     return [math]::Min([math]::Max($Value, $Min), $Max)
+}
+
+function Get-RegionMax {
+    # N리전 일반화된 리전별 최대 capacity(= 총량 − (n-1)*MIN). n=2 이면 TOTAL−MIN 로 기존과 동일.
+    param([int]$N)
+    $nn = [math]::Max($N, 1)
+    return [math]::Max($MinCapacity, $TotalCapacityUnits - (($nn - 1) * $MinCapacity))
+}
+
+function Get-EvenSplitTargets {
+    # RI(Reserved) 총량을 리전 수로 균등 분배(내림 + 나머지 앞 리전부터). 합은 항상 TOTAL.
+    # 메트릭 열화 등 판단 근거 상실 시, 미할당 버퍼 없이 RI 에 맞는 PTU 를 최대 소진하는 fallback 목표.
+    param([array]$Regions)
+    $n = [math]::Max($Regions.Count, 1)
+    $base = [int][math]::Floor($TotalCapacityUnits / $n)
+    $rem = $TotalCapacityUnits - ($base * $n)
+    $targets = @{}
+    for ($i = 0; $i -lt $Regions.Count; $i++) {
+        $targets[$Regions[$i]] = $base + (&{ if ($i -lt $rem) { 1 } else { 0 } })
+    }
+    return $targets
 }
 
 # ---------------------------------------------------------------------------
@@ -185,18 +208,20 @@ function Test-InCooldown {
 # ---------------------------------------------------------------------------
 
 function Get-NeedCapacity {
-    param([double]$ConsumedTpm)
+    param([double]$ConsumedTpm, [int]$CapMax = $MaxCapacity)
     if ($ConsumedTpm -le 0) { return $MinCapacity }
     $raw = [int][math]::Ceiling($ConsumedTpm / ($AimUtil * $TpmPerCapacityUnit))
-    return (Clamp -Value $raw -Min $MinCapacity -Max $MaxCapacity)
+    return (Clamp -Value $raw -Min $MinCapacity -Max $CapMax)
 }
 
 function Get-Targets {
     # $States: 각 원소 = @{ Region; Account; Deployment; Current; Consumed; Utilization }
     param([array]$States)
 
+    $n = $States.Count
+    $capMax = Get-RegionMax -N $n    # 리전 수에 따른 상한(2리전이면 TOTAL−MIN 로 기존과 동일)
     $needs = @{}
-    foreach ($s in $States) { $needs[$s.Region] = Get-NeedCapacity -ConsumedTpm $s.Consumed }
+    foreach ($s in $States) { $needs[$s.Region] = Get-NeedCapacity -ConsumedTpm $s.Consumed -CapMax $capMax }
     $totalNeed = ($needs.Values | Measure-Object -Sum).Sum
 
     if ($totalNeed -le $TotalCapacityUnits) {
@@ -205,7 +230,6 @@ function Get-Targets {
     }
 
     # 경합: MIN 을 먼저 보장하고 남은 용량을 소비 TPM 비율로 배분
-    $n = $States.Count
     $rem = $TotalCapacityUnits - ($n * $MinCapacity)
     $totalConsumed = ($States | ForEach-Object { [math]::Max($_.Consumed, 0.0) } | Measure-Object -Sum).Sum
     if ($totalConsumed -le 0) { $totalConsumed = 1.0 }
@@ -213,12 +237,12 @@ function Get-Targets {
     $targets = @{}
     foreach ($s in $States) {
         $extra = [int][math]::Floor($rem * [math]::Max($s.Consumed, 0.0) / $totalConsumed)
-        $targets[$s.Region] = Clamp -Value ($MinCapacity + $extra) -Min $MinCapacity -Max $MaxCapacity
+        $targets[$s.Region] = Clamp -Value ($MinCapacity + $extra) -Min $MinCapacity -Max $capMax
     }
     # 내림으로 남은 잔여 unit 을 소비가 큰 리전부터 채운다(합이 TOTAL 을 넘지 않게)
     $leftover = $TotalCapacityUnits - ($targets.Values | Measure-Object -Sum).Sum
     foreach ($s in ($States | Sort-Object -Property Consumed -Descending)) {
-        while ($leftover -gt 0 -and $targets[$s.Region] -lt $MaxCapacity) {
+        while ($leftover -gt 0 -and $targets[$s.Region] -lt $capMax) {
             $targets[$s.Region] += 1
             $leftover -= 1
         }
@@ -298,12 +322,20 @@ Connect-Context
 $now = (Get-Date).ToUniversalTime()
 
 # --- Phase 1: 상태 수집 (리전별 현재 capacity + 이동평균 사용률) ---------------
+# 메트릭 조회 실패는 리전을 degraded 로 표시한다(판단 근거 열화 → RI 균등분배 fallback).
 $states = @()
+$degraded = @()
 foreach ($region in $Regions.Keys) {
     $cfg = $Regions[$region]
     $current = Get-DeploymentCapacity -Account $cfg.Account -Deployment $cfg.Deployment
-    $rows = Get-RecentWindows -Region $region -Limit $SmoothingWindows
-    $consumed = Get-AvgConsumedTpm -Rows $rows
+    try {
+        $rows = Get-RecentWindows -Region $region -Limit $SmoothingWindows
+        $consumed = Get-AvgConsumedTpm -Rows $rows
+    }
+    catch {
+        $consumed = 0.0
+        $degraded += $region
+    }
     $provisioned = $current * $TpmPerCapacityUnit
     $util = if ($provisioned -gt 0) { [math]::Round($consumed / $provisioned, 4) } else { 0.0 }
     $states += @{
@@ -313,9 +345,17 @@ foreach ($region in $Regions.Keys) {
 }
 
 # --- Phase 2: 목표 산출(총량 제약) + dead-band/스텝/쿨다운 완충 ----------------
-$alloc = Get-Targets -States $states
-$targets = $alloc.Targets
-$contention = $alloc.Contention
+# 정상: 소비 비율 재분배. Fallback: 메트릭 열화 시 RI 총량을 균등분배해 RI 에 맞는 PTU 를 최대 소진.
+$fallback = ($degraded.Count -gt 0)
+if ($fallback) {
+    $targets = Get-EvenSplitTargets -Regions @($states | ForEach-Object { $_.Region })
+    $contention = $true   # 균등분배는 총량 만재 배분(버퍼 0)
+}
+else {
+    $alloc = Get-Targets -States $states
+    $targets = $alloc.Targets
+    $contention = $alloc.Contention
+}
 
 $results = @{}
 $plannedMap = @{}
@@ -325,6 +365,7 @@ foreach ($s in $states) {
     $decision = $p.Decision
     $planned = $p.Planned
     $reason = $p.Reason
+    if ($fallback) { $reason = "$reason | FALLBACK RI 균등분배(메트릭 열화)" }
 
     $cooldownBlocked = $false
     if ($decision -ne "hold" -and (Test-InCooldown -Region $s.Region -Now $now)) {
