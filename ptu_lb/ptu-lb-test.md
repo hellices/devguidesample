@@ -104,7 +104,7 @@ Azure Automation은 **스케줄러 + 실행/인증 호스트** 역할이며, 실
 
 > 불변식: 항상 `Σ cap_r ≤ TOTAL_CAPACITY_UNITS`. 리전 최대는 `TOTAL − (N−1)·MIN_CAPACITY`로 일반화되며(2리전이면 `TOTAL − MIN_CAPACITY`), 최소는 총량의 25%를 보장한다.
 >
-> **리전 확대 시**: 코드 변경은 `REGIONS`(PS `$Regions`) 매핑에 항목을 추가하는 것으로 끝난다. 리전별 최대는 `region_max(n)`(PS `Get-RegionMax`)이 리전 수 n으로 자동 일반화하고, 총량 제약·감축→증설 순서·MIN 보장은 그대로 유지된다.
+> **리전/모델 확대 시**: 코드 변경은 `REGIONS`(PS `$Regions`) 매핑에 배포 항목(리전 또는 모델별 `account`+`deployment` 쌍)을 추가하는 것으로 끝난다. 모델을 늘리는 경우도 동일하게 각 모델 배포를 하나의 항목으로 등록하면 같은 Reserved 총량을 공유한다. 항목별 최대는 `region_max(n)`(PS `Get-RegionMax`)이 항목 수 n으로 자동 일반화하고, 총량 제약·감축→증설 순서·MIN 보장은 그대로 유지된다.
 >
 > **PayGo fallback 병행 시**: 상위 트래픽이 PTU 초과분을 PayGo(표준) 배포로 흘리는 구성에서는 PTU util을 100%에 근접(TARGET_UTIL_HIGH·AIM_UTIL ≈ 1.0)시켜도 무방하다. 초과분은 fallback LLM이 흡수하므로, 비용 최적화 관점에서 적정 PTU/PayGo 비중을 도출하는 것이 목표다.
 
@@ -169,6 +169,7 @@ $$
 4. 목표 capacity 산출 (Reserved 총량 제약)
 - **여유 있음** ($\sum_r need_r \le TOTAL$): 각 리전에 need만 배정, 나머지는 미할당 버퍼로 둔다
 - **경합** ($\sum_r need_r > TOTAL$): 각 리전에 MIN을 먼저 보장하고, 남은 용량을 소비 TPM 비율로 배분
+- **fallback (메트릭 열화)**: 메트릭 조회가 실패해 판단 근거가 없을 때는 소비 기반 배분 대신 **RI 균등분배**(총량을 리전 수로 균등, $target_r \approx TOTAL / n$)로 전환해 미할당 버퍼 없이 RI에 맞는 PTU를 최대 소진한다
 
 $$
 target_r = MIN\_CAPACITY + \left\lfloor (TOTAL - n \cdot MIN\_CAPACITY)\times\frac{consumedTpm_r}{\sum_j consumedTpm_j} \right\rfloor
@@ -177,7 +178,7 @@ $$
 5. dead-band·스텝 완충
 - 경합이 아니고 사용률이 [LOW, HIGH] 안이면 유지(hold)로 churn 방지
 - 목표로의 이동을 ±MAX_STEP_UNITS로 제한
-- 리전 최소/최대(MIN_CAPACITY ~ MAX_CAPACITY = TOTAL − MIN) 경계 적용
+- 리전 최소/최대(MIN_CAPACITY ~ `region_max(n)` = TOTAL − (n−1)·MIN) 경계 적용. 2리전이면 MAX_CAPACITY = TOTAL − MIN 과 동일
 
 6. 쿨다운 가드
 - 해당 리전의 마지막 '실제 변경(changed=true)' ScaleAction이 COOLDOWN_MINUTES 이내면 조정 차단
