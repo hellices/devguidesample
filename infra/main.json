@@ -1,0 +1,199 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "6492250672774236316"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for shared monitoring resources. Defaults to the target resource group location."
+      }
+    },
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the existing Log Analytics workspace that stores HDInsight Kafka metrics."
+      }
+    },
+    "workbookDisplayName": {
+      "type": "string",
+      "defaultValue": "HDInsight Kafka Operations",
+      "metadata": {
+        "description": "Display name for the shared Azure Workbook."
+      }
+    },
+    "dashboardDisplayName": {
+      "type": "string",
+      "defaultValue": "HDInsight Kafka Operations Dashboard",
+      "metadata": {
+        "description": "Display name shown in the Azure portal for the shared Azure Dashboard."
+      }
+    },
+    "dashboardName": {
+      "type": "string",
+      "defaultValue": "kafka-ops-dash",
+      "metadata": {
+        "description": "Resource name for the shared Azure Dashboard. Use 3-24 letters, numbers, and dashes."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional tags applied to the Workbook and Dashboard resources."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "hdinsight-kafka-monitoring-assets",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceResourceId": {
+            "value": "[parameters('workspaceResourceId')]"
+          },
+          "workbookDisplayName": {
+            "value": "[parameters('workbookDisplayName')]"
+          },
+          "dashboardDisplayName": {
+            "value": "[parameters('dashboardDisplayName')]"
+          },
+          "dashboardName": {
+            "value": "[parameters('dashboardName')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "15779422644195398868"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Location for the Workbook and Dashboard resources."
+              }
+            },
+            "workspaceResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the existing Log Analytics workspace that stores HDInsight Kafka metrics."
+              }
+            },
+            "workbookDisplayName": {
+              "type": "string",
+              "metadata": {
+                "description": "Display name for the shared Azure Workbook."
+              }
+            },
+            "dashboardDisplayName": {
+              "type": "string",
+              "metadata": {
+                "description": "Display name shown in the Azure portal for the shared Azure Dashboard."
+              }
+            },
+            "dashboardName": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource name for the shared Azure Dashboard. Use 3-24 letters, numbers, and dashes."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional tags applied to the Workbook and Dashboard resources."
+              }
+            }
+          },
+          "variables": {
+            "$fxv#0": "{\n  \"version\": \"Notebook/1.0\",\n  \"items\": [\n    {\n      \"type\": 1,\n      \"content\": {\n        \"json\": \"# HDInsight Kafka Operations\\nMonitor controller leadership, partition health, throughput, and JVM pressure from `HDInsightKafkaMetrics`.\"\n      },\n      \"name\": \"Intro\"\n    },\n    {\n      \"type\": 3,\n      \"content\": {\n        \"version\": \"KqlItem/1.0\",\n        \"query\": \"HDInsightKafkaMetrics\\n| where TimeGenerated > ago(24h)\\n| where MetricName in ('ActiveControllerCount', 'OfflinePartitionsCount', 'UnderReplicatedPartitions')\\n| summarize arg_max(TimeGenerated, MetricValue) by MetricName\\n| project MetricName, LatestValue = todouble(MetricValue), LastUpdated = TimeGenerated\\n| order by MetricName asc\",\n        \"size\": 0,\n        \"title\": \"Latest cluster state\",\n        \"noDataMessage\": \"No Kafka cluster state metrics found in HDInsightKafkaMetrics.\",\n        \"showRefreshButton\": true,\n        \"queryType\": 0,\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n        \"crossComponentResources\": [\n          \"__WORKSPACE_RESOURCE_ID__\"\n        ],\n        \"visualization\": \"table\"\n      },\n      \"name\": \"Latest cluster state\"\n    },\n    {\n      \"type\": 3,\n      \"content\": {\n        \"version\": \"KqlItem/1.0\",\n        \"query\": \"HDInsightKafkaMetrics\\n| where TimeGenerated > ago(24h)\\n| where MetricName in ('ActiveControllerCount', 'OfflinePartitionsCount', 'UnderReplicatedPartitions')\\n| summarize ActiveControllerCount = avgif(todouble(MetricValue), MetricName == 'ActiveControllerCount'), OfflinePartitionsCount = avgif(todouble(MetricValue), MetricName == 'OfflinePartitionsCount'), UnderReplicatedPartitions = avgif(todouble(MetricValue), MetricName == 'UnderReplicatedPartitions') by bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\\n| render timechart\",\n        \"size\": 0,\n        \"title\": \"Cluster state over time\",\n        \"noDataMessage\": \"No Kafka state trend data found in the selected workspace.\",\n        \"showRefreshButton\": true,\n        \"queryType\": 0,\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n        \"crossComponentResources\": [\n          \"__WORKSPACE_RESOURCE_ID__\"\n        ],\n        \"visualization\": \"timechart\"\n      },\n      \"name\": \"Cluster state trend\"\n    },\n    {\n      \"type\": 3,\n      \"content\": {\n        \"version\": \"KqlItem/1.0\",\n        \"query\": \"HDInsightKafkaMetrics\\n| where TimeGenerated > ago(24h)\\n| where MetricName in ('MessagesInPerSec', 'BytesInPerSec', 'BytesOutPerSec')\\n| summarize MessagesInPerSec = avgif(todouble(MetricValue), MetricName == 'MessagesInPerSec'), BytesInPerSec = avgif(todouble(MetricValue), MetricName == 'BytesInPerSec'), BytesOutPerSec = avgif(todouble(MetricValue), MetricName == 'BytesOutPerSec') by bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\\n| render timechart\",\n        \"size\": 0,\n        \"title\": \"Kafka throughput\",\n        \"noDataMessage\": \"No Kafka throughput metrics found in HDInsightKafkaMetrics.\",\n        \"showRefreshButton\": true,\n        \"queryType\": 0,\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n        \"crossComponentResources\": [\n          \"__WORKSPACE_RESOURCE_ID__\"\n        ],\n        \"visualization\": \"timechart\"\n      },\n      \"name\": \"Kafka throughput\"\n    },\n    {\n      \"type\": 3,\n      \"content\": {\n        \"version\": \"KqlItem/1.0\",\n        \"query\": \"HDInsightKafkaMetrics\\n| where TimeGenerated > ago(24h)\\n| where MetricNamespace == 'JVMMetrics'\\n| where MetricName in ('jvm_memoryheapused', 'jvm_memoryheapmax')\\n| summarize HeapUsed = avgif(todouble(MetricValue), MetricName == 'jvm_memoryheapused'), HeapMax = avgif(todouble(MetricValue), MetricName == 'jvm_memoryheapmax') by bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\\n| render timechart\",\n        \"size\": 0,\n        \"title\": \"Broker JVM heap\",\n        \"noDataMessage\": \"No JVM heap metrics found in HDInsightKafkaMetrics.\",\n        \"showRefreshButton\": true,\n        \"queryType\": 0,\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n        \"crossComponentResources\": [\n          \"__WORKSPACE_RESOURCE_ID__\"\n        ],\n        \"visualization\": \"timechart\"\n      },\n      \"name\": \"Broker JVM heap\"\n    },\n    {\n      \"type\": 3,\n      \"content\": {\n        \"version\": \"KqlItem/1.0\",\n        \"query\": \"let BrokerSelector = (tbl:(*)) {\\n    tbl\\n    | extend Broker = case(\\n        isnotempty(tostring(column_ifexists('Computer', ''))), tostring(column_ifexists('Computer', '')),\\n        isnotempty(tostring(column_ifexists('HostName', ''))), tostring(column_ifexists('HostName', '')),\\n        isnotempty(tostring(column_ifexists('Host', ''))), tostring(column_ifexists('Host', '')),\\n        isnotempty(tostring(column_ifexists('InstanceName', ''))), tostring(column_ifexists('InstanceName', '')),\\n        'cluster')\\n};\\nlet LatestHeap = BrokerSelector(HDInsightKafkaMetrics\\n    | where TimeGenerated > ago(24h)\\n    | where MetricNamespace == 'JVMMetrics'\\n    | where MetricName in ('jvm_memoryheapused', 'jvm_memoryheapmax'))\\n| summarize arg_max(TimeGenerated, MetricValue) by Broker, MetricName\\n| summarize HeapUsedBytes = maxif(todouble(MetricValue), MetricName == 'jvm_memoryheapused'), HeapMaxBytes = maxif(todouble(MetricValue), MetricName == 'jvm_memoryheapmax') by Broker;\\nlet LatestReplication = BrokerSelector(HDInsightKafkaMetrics\\n    | where TimeGenerated > ago(24h)\\n    | where MetricName == 'UnderReplicatedPartitions')\\n| summarize arg_max(TimeGenerated, MetricValue) by Broker\\n| project Broker, UnderReplicatedPartitions = todouble(MetricValue);\\nLatestHeap\\n| join kind=fullouter LatestReplication on Broker\\n| project Broker = coalesce(Broker, Broker1), HeapUsedMB = round(HeapUsedBytes / 1048576.0, 2), HeapMaxMB = round(HeapMaxBytes / 1048576.0, 2), UnderReplicatedPartitions = coalesce(UnderReplicatedPartitions, 0.0)\\n| order by Broker asc\",\n        \"size\": 0,\n        \"title\": \"Latest broker state\",\n        \"noDataMessage\": \"No broker-level metrics found in HDInsightKafkaMetrics.\",\n        \"showRefreshButton\": true,\n        \"queryType\": 0,\n        \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n        \"crossComponentResources\": [\n          \"__WORKSPACE_RESOURCE_ID__\"\n        ],\n        \"visualization\": \"table\",\n        \"gridSettings\": {\n          \"filter\": true\n        }\n      },\n      \"name\": \"Latest broker state\"\n    }\n  ],\n  \"isLocked\": false,\n  \"fallbackResourceIds\": [\n    \"__WORKSPACE_RESOURCE_ID__\"\n  ]\n}\n",
+            "$fxv#1": "{\n  \"lenses\": [\n    {\n      \"order\": 0,\n      \"parts\": [\n        {\n          \"position\": {\n            \"x\": 0,\n            \"y\": 0,\n            \"colSpan\": 12,\n            \"rowSpan\": 3\n          },\n          \"metadata\": {\n            \"inputs\": [],\n            \"type\": \"Extension/HubsExtension/PartType/MarkdownPart\",\n            \"settings\": {\n              \"content\": {\n                \"settings\": {\n                  \"title\": \"HDInsight Kafka Operations Dashboard\",\n                  \"subtitle\": \"Portal-first view backed by Log Analytics\",\n                  \"content\": \"Use this shared dashboard for a quick health check, then open the full [HDInsight Kafka Workbook](__WORKBOOK_PORTAL_URL__) for deeper analysis.\\n\\nExpected healthy signals: `ActiveControllerCount = 1`, `OfflinePartitionsCount = 0`, `UnderReplicatedPartitions = 0`.\",\n                  \"markdownUri\": null\n                }\n              }\n            }\n          }\n        },\n        {\n          \"position\": {\n            \"x\": 0,\n            \"y\": 3,\n            \"colSpan\": 6,\n            \"rowSpan\": 4\n          },\n          \"metadata\": {\n            \"inputs\": [\n              {\n                \"name\": \"resourceTypeMode\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ComponentId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Scope\",\n                \"value\": {\n                  \"resourceIds\": [\n                    \"__WORKSPACE_RESOURCE_ID__\"\n                  ]\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartId\",\n                \"value\": \"ee0f89d2-4d6f-4178-bf3f-20e7ef26f401\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Version\",\n                \"value\": \"2.0\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"TimeRange\",\n                \"value\": \"P1D\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DashboardId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DraftRequestParameters\",\n                \"value\": {\n                  \"scope\": \"hierarchy\"\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Query\",\n                \"value\": \"HDInsightKafkaMetrics\\n| where MetricName in ('ActiveControllerCount', 'OfflinePartitionsCount', 'UnderReplicatedPartitions')\\n| summarize ActiveControllerCount = avgif(todouble(MetricValue), MetricName == 'ActiveControllerCount'), OfflinePartitionsCount = avgif(todouble(MetricValue), MetricName == 'OfflinePartitionsCount'), UnderReplicatedPartitions = avgif(todouble(MetricValue), MetricName == 'UnderReplicatedPartitions') by bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\\n| render timechart\\n\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ControlType\",\n                \"value\": \"AnalyticsGrid\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"SpecificChart\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartTitle\",\n                \"value\": \"Analytics\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Dimensions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"LegendOptions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"IsQueryContainTimeRange\",\n                \"value\": false,\n                \"isOptional\": true\n              }\n            ],\n            \"type\": \"Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart\",\n            \"settings\": {\n              \"content\": {\n                \"ControlType\": \"FrameControlChart\",\n                \"SpecificChart\": \"Line\",\n                \"PartTitle\": \"Cluster state\",\n                \"Dimensions\": {\n                  \"xAxis\": {\n                    \"name\": \"TimeGenerated\",\n                    \"type\": \"datetime\"\n                  },\n                  \"yAxis\": [\n                    {\n                      \"name\": \"ActiveControllerCount\",\n                      \"type\": \"real\"\n                    },\n                    {\n                      \"name\": \"OfflinePartitionsCount\",\n                      \"type\": \"real\"\n                    },\n                    {\n                      \"name\": \"UnderReplicatedPartitions\",\n                      \"type\": \"real\"\n                    }\n                  ],\n                  \"aggregation\": \"Avg\"\n                },\n                \"LegendOptions\": {\n                  \"isEnabled\": true,\n                  \"position\": \"Bottom\"\n                }\n              }\n            }\n          }\n        },\n        {\n          \"position\": {\n            \"x\": 6,\n            \"y\": 3,\n            \"colSpan\": 6,\n            \"rowSpan\": 4\n          },\n          \"metadata\": {\n            \"inputs\": [\n              {\n                \"name\": \"resourceTypeMode\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ComponentId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Scope\",\n                \"value\": {\n                  \"resourceIds\": [\n                    \"__WORKSPACE_RESOURCE_ID__\"\n                  ]\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartId\",\n                \"value\": \"a8277987-5d68-4cd4-9a0f-f8a8664264e7\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Version\",\n                \"value\": \"2.0\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"TimeRange\",\n                \"value\": \"P1D\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DashboardId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DraftRequestParameters\",\n                \"value\": {\n                  \"scope\": \"hierarchy\"\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Query\",\n                \"value\": \"HDInsightKafkaMetrics\\n| where MetricName in ('MessagesInPerSec', 'BytesInPerSec', 'BytesOutPerSec')\\n| summarize MessagesInPerSec = avgif(todouble(MetricValue), MetricName == 'MessagesInPerSec'), BytesInPerSec = avgif(todouble(MetricValue), MetricName == 'BytesInPerSec'), BytesOutPerSec = avgif(todouble(MetricValue), MetricName == 'BytesOutPerSec') by bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\\n| render timechart\\n\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ControlType\",\n                \"value\": \"AnalyticsGrid\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"SpecificChart\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartTitle\",\n                \"value\": \"Analytics\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Dimensions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"LegendOptions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"IsQueryContainTimeRange\",\n                \"value\": false,\n                \"isOptional\": true\n              }\n            ],\n            \"type\": \"Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart\",\n            \"settings\": {\n              \"content\": {\n                \"ControlType\": \"FrameControlChart\",\n                \"SpecificChart\": \"Line\",\n                \"PartTitle\": \"Kafka throughput\",\n                \"Dimensions\": {\n                  \"xAxis\": {\n                    \"name\": \"TimeGenerated\",\n                    \"type\": \"datetime\"\n                  },\n                  \"yAxis\": [\n                    {\n                      \"name\": \"MessagesInPerSec\",\n                      \"type\": \"real\"\n                    },\n                    {\n                      \"name\": \"BytesInPerSec\",\n                      \"type\": \"real\"\n                    },\n                    {\n                      \"name\": \"BytesOutPerSec\",\n                      \"type\": \"real\"\n                    }\n                  ],\n                  \"aggregation\": \"Avg\"\n                },\n                \"LegendOptions\": {\n                  \"isEnabled\": true,\n                  \"position\": \"Bottom\"\n                }\n              }\n            }\n          }\n        },\n        {\n          \"position\": {\n            \"x\": 0,\n            \"y\": 7,\n            \"colSpan\": 6,\n            \"rowSpan\": 4\n          },\n          \"metadata\": {\n            \"inputs\": [\n              {\n                \"name\": \"resourceTypeMode\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ComponentId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Scope\",\n                \"value\": {\n                  \"resourceIds\": [\n                    \"__WORKSPACE_RESOURCE_ID__\"\n                  ]\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartId\",\n                \"value\": \"1c11d65b-dd17-46d7-bbd8-aecf9d1003f4\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Version\",\n                \"value\": \"2.0\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"TimeRange\",\n                \"value\": \"P1D\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DashboardId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DraftRequestParameters\",\n                \"value\": {\n                  \"scope\": \"hierarchy\"\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Query\",\n                \"value\": \"HDInsightKafkaMetrics\\n| where MetricNamespace == 'JVMMetrics'\\n| where MetricName in ('jvm_memoryheapused', 'jvm_memoryheapmax')\\n| summarize HeapUsed = avgif(todouble(MetricValue), MetricName == 'jvm_memoryheapused'), HeapMax = avgif(todouble(MetricValue), MetricName == 'jvm_memoryheapmax') by bin(TimeGenerated, 5m)\\n| order by TimeGenerated asc\\n| render timechart\\n\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ControlType\",\n                \"value\": \"AnalyticsGrid\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"SpecificChart\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartTitle\",\n                \"value\": \"Analytics\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Dimensions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"LegendOptions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"IsQueryContainTimeRange\",\n                \"value\": false,\n                \"isOptional\": true\n              }\n            ],\n            \"type\": \"Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart\",\n            \"settings\": {\n              \"content\": {\n                \"ControlType\": \"FrameControlChart\",\n                \"SpecificChart\": \"Line\",\n                \"PartTitle\": \"Broker JVM heap\",\n                \"Dimensions\": {\n                  \"xAxis\": {\n                    \"name\": \"TimeGenerated\",\n                    \"type\": \"datetime\"\n                  },\n                  \"yAxis\": [\n                    {\n                      \"name\": \"HeapUsed\",\n                      \"type\": \"real\"\n                    },\n                    {\n                      \"name\": \"HeapMax\",\n                      \"type\": \"real\"\n                    }\n                  ],\n                  \"aggregation\": \"Avg\"\n                },\n                \"LegendOptions\": {\n                  \"isEnabled\": true,\n                  \"position\": \"Bottom\"\n                }\n              }\n            }\n          }\n        },\n        {\n          \"position\": {\n            \"x\": 6,\n            \"y\": 7,\n            \"colSpan\": 6,\n            \"rowSpan\": 4\n          },\n          \"metadata\": {\n            \"inputs\": [\n              {\n                \"name\": \"resourceTypeMode\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ComponentId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Scope\",\n                \"value\": {\n                  \"resourceIds\": [\n                    \"__WORKSPACE_RESOURCE_ID__\"\n                  ]\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartId\",\n                \"value\": \"a5627661-a98e-4ef3-9c3b-b8c38521dd31\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Version\",\n                \"value\": \"2.0\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"TimeRange\",\n                \"value\": \"P1D\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DashboardId\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"DraftRequestParameters\",\n                \"value\": {\n                  \"scope\": \"hierarchy\"\n                },\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Query\",\n                \"value\": \"let BrokerSelector = (tbl:(*)) {\\n    tbl\\n    | extend Broker = case(\\n        isnotempty(tostring(column_ifexists('Computer', ''))), tostring(column_ifexists('Computer', '')),\\n        isnotempty(tostring(column_ifexists('HostName', ''))), tostring(column_ifexists('HostName', '')),\\n        isnotempty(tostring(column_ifexists('Host', ''))), tostring(column_ifexists('Host', '')),\\n        isnotempty(tostring(column_ifexists('InstanceName', ''))), tostring(column_ifexists('InstanceName', '')),\\n        'cluster')\\n};\\nlet LatestHeap = BrokerSelector(HDInsightKafkaMetrics\\n    | where MetricNamespace == 'JVMMetrics'\\n    | where MetricName in ('jvm_memoryheapused', 'jvm_memoryheapmax'))\\n| summarize arg_max(TimeGenerated, MetricValue) by Broker, MetricName\\n| summarize HeapUsedMB = round(maxif(todouble(MetricValue), MetricName == 'jvm_memoryheapused') / 1048576.0, 2), HeapMaxMB = round(maxif(todouble(MetricValue), MetricName == 'jvm_memoryheapmax') / 1048576.0, 2) by Broker;\\nlet LatestReplication = BrokerSelector(HDInsightKafkaMetrics\\n    | where MetricName == 'UnderReplicatedPartitions')\\n| summarize arg_max(TimeGenerated, MetricValue) by Broker\\n| project Broker, UnderReplicatedPartitions = todouble(MetricValue);\\nLatestHeap\\n| join kind=fullouter LatestReplication on Broker\\n| project Broker = coalesce(Broker, Broker1), HeapUsedMB, HeapMaxMB, UnderReplicatedPartitions = coalesce(UnderReplicatedPartitions, 0.0)\\n| order by Broker asc\\n\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"ControlType\",\n                \"value\": \"AnalyticsGrid\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"SpecificChart\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"PartTitle\",\n                \"value\": \"Analytics\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"Dimensions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"LegendOptions\",\n                \"isOptional\": true\n              },\n              {\n                \"name\": \"IsQueryContainTimeRange\",\n                \"value\": false,\n                \"isOptional\": true\n              }\n            ],\n            \"type\": \"Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart\",\n            \"settings\": {\n              \"content\": {\n                \"PartTitle\": \"Latest broker state\",\n                \"GridColumnsWidth\": {\n                  \"Broker\": \"160px\",\n                  \"HeapUsedMB\": \"110px\",\n                  \"HeapMaxMB\": \"110px\",\n                  \"UnderReplicatedPartitions\": \"170px\"\n                }\n              }\n            }\n          }\n        }\n      ]\n    }\n  ],\n  \"metadata\": {\n    \"model\": {}\n  }\n}\n",
+            "workbookName": "[guid(resourceGroup().id, 'Microsoft.Insights/workbooks', parameters('workbookDisplayName'), parameters('workspaceResourceId'))]",
+            "workbookSerializedData": "[string(json(replace(variables('$fxv#0'), '__WORKSPACE_RESOURCE_ID__', parameters('workspaceResourceId'))))]",
+            "workbookPortalUrl": "[format('{0}/#view/AppInsightsExtension/UsageNotebookBlade/ComponentId/Azure%20Monitor/ConfigurationId/{1}/Type/workbook/WorkbookTemplateName/{2}', environment().portal, uriComponent(resourceId('Microsoft.Insights/workbooks', variables('workbookName'))), uriComponent(parameters('workbookDisplayName')))]",
+            "dashboardProperties": "[json(replace(replace(variables('$fxv#1'), '__WORKSPACE_RESOURCE_ID__', parameters('workspaceResourceId')), '__WORKBOOK_PORTAL_URL__', variables('workbookPortalUrl')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "apiVersion": "2023-06-01",
+              "name": "[variables('workbookName')]",
+              "location": "[parameters('location')]",
+              "kind": "shared",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "category": "workbook",
+                "description": "Workbook for HDInsight Kafka operational monitoring backed by Log Analytics.",
+                "displayName": "[parameters('workbookDisplayName')]",
+                "serializedData": "[variables('workbookSerializedData')]",
+                "sourceId": "[parameters('workspaceResourceId')]",
+                "version": "Notebook/1.0"
+              }
+            },
+            {
+              "type": "Microsoft.Portal/dashboards",
+              "apiVersion": "2022-12-01-preview",
+              "name": "[parameters('dashboardName')]",
+              "location": "[parameters('location')]",
+              "tags": "[union(parameters('tags'), createObject('hidden-title', parameters('dashboardDisplayName')))]",
+              "properties": "[variables('dashboardProperties')]"
+            }
+          ],
+          "outputs": {
+            "workbookResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/workbooks', variables('workbookName'))]"
+            },
+            "workbookPortalUrl": {
+              "type": "string",
+              "value": "[variables('workbookPortalUrl')]"
+            },
+            "dashboardResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Portal/dashboards', parameters('dashboardName'))]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "workbookResourceId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'hdinsight-kafka-monitoring-assets'), '2025-04-01').outputs.workbookResourceId.value]"
+    },
+    "workbookPortalUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'hdinsight-kafka-monitoring-assets'), '2025-04-01').outputs.workbookPortalUrl.value]"
+    },
+    "dashboardResourceId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'hdinsight-kafka-monitoring-assets'), '2025-04-01').outputs.dashboardResourceId.value]"
+    }
+  }
+}

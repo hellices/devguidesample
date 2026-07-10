@@ -1,0 +1,64 @@
+services:
+  # Consumer Lag / 오프셋 / 토픽·파티션 상태 (Kafka 프로토콜)
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    command:
+      # 브로커 IP:9092 를 나열 (한 대만 넣어도 되지만 여러 대 권장)
+      - --kafka.server=<BROKER0_IP>:9092
+      - --kafka.server=<BROKER1_IP>:9092
+      - --kafka.server=<BROKER2_IP>:9092
+    ports:
+      - "9308:9308"
+    restart: unless-stopped
+
+  # 브로커별 JMX -> Prometheus (원격 JMX, 브로커당 컨테이너 1개)
+  jmx-b0:
+    image: eclipse-temurin:17-jre
+    container_name: jmx-b0
+    command: ["java","-jar","/jmx/jmx_prometheus_httpserver.jar","9404","/jmx/b0.yml"]
+    volumes:
+      - ./jmx:/jmx:ro
+    restart: unless-stopped
+  jmx-b1:
+    image: eclipse-temurin:17-jre
+    container_name: jmx-b1
+    command: ["java","-jar","/jmx/jmx_prometheus_httpserver.jar","9404","/jmx/b1.yml"]
+    volumes:
+      - ./jmx:/jmx:ro
+    restart: unless-stopped
+  jmx-b2:
+    image: eclipse-temurin:17-jre
+    container_name: jmx-b2
+    command: ["java","-jar","/jmx/jmx_prometheus_httpserver.jar","9404","/jmx/b2.yml"]
+    volumes:
+      - ./jmx:/jmx:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=<GRAFANA_ADMIN_PASSWORD>
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  prom-data:
+  grafana-data:

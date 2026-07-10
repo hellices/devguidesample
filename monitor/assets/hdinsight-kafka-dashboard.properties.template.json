@@ -1,0 +1,489 @@
+{
+  "lenses": [
+    {
+      "order": 0,
+      "parts": [
+        {
+          "position": {
+            "x": 0,
+            "y": 0,
+            "colSpan": 12,
+            "rowSpan": 3
+          },
+          "metadata": {
+            "inputs": [],
+            "type": "Extension/HubsExtension/PartType/MarkdownPart",
+            "settings": {
+              "content": {
+                "settings": {
+                  "title": "HDInsight Kafka Operations Dashboard",
+                  "subtitle": "Portal-first view backed by Log Analytics",
+                  "content": "Use this shared dashboard for a quick health check, then open the full [HDInsight Kafka Workbook](__WORKBOOK_PORTAL_URL__) for deeper analysis.\n\nExpected healthy signals: `ActiveControllerCount = 1`, `OfflinePartitionsCount = 0`, `UnderReplicatedPartitions = 0`.",
+                  "markdownUri": null
+                }
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 0,
+            "y": 3,
+            "colSpan": 6,
+            "rowSpan": 4
+          },
+          "metadata": {
+            "inputs": [
+              {
+                "name": "resourceTypeMode",
+                "isOptional": true
+              },
+              {
+                "name": "ComponentId",
+                "isOptional": true
+              },
+              {
+                "name": "Scope",
+                "value": {
+                  "resourceIds": [
+                    "__WORKSPACE_RESOURCE_ID__"
+                  ]
+                },
+                "isOptional": true
+              },
+              {
+                "name": "PartId",
+                "value": "ee0f89d2-4d6f-4178-bf3f-20e7ef26f401",
+                "isOptional": true
+              },
+              {
+                "name": "Version",
+                "value": "2.0",
+                "isOptional": true
+              },
+              {
+                "name": "TimeRange",
+                "value": "P1D",
+                "isOptional": true
+              },
+              {
+                "name": "DashboardId",
+                "isOptional": true
+              },
+              {
+                "name": "DraftRequestParameters",
+                "value": {
+                  "scope": "hierarchy"
+                },
+                "isOptional": true
+              },
+              {
+                "name": "Query",
+                "value": "HDInsightKafkaMetrics\n| where MetricName in ('ActiveControllerCount', 'OfflinePartitionsCount', 'UnderReplicatedPartitions')\n| summarize ActiveControllerCount = avgif(todouble(MetricValue), MetricName == 'ActiveControllerCount'), OfflinePartitionsCount = avgif(todouble(MetricValue), MetricName == 'OfflinePartitionsCount'), UnderReplicatedPartitions = avgif(todouble(MetricValue), MetricName == 'UnderReplicatedPartitions') by bin(TimeGenerated, 5m)\n| order by TimeGenerated asc\n| render timechart\n",
+                "isOptional": true
+              },
+              {
+                "name": "ControlType",
+                "value": "AnalyticsGrid",
+                "isOptional": true
+              },
+              {
+                "name": "SpecificChart",
+                "isOptional": true
+              },
+              {
+                "name": "PartTitle",
+                "value": "Analytics",
+                "isOptional": true
+              },
+              {
+                "name": "Dimensions",
+                "isOptional": true
+              },
+              {
+                "name": "LegendOptions",
+                "isOptional": true
+              },
+              {
+                "name": "IsQueryContainTimeRange",
+                "value": false,
+                "isOptional": true
+              }
+            ],
+            "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+            "settings": {
+              "content": {
+                "ControlType": "FrameControlChart",
+                "SpecificChart": "Line",
+                "PartTitle": "Cluster state",
+                "Dimensions": {
+                  "xAxis": {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  "yAxis": [
+                    {
+                      "name": "ActiveControllerCount",
+                      "type": "real"
+                    },
+                    {
+                      "name": "OfflinePartitionsCount",
+                      "type": "real"
+                    },
+                    {
+                      "name": "UnderReplicatedPartitions",
+                      "type": "real"
+                    }
+                  ],
+                  "aggregation": "Avg"
+                },
+                "LegendOptions": {
+                  "isEnabled": true,
+                  "position": "Bottom"
+                }
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 6,
+            "y": 3,
+            "colSpan": 6,
+            "rowSpan": 4
+          },
+          "metadata": {
+            "inputs": [
+              {
+                "name": "resourceTypeMode",
+                "isOptional": true
+              },
+              {
+                "name": "ComponentId",
+                "isOptional": true
+              },
+              {
+                "name": "Scope",
+                "value": {
+                  "resourceIds": [
+                    "__WORKSPACE_RESOURCE_ID__"
+                  ]
+                },
+                "isOptional": true
+              },
+              {
+                "name": "PartId",
+                "value": "a8277987-5d68-4cd4-9a0f-f8a8664264e7",
+                "isOptional": true
+              },
+              {
+                "name": "Version",
+                "value": "2.0",
+                "isOptional": true
+              },
+              {
+                "name": "TimeRange",
+                "value": "P1D",
+                "isOptional": true
+              },
+              {
+                "name": "DashboardId",
+                "isOptional": true
+              },
+              {
+                "name": "DraftRequestParameters",
+                "value": {
+                  "scope": "hierarchy"
+                },
+                "isOptional": true
+              },
+              {
+                "name": "Query",
+                "value": "HDInsightKafkaMetrics\n| where MetricName in ('MessagesInPerSec', 'BytesInPerSec', 'BytesOutPerSec')\n| summarize MessagesInPerSec = avgif(todouble(MetricValue), MetricName == 'MessagesInPerSec'), BytesInPerSec = avgif(todouble(MetricValue), MetricName == 'BytesInPerSec'), BytesOutPerSec = avgif(todouble(MetricValue), MetricName == 'BytesOutPerSec') by bin(TimeGenerated, 5m)\n| order by TimeGenerated asc\n| render timechart\n",
+                "isOptional": true
+              },
+              {
+                "name": "ControlType",
+                "value": "AnalyticsGrid",
+                "isOptional": true
+              },
+              {
+                "name": "SpecificChart",
+                "isOptional": true
+              },
+              {
+                "name": "PartTitle",
+                "value": "Analytics",
+                "isOptional": true
+              },
+              {
+                "name": "Dimensions",
+                "isOptional": true
+              },
+              {
+                "name": "LegendOptions",
+                "isOptional": true
+              },
+              {
+                "name": "IsQueryContainTimeRange",
+                "value": false,
+                "isOptional": true
+              }
+            ],
+            "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+            "settings": {
+              "content": {
+                "ControlType": "FrameControlChart",
+                "SpecificChart": "Line",
+                "PartTitle": "Kafka throughput",
+                "Dimensions": {
+                  "xAxis": {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  "yAxis": [
+                    {
+                      "name": "MessagesInPerSec",
+                      "type": "real"
+                    },
+                    {
+                      "name": "BytesInPerSec",
+                      "type": "real"
+                    },
+                    {
+                      "name": "BytesOutPerSec",
+                      "type": "real"
+                    }
+                  ],
+                  "aggregation": "Avg"
+                },
+                "LegendOptions": {
+                  "isEnabled": true,
+                  "position": "Bottom"
+                }
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 0,
+            "y": 7,
+            "colSpan": 6,
+            "rowSpan": 4
+          },
+          "metadata": {
+            "inputs": [
+              {
+                "name": "resourceTypeMode",
+                "isOptional": true
+              },
+              {
+                "name": "ComponentId",
+                "isOptional": true
+              },
+              {
+                "name": "Scope",
+                "value": {
+                  "resourceIds": [
+                    "__WORKSPACE_RESOURCE_ID__"
+                  ]
+                },
+                "isOptional": true
+              },
+              {
+                "name": "PartId",
+                "value": "1c11d65b-dd17-46d7-bbd8-aecf9d1003f4",
+                "isOptional": true
+              },
+              {
+                "name": "Version",
+                "value": "2.0",
+                "isOptional": true
+              },
+              {
+                "name": "TimeRange",
+                "value": "P1D",
+                "isOptional": true
+              },
+              {
+                "name": "DashboardId",
+                "isOptional": true
+              },
+              {
+                "name": "DraftRequestParameters",
+                "value": {
+                  "scope": "hierarchy"
+                },
+                "isOptional": true
+              },
+              {
+                "name": "Query",
+                "value": "HDInsightKafkaMetrics\n| where MetricNamespace == 'JVMMetrics'\n| where MetricName in ('jvm_memoryheapused', 'jvm_memoryheapmax')\n| summarize HeapUsed = avgif(todouble(MetricValue), MetricName == 'jvm_memoryheapused'), HeapMax = avgif(todouble(MetricValue), MetricName == 'jvm_memoryheapmax') by bin(TimeGenerated, 5m)\n| order by TimeGenerated asc\n| render timechart\n",
+                "isOptional": true
+              },
+              {
+                "name": "ControlType",
+                "value": "AnalyticsGrid",
+                "isOptional": true
+              },
+              {
+                "name": "SpecificChart",
+                "isOptional": true
+              },
+              {
+                "name": "PartTitle",
+                "value": "Analytics",
+                "isOptional": true
+              },
+              {
+                "name": "Dimensions",
+                "isOptional": true
+              },
+              {
+                "name": "LegendOptions",
+                "isOptional": true
+              },
+              {
+                "name": "IsQueryContainTimeRange",
+                "value": false,
+                "isOptional": true
+              }
+            ],
+            "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+            "settings": {
+              "content": {
+                "ControlType": "FrameControlChart",
+                "SpecificChart": "Line",
+                "PartTitle": "Broker JVM heap",
+                "Dimensions": {
+                  "xAxis": {
+                    "name": "TimeGenerated",
+                    "type": "datetime"
+                  },
+                  "yAxis": [
+                    {
+                      "name": "HeapUsed",
+                      "type": "real"
+                    },
+                    {
+                      "name": "HeapMax",
+                      "type": "real"
+                    }
+                  ],
+                  "aggregation": "Avg"
+                },
+                "LegendOptions": {
+                  "isEnabled": true,
+                  "position": "Bottom"
+                }
+              }
+            }
+          }
+        },
+        {
+          "position": {
+            "x": 6,
+            "y": 7,
+            "colSpan": 6,
+            "rowSpan": 4
+          },
+          "metadata": {
+            "inputs": [
+              {
+                "name": "resourceTypeMode",
+                "isOptional": true
+              },
+              {
+                "name": "ComponentId",
+                "isOptional": true
+              },
+              {
+                "name": "Scope",
+                "value": {
+                  "resourceIds": [
+                    "__WORKSPACE_RESOURCE_ID__"
+                  ]
+                },
+                "isOptional": true
+              },
+              {
+                "name": "PartId",
+                "value": "a5627661-a98e-4ef3-9c3b-b8c38521dd31",
+                "isOptional": true
+              },
+              {
+                "name": "Version",
+                "value": "2.0",
+                "isOptional": true
+              },
+              {
+                "name": "TimeRange",
+                "value": "P1D",
+                "isOptional": true
+              },
+              {
+                "name": "DashboardId",
+                "isOptional": true
+              },
+              {
+                "name": "DraftRequestParameters",
+                "value": {
+                  "scope": "hierarchy"
+                },
+                "isOptional": true
+              },
+              {
+                "name": "Query",
+                "value": "let LatestHeap =\n    HDInsightKafkaMetrics\n    | where TimeGenerated > ago(24h)\n    | where MetricNamespace == 'JVMMetrics'\n    | where MetricName in ('jvm_memoryheapused', 'jvm_memoryheapmax')\n    | extend Broker = case(\n        isnotempty(tostring(column_ifexists('Computer', ''))), tostring(column_ifexists('Computer', '')),\n        isnotempty(tostring(column_ifexists('HostName', ''))), tostring(column_ifexists('HostName', '')),\n        isnotempty(tostring(column_ifexists('Host', ''))), tostring(column_ifexists('Host', '')),\n        isnotempty(tostring(column_ifexists('InstanceName', ''))), tostring(column_ifexists('InstanceName', '')),\n        'cluster')\n    | summarize arg_max(TimeGenerated, MetricValue) by Broker, MetricName\n    | summarize HeapUsedMB = round(maxif(todouble(MetricValue), MetricName == 'jvm_memoryheapused') / 1048576.0, 2), HeapMaxMB = round(maxif(todouble(MetricValue), MetricName == 'jvm_memoryheapmax') / 1048576.0, 2) by Broker;\nlet LatestReplication =\n    HDInsightKafkaMetrics\n    | where TimeGenerated > ago(24h)\n    | where MetricName == 'UnderReplicatedPartitions'\n    | extend Broker = case(\n        isnotempty(tostring(column_ifexists('Computer', ''))), tostring(column_ifexists('Computer', '')),\n        isnotempty(tostring(column_ifexists('HostName', ''))), tostring(column_ifexists('HostName', '')),\n        isnotempty(tostring(column_ifexists('Host', ''))), tostring(column_ifexists('Host', '')),\n        isnotempty(tostring(column_ifexists('InstanceName', ''))), tostring(column_ifexists('InstanceName', '')),\n        'cluster')\n    | summarize arg_max(TimeGenerated, MetricValue) by Broker\n    | project Broker, UnderReplicatedPartitions = todouble(MetricValue);\nLatestHeap\n| join kind=fullouter LatestReplication on Broker\n| project Broker = coalesce(Broker, Broker1), HeapUsedMB, HeapMaxMB, UnderReplicatedPartitions = coalesce(UnderReplicatedPartitions, 0.0)\n| order by Broker asc\n",
+                "isOptional": true
+              },
+              {
+                "name": "ControlType",
+                "value": "AnalyticsGrid",
+                "isOptional": true
+              },
+              {
+                "name": "SpecificChart",
+                "isOptional": true
+              },
+              {
+                "name": "PartTitle",
+                "value": "Analytics",
+                "isOptional": true
+              },
+              {
+                "name": "Dimensions",
+                "isOptional": true
+              },
+              {
+                "name": "LegendOptions",
+                "isOptional": true
+              },
+              {
+                "name": "IsQueryContainTimeRange",
+                "value": false,
+                "isOptional": true
+              }
+            ],
+            "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+            "settings": {
+              "content": {
+                "PartTitle": "Latest broker state",
+                "GridColumnsWidth": {
+                  "Broker": "160px",
+                  "HeapUsedMB": "110px",
+                  "HeapMaxMB": "110px",
+                  "UnderReplicatedPartitions": "170px"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "model": {}
+  }
+}
