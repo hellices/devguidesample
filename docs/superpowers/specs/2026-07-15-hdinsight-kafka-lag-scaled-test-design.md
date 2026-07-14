@@ -77,7 +77,32 @@ lag 회복 조건: 컨슈머 소비 지연 < T_cache.
 - 세션 파일: `hdi-kafka-template-public.json`, `recreate-public.sh`, `teardown.sh`
 - 모니터링: JMX Exporter + Kafka Exporter + Prometheus + Grafana (VM + Managed Grafana) — `monitor/assets/prometheus-grafana/`
 
-**부하 생성기**: Kafka 기본 제공 `kafka-producer-perf-test.sh` / `kafka-consumer-perf-test.sh` 로 produce/consume율 정밀 제어. rdkafka 앱 다운스트림 재현이 필요하면 소비측에 인위적 처리 지연(sleep) 주입.
+### 3.1 부하 발생·소비 실행 위치
+
+produce/consume는 **브로커와 분리된 전용 클라이언트에서 실행**한다. HDInsight headnode/workernode에서 직접 돌리면 브로커 CPU·네트워크를 잠식해 측정이 오염되므로 금지.
+
+**컨슈머를 VM으로? AKS pod로?** — 목적에 따라 갈린다. 이 테스트의 지배 가설은 브로커측(page cache eviction)이며, 브로커의 캐시·디스크 거동은 클라이언트가 VM이든 rdkafka pod든 **동일하다**(소비율과 뒤처짐 정도만 같으면 됨). 따라서 브로커를 증명하는 Arm은 VM으로 충분하고, 실제 rdkafka pod 재현은 **앱 자체가 병목인지 검증하는 Arm D에서만** 필요하다.
+
+```
+[클라이언트 VM]  ──produce──▶  [HDInsight Kafka 3 broker]  ◀──consume──  [클라이언트 VM]
+ (같은 VNet, Kafka bin)              (측정 대상)                         (동일/별도 VM)
+                                          │
+                          JMX/Kafka Exporter ─▶ Prometheus/Grafana (모니터 호스트)
+```
+
+| 옵션 | 장점 | 단점 | 채택 |
+|---|---|---|---|
+| **A. 전용 클라이언트 VM** | 브로커 부하 격리, produce/consume율 정밀 제어, SKU 자유 | VM 1대 추가 | **Baseline·A·B·C 채택** |
+| B. HDInsight edge node | 같은 클러스터·VNet, Kafka bin 기본 | edge node 비용, 브로커와 자원 근접 | 대안 |
+| **C. AKS pod (rdkafka)** | 실제 앱 거동·fetch 재현 | 구성 복잡, 정밀 부하 제어 난이 | **Arm D 채택** |
+
+- 프로듀서는 전 Arm 공통으로 **클라이언트 VM**에서 `kafka-producer-perf-test.sh` 실행(부하율은 브로커측 변수이지 앱 무관).
+- 컨슈머:
+  - Baseline·A·B·C → **VM `kafka-consumer-perf-test.sh`** (또는 sleep 주입 컨슈머). 앱 변수 제거로 병목을 브로커로 격리.
+  - **Arm D → AKS pod에 고객 실제 rdkafka 설정** 배포(fetch 튜닝 없음/msg_cache 버퍼 그대로). 브로커 개선이 실제 pod 컨슈머에 이득으로 전달되는지, fetch 파라미터 튜닝 효과가 있는지 검증.
+- 클라이언트 VM: HDInsight와 **동일 VNet**, 브로커보다 넉넉한 SKU(예: `Standard_D8s_v5`/`D16s_v5`)로 두어 부하 생성기 자신이 병목이 되지 않게 함. AKS도 동일 VNet(또는 peering).
+- 도구: `kafka-producer-perf-test.sh --throughput <rate> --record-size 1000000` 로 produce율을 배율 k(2 TB/day 상당)에 고정. 소비측은 "피크 시 뒤처짐"을 인위 유발(일시 정지 또는 처리 지연 주입) 후 회복 시간 측정.
+- produce율은 `--throughput`으로 인위 제한 → 클라이언트가 상한이 아니라 **브로커 동역학이 병목**임을 보장.
 
 ## 4. 실험 매트릭스 (한 번에 한 변수)
 
@@ -106,13 +131,13 @@ lag 회복 조건: 컨슈머 소비 지연 < T_cache.
 
 ## 6. 실험 절차
 
-1. **테스트베드 정합 배포** — ARM 템플릿을 브로커당 프로덕션 사양(32 GB, S30 ×4)으로 조정, 3-브로커 배포. node_exporter 추가.
+1. **테스트베드 정합 배포** — ARM 템플릿을 브로커당 프로덕션 사양(32 GB, S30 ×4)으로 조정, 3-브로커 배포. node_exporter 추가. **동일 VNet에 클라이언트 VM(부하 생성기) 배포**.
 2. **토픽 생성** — 파티션 30, RF 2, 프로덕션과 동일 설정.
-3. **Baseline 재현** — 2 TB/day 상당 produce + 30 컨슈머(파티션 1:1). 컨슈머에 소량 지연 또는 일시 정지를 주입해 "피크 시 뒤처짐" 유발 → lag 발생·회복 시간 측정. 7분급 정체 재현 확인.
+3. **Baseline 재현** — 클라이언트 VM에서 2 TB/day 상당 produce + VM `consumer-perf-test` 30개(파티션 1:1). 컨슈머에 소량 지연/일시 정지를 주입해 "피크 시 뒤처짐" 유발 → lag 발생·회복 시간 측정. 7분급 정체 재현 확인.
 4. **Arm A** — produce율 단계 감소, 각 단계에서 회복 시간 측정 → 회복<1분 임계 부하 도출.
 5. **Arm B** — 브로커 E-series 재생성, Baseline 부하 반복 → 회복 시간 비교.
 6. **Arm C** — Premium SSD 재생성(지원 확인 후), 반복.
-7. **Arm D** — 컨슈머 fetch 파라미터 조정, 반복.
+7. **Arm D** — **AKS pod에 고객 rdkafka 설정 배포**, 브로커 개선안 위에서 fetch 파라미터(fetch.min.bytes/queued.max.messages) 조정·비교. VM 컨슈머 대비 실제 앱 거동 차이 확인.
 8. **환산 및 권고** — §2 불변식으로 18-브로커 프로덕션에 대한 최소 비용 구성(SKU/디스크/부하/파티션) 권고 도출.
 
 각 실행: 워밍업 → 정상상태 → lag 유발 이벤트 → 회복 관측. 실행당 30–60분, 동일 조건 3회 반복해 분산 확인.
@@ -122,7 +147,8 @@ lag 회복 조건: 컨슈머 소비 지연 < T_cache.
 - **HDInsight SKU/디스크 변경 = 클러스터 재생성** (in-place resize 불가). Arm B·C는 재배포 비용·시간이 큼. `recreate-public.sh` 활용.
 - **HDInsight Kafka 데이터 디스크의 Premium SSD 지원 여부 확인 필요** — 미지원 시 Arm C는 "디스크 개수 증설" 또는 "브로커 증설"로 대체.
 - **부하 생성기가 실제 filebeat 트래픽 특성(메시지 크기 분포·배치)을 근사** — max.message 1 MB, compression=producer 반영해 record-size 정렬.
-- **비용 관리** — 각 Arm 테스트 후 즉시 teardown. 야간 유휴 클러스터 방치 금지.
+- **비용 관리** — 각 Arm 테스트 후 즉시 teardown. 야간 유휴 클러스터·클라이언트 VM·AKS 방치 금지.
+- **Arm D AKS 구성** — 실제 rdkafka 컨슈머 이미지·설정 확보 필요(고객 이미지 또는 동등 재현). AKS는 HDInsight와 동일 VNet 또는 peering.
 - **테스트베드 리전/구독** — 프로덕션과 동일 japaneast, contoso 구독(검증됨).
 
 ## 8. 산출물
