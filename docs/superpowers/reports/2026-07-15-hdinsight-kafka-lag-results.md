@@ -104,7 +104,20 @@
 - 고객 피크 7분 lag는 테스트 Baseline 7.7분과 **정성·자릿수 정합** → 축소 모델의 타당성 확인.
 - "1분 이내"는 **C를 약 2.3–2.5배** 확보하면 달성 가능(테스트 Cap-5MB=33s). 파티션 증설+브로커 보강 조합으로 현실화.
 
+## 정리(Teardown) 상태
+
+- 로드젠/모니터링/점프박스 VM: **deallocated** (비용 정지)
+- HDInsight 클러스터 `krafton-kafka-hdi-68944`: **유지 중** (후속 파티션/브로커 arm 대비). HDInsight는 중지가 불가하고 시간당 과금되므로, 후속 테스트 계획이 없으면 아래로 삭제:
+
+```bash
+az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944
+# 리소스그룹 통째 정리(스토리지·VM·Grafana 포함):
+# az group delete -n rg-krafton-kafka-dev-jpe --yes
+```
+- 재생성 필요 시: 세션 파일 `recreate-public.sh` + `hdi-kafka-template-public.json` 사용.
+
 ## 후속 (오늘 범위 밖)
+
 
 - **브로커 스펙 arm (RAM 32GB / Premium SSD v2):** 컨슈머 용량을 쿼터로 고정한 본 테스트에선 브로커 RAM 효과가 드러나지 않음(회복 = peak/C, C 고정). 실측하려면 쿼터를 풀고 lag 데이터가 page cache를 초과하도록 대용량 burst를 걸어 **디스크 read 바운드 catch-up**을 재현해야 함 → 별도 테스트.
 - **파티션 증설 arm:** 180→360→540 파티션에서 동일 부하의 회복 곡선 실측(권고 ①의 정량 근거 강화).
