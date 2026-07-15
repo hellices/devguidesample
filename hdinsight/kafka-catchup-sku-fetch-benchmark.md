@@ -162,7 +162,48 @@ lag 발생 구간에 broker(worker) 노드에서:
 3. **broker 자원은 여유인데 pod CPU 포화 / 특정 partition lag 편중** → SKU 상향 무효. pod·partition scale-out.
 4. 상향 전/후 동일 지표를 재수집해 소비 상한 C 상승·lag 해소 시간 단축을 실측 검증(본 벤치는 절대값 이식 불가, 방향성 근거).
 
-## 9. 해석 시 주의
+## 9. 고객 환경 적용 — 유입률 환산과 broker 증설 vs SKU 상향
+
+### 9-1. 본 테스트 producer 수치의 성격 (고객 피크 아님)
+
+본 테스트 producer 합산 유입(D4 303 / D8 521 / D16 588 MB/s)은 **3-broker 테스트 클러스터를 flood로 포화시킨 produce 상한**이며, 고객 피크 유입을 모델링한 값이 아니다. 자릿수가 비슷한 것은 우연.
+
+고객 유입률 환산(계산값, 실측 아님. Kafka MBps=10⁶ 기준):
+
+| 유입량 | 24h 평균 | 12h 집중 | 8h 집중 | 4h 피크 |
+|---|---|---|---|---|
+| 12 TB/day | 139 MB/s | 278 | 417 | 833 |
+| 15 TB/day | 174 MB/s | 347 | 521 | 1,042 |
+
+- 위는 클러스터 전체 유입. **per-broker로 정규화**하면(고객 broker 18대): 15TB·8h 집중 시 broker당 ~29 MB/s, 4h 피크여도 ~58 MB/s.
+- 본 테스트는 broker 3대라 per-broker produce가 D8 ~174 / D16 ~196 MB/s → **per-broker 기준으로는 고객보다 훨씬 높은 부하**를 broker에 가한 상태.
+- 따라서 비교의 기준은 클러스터 합산 MB/s가 아니라 **broker당·partition당 소비 상한 C vs produce 피크 P**. 본 테스트는 고객 피크 MB/s에 맞춘 캘리브레이션이 아니라 포화 테스트임에 유의.
+
+### 9-2. broker 증설 효과 (추론, 미실측)
+
+partition 수 = consumer pod 수를 고정한다는 고객 제약 하에서 broker 증설 효과는 병목 위치에 따라 갈린다. **본 테스트는 broker 수를 스윕하지 않았으므로 아래는 원리 기반 추론이다.**
+
+- **broker I/O(page cache / HDD IOPS) 병목이면 → SKU 상향과 같은 방향으로 유효, HDD IOPS 병목엔 더 직접적**
+  - 동일 partition을 더 많은 broker로 재분산 → broker당 partition 수↓ → broker당 working set↓, 파티션당 page cache 예산↑ → cache 적중률↑.
+  - 부착 disk(S30 HDD)의 IOPS가 더 많은 물리 디스크로 분산 → 집계 disk 상한↑. 고객이 **HDD random-read IOPS 바운드**(§3-1)이면, 물리 disk를 늘리는 broker 증설이 RAM으로 disk를 회피하는 SKU-up보다 직접적일 수 있음.
+  - 즉 broker 증설·SKU 상향 모두 "집계 RAM(page cache) + 집계 disk 대역"을 키운다는 점에서 동일 병목을 겨냥.
+- **partition 직렬화 / pod per-record 처리 병목이면 → broker 증설 무효**
+  - partition 1 = consumer 1 직렬 소비. 병목이 pod 처리면 broker를 늘려도 partition·pod 수 고정이라 C 불변 → partition·pod scale-out만 유효.
+- **고객 관찰과의 연결**: "partition·pod 증설 시 오히려 지연"은 partition 증가가 segment·random IO 분산을 키워 **broker disk IOPS를 더 압박**했을 가능성과 정합. 이 경우 병목은 broker I/O 쪽 → broker 증설(disk 분산) 또는 disk 종류 상향(Premium SSD)이 유효 후보.
+
+### 9-3. 레버 요약
+
+| 레버 | 겨냥 병목 | 무효한 경우 |
+|---|---|---|
+| broker SKU 상향(D8→D16) | broker당 RAM(page cache)·vCPU·disk/NIC 상한 | pod 처리 / partition 직렬화 병목 |
+| broker 증설(scale-out) | 집계 RAM·disk IOPS 분산, broker당 working set↓ | pod 처리 / partition 직렬화 병목 |
+| disk 종류 상향(HDD→Premium SSD) | disk IOPS/latency 병목 | cache-hit로 이미 RAM 서빙 중이면 효과 작음 |
+| partition·pod scale-out | partition 직렬화 / pod 처리 병목 | broker I/O가 이미 포화면 오히려 악화 가능 |
+
+- 어느 레버가 유효한지는 §8 진단(broker disk %util·IOPS·page cache·CPU vs pod CPU·partition별 lag 분포)으로 병목 위치를 특정한 뒤 결정.
+- broker 증설의 정량 효과는 본 테스트 미검증(후속 측정 후보, §11).
+
+## 10. 해석 시 주의
 
 - 본 결과의 C는 broker/disk/network 측 소비 상한이며, 운영 rdkafka pod의 per-record 처리 상한은 별도.
 - D8→D16 급등은 문서화된 disk 상한 대조로 **page cache(RAM) 임계 효과가 지배적**임을 확인(D16 측정 757 > D16 uncached disk 384 MBps, §7·§3-1). 다만 배포별 disk 편차·SKU 세대 차이가 절대 배율에 섞이므로 운영 환경에서는 §8 진단으로 병목 위치를 특정한 뒤 상향 결정.
@@ -170,14 +211,15 @@ lag 발생 구간에 broker(worker) 노드에서:
 - 고객이 Dav4 계열 내에서 상향하면 disk MBps 상한은 D8a_v4 192 → D16a_v4 384 → D32a_v4 768로 배가되나, **Dav4는 Premium Storage 미지원**이라 부착 disk가 Standard HDD/SSD로 제한된다. disk-bound(IOPS)가 병목이면 SKU 상향과 함께 **disk 종류 상향(Premium SSD 지원 계열, 예: Dasv5)** 검토가 더 직접적일 수 있음.
 - 병목 위치에 따라 유효 레버가 다름: broker I/O 병목 → SKU-up(RAM·disk·NIC) + fetch size 상향 / pod 처리 병목 → pod·partition scale-out(broker SKU 무관).
 
-## 10. 후속 측정 후보 (미검증)
+## 11. 후속 측정 후보 (미검증)
 
-- scale-out(partition·pod·broker 동시 증설) catch-up 영향.
+- **broker 증설(scale-out) catch-up 영향 정량화** (3→6 등, 동일 partition·consumer 조건에서 소비 상한 C 변화).
+- scale-out(partition·pod 동시 증설) catch-up 영향.
 - 운영 rdkafka pod 로직 포함 end-to-end 측정.
 - 다수 client에서 broker-side C 정밀화, 배포 인스턴스 반복 측정으로 disk 편차 정량화.
 - disk type(Premium SSD v2 등), network, producer 특성 영향.
 
-## 11. Teardown
+## 12. Teardown
 
 - Cluster `krafton-kafka-hdi-68944`: deleted (D4·D8·D16 각 테스트 후 재생성/삭제).
 - VM `vm-kafka-producer`, `vm-kafka-loadgen`, `vm-jumpbox`, `vm-monitoring`: deallocated/삭제.
