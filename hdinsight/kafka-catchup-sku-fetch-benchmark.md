@@ -45,6 +45,29 @@
 
 > 주: 테스트는 `Dads_v5`(로컬 NVMe temp + managed data disk), 고객 운영은 `D8a_v4` + S30 HDD로 SKU 세대·disk 구성이 다르다. 절대값 1:1 이식 불가, RAM(page cache) 축의 방향성 참고용.
 
+### 3-1. SKU별 문서화된 I/O 상한 (Azure VM 스펙)
+
+소비 상한을 제한하는 disk·network 경계는 SKU별로 문서화돼 있다. Kafka 소비가 page cache 밖으로 나가 disk read로 내려가면, 아래 **uncached data disk throughput**이 상한이 된다(단, 실제 부착 disk 종류의 한계가 더 낮으면 그쪽이 실효 상한).
+
+테스트 SKU (Dadsv5):
+
+| SKU | vCPU / RAM | uncached disk IOPS / MBps | temp SSD RR MBps | NIC Mbps |
+|---|---|---|---|---|
+| D4ads_v5 | 4 / 16GB | 6,400 / **144** | 250 | 12,500 |
+| D8ads_v5 | 8 / 32GB | 12,800 / **200** | 500 | 12,500 |
+| D16ads_v5 | 16 / 64GB | 25,600 / **384** | 1,000 | 12,500 |
+
+고객 운영/상향 축 (Dav4, Premium Storage 미지원 → Standard HDD/SSD):
+
+| SKU | vCPU / RAM | uncached disk IOPS / MBps | NIC Mbps |
+|---|---|---|---|
+| **D8a_v4 (현재)** | 8 / 32GB | 12,800 / **192** | 8,000 |
+| D16a_v4 | 16 / 64GB | 25,600 / **384** | 10,000 |
+| D32a_v4 | 32 / 128GB | 51,200 / **768** | 16,000 |
+
+- 부착 disk: HDInsight worker는 Standard HDD **S30**(disk당 500 IOPS / 60 MBps). 노드당 4개면 disk 자체 상한은 약 2,000 IOPS / 240 MBps(순차). random read(파티션 분산 cache-miss fetch)는 **IOPS 바운드**라 순차 MBps보다 훨씬 낮게 걸림.
+- 즉 disk-bound 시 실효 상한 = min(VM uncached MBps 상한, 부착 disk 종합 한계). S30 HDD에서는 후자(IOPS)가 지배적.
+
 ## 4. 방법 (연속 파이프라인 소비 상한 측정)
 
 - producer VM에서 8 parallel producer를 상시 실행해 유입 P를 지속 발생시킨다(연속 파이프라인 재현).
@@ -58,7 +81,7 @@
 
 - broker 3대 축소 구성. 운영 규모(18 broker, partition 180, pod 240) 절대 재현 아님.
 - 측정 consumer는 `kafka-consumer-perf-test`로 byte 처리만 수행 → 운영 rdkafka pod의 애플리케이션 로직(역직렬화·처리) 미포함. 절대 처리량 1:1 비교 불가, broker/디스크/네트워크 측 소비 상한의 경향 참고용.
-- **HDInsight worker data disk 성능은 배포 인스턴스마다 편차 존재**(내부 관리 디스크, RG에 비노출). 절대값은 배포 편차를 포함하므로, 아래 결과는 개별 수치보다 SKU 간 차수(order of magnitude) 차이를 robust한 관측으로 해석. 특히 D8→D16 급등이 page cache 효과인지 disk 편차인지는 본 테스트로 분리 불가(§8 진단 참고).
+- **HDInsight worker data disk 성능은 배포 인스턴스마다 편차 존재**(내부 관리 Standard HDD, RG에 비노출). 절대값은 배포 편차를 포함하므로, 개별 수치보다 SKU 간 차수(order of magnitude) 차이를 robust한 관측으로 해석. 단 disk·network 상한은 SKU별로 문서화돼 있어(§3-1) 경계 해석의 기준으로 사용 가능(예: D16 측정치가 문서상 disk 상한을 초과 → cache 서빙 확정, §7).
 - 조건별 3회 측정(중앙값). 미고정/미검증 변수: scale-out(partition·broker 증설), disk type, network, producer 특성, pod 처리 CPU.
 
 ## 6. 결과 (partition = consumer = 12 고정, 연속 파이프라인)
@@ -89,7 +112,9 @@
 - 연속 파이프라인에서 소비 상한 C:
   - D4(16GB) ~44/51, **D8(32GB) ~48/68** MB/s: 유입 P가 소비 오프셋을 tail에서 밀어내 read working set이 page cache 밖으로 나가면 C가 disk read 대역(수십 MB/s)에 머묾. 고객 base와 동일 RAM(32GB)인 D8도 이 구간에 위치.
   - D16(64GB) ~757/788 MB/s: 동일 조건에서 큰 폭 상승.
-  - **D8→D16 상향 시 소비 상한이 약 12~16× 상승 관측.** 단, 이 점프의 원인이 (a) page cache 용량 임계(32→64GB에서 working set 상주) 인지, (b) 큰 VM의 disk/network throughput cap 상향 및 배포 disk 편차인지는 **본 테스트만으로 분리 불가**(§8 진단 지표로 운영 환경에서 판별 필요).
+  - **D8→D16 상향 시 소비 상한이 약 12~16× 상승 관측.**
+  - **문서화된 상한 대조로 원인 일부 확인**: D16 측정치 ~757~788 MB/s는 D16ads_v5의 uncached data disk 상한(384 MBps)을 **초과** → 이 처리량은 물리적으로 disk가 아니라 **page cache(RAM)에서 서빙**됐음을 의미(§3-1 표). 반면 D4/D8 측정치(~44~68)는 각 SKU의 disk MBps 상한(144/200)보다 **낮음** → 순차 대역이 아니라 Standard HDD의 **random-read IOPS**에 걸린 disk-bound 상태.
+  - 따라서 D8→D16 급등은 "32GB에서는 working set이 cache 밖 → HDD IOPS 바운드 / 64GB에서는 cache 상주 → RAM 속도"로 해석되며, page cache 용량 임계 효과가 지배적. 단 절대 배율은 배포 disk 편차·SKU 세대 차이를 포함하므로 §8 진단으로 운영 환경에서 재확인.
 - fetch-size 효과: SKU 상향 대비 작음(D8 1MB→4MB +42%로 상대적으로 크나 절대값은 여전히 disk 대역).
 - 7x(≈7min→1min) catch-up 단축을 단일 변수로 단정하지 않음. 본 관측은 "고객 base(32GB)는 disk 대역에 가깝고, 64GB로 상향 시 소비 상한이 크게 오를 수 있다"는 방향성까지. 실효 여부는 §8 진단으로 운영 병목이 broker I/O 측인지 확인 후 판단.
 
@@ -110,6 +135,10 @@ lag 발생 구간에 broker(worker) 노드에서:
 | under-replicated | JMX `UnderReplicatedPartitions` | 0 유지(디스크 포화면 replication도 밀려 >0 가능) |
 
 - 판정: **data disk `%util`≈100% + `await` 상승 + page cache 부족(major fault↑) + CPU는 여유** → read가 disk 상한에 걸린 I/O 바운드. RAM(page cache)·disk 대역이 큰 SKU로 상향하면 완화 기대. 본 벤치의 D8→D16 급등이 이 시나리오에 해당.
+- **문서화된 상한과 대조**(§3-1): 관측 disk read MB/s를 (1) VM uncached disk MBps 상한, (2) 부착 disk(S30) 종합 IOPS/MBps와 비교한다.
+  - 관측 read가 **부착 HDD IOPS 한계**(S30 노드당 ~2,000 IOPS)에 붙어 있고 MBps는 VM 상한보다 낮음 → **IOPS 바운드**. disk 종류 상향(Premium SSD)·RAM 큰 SKU(cache로 disk 회피)가 유효.
+  - 관측 read가 **VM uncached MBps 상한**에 붙음 → VM disk cap 바운드. 상위 SKU(더 큰 MBps 상한)로 상향 유효.
+  - 소비 처리량이 **VM disk 상한을 초과**(예: D16 757 > 384) → 이미 page cache 서빙 중. 추가 disk 상향보다 RAM(cache) 확보가 핵심.
 
 ### 8-2. broker CPU/network 바운드인지 — 이러면 SKU 상향(코어·NIC) 유효
 
@@ -136,8 +165,9 @@ lag 발생 구간에 broker(worker) 노드에서:
 ## 9. 해석 시 주의
 
 - 본 결과의 C는 broker/disk/network 측 소비 상한이며, 운영 rdkafka pod의 per-record 처리 상한은 별도.
-- D8→D16 급등의 원인(page cache 임계 vs disk/network cap·배포 편차)은 본 테스트로 분리 불가 → §8 진단으로 운영 병목 위치를 특정한 뒤 상향 결정.
+- D8→D16 급등은 문서화된 disk 상한 대조로 **page cache(RAM) 임계 효과가 지배적**임을 확인(D16 측정 757 > D16 uncached disk 384 MBps, §7·§3-1). 다만 배포별 disk 편차·SKU 세대 차이가 절대 배율에 섞이므로 운영 환경에서는 §8 진단으로 병목 위치를 특정한 뒤 상향 결정.
 - 절대 수치는 배포 인스턴스 disk 편차 및 SKU 세대·disk 구성 차이(테스트 Dads_v5 vs 고객 D8a_v4+S30)를 포함. 재현 시 값이 달라질 수 있으므로 SKU 간 상대 차이·방향성을 우선 참고.
+- 고객이 Dav4 계열 내에서 상향하면 disk MBps 상한은 D8a_v4 192 → D16a_v4 384 → D32a_v4 768로 배가되나, **Dav4는 Premium Storage 미지원**이라 부착 disk가 Standard HDD/SSD로 제한된다. disk-bound(IOPS)가 병목이면 SKU 상향과 함께 **disk 종류 상향(Premium SSD 지원 계열, 예: Dasv5)** 검토가 더 직접적일 수 있음.
 - 병목 위치에 따라 유효 레버가 다름: broker I/O 병목 → SKU-up(RAM·disk·NIC) + fetch size 상향 / pod 처리 병목 → pod·partition scale-out(broker SKU 무관).
 
 ## 10. 후속 측정 후보 (미검증)
