@@ -1,0 +1,6 @@
+{
+  "mirrord.binaryPath": "/opt/homebrew/bin/mirrord",
+  "mirrord.enabledByDefault": true,
+  "mirrord.autoUpdate": false,
+  "mirrord.showStatusBarButton": true
+}

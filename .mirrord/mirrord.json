@@ -1,0 +1,18 @@
+{
+  "target": {
+    "path": "deployment/echo-server",
+    "namespace": "tp-demo"
+  },
+  "feature": {
+    "network": {
+      "incoming": {
+        "mode": "steal",
+        "port_mapping": [[8080, 80]]
+      },
+      "outgoing": true,
+      "dns": true
+    },
+    "env": true,
+    "fs": "read"
+  }
+}

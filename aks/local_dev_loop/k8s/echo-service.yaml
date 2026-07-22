@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tp-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-server
+  namespace: tp-demo
+  labels:
+    app: echo-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo-server
+  template:
+    metadata:
+      labels:
+        app: echo-server
+    spec:
+      containers:
+        - name: echo-server
+          # Returns request details (headers, pod name via env) as JSON
+          image: ealen/echo-server:0.9.2
+          ports:
+            - containerPort: 80
+          env:
+            - name: PORT
+              value: "80"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-server
+  namespace: tp-demo
+spec:
+  selector:
+    app: echo-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
