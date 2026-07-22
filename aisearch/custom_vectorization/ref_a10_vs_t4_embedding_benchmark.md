@@ -21,6 +21,7 @@
 - **쿼리 경로(단건 추론)**: 양쪽 모두 single-digit ms — latency-bound 구간, GPU 선택 무관
 - **적재 경로(배치 추론)**: throughput-bound 구간에서 **A10 4.9~5.5× 우위**. T4는 ~60 texts/s에서 compute saturation — batch size/concurrency 튜닝으로 개선 불가
 - ✅ 공개 스펙 교차검증 완료 — FP16 Tensor TFLOPS비 1.9× × Flash Attention 유무 × 메모리 대역폭 2× 복합 효과로 예측 범위(4.3~5.8×)와 정합 → [교차검증 섹션](#교차검증-공개-스펙벤치마크와의-정합성)
+- 스케일아웃 등가: **A10 × N ↔ T4 × 5N**(500자) / **× 6N**(1,000자) — 최소 SKU(NC4as) × N + Internal LB 구성 시 PAYG 기준 -14~18% (500자) → [스케일아웃 전략](#스케일아웃-전략-t4-최소-sku--n--lb)
 
 ---
 
@@ -152,6 +153,83 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 ---
 
+## 스케일아웃 전략: T4 최소 SKU × N + LB
+
+> 현행 운영 기준(A10 × 2, SPOF 없음)을 T4 스케일아웃으로 대체/보완할 경우의 등가 구성·비용·아키텍처 분석. vCPU 교차검증(GPU compute-bound 확정)이 본 전략의 실측 근거 — T4 계열 최소 SKU(NC4as_T4_v3, 4 vCPU)로도 GPU 처리량은 동일하므로 **처리량/달러 최적점 = 최소 SKU × N**.
+
+### 스케일 업/아웃 옵션별 효과
+
+| 방법 | 처리량 효과 | 근거 |
+|------|------------|------|
+| T4 1장에 TEI 다중 인스턴스 | ❌ 0% | GPU util 100% + 70W TDP cap 포화 (실측) — SM time-slicing 경합만 추가. MPS는 단일 프로세스 미포화 시에만 유효, MIG는 Turing 미지원 |
+| 파이프라인 병렬화 (청킹∥임베딩∥푸시) | △ wall time 10~20% 단축 | CPU/GPU/네트워크 자원 비중첩 — producer-consumer 큐로 오버랩. 처리량 상한(임베딩 단계)은 불변 |
+| **T4 VM 수평 확장 (N대 + LB)** | ✅ ~선형 (N×60 texts/s) | VM별 독립 GPU — 간섭 없음 |
+
+### 등가 배수: A10 N대 ↔ T4 몇 대?
+
+실측 처리량 비 기준 (500자 4.9×, 1,000자 5.5×):
+
+| 기준 (A10 대수) | 500자 워크로드 | 1,000자 워크로드 |
+|----------------|----------------|------------------|
+| A10 × 1 (301 texts/s) | **T4 × 5** (305 texts/s) | **T4 × 6** (140 vs 130 texts/s) |
+| A10 × 2 (602 texts/s) — 현행 | **T4 × 10** (610 texts/s) | **T4 × 12** (281 vs 259 texts/s) |
+| A10 × N | T4 × 5N | T4 × 6N |
+
+### 비용 비교 — PAYG(정규 VM) 기준
+
+Azure Retail Prices API 조회 (2026-07): NC4as_T4_v3 $0.631/hr (southcentralus) · $0.647/hr (koreacentral), NV36ads_A10_v5 $3.84/hr (southcentralus, **koreacentral 미제공**)
+
+| 구성 | 시간당 (southcentralus) | A10 등가 대비 |
+|------|------------------------|---------------|
+| A10 × 2 (현행) | $7.68/hr | 기준 |
+| T4 × 10 (500자 등가) | $6.31/hr | **-18%** |
+| T4 × 12 (1,000자 등가) | $7.57/hr | -1% (사실상 동률) |
+
+- 부대비용: Standard LB ~$0.025/hr + OS 디스크(P10급) ~$0.02/hr×N + Public IP $0.005/hr×N → T4 10대 기준 **+$0.3/hr** → 실질 ~$6.6/hr, **여전히 ~14% 저렴**
+- koreacentral 배치 시 T4 × 10 = $6.47/hr — A10 미제공 리전에서 유일한 선택지
+- 상시 운영이면 1-year Savings Plan/RI 적용 시 30~60% 추가 절감 여지 (양쪽 공통)
+
+### 엔드포인트 아키텍처
+
+TEI는 stateless HTTP(`POST /embed`) — L4 분배로 충분:
+
+```
+앱(청킹 파이프라인) ──> Internal Standard LB (:8080) ──> backend pool
+                          │ health probe: GET /health (TEI 내장)
+                          ├─ vm-t4-01 (NC4as_T4_v3)
+                          ├─ vm-t4-02
+                          └─ vm-t4-N        # VMSS 구성 시 증감·복구 자동화
+```
+
+| 옵션 | 적합도 | 비고 |
+|------|--------|------|
+| **Internal Standard LB** | ✅ 권장 | L4, 저비용, health probe로 노드 장애 자동 제외 |
+| VMSS + LB | ✅ 운영 자동화 | 노드 증감·재생성 자동. Spot 혼용 시 eviction 복구 포함 |
+| Application Gateway | △ 과잉 | TLS 종료·L7 라우팅 필요 시에만 — 비용·홉 추가 |
+| 클라이언트 사이드 라운드로빈 | △ 적재 전용이면 가능 | 적재 파이프라인이 유일한 클라이언트면 IP 리스트 셔플로 충분 — LB 불요 |
+
+**설계 파라미터:**
+- 분배 모드: 기본 5-tuple hash — 배치 요청이 요청 단위로 분산되므로 세션 어피니티 불요 (활성화 시 편중 발생)
+- Health probe: TEI `/health` — 모델 로딩(콜드스타트 ~1-2분) 중 자동 제외
+- 노드당 최적 부하 유지: batch 8~32 / conc 4 × N대 → 파이프라인 전체 concurrency = 4N
+- 노드 장애 시 처리량 (N-1)/N로 우아한 성능 저하 — N≥5면 노드 1대 손실 시에도 80%+ 유지
+- 쿼리 경로(Custom Vectorizer) 겸용 가능 — LB 홉 <1ms, 단건 5.6ms 대비 무시 가능
+
+### 전략 판단
+
+| 관점 | T4 × 5N + LB | A10 × N (현행) |
+|------|--------------|----------------|
+| 시간당 비용 (500자) | ✅ -14~18% | — |
+| 시간당 비용 (1,000자) | 동률 (6N대 필요) | — |
+| 리전 | ✅ koreacentral 가능 | ❌ 아시아 미제공 (cross-region 강제) |
+| 장애 내성 | 노드당 1/5N 손실 | 노드당 1/N 손실 (N≥2면 SPOF 없음) |
+| 운영 복잡도 | 관리 포인트 5N (LB·probe·드라이버 패치) | ✅ 관리 포인트 N |
+| 스케일 증분 | ✅ 60 texts/s 단위 미세 조정 | 301 texts/s 단위 |
+
+**권장:** 500자 내외 청크 위주 + koreacentral 상주 요구 시 **T4 × 5N + Internal LB(+VMSS)** 가 전략적으로 유리 (-14~18% + 리전 이점 + 미세한 스케일 증분). 장문(1,000자+) 비중이 크면 등가 대수가 6N으로 늘어 비용 이점이 소멸하므로 A10 유지가 합리적.
+
+---
+
 ## 결론 및 권장
 
 | 시나리오 | 권장 GPU | 근거 |
@@ -163,7 +241,7 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 **운영 파라미터:**
 - Push 파이프라인 최적점: T4 = batch 8~32 / conc 4 (초과 시 역효과), A10 = batch 32~64 / conc 4~8
-- 1M+ 청크 적재 시 T4 수평 확장(5대)보다 A10 1대가 운영 단순 (T4 5대 ≈ A10 1대)
+- 1M+ 청크 적재: A10 1대 ≈ T4 5대 — 운영 단순성은 A10, 비용·리전·스케일 증분은 T4 스케일아웃 우위 → [스케일아웃 전략](#스케일아웃-전략-t4-최소-sku--n--lb) 참고
 - Spot eviction 대비: Push 파이프라인에 retry + checkpoint(마지막 성공 문서 ID) 필수. 본 측정 중 eviction 미발생
 - A10 Spot 가용 리전 제한 (2026-07 확인: southcentralus, centralus, westus2, ukwest, spaincentral 등 — koreacentral/japaneast 등 아시아 리전 NVadsA10v5 미제공)
   - AI Search가 koreacentral인 경우: 적재 경로는 cross-region이나 Push API 배치 전송 특성상 RTT 영향 미미
