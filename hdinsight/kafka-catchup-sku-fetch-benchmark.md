@@ -4,7 +4,11 @@
 - Scope: partition·consumer 수 고정 조건에서 broker VM SKU, consumer fetch size 2개 변수만 스윕. 특정 축소 구성·특정 배포 인스턴스 한정 관측값이며 일반화 결론 아님.
 - Base SKU 기준: 고객 운영 worker = D8a_v4 (8 vCPU / 32GB) × 18. 본 테스트 base를 이에 맞춰 D8(32GB)로 두고 D16(64GB)으로의 상향 효과를 주 비교축으로 함(D4는 하위 참고점).
 
-> **후속 결과 (2026-07-22)**: 고객은 broker SKU 변경 없이 **consumer(클라이언트) 버전 업데이트만으로 lag 해소**를 확인함. 병목이 broker가 아닌 consumer 측이었다는 §8-3 시나리오가 실제로 확증된 사례. 상세는 §13.
+> **결론 요약 (2026-07-22 확정)**
+> - **실제 해결**: 고객은 broker SKU 상향·증설, fetch size, partition 조정 **없이 consumer(클라이언트) 버전 업데이트만으로 lag 해소**. 병목은 broker가 아니라 consumer 측이었다(§13).
+> - **이 문서에서 여전히 유효한 것**: ① 병목 위치 진단 프레임(§8) — 이번 케이스에서 "broker 여유 + client 병목 → SKU 상향 무효" 판정이 실사례로 확증됨 ② broker-side 소비 상한 실측치(§6–7) — 향후 **broker I/O가 실제 병목인 케이스**에서 SKU 상향 판단 근거.
+> - **결과적으로 쓰이지 않은 것**: §9의 broker 측 레버들(SKU 상향·증설·disk·compression)은 본 케이스에는 불필요했다. broker I/O 병목 케이스용 참고로만 유효.
+> - 구체적으로 client의 어떤 수정이 문제를 해소했는지는 **미확정**(업그레이드 전/후 버전 미확인). 후보 분석은 부록 A·B — 본문과 달리 추정임.
 
 ## 1. 측정 동기
 
@@ -170,6 +174,8 @@ lag 발생 구간에 broker(worker) 노드에서:
 
 ## 9. 고객 환경 적용 — 유입률 환산과 broker 증설 vs SKU 상향
 
+> 주: 이 장의 레버 분석은 **broker I/O가 병목이라는 가정 하의 시나리오 검토**다(§9-2 이하 대부분 미실측 추론). 실제 결말은 client 병목이어서 이 레버들은 쓰이지 않았다(§13). broker I/O 병목으로 진단된 케이스(§8-1·8-2)에서만 참고할 것.
+
 ### 9-1. 본 테스트 producer 수치의 성격 (고객 피크 아님)
 
 본 테스트 producer 합산 유입(D4 303 / D8 521 / D16 588 MB/s)은 **3-broker 테스트 클러스터를 flood로 포화시킨 produce 상한**이며, 고객 피크 유입을 모델링한 값이 아니다. 자릿수가 비슷한 것은 우연.
@@ -250,17 +256,23 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
 
 - 재현 아티팩트: worker SKU별 private template(`hdi-priv-Standard_D4ads_v5.json`, `hdi-priv-Standard_D8ads_v5.json`, `hdi-priv-Standard_D16ads_v5.json`), 연속 파이프라인 harness(producer VM 8-parallel flood + consumer VM single perf-consumer, fetch size 스윕).
 
-## 13. 실제 해결 결과 (후속, 2026-07-22)
+## 13. 결론 — 실제 해결 결과 (2026-07-22)
 
-- 고객은 **consumer(클라이언트) 버전 업데이트로 lag 문제를 해결**했다고 확인. broker SKU 상향·증설, fetch size 조정, partition 증설 등 broker/토폴로지 측 변경은 적용하지 않음.
-- 본 벤치마크 결론과의 정합:
-  - 본 문서의 실측 C는 broker/disk/network 측 상한이며, 운영 rdkafka pod의 per-record 처리 상한은 별도라고 명시했었음(§5·§10). C 제한 후보 중 "consumer pod의 per-message 처리 → broker SKU-up 무관"(§2)이 실제 병목이었던 케이스.
-  - 실제 해결 경로가 client-side 개선(버전 업데이트)이었다는 점에서, **§8 진단 프레임(broker 자원 여유 + client 병목 → SKU 상향 무효, client 측 개선 유효)** 이 실사례로 확증됨.
-- 남는 참고 가치: 본 문서의 SKU/fetch size 실측치는 향후 **broker I/O가 실제 병목인 케이스**(§8-1·8-2)에서 SKU 상향 판단의 방향성 근거로 유효. 또한 구버전 client 라이브러리(rdkafka 등)의 fetch 동작·버그가 소비 상한 C를 제한할 수 있으므로, §8-3 진단 시 **client/consumer 라이브러리 버전 확인**을 체크리스트에 포함할 것.
+- **해결**: 고객은 consumer(클라이언트) 버전 업데이트만으로 lag 해소. broker SKU 상향·증설, fetch size 조정, partition 증설 등 broker/토폴로지 측 변경은 적용하지 않음.
+- **판정**: §2의 C 제한 후보 중 2번("consumer pod의 per-message 처리 → broker SKU-up 무관")이 실제 병목. §8-3 시나리오("broker 자원 여유 + client 병목 → SKU 상향 무효, client 측 개선 유효")가 실사례로 확증됨.
+- **교훈**: lag 대응은 레버 선택 전에 **병목 위치 진단(§8)이 먼저**이며, 진단 체크리스트에 **client/consumer 라이브러리 버전**(fetch 동작·버그가 소비 상한 C를 제한할 수 있음)을 포함해야 한다. 본 벤치의 broker-side 실측치는 broker I/O가 병목인 케이스에서만 의사결정 근거로 쓴다.
+- 어떤 client 수정이 해소로 이어졌는지는 미확정(전/후 버전 미확인). 후보 분석은 부록 A, 관련 알려진 이슈는 부록 B.
 
-### 13-1. librdkafka 버전별 원인 후보 분석 (patch note 기반, from/to 버전 미확인 상태의 추정)
+## 관련 문서
 
-고객의 정확한 업그레이드 전/후 버전은 미확인. librdkafka CHANGELOG·PR을 기준으로, 본 증상("피크 유입 구간에만 lag 누적, client 버전 업그레이드만으로 해소")과 기계적으로 정합하는 수정들을 정합도 순으로 정리.
+- [`../monitor/hdinsight-kafka-monitoring.md`](../monitor/hdinsight-kafka-monitoring.md) — HDInsight Kafka 모니터링 개요(Azure Monitor·Log Analytics·Ambari·진단설정).
+- [`../monitor/hdinsight-kafka-prometheus-grafana.md`](../monitor/hdinsight-kafka-prometheus-grafana.md) — Prometheus + Grafana broker JMX·kafka-exporter(partition별 lag) 대시보드 구성.
+
+---
+
+## 부록 A. librdkafka 버전별 원인 후보 분석 (미확정 추정)
+
+> **주의**: 아래는 patch note 기반 추정이다. 고객의 정확한 업그레이드 전/후 버전이 미확인이므로 어느 후보도 확정이 아니다. librdkafka CHANGELOG·PR을 기준으로, 본 증상("피크 유입 구간에만 lag 누적, client 버전 업그레이드만으로 해소")과 기계적으로 정합하는 수정들을 정합도 순으로 정리했다.
 
 | 순위 | 수정 버전 | 내용 | 증상 정합 근거 |
 |---|---|---|---|
@@ -272,11 +284,11 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
 
 - consumer 소비 효율 관련 버전 마일스톤(참고): v1.6.0 KIP-429 incremental cooperative rebalancing(stop-the-world rebalance 제거) · v2.1.0 KIP-320 leader epoch fencing(spurious offset reset 방지) · v2.2.0 `fetch.queue.backoff.ms` 도입 · v2.5.0 KIP-951 leader discovery 최적화 · v2.12.0 KIP-848 신형 group protocol GA.
 - **"이전에는 잘 됐었다"는 관찰과의 정합성 검토** — 무엇이 달라진 시점부터 lag가 시작됐는지에 따라 후보가 갈린다:
-  - **부하 증가 이후 발생**(§1의 "log 50% 정상 / log 100% 피크 lag"): 1번 후보(v1.9.0)와 완전 정합. 이 버그의 트리거는 "fetch 응답이 한도를 꽉 채우는 것" = consumer가 뒤처져 broker에 데이터가 쌓였을 때뿐이므로, 저부하에서는 응답이 작아 backoff가 발동하지 않고 정상 동작. 버그는 상시 존재하나 부하 임계 초과 시에만 발현 — broker 버전 무관.
-  - **동일 부하에서 broker 버전 상향 이후 발생**(구버전 broker에서는 정상): 1번 후보는 client-side 버그라 broker 버전 독립이므로 단독 설명력이 약해지고, **2번 후보(v2.10.0)의 KIP-320 offset validation 후 1초 대기 제거가 유력**해진다. 이 코드 경로(librdkafka 2.1.0+)는 broker가 leader epoch(AK 2.1+)를 지원할 때만 활성화되므로, 구 broker에서는 발동 자체가 없다가 신 broker + client 2.1.0~2.9.x 조합에서 leader 변경마다 파티션별 1초+ fetch 정지가 새로 생김 → "구 broker 정상 + client 업그레이드(≥2.10.0)만으로 해소" 두 사실 모두 정합. 반면 3번 후보(v2.6.1)는 낮은 broker일수록 악화되는 방향이라 이 관찰과 배치되어 탈락.
+  - **해석 A — 부하 증가 이후 발생**(§1의 "log 50% 정상 / log 100% 피크 lag"): 1번 후보(v1.9.0)와 완전 정합. 이 버그의 트리거는 "fetch 응답이 한도를 꽉 채우는 것" = consumer가 뒤처져 broker에 데이터가 쌓였을 때뿐이므로, 저부하에서는 응답이 작아 backoff가 발동하지 않고 정상 동작. 버그는 상시 존재하나 부하 임계 초과 시에만 발현 — broker 버전 무관.
+  - **해석 B — 동일 부하에서 broker 버전 상향 이후 발생**(구버전 broker에서는 정상): 1번 후보는 client-side 버그라 broker 버전 독립이므로 단독 설명력이 약해지고, **2번 후보(v2.10.0)의 KIP-320 offset validation 후 1초 대기 제거가 유력**해진다. 이 코드 경로(librdkafka 2.1.0+)는 broker가 leader epoch(AK 2.1+)를 지원할 때만 활성화되므로, 구 broker에서는 발동 자체가 없다가 신 broker + client 2.1.0~2.9.x 조합에서 leader 변경마다 파티션별 1초+ fetch 정지가 새로 생김 → "구 broker 정상 + client 업그레이드(≥2.10.0)만으로 해소" 두 사실 모두 정합. 반면 3번 후보(v2.6.1)는 낮은 broker일수록 악화되는 방향이라 이 관찰과 배치되어 탈락.
 - **원인 확정에 필요한 확인 항목**: ① 업그레이드 전/후 librdkafka(래퍼 포함) 버전 — from<1.9.0이면 1번, from=2.6.0이면 3번 거의 확정 ② HDInsight broker Kafka 버전(<2.7 여부) ③ 피크 시간대 broker 롤링/파티션 재할당 유무(→2번) ④ SASL_SSL 사용 여부(→4번) ⑤ 업그레이드 전 client debug 로그의 `fetch error backoff`·metadata storm 흔적.
 
-### 13-2. 관련 알려진 이슈 (librdkafka issue tracker 실사례)
+## 부록 B. 관련 알려진 이슈 (librdkafka issue tracker 실사례)
 
 동일 증상 계열로 보고된 실제 이슈들. 후보별 근거 보강용.
 
@@ -297,10 +309,5 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
 | [#5357](https://github.com/confluentinc/librdkafka/issues/5357) | broker shutdown/leader 선출 시 OffsetForLeaderEpochRequest 78만 회 폭주(2.6.1) | 후속 버전 수정 |
 | [#3396](https://github.com/confluentinc/librdkafka/issues/3396)·[#2625](https://github.com/confluentinc/librdkafka/issues/2625) | leader 재선출 후 일부 consumer/partition 소비 정지 | 각 후속 버전 수정 |
 
-- 시사점: leader epoch 관련 정지·루프 버그는 **2.1.0(KIP-320 도입)~2.4.0 구간에 집중** 보고 → "신형 broker + client 2.1.0~2.9.x 조합에서 새로 생긴 문제"라는 §13-1 해석 B와 부합.
+- 시사점: leader epoch 관련 정지·루프 버그는 **2.1.0(KIP-320 도입)~2.4.0 구간에 집중** 보고 → "신형 broker + client 2.1.0~2.9.x 조합에서 새로 생긴 문제"라는 부록 A 해석 B와 부합.
 - 미해결 참고: [#5140](https://github.com/confluentinc/librdkafka/issues/5140)(fetch queue가 설정 한도 초과 성장, 2.10) 등 fetch queue 동작은 최신 버전에도 open 이슈 존재.
-
-## 관련 문서
-
-- [`../monitor/hdinsight-kafka-monitoring.md`](../monitor/hdinsight-kafka-monitoring.md) — HDInsight Kafka 모니터링 개요(Azure Monitor·Log Analytics·Ambari·진단설정).
-- [`../monitor/hdinsight-kafka-prometheus-grafana.md`](../monitor/hdinsight-kafka-prometheus-grafana.md) — Prometheus + Grafana broker JMX·kafka-exporter(partition별 lag) 대시보드 구성.
