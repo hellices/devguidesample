@@ -4,6 +4,8 @@
 - Scope: partition·consumer 수 고정 조건에서 broker VM SKU, consumer fetch size 2개 변수만 스윕. 특정 축소 구성·특정 배포 인스턴스 한정 관측값이며 일반화 결론 아님.
 - Base SKU 기준: 고객 운영 worker = D8a_v4 (8 vCPU / 32GB) × 18. 본 테스트 base를 이에 맞춰 D8(32GB)로 두고 D16(64GB)으로의 상향 효과를 주 비교축으로 함(D4는 하위 참고점).
 
+> **후속 결과 (2026-07-22)**: 고객은 broker SKU 변경 없이 **consumer(클라이언트) 버전 업데이트만으로 lag 해소**를 확인함. 병목이 broker가 아닌 consumer 측이었다는 §8-3 시나리오가 실제로 확증된 사례. 상세는 §13.
+
 ## 1. 측정 동기
 
 - 운영 관찰:
@@ -155,6 +157,8 @@ lag 발생 구간에 broker(worker) 노드에서:
 | partition별 lag 분포 | `kafka-consumer-groups --describe`, kafka-exporter | 특정 partition만 lag 편중 → 파티션 skew/직렬화. partition 재분배·증설 필요 |
 | broker 자원 여유 여부 | 위 8-1/8-2 지표 | broker disk·CPU·network 모두 여유인데 lag 증가 → 병목은 broker 밖(consumer/partition) |
 
+> 본 케이스의 실제 결말이 이 시나리오였다: 고객은 consumer 버전 업데이트로 lag를 해소했다(§13). broker SKU 상향 없이 client-side 개선만으로 해결된 것으로, "pod/client 처리 병목 시 broker SKU-up 무효" 판정과 정합.
+
 ### 8-4. 결정 흐름
 
 1. lag 구간에 broker disk `%util`/`await`, page cache, CPU, NIC, `RequestHandlerAvgIdlePercent`를 동시 수집.
@@ -243,6 +247,14 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
 ```
 
 - 재현 아티팩트: worker SKU별 private template(`hdi-priv-Standard_D4ads_v5.json`, `hdi-priv-Standard_D8ads_v5.json`, `hdi-priv-Standard_D16ads_v5.json`), 연속 파이프라인 harness(producer VM 8-parallel flood + consumer VM single perf-consumer, fetch size 스윕).
+
+## 13. 실제 해결 결과 (후속, 2026-07-22)
+
+- 고객은 **consumer(클라이언트) 버전 업데이트로 lag 문제를 해결**했다고 확인. broker SKU 상향·증설, fetch size 조정, partition 증설 등 broker/토폴로지 측 변경은 적용하지 않음.
+- 본 벤치마크 결론과의 정합:
+  - 본 문서의 실측 C는 broker/disk/network 측 상한이며, 운영 rdkafka pod의 per-record 처리 상한은 별도라고 명시했었음(§5·§10). C 제한 후보 중 "consumer pod의 per-message 처리 → broker SKU-up 무관"(§2)이 실제 병목이었던 케이스.
+  - 실제 해결 경로가 client-side 개선(버전 업데이트)이었다는 점에서, **§8 진단 프레임(broker 자원 여유 + client 병목 → SKU 상향 무효, client 측 개선 유효)** 이 실사례로 확증됨.
+- 남는 참고 가치: 본 문서의 SKU/fetch size 실측치는 향후 **broker I/O가 실제 병목인 케이스**(§8-1·8-2)에서 SKU 상향 판단의 방향성 근거로 유효. 또한 구버전 client 라이브러리(rdkafka 등)의 fetch 동작·버그가 소비 상한 C를 제한할 수 있으므로, §8-3 진단 시 **client/consumer 라이브러리 버전 확인**을 체크리스트에 포함할 것.
 
 ## 관련 문서
 
