@@ -258,6 +258,21 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
   - 실제 해결 경로가 client-side 개선(버전 업데이트)이었다는 점에서, **§8 진단 프레임(broker 자원 여유 + client 병목 → SKU 상향 무효, client 측 개선 유효)** 이 실사례로 확증됨.
 - 남는 참고 가치: 본 문서의 SKU/fetch size 실측치는 향후 **broker I/O가 실제 병목인 케이스**(§8-1·8-2)에서 SKU 상향 판단의 방향성 근거로 유효. 또한 구버전 client 라이브러리(rdkafka 등)의 fetch 동작·버그가 소비 상한 C를 제한할 수 있으므로, §8-3 진단 시 **client/consumer 라이브러리 버전 확인**을 체크리스트에 포함할 것.
 
+### 13-1. librdkafka 버전별 원인 후보 분석 (patch note 기반, from/to 버전 미확인 상태의 추정)
+
+고객의 정확한 업그레이드 전/후 버전은 미확인. librdkafka CHANGELOG·PR을 기준으로, 본 증상("피크 유입 구간에만 lag 누적, client 버전 업그레이드만으로 해소")과 기계적으로 정합하는 수정들을 정합도 순으로 정리.
+
+| 순위 | 수정 버전 | 내용 | 증상 정합 근거 |
+|---|---|---|---|
+| 1 | **v1.9.0** (2022-06) | max-size fetch 응답(=`fetch.max.bytes` 50MB 꽉 참)을 truncation으로 오판해 다음 fetch 전 `fetch.error.backoff.ms`(500ms)를 적용하던 버그 제거 | 커넥션당 소비 상한이 ~100MB/s(50MB/0.5s)로 **하드 캡**. 유입이 캡을 넘는 **피크 구간에만 lag가 선형 누적**되고 유입이 빠지면 해소 — 본 케이스 증상과 가장 정확히 일치. 설정 변경 불필요, 업그레이드만으로 해소되는 점도 일치 |
+| 2 | **v2.10.0** ([PR #4970](https://github.com/confluentinc/librdkafka/pull/4970)) | leader 변경 시 fetch backoff(500ms)가 리셋되지 않던 버그(1.x부터) + KIP-320 offset validation 후 1초 대기(2.1.0부터) 제거 | partition=pod 1:1 구조에서 broker 롤링/AZ failover 시 **전 파티션 동시 0.5~1.5s fetch 정지** → lag 스파이크. 피크와 유지보수 window가 겹치면 증상 재현 |
+| 3 | **v2.6.1** ([#4870](https://github.com/confluentinc/librdkafka/issues/4870)) | v2.6.0이 Fetch v13(topic ID)로 올리며 **Kafka broker <2.7에서 fetch 전면 실패**하던 회귀 수정 | HDInsight broker는 대부분 <2.7이라 해당 조건이나, 이 버그는 "피크만 lag"가 아닌 **소비 전면 중단**을 유발 → 증상 정합도는 낮음. from=2.6.0인 경우에만 유력 |
+| 4 | **v2.10.0** ([PR #4986](https://github.com/confluentinc/librdkafka/pull/4986)) | TCP_NODELAY 기본 활성화(Nagle 비활성, 0.x부터 Nagle 켜져 있었음) | SASL_SSL 연결에서 fetch 요청당 지연 누적 제거. 단독 원인보다는 기여 요인 |
+| 5 | **v2.4.0** ([#4577](https://github.com/confluentinc/librdkafka/issues/4577)·[#4684](https://github.com/confluentinc/librdkafka/issues/4684)) | metadata refresh 무한 루프(v2.3.0 회귀) + main-loop tight spin 수정 | 피크 부하 시 broker 커넥션·client CPU 낭비 제거. from=2.3.0인 경우 유력 |
+
+- consumer 소비 효율 관련 버전 마일스톤(참고): v1.6.0 KIP-429 incremental cooperative rebalancing(stop-the-world rebalance 제거) · v2.1.0 KIP-320 leader epoch fencing(spurious offset reset 방지) · v2.2.0 `fetch.queue.backoff.ms` 도입 · v2.5.0 KIP-951 leader discovery 최적화 · v2.12.0 KIP-848 신형 group protocol GA.
+- **원인 확정에 필요한 확인 항목**: ① 업그레이드 전/후 librdkafka(래퍼 포함) 버전 — from<1.9.0이면 1번, from=2.6.0이면 3번 거의 확정 ② HDInsight broker Kafka 버전(<2.7 여부) ③ 피크 시간대 broker 롤링/파티션 재할당 유무(→2번) ④ SASL_SSL 사용 여부(→4번) ⑤ 업그레이드 전 client debug 로그의 `fetch error backoff`·metadata storm 흔적.
+
 ## 관련 문서
 
 - [`../monitor/hdinsight-kafka-monitoring.md`](../monitor/hdinsight-kafka-monitoring.md) — HDInsight Kafka 모니터링 개요(Azure Monitor·Log Analytics·Ambari·진단설정).
