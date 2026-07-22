@@ -2,12 +2,16 @@
 
 Scenario A: single-query latency  (AI Search Custom Vectorizer path — always 1 text/call)
 Scenario B: batch throughput      (Push API ingestion path — batch x concurrency)
+Scenario C: batch throughput with longer chunks — use --chunk-chars 1000
 
-Usage: python3 bench_embed.py --gpu t4 --rounds 5
+Usage:
+    python3 bench_embed_gpu.py --gpu t4 --rounds 5                      # A + B (~500-char chunks)
+    python3 bench_embed_gpu.py --gpu t4 --rounds 3 --chunk-chars 1000   # C (~1,000-char chunks)
 Output: JSON lines to stdout + summary file /tmp/bench_result_<gpu>.json
 """
 import argparse
 import json
+import math
 import statistics as st
 import time
 import urllib.request
@@ -29,9 +33,14 @@ CHUNK_BASE = (
     "임베딩 처리량은 GPU 아키텍처, 텐서 코어 세대, 메모리 대역폭에 따라 크게 달라지므로 실측이 필수적이다."
 )  # ~500 chars
 
-def make_chunks(n: int) -> list[str]:
-    # unique suffix prevents any server-side caching effects
-    return [f"{CHUNK_BASE} (문서 번호 {i}번 청크입니다.)" for i in range(n)]
+def make_chunks(n: int, chars: int = 500) -> list[str]:
+    """Build n chunks of ~`chars` length by repeating/truncating CHUNK_BASE.
+
+    A unique suffix prevents any server-side caching effects.
+    """
+    reps = math.ceil(chars / len(CHUNK_BASE))
+    body = (CHUNK_BASE * reps)[:chars]
+    return [f"{body} (문서 번호 {i}번 청크입니다.)" for i in range(n)]
 
 
 def post_embed(texts: list[str], timeout: float = 120.0) -> float:
@@ -53,15 +62,15 @@ def scenario_a(n_requests: int = 100) -> dict:
         "n": n_requests,
         "mean_ms": round(st.mean(lat), 2),
         "p50_ms": round(lat_sorted[len(lat) // 2], 2),
-        "p95_ms": round(lat_sorted[int(len(lat) * 0.95)], 2),
+        "p95_ms": round(lat_sorted[math.ceil(len(lat) * 0.95) - 1], 2),  # nearest-rank p95
         "min_ms": round(lat_sorted[0], 2),
         "max_ms": round(lat_sorted[-1], 2),
     }
 
 
-def scenario_b(total_texts: int, batch: int, conc: int) -> dict:
+def scenario_b(total_texts: int, batch: int, conc: int, chunk_chars: int = 500) -> dict:
     """Batch throughput: total_texts split into batches, sent with `conc` workers."""
-    chunks = make_chunks(total_texts)
+    chunks = make_chunks(total_texts, chunk_chars)
     batches = [chunks[i:i + batch] for i in range(0, len(chunks), batch)]
     t0 = time.perf_counter()
     with ThreadPoolExecutor(max_workers=conc) as ex:
@@ -69,6 +78,7 @@ def scenario_b(total_texts: int, batch: int, conc: int) -> dict:
     wall = time.perf_counter() - t0
     return {
         "total_texts": total_texts, "batch": batch, "concurrency": conc,
+        "chunk_chars": chunk_chars,
         "wall_s": round(wall, 3),
         "texts_per_s": round(total_texts / wall, 1),
     }
@@ -78,12 +88,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gpu", required=True)
     ap.add_argument("--rounds", type=int, default=5)
+    ap.add_argument("--chunk-chars", type=int, default=500,
+                    help="target chunk length in chars (500=scenario B, 1000=scenario C)")
     args = ap.parse_args()
 
     # warmup
     for _ in range(5):
         post_embed([QUERY])
-    post_embed(make_chunks(32))
+    post_embed(make_chunks(32, args.chunk_chars))
 
     results = {"gpu": args.gpu, "rounds": []}
     B_COMBOS = [(1, 1), (1, 4), (1, 8), (8, 4), (32, 1), (32, 4), (32, 8), (64, 4)]
@@ -96,7 +108,7 @@ def main():
                          ensure_ascii=False), flush=True)
         combos = []
         for batch, conc in B_COMBOS:
-            res = scenario_b(TOTAL, batch, conc)
+            res = scenario_b(TOTAL, batch, conc, args.chunk_chars)
             combos.append(res)
             print(json.dumps({"gpu": args.gpu, "round": r, "B": res},
                              ensure_ascii=False), flush=True)

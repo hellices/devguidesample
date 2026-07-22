@@ -204,7 +204,8 @@ sudo docker run -d --gpus all --name tei -p 8080:80 -v /opt/tei-data:/data \
   --model-id dragonkue/BGE-m3-ko --max-client-batch-size 128 --auto-truncate   # A10
 
 # 4. 벤치마크 (VM 내부에서 localhost로 실행 — 네트워크 변수 제거)
-python3 bench_embed.py --gpu t4 --rounds 5    # bench/bench_embed_gpu.py
+python3 bench_embed_gpu.py --gpu t4 --rounds 5                      # 시나리오 A+B (500자)
+python3 bench_embed_gpu.py --gpu t4 --rounds 3 --chunk-chars 1000   # 시나리오 C (1,000자)
 ```
 
 </details>
