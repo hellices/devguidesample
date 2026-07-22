@@ -77,6 +77,7 @@
   - producer와 consumer를 **서로 다른 VM**에서 실행 → 단일 VM CPU/NIC 공유로 인한 측정 아티팩트 배제.
   - 지표는 `fetch.MB.sec` 사용(group rebalance 대기 시간 제외).
 - 변수: broker SKU(D4 / D8(base) / D16) × fetch size(`max.partition.fetch.bytes` 1MB / 4MB), 조건별 3회 측정 후 중앙값.
+- retention과의 간섭: `retention.ms=1800000`(30분) + from-earliest 조합에서 소비 도중 earliest segment가 retention 삭제되면 offset reset으로 실측 구간이 달라질 수 있다. 본 측정은 유입 ~300–590 MB/s 기준 retention window가 수백 GB로 소비 대상(4GB, 수십 초~수 분)보다 훨씬 크고 run 간 편차도 SKU별 경향과 일관돼(특히 D16 754~791로 안정) reset 징후는 관측되지 않았으나, 재현 시 consumer 로그의 offset-out-of-range/reset 발생 여부를 함께 확인할 것.
 - 각 SKU 클러스터는 측정 전 단일-thread producer로 health check(정상 disk 배포 인스턴스 여부 확인) 후 측정. (D4 76.5 / D8 74.5 / D16 정상 MB/s → 세 배포 모두 정상 disk 확인)
 
 ## 5. 측정 범위 한계
@@ -100,6 +101,7 @@
 - 원시값: D4 fetch1M 44.5/44.4/41.2, fetch4M 50.9/57.6/47.6. **D8 fetch1M 64.7/47.7/42.4, fetch4M 67.6/53.2/75.0.** D16 fetch1M 757/774/754, fetch4M 779/788/791.
 - **비선형 관측**: D4→D8(RAM 16→32GB)에서 소비 상한은 거의 불변(44→48, 51→68). D8→D16(32→64GB)에서만 큰 점프. RAM 2배 증가가 항상 비례 개선을 주지 않으며, 특정 임계를 넘는 구간에서만 급등.
 - fetch-size 효과(동일 SKU): D4 +16%, D8 +42%, D16 +4%. SKU 상향 대비 작고 일관적이지 않음.
+  - 단, **D8 +42%는 run 편차 범위 내**: D8 원시값 범위가 fetch1M 42.4~64.7, fetch4M 53.2~75.0으로 서로 겹침(n=3). 통계적으로 유의한 차이로 보기 어려우며 방향성 참고까지만. (D4·D16은 조건 간 범위 비중첩.)
 
 ### 6-2. 유입 P (8 parallel producer 합산 유입률, 참고)
 
@@ -117,7 +119,7 @@
   - **D8→D16 상향 시 소비 상한이 약 12~16× 상승 관측.**
   - **문서화된 상한 대조로 원인 일부 확인**: D16 측정치 ~757~788 MB/s는 D16ads_v5의 uncached data disk 상한(384 MBps)을 **초과** → 이 처리량은 물리적으로 disk가 아니라 **page cache(RAM)에서 서빙**됐음을 의미(§3-1 표). 반면 D4/D8 측정치(~44~68)는 각 SKU의 disk MBps 상한(144/200)보다 **낮음** → 순차 대역이 아니라 Standard HDD의 **random-read IOPS**에 걸린 disk-bound 상태.
   - 따라서 D8→D16 급등은 "32GB에서는 working set이 cache 밖 → HDD IOPS 바운드 / 64GB에서는 cache 상주 → RAM 속도"로 해석되며, page cache 용량 임계 효과가 지배적. 단 절대 배율은 배포 disk 편차·SKU 세대 차이를 포함하므로 §8 진단으로 운영 환경에서 재확인.
-- fetch-size 효과: SKU 상향 대비 작음(D8 1MB→4MB +42%로 상대적으로 크나 절대값은 여전히 disk 대역).
+- fetch-size 효과: SKU 상향 대비 작음(D8 1MB→4MB +42%는 run 편차 범위 내라 유의성 낮음, §6-1. 절대값은 여전히 disk 대역).
 - 7x(≈7min→1min) catch-up 단축을 단일 변수로 단정하지 않음. 본 관측은 "고객 base(32GB)는 disk 대역에 가깝고, 64GB로 상향 시 소비 상한이 크게 오를 수 있다"는 방향성까지. 실효 여부는 §8 진단으로 운영 병목이 broker I/O 측인지 확인 후 판단.
 
 ## 8. SKU 상향 실효 판단 — 지연이 어느 경계에서 나는지 진단
@@ -172,7 +174,7 @@ lag 발생 구간에 broker(worker) 노드에서:
 
 본 테스트 producer 합산 유입(D4 303 / D8 521 / D16 588 MB/s)은 **3-broker 테스트 클러스터를 flood로 포화시킨 produce 상한**이며, 고객 피크 유입을 모델링한 값이 아니다. 자릿수가 비슷한 것은 우연.
 
-고객 유입률 환산(계산값, 실측 아님. Kafka MBps=10⁶ 기준):
+고객 유입률 환산(계산값, 실측 아님. Kafka MBps=10⁶ 기준. §1 기준 유입량은 15TB/day이며, 12TB 행은 이전 보고서 수치를 하한 참고치로 병기):
 
 | 유입량 | 24h 평균 | 12h 집중 | 8h 집중 | 4h 피크 |
 |---|---|---|---|---|
