@@ -271,6 +271,9 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
 | 5 | **v2.4.0** ([#4577](https://github.com/confluentinc/librdkafka/issues/4577)·[#4684](https://github.com/confluentinc/librdkafka/issues/4684)) | metadata refresh 무한 루프(v2.3.0 회귀) + main-loop tight spin 수정 | 피크 부하 시 broker 커넥션·client CPU 낭비 제거. from=2.3.0인 경우 유력 |
 
 - consumer 소비 효율 관련 버전 마일스톤(참고): v1.6.0 KIP-429 incremental cooperative rebalancing(stop-the-world rebalance 제거) · v2.1.0 KIP-320 leader epoch fencing(spurious offset reset 방지) · v2.2.0 `fetch.queue.backoff.ms` 도입 · v2.5.0 KIP-951 leader discovery 최적화 · v2.12.0 KIP-848 신형 group protocol GA.
+- **"이전에는 잘 됐었다"는 관찰과의 정합성 검토** — 무엇이 달라진 시점부터 lag가 시작됐는지에 따라 후보가 갈린다:
+  - **부하 증가 이후 발생**(§1의 "log 50% 정상 / log 100% 피크 lag"): 1번 후보(v1.9.0)와 완전 정합. 이 버그의 트리거는 "fetch 응답이 한도를 꽉 채우는 것" = consumer가 뒤처져 broker에 데이터가 쌓였을 때뿐이므로, 저부하에서는 응답이 작아 backoff가 발동하지 않고 정상 동작. 버그는 상시 존재하나 부하 임계 초과 시에만 발현 — broker 버전 무관.
+  - **동일 부하에서 broker 버전 상향 이후 발생**(구버전 broker에서는 정상): 1번 후보는 client-side 버그라 broker 버전 독립이므로 단독 설명력이 약해지고, **2번 후보(v2.10.0)의 KIP-320 offset validation 후 1초 대기 제거가 유력**해진다. 이 코드 경로(librdkafka 2.1.0+)는 broker가 leader epoch(AK 2.1+)를 지원할 때만 활성화되므로, 구 broker에서는 발동 자체가 없다가 신 broker + client 2.1.0~2.9.x 조합에서 leader 변경마다 파티션별 1초+ fetch 정지가 새로 생김 → "구 broker 정상 + client 업그레이드(≥2.10.0)만으로 해소" 두 사실 모두 정합. 반면 3번 후보(v2.6.1)는 낮은 broker일수록 악화되는 방향이라 이 관찰과 배치되어 탈락.
 - **원인 확정에 필요한 확인 항목**: ① 업그레이드 전/후 librdkafka(래퍼 포함) 버전 — from<1.9.0이면 1번, from=2.6.0이면 3번 거의 확정 ② HDInsight broker Kafka 버전(<2.7 여부) ③ 피크 시간대 broker 롤링/파티션 재할당 유무(→2번) ④ SASL_SSL 사용 여부(→4번) ⑤ 업그레이드 전 client debug 로그의 `fetch error backoff`·metadata storm 흔적.
 
 ## 관련 문서
