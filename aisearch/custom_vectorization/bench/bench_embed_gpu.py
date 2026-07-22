@@ -34,9 +34,11 @@ CHUNK_BASE = (
 )  # ~500 chars
 
 def make_chunks(n: int, chars: int = 500) -> list[str]:
-    """Build n chunks of ~`chars` length by repeating/truncating CHUNK_BASE.
+    """Build n chunks of `chars` target length (body) by repeating/truncating CHUNK_BASE.
 
-    A unique suffix prevents any server-side caching effects.
+    A unique suffix (~15-20 chars) is appended AFTER truncation to prevent any
+    server-side caching effects, so actual chunk length is `chars` + suffix.
+    The measured mean length is reported as `chunk_chars_actual` in results.
     """
     reps = math.ceil(chars / len(CHUNK_BASE))
     body = (CHUNK_BASE * reps)[:chars]
@@ -79,6 +81,7 @@ def scenario_b(total_texts: int, batch: int, conc: int, chunk_chars: int = 500) 
     return {
         "total_texts": total_texts, "batch": batch, "concurrency": conc,
         "chunk_chars": chunk_chars,
+        "chunk_chars_actual": round(st.mean(len(c) for c in chunks), 1),  # incl. unique suffix
         "wall_s": round(wall, 3),
         "texts_per_s": round(total_texts / wall, 1),
     }
