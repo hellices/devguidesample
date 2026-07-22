@@ -1,0 +1,19 @@
+version: v0.1
+testId: appgw-aks-locust-test
+testType: Locust
+testPlan: locustfile.py
+engineInstances: 4
+configurationFiles:
+  - requirements.txt
+failureCriteria:
+  - avg(response_time_ms) > 500, terminate
+  - percentage(error) > 10, terminate
+env:
+  - name: TARGET_HOST
+    value: https://<APPGW_FQDN>
+  - name: USERS
+    value: "200"
+  - name: SPAWN_RATE
+    value: "20"
+  - name: RUN_TIME
+    value: "5m"
