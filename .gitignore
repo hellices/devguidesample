@@ -4,3 +4,5 @@ node_modules/
 .venv
 sim-env.json.vscode/
 .mirrord/
+__pycache__/
+*.py[cod]
