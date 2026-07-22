@@ -18,10 +18,12 @@
 | 최대 처리량 (~1,000자 청크) | 23 texts/s | **130 texts/s** | **5.5×** |
 | 1M 청크(500자) 적재 소요 | 4.5 hr | **0.9 hr** | 5× |
 
-- **쿼리 경로(단건 추론)**: 양쪽 모두 single-digit ms — latency-bound 구간, GPU 선택 무관
-- **적재 경로(배치 추론)**: throughput-bound 구간에서 **A10 4.9~5.5× 우위**. T4는 ~60 texts/s에서 compute saturation — batch size/concurrency 튜닝으로 개선 불가
-- ✅ 공개 스펙 교차검증 완료 — FP16 Tensor TFLOPS비 1.9× × Flash Attention 유무 × 메모리 대역폭 2× 복합 효과로 예측 범위(4.3~5.8×)와 정합 → [교차검증 섹션](#교차검증-공개-스펙벤치마크와의-정합성)
-- 스케일아웃 등가: **A10 × N ↔ T4 × 5N**(500자) / **× 6N**(1,000자) — 최소 SKU(NC4as) × N + Internal LB 구성 시 PAYG 기준 -15~18% (500자) → [스케일아웃 전략](#스케일아웃-전략-t4-최소-sku--n--lb)
+- **쿼리 경로(단건 추론)**: 양쪽 모두 single-digit ms — latency-bound 구간으로, 전체 검색 응답 시간에서 차지하는 비중이 상대적으로 작음
+- **적재 경로(배치 추론)**: throughput-bound 구간에서 **본 테스트 환경 기준 A10 처리량이 T4 대비 약 5배 수준으로 측정**. T4는 ~60 texts/s 부근에서 GPU 사용률·전력이 상한에 도달했으며, 본 벤치마크 조건에서는 batch size/concurrency 조정만으로는 유의미한 추가 향상을 확인하지 못함
+- 공개 스펙 교차검증 — FP16 Tensor TFLOPS비 1.9×, Flash Attention 지원 차이, 메모리 대역폭 2×가 **주요 원인으로 추정**되며, 공개 스펙 기반 예측 범위(4.3~5.8×)와 실측 결과의 방향성이 일치 → [교차검증 섹션](#교차검증-공개-스펙벤치마크와의-정합성)
+- 스케일아웃: 본 측정 조건 기준 **A10 × N ≈ T4 × 5N**(500자) / **× 6N**(1,000자) 수준 — 최소 SKU(NC4as) × N + Internal LB 구성 시 VM 비용만 기준 약 15~18% 절감 가능성 관찰 (500자) → [스케일아웃 전략](#스케일아웃-전략-t4-최소-sku--n--lb)
+
+> ⚠️ **측정 범위**: 본 측정은 **임베딩 생성 구간(TEI `/embed`)만 대상**이며, Azure AI Search 문서 업로드 및 인덱싱 시간은 포함하지 않는다. 실제 End-to-End 적재 시간은 Search 서비스 SKU, 문서 크기, 배치 크기 및 서비스 부하에 따라 달라질 수 있다. 또한 측정값은 모델, 텍스트 길이·토큰 분포, 서빙 엔진 버전, 드라이버 버전, 배치 설정 및 운영 환경에 따라 달라질 수 있다.
 
 ---
 
@@ -78,7 +80,7 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 **분석:**
 - A10 1.4× 우위이나 절대값은 양쪽 모두 single-digit ms
-- 하이브리드 검색 E2E 응답(수십~수백 ms) 대비 벡터화 비중 미미 → **쿼리 경로 기준 GPU 선택은 사용자 체감 무관**
+- 하이브리드 검색 E2E 응답 대비 벡터화 비중은 상대적으로 작음 (E2E가 수십 ms급인 저지연 환경이라면 1.6ms 차이의 비중은 커질 수 있음)
 - 라운드 간 편차 ±0.1ms — 재현성 확보
 
 ## 🧪 결과 2: 배치 처리량 — 500자 청크 (Push API 적재 경로)
@@ -99,9 +101,9 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 라운드 간 표준편차: T4 ≤2.1, A10 ≤6.1 texts/s (CV ~2%) — 5회 반복 전부 재현.
 
 **분석:**
-- **T4: ~60 texts/s에서 완전 포화.** batch/concurrency 조합 무관, 64×4에서는 오히려 하락(스케줄링 오버헤드). 부하 중 `nvidia-smi`: GPU util 100%, power draw 69W/70W(TDP cap 도달), CPU idle 73% → **순수 GPU compute-bound + power-bound**
+- **T4: ~60 texts/s 부근에서 상한 도달.** 본 벤치마크 조건에서는 batch/concurrency 조정만으로는 유의미한 추가 향상을 확인하지 못했으며, 64×4에서는 오히려 소폭 하락(스케줄링 오버헤드 추정). 부하 중 `nvidia-smi`: GPU util 100%, power draw 69W/70W(TDP cap 도달), CPU idle 73% → **GPU compute/power 제약으로 판단** (TEI 버전 업그레이드, quantization 등 서빙 스택 차원의 최적화는 본 측정 범위 외)
 - **A10: batch=1에서도 concurrency 스케일링 유효**(150→257, TEI dynamic batching 효과), batch 증가 시 ~300 texts/s 포화. 최대 부하에서도 GPU util ≤84% — SM occupancy 여유 잔존
-- 격차 요인: Ampere 3세대 Tensor Core(SM당 2× FP16 처리량) + FP16 Tensor 연산비(65 vs 125 TFLOPS) + TEI Flash Attention 지원 차이의 복합
+- 격차 요인(추정): Ampere 3세대 Tensor Core(SM당 2× FP16 처리량) + FP16 Tensor 연산비(65 vs 125 TFLOPS) + TEI Flash Attention 지원 차이의 복합
 
 ## 🧪 결과 3: 배치 처리량 — 1,000자 청크
 
@@ -122,7 +124,7 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 ## 교차검증: 공개 스펙·벤치마크와의 정합성
 
-실측 배율(4.9~5.5×)의 타당성을 공개 자료로 검증. **결론: 정합.** 이론 TFLOPS비(1.9×)는 하한선 — 아래 3개 요인의 곱셈 효과로 실측치 설명 가능.
+실측 배율(4.9~5.5×)의 타당성을 공개 자료로 검증. **공개 스펙과 실측 결과의 방향성이 일치**하며, 이론 TFLOPS비(1.9×)를 하한선으로 아래 3개 요인이 **주요 원인으로 추정**된다. (TEI 내부 구현, dynamic batching 동작, 드라이버 버전, 토큰 분포 등도 영향 요인이므로 정확한 기여도 분해는 본 측정 범위 외)
 
 ### 공식 스펙 비교 (NVIDIA 데이터시트)
 
@@ -135,13 +137,13 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 | CUDA 코어 | 2,560 | 9,216 | 3.6× |
 | Tensor Core 세대 | 2세대 | 3세대 (SM당 FP16 FMA 2×) | — |
 
-### 실측 배율(4.9~5.5×) > 스펙비(1.9×)의 메커니즘
+### 실측 배율(4.9~5.5×) > 스펙비(1.9×)의 추정 메커니즘
 
 1. **T4 70W power cap** — 패시브 쿨링·저전력 폼팩터 설계로 70W가 하드 리밋. 지속 배치 부하에서 boost clock 유지 불가 → 이론 peak TFLOPS 미도달 (실측: GPU 100% + 69W/70W 포화 확인). 지속 부하 기준 유효 격차 ~2.5–3×
 2. **TEI의 Turing Flash Attention 기본 비활성화** — TEI 공식 README: *"Flash Attention is turned off by default for the Turing image as it suffers from precision issues"*. FlashAttention-2는 `cp.async` 등 Ampere(CC 8.0+) 전용 명령 의존 → Turing 미지원. 결과적으로 T4는 O(N²) HBM 왕복의 standard attention, A10은 SRAM-fused FA 커널로 동작. **시퀀스 길이에 비례해 격차 확대 — 실측 500자 4.9× → 1,000자 5.5× 패턴과 일치**
 3. **메모리 대역폭 2×** — BGE-m3(XLM-RoBERTa encoder) 배치 추론은 레이어 간 activation 이동이 지배하는 memory bandwidth-bound 워크로드
 
-곱셈 효과: 1.9× (compute) × ~1.5–2× (FA 유무) × 잔여 대역폭 효과 ≈ **4.3–5.8×** ⊇ 실측 4.9~5.5×
+곱셈 효과 추정: 1.9× (compute) × ~1.5–2× (FA 유무) × 잔여 대역폭 효과 ≈ **4.3–5.8×** — 실측 4.9~5.5×가 이 범위 안에 있어 방향성이 일치
 
 **단건 1.4×의 정합성** — 단건 추론은 SM under-utilization 상태의 latency-bound 구간. 배치·FA·대역폭 이점 미발현, 세대 간 clock/IPC 차이만 반영 → 1.3~1.5× 예측과 일치.
 
@@ -155,7 +157,7 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 ## 스케일아웃 전략: T4 최소 SKU × N + LB
 
-> 현행 운영 기준(A10 × 2, SPOF 없음)을 T4 스케일아웃으로 대체/보완할 경우의 등가 구성·비용·아키텍처 분석. vCPU 교차검증(GPU compute-bound 확정)이 본 전략의 실측 근거 — T4 계열 최소 SKU(NC4as_T4_v3, 4 vCPU)로도 GPU 처리량은 동일하므로 **처리량/달러 최적점 = 최소 SKU × N**.
+> 현행 운영 기준(A10 × 2, SPOF 없음)을 T4 스케일아웃으로 대체/보완할 경우의 등가 구성·비용·아키텍처 분석. vCPU 교차검증(GPU compute-bound 확인)이 본 전략의 실측 근거 — T4 계열 최소 SKU(NC4as_T4_v3, 4 vCPU)로도 GPU 처리량은 동일하므로 **처리량/달러 최적점 = 최소 SKU × N**.
 
 ### 스케일 업/아웃 옵션별 효과
 
@@ -167,26 +169,29 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 ### 등가 배수: A10 N대 ↔ T4 몇 대?
 
-실측 처리량 비 기준 (500자 4.9×, 1,000자 5.5×):
+본 측정 조건 기준 처리량 비(500자 4.9×, 1,000자 5.5×)로 환산한 **산술 등가**:
 
 | 기준 (A10 대수) | 500자 워크로드 | 1,000자 워크로드 |
 |----------------|----------------|------------------|
-| A10 × 1 (301 texts/s) | **T4 × 5** (305 texts/s) | **T4 × 6** (140 vs 130 texts/s) |
-| A10 × 2 (602 texts/s) — 현행 | **T4 × 10** (610 texts/s) | **T4 × 12** (281 vs 259 texts/s) |
+| A10 × 1 (301 texts/s) | **T4 × 5 수준** (305 texts/s) | **T4 × 6 수준** (140 vs 130 texts/s) |
+| A10 × 2 (602 texts/s) — 현행 | **T4 × 10 수준** (610 texts/s) | **T4 × 12 수준** (281 vs 259 texts/s) |
 | A10 × N | T4 × 5N | T4 × 6N |
+
+> ⚠️ 위 등가는 단일 노드 실측치의 산술 배수다. 실제 환경에서는 LB 분배 편차, 콜드스타트/warmup, Spot eviction, 요청 크기 불균형 등으로 유효 처리량이 이보다 낮아질 수 있으므로 **여유분(+1대 이상) 산정을 권장**한다.
 
 ### 비용 비교 — PAYG(정규 VM) 기준
 
-Azure Retail Prices API 조회 (2026-07): NC4as_T4_v3 $0.631/hr (southcentralus) · $0.647/hr (koreacentral), NV36ads_A10_v5 $3.84/hr (southcentralus, **koreacentral 미제공**)
+Azure Retail Prices API 조회 (2026-07, southcentralus 기준 — 리전별 단가 상이): NC4as_T4_v3 $0.631/hr, NV36ads_A10_v5 $3.84/hr
 
 | 구성 | 시간당 (southcentralus) | A10 등가 대비 |
 |------|------------------------|---------------|
 | A10 × 2 (현행) | $7.68/hr | 기준 |
-| T4 × 10 (500자 등가) | $6.31/hr | **-18%** |
+| T4 × 10 (500자 등가) | $6.31/hr | 약 -18% |
 | T4 × 12 (1,000자 등가) | $7.57/hr | -1% (사실상 동률) |
 
-- 부대비용: Standard LB ~$0.025/hr + OS 디스크(P10급) ~$0.02/hr×N → T4 10대 기준 **+$0.25/hr** → 실질 ~$6.56/hr, **여전히 ~15% 저렴** (Internal LB 구성 — 노드별 Public IP 불필요, 아웃바운드는 NAT Gateway 또는 default outbound로 처리. HF 모델 다운로드 등 이그레스용 NAT Gateway 추가 시 +$0.045/hr)
-- koreacentral 배치 시 T4 × 10 = $6.47/hr — A10 미제공 리전에서 유일한 선택지
+> 위 절감률은 **VM 비용만 기준으로 관찰된 수치**다. 부대비용(LB·디스크·NAT)과 노드 수 증가에 따른 운영비(모니터링, 패치, 장애 대응 인력)를 포함한 TCO는 환경별로 재산정이 필요하다.
+
+- 부대비용: Standard LB ~$0.025/hr + OS 디스크(P10급) ~$0.02/hr×N → T4 10대 기준 **+$0.25/hr** → 실질 ~$6.56/hr, VM+부대비용 기준 약 15% 낮음 (Internal LB 구성 — 노드별 Public IP 불필요, 아웃바운드는 NAT Gateway 또는 default outbound로 처리. HF 모델 다운로드 등 이그레스용 NAT Gateway 추가 시 +$0.045/hr)
 - 상시 운영이면 1-year Savings Plan/RI 적용 시 30~60% 추가 절감 여지 (양쪽 공통)
 
 ### 엔드포인트 아키텍처
@@ -219,14 +224,13 @@ TEI는 stateless HTTP(`POST /embed`) — L4 분배로 충분:
 
 | 관점 | T4 × 5N + LB | A10 × N (현행) |
 |------|--------------|----------------|
-| 시간당 비용 (500자) | ✅ -15~18% | — |
+| 시간당 비용 (500자) | ✅ VM 비용 기준 약 -15~18% | — |
 | 시간당 비용 (1,000자) | 동률 (6N대 필요) | — |
-| 리전 | ✅ koreacentral 가능 | ❌ 아시아 미제공 (cross-region 강제) |
 | 장애 내성 | 노드당 1/5N 손실 | 노드당 1/N 손실 (N≥2면 SPOF 없음) |
 | 운영 복잡도 | 관리 포인트 5N (LB·probe·드라이버 패치) | ✅ 관리 포인트 N |
 | 스케일 증분 | ✅ 60 texts/s 단위 미세 조정 | 301 texts/s 단위 |
 
-**권장:** 500자 내외 청크 위주 + koreacentral 상주 요구 시 **T4 × 5N + Internal LB(+VMSS)** 가 전략적으로 유리 (-15~18% + 리전 이점 + 미세한 스케일 증분). 장문(1,000자+) 비중이 크면 등가 대수가 6N으로 늘어 비용 이점이 소멸하므로 A10 유지가 합리적.
+**권장:** 500자 내외 청크 위주 워크로드에서는 **T4 × 5N + Internal LB(+VMSS)** 가 전략적으로 유리 (VM 비용 기준 약 15~18% 절감 가능성 + 미세한 스케일 증분). 장문(1,000자+) 비중이 크면 등가 대수가 6N으로 늘어 비용 이점이 소멸하므로 A10 유지가 합리적. 최종 선택은 운영비를 포함한 TCO와 조직의 운영 역량을 함께 고려해 판단할 것.
 
 ---
 
@@ -234,18 +238,18 @@ TEI는 stateless HTTP(`POST /embed`) — L4 분배로 충분:
 
 | 시나리오 | 권장 GPU | 근거 |
 |----------|----------|------|
-| 쿼리 벡터화 (실시간 검색 경로) | **둘 다 가능** | 4~6ms — latency-bound, E2E 응답 대비 무의미 |
-| 대량 초기 적재 (Push API, 데드라인 존재) | **A10** | 5~5.5× — 1M 청크 기준 0.9hr vs 4.5hr |
+| 쿼리 벡터화 (실시간 검색 경로) | **둘 다 가능** | 4~6ms — latency-bound, E2E 응답 대비 비중 작음 |
+| 대량 초기 적재 (Push API, 데드라인 존재) | **A10** | 본 측정 기준 약 5~5.5× — 1M 청크 기준 0.9hr vs 4.5hr |
 | 상시 증분 적재 (소량) | **T4 충분** | 60 texts/s = 21.6만 건/hr — 증분 볼륨 대비 과분 |
-| 장문(1,000자+) 위주 코퍼스 | **A10** | 시퀀스 길이 비례 격차 확대 (5.5×+) |
+| 장문(1,000자+) 위주 코퍼스 | **A10** | 시퀀스 길이 비례 격차 확대 (측정 기준 5.5×) |
+
+> 위 권장은 본 측정 환경(TEI 1.8, dragonkue/BGE-m3-ko, 한국어 텍스트) 기준이며, 실제 결과는 모델·텍스트 길이·서빙 엔진 버전·배치 설정·운영 환경에 따라 달라질 수 있다.
 
 **운영 파라미터:**
 - Push 파이프라인 최적점: T4 = batch 8~32 / conc 4 (초과 시 역효과), A10 = batch 32~64 / conc 4~8
-- 1M+ 청크 적재: A10 1대 ≈ T4 5대 — 운영 단순성은 A10, 비용·리전·스케일 증분은 T4 스케일아웃 우위 → [스케일아웃 전략](#스케일아웃-전략-t4-최소-sku--n--lb) 참고
+- 1M+ 청크 적재: A10 1대 ≈ T4 5대 — 운영 단순성은 A10, 비용·스케일 증분은 T4 스케일아웃 우위 → [스케일아웃 전략](#스케일아웃-전략-t4-최소-sku--n--lb) 참고
 - Spot eviction 대비: Push 파이프라인에 retry + checkpoint(마지막 성공 문서 ID) 필수. 본 측정 중 eviction 미발생
-- A10 Spot 가용 리전 제한 (2026-07 확인: southcentralus, centralus, westus2, ukwest, spaincentral 등 — koreacentral/japaneast 등 아시아 리전 NVadsA10v5 미제공)
-  - AI Search가 koreacentral인 경우: 적재 경로는 cross-region이나 Push API 배치 전송 특성상 RTT 영향 미미
-  - 쿼리 경로(Custom Vectorizer)가 cross-region이면 RTT ~100-150ms 추가 → 쿼리용 T4(koreacentral) + 적재용 A10(미국 리전) 분리 토폴로지 고려
+- **A10 Spot 수급 주의**: NVadsA10_v5 Spot은 수급 변동성이 크며 특정 시간대에는 할당이 실패할 수 있다. 운영 환경에서는 PAYG 또는 예약 인스턴스(RI/Savings Plan)와의 조합 검토를 권장
 
 ---
 
