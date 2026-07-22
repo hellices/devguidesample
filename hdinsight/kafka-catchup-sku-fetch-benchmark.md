@@ -276,6 +276,30 @@ az hdinsight delete -g rg-krafton-kafka-dev-jpe -n krafton-kafka-hdi-68944 --yes
   - **동일 부하에서 broker 버전 상향 이후 발생**(구버전 broker에서는 정상): 1번 후보는 client-side 버그라 broker 버전 독립이므로 단독 설명력이 약해지고, **2번 후보(v2.10.0)의 KIP-320 offset validation 후 1초 대기 제거가 유력**해진다. 이 코드 경로(librdkafka 2.1.0+)는 broker가 leader epoch(AK 2.1+)를 지원할 때만 활성화되므로, 구 broker에서는 발동 자체가 없다가 신 broker + client 2.1.0~2.9.x 조합에서 leader 변경마다 파티션별 1초+ fetch 정지가 새로 생김 → "구 broker 정상 + client 업그레이드(≥2.10.0)만으로 해소" 두 사실 모두 정합. 반면 3번 후보(v2.6.1)는 낮은 broker일수록 악화되는 방향이라 이 관찰과 배치되어 탈락.
 - **원인 확정에 필요한 확인 항목**: ① 업그레이드 전/후 librdkafka(래퍼 포함) 버전 — from<1.9.0이면 1번, from=2.6.0이면 3번 거의 확정 ② HDInsight broker Kafka 버전(<2.7 여부) ③ 피크 시간대 broker 롤링/파티션 재할당 유무(→2번) ④ SASL_SSL 사용 여부(→4번) ⑤ 업그레이드 전 client debug 로그의 `fetch error backoff`·metadata storm 흔적.
 
+### 13-2. 관련 알려진 이슈 (librdkafka issue tracker 실사례)
+
+동일 증상 계열로 보고된 실제 이슈들. 후보별 근거 보강용.
+
+**1번 후보(고부하 fetch backoff) 계열 — "고부하에서만 fetch 간 1초 지연" 증상 실사례**:
+
+| 이슈 | 증상 | 해결 |
+|---|---|---|
+| [#1377](https://github.com/confluentinc/librdkafka/issues/1377) "sleep one second before sending next fetch request" | 평시 정상, **heavy load에서만** fetch 요청 간 1초 지연 발생 | fetch queue 임계(`queued.min.messages`) 도달 시 1초 backoff가 원인. 본 케이스 증상("피크에만 lag")과 동일 패턴 |
+| [#2879](https://github.com/confluentinc/librdkafka/issues/2879) "Consumer fetching once a second" | v0.9.5→v1.3.0 업그레이드 후 queue 임계 도달 시 즉시 1000ms backoff → 초당 1회만 fetch | v2.2.0에서 `fetch.queue.backoff.ms`로 설정 가능하게 개선. **"클라이언트 버전에 따라 같은 워크로드의 소비 상한이 달라진" 실증 사례** |
+| [#2993](https://github.com/confluentinc/librdkafka/issues/2993) → fix commit [2b76b65](https://github.com/confluentinc/librdkafka/commit/2b76b65212e5efda213961d5f84e565038036270) | max-size(truncated) fetch 응답 처리 오류 | 수정 커밋 메시지에 "**removes fetch backoffs on underflows (truncated responses)**" 명시 — 1번 후보(v1.9.0 반영)의 실제 수정 |
+
+**2번 후보(leader 변경 시 정지/루프) 계열**:
+
+| 이슈 | 증상 | 해결 |
+|---|---|---|
+| [#4425](https://github.com/confluentinc/librdkafka/issues/4425) | 연속 leader 변경 시 OffsetForLeaderEpoch 요청 실패 루프 (2.1.0+) | v2.3.0 수정 |
+| [#4620](https://github.com/confluentinc/librdkafka/issues/4620) | leader epoch 변경 시 ListOffsets 실패 루프 → timeout까지 소비 정지 | v2.4.0 수정 |
+| [#5357](https://github.com/confluentinc/librdkafka/issues/5357) | broker shutdown/leader 선출 시 OffsetForLeaderEpochRequest 78만 회 폭주(2.6.1) | 후속 버전 수정 |
+| [#3396](https://github.com/confluentinc/librdkafka/issues/3396)·[#2625](https://github.com/confluentinc/librdkafka/issues/2625) | leader 재선출 후 일부 consumer/partition 소비 정지 | 각 후속 버전 수정 |
+
+- 시사점: leader epoch 관련 정지·루프 버그는 **2.1.0(KIP-320 도입)~2.4.0 구간에 집중** 보고 → "신형 broker + client 2.1.0~2.9.x 조합에서 새로 생긴 문제"라는 §13-1 해석 B와 부합.
+- 미해결 참고: [#5140](https://github.com/confluentinc/librdkafka/issues/5140)(fetch queue가 설정 한도 초과 성장, 2.10) 등 fetch queue 동작은 최신 버전에도 open 이슈 존재.
+
 ## 관련 문서
 
 - [`../monitor/hdinsight-kafka-monitoring.md`](../monitor/hdinsight-kafka-monitoring.md) — HDInsight Kafka 모니터링 개요(Azure Monitor·Log Analytics·Ambari·진단설정).
