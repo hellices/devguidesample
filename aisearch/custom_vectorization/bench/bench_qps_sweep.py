@@ -38,6 +38,8 @@ def pctl(v, p):
 gpu_samples = []
 stop_gpu = threading.Event()
 def gpu_poll():
+    consecutive_failures = 0
+    warned = False
     while not stop_gpu.is_set():
         try:
             out = subprocess.check_output(
@@ -48,9 +50,15 @@ def gpu_poll():
                     continue
                 u, p = line.split(", ")
                 gpu_samples.append((time.time(), float(u), float(p)))
+            consecutive_failures = 0
         except Exception as e:
-            print(f"WARN: GPU telemetry disabled ({e})", file=sys.stderr)
-            return
+            consecutive_failures += 1
+            if not warned:
+                print(f"WARN: GPU telemetry sample failed ({e}) — retrying", file=sys.stderr)
+                warned = True
+            if consecutive_failures >= 3:  # transient blips tolerated; persistent failure stops polling
+                print("WARN: GPU telemetry disabled after 3 consecutive failures", file=sys.stderr)
+                return
         stop_gpu.wait(1.0)
 
 threading.Thread(target=gpu_poll, daemon=True).start()
@@ -59,8 +67,9 @@ results = []
 # NOTE: t0 is captured at submit time, so if the pool saturates at overload
 # stages (in-flight > max_workers), client-side queue wait is *included* in the
 # reported latency — overload-stage numbers degrade honestly rather than being
-# silently optimistic. Knee-region stages stay well under the worker count.
-MAX_WORKERS = 400
+# silently optimistic. Sized to max(STAGES) so overload stages keep enough
+# workers for the offered load to stay open-loop.
+MAX_WORKERS = max(400, max(STAGES) * 2)
 with cf.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
     for qps in STAGES:
         # warm gap between stages
