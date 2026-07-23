@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: memray-demo
+  labels:
+    app: loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadgen
+  template:
+    metadata:
+      labels:
+        app: loadgen
+    spec:
+      containers:
+        - name: loadgen
+          image: acrmemrayb219eb.azurecr.io/leaky-agent:v2
+          command: ["python", "loadgen.py"]
+          env:
+            - name: TARGET_URL
+              value: http://leaky-agent:8000
+            - name: RPS
+              value: "4"
+            - name: SESSIONS
+              value: "20"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
