@@ -223,10 +223,17 @@ def trim_history(
     max_input = MODEL_INPUT_LIMITS.get(model, 272_000)
     available = max_input - system_prompt_tokens - response_buffer
 
-    enc = tiktoken.encoding_for_model(model)
+    # tiktoken은 알고 있는 모델명만 지원 — gpt-5.x 계열은 KeyError 발생하므로 fallback 필요
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:
+        enc = tiktoken.get_encoding("o200k_base")  # gpt-4o/5.x 계열 인코딩
+
     trimmed = []
     total = 0
     for msg in reversed(messages):
+        # 주의: msg["content"]가 문자열이라고 가정. 멀티모달(list) 콘텐츠는
+        # enc.encode()가 실패하므로 별도 텍스트 추출 후 인코딩해야 함.
         tokens = len(enc.encode(msg["content"]))
         if total + tokens > available:
             break
