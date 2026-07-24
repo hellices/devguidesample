@@ -490,43 +490,9 @@ Australia East, Brazil South, Canada East, East US 2, France Central, Italy Nort
 
 현재 Redis 기반 세션 메모리를 운영 중이라면, 세 계층을 분리하되 각각의 강점을 활용하는 하이브리드 아키텍처를 권장합니다.
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         GPT-5.x 요청                              │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─ Layer 1: Prompt Cache (플랫폼 관리) ─────────────────────┐  │
-│  │  • 자동 활성화, 토큰 수 조정 불가                            │  │
-│  │  • prompt_cache_retention: "24h" (gpt-5.5+는 고정)         │  │
-│  │  • prompt_cache_key: gpt-5.6+에서 캐시 라우팅 최적화       │  │
-│  │  • 시스템 프롬프트를 불변 프리픽스로 설계                     │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌─ Layer 2: Session Memory (Redis 유지) ────────────────────┐  │
-│  │  • 대화 턴 히스토리 저장 + 토큰 버짓 기반 트리밍            │  │
-│  │  • Redis Agent Memory: 자동 요약, 시맨틱 캐싱, 벡터 검색   │  │
-│  │  • 세션 TTL 관리 (30분~24시간)                             │  │
-│  │  • VNet 내 프라이빗 엔드포인트                              │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌─ Layer 3: Long-term Memory ───────────────────────────────┐  │
-│  │                                                            │  │
-│  │  옵션 A: Foundry Memory Service (Preview)                 │  │
-│  │    → User Profile + Chat Summary + Procedural Memory      │  │
-│  │    → 자동 Extraction/Consolidation/Retrieval 파이프라인    │  │
-│  │    → VNet 불필요 + 스코프 100개 이하 시 권장               │  │
-│  │                                                            │  │
-│  │  옵션 B: Redis + 자체 구현 (현재 유지)                    │  │
-│  │    → 커스텀 임베딩 + Redis Vector Search                  │  │
-│  │    → VNet/데이터 주권 필수, 또는 스케일 제한 초과 시 권장  │  │
-│  │                                                            │  │
-│  │  옵션 C: 하이브리드                                       │  │
-│  │    → Redis (세션) + Foundry Memory (장기) 병행             │  │
-│  │    → 세션 종료 시 Redis 요약 → Foundry Memory에 저장      │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
-```
+![하이브리드 메모리 아키텍처](hybrid-architecture.png)
+
+<!-- editable source: hybrid-architecture.excalidraw (https://excalidraw.com 에서 열어 편집) -->
 
 ### 전환/마이그레이션 체크리스트
 
