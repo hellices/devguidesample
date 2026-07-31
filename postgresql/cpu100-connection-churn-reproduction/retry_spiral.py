@@ -71,6 +71,7 @@ t0 = time.time()
 gen_interval = 1.0 / RATE
 next_t = time.time()
 last_ok = 0
+next_report = t0 + 20
 
 while time.time() - t0 < DURATION and not stop.is_set():
     now = time.time()
@@ -83,8 +84,9 @@ while time.time() - t0 < DURATION and not stop.is_set():
             with lock: stats['client_saturated'] += 1
     else:
         time.sleep(min(0.005, next_t - now))
-    # periodic report
-    if int(now - t0) % 20 == 0 and now - t0 - int(now - t0) < 0.01:
+    # periodic report (monotonic schedule)
+    if now >= next_report:
+        next_report += 20
         with lock:
             c = dict(stats); ifl = inflight[0]
         ok = c.get('insert_ok', 0)
@@ -93,7 +95,6 @@ while time.time() - t0 < DURATION and not stop.is_set():
               f"ok={ok} retries={c.get('conn_fail_retry',0)} gaveup={c.get('task_gave_up',0)} "
               f"client_sat={c.get('client_saturated',0)} avg_conn_ms={avg}", flush=True)
         last_ok = ok
-        time.sleep(0.02)
 
 stop.set()
 print("SPIRAL_DONE", dict(stats), "inflight_final", inflight[0], flush=True)

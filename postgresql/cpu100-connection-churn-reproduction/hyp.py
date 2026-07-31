@@ -104,6 +104,9 @@ def run_persistent(ops, write_ratio=0.0):
             with lock: stats[k] += 1
         except Exception as e:
             with lock: stats['err:'+type(e).__name__] += 1
+            if conn is not None:
+                try: conn.close()
+                except Exception: pass
             time.sleep(0.5); conn = None
 
 def run_churn():

@@ -42,6 +42,13 @@ CREATE TABLE IF NOT EXISTS public.store_stream_offsets (
   consumed_seq bigint NOT NULL DEFAULT 0
 );
 
+-- 시퀀스 카운터 (replay.py의 op_seq_counter가 사용)
+CREATE TABLE IF NOT EXISTS public.seq_counter (
+  id bigint NOT NULL,
+  update_time timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT seq_counter_pk PRIMARY KEY (id)
+);
+
 -- 2) 부모 제약/인덱스만 정의 (자식에 자동 전파/생성)
 ALTER TABLE public.store_kv
   ADD CONSTRAINT store_kv_pkey PRIMARY KEY (scope, key, part_month);

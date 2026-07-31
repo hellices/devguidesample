@@ -72,6 +72,9 @@ def worker(delay):
             with lock:
                 stats['err:'+type(e).__name__] += 1
                 if conn is not None: connected[0] -= 1
+            if conn is not None:
+                try: conn.close()
+                except Exception: pass
             conn = None
             time.sleep(2)
 

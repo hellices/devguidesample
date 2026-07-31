@@ -117,6 +117,9 @@ def worker(port, rate_fn):
                 n += 1
         except Exception as e:
             with lock: errors["conn:" + type(e).__name__] += 1
+            if conn is not None:
+                try: conn.close()
+                except Exception: pass
             time.sleep(1); conn = None
 
 def main():
