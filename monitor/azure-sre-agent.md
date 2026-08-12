@@ -1,367 +1,340 @@
-# Azure SRE Agent: Alert에서 원인 분석·티켓·알림까지
+# Azure SRE Agent 소개
 
-Azure SRE Agent는 Azure Monitor alert를 시작점으로 telemetry, resource configuration, deployment history, source code, runbook, 과거 incident를 연결해 **root cause와 안전한 조치 방안**을 제시하는 AI 기반 reliability assistant다.
+Azure SRE Agent는 Azure 운영 환경에서 발생한 인시던트를 자동으로 조사하고, 관련 근거를 바탕으로 근본 원인과 조치 방안을 제안하는 AI 기반 운영 도우미입니다.
 
-> 이 문서는 제품 기능을 소개하고 실제 운영 패턴을 보여주는 입문 자료다.  
-> 수치·원본 timeline·점수는 [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)에서 확인할 수 있다.
+이 문서에서는 Azure SRE Agent가 인시던트를 조사하는 방식과 실제 활용 예시를 소개합니다. 제품에서 제공하는 표준 기능과 이번 실증에서 확인한 내용을 구분해 설명합니다.
 
-## 왜 필요한가
+> **문체 기준**
+>
+> 이 자료는 [Microsoft Korean Localization Style Guide](https://aka.ms/korean-styleguide)의 한국어 현지화 원칙과 [Microsoft Writing Style Guide](https://learn.microsoft.com/style-guide/welcome/)의 간결하고 사람다운 문체 원칙을 따릅니다.
 
-일반적인 장애 대응은 alert를 확인한 뒤 여러 도구를 오가며 사람이 직접 맥락을 조합한다.
+## Azure SRE Agent를 사용하면 무엇이 달라지나요?
 
-| 기존 대응 | Azure SRE Agent를 적용한 대응 |
+운영자는 경고가 발생하면 여러 도구를 오가며 원인을 찾아야 합니다. Azure SRE Agent는 이 과정을 하나의 조사 흐름으로 연결합니다.
+
+| 기존 장애 대응 | Azure SRE Agent를 활용한 대응 |
 |---|---|
-| Alert를 읽고 담당자가 조사 시작 | Incident가 response plan 또는 trigger로 Agent에 전달 |
-| Monitor, App Insights, Activity Log, GitHub를 각각 확인 | Agent가 필요한 도구를 선택해 evidence를 수집 |
-| 원인을 사람의 머릿속에서 추론 | Hypothesis를 세우고 evidence로 검증·기각 |
-| 채팅·티켓·메일을 사람이 다시 작성 | 같은 structured summary를 ticket·email·Teams로 전달 |
-| 해결 경험이 담당자에게만 남음 | Root cause와 resolution이 Agent memory에 축적 |
+| 담당자가 경고를 확인한 뒤 조사를 시작합니다. | 대응 계획에 따라 에이전트가 자동으로 조사를 시작합니다. |
+| 모니터링 화면, 로그, 변경 이력, 소스 코드를 각각 확인합니다. | 에이전트가 필요한 자료를 선택해 함께 분석합니다. |
+| 담당자가 여러 가능성을 머릿속에서 비교합니다. | 에이전트가 가설을 세우고 근거를 통해 확인하거나 제외합니다. |
+| 조사 결과를 티켓과 메일로 다시 작성합니다. | 같은 조사 결과를 GitHub Issue, Outlook, Microsoft Teams 등에 전달할 수 있습니다. |
+| 해결 경험이 담당자 개인에게 남습니다. | 근본 원인과 해결 과정을 지식으로 축적할 수 있습니다. |
 
-Microsoft Learn은 이를 “observability tools, incident platforms, source code repositories를 하나의 automated workflow로 연결하는 방식”으로 설명한다.
+Azure SRE Agent는 단순히 오류 로그를 나열하지 않습니다. 어떤 서비스가 영향을 받았는지 확인하고, 원격 분석 데이터와 변경 이력, 소스 코드를 함께 살펴본 뒤 근본 원인과 다음 조치를 설명합니다.
 
-- [Microsoft Learn: Overview of Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/overview)
+## 인시던트가 발생하면 어떻게 조사하나요?
 
-## 한눈에 보는 동작
+![Azure SRE Agent의 인시던트 대응 흐름](sre-agent-event-lab/assets/briefing/sre-agent-process.png)
 
-```mermaid
-flowchart LR
-    Alert[Azure Monitor / PagerDuty / ServiceNow] --> Route[Response plan / HTTP Trigger]
-    Route --> Agent[Azure SRE Agent]
-    Agent --> Observe[App Insights / Log Analytics / Resource Graph]
-    Agent --> Context[GitHub / Runbook / Past incidents]
-    Observe --> RCA[Hypothesis-driven RCA]
-    Context --> RCA
-    RCA --> Review{Review / Approval}
-    Review --> Ticket[ServiceNow / PagerDuty / GitHub Issue]
-    Review --> Notify[Outlook / Teams / Slack]
-    Review --> Action[Approved mitigation]
-    RCA --> Memory[Institutional memory]
-```
+[편집 가능한 SVG 보기](sre-agent-event-lab/assets/briefing/sre-agent-process.svg)
 
-```text
-Detect → Investigate → Recommend/Act → Communicate → Learn
-```
+Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
-### Detect
+1. **경고를 받습니다.**
 
-- Azure Monitor Alerts
+   Azure Monitor, PagerDuty, ServiceNow 또는 HTTP Trigger에서 조사 요청을 받습니다.
+
+2. **조사 범위를 확인합니다.**
+
+   영향을 받은 서비스, 발생 시각, 고객 영향을 먼저 정리합니다.
+
+3. **관련 근거를 수집합니다.**
+
+   Application Insights, Log Analytics, Azure Resource Graph, Azure Activity Log, 배포 이력, 소스 코드를 확인합니다.
+
+4. **가설을 세우고 검증합니다.**
+
+   가능한 원인을 여러 개 세운 뒤 수집한 근거와 맞지 않는 원인을 제외합니다.
+
+5. **근본 원인과 조치 방안을 제안합니다.**
+
+   확인한 근거, 현재 상태, 최소 범위의 완화 조치를 함께 설명합니다.
+
+6. **사람이 검토하고 승인합니다.**
+
+   검토 모드에서는 변경 작업을 실행하기 전에 담당자의 승인을 받습니다.
+
+7. **조사 결과를 공유합니다.**
+
+   ServiceNow, PagerDuty, GitHub, Outlook, Microsoft Teams 등 기존 운영 도구로 결과를 전달할 수 있습니다.
+
+## 어떤 정보를 조사할 수 있나요?
+
+Azure SRE Agent는 관리 ID와 Azure RBAC 권한을 사용해 Azure 리소스를 조사합니다.
+
+| 분류 | 확인할 수 있는 정보 |
+|---|---|
+| 애플리케이션 상태 | Application Insights 요청, 예외, 종속성 호출 |
+| 로그 | Log Analytics 작업 영역의 로그 |
+| 인프라 상태 | Azure Monitor 메트릭, 리소스 구성, Resource Graph |
+| 변경 이력 | Azure Activity Log, 배포 이력, Container Apps 수정 버전 |
+| 소스와 문서 | GitHub, Azure DevOps, 운영 절차서, 기술 문서 |
+| 과거 경험 | 유사한 인시던트, 이전의 근본 원인과 해결 방법 |
+
+Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 있습니다. 외부 시스템이나 특정 데이터 원본을 지속해서 사용해야 하는 경우에는 커넥터를 추가합니다.
+
+## 어떤 시스템과 연결할 수 있나요?
+
+### 인시던트 관리
+
+- Azure Monitor 경고
 - PagerDuty
 - ServiceNow
-- HTTP Trigger를 지원하는 외부 시스템
-- Scheduled task 기반 proactive check
 
-### Investigate
+### 소스와 작업 관리
 
-Connector를 추가하지 않아도 managed identity와 Azure RBAC를 통해 다음 Azure 자료를 조사할 수 있다.
+- GitHub 저장소, Issue, Pull Request
+- Azure DevOps 저장소와 Work Item
+- Jira와 같은 관리형 커넥터 또는 MCP 기반 티켓 시스템
 
-- Application Insights requests, exceptions, dependencies
-- Log Analytics
-- Azure Monitor metrics
-- Azure Resource Graph와 resource configuration
-- Azure Activity Log와 deployment history
-- AKS diagnostics와 Azure CLI
+### 알림과 협업
 
-### Correlate
+- Outlook 메일
+- Microsoft Teams 채널
+- Slack 채널
 
-- GitHub/Azure DevOps repository와 최근 변경
-- Runbook·architecture 문서·wiki
-- 유사한 과거 incident와 resolution
+### 외부 관찰 도구
 
-### Recommend or act
+- Grafana
+- Datadog
+- Dynatrace
+- New Relic
+- Splunk
+- MCP를 지원하는 사용자 지정 도구
 
-- **ReadOnly:** 조사만 수행
-- **Review:** 조사 후 변경 전에 사람의 승인 요청
-- **Autonomous:** 허용된 action을 자동 수행
+커넥터에서는 사용할 작업만 선택할 수 있습니다. 메일 수신자나 Jira 프로젝트 키처럼 에이전트가 임의로 바꾸면 안 되는 값은 고정할 수 있습니다.
 
-처음 도입할 때는 Review mode로 조사 품질과 tool selection을 검증하는 것이 안전하다.
+## 권한과 승인 절차는 어떻게 제어하나요?
 
-### Communicate and learn
+Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 
-- ServiceNow/PagerDuty incident update
-- GitHub Issue 또는 Azure DevOps work item
-- Outlook email
-- Teams/Slack notification
-- Root cause와 resolution을 Agent memory에 축적
+| 모드 | 동작 |
+|---|---|
+| 읽기 전용 모드 | 자료를 조회하고 분석하지만 변경 작업은 실행하지 않습니다. |
+| 검토 모드(Review mode) | 조치 방안을 제안하고 담당자의 승인을 기다립니다. |
+| 자율 모드 | 허용된 작업을 별도 승인 없이 실행합니다. |
 
-## Log search가 아니라 가설 기반 조사
+처음 도입할 때는 **검토 모드로 시작하는 것을 권장합니다.** 조사 결과와 도구 선택이 실제 운영 절차에 맞는지 충분히 확인한 뒤 자동화 범위를 넓히는 편이 안전합니다.
 
-Azure SRE Agent는 단순히 “error log를 찾아서 나열”하지 않는다.
+커넥터를 설정할 때도 최소 권한 원칙을 적용해야 합니다.
 
-1. affected resource와 incident window를 정의한다.
-2. 가능한 root-cause hypothesis를 만든다.
-3. metrics, traces, changes, code로 각각 검증한다.
-4. 맞지 않는 hypothesis를 버린다.
-5. full evidence chain과 uncertainty를 포함해 결론을 설명한다.
+- 읽기 작업과 쓰기 작업을 구분합니다.
+- 필요한 작업만 에이전트에 노출합니다.
+- 메일 수신자와 프로젝트 키처럼 중요한 값은 고정합니다.
+- 삭제나 변경 작업은 승인을 받도록 설정합니다.
+- 자율 모드에서는 일부 승인 절차가 생략될 수 있으므로 별도의 최소 권한 연결을 사용합니다.
 
-![Microsoft Learn의 Azure SRE Agent root cause analysis 흐름](https://learn.microsoft.com/en-us/azure/sre-agent/media/root-cause-analysis/root-cause-analysis.svg)
+## 제품에서 기본으로 지원하는 방식
 
-*출처: [Microsoft Learn — Root Cause Analysis in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)*
+제품의 표준 Azure Monitor 연계는 **Azure Monitor 인시던트 플랫폼 → 대응 계획 → Azure SRE Agent** 순서로 동작합니다. 이 방식에서는 Logic App과 같은 중간 연결이 필요하지 않습니다.
 
-## Incident를 어떤 Agent가 처리할지 정한다
+Azure SRE Agent는 다음 기능을 제품에서 기본으로 지원합니다.
 
-Response plan은 severity, impacted service, incident type, title keyword로 incident를 분류하고 적절한 custom agent와 autonomy level을 연결한다.
+- Azure Monitor, PagerDuty, ServiceNow를 통한 인시던트 수신
+- 조건에 맞는 인시던트를 담당 에이전트로 전달하는 대응 계획
+- Application Insights와 Log Analytics 조사
+- GitHub와 Azure DevOps 소스 연결
+- ServiceNow와 PagerDuty 상태 갱신
+- Outlook과 Microsoft Teams 알림 커넥터
+- 읽기 전용, 검토, 자율 실행 모드
 
-![Microsoft Learn의 incident response plan canvas](https://learn.microsoft.com/en-us/azure/sre-agent/media/tutorial-incident-response/incident-response-plans.png)
+자세한 제품 기능은 다음 자료에서 확인할 수 있습니다.
 
-*출처: [Microsoft Learn — Set Up Incident Response](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)*
+- [Azure SRE Agent 개요](https://learn.microsoft.com/azure/sre-agent/overview)
+- [인시던트 대응 설정](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)
+- [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
+- [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
+- [관리형 커넥터](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
-주의할 점:
+## 이번 실증에서 사용한 방식
 
-- 처음 incident platform을 연결하면 quickstart plan이 같이 생성될 수 있다.
-- custom response plan과 중복 처리되지 않도록 quickstart plan을 확인한다.
-- 신규 workflow는 Review mode로 시작한다.
-
-## 과거 경험과 runbook을 다시 사용한다
-
-Agent는 connected repository, knowledge document, 유사 incident memory를 조사에 사용한다. 같은 장애가 반복되면 처음부터 모든 discovery를 반복하지 않고 기존 맥락을 활용할 수 있다.
-
-![Microsoft Learn의 incident memory search 예시](https://learn.microsoft.com/en-us/azure/sre-agent/media/tutorial-incident-response/sample-app-memory-search-results.png)
-
-*출처: [Microsoft Learn — Set Up Incident Response](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)*
-
----
-
-# 대표 운영 패턴: 주문 API HTTP 500
-
-## 1. 상황
-
-새 Container App revision의 잘못된 설정으로 `/api/orders`가 HTTP 500을 반환한다.
+이번 실증에서는 대응 계획을 공개 API로 자동 구성하는 데 제약이 있어 Azure SRE Agent의 HTTP Trigger를 사용했습니다.
 
 ```text
-서비스: ca-sre-event-lab-vnet
-영향: 주문 요청 120건 실패
-탐지: Azure Monitor scheduled-query alert
-안전 모드: Review
-```
-
-### 운영자가 기대하는 것
-
-Agent가 다음 질문에 근거를 들어 답해야 한다.
-
-1. 어떤 resource와 endpoint가 영향을 받았는가?
-2. 정확한 장애 시작 시각은 언제인가?
-3. 외부 dependency 문제인가, application 문제인가?
-4. 어떤 deployment/configuration change가 장애와 연결되는가?
-5. 현재 서비스는 복구됐는가?
-6. 가장 작은 reversible mitigation은 무엇인가?
-
-## 2. 이벤트 전달
-
-제품의 표준 Azure Monitor 연계는 **Azure Monitor incident platform → response plan → Agent**로 직접 연결되며 Logic App bridge가 필요하지 않다.
-
-이번 lab은 response plan의 공개 API 자동 구성 제약 때문에, Azure SRE Agent가 공식 지원하는 HTTP Trigger 앞에 **Action Group + Logic App 인증 bridge**를 둔 lab-specific 자동화 경로를 사용했다. 이 bridge는 표준 Azure Monitor 도입의 필수 구성 요소가 아니다.
-
-```text
-Azure Monitor alert
+Azure Monitor 경고
   → Action Group
-  → Logic App managed identity bridge
+  → Logic App 관리 ID
   → Azure SRE Agent HTTP Trigger
-  → Review-mode investigation thread
+  → 검토 모드 조사
 ```
 
-실제 production에서는 Azure Monitor response plan, PagerDuty, ServiceNow를 직접 incident platform으로 사용할 수도 있다.
+이 연결은 실증 자동화를 위해 사용한 방식이며, 표준 Azure Monitor 연계에 필요한 필수 구성은 아닙니다.
 
-## 3. 실제 Agent 조사
+이번 실증에서 실제로 확인한 기능은 다음과 같습니다.
 
-아래 storyboard는 **설명 frame**과 **실제 Agent API evidence frame**을 구분한다.
+- Azure Monitor 경고에서 Azure SRE Agent 조사 시작
+- Application Insights와 Azure Activity Log 분석
+- Container Apps 설정과 배포 이력 확인
+- GitHub 저장소 검색
+- 근본 원인과 조치 방안 작성
+- 검토 모드에서 변경 작업을 실행하지 않는 안전 제어
+- 실제 GitHub Issue 생성
+- Outlook에서 열 수 있는 메일 초안 생성
 
-![HTTP 500 incident storyboard](sre-agent-event-lab/assets/storyboards/s1/investigation-guide.gif)
+다음 기능은 이번 실증에서 실제 연결하지 않았습니다.
 
-### 실제 확인한 evidence
+- ServiceNow
+- PagerDuty
+- Outlook OAuth 커넥터
+- Microsoft Teams 커넥터
+- Azure Monitor 기본 대응 계획
 
-| 조사 단계 | 확인한 내용 |
-|---|---|
-| Incident boundary | `ca-sre-event-lab-vnet`, `GET /api/orders` |
-| Telemetry | HTTP 500 request 120건 |
-| Change correlation | revision `0000010`, `FAILURE_MODE=http500` |
-| Source/context | connected repository와 Activity Log |
-| Recovery | `FAILURE_MODE=none` revision이 traffic 처리 |
-| Safety | Agent가 resource를 직접 변경하지 않음 |
+## 실제 활용 예시: 주문 API에서 HTTP 500 발생
 
-### 실제 결과
+배포 설정 오류로 주문 API가 HTTP 500을 반환하는 상황을 만들고, Azure SRE Agent가 어떤 근거를 확인하는지 검증했습니다.
 
-| 지표 | 결과 |
-|---|---:|
-| Alert → Agent thread | 2초 |
-| Thread → 구조화 결론 | 143초 |
-| Root-cause 평가 | 10/10 |
+![주문 API HTTP 500 실증 요약](sre-agent-event-lab/assets/briefing/s1-three-panel.png)
 
-Agent의 결론:
+[편집 가능한 SVG 보기](sre-agent-event-lab/assets/briefing/s1-three-panel.svg)
 
-```text
-Root cause:
-Container App revision 0000010이 FAILURE_MODE=http500으로 배포됨.
+### 상황
 
-Impact:
-GET /api/orders 요청 120건이 HTTP 500으로 실패.
+- 서비스: `ca-sre-event-lab-vnet`
+- 영향: `GET /api/orders` 요청 120건 실패
+- 탐지: Azure Monitor 경고
+- 실행 수준: 검토 모드
 
-Mitigation:
-정상 설정 revision으로 traffic을 복귀.
+### 에이전트에게 기대한 조사
 
-Current status:
-후속 revision에서 5xx가 관찰되지 않음.
-```
+1. 영향을 받은 서비스와 API를 정확히 찾아야 합니다.
+2. 장애가 시작된 시각을 확인해야 합니다.
+3. 외부 종속성 문제와 애플리케이션 문제를 구분해야 합니다.
+4. 장애 직전에 변경된 배포 설정을 찾아야 합니다.
+5. 서비스가 정상으로 돌아왔는지 확인해야 합니다.
+6. 추가로 필요한 조치를 제안해야 합니다.
 
-## 4. 운영 결과: Ticket
+### 실제 확인 결과
 
-분석 결과는 사람이 다시 작성하지 않고 ticket template으로 변환할 수 있다.
+![Azure SRE Agent가 확인한 결과](sre-agent-event-lab/assets/briefing/s1-agent-conclusion.png)
 
-- [실제 GitHub Issue #43](https://github.com/hellices/devguidesample/issues/43)
-- [Issue metadata](sre-agent-event-lab/assets/notifications/github-issue.json)
-- [Issue 화면 캡처](sre-agent-event-lab/assets/notifications/github-issue.png)
-- [Issue body 원문](sre-agent-event-lab/assets/notifications/s1-github-issue.md)
+- Azure Monitor 경고가 발생한 뒤 2초 안에 조사 대화가 생성됐습니다.
+- Application Insights에서 실패한 요청 120건을 확인했습니다.
+- Container Apps 수정 버전 `0000010`에서 `FAILURE_MODE=http500` 설정을 확인했습니다.
+- 정상 설정을 사용한 후속 수정 버전으로 트래픽이 이동한 사실을 확인했습니다.
+- 에이전트는 검토 모드에서 Azure 리소스를 직접 변경하지 않았습니다.
 
-Production 선택지:
+## 조사 결과를 티켓으로 전달하기
 
-| 시스템 | 사용 패턴 |
-|---|---|
-| ServiceNow | Incident 생성·discussion update·acknowledge·resolve |
-| PagerDuty | Triggered incident pickup·acknowledge·resolve |
-| GitHub | Issue 생성·관련 code/PR 연결 |
-| Azure DevOps | Work item 생성·repository/commit 연결 |
-| Jira | Managed connector 또는 MCP ticketing tool |
+Azure SRE Agent가 정리한 근본 원인과 조치 방안을 작업 항목으로 전달할 수 있습니다. 이번 실증에서는 같은 조사 결과로 실제 GitHub Issue를 만들었습니다.
 
-## 5. 운영 결과: Email
+![실제 GitHub Issue #43](sre-agent-event-lab/assets/notifications/github-issue.png)
 
-이번 lab에서는 외부 수신자와 OAuth consent 없이 email을 실제 전송하지 않는다. 같은 conclusion으로 Outlook-compatible draft와 preview를 생성한다.
+- [GitHub Issue #43 열기](https://github.com/hellices/devguidesample/issues/43)
+- [Issue 본문 보기](sre-agent-event-lab/assets/notifications/s1-github-issue.md)
 
-![Outlook email draft preview](sre-agent-event-lab/assets/notifications/s1-email-preview.png)
+Issue에는 다음 내용을 포함했습니다.
 
-- [HTML email](sre-agent-event-lab/assets/notifications/s1-incident-summary.html)
-- [RFC 5322 `.eml`](sre-agent-event-lab/assets/notifications/s1-incident-summary.eml)
+- 고객 영향
+- 탐지 시각과 조사 시작 시각
+- 근본 원인
+- 확인한 근거
+- 현재 복구 상태
+- 후속 권장 사항
+- Azure SRE Agent 조사 식별자
 
-Production에서는 Outlook connector의 Send email operation을 사용한다.
+실제 운영 환경에서는 ServiceNow, PagerDuty, Azure DevOps Work Item, Jira 등으로 같은 형식을 전달할 수 있습니다.
 
-- `To`: User-defined로 on-call distribution list에 고정
-- `Subject`, `Body`: Agent-defined
-- Review workflow: write action은 승인 후 실행
-- Autonomous workflow: 승인 bypass 가능성을 고려해 별도 최소권한 connector 사용
+## 조사 결과를 메일로 공유하기
 
----
+이번 실증에서는 외부 수신자에게 메일을 보내지 않았습니다. 대신 Azure SRE Agent의 조사 결과로 Outlook에서 열 수 있는 메일 초안과 화면 미리보기를 만들었습니다.
 
-# Connector로 기존 운영 도구에 연결
+![Outlook 메일 초안](sre-agent-event-lab/assets/notifications/s1-email-preview.png)
 
-Azure 내부 telemetry는 built-in tool만으로 조사할 수 있다. Connector는 외부 시스템과 persistent context가 필요할 때 추가한다.
+- [HTML 메일 보기](sre-agent-event-lab/assets/notifications/s1-incident-summary.html)
+- [RFC 5322 메일 파일 보기](sre-agent-event-lab/assets/notifications/s1-incident-summary.eml)
 
-![Microsoft Learn의 managed connector 목록](https://learn.microsoft.com/en-us/azure/sre-agent/media/managed-connectors/managed-connectors-icon-grid.png)
+실제 운영에서는 Outlook 커넥터의 메일 보내기 작업을 사용할 수 있습니다.
 
-*출처: [Microsoft Learn — Managed connectors](https://learn.microsoft.com/azure/sre-agent/managed-connectors)*
+- 받는 사람은 담당자 또는 배포 목록으로 고정합니다.
+- 제목과 본문은 에이전트가 조사 결과를 바탕으로 작성하도록 설정할 수 있습니다.
+- 검토 모드에서는 담당자가 내용을 확인한 뒤 전송합니다.
+- 자율 모드에는 중요한 수신자나 작업을 별도의 최소 권한 연결로 분리합니다.
 
-## 필요한 operation만 노출
+## 다른 장애에도 같은 조사 방식을 적용할 수 있나요?
 
-예를 들어 Jira connector에서 Search/Get은 허용하고 Create Issue는 제외할 수 있다.
+이번 실증에서는 세 가지 유형을 확인했습니다.
 
-![Microsoft Learn의 connector operation 선택 화면](https://learn.microsoft.com/en-us/azure/sre-agent/media/managed-connectors/office365-operations.png)
+| 상황 | Azure SRE Agent가 확인한 내용 | 결과 |
+|---|---|---|
+| 주문 API HTTP 500 | 실패한 요청, 수정 버전, 설정 변경 | 설정 오류를 근본 원인으로 확인했습니다. |
+| 주문 API 지연 | 성공한 요청의 응답 시간, 외부 종속성, 지연 설정 | `ORDER_DELAY_MS=4000`을 확인했습니다. |
+| Blob 권한 오류 | 역할 삭제 이력, Blob 403, API 503 | 역할 삭제를 근본 원인으로 확인했습니다. 복구 확인 대상은 한 차례 잘못 선택해 한계로 기록했습니다. |
 
-*출처: [Microsoft Learn — Managed connectors](https://learn.microsoft.com/azure/sre-agent/managed-connectors)*
+상세 수치, 시간 순서, 평가 기준은 [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)에서 확인할 수 있습니다.
 
-## 민감한 parameter를 고정
+## Dynamic Thresholds와 함께 사용할 수 있나요?
 
-Email 수신자, Jira project key처럼 Agent가 임의로 바꾸면 안 되는 값은 User-defined parameter로 lock한다.
+이번 실증은 같은 날 결과를 확인하기 위해 고정 임계값을 사용했습니다. 실제 운영에서는 Dynamic Thresholds를 함께 사용해 평소와 다른 패턴을 찾을 수 있습니다.
 
-![Microsoft Learn의 connector parameter policy](https://learn.microsoft.com/en-us/azure/sre-agent/media/managed-connectors/office365-parameter-policy.png)
+- 최소 3일과 30개 표본이 있어야 경고가 발생합니다.
+- 최근 10일의 데이터를 기준으로 허용 범위를 계산합니다.
+- 주간 패턴을 학습하려면 최소 3주가 필요합니다.
+- 로그 검색 경고에서는 1분 단위 평가를 지원하지 않습니다.
 
-*출처: [Microsoft Learn — Managed connectors](https://learn.microsoft.com/azure/sre-agent/managed-connectors)*
+처음에는 기존 고정 임계값을 유지하고, Dynamic Thresholds를 별도의 관찰용 경고로 추가하는 방식을 권장합니다. 충분한 학습 기간을 거친 뒤 오탐과 누락을 비교해 실제 대응 흐름에 연결합니다.
 
-> Managed connector는 configuring user의 credential을 사용한다. 모든 Agent user가 enabled operation을 호출할 수 있으므로 operation과 parameter를 최소 범위로 제한해야 한다.
+자세한 내용은 [Dynamic Thresholds와 Azure SRE Agent 연계 설계](../docs/superpowers/specs/2026-08-12-azure-monitor-dynamic-thresholds-sre-integration-design.md)를 참고하세요.
 
----
+## 도입 전에 무엇을 확인해야 하나요?
 
-# 같은 조사 패턴이 적용되는 다른 장애
+### 조사 범위
 
-## Latency anomaly
+- [ ] 필요한 구독과 리소스 그룹만 연결하세요.
+- [ ] Application Insights와 Log Analytics에 필요한 데이터가 들어오는지 확인하세요.
+- [ ] 실제 배포에 사용한 소스 분기와 운영 절차서를 연결하세요.
 
-**상황:** HTTP 200이지만 `/api/orders` p95가 4초로 상승.
+### 인시던트 전달
 
-**Agent가 구분해야 할 것:**
+- [ ] Azure Monitor, PagerDuty, ServiceNow 중 사용할 인시던트 플랫폼을 정하세요.
+- [ ] 심각도, 서비스, 제목 기준으로 대응 계획을 만드세요.
+- [ ] 빠른 시작 대응 계획과 사용자 정의 대응 계획이 중복되지 않는지 확인하세요.
+- [ ] 처음에는 검토 모드로 시작하세요.
 
-- availability incident인가?
-- external dependency가 느린가?
-- application configuration이 지연을 만들었는가?
+### 권한과 안전
 
-**실제 결과:** 90개 request가 약 4초였고 exception/dependency latency 없이 `ORDER_DELAY_MS=4000` revision을 root cause로 식별했다.
+- [ ] 읽기 권한부터 시작하세요.
+- [ ] 변경 작업은 필요한 리소스 범위에만 허용하세요.
+- [ ] 삭제와 변경 작업은 승인을 받도록 설정하세요.
+- [ ] 커넥터에는 필요한 작업만 노출하세요.
+- [ ] 메일 수신자와 프로젝트 키처럼 중요한 값은 고정하세요.
 
-[S2 storyboard](sre-agent-event-lab/assets/storyboards/s2/investigation-guide.gif)
+### 조사 품질
 
-## RBAC dependency failure
+- [ ] 영향을 받은 서비스와 발생 시각이 정확한지 확인하세요.
+- [ ] 결론에 근거가 포함되어 있는지 확인하세요.
+- [ ] 확인하지 못한 내용과 불확실성을 표시하는지 확인하세요.
+- [ ] 조치 방안이 최소 범위이며 되돌릴 수 있는지 확인하세요.
+- [ ] 올바른 서비스와 API에서 복구를 확인하는지 확인하세요.
 
-**상황:** workload identity의 Blob Data Reader role이 삭제되어 Blob 403과 API 503 발생.
+## 알아두어야 할 제한 사항
 
-**Agent가 연결해야 할 것:**
+- AI가 잘못된 결론이나 적절하지 않은 조치 방안을 제시할 수 있습니다.
+- 연결한 소스가 실제 배포 분기와 다르면 코드 변경을 정확히 찾지 못할 수 있습니다.
+- 여러 서비스가 같은 원격 분석 이름을 사용하면 서로 다른 데이터를 혼동할 수 있습니다.
+- 외부 커넥터는 연결을 설정한 사용자의 권한으로 동작할 수 있습니다.
+- 자율 모드에서는 일부 승인 절차가 생략될 수 있습니다.
+- 지역과 테넌트에 따라 사용할 수 있는 기능이 다를 수 있습니다.
 
-- Activity Log의 role assignment deletion
-- App Dependencies의 Blob 403
-- Application의 503 mapping
-- original least-privilege scope
+따라서 충분한 근거, 최소 권한, 검토 모드 우선 적용, 실제 복구 확인을 운영 원칙으로 삼는 것이 좋습니다.
 
-**실제 결과:** role deletion과 첫 failure 사이 0.4초 causal chain을 찾았다. 단, old app FQDN을 recovery check에 사용한 오류가 있었고 이후 deployment-unique telemetry로 보정했다.
+## 참고 자료
 
-[S3 storyboard](sre-agent-event-lab/assets/storyboards/s3/investigation-guide.gif)
+### 한국어 문체와 용어
 
----
+- [Microsoft Korean Localization Style Guide](https://aka.ms/korean-styleguide)
+- [Microsoft Terminology](https://learn.microsoft.com/globalization/reference/microsoft-terminology)
+- [Microsoft language resources](https://learn.microsoft.com/globalization/reference/microsoft-language-resources)
+- [Microsoft Writing Style Guide](https://learn.microsoft.com/style-guide/welcome/)
 
-# Static Alert에서 Dynamic Threshold로
+### Azure SRE Agent
 
-이번 당일 실험은 장애를 반드시 발생시키기 위해 static threshold를 사용했다. 운영에서는 numeric signal의 정상 패턴을 학습하는 Dynamic Threshold를 shadow mode로 추가할 수 있다.
+- [Azure SRE Agent 개요](https://learn.microsoft.com/azure/sre-agent/overview)
+- [인시던트 대응 설정](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)
+- [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
+- [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
+- [관리형 커넥터](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
-- 최소 3일·30 samples 전에는 alert가 발화하지 않음
-- 최근 10일을 baseline으로 사용
-- weekly seasonality는 최소 3주 필요
-- Log Search alert의 1분 dynamic evaluation은 지원되지 않음
-- 기존 Action Group과 SRE workflow를 재사용 가능
-
-자세한 설계: [Dynamic Thresholds와 SRE Agent 연계](../docs/superpowers/specs/2026-08-12-azure-monitor-dynamic-thresholds-sre-integration-design.md)
-
----
-
-# 도입 체크리스트
-
-## Context
-
-- [ ] 조사 대상 subscription/resource group을 최소 범위로 연결
-- [ ] Application Insights/Log Analytics telemetry 확인
-- [ ] 실제 배포 branch의 source repository 연결
-- [ ] runbook과 escalation policy upload
-
-## Incident routing
-
-- [ ] Azure Monitor, PagerDuty, ServiceNow 중 incident platform 선택
-- [ ] severity/service/title filter 정의
-- [ ] quickstart plan 중복 여부 확인
-- [ ] Review mode로 첫 response plan 실행
-
-## Safety
-
-- [ ] Agent identity는 Reader부터 시작
-- [ ] write action은 최소 scope와 reversible operation만 허용
-- [ ] connector operation allowlist
-- [ ] recipient/project key 같은 parameter lock
-- [ ] Agent action과 approval audit 확인
-
-## Quality
-
-- [ ] affected resource·onset·impact가 정확한가?
-- [ ] hypothesis와 evidence chain이 있는가?
-- [ ] uncertainty와 missing evidence를 표시하는가?
-- [ ] mitigation이 최소 범위이고 안전한가?
-- [ ] 실제 복구를 올바른 endpoint에서 확인하는가?
-
-# 한계와 운영 원칙
-
-- AI가 잘못된 결론이나 부적절한 mitigation을 제안할 수 있다.
-- connected source가 실제 배포 branch와 다르면 code correlation이 실패한다.
-- 같은 service name을 여러 workload가 공유하면 telemetry를 혼동할 수 있다.
-- OAuth connector는 connection owner의 권한으로 동작한다.
-- Autonomous mode에서는 일부 approval guardrail이 bypass될 수 있다.
-- 제품 지역·tenant·preview 기능 가용성은 달라질 수 있다.
-
-따라서 **충분한 evidence, 최소 권한, Review-first, 실제 복구 검증**이 운영 도입의 기본 원칙이다.
-
-# 더 보기
+### 실증 자료
 
 - [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)
-- [Lab 운영 및 재현 가이드](sre-agent-event-lab/README.md)
-- [Microsoft Learn — Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/)
-- [Microsoft Learn — Incident response](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)
-- [Microsoft Learn — Connectors](https://learn.microsoft.com/azure/sre-agent/connectors)
-- [Microsoft Learn — Managed connectors](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
+- [실험 환경과 재현 방법](sre-agent-event-lab/README.md)
