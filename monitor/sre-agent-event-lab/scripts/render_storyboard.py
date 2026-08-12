@@ -23,6 +23,9 @@ COLORS = {
     "ACTUAL": "#2563EB",
     "OPERATIONAL OUTPUT": "#16A34A",
 }
+AZURE_RESOURCE_ID_PATTERN = re.compile(
+    r"/subscriptions/[^\s,]+", re.IGNORECASE
+)
 SCENARIOS = {
     "s1": {
         "name": "주문 API HTTP 500",
@@ -79,10 +82,20 @@ def load_font(size: int, bold: bool = False):
 
 
 def clean_text(value: str) -> str:
-    value = sanitize(value)
+    value = public_text(value)
     value = re.sub(r"\[HTTP_TRIGGER_EXECUTION\].*", "", value, flags=re.DOTALL)
     value = value.replace("**", "").replace("`", "")
     return "\n".join(" ".join(line.split()) for line in value.splitlines())
+
+
+def public_text(value: str) -> str:
+    value = sanitize(value)
+
+    def replace_resource_id(match: re.Match) -> str:
+        resource_name = match.group(0).rstrip(".)]").split("/")[-1]
+        return f"[Azure resource: {resource_name}]"
+
+    return AZURE_RESOURCE_ID_PATTERN.sub(replace_resource_id, value)
 
 
 def wrap(value: str, width: int = 46, limit: int = 8) -> list[str]:
@@ -135,6 +148,30 @@ def fallback_event(
     }
 
 
+def find_event_or_missing(
+    timeline: list[dict[str, Any]],
+    state: str,
+    missing_state: str,
+    alert: dict[str, Any],
+    fallback_title: str,
+    fallback_summary: str,
+    keywords: tuple[str, ...] = (),
+    last: bool = False,
+) -> dict[str, Any]:
+    try:
+        return find_event(timeline, state, keywords, last)
+    except ValueError:
+        try:
+            return find_event(timeline, missing_state, last=True)
+        except ValueError:
+            return fallback_event(
+                alert,
+                missing_state,
+                fallback_title,
+                fallback_summary,
+            )
+
+
 def build_frames(
     scenario: str,
     timeline: list[dict[str, Any]],
@@ -145,35 +182,33 @@ def build_frames(
         raise ValueError(f"unknown scenario: {scenario}")
     config = SCENARIOS[scenario]
     alert = find_event(timeline, "alert-fired")
-    try:
-        thread = find_event(timeline, "thread-created")
-    except ValueError:
-        thread = fallback_event(
-            alert,
-            "thread-not-created",
-            "Agent thread가 생성되지 않음",
-            "Alert는 발생했지만 matching SRE Agent thread가 생성되지 않음",
-        )
-    try:
-        evidence = find_event(
-            timeline, "investigating", config["evidence_keywords"], last=True
-        )
-    except ValueError:
-        evidence = fallback_event(
-            alert,
-            "investigation-missing",
-            "조사 evidence가 수집되지 않음",
-            "Telemetry · change · code evidence가 수집되지 않음",
-        )
-    try:
-        conclusion = find_event(timeline, "conclusion", last=True)
-    except ValueError:
-        conclusion = fallback_event(
-            alert,
-            "conclusion-missing",
-            "결론이 수집되지 않음",
-            "Capture deadline까지 structured conclusion이 수집되지 않음",
-        )
+    thread = find_event_or_missing(
+        timeline,
+        "thread-created",
+        "thread-not-created",
+        alert,
+        "Agent thread가 생성되지 않음",
+        "Alert는 발생했지만 matching SRE Agent thread가 생성되지 않음",
+    )
+    evidence = find_event_or_missing(
+        timeline,
+        "investigating",
+        "investigation-missing",
+        alert,
+        "조사 evidence가 수집되지 않음",
+        "Telemetry · change · code evidence가 수집되지 않음",
+        keywords=config["evidence_keywords"],
+        last=True,
+    )
+    conclusion = find_event_or_missing(
+        timeline,
+        "conclusion",
+        "conclusion-missing",
+        alert,
+        "결론이 수집되지 않음",
+        "Capture deadline까지 structured conclusion이 수집되지 않음",
+        last=True,
+    )
     ticket = ticket_url or "GitHub Issue — 생성 단계에서 URL 연결"
     email = email_preview or "Outlook email draft — 미리보기 연결"
 
@@ -193,7 +228,7 @@ def build_frames(
         {
             "badge": "ACTUAL",
             "title": "Azure Monitor가 incident를 감지",
-            "body": sanitize(
+            "body": public_text(
                 f"{alert['title']}\n\n{alert['summary']}\nUTC {alert['timestamp']}"
             ),
             "footer": f"실제 evidence — {alert['source_file']}",
@@ -201,21 +236,26 @@ def build_frames(
         {
             "badge": "ACTUAL",
             "title": "SRE Agent investigation 시작",
-            "body": sanitize(
-                f"{thread['summary']}\n\nAlert에서 Agent thread까지 자동 전달\nUTC {thread['timestamp']}"
+            "body": public_text(
+                (
+                    "Review-mode incident thread created"
+                    if thread["state"] == "thread-created"
+                    else thread["summary"]
+                )
+                + f"\n\nUTC {thread['timestamp']}"
             ),
             "footer": f"실제 evidence — {thread['source_file']}",
         },
         {
             "badge": "ACTUAL",
             "title": "Telemetry · Change · Code evidence",
-            "body": sanitize(evidence["summary"]),
+            "body": public_text(evidence["summary"]),
             "footer": f"실제 Agent message — UTC {evidence['timestamp']}",
         },
         {
             "badge": "ACTUAL",
             "title": "Root cause와 조치 방안",
-            "body": sanitize(conclusion["summary"]),
+            "body": public_text(conclusion["summary"]),
             "footer": f"실제 Agent conclusion — UTC {conclusion['timestamp']}",
         },
         {

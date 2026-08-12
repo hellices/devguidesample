@@ -125,6 +125,51 @@ def test_storyboard_renders_missing_agent_states(tmp_path):
     assert (tmp_path / "investigation-guide.gif").exists()
 
 
+def test_storyboard_preserves_explicit_missing_state_deadline(tmp_path):
+    storyboard = load_module()
+    incomplete = [
+        sample_timeline()[0],
+        {
+            "event_id": "thread-not-created",
+            "timestamp": "2026-08-12T08:27:56Z",
+            "state": "thread-not-created",
+            "title": "Thread not created",
+            "summary": "No matching thread before capture ended.",
+            "source": "capture",
+            "source_file": "thread-snapshots/0045.json",
+        },
+        {
+            "event_id": "investigation-missing",
+            "timestamp": "2026-08-12T08:27:56Z",
+            "state": "investigation-missing",
+            "title": "Investigation missing",
+            "summary": "No investigation evidence before capture ended.",
+            "source": "capture",
+            "source_file": "thread-snapshots/0045.json",
+        },
+        {
+            "event_id": "conclusion-missing",
+            "timestamp": "2026-08-12T08:27:56Z",
+            "state": "conclusion-missing",
+            "title": "Conclusion missing",
+            "summary": "No conclusion before capture ended.",
+            "source": "capture",
+            "source_file": "thread-snapshots/0045.json",
+        },
+    ]
+
+    storyboard.render_storyboard(
+        scenario="s1",
+        timeline=incomplete,
+        output_dir=tmp_path,
+    )
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    serialized = json.dumps(manifest, ensure_ascii=False)
+    assert "08:27:56Z" in serialized
+    assert "thread-snapshots/0045.json" in serialized
+
+
 def test_storyboard_sanitizes_sensitive_timeline_content(tmp_path):
     storyboard = load_module()
     unsafe = sample_timeline()
@@ -145,3 +190,27 @@ def test_storyboard_sanitizes_sensitive_timeline_content(tmp_path):
     assert "user@contoso.com" not in manifest
     assert "verylongcallbacksigrandomvalue" not in manifest
     assert "[REDACTED]" in manifest
+
+
+def test_storyboard_hides_resource_ids_and_thread_internals(tmp_path):
+    storyboard = load_module()
+    timeline = sample_timeline()
+    timeline[0]["title"] = (
+        "/subscriptions/95933ae5-0201-4a21-a1fc-8051a7437982/"
+        "resourceGroups/rg/providers/Microsoft.Insights/"
+        "scheduledQueryRules/alert-sre-lab-s1-http500"
+    )
+    timeline[1]["summary"] = (
+        "Thread status: {'actionsStatus': {'hasCriticalActions': False}}"
+    )
+
+    storyboard.render_storyboard(
+        scenario="s1",
+        timeline=timeline,
+        output_dir=tmp_path,
+    )
+
+    manifest = (tmp_path / "manifest.json").read_text()
+    assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in manifest
+    assert "Thread status:" not in manifest
+    assert "alert-sre-lab-s1-http500" in manifest

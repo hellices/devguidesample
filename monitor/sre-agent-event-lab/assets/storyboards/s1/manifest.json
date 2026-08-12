@@ -16,13 +16,13 @@
     {
       "badge": "ACTUAL",
       "title": "Azure Monitor가 incident를 감지",
-      "body": "/subscriptions/95933ae5-0201-4a21-a1fc-8051a7437982/resourceGroups/rg-sre-agent-event-lab-krc/providers/microsoft.insights/scheduledqueryrules/alert-sre-lab-s1-http500\n\nSev2 alert fired\nUTC 2026-08-12T08:07:56.261581Z",
+      "body": "[Azure resource: alert-sre-lab-s1-http500]\n\nSev2 alert fired\nUTC 2026-08-12T08:07:56.261581Z",
       "footer": "실제 evidence — alert.json"
     },
     {
       "badge": "ACTUAL",
       "title": "SRE Agent investigation 시작",
-      "body": "Thread status: {'actionsStatus': {'hasCriticalActions': False, 'hasWarningActions': False}, 'incidentStatus': {'incidentId': '', 'status': ''}}\n\nAlert에서 Agent thread까지 자동 전달\nUTC 2026-08-12T08:07:58.694652Z",
+      "body": "Review-mode incident thread created\n\nUTC 2026-08-12T08:07:58.694652Z",
       "footer": "실제 evidence — thread-snapshots/0001.json"
     },
     {
