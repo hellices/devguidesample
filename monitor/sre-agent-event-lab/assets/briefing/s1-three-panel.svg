@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<rect width="1600" height="900" fill="#F5F8FC"/>
+<text x="70" y="92" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#0F1F3D">실제 활용 예시: 주문 API에서 HTTP 500 발생</text>
+<rect x="70" y="210" width="460" height="520" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="70" y="210" width="14" height="520" rx="7" fill="#C50F1F"/>
+<text x="110" y="285" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#C50F1F">1. 상황</text>
+<text x="110" y="380" font-family="Arial, sans-serif" font-size="25" fill="#52637A">주문 API에서 HTTP 500 발생 / 고객 주문 요청 120건 실패</text>
+<rect x="580" y="210" width="460" height="520" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="580" y="210" width="14" height="520" rx="7" fill="#2563EB"/>
+<text x="620" y="285" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#2563EB">2. Agent 조사</text>
+<text x="620" y="380" font-family="Arial, sans-serif" font-size="25" fill="#52637A">Application Insights / 배포 설정 / 소스 코드 분석</text>
+<rect x="1090" y="210" width="460" height="520" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="1090" y="210" width="14" height="520" rx="7" fill="#107C10"/>
+<text x="1130" y="285" font-family="Arial, sans-serif" font-size="32" font-weight="700" fill="#107C10">3. 운영 결과</text>
+<text x="1130" y="380" font-family="Arial, sans-serif" font-size="25" fill="#52637A">근본 원인 확인 / GitHub Issue #43 / 이메일 초안</text>
+</svg>
