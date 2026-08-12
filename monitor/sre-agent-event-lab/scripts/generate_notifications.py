@@ -24,6 +24,10 @@ def sanitize(value: str) -> str:
     return CALLBACK_SIGNATURE_PATTERN.sub(r"\1[REDACTED]", value)
 
 
+def strip_markdown(value: str) -> str:
+    return sanitize(value).replace("**", "").replace("`", "")
+
+
 def find_event(timeline: list[dict[str, Any]], state: str, last: bool = False):
     matches = [event for event in timeline if event.get("state") == state]
     if not matches:
@@ -90,7 +94,9 @@ def email_html(
     report_url: str,
     issue_url: str,
 ) -> str:
-    summary = html.escape(sanitize(conclusion["summary"]))
+    summary = html.escape(strip_markdown(conclusion["summary"])).replace(
+        "\n", "<br>"
+    )
     ticket = (
         f'<a href="{html.escape(issue_url)}">{html.escape(issue_url)}</a>'
         if issue_url

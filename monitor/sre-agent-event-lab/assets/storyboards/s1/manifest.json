@@ -40,7 +40,7 @@
     {
       "badge": "OPERATIONAL OUTPUT",
       "title": "분석을 운영 workflow로 전달",
-      "body": "결과\n설정 오류를 정확히 찾고 정상 revision 복귀를 확인\n\nTicket\nGitHub Issue — 생성 단계에서 URL 연결\n\nEmail\nOutlook email draft — 미리보기 연결\n\nReview mode — Agent가 임의로 resource를 변경하지 않음",
+      "body": "결과\n설정 오류를 정확히 찾고 정상 revision 복귀를 확인\n\nTicket\nGitHub Issue #43 · https://github.com/hellices/devguidesample/issues/43\n\nEmail\nOutlook Draft · assets/notifications/s1-email-preview.png\n\nReview mode — Agent가 임의로 resource를 변경하지 않음",
       "footer": "Ticket · Email · Teams에 같은 structured summary 재사용"
     }
   ],

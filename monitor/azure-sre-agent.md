@@ -204,7 +204,8 @@ Current status:
 
 분석 결과는 사람이 다시 작성하지 않고 ticket template으로 변환할 수 있다.
 
-- [실제 GitHub Issue 예시](sre-agent-event-lab/assets/notifications/github-issue.json)
+- [실제 GitHub Issue #43](https://github.com/hellices/devguidesample/issues/43)
+- [Issue metadata](sre-agent-event-lab/assets/notifications/github-issue.json)
 - [Issue 화면 캡처](sre-agent-event-lab/assets/notifications/github-issue.png)
 - [Issue body 원문](sre-agent-event-lab/assets/notifications/s1-github-issue.md)
 

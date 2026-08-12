@@ -43,8 +43,8 @@ def timeline():
             "state": "conclusion",
             "title": "Root cause",
             "summary": (
-                "Root cause confirmed: Container App ca-sre-event-lab-vnet "
-                "revision 0000010 had FAILURE_MODE=http500. "
+                "**Root cause confirmed:** Container App `ca-sre-event-lab-vnet` "
+                "revision `0000010` had `FAILURE_MODE=http500`. "
                 "120 GET /api/orders requests failed. "
                 "A healthy revision restored service."
             ),
@@ -88,6 +88,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     assert "https://github.com/hellices/devguidesample/issues/123" in message.get_body(
         preferencelist=("html",)
     ).get_content()
+    assert "**" not in (tmp_path / "s1-incident-summary.html").read_text()
     assert outputs["issue"].endswith("s1-github-issue.md")
 
 

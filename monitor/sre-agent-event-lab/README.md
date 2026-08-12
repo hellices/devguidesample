@@ -126,6 +126,34 @@ Agent principal, endpoint, subscription-scope assignment ID는 Git에서 제외�
 
 VS Code에서 `ms-azuretools.vscode-azure-mcp-server`와 `ms-azuretools.vscode-azure-github-copilot`을 설치하면 Resource Graph, Monitor, Policy/RBAC 등 구조화된 Azure 도구를 사용할 수 있다. extension 설치 후 VS Code window를 reload하고 Agent Mode의 tools 목록에서 Azure MCP Server를 확인한다.
 
+## 티켓과 이메일 운영 output
+
+S1 Agent conclusion에서 실제 GitHub Issue와 Outlook-compatible email draft를 생성했다.
+
+- 실제 ticket: [GitHub Issue #43](https://github.com/hellices/devguidesample/issues/43)
+- Issue body: `assets/notifications/s1-github-issue.md`
+- HTML draft: `assets/notifications/s1-incident-summary.html`
+- RFC 5322 email: `assets/notifications/s1-incident-summary.eml`
+- Email preview: `assets/notifications/s1-email-preview.png`
+
+artifact 재생성:
+
+```bash
+monitor/sre-agent-event-lab/app/.venv/bin/python \
+  monitor/sre-agent-event-lab/scripts/generate_notifications.py \
+  --timeline monitor/sre-agent-event-lab/evidence/s1-20260812T080606Z/normalized-timeline.json \
+  --output-dir monitor/sre-agent-event-lab/assets/notifications \
+  --report-url https://github.com/hellices/devguidesample/blob/main/docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md \
+  --issue-url https://github.com/hellices/devguidesample/issues/43
+```
+
+이번 lab은 외부 수신자와 Outlook OAuth consent가 없으므로 email을 보내지 않고 `DRAFT`로 보존한다. Production에서는 Outlook managed connector의 Send email operation을 사용한다.
+
+- `To`: User-defined parameter로 on-call distribution list에 고정
+- `Subject`, `Body`: Agent-defined
+- Review workflow: write operation을 `Ask`
+- Autonomous workflow: `Ask`가 bypass될 수 있으므로 별도 최소권한 connector 사용
+
 ## Baseline
 
 배포 output에서 FQDN을 확인하고 정상 요청을 만든다.

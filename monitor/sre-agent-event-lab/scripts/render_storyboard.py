@@ -216,8 +216,8 @@ def render_frame(frame: dict[str, str], number: int, total: int) -> Image.Image:
 
     y = 232
     for line in wrap(frame["body"], width=62, limit=11):
-        draw.text((94, y), line, font=load_font(25), fill=MUTED)
-        y += 38
+        draw.text((94, y), line, font=load_font(22), fill=MUTED)
+        y += 33
 
     draw.rectangle((0, 652, WIDTH, HEIGHT), fill="#0E1930")
     draw.text((54, 674), frame["footer"], font=load_font(18), fill="#94A3B8")
