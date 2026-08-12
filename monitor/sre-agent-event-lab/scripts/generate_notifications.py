@@ -14,6 +14,14 @@ INSTRUMENTATION_PATTERN = re.compile(
     r"(?i)InstrumentationKey\s*=\s*[0-9a-f-]{36}"
 )
 CALLBACK_SIGNATURE_PATTERN = re.compile(r"(?i)([?&]sig=)[A-Za-z0-9_-]+")
+CONNECTION_STRING_PATTERN = re.compile(
+    r"(?i)(?:DefaultEndpointsProtocol|AccountName|AccountKey|"
+    r"SharedAccessSignature|EndpointSuffix)=[^;\s]+(?:;[^;\s]+=[^;\s]+)*"
+)
+IDENTITY_CLAIM_PATTERN = re.compile(
+    r"(?i)\b(?:oid|upn|preferred_username|email)="
+    r"(?:[0-9a-f-]{36}|[^\s;]+)"
+)
 
 
 def sanitize(value: str) -> str:
@@ -21,6 +29,8 @@ def sanitize(value: str) -> str:
     value = INSTRUMENTATION_PATTERN.sub(
         "InstrumentationKey=[REDACTED]", value
     )
+    value = CONNECTION_STRING_PATTERN.sub("[CONNECTION STRING REDACTED]", value)
+    value = IDENTITY_CLAIM_PATTERN.sub("[IDENTITY CLAIM REDACTED]", value)
     return CALLBACK_SIGNATURE_PATTERN.sub(r"\1[REDACTED]", value)
 
 
@@ -47,7 +57,8 @@ def issue_markdown(
 - Service: `ca-sre-event-lab-vnet`
 - Operation: `GET /api/orders`
 - Customer impact: 120 requests returned HTTP 500
-- Incident window: {alert["timestamp"]} to {conclusion["timestamp"]}
+- Alert fired: {alert["timestamp"]}
+- Agent conclusion: {conclusion["timestamp"]}
 
 ## Detection
 

@@ -3,7 +3,8 @@
 - Service: `ca-sre-event-lab-vnet`
 - Operation: `GET /api/orders`
 - Customer impact: 120 requests returned HTTP 500
-- Incident window: 2026-08-12T08:07:56.261581Z to 2026-08-12T08:10:21.971535Z
+- Alert fired: 2026-08-12T08:07:56.261581Z
+- Agent conclusion: 2026-08-12T08:10:21.971535Z
 
 ## Detection
 

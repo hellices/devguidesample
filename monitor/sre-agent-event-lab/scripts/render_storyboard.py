@@ -115,6 +115,23 @@ def find_event(
     return matches[-1] if last else matches[0]
 
 
+def fallback_event(
+    alert: dict[str, Any],
+    state: str,
+    title: str,
+    summary: str,
+) -> dict[str, Any]:
+    return {
+        "event_id": state,
+        "timestamp": alert["timestamp"],
+        "state": state,
+        "title": title,
+        "summary": summary,
+        "source": "capture",
+        "source_file": "normalized-timeline.json",
+    }
+
+
 def build_frames(
     scenario: str,
     timeline: list[dict[str, Any]],
@@ -125,11 +142,35 @@ def build_frames(
         raise ValueError(f"unknown scenario: {scenario}")
     config = SCENARIOS[scenario]
     alert = find_event(timeline, "alert-fired")
-    thread = find_event(timeline, "thread-created")
-    evidence = find_event(
-        timeline, "investigating", config["evidence_keywords"], last=True
-    )
-    conclusion = find_event(timeline, "conclusion", last=True)
+    try:
+        thread = find_event(timeline, "thread-created")
+    except ValueError:
+        thread = fallback_event(
+            alert,
+            "thread-not-created",
+            "Agent thread가 생성되지 않음",
+            "Alert는 발생했지만 matching SRE Agent thread가 생성되지 않음",
+        )
+    try:
+        evidence = find_event(
+            timeline, "investigating", config["evidence_keywords"], last=True
+        )
+    except ValueError:
+        evidence = fallback_event(
+            alert,
+            "investigation-missing",
+            "조사 evidence가 수집되지 않음",
+            "Telemetry · change · code evidence가 수집되지 않음",
+        )
+    try:
+        conclusion = find_event(timeline, "conclusion", last=True)
+    except ValueError:
+        conclusion = fallback_event(
+            alert,
+            "conclusion-missing",
+            "결론이 수집되지 않음",
+            "Capture deadline까지 structured conclusion이 수집되지 않음",
+        )
     ticket = ticket_url or "GitHub Issue — 생성 단계에서 URL 연결"
     email = email_preview or "Outlook email draft — 미리보기 연결"
 

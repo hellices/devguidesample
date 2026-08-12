@@ -79,6 +79,9 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
         assert heading in issue
     assert "120" in issue
     assert "thread-1" in issue
+    assert "Incident window" not in issue
+    assert "Alert fired:" in issue
+    assert "Agent conclusion:" in issue
 
     message = BytesParser(policy=policy.default).parse(
         open(tmp_path / "s1-incident-summary.eml", "rb")
@@ -98,6 +101,9 @@ def test_generate_notifications_redacts_sensitive_values(tmp_path):
     unsafe[-1]["summary"] += (
         " Authorization: Bearer hidden-token "
         "InstrumentationKey=11111111-1111-1111-1111-111111111111 "
+        "DefaultEndpointsProtocol=https;AccountName=demo;AccountKey=abc123;EndpointSuffix=core.windows.net "
+        "oid=11111111-2222-3333-4444-555555555555 "
+        "upn=user@contoso.com "
         "https://logic.example/path?sig=verylongcallbacksigrandomvalue"
     )
 
@@ -114,5 +120,7 @@ def test_generate_notifications_redacts_sensitive_values(tmp_path):
     )
     assert "hidden-token" not in rendered
     assert "11111111-1111-1111-1111-111111111111" not in rendered
+    assert "abc123" not in rendered
+    assert "user@contoso.com" not in rendered
     assert "verylongcallbacksigrandomvalue" not in rendered
     assert "[REDACTED]" in rendered

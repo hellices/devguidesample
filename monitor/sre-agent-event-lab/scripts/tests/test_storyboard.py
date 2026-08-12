@@ -102,3 +102,24 @@ def test_storyboard_rejects_unknown_scenario(tmp_path):
         assert "unknown scenario" in str(exc)
     else:
         raise AssertionError("unknown scenario was accepted")
+
+
+def test_storyboard_renders_missing_agent_states(tmp_path):
+    storyboard = load_module()
+    incomplete = [sample_timeline()[0]]
+
+    storyboard.render_storyboard(
+        scenario="s1",
+        timeline=incomplete,
+        output_dir=tmp_path,
+    )
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    actual_bodies = [
+        frame["body"]
+        for frame in manifest["frames"]
+        if frame["badge"] == "ACTUAL"
+    ]
+    assert any("생성되지 않음" in body for body in actual_bodies)
+    assert any("수집되지 않음" in body for body in actual_bodies)
+    assert (tmp_path / "investigation-guide.gif").exists()

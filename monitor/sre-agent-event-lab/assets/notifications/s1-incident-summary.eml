@@ -4,9 +4,9 @@ Subject: [Resolved][SRE-LAB] Order API HTTP 500 incident
 X-SRE-Agent-Draft: true
 MIME-Version: 1.0
 Content-Type: multipart/alternative;
- boundary="===============2493417588013935637=="
+ boundary="===============7409614968663313665=="
 
---===============2493417588013935637==
+--===============7409614968663313665==
 Content-Type: text/plain; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 
@@ -28,7 +28,7 @@ Detailed validation appendix: https://github.com/hellices/devguidesample/blob=
 /main/docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-resul=
 ts.md
 
---===============2493417588013935637==
+--===============7409614968663313665==
 Content-Type: text/html; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 MIME-Version: 1.0
@@ -114,4 +114,4 @@ n detailed validation appendix</a></p>
 </body>
 </html>
 
---===============2493417588013935637==--
+--===============7409614968663313665==--
