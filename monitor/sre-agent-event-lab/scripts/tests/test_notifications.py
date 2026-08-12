@@ -60,10 +60,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     outputs = notifications.generate_notifications(
         timeline=timeline(),
         output_dir=tmp_path,
-        report_url=(
-            "https://github.com/hellices/devguidesample/blob/"
-            "feature/azure-sre-agent-event-lab/docs/report.md"
-        ),
+        report_url="docs/superpowers/reports/report.md (available after merge)",
         issue_url="https://github.com/hellices/devguidesample/issues/123",
     )
 
@@ -79,6 +76,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
         assert heading in issue
     assert "120" in issue
     assert "thread-1" in issue
+    assert "available after merge" in issue
     assert "Incident window" not in issue
     assert "Alert fired:" in issue
     assert "Agent conclusion:" in issue
@@ -89,6 +87,9 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     assert message["Subject"] == "[Resolved][SRE-LAB] Order API HTTP 500 incident"
     assert message["To"] == "oncall@example.invalid"
     assert "https://github.com/hellices/devguidesample/issues/123" in message.get_body(
+        preferencelist=("html",)
+    ).get_content()
+    assert "available after merge" in message.get_body(
         preferencelist=("html",)
     ).get_content()
     assert "**" not in (tmp_path / "s1-incident-summary.html").read_text()

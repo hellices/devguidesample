@@ -4,9 +4,9 @@ Subject: [Resolved][SRE-LAB] Order API HTTP 500 incident
 X-SRE-Agent-Draft: true
 MIME-Version: 1.0
 Content-Type: multipart/alternative;
- boundary="===============7409614968663313665=="
+ boundary="===============3080994355111351706=="
 
---===============7409614968663313665==
+--===============3080994355111351706==
 Content-Type: text/plain; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 
@@ -24,11 +24,10 @@ Current status:
 Resolved by a healthy revision with FAILURE_MODE=3Dnone.
 
 Ticket: https://github.com/hellices/devguidesample/issues/43
-Detailed validation appendix: https://github.com/hellices/devguidesample/blob=
-/main/docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-resul=
-ts.md
+Detailed validation appendix: docs/superpowers/reports/2026-08-12-azure-sre-a=
+gent-event-testing-results.md (available after feature branch merge)
 
---===============7409614968663313665==
+--===============3080994355111351706==
 Content-Type: text/html; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 MIME-Version: 1.0
@@ -102,9 +101,8 @@ ps://github.com/hellices/devguidesample/issues/43</a></p>
 .</li>
         <li>Retain this investigation in the Agent knowledge base.</li>
       </ol>
-      <p><a href=3D"https://github.com/hellices/devguidesample/blob/main/docs=
-/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md">Ope=
-n detailed validation appendix</a></p>
+      <p><code>docs/superpowers/reports/2026-08-12-azure-sre-agent-event-test=
+ing-results.md (available after feature branch merge)</code></p>
     </section>
     <footer class=3D"footer">
       Draft artifact =E2=80=94 not sent. Agent thread 6dd0e640-d969-46cb-a976=
@@ -114,4 +112,4 @@ n detailed validation appendix</a></p>
 </body>
 </html>
 
---===============7409614968663313665==--
+--===============3080994355111351706==--

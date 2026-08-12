@@ -47,5 +47,5 @@ Resolved. A succeeding revision uses `FAILURE_MODE=none`, receives traffic, and 
 ## Tracking
 
 - Agent thread ID: `6dd0e640-d969-46cb-a976-7c81b66fcadc`
-- Detailed validation appendix: https://github.com/hellices/devguidesample/blob/main/docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md
+- Detailed validation appendix: docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md (available after feature branch merge)
 - Generated from actual Azure SRE Agent evidence; no resource change was executed by the Agent.

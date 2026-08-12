@@ -113,6 +113,11 @@ def email_html(
         if issue_url
         else "GitHub Issue 발행 전 draft"
     )
+    report_reference = (
+        f'<a href="{html.escape(report_url)}">Open detailed validation appendix</a>'
+        if report_url.startswith(("https://", "http://"))
+        else f"<code>{html.escape(report_url)}</code>"
+    )
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -160,7 +165,7 @@ def email_html(
         <li>Keep the response plan in Review mode while accuracy is monitored.</li>
         <li>Retain this investigation in the Agent knowledge base.</li>
       </ol>
-      <p><a href="{html.escape(report_url)}">Open detailed validation appendix</a></p>
+      <p>{report_reference}</p>
     </section>
     <footer class="footer">
       Draft artifact — not sent. Agent thread {html.escape(thread["event_id"])}
