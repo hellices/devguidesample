@@ -7,3 +7,4 @@ sim-env.json.vscode/
 __pycache__/
 *.py[cod]
 .worktrees/
+monitor/sre-agent-event-lab/evidence/
