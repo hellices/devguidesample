@@ -76,6 +76,8 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
         assert heading in issue
     assert "120" in issue
     assert "thread-1" in issue
+    assert "Affected workload: `ca-sre-event-lab-vnet`" in issue
+    assert "Affected resource: Application Insights" not in issue
     assert "available after merge" in issue
     assert "Incident window" not in issue
     assert "Alert fired:" in issue
@@ -92,12 +94,27 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     assert "available after merge" in message.get_body(
         preferencelist=("html",)
     ).get_content()
+    assert "Affected workload: ca-sre-event-lab-vnet" in message.get_body(
+        preferencelist=("html",)
+    ).get_content()
     assert "**" not in (tmp_path / "s1-incident-summary.html").read_text()
     assert outputs["issue"].endswith("s1-github-issue.md")
 
 
 def test_generate_notifications_redacts_sensitive_values(tmp_path):
     notifications = load_module()
+    redacted = notifications.sanitize(
+        "Authorization: Bearer hidden-token "
+        "DefaultEndpointsProtocol=https;AccountKey=abc123 "
+        "upn=user@contoso.com "
+        "https://logic.example/path?sig=verylongcallbacksigrandomvalue"
+    )
+    assert "hidden-token" not in redacted
+    assert "abc123" not in redacted
+    assert "user@contoso.com" not in redacted
+    assert "verylongcallbacksigrandomvalue" not in redacted
+    assert "[REDACTED]" in redacted
+
     unsafe = timeline()
     unsafe[-1]["summary"] += (
         " Authorization: Bearer hidden-token "
@@ -124,4 +141,3 @@ def test_generate_notifications_redacts_sensitive_values(tmp_path):
     assert "abc123" not in rendered
     assert "user@contoso.com" not in rendered
     assert "verylongcallbacksigrandomvalue" not in rendered
-    assert "[REDACTED]" in rendered

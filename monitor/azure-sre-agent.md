@@ -147,7 +147,9 @@ Agent가 다음 질문에 근거를 들어 답해야 한다.
 
 ## 2. 이벤트 전달
 
-이번 lab은 공개 API로 재현 가능한 공식 HTTP Trigger 패턴을 사용했다.
+제품의 표준 Azure Monitor 연계는 **Azure Monitor incident platform → response plan → Agent**로 직접 연결되며 Logic App bridge가 필요하지 않다.
+
+이번 lab은 response plan의 공개 API 자동 구성 제약 때문에, Azure SRE Agent가 공식 지원하는 HTTP Trigger 앞에 **Action Group + Logic App 인증 bridge**를 둔 lab-specific 자동화 경로를 사용했다. 이 bridge는 표준 Azure Monitor 도입의 필수 구성 요소가 아니다.
 
 ```text
 Azure Monitor alert

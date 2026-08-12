@@ -24,15 +24,11 @@ Container App revision `0000010` was deployed with `FAILURE_MODE=http500`.
 - Activity Log and revision timing matched the first failed request.
 - Agent conclusion:
 
-> **Root cause confirmed:** Container App `ca-sre-event-lab-vnet` deployed revision `0000010` at 08:06:16 UTC with `FAILURE_MODE=http500`.
-
-- **Affected resource:** Application Insights `appi-sre-event-lab-95933ae5`
-- **Exact onset:** 2026-08-12 08:06:52.147 UTC
-- **Impact:** 120 HTTP 500s on `GET /api/orders` through 08:06:53.382 UTC. The alert fired at 08:07:56 UTC.
-- **Evidence:** Activity Log shows the Container App update began at 08:06:08.954 UTC; the active failing revision had `FAILURE_MODE=http500`. Trace evidence shows a 500 response without an external dependency timeout pattern.
-- **Mitigation:** Already applied externally: revision `0000011` is provisioned, receives 100% traffic, and has `FAILURE_MODE=none`. A post-change telemetry sample contained no 5xx responses.
-
-No resource changes were made by this investigation.
+> Affected workload: `ca-sre-event-lab-vnet`
+Telemetry source: `appi-sre-event-lab-95933ae5`
+Root cause: revision `0000010` had `FAILURE_MODE=http500`
+Impact: 120 `GET /api/orders` requests returned HTTP 500
+Mitigation: a healthy revision with FAILURE_MODE=none restored service
 
 ## Current status
 

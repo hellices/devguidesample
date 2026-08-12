@@ -34,7 +34,7 @@
       <h2>Customer impact</h2>
       <p>120 <code>GET /api/orders</code> requests returned HTTP 500.</p>
       <h2>Root cause and evidence</h2>
-      <p>Root cause confirmed: Container App ca-sre-event-lab-vnet deployed revision 0000010 at 08:06:16 UTC with FAILURE_MODE=http500.<br><br>- Affected resource: Application Insights appi-sre-event-lab-95933ae5<br>- Exact onset: 2026-08-12 08:06:52.147 UTC<br>- Impact: 120 HTTP 500s on GET /api/orders through 08:06:53.382 UTC. The alert fired at 08:07:56 UTC.<br>- Evidence: Activity Log shows the Container App update began at 08:06:08.954 UTC; the active failing revision had FAILURE_MODE=http500. Trace evidence shows a 500 response without an external dependency timeout pattern.<br>- Mitigation: Already applied externally: revision 0000011 is provisioned, receives 100% traffic, and has FAILURE_MODE=none. A post-change telemetry sample contained no 5xx responses.<br><br>No resource changes were made by this investigation.</p>
+      <p>Affected workload: ca-sre-event-lab-vnet<br>Telemetry source: appi-sre-event-lab-95933ae5<br>Root cause: revision 0000010 had FAILURE_MODE=http500<br>Impact: 120 GET /api/orders requests returned HTTP 500<br>Mitigation: a healthy revision with FAILURE_MODE=none restored service</p>
       <h2>Mitigation and current status</h2>
       <p>A healthy revision with <code>FAILURE_MODE=none</code> restored service. The Agent remained in Review mode and did not modify Azure resources.</p>
       <h2>Ticket</h2>

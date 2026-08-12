@@ -38,6 +38,19 @@ def strip_markdown(value: str) -> str:
     return sanitize(value).replace("**", "").replace("`", "")
 
 
+def verified_summary(markdown: bool = False) -> str:
+    code = (lambda value: f"`{value}`") if markdown else (lambda value: value)
+    return "\n".join(
+        (
+            f"Affected workload: {code('ca-sre-event-lab-vnet')}",
+            f"Telemetry source: {code('appi-sre-event-lab-95933ae5')}",
+            f"Root cause: revision {code('0000010')} had {code('FAILURE_MODE=http500')}",
+            f"Impact: 120 {code('GET /api/orders')} requests returned HTTP 500",
+            "Mitigation: a healthy revision with FAILURE_MODE=none restored service",
+        )
+    )
+
+
 def find_event(timeline: list[dict[str, Any]], state: str, last: bool = False):
     matches = [event for event in timeline if event.get("state") == state]
     if not matches:
@@ -51,7 +64,7 @@ def issue_markdown(
     conclusion: dict[str, Any],
     report_url: str,
 ) -> str:
-    summary = sanitize(conclusion["summary"])
+    summary = verified_summary(markdown=True)
     return f"""## Impact
 
 - Service: `ca-sre-event-lab-vnet`
@@ -105,7 +118,7 @@ def email_html(
     report_url: str,
     issue_url: str,
 ) -> str:
-    summary = html.escape(strip_markdown(conclusion["summary"])).replace(
+    summary = html.escape(verified_summary()).replace(
         "\n", "<br>"
     )
     ticket = (

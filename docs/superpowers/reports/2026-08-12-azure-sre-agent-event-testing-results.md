@@ -242,7 +242,7 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 ### 이벤트 기반 탐지 적합성
 
-Azure Monitor scheduled-query alert → Action Group → Logic App managed identity → SRE Agent HTTP Trigger 흐름은 세 시나리오에서 자동 thread를 생성했다. Native Azure Monitor response plan의 공개 API 자동 구성이 제한돼 HTTP Trigger bridge를 사용했지만, 외부 시스템이 alert context를 Agent에 전달하는 공식 event-driven trigger 모델이다.
+제품의 표준 Azure Monitor 경로는 incident platform과 response plan을 통해 Agent로 직접 전달된다. 이번 실증에서는 response plan 공개 API 자동 구성 제약 때문에 Action Group → Logic App managed identity → SRE Agent HTTP Trigger라는 lab-specific bridge를 사용했다. 이 bridge는 세 시나리오에서 자동 thread를 만들었지만 표준 Azure Monitor 도입의 필수 구성은 아니다.
 
 ### RCA 정확도
 

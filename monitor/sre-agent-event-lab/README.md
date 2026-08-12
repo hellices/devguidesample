@@ -98,7 +98,9 @@ monitor/sre-agent-event-lab/scripts/deploy.sh \
 
 ### 실제 event bridge
 
-Native Azure Monitor response plan은 Portal에서는 생성할 수 있지만 공개 API 자동화가 제한되었다. 이 실험은 Azure SRE Agent의 공식 HTTP Trigger 기능을 사용해 다음 경로를 구성했다.
+제품의 표준 Azure Monitor 연계는 Azure Monitor incident platform과 response plan을 통해 Agent로 직접 전달되며 Logic App bridge가 필요하지 않다.
+
+이 실험은 response plan 공개 API 자동 구성 제약 때문에 Azure SRE Agent의 HTTP Trigger 기능 앞에 Action Group + Logic App 인증 bridge를 둔 lab-specific 경로를 구성했다. 아래 bridge는 표준 도입의 필수 구성 요소가 아니다.
 
 ```text
 Azure Monitor scheduled-query alert
