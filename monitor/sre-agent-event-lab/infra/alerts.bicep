@@ -4,6 +4,12 @@ param location string
 @description('Resource ID of the workspace-based Application Insights component.')
 param appInsightsResourceId string
 
+@description('Optional Action Group that forwards fired alerts to Azure SRE Agent.')
+param actionGroupResourceId string = ''
+
+@description('Deployment-unique OpenTelemetry service name.')
+param serviceName string
+
 @description('Tags applied to alert rules.')
 param tags object
 
@@ -14,13 +20,14 @@ var alertDefinitions = [
     description: 'Detects injected HTTP 500 responses from the SRE event lab.'
     measureColumn: 'Failures'
     threshold: 10
-    query: '''
-AppRequests
-| where TimeGenerated > ago(5m)
-| where AppRoleName == "sre-event-lab"
-| where ResultCode startswith "5"
+    query: format('''
+requests
+| where timestamp > ago(5m)
+| where cloud_RoleName == "{0}"
+| where name has "/api/orders"
+| where resultCode == "500"
 | summarize Failures=count()
-'''
+''', serviceName)
   }
   {
     name: 'alert-sre-lab-s2-latency'
@@ -28,13 +35,13 @@ AppRequests
     description: 'Detects elevated p95 latency on the order endpoint.'
     measureColumn: 'P95DurationMs'
     threshold: 2000
-    query: '''
-AppRequests
-| where TimeGenerated > ago(5m)
-| where AppRoleName == "sre-event-lab"
-| where Name has "/api/orders"
-| summarize P95DurationMs=percentile(DurationMs, 95)
-'''
+    query: format('''
+requests
+| where timestamp > ago(5m)
+| where cloud_RoleName == "{0}"
+| where name has "/api/orders"
+| summarize P95DurationMs=percentile(duration, 95)
+''', serviceName)
   }
   {
     name: 'alert-sre-lab-s3-storage-rbac'
@@ -43,13 +50,13 @@ AppRequests
     measureColumn: 'DependencyFailures'
     threshold: 5
     query: format('''
-AppDependencies
-| where TimeGenerated > ago(5m)
-| where AppRoleName == "sre-event-lab"
-| where Target has "{0}"
-| where Success == false
+dependencies
+| where timestamp > ago(5m)
+| where cloud_RoleName == "{0}"
+| where target has "{1}"
+| where resultCode == "403"
 | summarize DependencyFailures=count()
-''', environment().suffixes.storage)
+''', serviceName, environment().suffixes.storage)
   }
 ]
 
@@ -61,7 +68,9 @@ resource alertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [
     tags: tags
     properties: {
       actions: {
-        actionGroups: []
+        actionGroups: empty(actionGroupResourceId) ? [] : [
+          actionGroupResourceId
+        ]
       }
       autoMitigate: true
       checkWorkspaceAlertsStorageConfigured: false
@@ -84,7 +93,6 @@ resource alertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [
       displayName: definition.displayName
       enabled: true
       evaluationFrequency: 'PT1M'
-      muteActionsDuration: 'PT5M'
       scopes: [
         appInsightsResourceId
       ]

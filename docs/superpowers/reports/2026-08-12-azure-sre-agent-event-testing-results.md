@@ -4,15 +4,15 @@
 - 목표: Azure Monitor 경고를 Azure SRE Agent가 자동 수신해 원인과 안전한 완화책을 올바르게 도출하는지 실증
 - 테스트베드: Azure Container Apps + Application Insights + Log Analytics + Azure Storage
 - Agent 모드: Review
-- 상태: 배포 전
+- 상태: S1/S2/S3 완료
 
 ## 한눈에 보기
 
 | Scenario | 장애 신호 | Alert 탐지 | Agent pickup | RCA 점수 | 판정 |
 |---|---|---:|---:|---:|---|
-| S1 | HTTP 500 급증 | ⏳ 미실행 | ⏳ 미실행 | ⏳ 미실행 | ⏳ |
-| S2 | p95 latency 급증 | ⏳ 미실행 | ⏳ 미실행 | ⏳ 미실행 | ⏳ |
-| S3 | Blob dependency 403/503 | ⏳ 미실행 | ⏳ 미실행 | ⏳ 미실행 | ⏳ |
+| S1 | HTTP 500 급증 | **107s** | **2s** | **10/10** | ✅ Pass |
+| S2 | p95 latency 급증 | **125s** | **3s** | **10/10** | ✅ Pass |
+| S3 | Blob dependency 403/503 | **123s** | **2s** | **9/10** | ✅ Pass |
 
 판정 범례: ✅ Pass(8-10) · ⚠️ Partial(5-7) · ❌ Fail(0-4) · ⏳ 미실행
 
@@ -28,26 +28,27 @@
 
 | 항목 | 값 | 상태 |
 |---|---|---|
-| Resource group | `rg-sre-agent-event-lab-krc` | ⏳ 미배포 |
-| Container App | `ca-sre-event-lab` | ⏳ 미배포 |
-| Log Analytics | 배포 output에서 기록 | ⏳ 미배포 |
-| Application Insights | 배포 output에서 기록 | ⏳ 미배포 |
-| Storage | 배포 output에서 기록 | ⏳ 미배포 |
-| Alert rules | S1/S2/S3 scheduled query | ⏳ 미배포 |
+| Resource group | `rg-sre-agent-event-lab-krc` | ✅ |
+| Container App | `ca-sre-event-lab-vnet` / image `20260812.4` | ✅ Healthy |
+| Log Analytics | `law-sre-event-lab-95933ae5` | ✅ |
+| Application Insights | `appi-sre-event-lab-95933ae5` | ✅ |
+| Storage | `stsrelab95933ae5`, Blob private endpoint | ✅ |
+| Alert rules | S1/S2/S3 scheduled query, Sev2 | ✅ Enabled |
+| Event bridge | Azure Monitor Action Group → Logic App MI → SRE HTTP Trigger | ✅ |
 
 ### Azure SRE Agent
 
 | 항목 | 값 | 상태 |
 |---|---|---|
-| Agent | `sre-devguidesample-95933ae5` | ⏳ 미생성 |
-| Region | Korea Central | ⏳ 미확인 |
-| Model provider | 실행 시 기록 | ⏳ 미확인 |
-| Azure resource access | 테스트 RG Reader | ⏳ 미확인 |
-| Azure Monitor incident platform | scanner 1분 | ⏳ 미연결 |
-| Observability connector | lab workspace/App Insights | ⏳ 미연결 |
-| Repository | `hellices/devguidesample` | ⏳ 미연결 |
-| Response plans | 3개, Sev2, Review | ⏳ 미생성 |
-| Quickstart plan | 삭제/비활성화 | ⏳ 미확인 |
+| Agent | `sre-devguidesample-95933ae5` | ✅ Running |
+| Region | Korea Central | ✅ |
+| Model provider | Microsoft Foundry / Automatic | ✅ |
+| Azure resource access | 테스트 RG Reader | ✅ |
+| Event source | Action Group + authenticated HTTP Trigger | ✅ |
+| Action mode | Review / Low | ✅ |
+| Repository | `hellices/devguidesample` | ✅ 연결 테스트 성공 |
+| Knowledge | `incident-response.md` | ✅ upload/indexing triggered |
+| Native response plan | Public API 자동 구성 제한 | ⚠️ HTTP Trigger bridge로 대체 |
 
 ## 평가 방법
 
@@ -69,15 +70,16 @@
 | 완화책 | 2 | 최소 범위, 가역적, 안전 |
 | 불확실성 | 1 | 미확인 추론을 구분 |
 
-## Baseline — ⏳ 미실행
+## Baseline — ✅ 완료
 
-- 배포 시작/종료 UTC: ⏳ 미실행
-- `/healthz`: ⏳ 미실행
-- 정상 `/api/orders`: ⏳ 미실행
-- 정상 `/api/documents`: ⏳ 미실행
-- `AppRequests` 수집: ⏳ 미실행
-- `AppDependencies` 수집: ⏳ 미실행
-- 정상 상태 alert: ⏳ 미실행
+- base deployment 완료: 2026-08-12 03:51:36 UTC
+- private network app deployment 완료: 2026-08-12 04:11:43 UTC
+- `/healthz`: HTTP 200
+- 정상 `/api/orders`: HTTP 200, baseline p95 55.79ms
+- 정상 `/api/documents`: HTTP 200, Blob dependency private endpoint 경유
+- `AppRequests`: full sampling 확인
+- `AppDependencies`: Blob 200 full sampling 확인
+- 정상 상태 lab alert: Fired 0건
 
 ## S1 — HTTP 500 급증
 
@@ -89,27 +91,44 @@
 
 | Event | UTC | Delta |
 |---|---|---:|
-| 장애 주입 | ⏳ 미실행 | - |
-| 첫 비정상 request | ⏳ 미실행 | ⏳ |
-| Azure Monitor fired | ⏳ 미실행 | ⏳ |
-| Agent thread 생성 | ⏳ 미실행 | ⏳ |
-| Agent 첫 구조화 결론 | ⏳ 미실행 | ⏳ |
-| 복구 | ⏳ 미실행 | ⏳ |
-| Alert resolved | ⏳ 미실행 | ⏳ |
+| 장애 config update 시작 | 08:06:08.954 | - |
+| 첫 비정상 request | 08:06:52.147 | +43s |
+| Azure Monitor fired | 08:07:56.262 | +107s |
+| Logic App bridge | 08:07:58.037 | +2s |
+| Agent thread 생성 | 08:07:58.695 | +2s |
+| Agent 첫 구조화 결론 | 08:10:21.972 | +145s |
+| 복구 revision active | 08:09경 | 조사 중 확인 |
+| Alert resolved | Azure Monitor auto-mitigate | 정상 telemetry 확인 |
+
+### 실제 동작 캡처
+
+**Event bridge 구성 전 — alert는 발생했지만 Agent thread가 생성되지 않음**
+
+![S1 before bridge](../../../monitor/sre-agent-event-lab/assets/captures/s1-before-bridge/investigation.gif)
+
+**Action Group + Logic App managed identity bridge 구성 후 — 실제 Agent 조사**
+
+![S1 SRE Agent investigation](../../../monitor/sre-agent-event-lab/assets/captures/s1/investigation.gif)
+
+- [결론 frame](../../../monitor/sre-agent-event-lab/assets/captures/s1/07-conclusion.png)
+- [실제 event timeline](../../../monitor/sre-agent-event-lab/assets/captures/s1/timeline.md)
+- [Mermaid sequence source](../../../monitor/sre-agent-event-lab/assets/captures/s1/timeline.mmd)
+- 원본 evidence: `monitor/sre-agent-event-lab/evidence/s1-20260812T080606Z/` (Git 제외)
+- Agent thread: `6dd0e640-d969-46cb-a976-7c81b66fcadc`
 
 ### Agent 분석
 
-- 영향 범위: ⏳ 미실행
-- 직접 원인: ⏳ 미실행
-- 사용 증거: ⏳ 미실행
-- 제안 완화책: ⏳ 미실행
-- 잘못된 주장/누락: ⏳ 미실행
+- 영향 범위: Container App `ca-sre-event-lab-vnet`, `GET /api/orders`, 120건 HTTP 500 정확히 식별
+- 직접 원인: revision `0000010`의 `FAILURE_MODE=http500` 정확히 식별
+- 사용 증거: Application Insights request telemetry, active revision env, Activity Log, connected repository 검색
+- 제안 완화책: `FAILURE_MODE=none`인 후속 revision으로 traffic 전환; 실제 복구 상태와 일치
+- 잘못된 주장/누락: 중요 오류 없음. Activity Log ingestion 지연 가능성을 조사 중 명시
 
 ### 점수
 
 | 영향 | 원인 | 증거 | 완화 | 불확실성 | 합계 | 판정 |
 |---:|---:|---:|---:|---:|---:|---|
-| ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳/10 | ⏳ |
+| 2 | 3 | 2 | 2 | 1 | **10/10** | ✅ Pass |
 
 ## S2 — p95 latency 급증
 
@@ -121,27 +140,37 @@
 
 | Event | UTC | Delta |
 |---|---|---:|
-| 장애 주입 | ⏳ 미실행 | - |
-| 첫 slow request | ⏳ 미실행 | ⏳ |
-| Azure Monitor fired | ⏳ 미실행 | ⏳ |
-| Agent thread 생성 | ⏳ 미실행 | ⏳ |
-| Agent 첫 구조화 결론 | ⏳ 미실행 | ⏳ |
-| 복구 | ⏳ 미실행 | ⏳ |
-| Alert resolved | ⏳ 미실행 | ⏳ |
+| 장애 config update 시작 | 08:15:43.907 | - |
+| 첫 slow request 시작 | 08:16:23.174 | +39s |
+| Azure Monitor fired | 08:17:49.338 | +125s |
+| Agent thread 생성 | 08:17:52.281 | +3s |
+| Agent 첫 구조화 결론 | 08:21:48.633 | +239s |
+| 복구 | 08:19:06 | revision 전환 완료 |
+| Alert resolved | Azure Monitor auto-mitigate | 정상 p95 확인 |
+
+### 실제 동작 캡처
+
+![S2 SRE Agent investigation](../../../monitor/sre-agent-event-lab/assets/captures/s2/investigation.gif)
+
+- [결론 frame](../../../monitor/sre-agent-event-lab/assets/captures/s2/07-conclusion.png)
+- [실제 event timeline](../../../monitor/sre-agent-event-lab/assets/captures/s2/timeline.md)
+- [Mermaid sequence source](../../../monitor/sre-agent-event-lab/assets/captures/s2/timeline.mmd)
+- 원본 evidence: `monitor/sre-agent-event-lab/evidence/s2-20260812T081539Z/` (Git 제외)
+- Agent thread: `29befef3-0ef6-4ccf-aa43-af1355cff767`
 
 ### Agent 분석
 
-- 영향 범위: ⏳ 미실행
-- 직접 원인: ⏳ 미실행
-- 사용 증거: ⏳ 미실행
-- 제안 완화책: ⏳ 미실행
-- 잘못된 주장/누락: ⏳ 미실행
+- 영향 범위: `ca-sre-event-lab-vnet`, `/api/orders`, 90건 slow request 정확히 식별
+- 직접 원인: revision `0000012`의 `ORDER_DELAY_MS=4000` 정확히 식별
+- 사용 증거: request duration, exception/dependency 부재, change analysis, revision env
+- 제안 완화책: `ORDER_DELAY_MS=0` revision으로 복귀; 실제 revision `0000013`과 일치
+- 잘못된 주장/누락: 중요 오류 없음. request 시작/완료 timestamp 차이를 명시적으로 보정
 
 ### 점수
 
 | 영향 | 원인 | 증거 | 완화 | 불확실성 | 합계 | 판정 |
 |---:|---:|---:|---:|---:|---:|---|
-| ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳/10 | ⏳ |
+| 2 | 3 | 2 | 2 | 1 | **10/10** | ✅ Pass |
 
 ## S3 — Blob dependency RBAC 장애
 
@@ -153,56 +182,111 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 | Event | UTC | Delta |
 |---|---|---:|
-| 역할 제거 | ⏳ 미실행 | - |
-| 첫 dependency failure | ⏳ 미실행 | ⏳ |
-| Azure Monitor fired | ⏳ 미실행 | ⏳ |
-| Agent thread 생성 | ⏳ 미실행 | ⏳ |
-| Agent 첫 구조화 결론 | ⏳ 미실행 | ⏳ |
-| 역할 복구 | ⏳ 미실행 | ⏳ |
-| Alert resolved | ⏳ 미실행 | ⏳ |
+| 역할 제거 | 08:40:07.988 | - |
+| 첫 dependency failure | 08:40:08.375 | +0.4s |
+| Azure Monitor fired | 08:42:11.060 | +123s |
+| Agent thread 생성 | 08:42:13.055 | +2s |
+| Agent 첫 구조화 결론 | 08:46:37.173 | +266s |
+| 역할 복구 | 08:42:48.660 | original container scope |
+| 실제 endpoint 정상 확인 | 실행자 후속 확인 | HTTP 200 |
+
+### 실제 동작 캡처
+
+![S3 SRE Agent investigation](../../../monitor/sre-agent-event-lab/assets/captures/s3/investigation.gif)
+
+- [결론 frame](../../../monitor/sre-agent-event-lab/assets/captures/s3/07-conclusion.png)
+- [실제 event timeline](../../../monitor/sre-agent-event-lab/assets/captures/s3/timeline.md)
+- [Mermaid sequence source](../../../monitor/sre-agent-event-lab/assets/captures/s3/timeline.mmd)
+- 원본 evidence: `monitor/sre-agent-event-lab/evidence/s3-20260812T084004Z/` (Git 제외)
+- Agent thread: `691f9f43-31c4-4822-8d1f-5f647d45f643`
 
 ### Agent 분석
 
-- 영향 범위: ⏳ 미실행
-- 직접 원인: ⏳ 미실행
-- 사용 증거: ⏳ 미실행
-- 제안 완화책: ⏳ 미실행
-- 잘못된 주장/누락: ⏳ 미실행
+- 영향 범위: `/api/documents`, Storage target, workload identity는 정확. Container App 이름은 old non-VNet app으로 잘못 연결
+- 직접 원인: container-scope `Storage Blob Data Reader` 삭제 정확히 식별
+- 사용 증거: Activity Log role deletion, Blob 403 trace, `AuthorizationPermissionMismatch`, 60건 실패
+- 제안 완화책: original least-privilege role 복원 후 propagation 대기; 실제 복구와 일치
+- 잘못된 주장/누락: old app FQDN을 확인해 recovery가 미완료라고 판단. 실제 vnet app endpoint는 HTTP 200
+
+후속 보정: vnet workload의 `OTEL_SERVICE_NAME`을 `sre-event-lab-95933ae5`로 변경하고 alert/evidence query도 이 deployment-unique 값으로 제한했다. 변경 후 새 role name으로 `/api/orders` 5건, `/api/documents` 2건과 health telemetry가 분리 수집됨을 확인했다.
 
 ### 점수
 
 | 영향 | 원인 | 증거 | 완화 | 불확실성 | 합계 | 판정 |
 |---:|---:|---:|---:|---:|---:|---|
-| ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳/10 | ⏳ |
+| 1 | 3 | 2 | 2 | 1 | **9/10** | ✅ Pass |
 
 ## 시나리오 간 비교
 
 | 관찰 | S1 | S2 | S3 |
 |---|---|---|---|
-| 가장 먼저 사용한 증거 | ⏳ | ⏳ | ⏳ |
-| 변경과 증상 상관분석 | ⏳ | ⏳ | ⏳ |
-| 로그/메트릭/KQL 정확성 | ⏳ | ⏳ | ⏳ |
-| 완화책 최소 권한/범위 | ⏳ | ⏳ | ⏳ |
-| hallucination | ⏳ | ⏳ | ⏳ |
+| 가장 먼저 사용한 증거 | App Insights + revision env | request duration + change analysis | Blob dependency + Activity Log |
+| 변경과 증상 상관분석 | 정확 | 정확 | role delete 정확, app name 혼동 |
+| 로그/메트릭/KQL 정확성 | 120×500 정확 | 90×4초/p95 정확 | 60×403 정확 |
+| 완화책 최소 권한/범위 | config/revision 복귀 | delay config 복귀 | container-scope role 복원 |
+| hallucination/오류 | 중요 오류 없음 | 중요 오류 없음 | old app FQDN으로 recovery 오판 |
 
 ## 결론 및 운영 권고
 
-- 이벤트 기반 탐지 적합성: ⏳ 미실행
-- RCA 정확도: ⏳ 미실행
-- Response plan 개선: ⏳ 미실행
-- Connector/권한 개선: ⏳ 미실행
-- 운영 도입 권고: ⏳ 미실행
+### 종합 판정 — ✅ 성공
+
+- 세 시나리오 모두 Pass: **10/10, 10/10, 9/10**
+- Alert detection latency: **107–125초**
+- Event bridge → Agent thread pickup: **2–3초**
+- Structured conclusion: thread 생성 후 **143–264초**
+- unauthorized autonomous action: **0건**
+
+### 이벤트 기반 탐지 적합성
+
+Azure Monitor scheduled-query alert → Action Group → Logic App managed identity → SRE Agent HTTP Trigger 흐름은 세 시나리오에서 자동 thread를 생성했다. Native Azure Monitor response plan의 공개 API 자동 구성이 제한돼 HTTP Trigger bridge를 사용했지만, 외부 시스템이 alert context를 Agent에 전달하는 공식 event-driven trigger 모델이다.
+
+### RCA 정확도
+
+- S1은 revision env, 120개 request trace, Activity Log를 결합해 injected HTTP 500을 정확히 진단했다.
+- S2는 5xx가 아닌 2xx latency incident를 dependency 문제와 구분하고 `ORDER_DELAY_MS=4000`을 정확히 진단했다.
+- S3는 role deletion과 첫 403 사이 0.4초 causal chain을 정확히 진단했다.
+- S3에서 같은 `OTEL_SERVICE_NAME`을 쓰는 old app과 vnet app을 혼동했다. 동일 Application Insights에 여러 앱을 보낼 때 `service.name`뿐 아니라 deployment/environment별 고유 `service.instance.id`와 resource attribute를 alert/Agent context에 포함해야 한다.
+
+### 운영 권고
+
+1. Agent는 **Review mode**로 시작하고, root cause/완화책 정확도가 축적된 response plan만 Autonomous로 승격한다.
+2. alert payload에 Container App resource ID, revision, role instance를 custom property로 명시한다.
+3. App Insights connector와 repository를 연결하되 실제 배포 branch가 indexing되었는지 확인한다. 이번 Agent는 main branch만 보아 feature worktree의 lab app source를 찾지 못했다.
+4. S3처럼 RBAC recovery가 지연되는 장애는 올바른 endpoint와 private-network workload를 명시한 runbook을 추가한다.
+5. API evidence capture를 incident 후 자동 실행해 thread/messages/tool timeline을 보존한다.
+
+### Static에서 Dynamic으로 — 운영 확장 (미실증)
+
+이번 S1/S2/S3 실측은 1분 evaluation의 static threshold를 사용했다. 목적은 known failure를 같은 날 반드시 alert로 만들고 SRE Agent의 분석 품질을 비교하는 것이었다. 따라서 아래 Dynamic Threshold 설계는 운영 권고이며 현재 점수에 포함하지 않는다.
+
+| Scenario | Static 실증 signal | Dynamic 후보 numeric signal |
+|---|---|---|
+| S1 | 5분 5xx count > 10 | 5xx count 또는 error rate의 upper anomaly |
+| S2 | p95 duration > 2000ms | `/api/orders` p95 duration의 upper anomaly |
+| S3 | Blob 403 count > 5 | dependency 403 count/failure rate의 upper anomaly |
+
+Dynamic Threshold 도입 조건:
+
+- 최소 **3일**과 **30 samples** 전에는 alert가 발화하지 않음
+- threshold border는 최근 **10일** data에 기반
+- weekly seasonality는 최소 **3주** 필요
+- Log Search Dynamic Threshold에서 **1분** frequency 미지원; 5분 이상 사용
+- Medium sensitivity, 15~20분 window, 4회 중 2회 위반으로 shadow 시작
+- 충분한 학습·false positive/negative 비교 후 기존 `ag-sre-agent-event-lab` 연결
+
+향후 shadow 실증은 static/dynamic 각각의 alert latency, Agent pickup, conclusion, false positive, false negative를 같은 형식으로 기록한다. Dynamic이 놓칠 수 있는 cold start·slow drift·hard limit에는 static rule을 유지한다.
 
 ## 비용 및 정리
 
 | 항목 | 결과 |
 |---|---|
-| 테스트 시작 비용 시점 | ⏳ 미실행 |
-| Azure Cost Management 실측 | ⏳ 미실행 |
-| 추정 비용과 실측 구분 | ⏳ 미실행 |
-| Agent Monitoring Contributor 회수 | ⏳ 미실행 |
-| 테스트 resource group 삭제 | ⏳ 미실행 |
-| 잔여 리소스/역할 | ⏳ 미실행 |
+| 테스트 시작 비용 시점 | 2026-08-12 03:49 UTC |
+| Azure Cost Management 실측 | ingestion 지연으로 cost 값 미확정 |
+| consumption record | ACR/Log Analytics meter record 생성 확인 |
+| Agent Monitoring Contributor 회수 | 리소스 보존 중; cleanup script에 assignment ID 기록 |
+| 테스트 resource group 삭제 | 사용자 확인과 Portal/GIF 검토를 위해 보존 |
+| 만료 태그 | `expiresOn=2026-08-13` |
+| 잔여 리소스/역할 | `rg-sre-agent-event-lab-krc`, subscription-scope Agent Monitoring Contributor 2건 |
 
 ## 증거 위치
 

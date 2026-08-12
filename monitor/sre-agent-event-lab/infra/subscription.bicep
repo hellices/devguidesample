@@ -15,6 +15,9 @@ param containerImage string
 @description('Whether to deploy the Container App and alert rules.')
 param deployContainerApp bool = false
 
+@description('Optional Azure Monitor Action Group resource ID for event-driven SRE invocation.')
+param actionGroupResourceId string = ''
+
 @description('Tags applied to the resource group and lab resources.')
 param tags object
 
@@ -32,6 +35,7 @@ module lab 'main.bicep' = {
     suffix: suffix
     containerImage: containerImage
     deployContainerApp: deployContainerApp
+    actionGroupResourceId: actionGroupResourceId
     tags: tags
   }
 }
@@ -49,3 +53,4 @@ output workspaceCustomerId string = lab.outputs.workspaceCustomerId
 output appInsightsName string = lab.outputs.appInsightsName
 output appInsightsResourceId string = lab.outputs.appInsightsResourceId
 output alertRuleNames array = lab.outputs.alertRuleNames
+output telemetryServiceName string = lab.outputs.telemetryServiceName

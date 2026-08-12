@@ -74,13 +74,13 @@ monitor/sre-agent-event-lab/scripts/deploy.sh \
 성공 조건:
 
 1. 두 Bicep deployment가 성공한다.
-2. ACR에 `sre-event-lab:20260812.1`이 존재한다.
+2. ACR에 `sre-event-lab:run-20260812T094446Z` 형식의 실행별 immutable image tag가 존재한다.
 3. active Container App revision이 `Healthy`다.
 4. `/healthz`가 HTTP 200을 반환한다.
 
 ## Azure SRE Agent 설정
 
-`https://sre.azure.com`에서 다음 값을 사용한다.
+실측 환경은 공식 ARM/data-plane API로 생성했다.
 
 | 항목 | 값 |
 |---|---|
@@ -91,37 +91,46 @@ monitor/sre-agent-event-lab/scripts/deploy.sh \
 | Azure resource access | 테스트 resource group, Reader |
 | Repository | `hellices/devguidesample` |
 | Knowledge | `runbooks/incident-response.md` |
-| Incident platform | Azure Monitor |
+| Model | Microsoft Foundry / Automatic |
+| Action mode | Review / Low |
 
-Quickstart response plan은 끄거나 삭제하고 아래 계획만 생성한다.
+### 실제 event bridge
 
-| Plan | Severity | Title filter | Mode |
-|---|---|---|---|
-| `sre-lab-s1-http500` | Sev2 | `[SRE-LAB-S1]` | Review |
-| `sre-lab-s2-latency` | Sev2 | `[SRE-LAB-S2]` | Review |
-| `sre-lab-s3-storage-rbac` | Sev2 | `[SRE-LAB-S3]` | Review |
+Native Azure Monitor response plan은 Portal에서는 생성할 수 있지만 공개 API 자동화가 제한되었다. 이 실험은 Azure SRE Agent의 공식 HTTP Trigger 기능을 사용해 다음 경로를 구성했다.
 
-설정 후 Agent managed identity의 principal ID와 구독 범위 Monitoring Contributor assignment ID를 다음 형식으로 저장한다.
-
-```json
-{
-  "agent_name": "sre-devguidesample-95933ae5",
-  "agent_principal_id": "00000000-0000-0000-0000-000000000000",
-  "monitoring_contributor_assignment_id": "/subscriptions/.../providers/Microsoft.Authorization/roleAssignments/...",
-  "recorded_at": "2026-08-12T00:00:00Z"
-}
+```text
+Azure Monitor scheduled-query alert
+  → Action Group (common alert schema)
+  → Logic App request trigger
+  → Logic App managed identity token
+  → Azure SRE Agent HTTP Trigger (Review)
+  → Agent thread / investigation
 ```
 
-실제 파일은 Git에서 제외되는 `monitor/sre-agent-event-lab/evidence/agent-setup.json`에 둔다.
+| 구성 | 값 |
+|---|---|
+| HTTP Trigger | `sre-lab-alerts`, Review |
+| Logic App | `logic-sre-agent-alert-bridge` |
+| Logic App role | SRE Agent Standard User, Agent scope |
+| Action Group | `ag-sre-agent-event-lab` |
+| Alert action | S1/S2/S3 모두 동일 Action Group |
+| Common schema | Enabled |
+
+중요: 2026-08-12 실측에서 HTTP Trigger endpoint는 `https://management.azure.com/` audience token을 HTTP 401로 거부하고 `https://azuresre.dev` audience token을 수락했다. Logic App HTTP action의 managed identity audience도 `https://azuresre.dev`로 설정해야 한다.
+
+Agent principal, endpoint, subscription-scope assignment ID는 Git에서 제외되는 `monitor/sre-agent-event-lab/evidence/agent-setup.json`에 기록한다.
+
+### Azure MCP
+
+VS Code에서 `ms-azuretools.vscode-azure-mcp-server`와 `ms-azuretools.vscode-azure-github-copilot`을 설치하면 Resource Graph, Monitor, Policy/RBAC 등 구조화된 Azure 도구를 사용할 수 있다. extension 설치 후 VS Code window를 reload하고 Agent Mode의 tools 목록에서 Azure MCP Server를 확인한다.
 
 ## Baseline
 
 배포 output에서 FQDN을 확인하고 정상 요청을 만든다.
 
 ```bash
-FQDN=$(az deployment group show \
-  -g rg-sre-agent-event-lab-krc \
-  -n sre-agent-event-lab-app \
+FQDN=$(az deployment sub show \
+  -n sre-agent-event-lab-private \
   --query properties.outputs.containerAppFqdn.value -o tsv)
 
 python3 monitor/sre-agent-event-lab/scripts/loadgen.py \
@@ -163,6 +172,106 @@ monitor/sre-agent-event-lab/scripts/query-evidence.sh \
 ```
 
 실제 timeline의 UTC 값을 사용해야 한다.
+
+## SRE Agent 실제 동작 캡처
+
+각 시나리오의 `timeline.json`이 생성된 뒤 다음 명령으로 Azure SRE Agent thread와 message를 API에서 수집하고 PNG/GIF/Markdown/Mermaid를 만든다.
+
+```bash
+monitor/sre-agent-event-lab/scripts/capture-scenario.sh \
+  s1 monitor/sre-agent-event-lab/evidence/s1-20260812T051000Z
+```
+
+원본 API snapshot과 normalized timeline은 Git에서 제외되는 evidence 폴더에 남는다.
+
+```text
+monitor/sre-agent-event-lab/evidence/s1-20260812T051000Z/
+  alert.json
+  normalized-timeline.json
+  thread-snapshots/
+```
+
+redaction을 통과한 시각 자료만 commit 대상이다.
+
+```text
+monitor/sre-agent-event-lab/assets/captures/s1/
+  01-alert-fired.png
+  02-thread-created.png
+  03-investigating.png
+  04-conclusion.png
+  investigation.gif
+  timeline.mmd
+  timeline.md
+```
+
+GIF frame 수와 크기를 확인한다.
+
+```bash
+monitor/sre-agent-event-lab/app/.venv/bin/python - <<'PY'
+from PIL import Image
+
+path = "monitor/sre-agent-event-lab/assets/captures/s1/investigation.gif"
+with Image.open(path) as image:
+    print({"frames": image.n_frames, "size": image.size})
+    assert image.n_frames >= 4
+    assert image.size == (1280, 720)
+PY
+```
+
+Agent가 thread를 만들지 않았거나 조사 결론을 내리지 못한 경우에도 GIF는 빈 성공 화면을 만들지 않는다. `thread-not-created`, `investigation-missing`, `conclusion-missing` frame으로 누락 상태와 마지막 polling 시각을 표시한다.
+
+### 선택: Portal UI 수동 녹화
+
+UI 모양 자체를 보존해야 할 때만 API evidence와 별도로 녹화한다.
+
+1. `https://sre.azure.com`에서 해당 incident thread를 연다.
+2. macOS에서 `Shift+Command+5` → 선택한 부분 기록을 사용한다.
+3. alert card → investigation plan → evidence → conclusion 순서로 30~60초 녹화한다.
+4. 계정 메뉴, token, unrelated resource는 화면에 포함하지 않는다.
+5. MP4를 GIF로 변환한다.
+
+```bash
+ffmpeg -i sre-agent-s1.mp4 \
+  -vf "fps=8,scale=1280:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+  monitor/sre-agent-event-lab/assets/captures/s1/portal-investigation.gif
+```
+
+Portal 녹화는 API evidence를 대체하지 않는다. 사실 판정은 `alert.json`, thread snapshots, KQL 결과를 기준으로 한다.
+
+## Static Threshold에서 Dynamic Threshold로
+
+이번 실험은 같은 날 세 장애를 결정론적으로 발생시키기 위해 1분 scheduled-query와 static threshold를 사용했다. 모든 S1/S2/S3 점수와 GIF는 static rule의 실측 결과다. Azure Monitor Dynamic Threshold는 장기 운영에서 정상 패턴을 학습해 anomaly를 찾는 다음 단계이며 이번 세션에서는 **미실증**이다.
+
+| 기준 | Static | Dynamic |
+|---|---|---|
+| 목적 | known failure의 빠른 재현·hard limit 보호 | 시간대·일간·주간 baseline을 벗어난 anomaly |
+| 준비 시간 | 즉시 | 최소 3일·30 samples |
+| 학습 | 수동 threshold | 최근 10일 data, 3주 후 weekly seasonality |
+| Log Search frequency | 1분 가능 | 1분 미지원, 5분 이상 |
+| 운영 | deterministic safety rule | shadow 검증 후 adaptive alert |
+
+### 후보 numeric signal
+
+| Scenario | KQL 결과 | Dynamic 조건 |
+|---|---|---|
+| S1 | 5분당 5xx count 또는 error rate | upper bound 초과 |
+| S2 | `/api/orders` p95 duration(ms) | upper bound 초과 |
+| S3 | Blob 403 count 또는 failure rate | upper bound 초과 |
+
+Boolean 식인 `count() > 10`이 아니라 `summarize ErrorCount=count()`처럼 numeric series를 반환해야 한다.
+
+### 권장 시작값
+
+- Frequency 5분, lookback 15~20분
+- Sensitivity Medium, noise가 크면 Low
+- 4회 평가 중 2회 위반
+- 정상 telemetry 시작 UTC를 learning start로 지정
+- action을 연결하지 않은 shadow mode로 시작
+- 학습 gate 통과 후 기존 `ag-sre-agent-event-lab`을 연결해 같은 Logic App → Review-mode SRE Agent 경로 재사용
+
+Dynamic rule은 3일·30 samples 전에는 발화하지 않으며 3주 전에는 weekly seasonality가 충분하지 않다. 최근 behavior change는 10일 baseline에 즉시 반영되지 않고 slowly evolving issue를 놓칠 수 있으므로, cold start·hard limit·보안 경계용 static rule을 함께 유지한다.
+
+공식 자료: [Azure Monitor alerts with dynamic thresholds](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
 
 ## 판정
 

@@ -105,6 +105,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--scenario", required=True, choices=("s1", "s2", "s3"))
     parser.add_argument("--alert-id", required=True)
     parser.add_argument("--endpoint", required=True)
+    parser.add_argument("--thread-id")
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--timeout", type=int, default=1200)
     parser.add_argument("--interval", type=int, default=15)
@@ -146,24 +147,42 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             token_acquired_at = time.monotonic()
         try:
             threads_payload = data_plane_get(args.endpoint, "/api/v1/threads", token)
-            threads = [
-                item
-                for item in list_items(threads_payload)
-                if thread_matches(item, alert_title, args.scenario)
-            ]
+            available_threads = list_items(threads_payload)
+            threads = []
             messages: Any = []
             thread_payload: Any = {}
-            if threads:
-                selected_id = thread_id(threads[0])
-                if selected_id:
-                    thread_payload = data_plane_get(
-                        args.endpoint, f"/api/v1/threads/{selected_id}", token
-                    )
-                    messages = data_plane_get(
-                        args.endpoint,
-                        f"/api/v1/threads/{selected_id}/messages",
-                        token,
-                    )
+            candidates = (
+                [
+                    item
+                    for item in available_threads
+                    if thread_id(item) == args.thread_id
+                ]
+                if args.thread_id
+                else list(reversed(available_threads))
+            )
+            for candidate in candidates:
+                selected_id = thread_id(candidate)
+                if not selected_id:
+                    continue
+                candidate_thread = data_plane_get(
+                    args.endpoint, f"/api/v1/threads/{selected_id}", token
+                )
+                candidate_messages = data_plane_get(
+                    args.endpoint,
+                    f"/api/v1/threads/{selected_id}/messages",
+                    token,
+                )
+                searchable = {
+                    "thread": candidate_thread,
+                    "messages": list_items(candidate_messages),
+                }
+                if args.thread_id or thread_matches(
+                    searchable, alert_title, args.scenario
+                ):
+                    threads = [candidate_thread]
+                    thread_payload = candidate_thread
+                    messages = candidate_messages
+                    break
             sequence += 1
             source_file = f"thread-snapshots/{sequence:04d}.json"
             snapshot = {

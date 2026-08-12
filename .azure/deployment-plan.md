@@ -1,6 +1,6 @@
 # Azure Deployment Plan
 
-> **Status:** Validated
+> **Status:** Deployed
 
 Generated: 2026-08-12T03:35:07Z
 
@@ -123,7 +123,7 @@ Quota CLI was used first for Microsoft.App and Microsoft.Storage. Azure Resource
 2. Run local tests, shell parse checks, Bicep compilation, group validation, and deployment what-if.
 3. Create the tagged resource group.
 4. Deploy observability, ACR, Storage, managed identity, RBAC, and Container Apps environment with `deployContainerApp=false`.
-5. Build `sre-event-lab:20260812.1` with ACR Tasks.
+5. Build `sre-event-lab:20260812.4` with ACR Tasks.
 6. Deploy the Container App and three scheduled-query alert rules with `deployContainerApp=true`.
 7. Poll revision health and `/healthz`.
 8. Generate normal baseline request and dependency telemetry.
@@ -179,11 +179,12 @@ Quota CLI was used first for Microsoft.App and Microsoft.Storage. Azure Resource
   - [x] Bicep compilation/lint validation
   - [x] Azure Policy validation
 - [ ] Fix all validation blockers and repeat the validation workflow
-- [ ] Invoke `azure-deploy`
-- [ ] Verify baseline telemetry
-- [ ] Configure Azure SRE Agent
-- [ ] Execute and score S1-S3
-- [ ] Publish results and verify cleanup
+- [x] Invoke `azure-deploy`
+- [x] Verify baseline telemetry
+- [x] Configure Azure SRE Agent
+- [x] Execute and score S1-S3
+- [x] Publish results and evidence captures
+- [ ] Cleanup pending explicit confirmation; lab retained with `expiresOn=2026-08-13`
 
 ---
 

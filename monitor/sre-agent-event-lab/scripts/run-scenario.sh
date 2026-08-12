@@ -26,6 +26,8 @@ EVIDENCE_DIR="$(create_evidence_dir "${SCENARIO}")"
 readonly EVIDENCE_DIR
 RECOVERED=0
 INJECTED_AT=""
+REVISION_READY_AT=""
+ROLE_DELETED_AT=""
 ALERT_RULE_NAME=""
 ALERT_ID=""
 ALERT_FIRED_AT=""
@@ -37,20 +39,22 @@ recover() {
 
   case "${SCENARIO}" in
     s1)
+      OLD_REVISION="$(latest_revision_name "${APP_NAME}")"
       az containerapp update \
         --resource-group "${RESOURCE_GROUP}" \
         --name "${APP_NAME}" \
         --set-env-vars FAILURE_MODE=none \
         --output none
-      wait_for_app_ready "${APP_NAME}" 600
+      wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
       ;;
     s2)
+      OLD_REVISION="$(latest_revision_name "${APP_NAME}")"
       az containerapp update \
         --resource-group "${RESOURCE_GROUP}" \
         --name "${APP_NAME}" \
         --set-env-vars ORDER_DELAY_MS=0 \
         --output none
-      wait_for_app_ready "${APP_NAME}" 600
+      wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
       ;;
     s3)
       if ! az role assignment list \
@@ -85,13 +89,15 @@ trap recover_on_exit EXIT
 case "${SCENARIO}" in
   s1)
     ALERT_RULE_NAME="alert-sre-lab-s1-http500"
+    OLD_REVISION="$(latest_revision_name "${APP_NAME}")"
+    INJECTED_AT="$(utc_now)"
     az containerapp update \
       --resource-group "${RESOURCE_GROUP}" \
       --name "${APP_NAME}" \
       --set-env-vars FAILURE_MODE=http500 \
       --output none
-    wait_for_app_ready "${APP_NAME}" 600
-    INJECTED_AT="$(utc_now)"
+    wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
+    REVISION_READY_AT="$(utc_now)"
     python3 "${SCRIPT_DIR}/loadgen.py" \
       "https://${APP_FQDN}/api/orders" \
       --requests 120 \
@@ -101,13 +107,15 @@ case "${SCENARIO}" in
     ;;
   s2)
     ALERT_RULE_NAME="alert-sre-lab-s2-latency"
+    OLD_REVISION="$(latest_revision_name "${APP_NAME}")"
+    INJECTED_AT="$(utc_now)"
     az containerapp update \
       --resource-group "${RESOURCE_GROUP}" \
       --name "${APP_NAME}" \
       --set-env-vars ORDER_DELAY_MS=4000 \
       --output none
-    wait_for_app_ready "${APP_NAME}" 600
-    INJECTED_AT="$(utc_now)"
+    wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
+    REVISION_READY_AT="$(utc_now)"
     python3 "${SCRIPT_DIR}/loadgen.py" \
       "https://${APP_FQDN}/api/orders" \
       --requests 90 \
@@ -120,8 +128,9 @@ case "${SCENARIO}" in
     ALERT_RULE_NAME="alert-sre-lab-s3-storage-rbac"
     ROLE_ASSIGNMENT_ID="${STORAGE_CONTAINER_SCOPE}/providers/Microsoft.Authorization/roleAssignments/${BLOB_ROLE_ASSIGNMENT_NAME}"
     readonly ROLE_ASSIGNMENT_ID
-    az role assignment delete --ids "${ROLE_ASSIGNMENT_ID}"
     INJECTED_AT="$(utc_now)"
+    az role assignment delete --ids "${ROLE_ASSIGNMENT_ID}"
+    ROLE_DELETED_AT="$(utc_now)"
     python3 "${SCRIPT_DIR}/loadgen.py" \
       "https://${APP_FQDN}/api/documents" \
       --requests 60 \
@@ -164,6 +173,8 @@ trap - EXIT
 jq -n \
   --arg scenario "${SCENARIO}" \
   --arg injectedAt "${INJECTED_AT}" \
+  --arg revisionReadyAt "${REVISION_READY_AT}" \
+  --arg roleDeletedAt "${ROLE_DELETED_AT}" \
   --arg alertRule "${ALERT_RULE_NAME}" \
   --arg alertId "${ALERT_ID}" \
   --arg alertFiredAt "${ALERT_FIRED_AT}" \
@@ -171,6 +182,8 @@ jq -n \
   '{
     scenario: $scenario,
     injected_at: $injectedAt,
+    revision_ready_at: (if $revisionReadyAt == "" then null else $revisionReadyAt end),
+    role_deleted_at: (if $roleDeletedAt == "" then null else $roleDeletedAt end),
     alert_rule: $alertRule,
     alert_id: $alertId,
     alert_fired_at: $alertFiredAt,

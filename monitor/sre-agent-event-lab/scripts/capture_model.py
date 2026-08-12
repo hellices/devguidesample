@@ -22,7 +22,7 @@ CONNECTION_PATTERN = re.compile(
     r"(?i)\b(InstrumentationKey|ConnectionString)\s*=\s*[^;\s]+"
 )
 CONCLUSION_PATTERN = re.compile(
-    r"(?i)\b(root cause|conclusion|remediation summary|resolved)\b"
+    r"(?i)\b(root cause|conclusion|incident summary|remediation summary|resolved)\b"
 )
 
 
@@ -78,8 +78,11 @@ def _get_timestamp(item: dict[str, Any], fallback: str) -> str:
         "createdAt",
         "created_at",
         "createdDateTime",
+        "createdTimestamp",
+        "timeStamp",
         "timestamp",
         "updatedAt",
+        "modifiedTimestamp",
     ):
         if item.get(key):
             return _timestamp(item[key], fallback)
@@ -165,9 +168,12 @@ def normalize_capture(
             message_id = str(message.get("id", message.get("messageId", "message")))
             if message_id in seen_messages:
                 continue
-            seen_messages.add(message_id)
             summary = _message_summary(message)
-            is_conclusion = bool(CONCLUSION_PATTERN.search(summary))
+            if not summary or summary.startswith("[HTTP_TRIGGER_EXECUTION]"):
+                continue
+            seen_messages.add(message_id)
+            is_reasoning = str(message.get("messageType", "")).lower() == "reasoning"
+            is_conclusion = not is_reasoning and bool(CONCLUSION_PATTERN.search(summary))
             state = "conclusion" if is_conclusion else "investigating"
             conclusion_found = conclusion_found or is_conclusion
             message_timestamp = _get_timestamp(message, captured_at)
@@ -203,6 +209,31 @@ def normalize_capture(
                             )
                         )
 
+    event_states = {event.state for event in events}
+    if not seen_threads:
+        events.append(
+            CaptureEvent(
+                event_id="thread-not-created",
+                timestamp=last_timestamp,
+                state="thread-not-created",
+                title="Incident thread not created",
+                summary="No matching SRE Agent thread was present before capture ended.",
+                source="capture",
+                source_file=last_snapshot_file,
+            )
+        )
+    if "investigating" not in event_states:
+        events.append(
+            CaptureEvent(
+                event_id="investigation-missing",
+                timestamp=last_timestamp,
+                state="investigation-missing",
+                title="Investigation not captured",
+                summary="No investigation message or running state was captured.",
+                source="capture",
+                source_file=last_snapshot_file,
+            )
+        )
     if not conclusion_found:
         events.append(
             CaptureEvent(
@@ -219,9 +250,11 @@ def normalize_capture(
     state_order = {
         "alert-fired": 0,
         "thread-created": 1,
-        "investigating": 2,
-        "conclusion": 3,
-        "conclusion-missing": 4,
+        "thread-not-created": 2,
+        "investigating": 3,
+        "investigation-missing": 4,
+        "conclusion": 5,
+        "conclusion-missing": 6,
     }
     deduplicated = {}
     for event in events:

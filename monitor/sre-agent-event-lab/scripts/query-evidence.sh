@@ -23,8 +23,9 @@ APP_NAME="$(deployment_output containerAppName)"
 WORKSPACE_CUSTOMER_ID="$(deployment_output workspaceCustomerId)"
 WORKLOAD_PRINCIPAL_ID="$(deployment_output containerAppPrincipalId)"
 STORAGE_CONTAINER_SCOPE="$(deployment_output storageContainerScope)"
+TELEMETRY_SERVICE_NAME="$(deployment_output telemetryServiceName)"
 readonly APP_NAME WORKSPACE_CUSTOMER_ID WORKLOAD_PRINCIPAL_ID
-readonly STORAGE_CONTAINER_SCOPE
+readonly STORAGE_CONTAINER_SCOPE TELEMETRY_SERVICE_NAME
 
 query_workspace() {
   local query="$1"
@@ -37,20 +38,28 @@ query_workspace() {
 }
 
 query_workspace \
-  'AppRequests | where AppRoleName == "sre-event-lab" | project TimeGenerated, Name, ResultCode, Success, DurationMs, OperationId | order by TimeGenerated asc' \
+  "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | project TimeGenerated, Name, ResultCode, Success, DurationMs, OperationId | order by TimeGenerated asc" \
   "${EVIDENCE_DIR}/app-requests.json"
 query_workspace \
-  'AppDependencies | where AppRoleName == "sre-event-lab" | project TimeGenerated, Name, Target, ResultCode, Success, DurationMs, OperationId | order by TimeGenerated asc' \
+  "AppDependencies | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | project TimeGenerated, Name, Target, ResultCode, Success, DurationMs, OperationId | order by TimeGenerated asc" \
   "${EVIDENCE_DIR}/app-dependencies.json"
 query_workspace \
-  'AppExceptions | where AppRoleName == "sre-event-lab" | project TimeGenerated, ExceptionType, OuterMessage, OperationId | order by TimeGenerated asc' \
+  "AppExceptions | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | project TimeGenerated, ExceptionType, OuterMessage, OperationId | order by TimeGenerated asc" \
   "${EVIDENCE_DIR}/app-exceptions.json"
 
 az monitor activity-log list \
   --resource-group "${RESOURCE_GROUP}" \
   --start-time "${START_UTC}" \
   --end-time "${END_UTC}" \
-  -o json >"${EVIDENCE_DIR}/activity-log.json"
+  -o json |
+  jq 'map({
+    eventTimestamp: .eventTimestamp,
+    operationName: .operationName.value,
+    status: .status.value,
+    subStatus: .subStatus.value,
+    resourceId: .resourceId,
+    correlationId: .correlationId
+  })' >"${EVIDENCE_DIR}/activity-log.json"
 
 az rest \
   --method get \

@@ -14,6 +14,9 @@ param containerImage string
 @description('Whether to deploy the Container App and alert rules.')
 param deployContainerApp bool = false
 
+@description('Optional Azure Monitor Action Group resource ID for event-driven SRE invocation.')
+param actionGroupResourceId string = ''
+
 @description('Tags applied to all resources that support tags.')
 param tags object
 
@@ -45,11 +48,10 @@ module alerts 'alerts.bicep' = if (deployContainerApp) {
   params: {
     location: location
     appInsightsResourceId: observability.outputs.appInsightsResourceId
+    actionGroupResourceId: actionGroupResourceId
+    serviceName: workload.outputs.telemetryServiceName
     tags: tags
   }
-  dependsOn: [
-    workload
-  ]
 }
 
 output acrName string = workload.outputs.acrName
@@ -64,3 +66,4 @@ output workspaceCustomerId string = observability.outputs.workspaceCustomerId
 output appInsightsName string = observability.outputs.appInsightsName
 output appInsightsResourceId string = observability.outputs.appInsightsResourceId
 output alertRuleNames array = deployContainerApp ? alerts!.outputs.alertRuleNames : []
+output telemetryServiceName string = workload.outputs.telemetryServiceName

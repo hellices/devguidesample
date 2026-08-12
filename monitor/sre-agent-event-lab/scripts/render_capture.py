@@ -50,6 +50,12 @@ def short_hash(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:10]
 
 
+def compact_title(value: str) -> str:
+    if value.startswith("/subscriptions/"):
+        return value.rstrip("/").split("/")[-1]
+    return value
+
+
 def ensure_safe(timeline: list[dict[str, Any]]) -> None:
     serialized = json.dumps(timeline, sort_keys=True)
     if SENSITIVE_PATTERN.search(serialized):
@@ -111,7 +117,7 @@ def render_frame(
         draw,
         (40, 125, 415, 585),
         "Azure Monitor Alert",
-        wrapped_lines(alert["title"], 30, 3)
+        wrapped_lines(compact_title(alert["title"]), 30, 3)
         + [f"UTC {alert['timestamp']}", f"ID {short_hash(alert['event_id'])}"],
         STATE_COLORS["alert-fired"],
     )
@@ -131,7 +137,7 @@ def render_frame(
     _card(
         draw,
         (885, 125, 1240, 585),
-        event["title"],
+        compact_title(event["title"]),
         wrapped_lines(event["summary"], 28, 9)
         + [f"Source: {event['source']}", f"Event: {short_hash(event['event_id'])}"],
         color,
@@ -181,6 +187,44 @@ def markdown_text(timeline: list[dict[str, Any]]) -> str:
     return "\n".join(rows) + "\n"
 
 
+def select_frame_events(timeline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if len(timeline) <= 8:
+        return timeline
+
+    fixed = [
+        event
+        for event in timeline
+        if event["state"]
+        in {
+            "alert-fired",
+            "thread-created",
+            "thread-not-created",
+            "investigation-missing",
+            "conclusion-missing",
+        }
+    ]
+    investigating = [
+        event for event in timeline if event["state"] == "investigating"
+    ]
+    conclusions = [event for event in timeline if event["state"] == "conclusion"]
+
+    selected_investigating = []
+    if investigating:
+        sample_count = min(4, len(investigating))
+        indices = {
+            round(index * (len(investigating) - 1) / max(1, sample_count - 1))
+            for index in range(sample_count)
+        }
+        selected_investigating = [
+            investigating[index] for index in sorted(indices)
+        ]
+
+    selected = fixed + selected_investigating
+    if conclusions:
+        selected.append(conclusions[-1])
+    return sorted(selected, key=lambda event: parse_timestamp(event["timestamp"]))[:8]
+
+
 def render_capture(
     timeline: list[dict[str, Any]], output_dir: Path, scenario: str
 ) -> dict[str, str]:
@@ -188,13 +232,14 @@ def render_capture(
         raise ValueError("timeline must contain at least one event")
     ensure_safe(timeline)
     output_dir.mkdir(parents=True, exist_ok=True)
+    frame_timeline = select_frame_events(timeline)
 
     frame_paths = []
     frames = []
-    for index, event in enumerate(timeline):
+    for index, event in enumerate(frame_timeline):
         safe_state = re.sub(r"[^a-z0-9-]", "-", event["state"].lower())
         path = output_dir / f"{index + 1:02d}-{safe_state}.png"
-        frame = render_frame(timeline, index, scenario)
+        frame = render_frame(frame_timeline, index, scenario)
         frame.save(path)
         frame_paths.append(path)
         frames.append(frame)

@@ -13,9 +13,8 @@ from fastapi import FastAPI, Header, HTTPException
 from telemetry import configure_telemetry
 
 
-configure_telemetry()
-
 app = FastAPI(title="Azure SRE Agent Event Lab")
+configure_telemetry(app)
 logger = logging.getLogger("sre_event_lab")
 logger.setLevel(logging.INFO)
 

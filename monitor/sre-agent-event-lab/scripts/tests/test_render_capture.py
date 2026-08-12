@@ -79,3 +79,22 @@ def test_command_line_reads_timeline_json(tmp_path):
 
     assert exit_code == 0
     assert (output_dir / "investigation.gif").exists()
+
+
+def test_renderer_limits_long_investigations_to_eight_frames(tmp_path):
+    renderer = load_module()
+    timeline = sample_timeline()
+    investigating = timeline[2]
+    timeline = timeline[:2] + [
+        {
+            **investigating,
+            "event_id": f"investigation-{index}",
+            "timestamp": f"2026-08-12T05:01:{index:02d}Z",
+            "summary": f"Investigation step {index}",
+        }
+        for index in range(12)
+    ] + [timeline[-1]]
+
+    renderer.render_capture(timeline, tmp_path, scenario="s1")
+
+    assert len(list(tmp_path.glob("*.png"))) <= 8

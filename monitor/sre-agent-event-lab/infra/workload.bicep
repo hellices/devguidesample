@@ -26,7 +26,9 @@ param tags object
 
 var acrName = 'acrsrelab${suffix}'
 var storageName = 'stsrelab${suffix}'
-var appName = 'ca-sre-event-lab'
+var appName = 'ca-sre-event-lab-vnet'
+var telemetryServiceName = 'sre-event-lab-${suffix}'
+var privateDnsZoneName = 'privatelink.blob.${az.environment().suffixes.storage}'
 var acrPullRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '7f951dda-4ed3-4680-a7ca-43fe172d538d'
@@ -65,7 +67,11 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     allowSharedKeyAccess: false
     defaultToOAuthAuthentication: true
     minimumTlsVersion: 'TLS1_2'
-    publicNetworkAccess: 'Enabled'
+    networkAcls: {
+      bypass: 'None'
+      defaultAction: 'Deny'
+    }
+    publicNetworkAccess: 'Disabled'
     supportsHttpsTrafficOnly: true
   }
 }
@@ -94,6 +100,104 @@ resource workloadIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023
   tags: tags
 }
 
+resource virtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' = {
+  name: 'vnet-sre-event-lab-${suffix}'
+  location: location
+  tags: tags
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        '10.42.0.0/16'
+      ]
+    }
+  }
+}
+
+resource containerAppsSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
+  parent: virtualNetwork
+  name: 'snet-container-apps'
+  properties: {
+    addressPrefix: '10.42.0.0/23'
+    delegations: [
+      {
+        name: 'container-apps-delegation'
+        properties: {
+          serviceName: 'Microsoft.App/environments'
+        }
+      }
+    ]
+  }
+}
+
+resource privateEndpointSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
+  parent: virtualNetwork
+  name: 'snet-private-endpoints'
+  properties: {
+    addressPrefix: '10.42.2.0/24'
+    privateEndpointNetworkPolicies: 'Disabled'
+  }
+}
+
+resource blobPrivateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = {
+  name: privateDnsZoneName
+  location: 'global'
+  tags: tags
+}
+
+resource blobPrivateDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = {
+  parent: blobPrivateDnsZone
+  name: 'link-sre-event-lab'
+  location: 'global'
+  tags: tags
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: virtualNetwork.id
+    }
+  }
+}
+
+resource blobPrivateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
+  name: 'pe-${storageName}-blob'
+  location: location
+  tags: tags
+  properties: {
+    privateLinkServiceConnections: [
+      {
+        name: 'blob'
+        properties: {
+          groupIds: [
+            'blob'
+          ]
+          privateLinkServiceId: storage.id
+          requestMessage: 'Azure SRE Agent event lab Blob access'
+        }
+      }
+    ]
+    subnet: {
+      id: privateEndpointSubnet.id
+    }
+  }
+}
+
+resource blobPrivateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
+  parent: blobPrivateEndpoint
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: 'blob'
+        properties: {
+          privateDnsZoneId: blobPrivateDnsZone.id
+        }
+      }
+    ]
+  }
+  dependsOn: [
+    blobPrivateDnsLink
+  ]
+}
+
 resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, workloadIdentity.id, acrPullRoleDefinitionId)
   scope: registry
@@ -115,7 +219,7 @@ resource blobReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-0
 }
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: 'cae-sre-event-lab-${suffix}'
+  name: 'cae-sre-event-lab-private-${suffix}'
   location: location
   tags: tags
   properties: {
@@ -125,6 +229,10 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         customerId: workspaceCustomerId
         sharedKey: workspaceSharedKey
       }
+    }
+    vnetConfiguration: {
+      infrastructureSubnetId: containerAppsSubnet.id
+      internal: false
     }
     zoneRedundant: false
   }
@@ -198,7 +306,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = if (deployConta
             }
             {
               name: 'OTEL_SERVICE_NAME'
-              value: 'sre-event-lab'
+              value: telemetryServiceName
             }
           ]
           probes: [
@@ -248,6 +356,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = if (deployConta
   dependsOn: [
     acrPullAssignment
     blobReaderAssignment
+    blobPrivateDnsZoneGroup
   ]
 }
 
@@ -258,3 +367,4 @@ output containerAppFqdn string = deployContainerApp ? containerApp!.properties.c
 output workloadPrincipalId string = workloadIdentity.properties.principalId
 output storageContainerScope string = documentsContainer.id
 output blobRoleAssignmentName string = blobReaderAssignment.name
+output telemetryServiceName string = telemetryServiceName
