@@ -1,4 +1,8 @@
-# Azure SRE Agent 이벤트 기반 장애 분석 실증 테스트 — 결과
+# Azure SRE Agent 실제 동작 검증 부록
+
+> 제품 개요와 실사용 패턴은 [Azure SRE Agent 소개 자료](../../../monitor/azure-sre-agent.md)를 먼저 참고한다.
+>
+> 이 문서는 소개 자료에서 사용한 S1/S2/S3 시나리오의 수치, timeline, evidence, 한계를 보존하는 검증 부록이다.
 
 - 실행일: 2026-08-12 | 리전: Korea Central | 구독: `ME-MngEnvMCAP310512-inhwanhwang-3`
 - 목표: Azure Monitor 경고를 Azure SRE Agent가 자동 수신해 원인과 안전한 완화책을 올바르게 도출하는지 실증

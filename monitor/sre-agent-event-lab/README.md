@@ -1,5 +1,7 @@
 # Azure SRE Agent 이벤트 기반 장애 분석 실험실
 
+제품 소개와 운영 패턴은 [Azure SRE Agent 소개 자료](../azure-sre-agent.md)를 참고한다. 이 문서는 lab 배포·재현·evidence 수집을 위한 운영 가이드다.
+
 Azure Container Apps에 결정론적 장애를 주입하고, Azure Monitor 경고를 Azure SRE Agent가 이벤트 기반으로 수신·분석하는지 실제 Azure 리소스에서 검증한다.
 
 ## 구성
