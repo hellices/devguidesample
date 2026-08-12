@@ -1,0 +1,48 @@
+{
+  "scenario": "s3",
+  "frames": [
+    {
+      "badge": "SCENARIO",
+      "title": "Blob RBAC 403/503",
+      "body": "Workload identity의 Blob read role이 삭제되어 문서 API가 실패한다.\n\n사용자 영향\nBlob 403과 API 503이 60건 발생",
+      "footer": "설명 frame — 실제 장애 맥락"
+    },
+    {
+      "badge": "EXPECTATION",
+      "title": "Agent에게 기대하는 조사",
+      "body": "1. Activity Log의 role deletion 식별\n2. Blob dependency 403과 API 503 연결\n3. 원래 least-privilege scope의 role 복원 제안",
+      "footer": "설명 frame — 성공 기준"
+    },
+    {
+      "badge": "ACTUAL",
+      "title": "Azure Monitor가 incident를 감지",
+      "body": "/subscriptions/95933ae5-0201-4a21-a1fc-8051a7437982/resourceGroups/rg-sre-agent-event-lab-krc/providers/microsoft.insights/scheduledqueryrules/alert-sre-lab-s3-storage-rbac\n\nSev2 alert fired\nUTC 2026-08-12T08:42:11.059575Z",
+      "footer": "실제 evidence — alert.json"
+    },
+    {
+      "badge": "ACTUAL",
+      "title": "SRE Agent investigation 시작",
+      "body": "Thread status: {'actionsStatus': {'hasCriticalActions': False, 'hasWarningActions': False}, 'incidentStatus': {'incidentId': '', 'status': ''}}\n\nAlert에서 Agent thread까지 자동 전달\nUTC 2026-08-12T08:42:13.055332Z",
+      "footer": "실제 evidence — thread-snapshots/0001.json"
+    },
+    {
+      "badge": "ACTUAL",
+      "title": "Telemetry · Change · Code evidence",
+      "body": "The role assignment is present, but recovery has not completed: at `08:45 UTC`, the public `/api/documents` endpoint still returns `503` while the replica remains ready. I’m separating post-restore dependency and request telemetry to distinguish RBAC propagation from a second fault.",
+      "footer": "실제 Agent message — UTC 2026-08-12T08:46:06.560018Z"
+    },
+    {
+      "badge": "ACTUAL",
+      "title": "Root cause와 조치 방안",
+      "body": "## Incident summary\n\n- **Alert:** `[SRE-LAB-S3] Blob dependency failures exceeded` (Sev2), fired **2026-08-12 08:42:11 UTC**.\n- **Affected path:** `GET /api/documents` on `ca-sre-event-lab`; Blob target `stsrelab95933ae5/documents`.\n- **Onset:** first `503` at **08:40:08.363 UTC**; first Blob `403` at **08:40:08.375 UTC**.\n\n## Root cause\n\nThe workload managed identity `b2be110a-9aae-463f-aac6-9238cf3a5362` lost its container-scoped **Storage Blob Data Reader** assignment at **08:40:07.988 UTC**. The storage call then failed with `AuthorizationPermissionMismatch`, which the app surfaced as `503`.\n\n## Evidence\n\n- Activity Log shows `roleAssignments/delete` for the `documents` container at **08:40:07.988 UTC**.\n- A representative trace shows `list_blobs` failing against Blob Storage with `403` and `AuthorizationPermissionMismatch`.\n- The alert window contained **60** Blob `403` failures.\n- The role was restored at **08:42:48.660 UTC**; current assignment is `Storage Blob Data Reader` at the original container scope.\n\n## Current status\n\nRecovery is **still propagating**: a Blob `403` occurred at **08:45:25 UTC**, and the external endpoint returned `503` at approximately **08:45 UTC**. The Container App revision is otherwise running with one ready replica.\n\n## Smallest safe mitigation\n\nNo additional change is recommended: the least-privilege role has already been restored at the correct scope. Allow RBAC propagation, then recheck `/api/documents` and Blob `403` telemetry. Do not restart or redeploy solely for this issue.\n\nThe connected repository contains managed-identity Blob-client guidance but not this deployed lab workload’s source: [bench_runner.py](https://github.com/hellices/devguidesample/blob/main/aisearch/custom_vectorization/bench/bench_runner.py#L49).",
+      "footer": "실제 Agent conclusion — UTC 2026-08-12T08:46:37.172586Z"
+    },
+    {
+      "badge": "OPERATIONAL OUTPUT",
+      "title": "분석을 운영 workflow로 전달",
+      "body": "결과\nRole deletion 원인은 찾았지만 recovery endpoint 혼동을 기록\n\nTicket\nGitHub Issue — 생성 단계에서 URL 연결\n\nEmail\nOutlook email draft — 미리보기 연결\n\nReview mode — Agent가 임의로 resource를 변경하지 않음",
+      "footer": "Ticket · Email · Teams에 같은 structured summary 재사용"
+    }
+  ],
+  "gif": "monitor/sre-agent-event-lab/assets/storyboards/s3/investigation-guide.gif"
+}
