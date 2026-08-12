@@ -123,3 +123,25 @@ def test_storyboard_renders_missing_agent_states(tmp_path):
     assert any("생성되지 않음" in body for body in actual_bodies)
     assert any("수집되지 않음" in body for body in actual_bodies)
     assert (tmp_path / "investigation-guide.gif").exists()
+
+
+def test_storyboard_sanitizes_sensitive_timeline_content(tmp_path):
+    storyboard = load_module()
+    unsafe = sample_timeline()
+    unsafe[2]["summary"] += (
+        " AccountKey=abc123 "
+        "preferred_username=user@contoso.com "
+        "https://logic.example/path?sig=verylongcallbacksigrandomvalue"
+    )
+
+    storyboard.render_storyboard(
+        scenario="s1",
+        timeline=unsafe,
+        output_dir=tmp_path,
+    )
+
+    manifest = (tmp_path / "manifest.json").read_text()
+    assert "abc123" not in manifest
+    assert "user@contoso.com" not in manifest
+    assert "verylongcallbacksigrandomvalue" not in manifest
+    assert "[REDACTED]" in manifest

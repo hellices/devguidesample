@@ -143,7 +143,7 @@ monitor/sre-agent-event-lab/app/.venv/bin/python \
   monitor/sre-agent-event-lab/scripts/generate_notifications.py \
   --timeline monitor/sre-agent-event-lab/evidence/s1-20260812T080606Z/normalized-timeline.json \
   --output-dir monitor/sre-agent-event-lab/assets/notifications \
-  --report-url https://github.com/hellices/devguidesample/blob/main/docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md \
+  --report-url "docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md (available after feature branch merge)" \
   --issue-url https://github.com/hellices/devguidesample/issues/43
 ```
 

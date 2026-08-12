@@ -100,7 +100,7 @@
 | Azure Monitor fired | 08:07:56.262 | +107s |
 | Logic App bridge | 08:07:58.037 | +2s |
 | Agent thread 생성 | 08:07:58.695 | +2s |
-| Agent 첫 구조화 결론 | 08:10:21.972 | +145s |
+| Agent 첫 구조화 결론 | 08:10:21.972 | +143s (thread 기준) |
 | 복구 revision active | 08:09경 | 조사 중 확인 |
 | Alert resolved | Azure Monitor auto-mitigate | 정상 telemetry 확인 |
 
@@ -148,7 +148,7 @@
 | 첫 slow request 시작 | 08:16:23.174 | +39s |
 | Azure Monitor fired | 08:17:49.338 | +125s |
 | Agent thread 생성 | 08:17:52.281 | +3s |
-| Agent 첫 구조화 결론 | 08:21:48.633 | +239s |
+| Agent 첫 구조화 결론 | 08:21:48.633 | +236s (thread 기준) |
 | 복구 | 08:19:06 | revision 전환 완료 |
 | Alert resolved | Azure Monitor auto-mitigate | 정상 p95 확인 |
 
@@ -190,7 +190,7 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 | 첫 dependency failure | 08:40:08.375 | +0.4s |
 | Azure Monitor fired | 08:42:11.060 | +123s |
 | Agent thread 생성 | 08:42:13.055 | +2s |
-| Agent 첫 구조화 결론 | 08:46:37.173 | +266s |
+| Agent 첫 구조화 결론 | 08:46:37.173 | +264s (thread 기준) |
 | 역할 복구 | 08:42:48.660 | original container scope |
 | 실제 endpoint 정상 확인 | 실행자 후속 확인 | HTTP 200 |
 

@@ -8,6 +8,8 @@ from typing import Any, Optional, Sequence
 
 from PIL import Image, ImageDraw, ImageFont
 
+from generate_notifications import sanitize
+
 
 WIDTH = 1280
 HEIGHT = 720
@@ -77,6 +79,7 @@ def load_font(size: int, bold: bool = False):
 
 
 def clean_text(value: str) -> str:
+    value = sanitize(value)
     value = re.sub(r"\[HTTP_TRIGGER_EXECUTION\].*", "", value, flags=re.DOTALL)
     value = value.replace("**", "").replace("`", "")
     return "\n".join(" ".join(line.split()) for line in value.splitlines())
@@ -190,25 +193,29 @@ def build_frames(
         {
             "badge": "ACTUAL",
             "title": "Azure Monitor가 incident를 감지",
-            "body": f"{alert['title']}\n\n{alert['summary']}\nUTC {alert['timestamp']}",
+            "body": sanitize(
+                f"{alert['title']}\n\n{alert['summary']}\nUTC {alert['timestamp']}"
+            ),
             "footer": f"실제 evidence — {alert['source_file']}",
         },
         {
             "badge": "ACTUAL",
             "title": "SRE Agent investigation 시작",
-            "body": f"{thread['summary']}\n\nAlert에서 Agent thread까지 자동 전달\nUTC {thread['timestamp']}",
+            "body": sanitize(
+                f"{thread['summary']}\n\nAlert에서 Agent thread까지 자동 전달\nUTC {thread['timestamp']}"
+            ),
             "footer": f"실제 evidence — {thread['source_file']}",
         },
         {
             "badge": "ACTUAL",
             "title": "Telemetry · Change · Code evidence",
-            "body": evidence["summary"],
+            "body": sanitize(evidence["summary"]),
             "footer": f"실제 Agent message — UTC {evidence['timestamp']}",
         },
         {
             "badge": "ACTUAL",
             "title": "Root cause와 조치 방안",
-            "body": conclusion["summary"],
+            "body": sanitize(conclusion["summary"]),
             "footer": f"실제 Agent conclusion — UTC {conclusion['timestamp']}",
         },
         {
