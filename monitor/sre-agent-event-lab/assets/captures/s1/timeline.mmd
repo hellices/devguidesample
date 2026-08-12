@@ -6,14 +6,14 @@ sequenceDiagram
     SREAgent->>Evidence: thread-created - Thread status- {'actionsStatus'- {'hasCriticalActions'- False, 'hasWarningActions'- False}, 'inciden
     SREAgent->>Evidence: investigating - **Investigating application insights**  I need to delve into Application Insights and assess skill r
     SREAgent->>Evidence: investigating - I’m correlating the alert window with telemetry, recent Azure changes, and the lab application’s fau
-    SREAgent->>Evidence: investigating - Checking the resource group for the instrumented workload and the deployment/activity record around 
+    SREAgent->>Evidence: investigating - Checking the resource group for the instrumented workload and the deployment/activity record around
     SREAgent->>Evidence: investigating - Grep Search- Found 30 matches in 9 files for query '(?i)(sre-event-lab|fault.?inject|http.?500|statu
     SREAgent->>Evidence: investigating - **Evaluating resources and tools**  I'm considering using `ListDir` to see if it reveals any apps. T
     SREAgent->>Evidence: investigating - Read file- code- devguidesample/infra/main.bicep
     SREAgent->>Evidence: investigating - **Working on code search**  I'm considering using the terminal to find the right code, possibly with
     SREAgent->>Evidence: investigating - The active revision explicitly has `FAILURE_MODE=http500`; telemetry shows all 120 failed requests a
-    SREAgent->>Evidence: investigating - Terminal- cd /home/appuser/sreagent/terminalRoot/codeRefs/devguidesample && git ls-files | grep -Ei 
-    SREAgent->>Evidence: investigating - **Analyzing activity logs**  I’m noticing that we found 0011 modifying the config, but the activity 
+    SREAgent->>Evidence: investigating - Terminal- cd /home/appuser/sreagent/terminalRoot/codeRefs/devguidesample && git ls-files | grep -Ei
+    SREAgent->>Evidence: investigating - **Analyzing activity logs**  I’m noticing that we found 0011 modifying the config, but the activity
     SREAgent->>Evidence: investigating - **Validating deployment activity**  I’m considering whether we need to read the git status, but it m
     SREAgent->>Evidence: investigating - The fault window was only 1.24 seconds- 120 `GET /api/orders` failures began at 08-06-52.147 UTC, af
     SREAgent->>Evidence: conclusion - **Root cause confirmed-** Container App `ca-sre-event-lab-vnet` deployed revision `0000010` at 08-06

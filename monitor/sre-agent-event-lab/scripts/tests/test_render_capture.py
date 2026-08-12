@@ -98,3 +98,7 @@ def test_renderer_limits_long_investigations_to_eight_frames(tmp_path):
     renderer.render_capture(timeline, tmp_path, scenario="s1")
 
     assert len(list(tmp_path.glob("*.png"))) <= 8
+    assert all(
+        line == line.rstrip()
+        for line in (tmp_path / "timeline.mmd").read_text().splitlines()
+    )

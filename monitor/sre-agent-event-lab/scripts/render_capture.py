@@ -161,7 +161,7 @@ def mermaid_text(timeline: list[dict[str, Any]]) -> str:
         "    participant Evidence",
     ]
     for event in timeline:
-        summary = event["summary"].replace("\n", " ").replace(":", "-")[:100]
+        summary = event["summary"].replace("\n", " ").replace(":", "-")[:100].rstrip()
         if event["source"] == "azure-monitor":
             lines.append(f"    AzureMonitor->>SREAgent: {summary}")
         elif event["source"] == "sre-agent":
