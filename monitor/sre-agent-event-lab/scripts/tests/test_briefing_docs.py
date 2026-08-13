@@ -217,6 +217,40 @@ def test_briefing_keeps_processing_time_caveat():
     assert "여러 차례 반복" in text
 
 
+def test_briefing_covers_specialization_and_routing_topics():
+    text = BRIEFING.read_text()
+
+    for heading in (
+        "## 팀에 맞게 어떻게 확장하나요?",
+        "## 인시던트를 담당자에게 어떻게 배분하나요?",
+    ):
+        assert heading in text, heading
+
+    for topic in (
+        "사용자 지정 에이전트",
+        "스킬",
+        "최대 5개",
+        "심각도",
+        "영향을 받은 서비스",
+        "인시던트 유형",
+        "제목",
+    ):
+        assert topic in text, topic
+
+    for source in (
+        "https://learn.microsoft.com/azure/sre-agent/sub-agents",
+        "https://learn.microsoft.com/azure/sre-agent/skills",
+    ):
+        assert source in text, source
+
+
+def test_briefing_marks_preview_capabilities():
+    text = BRIEFING.read_text()
+
+    managed = text.split("관리형 커넥터")[1][:200]
+    assert "미리 보기" in managed
+
+
 def test_official_sre_agent_svgs_are_stored_locally():
     asset_dir = (
         REPO_ROOT
