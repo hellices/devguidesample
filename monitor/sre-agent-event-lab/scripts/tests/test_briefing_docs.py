@@ -27,6 +27,24 @@ OFFICIAL_PNGS = {
 OFFICIAL_ASSETS = OFFICIAL_SVGS | OFFICIAL_PNGS
 
 
+def windows_after(text: str, anchor: str, size: int = 500) -> list:
+    """Return a text window following each occurrence of `anchor`.
+
+    Used to check that groups of related keywords appear close together
+    (i.e. in the same sentence/paragraph), without pinning the test to one
+    exact, invented sentence.
+    """
+    windows = []
+    start = 0
+    while True:
+        idx = text.find(anchor, start)
+        if idx == -1:
+            break
+        windows.append(text[idx : idx + size])
+        start = idx + 1
+    return windows
+
+
 def prose_only(markdown: str) -> str:
     markdown = re.sub(r"```.*?```", "", markdown, flags=re.DOTALL)
     markdown = re.sub(r"`[^`]+`", "", markdown)
@@ -348,11 +366,35 @@ def test_briefing_covers_private_network_connectivity():
     ):
         assert topic in text, topic
 
-    for limitation in (
-        "커넥터 트래픽은 이번 미리 보기에서 VNet을 거치지 않고 공개 인터넷 경로를 사용합니다",
-        "이번 미리 보기는 아웃바운드 트래픽만 제어하며 프라이빗 엔드포인트로 들어오는 인바운드 연결은 지원하지 않습니다",
-    ):
-        assert limitation in text, limitation
+    connector_windows = windows_after(text, "커넥터")
+    assert connector_windows, "missing connector coverage"
+    assert any(
+        "VNet" in window
+        and any(keyword in window for keyword in ("공개 인터넷", "퍼블릭 인터넷", "인터넷 경로"))
+        and any(
+            keyword in window
+            for keyword in ("거치지 않", "통과하지 않", "지나지 않", "라우팅되지 않", "우회")
+        )
+        for window in connector_windows
+    ), (
+        "briefing must state that connector traffic uses the public internet "
+        "and does not traverse the VNet during preview"
+    )
+
+    outbound_windows = windows_after(text, "아웃바운드") + windows_after(text, "인바운드")
+    assert outbound_windows, "missing outbound/inbound VNet coverage"
+    assert any(
+        "아웃바운드" in window
+        and "인바운드" in window
+        and any(
+            keyword in window
+            for keyword in ("지원하지 않", "지원되지 않", "지원하지 못", "미지원", "불가")
+        )
+        for window in outbound_windows
+    ), (
+        "briefing must state that VNet integration controls outbound traffic only "
+        "and that inbound connections via private endpoint are unsupported in preview"
+    )
 
     for source in (
         "https://learn.microsoft.com/azure/sre-agent/network-integration",
