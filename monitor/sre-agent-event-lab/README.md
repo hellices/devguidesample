@@ -336,6 +336,11 @@ monitor/sre-agent-event-lab/scripts/cleanup.sh --yes
 
 ## 공식 자료
 
+- [Azure SRE Agent 제품 소개](../azure-sre-agent.md)
+- [Incident response](https://learn.microsoft.com/azure/sre-agent/incident-response)
+- [Root cause analysis](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
+- [Agent reasoning](https://learn.microsoft.com/azure/sre-agent/agent-reasoning)
+- [Memory and knowledge](https://learn.microsoft.com/azure/sre-agent/memory)
 - [Azure Monitor alerts in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts)
 - [Automate incident response](https://learn.microsoft.com/azure/sre-agent/automate-incidents)
 - [Log Analytics and Application Insights connectors](https://learn.microsoft.com/azure/sre-agent/log-analytics-app-insights)
