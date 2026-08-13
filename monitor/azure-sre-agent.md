@@ -4,10 +4,6 @@ Azure SRE Agent는 Azure 운영 환경에서 발생한 인시던트를 자동으
 
 이 문서에서는 Azure SRE Agent가 인시던트를 조사하는 방식과 실제 활용 예시를 소개합니다. 제품에서 제공하는 표준 기능과 이번 실증에서 확인한 내용을 구분해 설명합니다.
 
-> **문체 기준**
->
-> 이 자료는 [Microsoft Korean Localization Style Guide](https://aka.ms/korean-styleguide)의 한국어 현지화 원칙과 [Microsoft Writing Style Guide](https://learn.microsoft.com/style-guide/welcome/)의 간결하고 사람다운 문체 원칙을 따릅니다.
-
 ## Azure SRE Agent를 사용하면 무엇이 달라지나요?
 
 운영자는 경고가 발생하면 여러 도구를 오가며 원인을 찾아야 합니다. Azure SRE Agent는 이 과정을 하나의 조사 흐름으로 연결합니다.
@@ -32,7 +28,7 @@ Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
 1. **경고를 받습니다.**
 
-   Azure Monitor, PagerDuty, ServiceNow 또는 HTTP Trigger에서 조사 요청을 받습니다.
+   Azure Monitor, PagerDuty 또는 ServiceNow에서 조사 요청을 받습니다. 이번 실증에서 사용한 별도 연결 방식은 뒤에서 설명합니다.
 
 2. **조사 범위를 확인합니다.**
 
