@@ -30,11 +30,19 @@ def sample_timeline():
             "state": state,
             "title": title,
             "summary": title,
-            "source": "azure-monitor" if index == 0 else "sre-agent",
+            "source": "azure-monitor" if index == 1 else "sre-agent",
             "source_file": f"thread-snapshots/{index:04d}.json",
         }
         for index, (event_id, timestamp, state, title) in enumerate(states, 1)
     ]
+
+
+def test_sample_timeline_starts_with_azure_monitor_alert():
+    timeline = sample_timeline()
+
+    assert timeline[0]["state"] == "alert-fired"
+    assert timeline[0]["source"] == "azure-monitor"
+    assert all(event["source"] == "sre-agent" for event in timeline[1:])
 
 
 def test_render_capture_creates_frames_gif_and_timelines(tmp_path):

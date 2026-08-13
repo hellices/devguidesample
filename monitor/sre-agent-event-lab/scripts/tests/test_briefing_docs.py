@@ -68,11 +68,53 @@ def test_briefing_uses_customer_facing_honorific_style():
     assert not any(re.search(r"(?<!니)다\.$", line) for line in explanatory_lines)
 
 
-def test_briefing_uses_official_korean_localization_reference():
+def test_briefing_does_not_document_localization_style_sources():
     text = BRIEFING.read_text()
 
-    assert "Microsoft Korean Localization Style Guide" in text
-    assert "https://aka.ms/korean-styleguide" in text
+    for marker in (
+        "한국어 문체와 용어",
+        "Microsoft Korean Localization Style Guide",
+        "aka.ms/korean-styleguide",
+        "Microsoft Writing Style Guide",
+    ):
+        assert marker not in text, marker
+
+
+def test_briefing_covers_adoption_critical_product_topics():
+    text = BRIEFING.read_text()
+
+    for heading in (
+        "## 도입 전에 확인해야 할 사전 조건",
+        "## 비용은 어떻게 발생하나요?",
+        "## 보안과 데이터는 어떻게 보호되나요?",
+        "## 인시던트 대응 외에 무엇을 자동화할 수 있나요?",
+        "## 에이전트가 한 일을 어떻게 감사하나요?",
+    ):
+        assert heading in text, heading
+
+    for topic in (
+        "Azure Agent Unit",
+        "Korea Central",
+        "리전은 변경할 수 없습니다",
+        "Agent Hooks",
+        "예약 작업",
+        "빠른 시작 대응 계획",
+        "customEvents",
+        "80개",
+    ):
+        assert topic in text, topic
+
+    for source in (
+        "https://learn.microsoft.com/azure/sre-agent/pricing-billing",
+        "https://learn.microsoft.com/azure/sre-agent/supported-regions",
+        "https://learn.microsoft.com/azure/sre-agent/security-overview",
+        "https://learn.microsoft.com/azure/sre-agent/data-privacy",
+        "https://learn.microsoft.com/azure/sre-agent/agent-hooks",
+        "https://learn.microsoft.com/azure/sre-agent/scheduled-tasks",
+        "https://learn.microsoft.com/azure/sre-agent/audit-agent-actions",
+        "https://learn.microsoft.com/azure/sre-agent/create-and-set-up",
+    ):
+        assert source in text, source
 
 
 def test_briefing_uses_only_local_images_and_no_storyboards():
@@ -121,31 +163,51 @@ def test_official_images_are_placed_with_sections_and_sources():
         assert source in text
 
 
-def test_agent_reasoning_source_is_followed_by_explanatory_paragraph():
+OFFICIAL_IMAGE_ALT_KEYWORDS = {
+    "incident-response-flow.svg": ("경고", "조사", "근본 원인"),
+    "root-cause-analysis.svg": ("근거", "가설", "근본 원인"),
+    "agent-reasoning-flow.svg": ("맥락", "추론", "승인"),
+    "memory-unified-search.svg": ("과거", "문서", "검색"),
+    "memory-auto-learning.svg": ("조사", "학습"),
+}
+
+
+def official_image_alt_texts() -> dict[str, str]:
+    pattern = re.compile(r"!\[([^\]]*)\]\(([^)]*assets/official/([^)]+))\)")
+    return {
+        match.group(3): match.group(1)
+        for match in pattern.finditer(BRIEFING.read_text())
+    }
+
+
+def test_official_images_describe_themselves_in_alt_text():
+    alt_texts = official_image_alt_texts()
+
+    assert set(alt_texts) == set(OFFICIAL_IMAGE_ALT_KEYWORDS)
+    for name, keywords in OFFICIAL_IMAGE_ALT_KEYWORDS.items():
+        alt = alt_texts[name]
+        assert len(alt) >= 40, (name, alt)
+        for keyword in keywords:
+            assert keyword in alt, (name, keyword)
+
+
+def test_official_images_do_not_repeat_alt_text_as_body_prose():
     text = BRIEFING.read_text()
-    source_marker = (
-        "> 출처: [에이전트 추론과 실행]"
-        "(https://learn.microsoft.com/azure/sre-agent/agent-reasoning)"
-    )
-    assert source_marker in text
-    tail = text.split(source_marker, 1)[1]
-    next_heading_index = tail.find("\n## ")
-    paragraph_section = tail[:next_heading_index] if next_heading_index != -1 else tail
 
-    # Explains the Understand -> context gathering -> reasoning -> safe
-    # execution/approval-wait/response loop in natural Korean.
-    for phrase in (
-        "파악",
-        "맥락",
-        "추론",
-        "승인",
-        "응답",
-        "반복",
+    for source_line in (
+        "> 출처: [근본 원인 분석]",
+        "> 출처: [메모리와 지식 관리]",
+        "> 출처: [에이전트 추론과 실행]",
     ):
-        assert phrase in paragraph_section, phrase
+        assert source_line in text
 
-    # Must not overclaim a fixed processing time.
-    assert "고정된 처리 시간을 보장하지는 않습니다" in paragraph_section
+    for marker in (
+        "Azure SRE Agent는 오류 로그를 나열하는 데서 멈추지 않습니다.",
+        "Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 내용",
+        "에이전트는 이 흐름을 따라 판단합니다.",
+        "조사가 완료되면 Azure SRE Agent는 확인한 증상",
+    ):
+        assert marker not in text, marker
 
 
 def test_official_sre_agent_svgs_are_stored_locally():

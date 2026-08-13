@@ -88,11 +88,13 @@ def data_plane_get(endpoint: str, path: str, token: str) -> Any:
             retry_after = int(exc.headers.get("Retry-After", "10"))
             raise TransientApiError(retry_after, exc.code)
         raise
+    except (urllib.error.URLError, OSError) as exc:
+        raise TransientApiError(10, f"network error ({exc})")
 
 
 class TransientApiError(RuntimeError):
-    def __init__(self, retry_after: int, status_code: int):
-        super().__init__(f"Transient API failure: HTTP {status_code}")
+    def __init__(self, retry_after: int, status_code: int | str):
+        super().__init__(f"Transient API failure: {status_code}")
         self.retry_after = max(1, min(retry_after, 60))
 
 

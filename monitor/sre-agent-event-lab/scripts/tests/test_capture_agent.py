@@ -84,3 +84,39 @@ def test_data_plane_get_sends_supplied_bearer_token(monkeypatch):
         "authorization": "Bearer actual-access-token",
         "timeout": 30,
     }
+
+
+def test_data_plane_get_treats_network_failure_as_transient(monkeypatch):
+    capture_agent = load_module()
+
+    def fake_urlopen(request, timeout):
+        raise capture_agent.urllib.error.URLError("temporary failure in name resolution")
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    try:
+        capture_agent.data_plane_get(
+            "https://agent.example", "/api/v1/threads", "token"
+        )
+    except capture_agent.TransientApiError as exc:
+        assert exc.retry_after >= 1
+    else:
+        raise AssertionError("network failure must raise TransientApiError")
+
+
+def test_data_plane_get_treats_timeout_as_transient(monkeypatch):
+    capture_agent = load_module()
+
+    def fake_urlopen(request, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    try:
+        capture_agent.data_plane_get(
+            "https://agent.example", "/api/v1/threads", "token"
+        )
+    except capture_agent.TransientApiError as exc:
+        assert exc.retry_after >= 1
+    else:
+        raise AssertionError("timeout must raise TransientApiError")
