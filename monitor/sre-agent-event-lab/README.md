@@ -230,7 +230,10 @@ monitor/sre-agent-event-lab/assets/captures/s1/
   01-alert-fired.png
   02-thread-created.png
   03-investigating.png
-  04-conclusion.png
+  04-investigating.png
+  05-investigating.png
+  06-investigating.png
+  07-conclusion.png
   investigation.gif
   timeline.mmd
   timeline.md

@@ -128,9 +128,11 @@ if [[ "${CONFIRMED}" -ne 1 ]]; then
   exit 0
 fi
 
-for assignment_id in "${ROLE_ASSIGNMENT_IDS[@]}"; do
-  az role assignment delete --ids "${assignment_id}"
-done
+if (( ${#ROLE_ASSIGNMENT_IDS[@]} > 0 )); then
+  for assignment_id in "${ROLE_ASSIGNMENT_IDS[@]}"; do
+    az role assignment delete --ids "${assignment_id}"
+  done
+fi
 
 az group delete \
   --name "${RESOURCE_GROUP}" \

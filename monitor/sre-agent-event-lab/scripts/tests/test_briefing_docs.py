@@ -121,6 +121,33 @@ def test_official_images_are_placed_with_sections_and_sources():
         assert source in text
 
 
+def test_agent_reasoning_source_is_followed_by_explanatory_paragraph():
+    text = BRIEFING.read_text()
+    source_marker = (
+        "> 출처: [에이전트 추론과 실행]"
+        "(https://learn.microsoft.com/azure/sre-agent/agent-reasoning)"
+    )
+    assert source_marker in text
+    tail = text.split(source_marker, 1)[1]
+    next_heading_index = tail.find("\n## ")
+    paragraph_section = tail[:next_heading_index] if next_heading_index != -1 else tail
+
+    # Explains the Understand -> context gathering -> reasoning -> safe
+    # execution/approval-wait/response loop in natural Korean.
+    for phrase in (
+        "파악",
+        "맥락",
+        "추론",
+        "승인",
+        "응답",
+        "반복",
+    ):
+        assert phrase in paragraph_section, phrase
+
+    # Must not overclaim a fixed processing time.
+    assert "고정된 처리 시간을 보장하지는 않습니다" in paragraph_section
+
+
 def test_official_sre_agent_svgs_are_stored_locally():
     asset_dir = (
         REPO_ROOT

@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -80,3 +82,50 @@ def test_activity_log_export_projects_only_incident_fields():
     assert "correlationId:" in script
     assert "caller:" not in script
     assert "claims:" not in script
+
+
+def test_cleanup_deletion_loop_tolerates_empty_role_assignments_on_bash32(tmp_path):
+    """Regression test for the macOS Bash 3.2 empty-array bug.
+
+    Bash 3.2 (macOS's default /bin/bash) raises "unbound variable" when
+    expanding "${ARRAY[@]}" for an empty array under `set -u`, even though
+    Bash 4+ treats it as an empty expansion. cleanup.sh must guard the
+    ROLE_ASSIGNMENT_IDS deletion loop so a lab run with zero recorded role
+    assignments still proceeds to delete the resource group instead of
+    crashing.
+    """
+    bash_path = shutil.which("bash") or "/bin/bash"
+
+    script = CLEANUP_SH.read_text()
+    dry_run_marker = (
+        'if [[ "${CONFIRMED}" -ne 1 ]]; then\n'
+        '  echo "Dry run only. Re-run with --yes to execute."\n'
+        "  exit 0\n"
+        "fi\n"
+    )
+    assert dry_run_marker in script
+    deletion_tail = script.split(dry_run_marker, 1)[1]
+
+    call_log = tmp_path / "az-calls.log"
+    harness = f"""
+set -euo pipefail
+RESOURCE_GROUP="rg-test-empty-assignments"
+ROLE_ASSIGNMENT_IDS=()
+az() {{
+  echo "az $*" >> "{call_log}"
+}}
+{deletion_tail}
+"""
+    result = subprocess.run(
+        [bash_path, "-c", harness],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, (
+        "cleanup.sh's deletion loop must not crash on Bash 3.2 when "
+        f"ROLE_ASSIGNMENT_IDS is empty. stderr:\n{result.stderr}"
+    )
+    calls = call_log.read_text() if call_log.exists() else ""
+    assert "az role assignment delete" not in calls
+    assert "az group delete" in calls
