@@ -248,3 +248,46 @@ def test_reachable_http_errors_reset_the_network_failure_counter(monkeypatch):
         raise AssertionError(f"counter was not reset after a reachable response: {exc}")
 
     capture_agent.reset_network_failures()
+
+
+def test_malformed_response_body_still_resets_network_failures(monkeypatch):
+    capture_agent = load_module()
+    capture_agent.reset_network_failures()
+    state = {"mode": "network"}
+
+    class BadJson:
+        def __enter__(self):
+            return BytesIO(b"not json")
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    def fake_urlopen(request, timeout):
+        if state["mode"] == "network":
+            raise capture_agent.urllib.error.URLError("temporary blip")
+        return BadJson()
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    for _ in range(capture_agent.MAX_CONSECUTIVE_NETWORK_FAILURES - 1):
+        try:
+            capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+        except capture_agent.TransientApiError:
+            pass
+
+    # The endpoint answered, so connectivity is proven even though the body is invalid.
+    state["mode"] = "bad-json"
+    try:
+        capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+    except ValueError:
+        pass
+
+    state["mode"] = "network"
+    try:
+        capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+    except capture_agent.TransientApiError:
+        pass
+    except RuntimeError as exc:
+        raise AssertionError(f"counter was not reset after a reachable response: {exc}")
+
+    capture_agent.reset_network_failures()

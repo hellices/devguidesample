@@ -91,7 +91,9 @@ def data_plane_get(endpoint: str, path: str, token: str) -> Any:
     global _consecutive_network_failures
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.load(response)
+            # The endpoint answered, so connectivity is proven regardless of the body.
+            reset_network_failures()
+            return json.load(response)
     except urllib.error.HTTPError as exc:
         # An HTTP status means the endpoint answered, so the connection is healthy.
         reset_network_failures()
@@ -110,9 +112,6 @@ def data_plane_get(endpoint: str, path: str, token: str) -> Any:
             )
         print(f"Transient network failure, retrying: {exc}", file=sys.stderr)
         raise TransientApiError(10, f"network error ({exc})")
-
-    reset_network_failures()
-    return payload
 
 
 class TransientApiError(RuntimeError):
