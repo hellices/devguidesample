@@ -282,7 +282,7 @@ Issue에는 다음 내용을 포함했습니다.
 | 주문 API 지연 | 성공한 요청의 응답 시간, 외부 종속성, 지연 설정 | `ORDER_DELAY_MS=4000`을 확인했습니다. |
 | Blob 권한 오류 | 역할 삭제 이력, Blob 403, API 503 | 역할 삭제를 근본 원인으로 확인했습니다. 복구 확인 대상은 한 차례 잘못 선택해 한계로 기록했습니다. |
 
-상세 수치, 시간 순서, 평가 기준은 [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)에서 확인할 수 있습니다.
+상세 수치, 시간 순서, 평가 기준은 [실제 동작 검증 결과](sre-agent-event-lab/validation-results.md)에서 확인할 수 있습니다.
 
 ## Dynamic Thresholds와 함께 사용할 수 있나요?
 
@@ -295,20 +295,22 @@ Issue에는 다음 내용을 포함했습니다.
 
 처음에는 기존 고정 임계값을 유지하고, Dynamic Thresholds를 별도의 관찰용 경고로 추가하는 방식을 권장합니다. 충분한 학습 기간을 거친 뒤 오탐과 누락을 비교해 실제 대응 흐름에 연결합니다.
 
-자세한 내용은 [Dynamic Thresholds와 Azure SRE Agent 연계 설계](../docs/superpowers/specs/2026-08-12-azure-monitor-dynamic-thresholds-sre-integration-design.md)를 참고하세요.
+자세한 내용은 [Dynamic Thresholds 연계 가이드](sre-agent-event-lab/dynamic-thresholds.md)를 참고하세요.
 
 ## 도입 전에 확인해야 할 사전 조건
 
 Azure SRE Agent를 만들기 전에 다음 조건을 먼저 확인하세요.
 
 - 구독이 Azure SRE Agent 사용 대상으로 등록되어 있어야 합니다. 등록되지 않으면 에이전트를 만들 때 리전 목록이 비어 있습니다.
-- 구독에 `Microsoft.App` 리소스 공급자가 등록되어 있어야 합니다.
-- 리소스를 조사하려면 Contributor 권한이, 역할 할당을 직접 만들려면 Owner 또는 User Access Administrator 권한이 필요합니다.
+- 에이전트를 만드는 담당자에게 구독 Contributor 권한이 필요합니다. 리소스 공급자를 등록하고 리소스를 만들기 위한 권한입니다.
+- 역할 할당을 직접 만들려면 Owner 또는 User Access Administrator 권한이 추가로 필요합니다.
 - 사내 네트워크에서 에이전트 포털 도메인을 차단하지 않아야 합니다. 보안 프록시 환경에서는 사전에 허용 목록을 확인하세요.
+
+에이전트가 조사에 사용하는 권한은 담당자의 권한과 다릅니다. 에이전트의 관리 ID는 기본적으로 읽기 권한만 가지며, 변경 작업을 하려면 필요한 범위에 권한을 따로 부여해야 합니다.
 
 에이전트는 한 리전에 배포합니다. Korea Central을 포함해 여러 리전을 지원하지만, **만든 뒤에는 리전은 변경할 수 없습니다.** 다른 리전에서 운영하려면 해당 리전에 별도 에이전트를 만듭니다. 에이전트가 배포된 리전과 무관하게 다른 리전의 리소스를 조사할 수 있습니다.
 
-AI 모델 공급자도 함께 확인하세요. 지역에 따라 기본 공급자가 다르며, 조사 기록과 요약은 에이전트가 배포된 리전에 저장됩니다. 규제 요건이 있는 조직은 도입 검토 단계에서 공급자와 데이터 처리 위치를 확인하는 편이 좋습니다.
+AI 모델 공급자도 함께 확인하세요. 조사 대화와 요약 결과는 에이전트를 배포한 리전에 저장되지만, 모델 추론은 공급자에 따라 다른 국가에서 처리될 수 있습니다. 지역별 기본 공급자가 다르므로, 데이터 처리 위치에 대한 요건이 있는 조직은 도입 검토 단계에서 현재 설정된 공급자와 처리 범위를 확인하세요.
 
 ## 비용은 어떻게 발생하나요?
 
@@ -322,7 +324,7 @@ Azure SRE Agent는 Azure Agent Unit(AAU)을 기준으로 과금합니다. 비용
 비용을 관리할 때는 다음을 기억하세요.
 
 - 에이전트를 중지해도 상시 비용은 계속 발생합니다. 완전히 멈추려면 삭제해야 합니다.
-- 월별 AAU 한도를 설정할 수 있습니다. 한도에 도달하면 다음 달까지 조사와 채팅을 사용할 수 없습니다.
+- 월별 AAU 한도를 설정할 수 있습니다. 이 한도는 활성 비용에만 적용되며, 한도에 도달하면 다음 달까지 조사와 채팅을 사용할 수 없습니다. 상시 비용은 한도와 무관하게 계속 발생합니다.
 - 사용하는 모델에 따라 단가가 크게 달라집니다.
 - 스레드 유형별 사용량을 확인하고 내보낼 수 있어 팀별 비용 배분에 활용할 수 있습니다.
 - Azure Monitor 로그 조회처럼 연결된 서비스의 비용은 별도로 발생합니다.
@@ -338,7 +340,7 @@ Azure SRE Agent는 조사 도구를 격리된 샌드박스에서 실행하고, �
 - Azure CLI 기반 작업에는 안전 장치가 있어 삭제 계열 명령과 키 자격 증명 모음 접근은 차단됩니다.
 - 읽기 전용으로 잠근 리소스는 변경하지 않습니다.
 
-Log Analytics 작업 영역이나 AKS를 비공개 네트워크로만 노출한 환경이라면 에이전트의 네트워크 모드를 VNet 통합으로 설정해 사설 엔드포인트에 접근할 수 있습니다. 공개 엔드포인트만 사용하는 환경에서는 별도 VNet 구성 없이도 조사할 수 있습니다.
+Log Analytics 작업 영역이나 AKS를 비공개 네트워크로만 노출한 환경이라면 에이전트의 네트워크 모드를 VNet 통합으로 설정해 사설 엔드포인트에 접근할 수 있습니다. 이 기능은 현재 미리 보기입니다. 공개 엔드포인트만 사용하는 환경에서는 별도 VNet 구성 없이도 조사할 수 있습니다.
 
 ## 인시던트 대응 외에 무엇을 자동화할 수 있나요?
 
@@ -433,6 +435,8 @@ Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 
 ### 보안과 확장
 
 - [보안 개요](https://learn.microsoft.com/azure/sre-agent/security-overview)
+- [권한](https://learn.microsoft.com/azure/sre-agent/permissions)
+- [네트워크 통합](https://learn.microsoft.com/azure/sre-agent/network-integration)
 - [데이터 보존과 개인 정보](https://learn.microsoft.com/azure/sre-agent/data-privacy)
 - [Agent Hooks](https://learn.microsoft.com/azure/sre-agent/agent-hooks)
 - [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
@@ -441,5 +445,5 @@ Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 
 
 ### 실증 자료
 
-- [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)
+- [실제 동작 검증 결과](sre-agent-event-lab/validation-results.md)
 - [실험 환경과 재현 방법](sre-agent-event-lab/README.md)

@@ -2,12 +2,13 @@
 import argparse
 import json
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 
 from capture_model import normalize_capture, redact
 
@@ -89,11 +90,12 @@ def data_plane_get(endpoint: str, path: str, token: str) -> Any:
             raise TransientApiError(retry_after, exc.code)
         raise
     except (urllib.error.URLError, OSError) as exc:
+        print(f"Transient network failure, retrying: {exc}", file=sys.stderr)
         raise TransientApiError(10, f"network error ({exc})")
 
 
 class TransientApiError(RuntimeError):
-    def __init__(self, retry_after: int, status_code: int | str):
+    def __init__(self, retry_after: int, status_code: Union[int, str]):
         super().__init__(f"Transient API failure: {status_code}")
         self.retry_after = max(1, min(retry_after, 60))
 

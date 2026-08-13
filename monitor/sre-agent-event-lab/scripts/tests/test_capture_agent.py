@@ -120,3 +120,63 @@ def test_data_plane_get_treats_timeout_as_transient(monkeypatch):
         assert exc.retry_after >= 1
     else:
         raise AssertionError("timeout must raise TransientApiError")
+
+
+def test_capture_agent_avoids_runtime_only_new_union_syntax():
+    """Scripts must import on the interpreter the README assumes (`python3`).
+
+    PEP 604 unions in runtime-evaluated annotations break Python 3.9, which is
+    the default `python3` on current macOS.
+    """
+    source = MODULE_PATH.read_text()
+    annotation_lines = [
+        line
+        for line in source.splitlines()
+        if line.lstrip().startswith("def ") or ": " in line
+    ]
+
+    for line in annotation_lines:
+        assert "int | str" not in line, line
+        assert "str | int" not in line, line
+
+    assert "from __future__ import annotations" in source or "Union" in source
+
+
+def test_data_plane_get_propagates_client_errors(monkeypatch):
+    capture_agent = load_module()
+
+    def fake_urlopen(request, timeout):
+        raise capture_agent.urllib.error.HTTPError(
+            "https://agent.example/api/v1/threads", 404, "Not Found", {}, None
+        )
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    try:
+        capture_agent.data_plane_get(
+            "https://agent.example", "/api/v1/threads", "token"
+        )
+    except capture_agent.TransientApiError:
+        raise AssertionError("client errors must not be treated as transient")
+    except capture_agent.urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("client errors must propagate")
+
+
+def test_network_failures_are_reported_before_retrying(capsys, monkeypatch):
+    capture_agent = load_module()
+
+    def fake_urlopen(request, timeout):
+        raise capture_agent.urllib.error.URLError("name resolution failed")
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    try:
+        capture_agent.data_plane_get(
+            "https://agent.example", "/api/v1/threads", "token"
+        )
+    except capture_agent.TransientApiError:
+        pass
+
+    assert "name resolution failed" in capsys.readouterr().err

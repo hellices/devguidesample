@@ -12,9 +12,9 @@ Generated: 2026-08-12T03:35:07Z
 
 **Path:** Add Components
 
-**Design:** `docs/superpowers/specs/2026-08-12-azure-sre-agent-event-testing-design.md`
+**Design:** `monitor/sre-agent-event-lab/README.md`
 
-**Execution plan:** `docs/superpowers/plans/2026-08-12-azure-sre-agent-event-testing-execution.md`
+**Execution plan:** `monitor/sre-agent-event-lab/README.md`
 
 ---
 
@@ -43,7 +43,7 @@ The current Azure CLI context matches the recorded subscription. Korea Central s
 | Azure infrastructure | IaC | Bicep | `monitor/sre-agent-event-lab/infra/` |
 | Deployment and incident tooling | Operations | Azure CLI, Bash, Python | `monitor/sre-agent-event-lab/scripts/` |
 | Agent knowledge | Runbook | Markdown | `monitor/sre-agent-event-lab/runbooks/` |
-| Results | Report | Markdown | `docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md` |
+| Results | Report | Markdown | `monitor/sre-agent-event-lab/validation-results.md` |
 
 ---
 
