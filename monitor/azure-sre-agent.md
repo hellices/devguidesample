@@ -20,7 +20,7 @@ Azure SRE Agent는 단순히 오류 로그를 나열하지 않습니다. 어떤 
 
 ## 인시던트가 발생하면 어떻게 조사하나요?
 
-![Azure SRE Agent 공식 인시던트 대응 흐름](sre-agent-event-lab/assets/official/incident-response-flow.svg)
+![경고가 발생하면 Azure SRE Agent가 인시던트를 확인하고 로그와 메트릭, 배포 이력을 조사해 근본 원인을 찾은 뒤 해결하거나 담당자에게 넘기는 흐름](sre-agent-event-lab/assets/official/incident-response-flow.svg)
 
 > 출처: [인시던트 대응 자동화](https://learn.microsoft.com/azure/sre-agent/incident-response)
 
@@ -56,11 +56,9 @@ Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
 ## 근본 원인은 어떻게 찾나요?
 
-![Azure SRE Agent 공식 근본 원인 분석 흐름](sre-agent-event-lab/assets/official/root-cause-analysis.svg)
+![증상에서 시작해 로그와 메트릭, 배포 이력, 소스 코드, 과거 경험을 근거로 모으고 가설을 세워 검증한 뒤 근본 원인과 조치 방안을 제시하는 흐름](sre-agent-event-lab/assets/official/root-cause-analysis.svg)
 
 > 출처: [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
-
-Azure SRE Agent는 오류 로그를 나열하는 데서 멈추지 않습니다. 증상을 기준으로 관련 로그, 메트릭, 배포 이력, 소스 코드와 과거 경험을 모으고 가능한 원인을 가설로 세웁니다. 이후 각 가설을 근거와 비교해 제외하거나 확인하고, 결론을 뒷받침하는 자료와 함께 조치 방안을 제시합니다.
 
 ## 어떤 정보를 조사할 수 있나요?
 
@@ -79,19 +77,15 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 ## 과거 경험과 운영 문서는 어떻게 활용하나요?
 
-![Azure SRE Agent 공식 메모리 통합 검색 구조](sre-agent-event-lab/assets/official/memory-unified-search.svg)
+![과거 조사 기록과 사용자가 지정한 내용, 업로드한 운영 문서를 함께 검색해 근거와 출처가 있는 답변을 만드는 구조](sre-agent-event-lab/assets/official/memory-unified-search.svg)
 
 > 출처: [메모리와 지식 관리](https://learn.microsoft.com/azure/sre-agent/memory)
-
-Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 내용, 업로드한 운영 문서와 연결된 지식 원본을 함께 검색합니다. 답변에는 근거와 출처를 포함해 어떤 경험과 문서를 사용했는지 확인할 수 있습니다.
 
 ## 조사가 끝난 뒤 무엇을 학습하나요?
 
-![Azure SRE Agent 공식 자동 학습 흐름](sre-agent-event-lab/assets/official/memory-auto-learning.svg)
+![조사가 끝나면 증상과 해결 단계, 근본 원인, 피해야 할 접근을 추출해 다음 조사에 사용할 수 있도록 학습하는 흐름](sre-agent-event-lab/assets/official/memory-auto-learning.svg)
 
 > 출처: [메모리와 지식 관리](https://learn.microsoft.com/azure/sre-agent/memory)
-
-조사가 완료되면 Azure SRE Agent는 확인한 증상, 효과가 있었던 해결 단계, 근본 원인과 피해야 할 접근을 추출합니다. 이렇게 축적한 내용은 이후 유사한 인시던트를 조사할 때 다시 검색할 수 있습니다.
 
 ## 어떤 시스템과 연결할 수 있나요?
 
@@ -105,7 +99,7 @@ Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 
 
 - GitHub 저장소, Issue, Pull Request
 - Azure DevOps 저장소와 Work Item
-- Jira와 같은 관리형 커넥터 또는 MCP 기반 티켓 시스템
+- Jira와 같은 관리형 커넥터(미리 보기) 또는 MCP 기반 티켓 시스템
 
 ### 알림과 협업
 
@@ -126,11 +120,11 @@ Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 
 
 ## 권한과 승인 절차는 어떻게 제어하나요?
 
-![Azure SRE Agent 공식 추론과 실행 흐름](sre-agent-event-lab/assets/official/agent-reasoning-flow.svg)
+![요청의 의미를 파악하고 맥락 정보를 모아 추론한 뒤 안전한 작업은 실행하고 위험한 작업은 승인을 기다리며 결과를 응답하는 흐름](sre-agent-event-lab/assets/official/agent-reasoning-flow.svg)
 
 > 출처: [에이전트 추론과 실행](https://learn.microsoft.com/azure/sre-agent/agent-reasoning)
 
-에이전트는 이 흐름을 따라 판단합니다. 먼저 들어온 요청과 신호의 의미를 파악하고, 관련 리소스 상태와 로그, 과거 조사 기록 같은 맥락 정보를 모읍니다. 이어서 모은 정보를 바탕으로 원인과 다음 행동을 추론한 뒤, 안전하다고 판단한 작업은 바로 실행하고 그렇지 않은 작업은 담당자의 승인을 기다렸다가 결과를 정리해 응답합니다. 요청이 복잡한 경우에는 한 번에 끝나지 않고 이 과정을 여러 차례 반복하며 판단을 다듬어 나갈 수 있습니다. 각 단계에 걸리는 시간은 상황과 작업 범위에 따라 달라지므로 고정된 처리 시간을 보장하지는 않습니다.
+요청이 복잡하면 이 과정을 여러 차례 반복하며 판단을 다듬습니다. 각 단계에 걸리는 시간은 상황과 작업 범위에 따라 달라지므로 고정된 처리 시간을 보장하지는 않습니다.
 
 Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 
@@ -149,6 +143,36 @@ Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 - 메일 수신자와 프로젝트 키처럼 중요한 값은 고정합니다.
 - 삭제나 변경 작업은 승인을 받도록 설정합니다.
 - 자율 모드에서는 일부 승인 절차가 생략될 수 있으므로 별도의 최소 권한 연결을 사용합니다.
+
+## 팀에 맞게 어떻게 확장하나요?
+
+![에이전트가 사용자 지정 스킬을 불러오고 스킬에 연결된 도구로 외부 API를 호출한 뒤 결과를 받아 조사에 활용하는 흐름](sre-agent-event-lab/assets/official/custom-skill-flow.svg)
+
+> 출처: [스킬](https://learn.microsoft.com/azure/sre-agent/skills)
+
+기본 에이전트만으로 부족한 영역은 두 가지 방법으로 보완합니다.
+
+| 구분 | 사용 방식 | 적합한 용도 |
+|---|---|---|
+| 스킬 | 관련 상황에서 에이전트가 자동으로 불러옵니다. | 팀 공통 문제 해결 절차와 실행 도구 |
+| 사용자 지정 에이전트 | 담당자가 필요할 때 직접 호출합니다. | 데이터베이스, 보안처럼 특정 영역 전문 조사 |
+
+스킬에는 절차를 담은 문서와 함께 Azure CLI, Kusto 쿼리, Python 스크립트 같은 도구를 연결할 수 있습니다. 따라서 방법을 설명하는 데서 그치지 않고 필요한 조회를 직접 수행합니다. 한 대화에서 동시에 활성화되는 스킬은 **최대 5개**이며, 이 수를 넘으면 오래된 스킬부터 해제되었다가 필요할 때 다시 불러옵니다.
+
+사용자 지정 에이전트는 각자 도구와 커넥터, 사용할 스킬을 따로 지정합니다. 조사 과정에서 다른 전문 에이전트로 작업을 넘기도록 구성할 수도 있어, 인시던트 분류와 상세 조사, 결과 전달을 단계별로 나눌 수 있습니다.
+
+## 인시던트를 담당자에게 어떻게 배분하나요?
+
+대응 계획은 들어온 인시던트를 조건에 따라 적절한 사용자 지정 에이전트로 전달합니다. 다음 조건을 조합할 수 있습니다.
+
+- 심각도 또는 우선순위(여러 값 동시 선택 가능)
+- 영향을 받은 서비스
+- 인시던트 유형
+- 제목에 포함된 키워드
+
+대응 계획마다 실행 수준을 따로 지정할 수 있어, 중요한 장애는 자동 조치를 허용하고 낮은 심각도는 검토 모드로 운영하는 방식이 가능합니다. 계획은 삭제하지 않고 사용 중지할 수 있으므로 정기 점검 기간에도 설정을 유지할 수 있습니다.
+
+인시던트 플랫폼을 처음 연결하면 빠른 시작 대응 계획이 자동으로 만들어집니다. 사용자 정의 대응 계획을 만든 뒤에는 이 계획을 삭제해야 인시던트가 잘못 전달되거나 두 번 처리되지 않습니다.
 
 ## 제품에서 기본으로 지원하는 방식
 
@@ -170,7 +194,7 @@ Azure SRE Agent는 다음 기능을 제품에서 기본으로 지원합니다.
 - [인시던트 대응 설정](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)
 - [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
 - [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
-- [관리형 커넥터](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
+- [관리형 커넥터(미리 보기)](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
 ## 이번 실증에서 사용한 방식
 
@@ -290,7 +314,7 @@ Issue에는 다음 내용을 포함했습니다.
 | 주문 API 지연 | 성공한 요청의 응답 시간, 외부 종속성, 지연 설정 | `ORDER_DELAY_MS=4000`을 확인했습니다. |
 | Blob 권한 오류 | 역할 삭제 이력, Blob 403, API 503 | 역할 삭제를 근본 원인으로 확인했습니다. 복구 확인 대상은 한 차례 잘못 선택해 한계로 기록했습니다. |
 
-상세 수치, 시간 순서, 평가 기준은 [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)에서 확인할 수 있습니다.
+상세 수치, 시간 순서, 평가 기준은 [실제 동작 검증 결과](sre-agent-event-lab/validation-results.md)에서 확인할 수 있습니다.
 
 ## Dynamic Thresholds와 함께 사용할 수 있나요?
 
@@ -303,7 +327,80 @@ Issue에는 다음 내용을 포함했습니다.
 
 처음에는 기존 고정 임계값을 유지하고, Dynamic Thresholds를 별도의 관찰용 경고로 추가하는 방식을 권장합니다. 충분한 학습 기간을 거친 뒤 오탐과 누락을 비교해 실제 대응 흐름에 연결합니다.
 
-자세한 내용은 [Dynamic Thresholds와 Azure SRE Agent 연계 설계](../docs/superpowers/specs/2026-08-12-azure-monitor-dynamic-thresholds-sre-integration-design.md)를 참고하세요.
+자세한 내용은 [Dynamic Thresholds 연계 가이드](sre-agent-event-lab/dynamic-thresholds.md)를 참고하세요.
+
+## 도입 전에 확인해야 할 사전 조건
+
+Azure SRE Agent를 만들기 전에 다음 조건을 먼저 확인하세요.
+
+- 구독이 Azure SRE Agent 사용 대상으로 등록되어 있어야 합니다. 등록되지 않으면 에이전트를 만들 때 리전 목록이 비어 있습니다.
+- 에이전트를 만드는 담당자에게 구독 Contributor 권한이 필요합니다. 리소스 공급자를 등록하고 리소스를 만들기 위한 권한입니다.
+- 역할 할당을 직접 만들려면 Owner 또는 User Access Administrator 권한이 추가로 필요합니다.
+- 사내 네트워크에서 에이전트 포털 도메인을 차단하지 않아야 합니다. 보안 프록시 환경에서는 사전에 허용 목록을 확인하세요.
+
+에이전트가 조사에 사용하는 권한은 담당자의 권한과 다릅니다. 에이전트의 관리 ID는 기본적으로 읽기 권한만 가지며, 변경 작업을 하려면 필요한 범위에 권한을 따로 부여해야 합니다.
+
+에이전트는 한 리전에 배포합니다. Korea Central을 포함해 여러 리전을 지원하지만, **만든 뒤에는 리전은 변경할 수 없습니다.** 다른 리전에서 운영하려면 해당 리전에 별도 에이전트를 만듭니다. 에이전트가 배포된 리전과 무관하게 다른 리전의 리소스를 조사할 수 있습니다.
+
+AI 모델 공급자도 함께 확인하세요. 조사 대화와 요약 결과는 에이전트를 배포한 리전에 저장되지만, 모델 추론은 공급자에 따라 다른 국가에서 처리될 수 있습니다. 지역별 기본 공급자가 다르므로, 데이터 처리 위치에 대한 요건이 있는 조직은 도입 검토 단계에서 현재 설정된 공급자와 처리 범위를 확인하세요.
+
+## 비용은 어떻게 발생하나요?
+
+Azure SRE Agent는 Azure Agent Unit(AAU)을 기준으로 과금합니다. 비용은 두 가지로 나뉩니다.
+
+| 구분 | 발생 방식 |
+|---|---|
+| 상시 비용 | 에이전트를 만든 시점부터 삭제할 때까지 시간 단위로 발생합니다. |
+| 활성 비용 | 조사, 채팅, 예약 작업처럼 모델을 사용하는 작업에서 토큰 사용량에 따라 발생합니다. |
+
+비용을 관리할 때는 다음을 기억하세요.
+
+- 에이전트를 중지해도 상시 비용은 계속 발생합니다. 완전히 멈추려면 삭제해야 합니다.
+- 월별 AAU 한도를 설정할 수 있습니다. 이 한도는 활성 비용에만 적용되며, 한도에 도달하면 다음 달까지 조사와 채팅을 사용할 수 없습니다. 상시 비용은 한도와 무관하게 계속 발생합니다.
+- 사용하는 모델에 따라 단가가 크게 달라집니다.
+- 스레드 유형별 사용량을 확인하고 내보낼 수 있어 팀별 비용 배분에 활용할 수 있습니다.
+- Azure Monitor 로그 조회처럼 연결된 서비스의 비용은 별도로 발생합니다.
+
+## 보안과 데이터는 어떻게 보호되나요?
+
+Azure SRE Agent는 조사 도구를 격리된 샌드박스에서 실행하고, 자격 증명을 대화 맥락에 남기지 않습니다.
+
+- 도구 실행 환경은 에이전트별로 분리되며, 호출마다 새 프로세스를 사용합니다.
+- 자격 증명은 호출 시점에 짧은 수명 토큰으로 발급하고 재사용하지 않습니다.
+- 조회한 원시 로그는 별도로 저장하지 않고, 조사 대화와 요약된 결과만 보존합니다.
+- 관리 ID 권한이 부족하면 담당자 승인 후 사용자 자격 증명으로 실행하며, 이후 자격 증명을 캐시하지 않습니다.
+- Azure CLI 기반 작업에는 안전 장치가 있어 삭제 계열 명령과 키 자격 증명 모음 접근은 차단됩니다.
+- 읽기 전용으로 잠근 리소스는 변경하지 않습니다.
+
+Log Analytics 작업 영역이나 AKS를 비공개 네트워크로만 노출한 환경이라면 에이전트의 네트워크 모드를 VNet 통합으로 설정해 사설 엔드포인트에 접근할 수 있습니다. 이 기능은 현재 미리 보기입니다. 공개 엔드포인트만 사용하는 환경에서는 별도 VNet 구성 없이도 조사할 수 있습니다.
+
+## 인시던트 대응 외에 무엇을 자동화할 수 있나요?
+
+### 예약 작업
+
+일정에 따라 에이전트가 스스로 점검을 수행하도록 예약할 수 있습니다. 작업 내용은 자연어로 작성하며, 실행할 때마다 조사 대화와 요약 결과가 남습니다. 매일 서비스 상태 점검, 비용 이상 탐지, 보안 구성 점검, 배포 후 확인처럼 경고가 발생하기 전에 문제를 찾는 용도로 사용합니다.
+
+### 심층 조사
+
+영향 범위가 크거나 원인이 여러 개일 수 있는 상황에서는 심층 조사를 사용할 수 있습니다. 가설을 여러 개 세우고 검증 과정을 단계별로 보여주며, 제외한 가설도 함께 정리합니다. 일반 조사보다 토큰 사용량이 많으므로 중요한 인시던트에 선택적으로 사용하는 편이 좋습니다.
+
+### 팀 지식 온보딩
+
+에이전트에 팀 구조, 서비스 아키텍처, 문제 해결 절차를 미리 학습시킬 수 있습니다. 대화형 온보딩을 진행하거나 운영 문서를 업로드하면 이후 조사에서 해당 내용을 근거로 활용합니다.
+
+### Agent Hooks
+
+Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 도구 실행 직후에 자체 검증을 추가할 수 있습니다. 위험한 명령을 차단하거나, 결론에 근거가 충분한지 확인해 다시 조사하도록 만들 수 있습니다. 실행 수준이 *무엇을 할 수 있는지*를 정한다면, Agent Hooks는 *어떻게 수행해야 하는지*를 정합니다.
+
+### 도구 용량 관리
+
+하나의 에이전트가 사용할 수 있는 도구는 기본 도구와 MCP 도구를 합쳐 최대 **80개**입니다. 외부 관찰 도구와 사내 시스템을 폭넓게 연결할 계획이라면 도구 수를 미리 설계하세요.
+
+## 에이전트가 한 일을 어떻게 감사하나요?
+
+에이전트의 활동은 조직이 소유한 Application Insights의 `customEvents` 테이블에 기록됩니다. 모델 호출, 도구 실행, Azure CLI 명령, 승인 결정, 인시던트 처리 결과를 각각 확인할 수 있어 KQL로 조회하고 보고서로 활용할 수 있습니다.
+
+또한 인시던트 지표 화면에서 처리한 인시던트 수, 에이전트가 완화한 비율, 담당자가 처리한 비율, 절감한 시간, 근본 원인 분포를 확인할 수 있습니다. 도입 효과를 정량적으로 설명해야 할 때 활용하기 좋습니다.
 
 ## 도입 전에 무엇을 확인해야 하나요?
 
@@ -317,7 +414,7 @@ Issue에는 다음 내용을 포함했습니다.
 
 - [ ] Azure Monitor, PagerDuty, ServiceNow 중 사용할 인시던트 플랫폼을 정하세요.
 - [ ] 심각도, 서비스, 제목 기준으로 대응 계획을 만드세요.
-- [ ] 빠른 시작 대응 계획과 사용자 정의 대응 계획이 중복되지 않는지 확인하세요.
+- [ ] 사용자 정의 대응 계획을 만들었다면 빠른 시작 대응 계획을 삭제하세요.
 - [ ] 처음에는 검토 모드로 시작하세요.
 
 ### 권한과 안전
@@ -349,22 +446,38 @@ Issue에는 다음 내용을 포함했습니다.
 
 ## 참고 자료
 
-### 한국어 문체와 용어
-
-- [Microsoft Korean Localization Style Guide](https://aka.ms/korean-styleguide)
-- [Microsoft Terminology](https://learn.microsoft.com/globalization/reference/microsoft-terminology)
-- [Microsoft language resources](https://learn.microsoft.com/globalization/reference/microsoft-language-resources)
-- [Microsoft Writing Style Guide](https://learn.microsoft.com/style-guide/welcome/)
-
-### Azure SRE Agent
+### 제품 개요와 조사 방식
 
 - [Azure SRE Agent 개요](https://learn.microsoft.com/azure/sre-agent/overview)
 - [인시던트 대응 설정](https://learn.microsoft.com/azure/sre-agent/tutorial-incident-response)
+- [인시던트 대응 계획](https://learn.microsoft.com/azure/sre-agent/incident-response-plans)
 - [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
+- [심층 조사](https://learn.microsoft.com/azure/sre-agent/deep-investigation)
+- [팀 온보딩](https://learn.microsoft.com/azure/sre-agent/team-onboard)
+- [사용자 지정 에이전트](https://learn.microsoft.com/azure/sre-agent/sub-agents)
+- [스킬](https://learn.microsoft.com/azure/sre-agent/skills)
+
+### 도입과 운영
+
+- [에이전트 만들기와 설정](https://learn.microsoft.com/azure/sre-agent/create-and-set-up)
+- [지원 리전](https://learn.microsoft.com/azure/sre-agent/supported-regions)
+- [가격과 청구](https://learn.microsoft.com/azure/sre-agent/pricing-billing)
+- [예약 작업](https://learn.microsoft.com/azure/sre-agent/scheduled-tasks)
+- [작업 감사](https://learn.microsoft.com/azure/sre-agent/audit-agent-actions)
+- [인시던트 가치 추적](https://learn.microsoft.com/azure/sre-agent/track-incident-value)
+
+### 보안과 확장
+
+- [보안 개요](https://learn.microsoft.com/azure/sre-agent/security-overview)
+- [권한](https://learn.microsoft.com/azure/sre-agent/permissions)
+- [네트워크 통합](https://learn.microsoft.com/azure/sre-agent/network-integration)
+- [데이터 보존과 개인 정보](https://learn.microsoft.com/azure/sre-agent/data-privacy)
+- [Agent Hooks](https://learn.microsoft.com/azure/sre-agent/agent-hooks)
 - [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
-- [관리형 커넥터](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
+- [관리형 커넥터(미리 보기)](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
+- [MCP 커넥터](https://learn.microsoft.com/azure/sre-agent/mcp-connectors)
 
 ### 실증 자료
 
-- [실제 동작 검증 부록](../docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md)
+- [실제 동작 검증 결과](sre-agent-event-lab/validation-results.md)
 - [실험 환경과 재현 방법](sre-agent-event-lab/README.md)

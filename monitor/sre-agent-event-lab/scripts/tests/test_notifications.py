@@ -60,7 +60,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     outputs = notifications.generate_notifications(
         timeline=timeline(),
         output_dir=tmp_path,
-        report_url="docs/superpowers/reports/report.md (available after merge)",
+        report_url="monitor/sre-agent-event-lab/validation-results.md",
         issue_url="https://github.com/hellices/devguidesample/issues/123",
     )
 
@@ -78,7 +78,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     assert "thread-1" in issue
     assert "Affected workload: `ca-sre-event-lab-vnet`" in issue
     assert "Affected resource: Application Insights" not in issue
-    assert "available after merge" in issue
+    assert "monitor/sre-agent-event-lab/validation-results.md" in issue
     assert "Incident window" not in issue
     assert "Alert fired:" in issue
     assert "Agent conclusion:" in issue
@@ -91,7 +91,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     assert "https://github.com/hellices/devguidesample/issues/123" in message.get_body(
         preferencelist=("html",)
     ).get_content()
-    assert "available after merge" in message.get_body(
+    assert "monitor/sre-agent-event-lab/validation-results.md" in message.get_body(
         preferencelist=("html",)
     ).get_content()
     assert "Affected workload: ca-sre-event-lab-vnet" in message.get_body(

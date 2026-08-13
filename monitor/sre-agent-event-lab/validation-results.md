@@ -1,8 +1,8 @@
-# Azure SRE Agent 실제 동작 검증 부록
+# Azure SRE Agent 실제 동작 검증 결과
 
-> 제품 개요와 실사용 패턴은 [Azure SRE Agent 소개 자료](../../../monitor/azure-sre-agent.md)를 먼저 참고한다.
+> 제품 개요와 실사용 패턴은 [Azure SRE Agent 소개 자료](../azure-sre-agent.md)를 먼저 참고한다.
 >
-> 이 문서는 소개 자료에서 사용한 S1/S2/S3 시나리오의 수치, timeline, evidence, 한계를 보존하는 검증 부록이다.
+> 이 문서는 S1/S2/S3 시나리오에서 측정한 수치, timeline, evidence, 한계를 정리한다.
 
 - 실행일: 2026-08-12 | 리전: Korea Central | 구독: `95933ae5-0201-4a21-a1fc-8051a7437982`
 - 목표: Azure Monitor 경고를 Azure SRE Agent가 자동 수신해 원인과 안전한 완화책을 올바르게 도출하는지 실증
@@ -108,15 +108,15 @@
 
 **Event bridge 구성 전 — alert는 발생했지만 Agent thread가 생성되지 않음**
 
-![S1 before bridge](../../../monitor/sre-agent-event-lab/assets/captures/s1-before-bridge/investigation.gif)
+![S1 before bridge](assets/captures/s1-before-bridge/investigation.gif)
 
 **Action Group + Logic App managed identity bridge 구성 후 — 실제 Agent 조사**
 
-![S1 SRE Agent investigation](../../../monitor/sre-agent-event-lab/assets/captures/s1/investigation.gif)
+![S1 SRE Agent investigation](assets/captures/s1/investigation.gif)
 
-- [결론 frame](../../../monitor/sre-agent-event-lab/assets/captures/s1/07-conclusion.png)
-- [실제 event timeline](../../../monitor/sre-agent-event-lab/assets/captures/s1/timeline.md)
-- [Mermaid sequence source](../../../monitor/sre-agent-event-lab/assets/captures/s1/timeline.mmd)
+- [결론 frame](assets/captures/s1/07-conclusion.png)
+- [실제 event timeline](assets/captures/s1/timeline.md)
+- [Mermaid sequence source](assets/captures/s1/timeline.mmd)
 - 원본 evidence: `monitor/sre-agent-event-lab/evidence/s1-20260812T080606Z/` (Git 제외)
 - Agent thread: `6dd0e640-d969-46cb-a976-7c81b66fcadc`
 
@@ -154,11 +154,11 @@
 
 ### 실제 동작 캡처
 
-![S2 SRE Agent investigation](../../../monitor/sre-agent-event-lab/assets/captures/s2/investigation.gif)
+![S2 SRE Agent investigation](assets/captures/s2/investigation.gif)
 
-- [결론 frame](../../../monitor/sre-agent-event-lab/assets/captures/s2/07-conclusion.png)
-- [실제 event timeline](../../../monitor/sre-agent-event-lab/assets/captures/s2/timeline.md)
-- [Mermaid sequence source](../../../monitor/sre-agent-event-lab/assets/captures/s2/timeline.mmd)
+- [결론 frame](assets/captures/s2/07-conclusion.png)
+- [실제 event timeline](assets/captures/s2/timeline.md)
+- [Mermaid sequence source](assets/captures/s2/timeline.mmd)
 - 원본 evidence: `monitor/sre-agent-event-lab/evidence/s2-20260812T081539Z/` (Git 제외)
 - Agent thread: `29befef3-0ef6-4ccf-aa43-af1355cff767`
 
@@ -196,11 +196,11 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 ### 실제 동작 캡처
 
-![S3 SRE Agent investigation](../../../monitor/sre-agent-event-lab/assets/captures/s3/investigation.gif)
+![S3 SRE Agent investigation](assets/captures/s3/investigation.gif)
 
-- [결론 frame](../../../monitor/sre-agent-event-lab/assets/captures/s3/07-conclusion.png)
-- [실제 event timeline](../../../monitor/sre-agent-event-lab/assets/captures/s3/timeline.md)
-- [Mermaid sequence source](../../../monitor/sre-agent-event-lab/assets/captures/s3/timeline.mmd)
+- [결론 frame](assets/captures/s3/07-conclusion.png)
+- [실제 event timeline](assets/captures/s3/timeline.md)
+- [Mermaid sequence source](assets/captures/s3/timeline.mmd)
 - 원본 evidence: `monitor/sre-agent-event-lab/evidence/s3-20260812T084004Z/` (Git 제외)
 - Agent thread: `691f9f43-31c4-4822-8d1f-5f647d45f643`
 

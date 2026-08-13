@@ -1,8 +1,6 @@
 # Azure Monitor Dynamic Thresholds와 SRE Agent 연계 설계
 
-- 작성일: 2026-08-12
-- 대상: Azure SRE Agent 이벤트 기반 장애 분석 실증 보고서
-- 상태: 승인된 설계
+- 대상: Azure Monitor 정적 임계값을 사용하는 Azure SRE Agent 이벤트 연계 환경
 
 ## 1. 목적
 
@@ -78,20 +76,6 @@ query는 `summarize` 결과가 하나 이상의 numeric series를 반환해야 �
 - 동일 anomaly를 static/dynamic이 각각 탐지했는지 비교한다.
 - 계절성, 최근 배포, traffic shift 때문에 threshold가 왜 변했는지 설명할 수 있어야 한다.
 - Action Group 연결 후 unauthorized autonomous action은 0건이어야 한다.
-
-## 8. 보고서 반영
-
-결과 보고서의 운영 권고에 다음을 추가한다.
-
-1. Static vs Dynamic 비교표
-2. 이번 실험에서 static을 사용한 이유
-3. Dynamic 후보 KQL signal
-4. 학습 기간과 1분 frequency 제한
-5. 기존 SRE Agent bridge 재사용 흐름
-6. Shadow mode 검증 체크리스트
-7. “이번 세션에서는 미실증” 상태 표시
-
-README에는 공식 문서 링크와 도입 명령 대신 Portal/ARM에서 확인해야 할 설정값을 제공한다. Preview API가 안정되기 전까지 미검증 Bicep resource를 추가하지 않는다.
 
 ## 9. 공식 자료
 

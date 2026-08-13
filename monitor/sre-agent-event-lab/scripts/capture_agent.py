@@ -2,12 +2,13 @@
 import argparse
 import json
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 
 from capture_model import normalize_capture, redact
 
@@ -73,26 +74,49 @@ def get_token() -> str:
     return completed.stdout.strip()
 
 
+MAX_CONSECUTIVE_NETWORK_FAILURES = 5
+_consecutive_network_failures = 0
+
+
+def reset_network_failures() -> None:
+    global _consecutive_network_failures
+    _consecutive_network_failures = 0
+
+
 def data_plane_get(endpoint: str, path: str, token: str) -> Any:
     request = urllib.request.Request(
         f"{endpoint.rstrip('/')}{path}",
         headers={"Authorization": f"Bearer {token}"},
     )
+    global _consecutive_network_failures
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
+            # The endpoint answered, so connectivity is proven regardless of the body.
+            reset_network_failures()
             return json.load(response)
     except urllib.error.HTTPError as exc:
+        # An HTTP status means the endpoint answered, so the connection is healthy.
+        reset_network_failures()
         if exc.code in {401, 403}:
             raise RuntimeError(f"SRE Agent data-plane RBAC failure: HTTP {exc.code}")
         if exc.code == 429 or exc.code >= 500:
             retry_after = int(exc.headers.get("Retry-After", "10"))
             raise TransientApiError(retry_after, exc.code)
         raise
+    except (urllib.error.URLError, OSError) as exc:
+        _consecutive_network_failures += 1
+        if _consecutive_network_failures >= MAX_CONSECUTIVE_NETWORK_FAILURES:
+            raise RuntimeError(
+                f"SRE Agent endpoint unreachable after "
+                f"{_consecutive_network_failures} consecutive network failures: {exc}"
+            )
+        print(f"Transient network failure, retrying: {exc}", file=sys.stderr)
+        raise TransientApiError(10, f"network error ({exc})")
 
 
 class TransientApiError(RuntimeError):
-    def __init__(self, retry_after: int, status_code: int):
-        super().__init__(f"Transient API failure: HTTP {status_code}")
+    def __init__(self, retry_after: int, status_code: Union[int, str]):
+        super().__init__(f"Transient API failure: {status_code}")
         self.retry_after = max(1, min(retry_after, 60))
 
 

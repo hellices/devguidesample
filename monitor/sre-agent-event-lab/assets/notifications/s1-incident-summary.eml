@@ -4,9 +4,9 @@ Subject: [Resolved][SRE-LAB] Order API HTTP 500 incident
 X-SRE-Agent-Draft: true
 MIME-Version: 1.0
 Content-Type: multipart/alternative;
- boundary="===============6402554201647369171=="
+ boundary="===============4373938818987806184=="
 
---===============6402554201647369171==
+--===============4373938818987806184==
 Content-Type: text/plain; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 
@@ -24,10 +24,10 @@ Current status:
 Resolved by a healthy revision with FAILURE_MODE=3Dnone.
 
 Ticket: https://github.com/hellices/devguidesample/issues/43
-Detailed validation appendix: docs/superpowers/reports/2026-08-12-azure-sre-a=
-gent-event-testing-results.md (available after feature branch merge)
+Detailed validation appendix: monitor/sre-agent-event-lab/validation-results.=
+md
 
---===============6402554201647369171==
+--===============4373938818987806184==
 Content-Type: text/html; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 MIME-Version: 1.0
@@ -94,8 +94,7 @@ ps://github.com/hellices/devguidesample/issues/43</a></p>
 .</li>
         <li>Retain this investigation in the Agent knowledge base.</li>
       </ol>
-      <p><code>docs/superpowers/reports/2026-08-12-azure-sre-agent-event-test=
-ing-results.md (available after feature branch merge)</code></p>
+      <p><code>monitor/sre-agent-event-lab/validation-results.md</code></p>
     </section>
     <footer class=3D"footer">
       Draft artifact =E2=80=94 not sent. Agent thread 6dd0e640-d969-46cb-a976=
@@ -105,4 +104,4 @@ ing-results.md (available after feature branch merge)</code></p>
 </body>
 </html>
 
---===============6402554201647369171==--
+--===============4373938818987806184==--

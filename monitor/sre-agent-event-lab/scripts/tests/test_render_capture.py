@@ -30,11 +30,23 @@ def sample_timeline():
             "state": state,
             "title": title,
             "summary": title,
-            "source": "azure-monitor" if index == 0 else "sre-agent",
+            "source": "azure-monitor" if index == 1 else "sre-agent",
             "source_file": f"thread-snapshots/{index:04d}.json",
         }
         for index, (event_id, timestamp, state, title) in enumerate(states, 1)
     ]
+
+
+def test_mermaid_renders_alert_handoff_from_azure_monitor(tmp_path):
+    renderer = load_module()
+    timeline = sample_timeline()
+
+    assert timeline[0]["source"] == "azure-monitor"
+
+    renderer.render_capture(timeline, tmp_path, scenario="s1")
+    mermaid = (tmp_path / "timeline.mmd").read_text()
+
+    assert "AzureMonitor->>SREAgent:" in mermaid
 
 
 def test_render_capture_creates_frames_gif_and_timelines(tmp_path):
