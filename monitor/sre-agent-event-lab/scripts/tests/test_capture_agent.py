@@ -210,3 +210,41 @@ def test_consecutive_network_failures_stop_the_capture(monkeypatch, capsys):
         raise AssertionError("repeated network failures must raise")
 
     capture_agent.reset_network_failures()
+
+
+def test_reachable_http_errors_reset_the_network_failure_counter(monkeypatch):
+    capture_agent = load_module()
+    capture_agent.reset_network_failures()
+    state = {"mode": "network"}
+
+    def fake_urlopen(request, timeout):
+        if state["mode"] == "network":
+            raise capture_agent.urllib.error.URLError("temporary blip")
+        raise capture_agent.urllib.error.HTTPError(
+            "https://agent.example/api/v1/threads", 503, "Service Unavailable", {}, None
+        )
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    for _ in range(capture_agent.MAX_CONSECUTIVE_NETWORK_FAILURES - 1):
+        try:
+            capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+        except capture_agent.TransientApiError:
+            pass
+
+    # The endpoint answered with HTTP 503, so it is reachable.
+    state["mode"] = "http"
+    try:
+        capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+    except capture_agent.TransientApiError:
+        pass
+
+    state["mode"] = "network"
+    try:
+        capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+    except capture_agent.TransientApiError:
+        pass
+    except RuntimeError as exc:
+        raise AssertionError(f"counter was not reset after a reachable response: {exc}")
+
+    capture_agent.reset_network_failures()

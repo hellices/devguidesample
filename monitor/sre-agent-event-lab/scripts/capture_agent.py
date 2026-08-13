@@ -93,6 +93,8 @@ def data_plane_get(endpoint: str, path: str, token: str) -> Any:
         with urllib.request.urlopen(request, timeout=30) as response:
             payload = json.load(response)
     except urllib.error.HTTPError as exc:
+        # An HTTP status means the endpoint answered, so the connection is healthy.
+        reset_network_failures()
         if exc.code in {401, 403}:
             raise RuntimeError(f"SRE Agent data-plane RBAC failure: HTTP {exc.code}")
         if exc.code == 429 or exc.code >= 500:
