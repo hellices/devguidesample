@@ -23,6 +23,26 @@ def atomic_json(path: Path, value: Any) -> None:
     temporary.replace(path)
 
 
+def build_snapshot(
+    *,
+    captured_at: str,
+    source_file: str,
+    threads: list[dict[str, Any]],
+    thread: Any,
+    messages: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a snapshot that is safe to persist and normalize."""
+    return redact(
+        {
+            "captured_at": captured_at,
+            "source_file": source_file,
+            "threads": threads,
+            "thread": thread,
+            "messages": messages,
+        }
+    )
+
+
 def run_json(command: list[str]) -> Any:
     completed = subprocess.run(
         command,
@@ -185,13 +205,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     break
             sequence += 1
             source_file = f"thread-snapshots/{sequence:04d}.json"
-            snapshot = {
-                "captured_at": utc_now(),
-                "source_file": source_file,
-                "threads": threads,
-                "thread": thread_payload,
-                "messages": list_items(messages),
-            }
+            snapshot = build_snapshot(
+                captured_at=utc_now(),
+                source_file=source_file,
+                threads=threads,
+                thread=thread_payload,
+                messages=list_items(messages),
+            )
             atomic_json(output_dir / source_file, snapshot)
             snapshots.append(snapshot)
             timeline = normalize_capture(alert, snapshots)
