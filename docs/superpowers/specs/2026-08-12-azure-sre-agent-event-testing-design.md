@@ -1,7 +1,7 @@
 # Azure SRE Agent 이벤트 기반 장애 분석 실증 테스트 설계
 
 - 작성일: 2026-08-12
-- 대상 구독: `ME-MngEnvMCAP310512-inhwanhwang-3`
+- 대상 구독: `95933ae5-0201-4a21-a1fc-8051a7437982`
 - 배포 리전: `koreacentral`
 - 상태: 승인된 설계
 

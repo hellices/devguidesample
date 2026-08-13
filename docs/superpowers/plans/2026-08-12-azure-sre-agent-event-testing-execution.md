@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Use subscription `ME-MngEnvMCAP310512-inhwanhwang-3` and region `koreacentral`.
+- Use subscription `95933ae5-0201-4a21-a1fc-8051a7437982` and region `koreacentral`.
 - Create only resources in `rg-sre-agent-event-lab-krc`, except the Azure SRE Agent managed identity's required subscription-scope `Monitoring Contributor` role assignment.
 - Apply `purpose=sre-agent-event-lab` and `expiresOn=2026-08-13` tags to created resources.
 - Configure every incident response plan in `Review` mode.
@@ -534,7 +534,7 @@ git commit -m "docs(monitor): record SRE lab deployment" \
 
 Use:
 
-- subscription: `ME-MngEnvMCAP310512-inhwanhwang-3`;
+- subscription: `95933ae5-0201-4a21-a1fc-8051a7437982`;
 - resource group: `rg-sre-agent-event-lab-krc`;
 - agent name: `sre-devguidesample-95933ae5`;
 - region: Korea Central;

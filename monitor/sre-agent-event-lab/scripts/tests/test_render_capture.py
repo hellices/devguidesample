@@ -69,6 +69,18 @@ def test_render_capture_rejects_sensitive_content(tmp_path):
         renderer.render_capture(timeline, tmp_path, scenario="s1")
 
 
+def test_render_capture_rejects_unredacted_container_app_fqdn(tmp_path):
+    renderer = load_module()
+    timeline = sample_timeline()
+    timeline[2]["summary"] = (
+        "Terminal: curl https://ca-sre-event-lab.blueocean-da60b151"
+        ".koreacentral.azurecontainerapps.io/api/orders (exit 0)"
+    )
+
+    with pytest.raises(ValueError, match="sensitive"):
+        renderer.render_capture(timeline, tmp_path, scenario="s1")
+
+
 def test_command_line_reads_timeline_json(tmp_path):
     renderer = load_module()
     timeline_path = tmp_path / "timeline.json"

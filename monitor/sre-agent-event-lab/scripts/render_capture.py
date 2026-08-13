@@ -23,7 +23,8 @@ STATE_COLORS = {
 }
 SENSITIVE_PATTERN = re.compile(
     r"(?i)(Bearer\s+[A-Za-z0-9._~+/=-]+|InstrumentationKey\s*=|"
-    r"ConnectionString\s*=|access_token|connection_string)"
+    r"ConnectionString\s*=|access_token|connection_string|"
+    r"[a-z0-9-]+(?:\.[a-z0-9-]+)*\.azurecontainerapps\.io)"
 )
 
 

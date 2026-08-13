@@ -19,7 +19,7 @@ Azure Container Apps에 의도적인 장애를 만들고, Azure Monitor 경고�
 
 ## 사전 조건
 
-- Azure CLI 로그인 및 구독 `ME-MngEnvMCAP310512-inhwanhwang-3` 접근
+- Azure CLI 로그인 및 구독 `95933ae5-0201-4a21-a1fc-8051a7437982` 접근
 - 구독 또는 필요한 리소스에 Contributor, 역할 할당에는 Owner/User Access Administrator
 - `az`, `jq`, `curl`, `python3`
 - 브라우저에서 `https://sre.azure.com` 및 `*.azuresre.ai` 접근
@@ -86,7 +86,7 @@ monitor/sre-agent-event-lab/scripts/deploy.sh \
 
 | 항목 | 값 |
 |---|---|
-| Subscription | `ME-MngEnvMCAP310512-inhwanhwang-3` |
+| Subscription | `95933ae5-0201-4a21-a1fc-8051a7437982` |
 | Resource group | `rg-sre-agent-event-lab-krc` |
 | Agent name | `sre-devguidesample-95933ae5` |
 | Region | Korea Central |

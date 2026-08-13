@@ -2,7 +2,6 @@
 set -euo pipefail
 
 readonly SUBSCRIPTION_ID="95933ae5-0201-4a21-a1fc-8051a7437982"
-readonly SUBSCRIPTION_NAME="ME-MngEnvMCAP310512-inhwanhwang-3"
 readonly RESOURCE_GROUP="rg-sre-agent-event-lab-krc"
 readonly LOCATION="koreacentral"
 readonly FINAL_DEPLOYMENT_NAME="sre-agent-event-lab-private"
@@ -29,7 +28,7 @@ verify_subscription() {
   current_subscription="$(az account show --query id -o tsv)"
   if [[ "${current_subscription}" != "${SUBSCRIPTION_ID}" ]]; then
     echo "Refusing to continue in subscription ${current_subscription}." >&2
-    echo "Expected ${SUBSCRIPTION_NAME} (${SUBSCRIPTION_ID})." >&2
+    echo "Expected ${SUBSCRIPTION_ID}." >&2
     return 1
   fi
 }

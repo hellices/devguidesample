@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 
@@ -124,6 +125,112 @@ def test_redact_removes_sensitive_keys_recursively():
     assert redacted["Authorization"] == "[REDACTED]"
     assert redacted["nested"]["connectionString"] == "[REDACTED]"
     assert redacted["nested"]["safe"] == "value"
+
+
+def test_redact_replaces_container_app_fqdn_preserving_surrounding_text():
+    model = load_module()
+
+    redacted = model.redact(
+        "Terminal: curl --silent --show-error --output /dev/null "
+        "--write-out '%{http_code}\\n' --max-time 15 "
+        "https://ca-sre-event-lab.blueocean-da60b151.koreacentral"
+        ".azurecontainerapps.io/api/documents (exit 0)"
+    )
+
+    assert "azurecontainerapps.io" not in redacted
+    assert "[CONTAINER_APP_FQDN]" in redacted
+    assert redacted == (
+        "Terminal: curl --silent --show-error --output /dev/null "
+        "--write-out '%{http_code}\\n' --max-time 15 "
+        "https://[CONTAINER_APP_FQDN]/api/documents (exit 0)"
+    )
+
+
+def test_redact_replaces_multiple_container_app_fqdns_in_one_string():
+    model = load_module()
+
+    value = (
+        "for host in \\\n"
+        "  ca-sre-event-lab.blueocean-da60b151.koreacentral"
+        ".azurecontainerapps.io \\\n"
+        "  ca-sre-event-lab-vnet.ambitiousmoss-e0d0dcb7.koreacentral"
+        ".azurecontainerapps.io; do\n"
+        "  curl \"https://$host/api/orders\"\n"
+        "done"
+    )
+
+    redacted = model.redact(value)
+
+    assert "azurecontainerapps.io" not in redacted
+    assert redacted.count("[CONTAINER_APP_FQDN]") == 2
+
+
+def test_redact_replaces_container_app_fqdn_recursively_in_nested_structures():
+    model = load_module()
+
+    redacted = model.redact(
+        {
+            "summary": (
+                "https://ca-sre-event-lab.blueocean-da60b151.koreacentral"
+                ".azurecontainerapps.io/api/orders"
+            ),
+            "nested": [
+                "see ca-sre-event-lab-vnet.ambitiousmoss-e0d0dcb7.koreacentral"
+                ".azurecontainerapps.io for details",
+            ],
+        }
+    )
+
+    assert "azurecontainerapps.io" not in json.dumps(redacted)
+    assert "[CONTAINER_APP_FQDN]" in redacted["summary"]
+    assert "[CONTAINER_APP_FQDN]" in redacted["nested"][0]
+
+
+def test_normalize_capture_redacts_container_app_fqdn_in_message_summary():
+    model = load_module()
+    alert = {
+        "id": "alert-5",
+        "properties": {
+            "essentials": {
+                "alertRule": "[SRE-LAB-S2] Request p95 latency exceeded",
+                "severity": "Sev2",
+                "startDateTime": "2026-08-12T08:20:00Z",
+            }
+        },
+    }
+    snapshots = [
+        {
+            "captured_at": "2026-08-12T08:21:00Z",
+            "source_file": "thread-snapshots/0001.json",
+            "threads": [
+                {
+                    "id": "thread-5",
+                    "title": "[SRE-LAB-S2] Request p95 latency exceeded",
+                    "status": "Running",
+                    "createdAt": "2026-08-12T08:20:30Z",
+                }
+            ],
+            "messages": [
+                {
+                    "id": "message-5",
+                    "createdAt": "2026-08-12T08:21:00Z",
+                    "content": (
+                        "Terminal: curl https://ca-sre-event-lab"
+                        ".blueocean-da60b151.koreacentral.azurecontainerapps"
+                        ".io/api/orders (exit 0)"
+                    ),
+                }
+            ],
+        }
+    ]
+
+    events = model.normalize_capture(alert, snapshots)
+    message_event = next(
+        event for event in events if event["event_id"] == "message-5"
+    )
+
+    assert "azurecontainerapps.io" not in message_event["summary"]
+    assert "[CONTAINER_APP_FQDN]" in message_event["summary"]
 
 
 def test_normalize_capture_records_missing_agent_states():

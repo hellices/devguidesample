@@ -17,6 +17,44 @@ def test_outputs_come_from_latest_subscription_deployment():
     assert "az deployment group show" not in script
 
 
+def test_common_does_not_expose_personal_subscription_display_name():
+    script = COMMON_SH.read_text()
+
+    assert "SUBSCRIPTION_NAME" not in script
+    assert "ME-MngEnvMCAP310512-inhwanhwang-3" not in script
+    assert "inhwanhwang" not in script
+    # The subscription ID equality check is the real safety boundary and
+    # must remain intact.
+    assert 'readonly SUBSCRIPTION_ID="95933ae5-0201-4a21-a1fc-8051a7437982"' in script
+
+
+def test_verify_subscription_reports_only_subscription_id_on_mismatch():
+    """verify_subscription must not reference an undeclared SUBSCRIPTION_NAME.
+
+    Regression guard for `set -u`: after removing SUBSCRIPTION_NAME, the
+    mismatch message must only report the expected SUBSCRIPTION_ID, or the
+    function will crash under `set -u` when the variable no longer exists.
+    """
+    bash_path = shutil.which("bash") or "/bin/bash"
+
+    harness = (
+        "set -euo pipefail\n"
+        'source "$1"\n'
+        "az() {\n  echo \"wrong-subscription-id\"\n}\n"
+        "verify_subscription\n"
+    )
+    result = subprocess.run(
+        [bash_path, "-c", harness, "bash", str(COMMON_SH)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "unbound variable" not in result.stderr
+    assert "SUBSCRIPTION_NAME" not in result.stderr
+    assert "95933ae5-0201-4a21-a1fc-8051a7437982" in result.stderr
+
+
 def test_deploy_uses_subscription_wrapper():
     script = DEPLOY_SH.read_text()
 

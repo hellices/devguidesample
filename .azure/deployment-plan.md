@@ -25,7 +25,7 @@ Generated: 2026-08-12T03:35:07Z
 | Classification | Development / disposable incident lab |
 | Scale | Small |
 | Budget | Cost-Optimized |
-| Subscription | `ME-MngEnvMCAP310512-inhwanhwang-3` (`95933ae5-0201-4a21-a1fc-8051a7437982`) |
+| Subscription | `95933ae5-0201-4a21-a1fc-8051a7437982` |
 | Location | `koreacentral` |
 | Resource group | `rg-sre-agent-event-lab-krc` |
 | Required tags | `purpose=sre-agent-event-lab`, `expiresOn=2026-08-13` |
@@ -195,7 +195,7 @@ Validated: 2026-08-12T03:40:00Z
 | Check | Result | Evidence |
 |---|---|---|
 | Azure CLI | PASS | CLI installed and current account authenticated |
-| Subscription | PASS | `ME-MngEnvMCAP310512-inhwanhwang-3` |
+| Subscription | PASS | `95933ae5-0201-4a21-a1fc-8051a7437982` |
 | Bicep build/lint | PASS | `subscription.bicep` compiled with no warnings |
 | ARM validation | PASS | subscription-scope deployment validation succeeded in `koreacentral` |
 | What-if | PASS | Create 12, Modify 0, Delete 0 |

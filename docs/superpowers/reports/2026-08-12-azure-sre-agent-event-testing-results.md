@@ -4,7 +4,7 @@
 >
 > 이 문서는 소개 자료에서 사용한 S1/S2/S3 시나리오의 수치, timeline, evidence, 한계를 보존하는 검증 부록이다.
 
-- 실행일: 2026-08-12 | 리전: Korea Central | 구독: `ME-MngEnvMCAP310512-inhwanhwang-3`
+- 실행일: 2026-08-12 | 리전: Korea Central | 구독: `95933ae5-0201-4a21-a1fc-8051a7437982`
 - 목표: Azure Monitor 경고를 Azure SRE Agent가 자동 수신해 원인과 안전한 완화책을 올바르게 도출하는지 실증
 - 테스트베드: Azure Container Apps + Application Insights + Log Analytics + Azure Storage
 - Agent 모드: Review

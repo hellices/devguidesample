@@ -20,7 +20,7 @@ sequenceDiagram
     SREAgent->>Evidence: investigating - **Updating vnet and alerts**  I'm checking the vnet updates made at 8-18, where it seems the version
     SREAgent->>Evidence: investigating - **Updating tasks and telemetry**  I'm thinking it might be time to update my to-do list now that the
     SREAgent->>Evidence: investigating - **Assessing change history**  I need to get the change history, and it seems like I might need to us
-    SREAgent->>Evidence: investigating - Terminal- set -euo pipefail for host in \   ca-sre-event-lab.blueocean-da60b151.koreacentral.azureco
+    SREAgent->>Evidence: investigating - Terminal- set -euo pipefail for host in \   [CONTAINER_APP_FQDN] \   [CONTAINER_APP_FQDN]; do   prin
     SREAgent->>Evidence: investigating - **Analyzing request timestamps**  I need to conclude my analysis. I see direct evidence from 8-18 sh
     SREAgent->>Evidence: investigating - **Examining environment changes**  It looks like the environment 4000 might still exist in revision
     SREAgent->>Evidence: conclusion - ## Root cause confirmed  - **Affected workload-** `ca-sre-event-lab-vnet`, instrumented as `sre-even
