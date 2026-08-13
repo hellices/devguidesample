@@ -81,7 +81,7 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 ![Azure SRE Agent 공식 메모리 통합 검색 구조](sre-agent-event-lab/assets/official/memory-unified-search.svg)
 
-> 출처: [Memory and Knowledge in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/memory)
+> 출처: [메모리와 지식 관리](https://learn.microsoft.com/azure/sre-agent/memory)
 
 Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 내용, 업로드한 운영 문서와 연결된 지식 원본을 함께 검색합니다. 답변에는 근거와 출처를 포함해 어떤 경험과 문서를 사용했는지 확인할 수 있습니다.
 
@@ -89,7 +89,7 @@ Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 
 
 ![Azure SRE Agent 공식 자동 학습 흐름](sre-agent-event-lab/assets/official/memory-auto-learning.svg)
 
-> 출처: [Memory and Knowledge in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/memory)
+> 출처: [메모리와 지식 관리](https://learn.microsoft.com/azure/sre-agent/memory)
 
 조사가 완료되면 Azure SRE Agent는 확인한 증상, 효과가 있었던 해결 단계, 근본 원인과 피해야 할 접근을 추출합니다. 이렇게 축적한 내용은 이후 유사한 인시던트를 조사할 때 다시 검색할 수 있습니다.
 
