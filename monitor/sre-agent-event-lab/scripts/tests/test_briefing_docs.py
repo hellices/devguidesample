@@ -4,14 +4,27 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[4]
 BRIEFING = REPO_ROOT / "monitor" / "azure-sre-agent.md"
-OFFICIAL_ASSETS = {
+OFFICIAL_SVGS = {
     "incident-response-flow.svg",
     "root-cause-analysis.svg",
     "agent-reasoning-flow.svg",
     "memory-unified-search.svg",
     "memory-auto-learning.svg",
     "custom-skill-flow.svg",
+    "diagnose-azure-services.svg",
+    "notification-paths.svg",
+    "incident-platform-flow.svg",
+    "knowledge-sources.svg",
+    "run-modes-comparison.svg",
+    "permission-flow.svg",
 }
+OFFICIAL_PNGS = {
+    "azure-sre-agent-networking-vnet.png",
+    "portal-sub-agent-canvas-full.png",
+    "managed-connectors-icon-grid.png",
+    "operations-hub-overview-tab.png",
+}
+OFFICIAL_ASSETS = OFFICIAL_SVGS | OFFICIAL_PNGS
 
 
 def prose_only(markdown: str) -> str:
@@ -255,6 +268,19 @@ def test_briefing_marks_preview_capabilities():
     assert "미리 보기" in managed
 
 
+def test_official_asset_set_has_16_selected_files():
+    asset_dir = (
+        REPO_ROOT
+        / "monitor"
+        / "sre-agent-event-lab"
+        / "assets"
+        / "official"
+    )
+
+    assert len(OFFICIAL_ASSETS) == 16
+    assert {path.name for path in asset_dir.glob("*")} == OFFICIAL_ASSETS
+
+
 def test_official_sre_agent_svgs_are_stored_locally():
     asset_dir = (
         REPO_ROOT
@@ -264,8 +290,74 @@ def test_official_sre_agent_svgs_are_stored_locally():
         / "official"
     )
 
-    assert {path.name for path in asset_dir.glob("*.svg")} == OFFICIAL_ASSETS
-    for name in OFFICIAL_ASSETS:
+    assert {path.name for path in asset_dir.glob("*.svg")} == OFFICIAL_SVGS
+    for name in OFFICIAL_SVGS:
         svg = (asset_dir / name).read_text()
         assert "<svg" in svg
         assert "learn.microsoft.com" not in svg
+
+
+def test_official_sre_agent_pngs_are_stored_locally():
+    asset_dir = (
+        REPO_ROOT
+        / "monitor"
+        / "sre-agent-event-lab"
+        / "assets"
+        / "official"
+    )
+
+    assert {path.name for path in asset_dir.glob("*.png")} == OFFICIAL_PNGS
+    for name in OFFICIAL_PNGS:
+        header = (asset_dir / name).read_bytes()[:8]
+        assert header == b"\x89PNG\r\n\x1a\n", name
+
+
+def test_all_conceptual_svgs_are_referenced_in_briefing():
+    text = BRIEFING.read_text()
+
+    for name in OFFICIAL_SVGS:
+        assert f"assets/official/{name}" in text, name
+
+
+def test_all_selected_official_pngs_are_referenced_in_briefing():
+    text = BRIEFING.read_text()
+
+    for name in OFFICIAL_PNGS:
+        assert f"assets/official/{name}" in text, name
+
+
+def test_briefing_covers_private_network_connectivity():
+    text = BRIEFING.read_text()
+
+    assert "## 비공개 네트워크에는 어떻게 연결하나요?" in text, "missing VNet heading"
+
+    for topic in (
+        "Unrestricted",
+        "Limited",
+        "Azure VNet",
+        "/28",
+        "/26",
+        "Microsoft.App/environments",
+        "Network Contributor",
+        "SRE Agent Administrator",
+        "Use VNet's private DNS",
+        "privatelink.ods.opinsights.azure.com",
+        "privatelink.vaultcore.azure.net",
+        "ExpressRoute",
+        "VPN",
+    ):
+        assert topic in text, topic
+
+    for limitation in (
+        "커넥터 트래픽은 이번 미리 보기에서 VNet을 거치지 않고 공개 인터넷 경로를 사용합니다",
+        "이번 미리 보기는 아웃바운드 트래픽만 제어하며 프라이빗 엔드포인트로 들어오는 인바운드 연결은 지원하지 않습니다",
+    ):
+        assert limitation in text, limitation
+
+    for source in (
+        "https://learn.microsoft.com/azure/sre-agent/network-integration",
+        "https://learn.microsoft.com/azure/sre-agent/configure-network-controls",
+        "https://learn.microsoft.com/azure/sre-agent/network-requirements",
+        "https://learn.microsoft.com/azure/sre-agent/allow-list-key-vault-firewall",
+    ):
+        assert source in text, source
