@@ -146,6 +146,10 @@ Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 
 ## 팀에 맞게 어떻게 확장하나요?
 
+![에이전트가 사용자 지정 스킬을 불러오고 스킬에 연결된 도구로 외부 API를 호출한 뒤 결과를 받아 조사에 활용하는 흐름](sre-agent-event-lab/assets/official/custom-skill-flow.svg)
+
+> 출처: [스킬](https://learn.microsoft.com/azure/sre-agent/skills)
+
 기본 에이전트만으로 부족한 영역은 두 가지 방법으로 보완합니다.
 
 | 구분 | 사용 방식 | 적합한 용도 |

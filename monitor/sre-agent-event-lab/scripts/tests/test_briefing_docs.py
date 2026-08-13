@@ -10,6 +10,7 @@ OFFICIAL_ASSETS = {
     "agent-reasoning-flow.svg",
     "memory-unified-search.svg",
     "memory-auto-learning.svg",
+    "custom-skill-flow.svg",
 }
 
 
@@ -149,6 +150,7 @@ def test_official_images_are_placed_with_sections_and_sources():
         "agent-reasoning-flow.svg": "## 권한과 승인 절차는 어떻게 제어하나요?",
         "memory-unified-search.svg": "## 과거 경험과 운영 문서는 어떻게 활용하나요?",
         "memory-auto-learning.svg": "## 조사가 끝난 뒤 무엇을 학습하나요?",
+        "custom-skill-flow.svg": "## 팀에 맞게 어떻게 확장하나요?",
     }
     for image, heading in expected.items():
         assert image in text
@@ -159,6 +161,7 @@ def test_official_images_are_placed_with_sections_and_sources():
         "https://learn.microsoft.com/azure/sre-agent/root-cause-analysis",
         "https://learn.microsoft.com/azure/sre-agent/agent-reasoning",
         "https://learn.microsoft.com/azure/sre-agent/memory",
+        "https://learn.microsoft.com/azure/sre-agent/skills",
     ):
         assert source in text
 
@@ -169,6 +172,7 @@ OFFICIAL_IMAGE_ALT_KEYWORDS = {
     "agent-reasoning-flow.svg": ("맥락", "추론", "승인"),
     "memory-unified-search.svg": ("과거", "문서", "검색"),
     "memory-auto-learning.svg": ("조사", "학습"),
+    "custom-skill-flow.svg": ("스킬", "도구", "에이전트"),
 }
 
 
