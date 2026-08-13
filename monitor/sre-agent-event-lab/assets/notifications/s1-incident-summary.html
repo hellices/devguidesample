@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>SRE incident summary</title>
+  <style>
+    body { margin: 0; background: #eef2f7; color: #172033; font-family: Arial, "Apple SD Gothic Neo", sans-serif; }
+    .mail { max-width: 760px; margin: 32px auto; background: white; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 30px #16203522; }
+    .header { padding: 28px 34px; background: #0e1930; color: white; }
+    .badge { display: inline-block; padding: 6px 12px; border-radius: 16px; background: #16a34a; font-weight: 700; }
+    .content { padding: 30px 34px 36px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { padding: 16px; border: 1px solid #dbe3ef; border-radius: 10px; background: #f8fafc; }
+    h1 { margin: 14px 0 4px; font-size: 26px; }
+    h2 { margin-top: 28px; font-size: 18px; color: #0f4c81; }
+    p, li { line-height: 1.55; }
+    .footer { padding: 20px 34px; background: #f3f6fa; color: #64748b; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="mail">
+    <header class="header">
+      <span class="badge">RESOLVED · DRAFT</span>
+      <h1>Order API HTTP 500 incident</h1>
+      <p>Azure SRE Agent investigation summary</p>
+    </header>
+    <section class="content">
+      <div class="grid">
+        <div class="card"><strong>Severity</strong><br>Sev2</div>
+        <div class="card"><strong>Service</strong><br>ca-sre-event-lab-vnet</div>
+        <div class="card"><strong>Alert fired</strong><br>2026-08-12T08:07:56.261581Z</div>
+        <div class="card"><strong>Conclusion</strong><br>2026-08-12T08:10:21.971535Z</div>
+      </div>
+      <h2>Customer impact</h2>
+      <p>120 <code>GET /api/orders</code> requests returned HTTP 500.</p>
+      <h2>Root cause and evidence</h2>
+      <p>Affected workload: ca-sre-event-lab-vnet<br>Telemetry source: appi-sre-event-lab-95933ae5<br>Root cause: revision 0000010 had FAILURE_MODE=http500<br>Impact: 120 GET /api/orders requests returned HTTP 500<br>Mitigation: a healthy revision with FAILURE_MODE=none restored service</p>
+      <h2>Mitigation and current status</h2>
+      <p>A healthy revision with <code>FAILURE_MODE=none</code> restored service. The Agent remained in Review mode and did not modify Azure resources.</p>
+      <h2>Ticket</h2>
+      <p><a href="https://github.com/hellices/devguidesample/issues/43">https://github.com/hellices/devguidesample/issues/43</a></p>
+      <h2>Follow-up</h2>
+      <ol>
+        <li>Reject lab-only fault settings in non-lab deployments.</li>
+        <li>Keep the response plan in Review mode while accuracy is monitored.</li>
+        <li>Retain this investigation in the Agent knowledge base.</li>
+      </ol>
+      <p><code>docs/superpowers/reports/2026-08-12-azure-sre-agent-event-testing-results.md (available after feature branch merge)</code></p>
+    </section>
+    <footer class="footer">
+      Draft artifact — not sent. Agent thread 6dd0e640-d969-46cb-a976-7c81b66fcadc
+    </footer>
+  </main>
+</body>
+</html>

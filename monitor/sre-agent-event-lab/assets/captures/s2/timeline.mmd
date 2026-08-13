@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant AzureMonitor
+    participant SREAgent
+    participant Evidence
+    AzureMonitor->>SREAgent: Sev2 alert fired
+    SREAgent->>Evidence: thread-created - Thread status- {'actionsStatus'- {'hasCriticalActions'- False, 'hasWarningActions'- False}, 'inciden
+    SREAgent->>Evidence: investigating - Investigating the `/api/orders` p95 breach for the 08-12–08-17 UTC evaluation window, correlating te
+    SREAgent->>Evidence: investigating - **Investigating resource context**  I need to inspect the resource context, perhaps using Azure's re
+    SREAgent->>Evidence: investigating - Checking the alert target, its hosting workload, and nearby Azure changes to establish the incident
+    SREAgent->>Evidence: investigating - Grep Search- Found 100 matches in 32 files for query 'api/orders|orders|latency|sleep|delay'
+    SREAgent->>Evidence: investigating - The alert target is the `appi-sre-event-lab-95933ae5` Application Insights instance, and the activit
+    SREAgent->>Evidence: investigating - Read file- code- devguidesample/infra/modules/monitoring.bicep
+    SREAgent->>Evidence: investigating - Read file- code- devguidesample/infra/main.bicep
+    SREAgent->>Evidence: investigating - Grep Search- Found 2 matches in 1 files for query 'sre-event-lab|/api/orders|api/orders|order'
+    SREAgent->>Evidence: investigating - **Clarifying API orders**  I need to check the current API orders role, which could relate to either
+    SREAgent->>Evidence: investigating - Parallel subagent execution- 1 completed, 0 failed (Locate order endpoint)
+    SREAgent->>Evidence: investigating - Telemetry isolates the incident to successful `/api/orders` calls on one role instance- 90 requests
+    SREAgent->>Evidence: investigating - **Investigating request delay**  I'm noticing some oddities with code execution related to a potenti
+    SREAgent->>Evidence: investigating - **Clarifying request timestamps**  I'm trying to figure out the accurate start time for requests. Th
+    SREAgent->>Evidence: investigating - **Updating vnet and alerts**  I'm checking the vnet updates made at 8-18, where it seems the version
+    SREAgent->>Evidence: investigating - **Updating tasks and telemetry**  I'm thinking it might be time to update my to-do list now that the
+    SREAgent->>Evidence: investigating - **Assessing change history**  I need to get the change history, and it seems like I might need to us
+    SREAgent->>Evidence: investigating - Terminal- set -euo pipefail for host in \   [CONTAINER_APP_FQDN] \   [CONTAINER_APP_FQDN]; do   prin
+    SREAgent->>Evidence: investigating - **Analyzing request timestamps**  I need to conclude my analysis. I see direct evidence from 8-18 sh
+    SREAgent->>Evidence: investigating - **Examining environment changes**  It looks like the environment 4000 might still exist in revision
+    SREAgent->>Evidence: conclusion - ## Root cause confirmed  - **Affected workload-** `ca-sre-event-lab-vnet`, instrumented as `sre-even

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<rect width="1600" height="900" fill="#F5F8FC"/>
+<text x="70" y="92" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#0F1F3D">Azure SRE Agent의 인시던트 대응 흐름</text>
+<rect x="70" y="230" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="70" y="230" width="14" height="220" rx="7" fill="#C50F1F"/>
+<circle cx="124" cy="282" r="25" fill="#C50F1F"/>
+<text x="117" y="291" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">1</text>
+<text x="166" y="290" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">경고 수신</text>
+<text x="102" y="356" font-family="Arial, sans-serif" font-size="21" fill="#52637A">Azure Monitor · PagerDuty · ServiceNow</text>
+<rect x="440" y="230" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="440" y="230" width="14" height="220" rx="7" fill="#D97706"/>
+<circle cx="494" cy="282" r="25" fill="#D97706"/>
+<text x="487" y="291" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">2</text>
+<text x="536" y="290" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">조사 범위 확인</text>
+<text x="472" y="356" font-family="Arial, sans-serif" font-size="21" fill="#52637A">영향 서비스 · 발생 시각 · 고객 영향</text>
+<rect x="810" y="230" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="810" y="230" width="14" height="220" rx="7" fill="#2563EB"/>
+<circle cx="864" cy="282" r="25" fill="#2563EB"/>
+<text x="857" y="291" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">3</text>
+<text x="906" y="290" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">근거 수집</text>
+<text x="842" y="356" font-family="Arial, sans-serif" font-size="21" fill="#52637A">원격 분석 · 변경 이력 · 소스 코드</text>
+<rect x="1180" y="230" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="1180" y="230" width="14" height="220" rx="7" fill="#008272"/>
+<circle cx="1234" cy="282" r="25" fill="#008272"/>
+<text x="1227" y="291" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">4</text>
+<text x="1276" y="290" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">가설 검증</text>
+<text x="1212" y="356" font-family="Arial, sans-serif" font-size="21" fill="#52637A">가능한 원인을 근거로 확인</text>
+<rect x="250" y="560" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="250" y="560" width="14" height="220" rx="7" fill="#2563EB"/>
+<circle cx="304" cy="612" r="25" fill="#2563EB"/>
+<text x="297" y="621" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">5</text>
+<text x="346" y="620" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">조치 방안 제안</text>
+<text x="282" y="686" font-family="Arial, sans-serif" font-size="21" fill="#52637A">근본 원인 · 완화 조치 · 현재 상태</text>
+<rect x="620" y="560" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="620" y="560" width="14" height="220" rx="7" fill="#D97706"/>
+<circle cx="674" cy="612" r="25" fill="#D97706"/>
+<text x="667" y="621" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">6</text>
+<text x="716" y="620" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">검토 및 승인</text>
+<text x="652" y="686" font-family="Arial, sans-serif" font-size="21" fill="#52637A">검토 모드에서 사람이 승인</text>
+<rect x="990" y="560" width="300" height="220" rx="26" fill="#fff" stroke="#CBD7E8" stroke-width="2"/>
+<rect x="990" y="560" width="14" height="220" rx="7" fill="#107C10"/>
+<circle cx="1044" cy="612" r="25" fill="#107C10"/>
+<text x="1037" y="621" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff">7</text>
+<text x="1086" y="620" font-family="Arial, sans-serif" font-size="27" font-weight="700" fill="#0F1F3D">티켓과 알림</text>
+<text x="1022" y="686" font-family="Arial, sans-serif" font-size="21" fill="#52637A">GitHub Issue · Outlook · Microsoft Teams</text>
+</svg>

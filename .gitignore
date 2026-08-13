@@ -6,3 +6,6 @@ sim-env.json.vscode/
 .mirrord/
 __pycache__/
 *.py[cod]
+.worktrees/
+.superpowers/
+monitor/sre-agent-event-lab/evidence/

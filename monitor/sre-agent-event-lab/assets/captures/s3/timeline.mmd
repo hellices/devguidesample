@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant AzureMonitor
+    participant SREAgent
+    participant Evidence
+    AzureMonitor->>SREAgent: Sev2 alert fired
+    SREAgent->>Evidence: thread-created - Thread status- {'actionsStatus'- {'hasCriticalActions'- False, 'hasWarningActions'- False}, 'inciden
+    SREAgent->>Evidence: investigating - **Executing alert incident**  I need to focus on executing an alert incident and determining the ski
+    SREAgent->>Evidence: investigating - I’m correlating the dependency failures with resource configuration, recent control-plane changes, a
+    SREAgent->>Evidence: investigating - **Looking into loading skills**  I need to load the skills and think the app insights query might no
+    SREAgent->>Evidence: investigating - **Considering application insights**  I need to query Application Insights, but there's no direct Ku
+    SREAgent->>Evidence: investigating - Grep Search- Found 200 matches in 21 files for query '(?i)(blob|storage|core\.windows\.net|managed.?
+    SREAgent->>Evidence: investigating - Memory Search- Found 1 relevant results
+    SREAgent->>Evidence: investigating - The alert is valid- 120 Blob `403` failures affected `GET /api/documents` across the sole applicatio
+    SREAgent->>Evidence: investigating - Grep Search- Found 0 matches in 0 files for query '(?i)(sre-event-lab|stsrelab|ca-sre-event-lab|Stor
+    SREAgent->>Evidence: investigating - Grep Search- Found 0 matches in 0 files for query '(?i)(sre-event-lab|stsrelab|ca-sre-event-lab|Stor
+    SREAgent->>Evidence: investigating - **Analyzing alert and role assignment**  I've identified a precise root cause, but I need to ensure
+    SREAgent->>Evidence: investigating - **Investigating role assignments and code issues**  I'm focusing on querying current role assignment
+    SREAgent->>Evidence: investigating - **Searching for lab configuration and app code**  I need to state that there's no matching lab workl
+    SREAgent->>Evidence: investigating - **Inspecting role assignments**  The user requested a connected repo, so I need to check if any code
+    SREAgent->>Evidence: investigating - **Analyzing requests and logs**  I need to gather raw requests from around 8-40 to align with the 50
+    SREAgent->>Evidence: investigating - Read file- code- devguidesample/README.md
+    SREAgent->>Evidence: investigating - Grep Search- Found 23 matches in 8 files for query 'DefaultAzureCredential'
+    SREAgent->>Evidence: investigating - Grep Search- Found 5 matches in 2 files for query 'BlobServiceClient'
+    SREAgent->>Evidence: investigating - The causal change is identified- the workload identity’s container-scoped `Storage Blob Data Reader`
+    SREAgent->>Evidence: investigating - Read file- code- devguidesample/aisearch/custom_vectorization/bench/bench_runner.py
+    SREAgent->>Evidence: investigating - **Considering app recovery**  I think the container app might be external. I need its FQDN to procee
+    SREAgent->>Evidence: investigating - **Verifying container information**  I need to verify something now. It looks like I should query th
+    SREAgent->>Evidence: investigating - The role was recreated at `08-42-48.660Z`. I’m issuing a single non-mutating request to the affected
+    SREAgent->>Evidence: investigating - Terminal- curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' --max-time 15 h
+    SREAgent->>Evidence: investigating - **Evaluating KQL issues**  I'm working through a problem with KQL where I'm trying to use `union kin
+    SREAgent->>Evidence: investigating - **Analyzing query for failures**  I need to run two queries to check for failures after adding a rol
+    SREAgent->>Evidence: investigating - The role assignment is present, but recovery has not completed- at `08-45 UTC`, the public `/api/doc
+    SREAgent->>Evidence: conclusion - ## Incident summary  - **Alert-** `[SRE-LAB-S3] Blob dependency failures exceeded` (Sev2), fired **2

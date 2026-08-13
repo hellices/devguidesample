@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant AzureMonitor
+    participant SREAgent
+    participant Evidence
+    AzureMonitor->>SREAgent: Sev2 alert fired
+    Evidence-->>Evidence: thread-not-created - No matching SRE Agent thread was present before capture ended.
+    Evidence-->>Evidence: investigation-missing - No investigation message or running state was captured.
+    Evidence-->>Evidence: conclusion-missing - No structured conclusion was present before capture ended.
