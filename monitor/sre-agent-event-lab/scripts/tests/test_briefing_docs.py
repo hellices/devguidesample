@@ -99,6 +99,28 @@ def test_briefing_distinguishes_product_and_lab_behavior():
         assert phrase in text
 
 
+def test_official_images_are_placed_with_sections_and_sources():
+    text = BRIEFING.read_text()
+    expected = {
+        "incident-response-flow.svg": "## 인시던트가 발생하면 어떻게 조사하나요?",
+        "root-cause-analysis.svg": "## 근본 원인은 어떻게 찾나요?",
+        "agent-reasoning-flow.svg": "## 권한과 승인 절차는 어떻게 제어하나요?",
+        "memory-unified-search.svg": "## 과거 경험과 운영 문서는 어떻게 활용하나요?",
+        "memory-auto-learning.svg": "## 조사가 끝난 뒤 무엇을 학습하나요?",
+    }
+    for image, heading in expected.items():
+        assert image in text
+        assert heading in text
+
+    for source in (
+        "https://learn.microsoft.com/azure/sre-agent/incident-response",
+        "https://learn.microsoft.com/azure/sre-agent/root-cause-analysis",
+        "https://learn.microsoft.com/azure/sre-agent/agent-reasoning",
+        "https://learn.microsoft.com/azure/sre-agent/memory",
+    ):
+        assert source in text
+
+
 def test_official_sre_agent_svgs_are_stored_locally():
     asset_dir = (
         REPO_ROOT

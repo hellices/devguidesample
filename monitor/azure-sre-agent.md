@@ -20,9 +20,9 @@ Azure SRE Agent는 단순히 오류 로그를 나열하지 않습니다. 어떤 
 
 ## 인시던트가 발생하면 어떻게 조사하나요?
 
-![Azure SRE Agent의 인시던트 대응 흐름](sre-agent-event-lab/assets/briefing/sre-agent-process.png)
+![Azure SRE Agent 공식 인시던트 대응 흐름](sre-agent-event-lab/assets/official/incident-response-flow.svg)
 
-[편집 가능한 SVG 보기](sre-agent-event-lab/assets/briefing/sre-agent-process.svg)
+> 출처: [인시던트 대응 자동화](https://learn.microsoft.com/azure/sre-agent/incident-response)
 
 Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
@@ -54,6 +54,14 @@ Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
    ServiceNow, PagerDuty, GitHub, Outlook, Microsoft Teams 등 기존 운영 도구로 결과를 전달할 수 있습니다.
 
+## 근본 원인은 어떻게 찾나요?
+
+![Azure SRE Agent 공식 근본 원인 분석 흐름](sre-agent-event-lab/assets/official/root-cause-analysis.svg)
+
+> 출처: [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
+
+Azure SRE Agent는 오류 로그를 나열하는 데서 멈추지 않습니다. 증상을 기준으로 관련 로그, 메트릭, 배포 이력, 소스 코드와 과거 경험을 모으고 가능한 원인을 가설로 세웁니다. 이후 각 가설을 근거와 비교해 제외하거나 확인하고, 결론을 뒷받침하는 자료와 함께 조치 방안을 제시합니다.
+
 ## 어떤 정보를 조사할 수 있나요?
 
 Azure SRE Agent는 관리 ID와 Azure RBAC 권한을 사용해 Azure 리소스를 조사합니다.
@@ -68,6 +76,22 @@ Azure SRE Agent는 관리 ID와 Azure RBAC 권한을 사용해 Azure 리소스�
 | 과거 경험 | 유사한 인시던트, 이전의 근본 원인과 해결 방법 |
 
 Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 있습니다. 외부 시스템이나 특정 데이터 원본을 지속해서 사용해야 하는 경우에는 커넥터를 추가합니다.
+
+## 과거 경험과 운영 문서는 어떻게 활용하나요?
+
+![Azure SRE Agent 공식 메모리 통합 검색 구조](sre-agent-event-lab/assets/official/memory-unified-search.svg)
+
+> 출처: [Memory and Knowledge in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/memory)
+
+Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 내용, 업로드한 운영 문서와 연결된 지식 원본을 함께 검색합니다. 답변에는 근거와 출처를 포함해 어떤 경험과 문서를 사용했는지 확인할 수 있습니다.
+
+## 조사가 끝난 뒤 무엇을 학습하나요?
+
+![Azure SRE Agent 공식 자동 학습 흐름](sre-agent-event-lab/assets/official/memory-auto-learning.svg)
+
+> 출처: [Memory and Knowledge in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/memory)
+
+조사가 완료되면 Azure SRE Agent는 확인한 증상, 효과가 있었던 해결 단계, 근본 원인과 피해야 할 접근을 추출합니다. 이렇게 축적한 내용은 이후 유사한 인시던트를 조사할 때 다시 검색할 수 있습니다.
 
 ## 어떤 시스템과 연결할 수 있나요?
 
@@ -101,6 +125,10 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 커넥터에서는 사용할 작업만 선택할 수 있습니다. 메일 수신자나 Jira 프로젝트 키처럼 에이전트가 임의로 바꾸면 안 되는 값은 고정할 수 있습니다.
 
 ## 권한과 승인 절차는 어떻게 제어하나요?
+
+![Azure SRE Agent 공식 추론과 실행 흐름](sre-agent-event-lab/assets/official/agent-reasoning-flow.svg)
+
+> 출처: [에이전트 추론과 실행](https://learn.microsoft.com/azure/sre-agent/agent-reasoning)
 
 Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 
@@ -143,6 +171,10 @@ Azure SRE Agent는 다음 기능을 제품에서 기본으로 지원합니다.
 - [관리형 커넥터](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
 ## 이번 실증에서 사용한 방식
+
+![Azure SRE Agent의 인시던트 대응 흐름](sre-agent-event-lab/assets/briefing/sre-agent-process.png)
+
+[편집 가능한 SVG 보기](sre-agent-event-lab/assets/briefing/sre-agent-process.svg)
 
 이번 실증에서는 대응 계획을 공개 API로 자동 구성하는 데 제약이 있어 Azure SRE Agent의 HTTP Trigger를 사용했습니다.
 
