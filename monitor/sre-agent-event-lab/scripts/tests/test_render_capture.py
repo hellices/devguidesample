@@ -37,12 +37,16 @@ def sample_timeline():
     ]
 
 
-def test_sample_timeline_starts_with_azure_monitor_alert():
+def test_mermaid_renders_alert_handoff_from_azure_monitor(tmp_path):
+    renderer = load_module()
     timeline = sample_timeline()
 
-    assert timeline[0]["state"] == "alert-fired"
     assert timeline[0]["source"] == "azure-monitor"
-    assert all(event["source"] == "sre-agent" for event in timeline[1:])
+
+    renderer.render_capture(timeline, tmp_path, scenario="s1")
+    mermaid = (tmp_path / "timeline.mmd").read_text()
+
+    assert "AzureMonitor->>SREAgent:" in mermaid
 
 
 def test_render_capture_creates_frames_gif_and_timelines(tmp_path):

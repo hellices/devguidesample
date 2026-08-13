@@ -210,6 +210,13 @@ def test_official_images_do_not_repeat_alt_text_as_body_prose():
         assert marker not in text, marker
 
 
+def test_briefing_keeps_processing_time_caveat():
+    text = BRIEFING.read_text()
+
+    assert "고정된 처리 시간을 보장하지는 않습니다" in text
+    assert "여러 차례 반복" in text
+
+
 def test_official_sre_agent_svgs_are_stored_locally():
     asset_dir = (
         REPO_ROOT

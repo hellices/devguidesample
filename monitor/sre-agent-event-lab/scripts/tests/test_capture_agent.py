@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -135,9 +136,12 @@ def test_capture_agent_avoids_runtime_only_new_union_syntax():
         if line.lstrip().startswith("def ") or ": " in line
     ]
 
+    union_annotation = re.compile(r":\s*[A-Za-z_][\w.\[\], ]*\s\|\s")
     for line in annotation_lines:
-        assert "int | str" not in line, line
-        assert "str | int" not in line, line
+        assert not union_annotation.search(line), line
+    assert "-> " not in "".join(
+        line for line in annotation_lines if " | " in line.split("->")[-1]
+    )
 
     assert "from __future__ import annotations" in source or "Union" in source
 
@@ -180,3 +184,29 @@ def test_network_failures_are_reported_before_retrying(capsys, monkeypatch):
         pass
 
     assert "name resolution failed" in capsys.readouterr().err
+
+
+def test_consecutive_network_failures_stop_the_capture(monkeypatch, capsys):
+    capture_agent = load_module()
+
+    def fake_urlopen(request, timeout):
+        raise capture_agent.urllib.error.URLError("name resolution failed")
+
+    monkeypatch.setattr(capture_agent.urllib.request, "urlopen", fake_urlopen)
+
+    for _ in range(capture_agent.MAX_CONSECUTIVE_NETWORK_FAILURES - 1):
+        try:
+            capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+        except capture_agent.TransientApiError:
+            pass
+
+    try:
+        capture_agent.data_plane_get("https://agent.example", "/api/v1/threads", "t")
+    except capture_agent.TransientApiError:
+        raise AssertionError("repeated network failures must stop being transient")
+    except RuntimeError as exc:
+        assert "network" in str(exc).lower()
+    else:
+        raise AssertionError("repeated network failures must raise")
+
+    capture_agent.reset_network_failures()

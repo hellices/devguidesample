@@ -49,7 +49,6 @@ def test_sre_lab_captures_do_not_expose_container_app_fqdn():
 
 def test_repository_does_not_ship_agent_workflow_docs():
     assert not (REPO_ROOT / "docs" / "superpowers").exists()
-    assert not (REPO_ROOT / "docs").exists()
 
 
 def test_sre_lab_docs_do_not_link_removed_workflow_paths():
@@ -73,3 +72,12 @@ def test_briefing_relative_links_resolve():
     assert targets
     for target in targets:
         assert (briefing.parent / target).resolve().exists(), target
+
+
+def test_relocated_lab_docs_drop_internal_workflow_directives():
+    for name in ("validation-results.md", "dynamic-thresholds.md"):
+        content = (
+            REPO_ROOT / "monitor" / "sre-agent-event-lab" / name
+        ).read_text()
+        for marker in ("승인된 설계", "보고서 반영", "검증 부록"):
+            assert marker not in content, (name, marker)

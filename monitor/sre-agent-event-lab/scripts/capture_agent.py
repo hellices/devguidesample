@@ -74,14 +74,24 @@ def get_token() -> str:
     return completed.stdout.strip()
 
 
+MAX_CONSECUTIVE_NETWORK_FAILURES = 5
+_consecutive_network_failures = 0
+
+
+def reset_network_failures() -> None:
+    global _consecutive_network_failures
+    _consecutive_network_failures = 0
+
+
 def data_plane_get(endpoint: str, path: str, token: str) -> Any:
     request = urllib.request.Request(
         f"{endpoint.rstrip('/')}{path}",
         headers={"Authorization": f"Bearer {token}"},
     )
+    global _consecutive_network_failures
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
+            payload = json.load(response)
     except urllib.error.HTTPError as exc:
         if exc.code in {401, 403}:
             raise RuntimeError(f"SRE Agent data-plane RBAC failure: HTTP {exc.code}")
@@ -90,8 +100,17 @@ def data_plane_get(endpoint: str, path: str, token: str) -> Any:
             raise TransientApiError(retry_after, exc.code)
         raise
     except (urllib.error.URLError, OSError) as exc:
+        _consecutive_network_failures += 1
+        if _consecutive_network_failures >= MAX_CONSECUTIVE_NETWORK_FAILURES:
+            raise RuntimeError(
+                f"SRE Agent endpoint unreachable after "
+                f"{_consecutive_network_failures} consecutive network failures: {exc}"
+            )
         print(f"Transient network failure, retrying: {exc}", file=sys.stderr)
         raise TransientApiError(10, f"network error ({exc})")
+
+    reset_network_failures()
+    return payload
 
 
 class TransientApiError(RuntimeError):
