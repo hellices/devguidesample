@@ -37,6 +37,8 @@ def test_snapshot_redacts_sensitive_data_before_persistence():
                 "content": (
                     "Authorization: Bearer message-secret; "
                     "InstrumentationKey=11111111-1111-1111-1111-111111111111; "
+                    "AccountKey=storage-account-secret; "
+                    "https://logic.example/callback?sig=sas-signature-secret&x=1; "
                     "https://ca-lab.example.koreacentral.azurecontainerapps.io/api/orders"
                 )
             }
@@ -49,6 +51,8 @@ def test_snapshot_redacts_sensitive_data_before_persistence():
         "thread-access-token",
         "message-secret",
         "11111111-1111-1111-1111-111111111111",
+        "storage-account-secret",
+        "sas-signature-secret",
         "azurecontainerapps.io",
     ):
         assert sensitive not in serialized

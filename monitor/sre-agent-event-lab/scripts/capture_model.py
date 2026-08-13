@@ -16,11 +16,19 @@ SENSITIVE_KEYS = {
     "pat",
     "password",
     "secret",
+    "apikey",
+    "clientsecret",
+    "primarysharedkey",
+    "sharedkey",
+    "sig",
+    "workspacesharedkey",
 }
 BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 CONNECTION_PATTERN = re.compile(
-    r"(?i)\b(InstrumentationKey|ConnectionString)\s*=\s*[^;\s]+"
+    r"(?i)\b(InstrumentationKey|ConnectionString|AccountKey|SharedAccessSignature)"
+    r"\s*=\s*[^;\s]+"
 )
+SAS_SIGNATURE_PATTERN = re.compile(r"(?i)([?&]sig=)[^&#\s\"']+")
 CONTAINER_APP_FQDN_PATTERN = re.compile(
     r"(?i)\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.azurecontainerapps\.io\b"
 )
@@ -58,6 +66,7 @@ def redact(value: Any) -> Any:
     if isinstance(value, str):
         value = BEARER_PATTERN.sub("Bearer [REDACTED]", value)
         value = CONNECTION_PATTERN.sub(r"\1=[REDACTED]", value)
+        value = SAS_SIGNATURE_PATTERN.sub(r"\1[REDACTED]", value)
         return CONTAINER_APP_FQDN_PATTERN.sub("[CONTAINER_APP_FQDN]", value)
     return value
 

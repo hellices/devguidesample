@@ -127,6 +127,25 @@ def test_redact_removes_sensitive_keys_recursively():
     assert redacted["nested"]["safe"] == "value"
 
 
+def test_redact_removes_storage_keys_and_sas_signatures_from_strings():
+    model = load_module()
+
+    original = (
+        "DefaultEndpointsProtocol=https;AccountKey=storage-secret; "
+        "SharedAccessSignature=shared-access-secret; "
+        "https://storage.example/container?sv=2026-01-01&sig=sas-secret&sp=r"
+    )
+    redacted = model.redact(original)
+
+    assert "storage-secret" not in redacted
+    assert "shared-access-secret" not in redacted
+    assert "sas-secret" not in redacted
+    assert "AccountKey=[REDACTED]" in redacted
+    assert "SharedAccessSignature=[REDACTED]" in redacted
+    assert "sig=[REDACTED]" in redacted
+    assert model.redact(redacted) == redacted
+
+
 def test_redact_replaces_container_app_fqdn_preserving_surrounding_text():
     model = load_module()
 
