@@ -4,6 +4,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parents[4]
 BRIEFING = REPO_ROOT / "monitor" / "azure-sre-agent.md"
+OFFICIAL_ASSETS = {
+    "incident-response-flow.svg",
+    "root-cause-analysis.svg",
+    "agent-reasoning-flow.svg",
+    "memory-unified-search.svg",
+    "memory-auto-learning.svg",
+}
 
 
 def prose_only(markdown: str) -> str:
@@ -90,3 +97,19 @@ def test_briefing_distinguishes_product_and_lab_behavior():
         "실제 연결하지 않았습니다",
     ):
         assert phrase in text
+
+
+def test_official_sre_agent_svgs_are_stored_locally():
+    asset_dir = (
+        REPO_ROOT
+        / "monitor"
+        / "sre-agent-event-lab"
+        / "assets"
+        / "official"
+    )
+
+    assert {path.name for path in asset_dir.glob("*.svg")} == OFFICIAL_ASSETS
+    for name in OFFICIAL_ASSETS:
+        svg = (asset_dir / name).read_text()
+        assert "<svg" in svg
+        assert "learn.microsoft.com" not in svg
