@@ -144,6 +144,44 @@ def test_lab_ignores_local_azd_environment_directory():
     assert ".azure/" in ignore_file.read_text()
 
 
+def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
+    """README's `azd env new` command hardcoded the one subscription ID used
+    for the original real validation run. Anyone following the README for a
+    *different* subscription would silently target someone else's
+    subscription, so no file that documents or drives the current `azd`
+    onboarding path may hardcode it.
+
+    `scripts/common.sh` (the pre-azd legacy flow, still intentionally pinned
+    per `test_common_does_not_expose_personal_subscription_display_name`) and
+    `validation-results.md` (the historical record of that specific real run)
+    are deliberately out of scope here.
+    """
+    fixed_subscription_id = "95933ae5-0201-4a21-a1fc-8051a7437982"
+    onboarding_paths = [
+        LAB_ROOT / "README.md",
+        LAB_ROOT / "azure.yaml",
+        LAB_ROOT / "infra" / "main.bicep",
+        LAB_ROOT / "infra" / "lab.bicep",
+        LAB_ROOT / "infra" / "workload.bicep",
+        LAB_ROOT / "infra" / "main.parameters.json",
+        LAB_ROOT / "scripts" / "azd-configure.sh",
+        LAB_ROOT / "scripts" / "azd-postprovision.sh",
+        LAB_ROOT / "scripts" / "cleanup-external.sh",
+        LAB_ROOT / "scripts" / "deploy.sh",
+    ]
+
+    offenders = [
+        str(path.relative_to(LAB_ROOT))
+        for path in onboarding_paths
+        if path.is_file() and fixed_subscription_id in path.read_text()
+    ]
+
+    assert offenders == [], (
+        "azd onboarding docs/config still hardcode the original validation "
+        f"subscription ID: {offenders}"
+    )
+
+
 def test_main_bicep_tolerates_an_empty_resource_group_parameter():
     """azd substitutes an unset ${AZURE_RESOURCE_GROUP} with "" and, because
     the Bicep default is a non-empty expression, passes that empty string

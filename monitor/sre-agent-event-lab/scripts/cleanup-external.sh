@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 # Removes only the lab resources that live outside the azd-owned resource
-# group, so `azd down` can delete everything else itself.
+# group, so `azd down` can delete everything else itself, and clears the
+# azd environment values that `azd-postprovision.sh` set for this run.
 #
-# Today that is the subscription-scoped Monitoring Contributor assignments
-# recorded by the Azure SRE Agent setup. Nothing else is ever deleted here: no
-# resource groups, no resources, no unrecorded role assignments. When the
-# evidence file is missing the lab never configured the Agent, so the hook
-# reports that and succeeds -- `azd down` must not fail because an optional
-# step was skipped.
+# Today the external resources are the subscription-scoped Monitoring
+# Contributor assignments recorded by the Azure SRE Agent setup. Nothing
+# else is ever deleted here: no resource groups, no resources, no
+# unrecorded role assignments. When the evidence file is missing the lab
+# never configured the Agent, so the hook reports that and succeeds --
+# `azd down` must not fail because an optional step was skipped.
+#
+# `azd down` may delete the resource group (and the ACR inside it) that
+# `azd-postprovision.sh` recorded in SRE_CONTAINER_IMAGE/SRE_IMAGE_TAG. If
+# those azd environment values survive, reusing the same environment would
+# make a later `azd provision` try to redeploy an immutable image tag that
+# no longer exists instead of falling back to the placeholder image. So
+# this hook always clears both values -- independent of whether the Agent
+# was ever configured -- before doing anything else.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -27,6 +36,19 @@ case "${1:-}" in
     exit 2
     ;;
 esac
+
+command -v azd >/dev/null 2>&1 || {
+  echo "Required command not found: azd" >&2
+  exit 1
+}
+
+if [[ "${CONFIRMED}" -eq 1 ]]; then
+  azd env set SRE_CONTAINER_IMAGE ""
+  azd env set SRE_IMAGE_TAG ""
+  echo "Cleared hook-set SRE_CONTAINER_IMAGE and SRE_IMAGE_TAG."
+else
+  echo "Dry run: would clear hook-set SRE_CONTAINER_IMAGE and SRE_IMAGE_TAG."
+fi
 
 if [[ ! -f "${AGENT_SETUP_FILE}" ]]; then
   echo "No Azure SRE Agent setup evidence at ${AGENT_SETUP_FILE}."

@@ -13,7 +13,14 @@ done
 # The Azure CLI's active account is whatever the operator selected last, which
 # is not necessarily the subscription azd provisions into. Report the mismatch
 # and pin every operation below to the azd subscription explicitly.
-ACTIVE_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+#
+# `az account show` fails with a raw Azure CLI error when no one is signed
+# in; guard it so the hook fails fast with one clear, actionable message
+# instead of that raw stderr or an unexplained `set -e` abort.
+if ! ACTIVE_SUBSCRIPTION_ID="$(az account show --query id -o tsv 2>/dev/null)"; then
+  echo "Azure CLI is not signed in. Run 'az login', then re-run this command." >&2
+  exit 1
+fi
 readonly ACTIVE_SUBSCRIPTION_ID
 if [[ "${ACTIVE_SUBSCRIPTION_ID}" != "${AZURE_SUBSCRIPTION_ID}" ]]; then
   echo "Azure CLI is signed in to ${ACTIVE_SUBSCRIPTION_ID}." >&2

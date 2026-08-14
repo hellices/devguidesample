@@ -56,11 +56,53 @@ def _write_az_stub(directory, log_path):
     return stub
 
 
+def _write_azd_stub(directory, log_path):
+    """A fake `azd` on PATH that records its arguments.
+
+    Without this, `command -v azd` on a developer machine finds the real
+    `azd` binary, which would then try to mutate an environment that does
+    not exist in the test's tmp_path and fail for unrelated reasons.
+
+    Uses `%q` (not `$*`) so an empty-string argument -- e.g. clearing an
+    azd environment value with `azd env set KEY ""` -- is visible in the
+    log as `''` instead of silently vanishing.
+    """
+    stub = directory / "azd"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        f'printf "%q " "$@" >> "{log_path}"\n'
+        f'printf "\\n" >> "{log_path}"\n'
+        "exit 0\n"
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return stub
+
+
+def _write_login_failing_az_stub(directory, log_path):
+    """A fake `az` that fails only the login-check probe, like a signed-out
+    Azure CLI, while logging every invocation it receives.
+    """
+    stub = directory / "az"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        f'printf "%s\\n" "$*" >> "{log_path}"\n'
+        'if [[ "$1 $2" == "account show" && "$*" == *"--query id"* ]]; then\n'
+        "  echo \"ERROR: Please run 'az login' to setup account.\" >&2\n"
+        "  exit 1\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return stub
+
+
 def _run_cleanup_external(tmp_path, args, evidence=None, environment=None):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     log_path = tmp_path / "az-calls.log"
+    azd_log_path = tmp_path / "azd-calls.log"
     _write_az_stub(bin_dir, log_path)
+    _write_azd_stub(bin_dir, azd_log_path)
 
     evidence_root = tmp_path / "evidence"
     evidence_root.mkdir(exist_ok=True)
@@ -76,6 +118,30 @@ def _run_cleanup_external(tmp_path, args, evidence=None, environment=None):
 
     result = subprocess.run(
         [str(CLEANUP_EXTERNAL), *args],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    calls = log_path.read_text() if log_path.exists() else ""
+    azd_calls = azd_log_path.read_text() if azd_log_path.exists() else ""
+    return result, calls, azd_calls
+
+
+def _run_hook_script(script_path, tmp_path, az_stub_factory, environment=None):
+    """Execute an azd hook script with a controllable fake `az` on PATH."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    log_path = tmp_path / "az-calls.log"
+    az_stub_factory(bin_dir, log_path)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env.setdefault("AZURE_SUBSCRIPTION_ID", "11111111-2222-3333-4444-555555555555")
+    if environment:
+        env.update(environment)
+
+    result = subprocess.run(
+        [str(script_path)],
         capture_output=True,
         text=True,
         env=env,
@@ -165,7 +231,7 @@ def test_cleanup_external_succeeds_when_agent_evidence_is_absent(tmp_path):
     """`azd down` runs this hook with continueOnError: false, so a lab that
     never configured the SRE Agent must still tear down cleanly.
     """
-    result, calls = _run_cleanup_external(tmp_path, ["--yes"])
+    result, calls, _ = _run_cleanup_external(tmp_path, ["--yes"])
 
     assert result.returncode == 0, result.stderr
     assert calls == "", f"nothing external exists, but the hook called: {calls}"
@@ -181,7 +247,7 @@ def test_cleanup_external_deletes_only_recorded_subscription_assignments(tmp_pat
         f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization"
         "/roleAssignments/ffffffff-1111-2222-3333-444444444444"
     )
-    result, calls = _run_cleanup_external(
+    result, calls, _ = _run_cleanup_external(
         tmp_path,
         ["--yes"],
         evidence={
@@ -206,7 +272,7 @@ def test_cleanup_external_refuses_assignments_outside_the_target_subscription(tm
         "/subscriptions/99999999-9999-9999-9999-999999999999/providers"
         "/Microsoft.Authorization/roleAssignments/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     )
-    result, calls = _run_cleanup_external(
+    result, calls, _ = _run_cleanup_external(
         tmp_path,
         ["--yes"],
         evidence={
@@ -228,7 +294,7 @@ def test_cleanup_external_is_a_dry_run_without_yes(tmp_path):
         f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization"
         "/roleAssignments/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     )
-    result, calls = _run_cleanup_external(
+    result, calls, _ = _run_cleanup_external(
         tmp_path,
         [],
         evidence={
@@ -255,9 +321,106 @@ def test_cleanup_external_runs_under_bash_32(tmp_path):
         text=True,
     ).stdout.strip()
 
-    result, _ = _run_cleanup_external(tmp_path, ["--yes"])
+    result, _, _ = _run_cleanup_external(tmp_path, ["--yes"])
 
     assert result.returncode == 0, (
         f"cleanup-external.sh must run on bash {version}: {result.stderr}"
     )
     assert "unbound variable" not in result.stderr
+
+
+def test_cleanup_external_clears_hook_set_image_env_vars_alongside_role_cleanup(tmp_path):
+    """`azd down` may delete the resource group (and its ACR) that
+    `azd-postprovision.sh` recorded in SRE_CONTAINER_IMAGE/SRE_IMAGE_TAG. If
+    those values survive in the azd environment, reusing it later would make
+    `azd provision` try to redeploy an image tag that no longer exists
+    instead of falling back to the placeholder. `predown` always runs this
+    hook with --yes (see azure.yaml), so clearing here is safe.
+    """
+    subscription_id = "11111111-2222-3333-4444-555555555555"
+    recorded = (
+        f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization"
+        "/roleAssignments/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    )
+    result, calls, azd_calls = _run_cleanup_external(
+        tmp_path,
+        ["--yes"],
+        evidence={
+            "monitoring_contributor_assignment_id": recorded,
+            "agent_principal_id": "principal-a",
+            "uami_monitoring_contributor_assignment_id": recorded,
+            "agent_user_assigned_principal_id": "principal-b",
+        },
+        environment={"AZURE_SUBSCRIPTION_ID": subscription_id},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert f"role assignment delete --ids {recorded}" in calls
+    assert "env set SRE_CONTAINER_IMAGE ''" in azd_calls
+    assert "env set SRE_IMAGE_TAG ''" in azd_calls
+    assert "group delete" not in calls
+    assert "resource delete" not in calls
+
+
+def test_cleanup_external_clears_image_env_vars_even_without_agent_evidence(tmp_path):
+    """A lab that never configured the SRE Agent takes the early-exit path
+    (no evidence file); the hook-set image values must still be cleared on
+    that path, since it has nothing to do with the Agent.
+    """
+    result, calls, azd_calls = _run_cleanup_external(tmp_path, ["--yes"])
+
+    assert result.returncode == 0, result.stderr
+    assert calls == "", f"nothing external exists, but the hook called: {calls}"
+    assert "env set SRE_CONTAINER_IMAGE ''" in azd_calls
+    assert "env set SRE_IMAGE_TAG ''" in azd_calls
+
+
+def test_cleanup_external_does_not_clear_image_env_vars_during_a_dry_run(tmp_path):
+    """Without --yes, the hook only plans actions; it must not mutate the
+    azd environment either.
+    """
+    result, _, azd_calls = _run_cleanup_external(tmp_path, [])
+
+    assert result.returncode == 0, result.stderr
+    assert azd_calls == "", (
+        f"a dry run (no --yes) must not mutate the azd environment: {azd_calls}"
+    )
+
+
+def test_azd_configure_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path):
+    """`az account show` fails with a generic Azure CLI error when signed
+    out. Guard it so the hook fails fast with one unambiguous message
+    instead of raw CLI stderr or an unexplained `set -e` abort.
+    """
+    result, calls = _run_hook_script(
+        AZD_CONFIGURE, tmp_path, _write_login_failing_az_stub
+    )
+
+    assert result.returncode != 0
+    assert "az login" in result.stderr
+    assert "Please run 'az login' to setup account." not in result.stderr
+    assert calls.strip() == "account show --query id -o tsv", (
+        "the hook must exit immediately after the failed login check, "
+        f"before any other az call: {calls!r}"
+    )
+
+
+def test_azd_postprovision_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path):
+    environment = {
+        "AZURE_RESOURCE_GROUP": "rg-test",
+        "AZURE_ACR_NAME": "acrtest",
+        "AZURE_CONTAINER_APP_NAME": "ca-test",
+        "AZURE_CONTAINER_APP_FQDN": "ca-test.example.com",
+    }
+    result, calls = _run_hook_script(
+        AZD_POSTPROVISION, tmp_path, _write_login_failing_az_stub, environment
+    )
+
+    assert result.returncode != 0
+    assert "az login" in result.stderr
+    assert "Please run 'az login' to setup account." not in result.stderr
+    assert calls.strip() == "account show --query id -o tsv", (
+        "the hook must exit immediately after the failed login check, "
+        f"before any other az call: {calls!r}"
+    )
+

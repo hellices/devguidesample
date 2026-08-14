@@ -19,7 +19,7 @@ Azure Container Apps에 의도적인 장애를 만들고, Azure Monitor 경고�
 
 ## 사전 조건
 
-- Azure CLI 로그인 및 구독 `95933ae5-0201-4a21-a1fc-8051a7437982` 접근
+- Azure CLI 로그인 및 대상 Azure 구독 접근 권한
 - 구독 또는 필요한 리소스에 Contributor, 역할 할당에는 Owner/User Access Administrator
 - `az`, `jq`, `curl`, `python3`
 - 브라우저에서 `https://sre.azure.com` 및 `*.azuresre.ai` 접근
@@ -60,12 +60,12 @@ az bicep build --file monitor/sre-agent-event-lab/infra/main.bicep --stdout >/de
 
 ```bash
 cd monitor/sre-agent-event-lab
-azd env new sre-event-lab \
-  --subscription 95933ae5-0201-4a21-a1fc-8051a7437982 \
-  --location koreacentral
+azd env new sre-event-lab --location koreacentral
 mkdir -p evidence
 azd up 2>&1 | tee evidence/deploy.log
 ```
+
+`azd env new`에 `--subscription`을 지정하지 않으면 azd가 로그인된 계정의 구독 목록에서 대화형으로 선택하도록 안내한다. 특정 구독을 고정하려면 `--subscription <YOUR_SUBSCRIPTION_ID>`를 추가한다(하드코딩된 예시 구독 ID를 그대로 복사해 사용하지 않는다).
 
 `azd up`은 Bicep provision → ACR cloud build → Container App image 전환 순서로 진행된다. 로컬 Docker는 필요하지 않다. 초기 provision은 public placeholder image를 port 80으로 띄우고, postprovision hook이 ingress를 8000으로 옮긴 뒤 lab image로 교체한다. `scripts/deploy.sh`는 위 `azd up`을 호출하는 호환 wrapper로 남아 있다.
 
@@ -82,8 +82,8 @@ azd up 2>&1 | tee evidence/deploy.log
 
 | 항목 | 값 |
 |---|---|
-| Subscription | `95933ae5-0201-4a21-a1fc-8051a7437982` |
-| Resource group | `rg-sre-agent-event-lab-krc` |
+| Subscription | `azd env new`에서 선택한 구독. 최초 실측값은 `validation-results.md` 참고 |
+| Resource group | `rg-sre-agent-event-lab-krc` (최초 실측 실행; `azd`가 provision한 environment는 `azd env get-value AZURE_RESOURCE_GROUP`으로 확인) |
 | Agent name | `sre-devguidesample-95933ae5` |
 | Region | Korea Central |
 | Azure resource access | 테스트 resource group, Reader |
@@ -173,6 +173,14 @@ python3 monitor/sre-agent-event-lab/scripts/loadgen.py \
 Application Insights의 `AppRequests`와 `AppDependencies`에 현재 데이터가 들어오고 세 alert가 Resolved인지 확인한다.
 
 ## 시나리오 실행
+
+> ⚠️ **전환기 주의사항 (레거시)**: `run-scenario.sh`와 `query-evidence.sh`는 아직 `scripts/common.sh`의
+> `deployment_output` 함수(구독 스코프 배포 조회, 고정된 `rg-sre-agent-event-lab-krc`)로 배포 output을
+> 조회한다. 즉 이 절의 명령은 `azd up`이 provision한 현재 azd 환경이 아니라 최초 실측 실행에서 만든
+> 리소스 그룹만을 대상으로 동작한다. 새로 `azd up`한 환경에서는 아직 동작을 보장하지 않으며, `common.sh`가
+> `azd env get-value`를 읽도록 재작성되는 후속 작업(가이드된 CLI 제공) 전까지는 아래 명령을 레거시 전용으로
+> 취급한다. 새 azd 환경에서 baseline을 확인하려면 위 [Baseline](#baseline) 절의 `azd env get-value` 기반
+> 명령을 사용한다.
 
 각 명령은 장애 주입, 제한 부하, alert polling, 복구, timeline 저장을 수행한다.
 

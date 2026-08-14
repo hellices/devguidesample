@@ -102,6 +102,29 @@ def test_readme_documents_a_working_deployment_command():
     assert "azd env get-value AZURE_CONTAINER_APP_FQDN" in readme
 
 
+def test_readme_marks_legacy_scenario_scripts_as_transitional():
+    """`run-scenario.sh` and `query-evidence.sh` still resolve deployment
+    outputs through `common.sh`'s `deployment_output` (`az deployment sub
+    show --name sre-agent-event-lab-private` against the hardcoded
+    `rg-sre-agent-event-lab-krc`), not through the `azd`-provisioned
+    environment introduced by this task. The README must not present them as
+    working against a fresh `azd up` environment without saying so.
+    """
+    readme = (Path(__file__).parents[2] / "README.md").read_text()
+
+    scenario_heading = "## 시나리오 실행"
+    assert scenario_heading in readme
+    section = readme.split(scenario_heading, 1)[1]
+
+    assert "run-scenario.sh" in section.split("##", 1)[0]
+    caveat_markers = ("common.sh", "레거시", "azd 환경")
+    assert any(marker in section.split("##", 1)[0] for marker in caveat_markers), (
+        "README's scenario-execution section must caveat that "
+        "run-scenario.sh/query-evidence.sh still read the pre-azd "
+        "common.sh deployment lookup, not the current azd environment"
+    )
+
+
 def test_scenario_waits_for_new_revision_before_load():
     common = COMMON_SH.read_text()
     scenario = (Path(__file__).parents[1] / "run-scenario.sh").read_text()

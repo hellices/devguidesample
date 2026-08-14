@@ -25,7 +25,13 @@ done
 : "${AZURE_CONTAINER_APP_NAME:?AZURE_CONTAINER_APP_NAME must be set by azd before running this hook}"
 : "${AZURE_CONTAINER_APP_FQDN:?AZURE_CONTAINER_APP_FQDN must be set by azd before running this hook}"
 
-ACTIVE_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+# `az account show` fails with a raw Azure CLI error when no one is signed
+# in; guard it so the hook fails fast with one clear, actionable message
+# instead of that raw stderr or an unexplained `set -e` abort.
+if ! ACTIVE_SUBSCRIPTION_ID="$(az account show --query id -o tsv 2>/dev/null)"; then
+  echo "Azure CLI is not signed in. Run 'az login', then re-run this command." >&2
+  exit 1
+fi
 readonly ACTIVE_SUBSCRIPTION_ID
 if [[ "${ACTIVE_SUBSCRIPTION_ID}" != "${AZURE_SUBSCRIPTION_ID}" ]]; then
   echo "Azure CLI is signed in to ${ACTIVE_SUBSCRIPTION_ID}." >&2
