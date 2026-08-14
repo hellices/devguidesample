@@ -47,33 +47,36 @@ if ! python3 "${SCRIPT_DIR}/loadgen.py" \
   exit 1
 fi
 
-# telemetry_row_count QUERY -- number of rows the workspace returns for
-# QUERY, or 0 when the query errors or returns nothing. Never fails the
-# caller: an ingestion-lag miss is expected mid-poll, not this function's
-# error to report.
-telemetry_row_count() {
-  local query="$1"
-  az monitor log-analytics query \
-    --workspace "${WORKSPACE_CUSTOMER_ID}" \
-    --analytics-query "${query}" \
-    --timespan PT30M \
-    -o json 2>/dev/null |
-    jq '(.tables[0].rows // []) | length' 2>/dev/null || echo 0
+# The workspace answers with a flat JSON array of row objects (see
+# `log_analytics_row_count` in common.sh), so the poll asks for real rows --
+# projected and bounded with `take 1` -- rather than a `| count`, whose
+# single row would look like data even for an empty workspace. `contains`
+# (substring) is used rather than `has` (term match) so a path like
+# `/api/orders` matches inside `GET /api/orders` regardless of tokenization.
+telemetry_seen() {
+  local path_fragment="$1"
+  local rows
+  rows="$(log_analytics_row_count "${WORKSPACE_CUSTOMER_ID}" PT30M \
+    "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | where Name contains '${path_fragment}' | project TimeGenerated, Name | take 1")"
+  [[ "${rows:-0}" -gt 0 ]]
 }
 
 ORDERS_SEEN=0
 DOCUMENTS_SEEN=0
-started="${SECONDS}"
-while (( SECONDS - started < TELEMETRY_TIMEOUT_SECONDS )); do
-  if [[ "${ORDERS_SEEN}" -eq 0 ]]; then
-    orders_rows="$(telemetry_row_count "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | where Name has '/api/orders' | take 1")"
-    [[ "${orders_rows:-0}" -gt 0 ]] && ORDERS_SEEN=1
+# Bounded poll: always at least one honest attempt (even with a zero
+# timeout), and never a sleep that would run past the deadline.
+TELEMETRY_DEADLINE=$(( SECONDS + TELEMETRY_TIMEOUT_SECONDS ))
+while :; do
+  if [[ "${ORDERS_SEEN}" -eq 0 ]] && telemetry_seen "/api/orders"; then
+    ORDERS_SEEN=1
   fi
-  if [[ "${DOCUMENTS_SEEN}" -eq 0 ]]; then
-    documents_rows="$(telemetry_row_count "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | where Name has '/api/documents' | take 1")"
-    [[ "${documents_rows:-0}" -gt 0 ]] && DOCUMENTS_SEEN=1
+  if [[ "${DOCUMENTS_SEEN}" -eq 0 ]] && telemetry_seen "/api/documents"; then
+    DOCUMENTS_SEEN=1
   fi
   if [[ "${ORDERS_SEEN}" -eq 1 && "${DOCUMENTS_SEEN}" -eq 1 ]]; then
+    break
+  fi
+  if (( SECONDS + TELEMETRY_POLL_INTERVAL_SECONDS > TELEMETRY_DEADLINE )); then
     break
   fi
   sleep "${TELEMETRY_POLL_INTERVAL_SECONDS}"

@@ -20,8 +20,10 @@ Azure Container Apps에 의도적인 장애를 만들고, Azure Monitor 경고�
 ## 사전 조건
 
 - Azure CLI 로그인 및 대상 Azure 구독 접근 권한
+- azd 로그인(`azd auth login`) — azd는 Azure CLI와 별도의 자격 증명을 사용한다
 - 구독 또는 필요한 리소스에 Contributor, 역할 할당에는 Owner/User Access Administrator
-- `az`, `jq`, `curl`, `python3`
+- `az`, `azd`, `jq`, `curl`, `python3`
+- `az` Log Analytics extension: `az extension add --name log-analytics` (`az monitor log-analytics query` 제공)
 - 브라우저에서 `https://sre.azure.com` 및 `*.azuresre.ai` 접근
 - Azure SRE Agent Korea Central 사용 권한
 - GitHub 저장소 `hellices/devguidesample` 연결 권한
@@ -56,7 +58,13 @@ monitor/sre-agent-event-lab/scripts/lab.sh score                   # (예정) �
 
 ### `doctor` 점검 항목
 
-`lab.sh doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 형식으로 한 줄에 하나씩 점검 결과를 출력한다. `STATUS`는 `PASS`, `FAIL`, `MANUAL` 중 하나이며, `FAIL`이 하나라도 있으면 종료 코드 1을 반환한다. 필수 명령, 로그인, azd 구성, 구독/리소스 그룹, Container App 상태, `/healthz`, Application Insights telemetry, alert rule 활성화, SRE Agent 리소스(설정된 경우), Reader 역할 할당을 공식 안정 API로 검증한다. Repository connection, Knowledge source, Incident platform, Response plan은 공식 API로 확인할 수 없으므로 항상 `MANUAL`로 표시되며 portal에서 직접 확인해야 한다.
+`lab.sh doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 형식으로 한 줄에 하나씩 점검 결과를 출력한다. `STATUS`는 `PASS`, `FAIL`, `MANUAL` 중 하나이며, `FAIL`이 하나라도 있으면 종료 코드 1을 반환한다. 필수 명령, `log-analytics` CLI extension, Azure CLI 로그인, azd 인증(`azd auth login --check-status`), azd 구성, 구독/리소스 그룹, Container App 상태, `/healthz`, Application Insights telemetry, alert rule 활성화, SRE Agent 리소스(설정된 경우), Reader 역할 할당을 공식 안정 API로 검증한다. Repository connection, Knowledge source, Incident platform, Response plan은 공식 API로 확인할 수 없으므로 항상 `MANUAL`로 표시되며 portal에서 직접 확인해야 한다.
+
+점검 항목 중 세 가지는 실제 CLI 동작에 맞춰 해석해야 한다.
+
+- **`log-analytics` extension**: `az monitor log-analytics query`는 core CLI에 포함되지 않는다. 없으면 telemetry 점검이 무의미하므로 별도 `FAIL` 행으로 보고하고 `az extension add --name log-analytics`를 안내한다.
+- **azd 인증**: `azd auth login --check-status`는 로그인 여부와 무관하게 항상 종료 코드 0을 반환하므로, `--output json`의 `status` 값(`success`/`unauthenticated`)으로만 판정한다.
+- **Reader 역할**: `az role assignment list`는 `--include-inherited` 없이는 상위 scope(구독 등)에서 상속된 할당을 보여주지 않는다. 상속된 Reader도 이 lab을 읽는 데 충분하므로 `PASS`로 처리하되, 리소스 그룹에 직접 할당된 경우와 상속된 경우를 DETAIL에서 구분해 표시한다.
 
 ## 로컬 검증
 

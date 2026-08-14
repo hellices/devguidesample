@@ -109,7 +109,9 @@ case "${{1:-}} ${{2:-}}" in
       printf '[]\\n'
     fi ;;
   "monitor log-analytics")
-    printf '{{"tables": []}}\\n' ;;
+    # The `log-analytics` extension flattens the REST `{{"tables": [...]}}`
+    # envelope into one JSON array of row objects, so "no rows" is `[]`.
+    printf '[]\\n' ;;
   "monitor activity-log")
     printf '[]\\n' ;;
   "role assignment")

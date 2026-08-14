@@ -4,12 +4,24 @@
 `query-evidence.sh` / `capture-scenario.sh` / `cleanup.sh`'s call surface. It
 does not model the surfaces `doctor.sh` and `baseline.sh` add: a container
 app's *current* health state (no polling loop), a `curl` probe of
-`/healthz`, `az resource show` for the SRE Agent resource, a per-rule
-`az rest` read of `Microsoft.Insights/scheduledQueryRules`, and
-`az role assignment list` keyed by a specific `--assignee-object-id`. This
-module gives each test full, mutable control over that state through a
-single `FakeAz` object so `doctor.sh`/`baseline.sh`/`lab.sh` are driven as
-real programs -- not grepped as text -- exactly like the other lab scripts.
+`/healthz`, `az extension show` for the `log-analytics` extension,
+`az resource show` for the SRE Agent resource, a per-rule `az rest` read of
+`Microsoft.Insights/scheduledQueryRules`, and `az role assignment list`
+keyed by a specific `--assignee-object-id`. This module gives each test
+full, mutable control over that state through a single `FakeAz` object so
+`doctor.sh`/`baseline.sh`/`lab.sh` are driven as real programs -- not
+grepped as text -- exactly like the other lab scripts.
+
+Three observable contracts here were re-verified against the *real* CLIs on
+2026-08-14 (azure-cli 2.86.0 / log-analytics 1.0.0b1 / azd 1.29.0) rather
+than assumed, because each one had been modelled incorrectly before:
+
+1. `az monitor log-analytics query -o json` prints a flat JSON array of row
+   objects, not the `{"tables": [...]}` REST envelope (see `_rows`).
+2. `az role assignment list` hides parent-scope assignments unless
+   `--include-inherited` is passed.
+3. `azd auth login --check-status` always exits 0 and reports the real
+   answer only in its output (see `azd_fake.py`).
 """
 import json
 import os
@@ -38,9 +50,44 @@ ALERT_RULE_NAMES = (
     "alert-sre-lab-s3-storage-rbac",
 )
 
+RESOURCE_GROUP_SCOPE = f"/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
+SUBSCRIPTION_SCOPE = f"/subscriptions/{SUBSCRIPTION_ID}"
+
+# `az monitor log-analytics query -o json` does NOT print the REST envelope
+# (`{"tables": [...]}`). The `log-analytics` extension's `Query._output`
+# flattens every table into one JSON array with a single object per row --
+# `TableName` plus one *stringified* value per projected column -- so an
+# empty result set prints exactly `[]`. Verified against the installed
+# extension source (log-analytics 1.0.0b1, azure-cli 2.86.0):
+# `~/.azure/cliextensions/log-analytics/azext_loganalytics/custom.py`.
+def _rows(*rows) -> str:
+    return json.dumps(list(rows))
+
+
+APP_REQUESTS_ROW = {
+    "TableName": "PrimaryResult",
+    "TimeGenerated": "2026-08-14T00:05:00Z",
+    "Name": "GET /api/orders",
+}
+DOCUMENT_REQUESTS_ROW = {
+    "TableName": "PrimaryResult",
+    "TimeGenerated": "2026-08-14T00:06:00Z",
+    "Name": "GET /api/documents",
+}
+EMPTY_RESULT = "[]"
+
+# What KQL's `count` operator really returns: exactly one row, whatever the
+# data looks like. A fake that answers `| count` with an empty array would
+# hide the very defect the doctor/baseline telemetry checks must not have.
+COUNT_ZERO_RESULT = _rows({"TableName": "PrimaryResult", "Count": "0"})
+
 
 def _default_alert_rules_enabled() -> Dict[str, bool]:
     return {name: True for name in ALERT_RULE_NAMES}
+
+
+def _no_inherited_reader() -> Dict[str, bool]:
+    return {AGENT_PRINCIPAL_ID: False, AGENT_UAMI_PRINCIPAL_ID: False}
 
 
 @dataclass
@@ -58,6 +105,8 @@ class FakeAz:
 
     workdir: Path
     logged_in: bool = True
+    azd_logged_in: bool = True
+    log_analytics_extension_installed: bool = True
     active_subscription_id: str = SUBSCRIPTION_ID
     resource_group_exists: bool = True
     resource_group_purpose: str = "sre-agent-event-lab"
@@ -71,11 +120,16 @@ class FakeAz:
     alert_rules_enabled: Dict[str, bool] = field(default_factory=_default_alert_rules_enabled)
     sre_agent_resource_exists: bool = True
     agent_setup_present: bool = True
+    agent_setup_body: "str | None" = None
     agent_principal_id: str = AGENT_PRINCIPAL_ID
     agent_uami_principal_id: str = AGENT_UAMI_PRINCIPAL_ID
+    # Reader assigned *directly* on the lab resource group.
     reader_role_assigned: Dict[str, bool] = field(
         default_factory=lambda: {AGENT_PRINCIPAL_ID: True, AGENT_UAMI_PRINCIPAL_ID: True}
     )
+    # Reader assigned on the subscription and therefore only visible to a
+    # lookup that asks for inherited assignments.
+    reader_role_inherited: Dict[str, bool] = field(default_factory=_no_inherited_reader)
     baseline_orders_succeed: bool = True
     baseline_documents_succeed: bool = True
     # None means "use the module default AZD_VALUES"; a test passes {} (or
@@ -101,26 +155,68 @@ def _az_stub_source(fake_az: FakeAz, log_path: Path) -> str:
             )
     rule_case = "\n".join(rule_branches)
 
+    # `az role assignment list` only returns assignments made at *parent*
+    # scopes when `--include-inherited` is passed; without it, a Reader
+    # granted on the subscription is invisible to a resource-group scoped
+    # lookup. The fake reproduces that, so a doctor that drops the flag
+    # cannot pass the inherited-Reader test by accident.
+    principal_ids = set(fake_az.reader_role_assigned) | set(fake_az.reader_role_inherited)
     reader_branches = []
-    for principal_id, has_reader in fake_az.reader_role_assigned.items():
-        count = "1" if has_reader else "0"
-        reader_branches.append(f'    "{principal_id}") printf \'{count}\\n\' ;;')
-    reader_case = "\n".join(reader_branches) if reader_branches else "    *) printf '0\\n' ;;"
+    for principal_id in sorted(principal_ids):
+        direct = []
+        inherited = []
+        if fake_az.reader_role_assigned.get(principal_id, False):
+            direct.append(
+                {
+                    "principalId": principal_id,
+                    "roleDefinitionName": "Reader",
+                    "scope": RESOURCE_GROUP_SCOPE,
+                }
+            )
+        if fake_az.reader_role_inherited.get(principal_id, False):
+            inherited.append(
+                {
+                    "principalId": principal_id,
+                    "roleDefinitionName": "Reader",
+                    "scope": SUBSCRIPTION_SCOPE,
+                }
+            )
+        reader_branches.append(
+            f'    "{principal_id}")\n'
+            f"      if [[ \"${{all_args}}\" == *--include-inherited* ]]; then\n"
+            f"        printf '%s\\n' '{json.dumps(direct + inherited)}'\n"
+            f"      else\n"
+            f"        printf '%s\\n' '{json.dumps(direct)}'\n"
+            f"      fi ;;"
+        )
+    reader_branches.append("    *) printf '[]\\n' ;;")
+    reader_case = "\n".join(reader_branches)
 
-    orders_rows = "[[1]]" if fake_az.app_insights_orders_seen else "[]"
-    documents_rows = "[[1]]" if fake_az.app_insights_documents_seen else "[]"
-    any_rows = "[[1]]" if fake_az.app_insights_has_recent_requests else "[]"
+    orders_rows = _rows(APP_REQUESTS_ROW) if fake_az.app_insights_orders_seen else EMPTY_RESULT
+    documents_rows = (
+        _rows(DOCUMENT_REQUESTS_ROW) if fake_az.app_insights_documents_seen else EMPTY_RESULT
+    )
+    any_rows = _rows(APP_REQUESTS_ROW) if fake_az.app_insights_has_recent_requests else EMPTY_RESULT
     account_show = (
         f"printf '%s\\n' '{fake_az.active_subscription_id}'" if fake_az.logged_in else "exit 1"
     )
     group_exists = "printf 'true\\n'" if fake_az.resource_group_exists else "printf 'false\\n'"
     resource_show = "exit 0" if fake_az.sre_agent_resource_exists else "exit 1"
+    log_analytics_extension = "exit 0" if fake_az.log_analytics_extension_installed else (
+        "printf 'ERROR: The extension log-analytics is not installed.\\n' >&2\n    exit 1"
+    )
 
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+all_args="$*"
 case "${{1:-}} ${{2:-}}" in
   "account show")
     {account_show}
+    ;;
+  "extension show")
+    if [[ "${{all_args}}" == *"--name log-analytics"* ]]; then
+    {log_analytics_extension}
+    fi
     ;;
   "group exists")
     {group_exists}
@@ -136,12 +232,17 @@ case "${{1:-}} ${{2:-}}" in
     printf '%s\\n' "{fake_az.container_app_health}"
     ;;
   "monitor log-analytics")
-    if [[ "$*" == *"/api/orders"* ]]; then
-      printf '{{"tables": [{{"rows": {orders_rows}}}]}}\\n'
-    elif [[ "$*" == *"/api/documents"* ]]; then
-      printf '{{"tables": [{{"rows": {documents_rows}}}]}}\\n'
+    # KQL's `count` operator always returns exactly one row, even for an
+    # empty table -- reproduced here so any caller that infers "data
+    # exists" from a `| count` result's row count fails loudly.
+    if [[ "${{all_args}}" == *"| count"* ]]; then
+      printf '%s\\n' '{COUNT_ZERO_RESULT}'
+    elif [[ "${{all_args}}" == *"/api/orders"* ]]; then
+      printf '%s\\n' '{orders_rows}'
+    elif [[ "${{all_args}}" == *"/api/documents"* ]]; then
+      printf '%s\\n' '{documents_rows}'
     else
-      printf '{{"tables": [{{"rows": {any_rows}}}]}}\\n'
+      printf '%s\\n' '{any_rows}'
     fi
     ;;
   "rest --method")
@@ -154,7 +255,6 @@ case "${{1:-}} ${{2:-}}" in
     {resource_show}
     ;;
   "role assignment")
-    all_args="$*"
     principal="${{all_args##*--assignee-object-id }}"
     principal="${{principal%% *}}"
     case "${{principal}}" in
@@ -280,6 +380,9 @@ def _write_agent_setup(lab: Path, fake_az: FakeAz) -> None:
     if not fake_az.agent_setup_present:
         agent_setup_path.unlink(missing_ok=True)
         return
+    if fake_az.agent_setup_body is not None:
+        agent_setup_path.write_text(fake_az.agent_setup_body)
+        return
     setup = {
         "agent_endpoint": "https://sre-agent.example.com/api/incidents",
         "monitoring_contributor_assignment_id": (
@@ -327,7 +430,7 @@ def _materialize(fake_az: FakeAz) -> LabRun:
 
     write_executable(bin_dir / "az", _az_stub_source(fake_az, az_log))
     azd_values = fake_az.azd_values if fake_az.azd_values is not None else AZD_VALUES
-    write_azd_stub(bin_dir, azd_values, "azd_1_29", azd_log)
+    write_azd_stub(bin_dir, azd_values, "azd_1_29", azd_log, logged_in=fake_az.azd_logged_in)
     write_executable(bin_dir / "curl", _curl_stub_source(fake_az))
     write_executable(bin_dir / "python3", _python3_stub_source(fake_az, python_log))
 

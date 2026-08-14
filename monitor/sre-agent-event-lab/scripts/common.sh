@@ -159,6 +159,72 @@ verify_lab_resource_group() {
   fi
 }
 
+# The `log-analytics` Azure CLI extension provides
+# `az monitor log-analytics query`; it is not part of the core CLI.
+readonly LOG_ANALYTICS_EXTENSION_NAME="log-analytics"
+
+# log_analytics_extension_installed -- true when the extension that provides
+# `az monitor log-analytics query` is installed. `az extension show --name`
+# is the stable read for this: exit 0 when installed, exit 1 with
+# "ERROR: The extension ... is not installed" otherwise.
+log_analytics_extension_installed() {
+  az extension show --name "${LOG_ANALYTICS_EXTENSION_NAME}" -o none >/dev/null 2>&1
+}
+
+# log_analytics_row_count WORKSPACE TIMESPAN QUERY -- how many rows QUERY
+# returned, or 0 when the CLI call or the parse failed. Never fails the
+# caller: an ingestion-lag miss mid-poll is an expected answer, not an error
+# to report.
+#
+# Output contract (verified against azure-cli 2.86.0 with the log-analytics
+# 1.0.0b1 extension): `az monitor log-analytics query -o json` does **not**
+# print the REST envelope `{"tables": [...]}`. The extension's own `_output`
+# transform flattens every table into a single JSON array holding one object
+# per row -- `TableName` plus one stringified value per column -- so an empty
+# result set prints exactly `[]`. Parsing `.tables[0].rows` against that
+# always yields nothing, which reads as "no telemetry" forever.
+#
+# Row *presence* is therefore the reliable "is there data?" signal, and only
+# for a query that returns one row per matching record: KQL's `count`
+# operator always returns exactly one row (`Count: 0` when nothing matched),
+# so counting the rows of a `| count` result answers 1 either way. Callers
+# pass a projecting query bounded with `take`, never `| count`.
+log_analytics_row_count() {
+  local workspace="$1"
+  local timespan="$2"
+  local query="$3"
+  local output rows
+  if ! output="$(az monitor log-analytics query \
+    --workspace "${workspace}" \
+    --analytics-query "${query}" \
+    --timespan "${timespan}" \
+    -o json 2>/dev/null)"; then
+    printf '0\n'
+    return 0
+  fi
+  if ! rows="$(jq 'if type == "array" then length else 0 end' <<<"${output:-[]}" 2>/dev/null)"; then
+    printf '0\n'
+    return 0
+  fi
+  printf '%s\n' "${rows:-0}"
+}
+
+# azd_auth_status -- azd's own word for the current login state: `success`,
+# `unauthenticated`, or empty when this azd could not report one.
+#
+# `azd auth login --check-status` is the only non-interactive login read azd
+# offers, and it deliberately "always return[s] a zero exit code"
+# (cli/azd/cmd/auth_login.go), printing the answer instead. Reading its exit
+# status would report every signed-out operator as signed in, so the
+# machine-readable `--output json` status field is parsed instead of the
+# human sentence it prints without that flag.
+azd_auth_status() {
+  local status
+  status="$(azd auth login --check-status --output json --cwd "${LAB_ROOT}" 2>/dev/null |
+    jq -r '.status // empty' 2>/dev/null)" || true
+  printf '%s\n' "${status:-}"
+}
+
 # deployment_output NAME -- returns an azd deployment output already
 # resolved by load_lab_config. Callers must call load_lab_config first.
 deployment_output() {

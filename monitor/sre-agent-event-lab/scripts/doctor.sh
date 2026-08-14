@@ -5,10 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 
 # `require_lab_config` may return before every value below is assigned (a
-# missing required setting makes it `return 1` immediately). Pre-seeding
-# these names keeps every later `${NAME}`/`-n` check well-defined under
-# `set -u` no matter how far configuration loading got, without ever
-# reading the raw, un-validated process environment as a stand-in.
+# missing required setting makes it `return 1` immediately). Seeding these
+# names from the process environment keeps every later `${NAME}`/`-n` check
+# well-defined under `set -u` no matter how far configuration loading got.
+# The process environment is exactly where `common.sh`'s `setting` takes its
+# highest-precedence value from, so this reads the same source it would --
+# it does not invent a fallback, and any name that survives here unset stays
+# empty rather than becoming a configuration value on its own.
 SUBSCRIPTION_ID="${SUBSCRIPTION_ID:-}"
 RESOURCE_GROUP="${RESOURCE_GROUP:-}"
 AZURE_ENV_NAME="${AZURE_ENV_NAME:-}"
@@ -41,6 +44,21 @@ else
   report "Required commands" FAIL "Install missing commands: ${MISSING_COMMANDS[*]}."
 fi
 
+# Log Analytics CLI extension ------------------------------------------------
+# `az monitor log-analytics query` -- the only read behind the telemetry
+# check and behind `baseline.sh`/`query-evidence.sh` -- ships in an extension
+# that is not installed with the core CLI, so its absence is a prerequisite
+# failure with its own row rather than a mysterious empty query result.
+if ! command -v az >/dev/null 2>&1; then
+  AZURE_SAFE=0
+  report "Log Analytics CLI extension" FAIL "Blocked: install the Azure CLI first, then run: az extension add --name ${LOG_ANALYTICS_EXTENSION_NAME}"
+elif log_analytics_extension_installed; then
+  report "Log Analytics CLI extension" PASS "az monitor log-analytics query is available (extension ${LOG_ANALYTICS_EXTENSION_NAME})."
+else
+  AZURE_SAFE=0
+  report "Log Analytics CLI extension" FAIL "az monitor log-analytics query is unavailable. Install it: az extension add --name ${LOG_ANALYTICS_EXTENSION_NAME}"
+fi
+
 # Azure CLI login ------------------------------------------------------------
 if login_error="$(az account show --query id -o tsv 2>&1 1>/dev/null)"; then
   report "Azure CLI login" PASS "Signed in to Azure CLI."
@@ -48,6 +66,29 @@ else
   AZURE_SAFE=0
   report "Azure CLI login" FAIL "Run: az login -- ${login_error:-not signed in}"
 fi
+
+# azd authentication ---------------------------------------------------------
+# azd keeps its own credential store: `az login` alone does not make
+# `azd env`/`azd provision` work. `azd auth login --check-status` is the only
+# non-interactive read of that state and always exits 0, so the row is
+# decided by the status it prints, never by its exit code.
+AZD_AUTH_STATUS=""
+if command -v azd >/dev/null 2>&1; then
+  AZD_AUTH_STATUS="$(azd_auth_status)"
+fi
+case "${AZD_AUTH_STATUS}" in
+  success)
+    report "azd authentication" PASS "azd reports an authenticated session (azd auth login --check-status)."
+    ;;
+  unauthenticated)
+    AZURE_SAFE=0
+    report "azd authentication" FAIL "azd is not signed in. Run: azd auth login"
+    ;;
+  *)
+    AZURE_SAFE=0
+    report "azd authentication" FAIL "azd did not report a login status. Check it by hand: azd auth login --check-status, then run: azd auth login"
+    ;;
+esac
 
 # azd configuration -----------------------------------------------------------
 # `require_lab_config` must run in *this* shell (not a subshell) so the
@@ -140,12 +181,14 @@ else
 fi
 
 # 5. Application Insights request telemetry in the last 30 minutes ----------
+# The query projects and `take`s real rows instead of `| count`: KQL's
+# `count` always returns exactly one row (`Count: 0` for an empty table), so
+# a row count taken from it can never distinguish data from no data. The
+# extension prints a flat JSON array, and `log_analytics_row_count` parses
+# that shape (see common.sh).
 if [[ "${AZURE_SAFE}" -eq 1 && -n "${WORKSPACE_CUSTOMER_ID}" && -n "${TELEMETRY_SERVICE_NAME}" ]]; then
-  request_rows="$(az monitor log-analytics query \
-    --workspace "${WORKSPACE_CUSTOMER_ID}" \
-    --analytics-query "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | where TimeGenerated > ago(30m) | count" \
-    --timespan PT30M \
-    -o json 2>/dev/null | jq '(.tables[0].rows // []) | length' 2>/dev/null || echo 0)"
+  request_rows="$(log_analytics_row_count "${WORKSPACE_CUSTOMER_ID}" PT30M \
+    "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | project TimeGenerated, Name | take 1")"
   if [[ "${request_rows:-0}" -gt 0 ]]; then
     report "Application Insights telemetry" PASS "AppRequests present for ${TELEMETRY_SERVICE_NAME} in the last 30 minutes."
   else
@@ -195,30 +238,64 @@ if [[ -n "${SRE_AGENT_RESOURCE_ID}" ]]; then
 fi
 
 # 8. Reader role assignment on the lab resource group ------------------------
+# `--include-inherited` is deliberate: Reader granted at the subscription (or
+# management group) gives the Agent exactly the effective read access it
+# needs on this resource group, and omitting the flag hides those grants
+# entirely -- `az role assignment list` returns only assignments made at the
+# queried scope without it -- which would report a working setup as broken.
+# The detail still distinguishes the two, because an operator who requires an
+# explicit resource-group-scoped assignment has to be able to see that the
+# access is only inherited.
 if [[ "${AZURE_SAFE}" -eq 1 ]]; then
+  RESOURCE_GROUP_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}"
   if [[ ! -f "${AGENT_SETUP_FILE}" ]]; then
     report "Reader role assignment" FAIL "Agent setup evidence missing: ${AGENT_SETUP_FILE}. Run: lab.sh acknowledge agent-setup after recording the Agent identities."
+  elif ! AGENT_SETUP_JSON="$(jq '.' "${AGENT_SETUP_FILE}" 2>/dev/null)"; then
+    # A hand-edited or truncated evidence file is one FAIL row, not a raw
+    # `jq` abort: under `set -e` an unguarded parse would kill the run and
+    # swallow every remaining check, including the MANUAL rows an operator
+    # still needs.
+    report "Reader role assignment" FAIL "Agent setup evidence is not valid JSON: ${AGENT_SETUP_FILE}. Recreate it: lab.sh acknowledge agent-setup"
   else
-    agent_principal_id="$(jq -r '.agent_principal_id // empty' "${AGENT_SETUP_FILE}")"
-    agent_uami_principal_id="$(jq -r '.agent_user_assigned_principal_id // empty' "${AGENT_SETUP_FILE}")"
+    agent_principal_id="$(jq -r '.agent_principal_id // empty' <<<"${AGENT_SETUP_JSON}" 2>/dev/null || true)"
+    agent_uami_principal_id="$(jq -r '.agent_user_assigned_principal_id // empty' <<<"${AGENT_SETUP_JSON}" 2>/dev/null || true)"
     if [[ -z "${agent_principal_id}" || -z "${agent_uami_principal_id}" ]]; then
       report "Reader role assignment" FAIL "Agent setup evidence is missing agent_principal_id/agent_user_assigned_principal_id: ${AGENT_SETUP_FILE}."
     else
       MISSING_READER=()
+      INHERITED_READER=()
       for principal_id in "${agent_principal_id}" "${agent_uami_principal_id}"; do
-        reader_count="$(az role assignment list \
+        assignments_json="$(az role assignment list \
           --resource-group "${RESOURCE_GROUP}" \
           --assignee-object-id "${principal_id}" \
-          --query "[?roleDefinitionName=='Reader'] | length(@)" \
-          -o tsv 2>/dev/null || echo 0)"
-        if [[ "${reader_count:-0}" -eq 0 ]]; then
+          --include-inherited \
+          -o json 2>/dev/null || true)"
+        if [[ -z "${assignments_json}" ]]; then
+          assignments_json='[]'
+        fi
+        direct_count="$(jq --arg scope "${RESOURCE_GROUP_SCOPE}" '
+          [.[]? | select((.roleDefinitionName // "") == "Reader")
+                | select(((.scope // "") | ascii_downcase) == ($scope | ascii_downcase))]
+          | length' <<<"${assignments_json}" 2>/dev/null || echo 0)"
+        inherited_scope="$(jq -r --arg scope "${RESOURCE_GROUP_SCOPE}" '
+          [.[]? | select((.roleDefinitionName // "") == "Reader")
+                | select(((.scope // "") | ascii_downcase) != ($scope | ascii_downcase))
+                | .scope]
+          | first // empty' <<<"${assignments_json}" 2>/dev/null || true)"
+        if [[ "${direct_count:-0}" -gt 0 ]]; then
+          continue
+        elif [[ -n "${inherited_scope}" ]]; then
+          INHERITED_READER+=("${principal_id} (inherited from ${inherited_scope})")
+        else
           MISSING_READER+=("${principal_id}")
         fi
       done
-      if [[ "${#MISSING_READER[@]}" -eq 0 ]]; then
-        report "Reader role assignment" PASS "Reader is assigned on ${RESOURCE_GROUP} for both recorded Agent identities."
+      if [[ "${#MISSING_READER[@]}" -gt 0 ]]; then
+        report "Reader role assignment" FAIL "Missing Reader on ${RESOURCE_GROUP} (direct or inherited) for: ${MISSING_READER[*]}. Grant: az role assignment create --assignee-object-id <id> --assignee-principal-type ServicePrincipal --role Reader --resource-group ${RESOURCE_GROUP}"
+      elif [[ "${#INHERITED_READER[@]}" -gt 0 ]]; then
+        report "Reader role assignment" PASS "Reader is effective on ${RESOURCE_GROUP} for both recorded Agent identities; not assigned directly for: ${INHERITED_READER[*]}. Inherited access is sufficient to read the lab; assign it on ${RESOURCE_GROUP} if the setup must be scoped to this lab only."
       else
-        report "Reader role assignment" FAIL "Missing Reader on ${RESOURCE_GROUP} for: ${MISSING_READER[*]}. Grant: az role assignment create --assignee-object-id <id> --assignee-principal-type ServicePrincipal --role Reader --resource-group ${RESOURCE_GROUP}"
+        report "Reader role assignment" PASS "Reader is assigned directly on ${RESOURCE_GROUP} for both recorded Agent identities."
       fi
     fi
   fi
