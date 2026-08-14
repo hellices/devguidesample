@@ -16,7 +16,10 @@ import subprocess
 from pathlib import Path
 
 
+from azd_fake import write_azd_stub
+
 SCRIPTS_DIR = Path(__file__).parents[1]
+LAB_ROOT = Path(__file__).parents[2]
 AZD_CONFIGURE = SCRIPTS_DIR / "azd-configure.sh"
 AZD_POSTPROVISION = SCRIPTS_DIR / "azd-postprovision.sh"
 CLEANUP_EXTERNAL = SCRIPTS_DIR / "cleanup-external.sh"
@@ -424,3 +427,99 @@ def test_azd_postprovision_reports_a_clear_error_when_the_azure_cli_is_not_logge
         f"before any other az call: {calls!r}"
     )
 
+
+
+def _run_azd_configure(tmp_path, azd_values, missing_key_mode="azd_1_29"):
+    """Run the preprovision hook with a fake `az` and a realistic fake `azd`.
+
+    The fake `azd` reproduces azd 1.29.0: it reports a value it does not
+    have with `ERROR: ...` on **stdout** and exit 1, and resolves the
+    project from `--cwd` (else the process working directory). The hook is
+    started from a scratch directory that holds no `azure.yaml`.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    az_log = tmp_path / "az-calls.log"
+    azd_log = tmp_path / "azd-calls.log"
+    _write_az_stub(bin_dir, az_log)
+    write_azd_stub(bin_dir, azd_values, missing_key_mode, azd_log)
+
+    workdir = tmp_path / "elsewhere"
+    workdir.mkdir(exist_ok=True)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
+
+    result = subprocess.run(
+        [str(AZD_CONFIGURE)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(workdir),
+    )
+    return result, (azd_log.read_text() if azd_log.exists() else "")
+
+
+def test_azd_configure_defaults_the_resource_group_when_azd_has_no_value(tmp_path):
+    """A key azd does not have must read as absent, not as azd's error text.
+
+    azd 1.29 prints `ERROR: ...` on stdout while exiting non-zero, so a
+    lookup that keeps stdout regardless sees a non-empty "value" and skips
+    the default the hook is there to write.
+    """
+    result, azd_calls = _run_azd_configure(
+        tmp_path, {"AZURE_ENV_NAME": "sre-lab-hooktest"}
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "env set AZURE_RESOURCE_GROUP rg-sre-lab-hooktest" in azd_calls, (
+        f"the hook did not derive the resource group: {azd_calls!r}"
+    )
+    assert "env set SRE_LAB_EXPIRES_ON" in azd_calls
+    assert "ERROR" not in azd_calls, (
+        f"azd's error output leaked into a stored value: {azd_calls!r}"
+    )
+
+
+def test_azd_configure_keeps_values_the_azd_environment_already_has(tmp_path):
+    result, azd_calls = _run_azd_configure(
+        tmp_path,
+        {
+            "AZURE_ENV_NAME": "sre-lab-hooktest",
+            "AZURE_RESOURCE_GROUP": "rg-chosen-by-the-operator",
+            "SRE_LAB_EXPIRES_ON": "2026-08-15",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "env set AZURE_RESOURCE_GROUP" not in azd_calls, (
+        f"the hook overwrote an existing resource group: {azd_calls!r}"
+    )
+    assert "env set SRE_LAB_EXPIRES_ON" not in azd_calls
+
+
+def test_azd_configure_pins_every_azd_lookup_to_the_lab_project(tmp_path):
+    """azd hooks are also run by hand while debugging a lab, so the hook
+    must not depend on the working directory it inherits."""
+    result, azd_calls = _run_azd_configure(
+        tmp_path, {"AZURE_ENV_NAME": "sre-lab-hooktest"}
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert f"cwd={LAB_ROOT}" in azd_calls, (
+        f"azd was not pinned to the lab project root: {azd_calls!r}"
+    )
+    assert "no project exists" not in azd_calls
+
+
+def test_azd_configure_refuses_to_derive_a_resource_group_without_an_environment(tmp_path):
+    """Deriving `rg-` from an unavailable environment name would create a
+    resource group nobody can identify; the hook must stop instead."""
+    result, azd_calls = _run_azd_configure(tmp_path, {})
+
+    assert result.returncode != 0
+    assert "azd env new" in result.stderr
+    assert "env set AZURE_RESOURCE_GROUP" not in azd_calls, (
+        f"the hook must not store a half-derived resource group: {azd_calls!r}"
+    )

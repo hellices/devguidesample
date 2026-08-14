@@ -20,11 +20,23 @@ require_commands() {
 
 # azd_value NAME -- the current azd environment's value for NAME, or empty
 # when azd has no such value (e.g. before the environment was provisioned).
+#
+# azd reports failure only through its exit status: azd 1.29 answers an
+# unknown key -- or a working directory outside the project -- with an
+# `ERROR: ...` sentence on *stdout* and exit 1. Keeping stdout regardless of
+# the exit status would adopt that sentence as a configuration value, so the
+# output is used only when the lookup succeeded. `--cwd` pins the lookup to
+# this lab's azd project (the directory holding azure.yaml) so the scripts
+# work when they are invoked from the repository root or any other cwd.
 # Never fails the caller: a missing value is not this function's error to
 # report, `setting`/`require_setting` decide what to do about it.
 azd_value() {
   local name="$1"
-  azd env get-value "${name}" 2>/dev/null || true
+  local stored_value
+  if ! stored_value="$(azd env get-value "${name}" --cwd "${LAB_ROOT}" 2>/dev/null)"; then
+    return 0
+  fi
+  printf '%s\n' "${stored_value}"
 }
 
 # setting NAME EXPLICIT_VALUE [DEFAULT]
@@ -85,12 +97,17 @@ load_lab_config() {
   AZURE_APP_INSIGHTS_NAME="$(setting AZURE_APP_INSIGHTS_NAME "${AZURE_APP_INSIGHTS_NAME:-}" "")"
   AZURE_TELEMETRY_SERVICE_NAME="$(setting AZURE_TELEMETRY_SERVICE_NAME "${AZURE_TELEMETRY_SERVICE_NAME:-}" "")"
   # Deployment outputs without an AZURE_-prefixed duplicate (see
-  # infra/main.bicep): read straight from their own azd output name.
-  CONTAINER_APP_PRINCIPAL_ID="$(setting containerAppPrincipalId "${CONTAINER_APP_PRINCIPAL_ID:-}" "")"
-  WORKSPACE_CUSTOMER_ID="$(setting workspaceCustomerId "${WORKSPACE_CUSTOMER_ID:-}" "")"
+  # infra/main.bicep): read straight from their own azd output name. They
+  # are stored under LAB_-prefixed names because `load_lab_config` makes
+  # every resolved value readonly for the rest of the process, and the
+  # calling scripts already use the unprefixed names for their own
+  # variables -- an assignment to a readonly name aborts the caller under
+  # `set -e` before it reaches its first Azure call.
+  LAB_CONTAINER_APP_PRINCIPAL_ID="$(setting containerAppPrincipalId "${CONTAINER_APP_PRINCIPAL_ID:-}" "")"
+  LAB_WORKSPACE_CUSTOMER_ID="$(setting workspaceCustomerId "${WORKSPACE_CUSTOMER_ID:-}" "")"
   readonly AZURE_CONTAINER_APP_NAME AZURE_CONTAINER_APP_FQDN AZURE_STORAGE_CONTAINER_SCOPE
   readonly AZURE_BLOB_ROLE_ASSIGNMENT_NAME AZURE_WORKSPACE_ID AZURE_APP_INSIGHTS_NAME
-  readonly AZURE_TELEMETRY_SERVICE_NAME CONTAINER_APP_PRINCIPAL_ID WORKSPACE_CUSTOMER_ID
+  readonly AZURE_TELEMETRY_SERVICE_NAME LAB_CONTAINER_APP_PRINCIPAL_ID LAB_WORKSPACE_CUSTOMER_ID
 
   # Azure SRE Agent settings (.env.example documents these). None of the
   # current scripts read them yet, but they resolve through the same
@@ -149,11 +166,11 @@ deployment_output() {
   case "${output_name}" in
     containerAppName) printf '%s\n' "${AZURE_CONTAINER_APP_NAME}" ;;
     containerAppFqdn) printf '%s\n' "${AZURE_CONTAINER_APP_FQDN}" ;;
-    containerAppPrincipalId) printf '%s\n' "${CONTAINER_APP_PRINCIPAL_ID}" ;;
+    containerAppPrincipalId) printf '%s\n' "${LAB_CONTAINER_APP_PRINCIPAL_ID}" ;;
     storageContainerScope) printf '%s\n' "${AZURE_STORAGE_CONTAINER_SCOPE}" ;;
     blobRoleAssignmentName) printf '%s\n' "${AZURE_BLOB_ROLE_ASSIGNMENT_NAME}" ;;
     workspaceId) printf '%s\n' "${AZURE_WORKSPACE_ID}" ;;
-    workspaceCustomerId) printf '%s\n' "${WORKSPACE_CUSTOMER_ID}" ;;
+    workspaceCustomerId) printf '%s\n' "${LAB_WORKSPACE_CUSTOMER_ID}" ;;
     appInsightsName) printf '%s\n' "${AZURE_APP_INSIGHTS_NAME}" ;;
     telemetryServiceName) printf '%s\n' "${AZURE_TELEMETRY_SERVICE_NAME}" ;;
     *) echo "Unknown deployment output: ${output_name}" >&2; return 2 ;;

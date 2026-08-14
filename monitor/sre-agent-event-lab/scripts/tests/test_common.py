@@ -17,19 +17,58 @@ REQUIRED_ENV = {
 }
 
 
-def test_deployment_output_reads_the_current_azd_environment():
+def test_deployment_output_reads_the_current_azd_environment(tmp_path):
     """`deployment_output` used to look up a fixed subscription-scope
-    deployment name; it must now read the values `load_lab_config` already
+    deployment name; it must now return the values `load_lab_config`
     resolved from the current azd environment, so a fresh `azd up` in any
     environment works without editing common.sh.
     """
+    azd_values = {
+        **REQUIRED_ENV,
+        "AZURE_CONTAINER_APP_NAME": "ca-current-env",
+        "AZURE_CONTAINER_APP_FQDN": "ca-current-env.example.com",
+        "workspaceCustomerId": "6f6f6f6f-1111-2222-3333-444444444444",
+    }
+    result = run_common(
+        tmp_path,
+        env={},
+        azd_values=azd_values,
+        command=(
+            "load_lab_config; "
+            'printf "%s|%s|%s" '
+            '"$(deployment_output containerAppName)" '
+            '"$(deployment_output containerAppFqdn)" '
+            '"$(deployment_output workspaceCustomerId)"'
+        ),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        "ca-current-env|ca-current-env.example.com|"
+        "6f6f6f6f-1111-2222-3333-444444444444"
+    )
+
+
+def test_deployment_output_refuses_an_unknown_output_name(tmp_path):
+    result = run_common(
+        tmp_path,
+        env=dict(REQUIRED_ENV),
+        azd_values=dict(REQUIRED_ENV),
+        command="load_lab_config; deployment_output notAnOutput",
+    )
+
+    assert result.returncode == 2
+    assert "Unknown deployment output: notAnOutput" in result.stderr
+
+
+def test_common_no_longer_queries_a_fixed_subscription_deployment():
+    """Regression guard for the removed lookup: nothing may reintroduce a
+    deployment-name based read of the lab's outputs."""
     script = COMMON_SH.read_text()
 
     assert "FINAL_DEPLOYMENT_NAME" not in script
     assert "az deployment sub show" not in script
     assert "az deployment group show" not in script
-    assert "azd env get-value" in script
-    assert 'containerAppName) printf \'%s\\n\' "${AZURE_CONTAINER_APP_NAME}"' in script
 
 
 def test_common_does_not_expose_personal_subscription_display_name():
@@ -42,10 +81,6 @@ def test_common_does_not_expose_personal_subscription_display_name():
     # never hardcode a subscription ID again, it must resolve one via
     # load_lab_config (explicit env > azd env > default) instead.
     assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in script
-    assert 'SUBSCRIPTION_ID="$(require_setting AZURE_SUBSCRIPTION_ID' in script
-    # The subscription ID equality check is the real safety boundary and
-    # must remain intact.
-    assert '"${current_subscription}" != "${SUBSCRIPTION_ID}"' in script
 
 
 def test_verify_subscription_reports_only_subscription_id_on_mismatch(tmp_path):
@@ -249,36 +284,22 @@ az() {{
     assert "az group delete" in calls
 
 
-def test_scenario_query_capture_cleanup_scripts_load_lab_config_before_use():
-    """Every script that reads SUBSCRIPTION_ID/RESOURCE_GROUP/deployment_output
-    must resolve them via `load_lab_config` (through `require_lab_config`)
-    first, and must do so before `verify_subscription`/`verify_lab_resource_group`
-    or any deployment_output() call that depends on those values.
+def test_scenario_query_capture_cleanup_scripts_are_exercised_as_programs():
+    """The four entry points are covered by execution tests, not by reading
+    their text: `test_lab_scripts.py` runs each one against fake
+    `az`/`azd`/`python` executables from a working directory outside the
+    lab, which is the only way to catch a caller that reassigns a name
+    `common.sh` already made readonly.
     """
-    scripts_dir = Path(__file__).parents[1]
+    lab_script_tests = (Path(__file__).parent / "test_lab_scripts.py").read_text()
+
     for script_name in (
         "run-scenario.sh",
         "query-evidence.sh",
         "capture-scenario.sh",
         "cleanup.sh",
     ):
-        script = (scripts_dir / script_name).read_text()
-        assert "require_lab_config" in script, (
-            f"{script_name} must call require_lab_config (which calls "
-            "load_lab_config) before using SUBSCRIPTION_ID/RESOURCE_GROUP"
+        assert f'"{script_name}"' in lab_script_tests, (
+            f"{script_name} has no execution test"
         )
-        config_index = script.index("require_lab_config")
-
-        for later_use in ("verify_subscription", "verify_lab_resource_group"):
-            if later_use in script:
-                assert config_index < script.index(later_use), (
-                    f"{script_name} must call require_lab_config before {later_use}"
-                )
-
-        if "deployment_output " in script:
-            first_output_call = script.index("deployment_output ")
-            assert config_index < first_output_call, (
-                f"{script_name} must call require_lab_config before reading "
-                "any deployment_output() value"
-            )
 
