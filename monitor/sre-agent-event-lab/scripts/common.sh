@@ -252,6 +252,46 @@ create_evidence_dir() {
   printf '%s\n' "${directory}"
 }
 
+# lab_python -- the interpreter the lab's own Python helpers run under: the
+# app virtualenv when it exists (the capture pipeline needs its packages),
+# otherwise the system python3. `lab_state.py` and `score.py` import
+# nothing outside the standard library, so either interpreter runs them.
+lab_python() {
+  local venv_python="${LAB_ROOT}/app/.venv/bin/python"
+  if [[ -x "${venv_python}" ]]; then
+    printf '%s\n' "${venv_python}"
+  else
+    printf '%s\n' "python3"
+  fi
+}
+
+# lab_tool SCRIPT [ARGS...] -- runs one of the lab's Python helpers with the
+# configuration `load_lab_config` resolved passed through the process
+# environment. Nothing in Python re-resolves the lab's identity: the caller
+# has already verified the subscription and the resource-group tags, and
+# passing the verified values on is what lets `lab_state.py` refuse a state
+# file that belongs to a different environment.
+lab_tool() {
+  local script_name="$1"
+  shift
+  env \
+    AZURE_ENV_NAME="${AZURE_ENV_NAME}" \
+    AZURE_SUBSCRIPTION_ID="${SUBSCRIPTION_ID}" \
+    AZURE_RESOURCE_GROUP="${RESOURCE_GROUP}" \
+    SRE_AGENT_NAME="${SRE_AGENT_NAME}" \
+    SRE_AGENT_RESOURCE_ID="${SRE_AGENT_RESOURCE_ID}" \
+    SRE_REPOSITORY_URL="${SRE_REPOSITORY_URL}" \
+    SRE_REPOSITORY_BRANCH="${SRE_REPOSITORY_BRANCH}" \
+    SRE_KNOWLEDGE_PATH="${SRE_KNOWLEDGE_PATH}" \
+    "$(lab_python)" "${SCRIPT_DIR}/${script_name}" "$@"
+}
+
+# lab_state COMMAND [ARGS...] -- the lab's ordered-run state (see
+# lab_state.py). Requires load_lab_config to have run.
+lab_state() {
+  lab_tool lab_state.py --state "${EVIDENCE_ROOT}/state.json" "$@"
+}
+
 utc_now() {
   date -u +%Y-%m-%dT%H:%M:%SZ
 }
@@ -317,5 +357,50 @@ wait_for_new_revision_ready() {
   done
 
   echo "A new healthy revision did not become active within ${timeout_seconds}s." >&2
+  return 1
+}
+
+# alert_monitor_condition ALERT_ID -- Azure Monitor's own word for the
+# alert's current state: `Fired`, `Resolved`, or empty when the read failed.
+# ALERT_ID is the alert's full ARM resource ID, exactly as
+# `run-scenario.sh` recorded it from the Alerts Management list.
+alert_monitor_condition() {
+  local alert_id="$1"
+  az rest \
+    --method get \
+    --url "https://management.azure.com${alert_id}?api-version=2019-03-01" 2>/dev/null |
+    jq -r '.properties.essentials.monitorCondition // empty' 2>/dev/null || true
+}
+
+# wait_for_alert_resolved ALERT_ID [TIMEOUT] [INTERVAL] -- waits until Azure
+# Monitor reports the fired alert as `Resolved` and prints the UTC moment
+# that was observed. Fails (without printing a moment) when the alert is
+# still firing at the deadline.
+#
+# This is the only external confirmation that the injected failure is really
+# gone: the recovery command returning 0 proves the *change* was applied,
+# not that the signal it broke recovered. A run that recorded a recovery
+# here on a still-firing alert would let the next scenario start on top of
+# an open incident, and both incidents' evidence would be unreadable.
+wait_for_alert_resolved() {
+  local alert_id="$1"
+  local timeout_seconds="${2:-900}"
+  local interval_seconds="${3:-20}"
+  local deadline=$(( SECONDS + timeout_seconds ))
+  local condition=""
+
+  while :; do
+    condition="$(alert_monitor_condition "${alert_id}")"
+    if [[ "${condition}" == "Resolved" ]]; then
+      utc_now
+      return 0
+    fi
+    if (( SECONDS + interval_seconds > deadline )); then
+      break
+    fi
+    sleep "${interval_seconds}"
+  done
+
+  echo "Alert ${alert_id} was not Resolved within ${timeout_seconds}s (last condition: ${condition:-unknown})." >&2
   return 1
 }

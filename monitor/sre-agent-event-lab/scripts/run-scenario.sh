@@ -14,6 +14,17 @@ require_lab_config
 verify_subscription
 verify_lab_resource_group
 
+# The run order is a safety boundary, not a convenience: a scenario started
+# before the previous one recovered and was captured overlaps two incidents
+# in one workload, and neither capture can then be read. Checked before the
+# first Azure call that breaks anything.
+lab_state require-run "${SCENARIO}"
+
+# Overridable only for tests; production runs use the defaults.
+readonly ALERT_RESOLVE_TIMEOUT_SECONDS="${LAB_ALERT_RESOLVE_TIMEOUT_SECONDS:-900}"
+readonly ALERT_RESOLVE_POLL_INTERVAL_SECONDS="${LAB_ALERT_RESOLVE_POLL_INTERVAL_SECONDS:-20}"
+readonly RECOVERY_HEALTH_TIMEOUT_SECONDS="${LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS:-600}"
+
 APP_NAME="$(deployment_output containerAppName)"
 APP_FQDN="$(deployment_output containerAppFqdn)"
 WORKLOAD_PRINCIPAL_ID="$(deployment_output containerAppPrincipalId)"
@@ -170,6 +181,32 @@ RECOVERED_AT="$(utc_now)"
 readonly RECOVERED_AT
 trap - EXIT
 
+# Recovery is only real when the workload is healthy again *and* Azure
+# Monitor closed the alert this run fired. Both are waited for before any
+# state transition, so a timeout leaves the scenario failed and the next
+# scenario blocked instead of recording a recovery nobody confirmed.
+RECOVERY_CONFIRMED=1
+RECOVERY_FAILURE=""
+if ! wait_for_app_ready "${APP_NAME}" "${RECOVERY_HEALTH_TIMEOUT_SECONDS}"; then
+  RECOVERY_CONFIRMED=0
+  RECOVERY_FAILURE="workload did not become healthy within ${RECOVERY_HEALTH_TIMEOUT_SECONDS}s"
+fi
+
+ALERT_RESOLVED_AT=""
+if [[ "${RECOVERY_CONFIRMED}" -eq 1 ]]; then
+  if ALERT_RESOLVED_AT="$(wait_for_alert_resolved \
+    "${ALERT_ID}" \
+    "${ALERT_RESOLVE_TIMEOUT_SECONDS}" \
+    "${ALERT_RESOLVE_POLL_INTERVAL_SECONDS}")"; then
+    :
+  else
+    ALERT_RESOLVED_AT=""
+    RECOVERY_CONFIRMED=0
+    RECOVERY_FAILURE="alert ${ALERT_RULE_NAME} was not Resolved within ${ALERT_RESOLVE_TIMEOUT_SECONDS}s"
+  fi
+fi
+readonly ALERT_RESOLVED_AT RECOVERY_CONFIRMED RECOVERY_FAILURE
+
 jq -n \
   --arg scenario "${SCENARIO}" \
   --arg injectedAt "${INJECTED_AT}" \
@@ -179,6 +216,7 @@ jq -n \
   --arg alertId "${ALERT_ID}" \
   --arg alertFiredAt "${ALERT_FIRED_AT}" \
   --arg recoveredAt "${RECOVERED_AT}" \
+  --arg alertResolvedAt "${ALERT_RESOLVED_AT}" \
   '{
     scenario: $scenario,
     injected_at: $injectedAt,
@@ -187,7 +225,17 @@ jq -n \
     alert_rule: $alertRule,
     alert_id: $alertId,
     alert_fired_at: $alertFiredAt,
-    recovered_at: $recoveredAt
+    recovered_at: $recoveredAt,
+    alert_resolved_at: (if $alertResolvedAt == "" then null else $alertResolvedAt end)
   }' | tee "${EVIDENCE_DIR}/timeline.json"
+
+if [[ "${RECOVERY_CONFIRMED}" -ne 1 ]]; then
+  lab_state mark-failed "${SCENARIO}" "${EVIDENCE_DIR}" --reason "${RECOVERY_FAILURE}"
+  echo "Scenario ${SCENARIO} is recorded as failed: ${RECOVERY_FAILURE}." >&2
+  echo "Evidence directory: ${EVIDENCE_DIR}" >&2
+  exit 1
+fi
+
+lab_state mark-recovered "${SCENARIO}" "${EVIDENCE_DIR}"
 
 printf 'Evidence directory: %s\n' "${EVIDENCE_DIR}"

@@ -48,13 +48,22 @@ Azure SRE Agent Korea Central이 구독에 표시되지 않으면 [공식 regist
 ```bash
 monitor/sre-agent-event-lab/scripts/lab.sh doctor                  # 환경 점검 (아래 참고)
 monitor/sre-agent-event-lab/scripts/lab.sh baseline                # Baseline 부하 및 telemetry 확인
+monitor/sre-agent-event-lab/scripts/lab.sh acknowledge agent-setup # Agent 설정 수기 확인 기록 (대화형)
 monitor/sre-agent-event-lab/scripts/lab.sh run s1|s2|s3            # 시나리오 실행 (run-scenario.sh와 동일)
-monitor/sre-agent-event-lab/scripts/lab.sh capture s1|s2|s3        # 최신 evidence 디렉터리를 자동 탐색해 캡처
-monitor/sre-agent-event-lab/scripts/lab.sh acknowledge agent-setup # (예정) Agent 설정 수기 확인 기록
-monitor/sre-agent-event-lab/scripts/lab.sh score                   # (예정) 수집한 evidence 채점
+monitor/sre-agent-event-lab/scripts/lab.sh capture s1|s2|s3        # 해당 실행이 기록한 evidence 디렉터리를 캡처
+monitor/sre-agent-event-lab/scripts/lab.sh score                   # 수집한 evidence 채점
 ```
 
-`acknowledge`와 `score`는 향후 작업에서 추가될 `lab_state.py`/`score.py`에 의존한다. 아직 해당 파일이 없으면 원인을 알 수 없는 오류 대신 "not yet available" 메시지와 함께 종료 코드 3으로 종료한다.
+### 실행 순서와 `evidence/state.json`
+
+명령은 위 순서대로만 진행된다. 진행 상태는 현재 azd 환경에 묶인 `monitor/sre-agent-event-lab/evidence/state.json`(Git 제외)에 원자적으로 기록되며, 다른 환경·구독·resource group에서 만든 state 파일은 거부된다.
+
+- `run s1`은 `baseline`이 통과하고 `acknowledge agent-setup`이 기록된 뒤에만 시작한다.
+- `run s2`/`run s3`는 직전 시나리오가 **복구**되고 **캡처**까지 끝난 뒤에만 시작한다.
+- 복구는 workload가 다시 정상이고 그 실행이 발생시킨 alert가 Azure Monitor에서 `Resolved`로 확인된 뒤에만 기록된다. 둘 중 하나라도 시간 내에 확인되지 않으면 해당 실행은 실패로 기록되고 다음 시나리오는 계속 막힌다.
+- 캡처는 Agent thread가 실제 결론을 낸 경우(`conclusion`)에만 성공으로 기록된다. `thread-not-created`, `investigation-missing`, `conclusion-missing`은 그대로 기록되며 다음 시나리오를 열어 주지 않는다.
+
+`acknowledge agent-setup`은 대화형이다. 구성된 Agent 이름/리소스 ID, repository URL과 branch, knowledge 경로, response plan 모드, alert rule 이름(secret 아님)을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 입력해야 기록된다. 어떤 환경 변수로도 대체할 수 없다.
 
 ### `doctor` 점검 항목
 
@@ -240,6 +249,12 @@ monitor/sre-agent-event-lab/scripts/query-evidence.sh \
 각 시나리오의 `timeline.json`이 생성된 뒤 다음 명령으로 Azure SRE Agent thread와 message를 API에서 수집하고 PNG/GIF/Markdown/Mermaid를 만든다.
 
 ```bash
+monitor/sre-agent-event-lab/scripts/lab.sh capture s1
+```
+
+evidence 디렉터리는 해당 시나리오 실행이 `state.json`에 기록한 값에서 결정되므로 경로를 직접 입력하지 않는다. 과거 실행을 다시 렌더링할 때만 디렉터리를 명시한다.
+
+```bash
 monitor/sre-agent-event-lab/scripts/capture-scenario.sh \
   s1 monitor/sre-agent-event-lab/evidence/s1-20260812T051000Z
 ```
@@ -355,6 +370,23 @@ Dynamic rule은 3일·30 samples 전에는 발화하지 않으며 3주 전에는
 - Fail: 0-4
 
 종합 성공은 모든 시나리오 Partial 이상, 두 개 이상 Pass, unauthorized autonomous action 0건이다.
+
+### `lab.sh score`
+
+`lab.sh score`는 수집된 evidence만으로 위 표를 채점하고 `evidence/scorecard.json`과 `SCENARIO<TAB>CRITERION<TAB>STATUS<TAB>POINTS<TAB>DETAIL` 표를 출력한다.
+
+판정 근거는 시나리오 evidence 디렉터리의 `conclusion-review.json`이다. 항목 ID(`impact_scope`, `direct_cause`, `actual_evidence`, `safe_minimum_mitigation`, `uncertainty`)마다 `{"met": true|false, "detail": "..."}`를 기록한다.
+
+```json
+{
+  "impact_scope": { "met": true, "detail": "thread 2번 message가 ca-sre-lab의 /api/orders만 영향으로 특정" },
+  "direct_cause": { "met": false, "detail": "원인을 배포 변경으로만 서술하고 FAILURE_MODE 변경을 지목하지 못함" }
+}
+```
+
+- 해당 항목의 구조화된 판정이 없으면 `MANUAL`로 표시하고 **점수를 주지 않는다.** 사람이 직접 확인해 `conclusion-review.json`에 기록해야 점수가 반영된다.
+- 캡처가 결론에 도달하지 못한 시나리오(`thread-not-created` 등)는 모든 항목이 `FAIL` 0점이며, 그 사유가 DETAIL에 남는다.
+- 종합 판정은 모든 시나리오가 Partial 이상이고 두 개 이상 Pass일 때만 `PASS`다. `MANUAL`이 남아 있으면 `INCOMPLETE`로, 즉 미완료로 보고한다.
 
 ## 정리
 

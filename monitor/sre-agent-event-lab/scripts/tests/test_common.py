@@ -9,6 +9,9 @@ COMMON_SH = Path(__file__).parents[1] / "common.sh"
 DEPLOY_SH = Path(__file__).parents[1] / "deploy.sh"
 CLEANUP_SH = Path(__file__).parents[1] / "cleanup.sh"
 QUERY_EVIDENCE_SH = Path(__file__).parents[1] / "query-evidence.sh"
+RUN_SCENARIO_SH = Path(__file__).parents[1] / "run-scenario.sh"
+CAPTURE_SCENARIO_SH = Path(__file__).parents[1] / "capture-scenario.sh"
+BASELINE_SH = Path(__file__).parents[1] / "baseline.sh"
 
 REQUIRED_ENV = {
     "AZURE_SUBSCRIPTION_ID": "11111111-2222-3333-4444-555555555555",
@@ -226,6 +229,83 @@ def test_s3_records_injection_before_role_deletion():
         "az role assignment delete"
     )
     assert 'ROLE_DELETED_AT="$(utc_now)"' in section
+
+
+def test_lab_state_runs_bound_to_the_resolved_configuration():
+    """`lab_state.py` must never resolve the lab's identity itself.
+
+    `common.sh` is the one place that decides which azd environment,
+    subscription and resource group the caller verified, so its `lab_state`
+    helper hands those exact values to every state command. A state file
+    that belongs to another environment is then refused instead of quietly
+    unlocking a run here.
+    """
+    script = COMMON_SH.read_text()
+    state_helper = script.split("lab_state() {", 1)[1].split("\n}", 1)[0]
+    tool_helper = script.split("lab_tool() {", 1)[1].split("\n}", 1)[0]
+
+    assert "lab_tool lab_state.py" in state_helper
+    assert '"${EVIDENCE_ROOT}/state.json"' in state_helper
+    assert 'AZURE_ENV_NAME="${AZURE_ENV_NAME}"' in tool_helper
+    assert 'AZURE_SUBSCRIPTION_ID="${SUBSCRIPTION_ID}"' in tool_helper
+    assert 'AZURE_RESOURCE_GROUP="${RESOURCE_GROUP}"' in tool_helper
+
+
+def test_run_scenario_checks_the_run_order_before_injecting_a_failure():
+    """The gate is worthless after the fact: `require-run` has to run before
+    the first `az` call that breaks the workload."""
+    script = RUN_SCENARIO_SH.read_text()
+
+    assert script.index('lab_state require-run "${SCENARIO}"') < script.index(
+        "az containerapp update"
+    )
+    assert script.index('lab_state require-run "${SCENARIO}"') < script.index(
+        "az role assignment delete"
+    )
+
+
+def test_run_scenario_records_recovery_only_after_health_and_alert_checks():
+    script = RUN_SCENARIO_SH.read_text()
+
+    assert "wait_for_app_ready" in script
+    assert "wait_for_alert_resolved" in script
+    assert script.index("wait_for_alert_resolved") < script.index(
+        'lab_state mark-recovered'
+    )
+    assert "lab_state mark-failed" in script
+
+
+def test_capture_scenario_records_the_terminal_state_from_the_timeline():
+    """The capture status is derived from the normalized timeline, so a
+    missing thread/investigation/conclusion is recorded as itself and can
+    never be reported as a successful capture."""
+    script = CAPTURE_SCENARIO_SH.read_text()
+
+    assert 'lab_state record-capture "${SCENARIO}"' in script
+    assert '--timeline "${NORMALIZED_FILE}"' in script
+    assert 'lab_state evidence-dir "${SCENARIO}"' in script
+
+
+def test_baseline_records_the_passing_baseline_stage():
+    script = BASELINE_SH.read_text()
+
+    assert "lab_state mark baseline_passed" in script
+    assert script.index("lab_state mark baseline_passed") > script.index(
+        "did not show both request types"
+    )
+
+
+def test_lab_state_and_score_are_exercised_as_programs():
+    """`lab_state.py` and `score.py` decide whether a scenario may run and
+    what the evidence is worth, so both are driven through their real API
+    and their real command line, not read as text."""
+    for module_name, test_name in (
+        ("lab_state.py", "test_lab_state.py"),
+        ("score.py", "test_score.py"),
+    ):
+        assert (Path(__file__).parents[1] / module_name).is_file()
+        tests = (Path(__file__).parent / test_name).read_text()
+        assert "subprocess.run" in tests, f"{module_name} has no command-line test"
 
 
 def test_activity_log_export_projects_only_incident_fields():

@@ -32,7 +32,13 @@ from pathlib import Path
 from typing import Dict
 
 from azd_fake import write_azd_stub, write_executable
-from lab_script_harness import ENV_NAME, RESOURCE_GROUP, SCRIPTS_DIR, SUBSCRIPTION_ID
+from lab_script_harness import (
+    ENV_NAME,
+    REAL_PYTHON,
+    RESOURCE_GROUP,
+    SCRIPTS_DIR,
+    SUBSCRIPTION_ID,
+)
 
 
 BASH = shutil.which("bash") or "/bin/bash"
@@ -278,11 +284,19 @@ def _python3_stub_source(fake_az: FakeAz, log_path: Path) -> str:
     """Fake `python3`/`.venv/bin/python` for `loadgen.py`: writes a minimal,
     valid summary and exits with loadgen's real contract (0 success, 2 a
     request mismatch), keyed by the target URL so orders/documents can be
-    made to succeed or fail independently."""
+    made to succeed or fail independently.
+
+    Every other script -- notably `lab_state.py` and `score.py`, whose
+    behaviour these tests are checking -- runs under the real interpreter,
+    so a lab script that records or reads state is exercised, not faked."""
     orders_ok = 1 if fake_az.baseline_orders_succeed else 0
     documents_ok = 1 if fake_az.baseline_documents_succeed else 0
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+case "${{1:-}}" in
+  *loadgen.py) ;;
+  *) exec "{REAL_PYTHON}" "$@" ;;
+esac
 output=""
 requests=1
 args=("$@")
@@ -351,7 +365,7 @@ class LabRun:
         self.python_log = python_log
         self.azd_log = azd_log
 
-    def run(self, script_name, args=(), env=None):
+    def run(self, script_name, args=(), env=None, stdin=None):
         process_env = {
             "PATH": f"{self.bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
             "HOME": os.environ.get("HOME", str(self.lab)),
@@ -361,6 +375,7 @@ class LabRun:
             [BASH, str(self.lab / "scripts" / script_name), *args],
             capture_output=True,
             text=True,
+            input=stdin,
             env=process_env,
             cwd=str(self.workdir),
         )
@@ -467,9 +482,19 @@ def run_baseline(fake_az: FakeAz, **env_overrides) -> subprocess.CompletedProces
     return run.run("baseline.sh", env=_split_env(env_overrides))
 
 
-def run_lab_cli(fake_az: FakeAz, args, **env_overrides) -> subprocess.CompletedProcess:
+def run_lab_cli(fake_az: FakeAz, args, stdin=None, **env_overrides) -> subprocess.CompletedProcess:
+    """Run `lab.sh` against `fake_az`'s current state.
+
+    `stdin` feeds the interactive commands (`acknowledge agent-setup` reads
+    the operator's typed answer), so the acknowledgement is driven exactly
+    as a human drives it -- through the process's standard input."""
     run = _materialize(fake_az)
-    return run.run("lab.sh", args=args, env=_split_env(env_overrides))
+    return run.run("lab.sh", args=args, stdin=stdin, env=_split_env(env_overrides))
+
+
+def state_path_for(fake_az: FakeAz) -> Path:
+    """Where `lab_state.py` keeps this lab's ordered-run state."""
+    return lab_dir_for(fake_az) / "evidence" / "state.json"
 
 
 def lab_dir_for(fake_az: FakeAz) -> Path:

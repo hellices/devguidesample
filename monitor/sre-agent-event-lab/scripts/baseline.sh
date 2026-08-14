@@ -95,4 +95,9 @@ if [[ "${ORDERS_SEEN}" -ne 1 || "${DOCUMENTS_SEEN}" -ne 1 ]]; then
   exit 1
 fi
 
+# Only a baseline that really produced both request types unlocks S1: a
+# scenario run against a workload whose telemetry never arrived cannot be
+# told apart from the failure it is supposed to inject.
+lab_state mark baseline_passed --evidence-dir "${EVIDENCE_DIR}"
+
 echo "Evidence directory: ${EVIDENCE_DIR}"

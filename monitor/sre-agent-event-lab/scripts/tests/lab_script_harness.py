@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from azd_fake import write_azd_stub, write_executable
@@ -19,6 +20,11 @@ from azd_fake import write_azd_stub, write_executable
 
 SCRIPTS_DIR = Path(__file__).parents[1]
 BASH = shutil.which("bash") or "/bin/bash"
+# `lab_state.py`/`score.py` are part of the behaviour under test, so the fake
+# interpreters below only fake the scripts that would reach Azure or render
+# images (`loadgen.py`, `capture_agent.py`, `render_capture.py`) and hand
+# every other script to the real interpreter running the suite.
+REAL_PYTHON = sys.executable
 
 SUBSCRIPTION_ID = "11111111-2222-3333-4444-555555555555"
 RESOURCE_GROUP = "rg-sre-lab-exec"
@@ -48,28 +54,61 @@ AZD_VALUES = {
     "workspaceCustomerId": "9d1a0b2c-3d4e-5f60-7182-93a4b5c6d7e8",
 }
 
+
+def _alert(scenario, alert_uuid):
+    """One entry of the Alerts Management list response.
+
+    All three lab rules are listed, because `run-scenario.sh` picks the
+    alert whose rule matches the scenario it just ran: a list containing
+    only S1's alert would let an S2 run pass on S1's evidence.
+    """
+    return {
+        "id": (
+            f"/subscriptions/{SUBSCRIPTION_ID}/providers"
+            f"/Microsoft.AlertsManagement/alerts/{alert_uuid}"
+        ),
+        "properties": {
+            "essentials": {
+                "alertRule": (
+                    f"/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
+                    f"/providers/microsoft.insights/metricAlerts/{scenario}"
+                ),
+                "startDateTime": "2026-08-14T00:05:00Z",
+                "monitorCondition": "Fired",
+            }
+        },
+    }
+
+
 ALERTS_JSON = json.dumps(
     {
         "value": [
-            {
-                "id": (
-                    f"/subscriptions/{SUBSCRIPTION_ID}/providers"
-                    "/Microsoft.AlertsManagement/alerts/aaaa0000-1111-2222-3333-444455556666"
-                ),
-                "properties": {
-                    "essentials": {
-                        "alertRule": (
-                            f"/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
-                            "/providers/microsoft.insights/metricAlerts/"
-                            "alert-sre-lab-s1-http500"
-                        ),
-                        "startDateTime": "2026-08-14T00:05:00Z",
-                        "monitorCondition": "Fired",
-                    }
-                },
-            }
+            _alert("alert-sre-lab-s1-http500", "aaaa0000-1111-2222-3333-444455556666"),
+            _alert("alert-sre-lab-s2-latency", "bbbb0000-1111-2222-3333-444455556666"),
+            _alert("alert-sre-lab-s3-storage-rbac", "cccc0000-1111-2222-3333-444455556666"),
         ]
     }
+)
+
+# The normalized capture a healthy run produces: a real conclusion, which is
+# the only outcome `lab_state.py` treats as a successful capture.
+CONCLUSION_TIMELINE = json.dumps(
+    [
+        {"state": "alert-fired"},
+        {"state": "thread-created"},
+        {"state": "investigating"},
+        {"state": "conclusion"},
+    ]
+)
+# What the Agent leaves behind when it never concluded: the explicit marker
+# `capture_model.normalize_capture` appends, never a success.
+MISSING_CONCLUSION_TIMELINE = json.dumps(
+    [
+        {"state": "alert-fired"},
+        {"state": "thread-created"},
+        {"state": "investigating"},
+        {"state": "conclusion-missing"},
+    ]
 )
 
 
@@ -79,10 +118,23 @@ def _az_stub_source(log_path, state_dir):
     Revision names advance on `containerapp update` so
     `wait_for_new_revision_ready` observes a genuinely new revision instead
     of spinning on its ten-minute timeout.
+
+    The fired alert has a lifecycle: a single-alert read answers with the
+    condition recorded in `${state}/alert_condition`, and a *recovering*
+    call (clearing the failure mode/delay, or restoring the blob role)
+    flips it to `Resolved` -- unless `${state}/alert_stays_fired` exists,
+    which reproduces an alert that never closes. That is the only way to
+    exercise the recovery gate honestly: `run-scenario.sh` must not record
+    a recovery Azure Monitor never confirmed.
     """
     return f"""#!/usr/bin/env bash
 printf '%s\\t%s\\n' "$*" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "{log_path}"
 state="{state_dir}"
+resolve_alert() {{
+  if [[ ! -f "${{state}}/alert_stays_fired" ]]; then
+    printf 'Resolved\\n' > "${{state}}/alert_condition"
+  fi
+}}
 case "${{1:-}} ${{2:-}}" in
   "account show")
     printf '%s\\n' "{SUBSCRIPTION_ID}" ;;
@@ -99,7 +151,10 @@ case "${{1:-}} ${{2:-}}" in
   "containerapp show")
     printf 'rev-%s\\n' "$(cat "${{state}}/revision")" ;;
   "containerapp update")
-    printf '%s\\n' "$(( $(cat "${{state}}/revision") + 1 ))" > "${{state}}/revision" ;;
+    printf '%s\\n' "$(( $(cat "${{state}}/revision") + 1 ))" > "${{state}}/revision"
+    if [[ "$*" == *"FAILURE_MODE=none"* || "$*" == *"ORDER_DELAY_MS=0"* ]]; then
+      resolve_alert
+    fi ;;
   "containerapp revision")
     if [[ "$*" == *"healthState"* ]]; then
       printf 'Healthy\\n'
@@ -115,7 +170,9 @@ case "${{1:-}} ${{2:-}}" in
   "monitor activity-log")
     printf '[]\\n' ;;
   "role assignment")
-    if [[ "${{3:-}}" == "list" && "$*" != *"-o tsv"* ]]; then
+    if [[ "${{3:-}}" == "create" ]]; then
+      resolve_alert
+    elif [[ "${{3:-}}" == "list" && "$*" != *"-o tsv"* ]]; then
       printf '[]\\n'
     fi ;;
   "rest --method")
@@ -125,6 +182,11 @@ case "${{1:-}} ${{2:-}}" in
       principal_id="${{assignment_id##*/}}"
       printf '{{"properties": {{"principalId": "%s", "roleDefinitionId": "/subscriptions/{SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleDefinitions/{MONITORING_CONTRIBUTOR_ROLE_ID}", "scope": "/subscriptions/{SUBSCRIPTION_ID}"}}}}\\n' \\
         "${{principal_id}}"
+    elif [[ "$*" == *"monitorCondition=Fired"* ]]; then
+      printf '%s\\n' '{ALERTS_JSON}'
+    elif [[ "$*" == *"/Microsoft.AlertsManagement/alerts/"* ]]; then
+      printf '{{"properties": {{"essentials": {{"monitorCondition": "%s", "startDateTime": "2026-08-14T00:05:00Z"}}}}}}\\n' \\
+        "$(cat "${{state}}/alert_condition")"
     else
       printf '%s\\n' '{ALERTS_JSON}'
     fi ;;
@@ -135,27 +197,30 @@ exit 0
 """
 
 
-def _lab_python_stub_source(log_path):
-    """A fake `${LAB_ROOT}/app/.venv/bin/python` for capture-scenario.sh."""
+def _lab_python_stub_source(log_path, capture_timeline):
+    """A fake `${LAB_ROOT}/app/.venv/bin/python`.
+
+    Only the two scripts that would reach the SRE Agent data plane or write
+    images are faked; every other script (notably `lab_state.py` and
+    `score.py`, which are the behaviour under test) runs under the real
+    interpreter.
+    """
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
-script="${{1:-}}"
-shift || true
-output_dir=""
-asset_dir=""
-normalized=""
-case "${{script}}" in
+case "${{1:-}}" in
   *capture_agent.py)
+    shift
+    output_dir=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
         --output-dir) output_dir="$2"; shift 2 ;;
         *) shift ;;
       esac
     done
-    printf '%s\\n' '[{{"state": "detected"}}, {{"state": "diagnosing"}}, {{"state": "root-caused"}}, {{"state": "resolved"}}]' \\
-      > "${{output_dir}}/normalized-timeline.json"
+    printf '%s\\n' '{capture_timeline}' > "${{output_dir}}/normalized-timeline.json"
     ;;
   *render_capture.py)
+    shift
     normalized="${{1:-}}"
     asset_dir="${{2:-}}"
     [[ -f "${{normalized}}" ]] || exit 1
@@ -163,12 +228,34 @@ case "${{script}}" in
     printf 'GIF89a' > "${{asset_dir}}/investigation.gif"
     printf 'timeline\\n' > "${{asset_dir}}/timeline.mmd"
     ;;
+  *loadgen.py)
+    ;;
+  *)
+    exec "{REAL_PYTHON}" "$@"
+    ;;
 esac
 exit 0
 """
 
 
-def make_lab(tmp_path, azd_values=None, missing_key_mode="azd_1_29"):
+def _python3_stub_source(log_path):
+    """A fake `python3`: `loadgen.py` is faked, everything else is real."""
+    return f"""#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "{log_path}"
+case "${{1:-}}" in
+  *loadgen.py) exit 0 ;;
+  *) exec "{REAL_PYTHON}" "$@" ;;
+esac
+"""
+
+
+def make_lab(
+    tmp_path,
+    azd_values=None,
+    missing_key_mode="azd_1_29",
+    alert_resolves=True,
+    capture_timeline=CONCLUSION_TIMELINE,
+):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
     lab = tmp_path / "lab"
     shutil.copytree(
@@ -184,6 +271,9 @@ def make_lab(tmp_path, azd_values=None, missing_key_mode="azd_1_29"):
     state_dir = tmp_path / "state"
     state_dir.mkdir()
     (state_dir / "revision").write_text("1\n")
+    (state_dir / "alert_condition").write_text("Fired\n")
+    if not alert_resolves:
+        (state_dir / "alert_stays_fired").write_text("1\n")
 
     az_log = tmp_path / "az-calls.log"
     azd_log = tmp_path / "azd-calls.log"
@@ -197,14 +287,13 @@ def make_lab(tmp_path, azd_values=None, missing_key_mode="azd_1_29"):
         missing_key_mode,
         azd_log,
     )
-    write_executable(
-        bin_dir / "python3",
-        f'#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "{python_log}"\nexit 0\n',
-    )
+    write_executable(bin_dir / "python3", _python3_stub_source(python_log))
 
     venv_bin = lab / "app" / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
-    write_executable(venv_bin / "python", _lab_python_stub_source(lab_python_log))
+    write_executable(
+        venv_bin / "python", _lab_python_stub_source(lab_python_log, capture_timeline)
+    )
 
     workdir = tmp_path / "elsewhere"
     workdir.mkdir()
@@ -257,3 +346,41 @@ class LabRun:
         path = self.lab / "evidence" / "agent-setup.json"
         path.write_text(json.dumps(setup))
         return path
+
+    @property
+    def state_path(self):
+        return self.lab / "evidence" / "state.json"
+
+    def seed_state(
+        self,
+        stages=("baseline_passed", "agent_setup_acknowledged"),
+        scenarios=None,
+        environment=ENV_NAME,
+        subscription_id=SUBSCRIPTION_ID,
+        resource_group=RESOURCE_GROUP,
+    ):
+        """Pre-record the ordered state a test starts from.
+
+        Written directly rather than through `lab_state.py` so a test states
+        the precondition it wants (including impossible ones, e.g. a state
+        file bound to another environment) without depending on the code
+        under test to produce it.
+        """
+        state = {
+            "environment": environment,
+            "subscription_id": subscription_id,
+            "resource_group": resource_group,
+            "stages": {stage: {"at": "2026-08-14T00:00:00Z"} for stage in stages},
+            "scenarios": scenarios or {},
+        }
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        self.state_path.write_text(json.dumps(state, indent=2, sort_keys=True))
+        return self.state_path
+
+    def state(self):
+        if not self.state_path.exists():
+            return {}
+        return json.loads(self.state_path.read_text())
+
+    def scenario_state(self, scenario):
+        return self.state().get("scenarios", {}).get(scenario, {})

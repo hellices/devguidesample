@@ -11,10 +11,35 @@ import json
 
 import pytest
 
-from lab_script_harness import ENV_NAME, RESOURCE_GROUP, SUBSCRIPTION_ID, make_lab
+from lab_script_harness import (
+    ENV_NAME,
+    MISSING_CONCLUSION_TIMELINE,
+    RESOURCE_GROUP,
+    SUBSCRIPTION_ID,
+    make_lab,
+)
 
 
 CALLERS = ("run-scenario.sh", "query-evidence.sh", "capture-scenario.sh", "cleanup.sh")
+
+# Short enough that a genuinely unbounded wait fails the test instead of
+# hanging the suite, long enough for several poll rounds.
+BOUNDED_WAITS = {
+    "LAB_ALERT_RESOLVE_TIMEOUT_SECONDS": "5",
+    "LAB_ALERT_RESOLVE_POLL_INTERVAL_SECONDS": "1",
+    "LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS": "5",
+}
+
+
+def captured(scenario, evidence_dir):
+    """The state entry of a scenario that already ran and captured cleanly."""
+    return {
+        scenario: {
+            "run_status": "recovered",
+            "capture_status": "conclusion",
+            "evidence_dir": str(evidence_dir),
+        }
+    }
 
 
 def _assert_loaded_config(result, lab_run):
@@ -41,8 +66,9 @@ def _assert_loaded_config(result, lab_run):
 
 def test_run_scenario_s1_runs_to_completion_from_another_directory(tmp_path):
     lab_run = make_lab(tmp_path)
+    lab_run.seed_state()
 
-    result = lab_run.run("run-scenario.sh", ["s1"])
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
 
     _assert_loaded_config(result, lab_run)
     assert result.returncode == 0, result.stderr
@@ -112,6 +138,169 @@ def test_query_evidence_queries_the_resolved_workspace_and_principal(tmp_path):
     az_calls = lab_run.az_calls()
     assert "--workspace 9d1a0b2c-3d4e-5f60-7182-93a4b5c6d7e8" in az_calls
     assert "--assignee-object-id 8c8a4f0e-0000-4000-8000-2b1f9a0c1234" in az_calls
+
+
+def test_run_scenario_refuses_a_scenario_the_state_does_not_allow(tmp_path):
+    """No baseline and no acknowledgement recorded: the failure must be
+    injected into nothing at all."""
+    lab_run = make_lab(tmp_path)
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "baseline_passed" in result.stderr
+    assert "agent_setup_acknowledged" in result.stderr
+    assert "containerapp update" not in lab_run.az_calls(), (
+        "run-scenario.sh injected a failure before checking the run order"
+    )
+    assert not sorted((lab_run.lab / "evidence").glob("s1-*"))
+
+
+def test_run_scenario_s2_refuses_to_start_before_s1_was_captured(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state(
+        scenarios={"s1": {"run_status": "recovered", "evidence_dir": str(tmp_path / "s1")}}
+    )
+
+    result = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "s1_captured" in result.stderr
+    assert "containerapp update" not in lab_run.az_calls()
+
+
+def test_run_scenario_s2_starts_once_s1_recovered_and_was_captured(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state(scenarios=captured("s1", tmp_path / "s1"))
+
+    result = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ORDER_DELAY_MS=4000" in lab_run.az_calls()
+    assert lab_run.scenario_state("s2")["run_status"] == "recovered"
+
+
+def test_run_scenario_records_recovery_only_after_the_alert_resolved(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    evidence_dir = sorted((lab_run.lab / "evidence").glob("s1-*"))[-1]
+    scenario_state = lab_run.scenario_state("s1")
+    assert scenario_state["run_status"] == "recovered"
+    assert scenario_state["evidence_dir"] == str(evidence_dir)
+    timeline = json.loads((evidence_dir / "timeline.json").read_text())
+    assert timeline["alert_resolved_at"], "the resolved moment was never recorded"
+    assert timeline["recovered_at"] <= timeline["alert_resolved_at"]
+
+
+def test_run_scenario_fails_when_the_alert_never_resolves(tmp_path):
+    """An alert Azure Monitor never closed means the workload is not proven
+    healthy again: the run stays failed, so the next scenario cannot start
+    on top of an unresolved incident."""
+    lab_run = make_lab(tmp_path, alert_resolves=False)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "Resolved" in result.stderr
+    assert "FAILURE_MODE=none" in lab_run.az_calls(), (
+        "the injected failure must still be reverted before the run gives up"
+    )
+    assert lab_run.scenario_state("s1")["run_status"] == "failed"
+    evidence_dir = sorted((lab_run.lab / "evidence").glob("s1-*"))[-1]
+    timeline = json.loads((evidence_dir / "timeline.json").read_text())
+    assert timeline["alert_resolved_at"] is None
+
+
+def test_a_failed_run_blocks_the_next_scenario(tmp_path):
+    lab_run = make_lab(tmp_path, alert_resolves=False)
+    lab_run.seed_state()
+    first = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert first.returncode != 0
+
+    result = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "s1_recovered" in result.stderr
+
+
+def test_run_scenario_refuses_a_state_file_from_another_environment(tmp_path):
+    """A `state.json` left behind by another lab must never unlock a run
+    here: the file records the environment, subscription and resource group
+    it belongs to, and every command checks them."""
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state(environment="sre-lab-somewhere-else")
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "sre-lab-somewhere-else" in result.stderr
+    assert "containerapp update" not in lab_run.az_calls()
+
+
+def test_run_scenario_binds_new_state_to_the_current_environment(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.state_path.unlink(missing_ok=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    state = lab_run.state()
+    assert state["environment"] == ENV_NAME
+    assert state["subscription_id"] == SUBSCRIPTION_ID
+    assert state["resource_group"] == RESOURCE_GROUP
+
+
+def test_capture_scenario_resolves_the_evidence_directory_from_the_state(tmp_path):
+    """The public command is `lab.sh capture s1` -- no timestamped path --
+    so `capture-scenario.sh` has to find the directory the recorded run
+    wrote, not the newest directory that happens to be on disk."""
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+    evidence_dir = sorted((lab_run.lab / "evidence").glob("s1-*"))[-1]
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (evidence_dir / "normalized-timeline.json").is_file()
+    assert lab_run.scenario_state("s1")["capture_status"] == "conclusion"
+
+
+def test_capture_scenario_records_a_missing_conclusion_as_itself(tmp_path):
+    lab_run = make_lab(tmp_path, capture_timeline=MISSING_CONCLUSION_TIMELINE)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert lab_run.scenario_state("s1")["capture_status"] == "conclusion-missing"
+    assert "conclusion-missing" in result.stdout
+    blocked = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+    assert blocked.returncode != 0
+    assert "s1_captured" in blocked.stderr
+
+
+def test_capture_scenario_without_a_recorded_run_names_the_command_to_run(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert "No such file or directory" not in result.stderr
+    assert "lab.sh run s1" in result.stderr
 
 
 def test_capture_scenario_renders_from_another_directory(tmp_path):
