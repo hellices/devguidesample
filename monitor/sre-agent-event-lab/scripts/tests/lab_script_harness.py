@@ -135,7 +135,16 @@ resolve_alert() {{
     printf 'Resolved\\n' > "${{state}}/alert_condition"
   fi
 }}
-case "${{1:-}} ${{2:-}}" in
+# Real azure-cli global flags (`--only-show-errors`, etc.) can land before
+# or between an az command's own arguments, shifting whatever the
+# positional `$1 $2` dispatch below expects. `az rest` is the one call
+# `cleanup-external.sh` adds such a flag to, so its dispatch key is derived
+# from the presence of `--method` in "$@" rather than its position.
+dispatch_key="${{1:-}} ${{2:-}}"
+case " $* " in
+  *" --method "*) dispatch_key="rest --method" ;;
+esac
+case "${{dispatch_key}}" in
   "account show")
     printf '%s\\n' "{SUBSCRIPTION_ID}" ;;
   "group exists")

@@ -180,20 +180,46 @@ verify_recorded_assignment() {
     return 1
   fi
 
-  local assignment_json
-  # A role assignment that no longer exists answers, verbatim (recorded
-  # from azure-cli against a live subscription on 2026-08-14):
-  #   ERROR: Not Found({"error":{"code":"RoleAssignmentNotFound", ...}})
-  # which is an expected state during teardown, not a failure.
-  if ! assignment_json="$(az rest --method get --url "https://management.azure.com${assignment_id}?api-version=2022-04-01" --subscription "${SUBSCRIPTION_ID}" 2>&1)"; then
-    case "${assignment_json}" in
+  # `az rest`'s stdout is the ARM document this function parses with jq;
+  # its stderr is diagnostics only -- an azure-cli warning (a preview
+  # notice, an extension-update nag) on a *successful* call, or the real
+  # error body on a failed one. A plain `2>&1` would merge the two: a
+  # warning on an otherwise-healthy read corrupts the JSON and makes a live
+  # assignment look unreadable, and a failure's real error can end up
+  # interleaved with unrelated output. The two streams are therefore kept
+  # apart with separate capture files (no array, no process substitution,
+  # portable to Bash 3.2) and read back into their own variables.
+  # `--only-show-errors` additionally asks azure-cli itself to drop most
+  # warnings before they are ever written.
+  local rest_stdout_file rest_stderr_file rest_status=0
+  rest_stdout_file="$(mktemp)"
+  rest_stderr_file="$(mktemp)"
+  if ! az rest --only-show-errors --method get \
+    --url "https://management.azure.com${assignment_id}?api-version=2022-04-01" \
+    --subscription "${SUBSCRIPTION_ID}" \
+    >"${rest_stdout_file}" 2>"${rest_stderr_file}"; then
+    rest_status=1
+  fi
+  local assignment_json assignment_stderr
+  assignment_json="$(cat "${rest_stdout_file}")"
+  assignment_stderr="$(cat "${rest_stderr_file}")"
+  rm -f "${rest_stdout_file}" "${rest_stderr_file}"
+
+  if [[ "${rest_status}" -ne 0 ]]; then
+    # A role assignment that no longer exists answers, verbatim (recorded
+    # from azure-cli against a live subscription on 2026-08-14):
+    #   ERROR: Not Found({"error":{"code":"RoleAssignmentNotFound", ...}})
+    # which is an expected state during teardown, not a failure. Only
+    # stderr is inspected for it -- never stdout, which a failing call must
+    # not be trusted to have left empty.
+    case "${assignment_stderr}" in
       *RoleAssignmentNotFound* | *RoleAssignmentDoesNotExist* | *ResourceNotFound*)
         echo "Recorded role assignment is already absent: ${assignment_id}"
         return 2
         ;;
     esac
     echo "Unable to verify recorded role assignment: ${assignment_id}" >&2
-    echo "${assignment_json}" >&2
+    echo "${assignment_stderr}" >&2
     return 1
   fi
 
@@ -220,9 +246,14 @@ verify_recorded_assignment() {
 
 # Every record is verified before the first deletion, so a single untrusted
 # record leaves the whole subscription untouched. Held as a newline-joined
-# string: Bash 3.2 (macOS) aborts under `set -u` when an empty array is
-# expanded.
-VERIFIED_ASSIGNMENT_IDS=""
+# string bounded by a leading newline as well as a trailing one, so the
+# "already verified" check below can require a full `\n<id>\n` match --
+# matching bare `<id>\n` (no leading boundary) would also accept any
+# recorded ID that merely *ends with* the same characters as an
+# already-verified one, silently treating a distinct, unverified record as
+# a duplicate. Bash 3.2 (macOS) aborts under `set -u` when an empty array
+# is expanded, which is why this stays a string instead of an array.
+VERIFIED_ASSIGNMENT_IDS=$'\n'
 while IFS=$'\t' read -r assignment_id expected_principal_id; do
   if [[ -z "${assignment_id}" ]]; then
     continue
@@ -233,7 +264,7 @@ while IFS=$'\t' read -r assignment_id expected_principal_id; do
     exit 1
   fi
   case "${VERIFIED_ASSIGNMENT_IDS}" in
-    *"${assignment_id}"$'\n'*) continue ;;
+    *$'\n'"${assignment_id}"$'\n'*) continue ;;
   esac
 
   verification_status=0
@@ -246,7 +277,7 @@ while IFS=$'\t' read -r assignment_id expected_principal_id; do
 done <<<"${RECORDED_ASSIGNMENTS}"
 readonly VERIFIED_ASSIGNMENT_IDS
 
-if [[ -z "${VERIFIED_ASSIGNMENT_IDS}" ]]; then
+if [[ "${VERIFIED_ASSIGNMENT_IDS}" == $'\n' ]]; then
   echo "Agent setup evidence records no subscription role assignment to remove."
   exit 0
 fi

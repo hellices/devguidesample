@@ -24,10 +24,12 @@ from cleanup_harness import (
     ABSENT_ASSIGNMENT_NAME,
     AGENT_ASSIGNMENT_NAME,
     AGENT_PRINCIPAL_ID,
+    AGENT_UAMI_PRINCIPAL_ID,
     CLEANUP_EXTERNAL,
     LAB_ROOT,
     OTHER_SUBSCRIPTION_ID,
     READER_ROLE_ID,
+    Staged,
     SUBSCRIPTION_ID,
     UAMI_ASSIGNMENT_NAME,
     agent_setup,
@@ -126,7 +128,7 @@ def test_cleanup_deletes_both_recorded_assignments_after_verifying_them(tmp_path
     assert f"--subscription {SUBSCRIPTION_ID}" in run.az_calls
     assert "group delete" not in run.az_calls
     # Each assignment is read back before it is deleted.
-    assert run.az_calls.index("rest --method get") < run.az_calls.index(
+    assert run.az_calls.index("rest --only-show-errors --method get") < run.az_calls.index(
         "role assignment delete"
     )
 
@@ -224,6 +226,120 @@ def test_cleanup_deletes_a_record_repeated_under_both_keys_once(tmp_path):
         f"role assignment delete --ids {RECORDED_ASSIGNMENT_ID} "
         f"--subscription {SUBSCRIPTION_ID} --output none"
     ]
+
+
+def test_cleanup_does_not_dedupe_a_second_id_that_is_only_a_suffix_of_the_first(
+    tmp_path,
+):
+    """The "already verified" check must match a whole recorded ID, not any
+    suffix of the newline-joined string it is held in. A UAMI-key record
+    that merely *ends with* the same characters as the already-verified
+    monitoring-key record is a different value and must still be validated
+    on its own -- a suffix-only "match" would silently skip validating (and
+    so deleting) whatever it actually names, exactly like the untrusted
+    records this hook exists to stop."""
+    monitoring_id = RECORDED_ASSIGNMENT_ID
+    suffix_only_id = monitoring_id[-40:]
+    assert not suffix_only_id.startswith("/subscriptions/"), (
+        "the crafted ID must not independently pass the subscription-prefix "
+        "check -- it must only ever be seen through the dedupe path"
+    )
+
+    run = run_cleanup(
+        tmp_path,
+        ["--yes"],
+        evidence=agent_setup(
+            uami_assignment_id=suffix_only_id,
+            uami_principal_id=AGENT_UAMI_PRINCIPAL_ID,
+        ),
+    )
+
+    assert run.returncode != 0, (
+        "a suffix-only match let a second, distinct recorded ID go "
+        f"unvalidated: stdout={run.stdout!r} stderr={run.stderr!r}"
+    )
+    assert "does not belong to current subscription" in run.stderr
+    assert "role assignment delete" not in run.az_calls, (
+        "a single untrusted record must leave the whole subscription untouched"
+    )
+
+
+def test_cleanup_tolerates_a_cli_warning_on_a_successful_verification_read(tmp_path):
+    """A verified read that also emits an azure-cli warning on stderr (a
+    preview notice, an extension-update nag) must still parse the ARM
+    document from stdout and proceed -- merging the two streams (as a bare
+    `2>&1` would) corrupts the JSON with the warning text and makes a
+    legitimate, live assignment look unreadable."""
+    assignments = staged_assignments()
+    assignments[AGENT_ASSIGNMENT_NAME] = Staged(
+        assignment_document(AGENT_PRINCIPAL_ID),
+        stderr_extra="WARNING: This command is in preview and under development.\n",
+    )
+
+    run = run_cleanup(
+        tmp_path, ["--yes"], evidence=agent_setup(), assignments=assignments
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert f"role assignment delete --ids {RECORDED_ASSIGNMENT_ID}" in run.az_calls
+    assert f"role assignment delete --ids {RECORDED_UAMI_ASSIGNMENT_ID}" in run.az_calls
+
+
+def test_cleanup_absent_detection_reads_stderr_alone_ignoring_stray_stdout(tmp_path):
+    """The already-absent check inspects stderr alone. Unrelated content on
+    stdout during a failing call (a real `az rest` failure never produces
+    any, but a robust reader must not depend on that) must not stop the
+    'already absent' no-op the RoleAssignmentNotFound text on stderr asks
+    for."""
+    assignments = staged_assignments()
+    assignments[AGENT_ASSIGNMENT_NAME] = Staged(
+        '@error:ERROR: Not Found({"error":{"code":"RoleAssignmentNotFound",'
+        '"message":"The role assignment is not found."}})',
+        stdout_noise='{"unexpected": "stdout noise"}\n',
+    )
+
+    run = run_cleanup(
+        tmp_path, ["--yes"], evidence=agent_setup(), assignments=assignments
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert "already absent" in run.stdout
+    assert (
+        f"role assignment delete --ids {RECORDED_UAMI_ASSIGNMENT_ID}" in run.az_calls
+    )
+    assert AGENT_ASSIGNMENT_NAME not in run.az_calls.split("role assignment delete")[-1]
+
+
+def test_cleanup_reports_the_real_error_unmixed_with_warning_noise(tmp_path):
+    """A verification read that fails for a real reason (not
+    RoleAssignmentNotFound) must surface that real error text -- unmixed
+    with any warning also present on stderr -- and must never delete."""
+    assignments = staged_assignments()
+    assignments[AGENT_ASSIGNMENT_NAME] = Staged(
+        '@error:ERROR: Forbidden({"error":{"code":"AuthorizationFailed"}})',
+        stderr_extra="WARNING: This command is in preview and under development.\n",
+    )
+
+    run = run_cleanup(
+        tmp_path, ["--yes"], evidence=agent_setup(), assignments=assignments
+    )
+
+    assert run.returncode != 0
+    assert "Unable to verify recorded role assignment" in run.stderr
+    assert "AuthorizationFailed" in run.stderr
+    assert "already absent" not in run.stdout
+    assert "role assignment delete" not in run.az_calls
+
+
+def test_cleanup_verification_read_requests_only_show_errors():
+    """`--only-show-errors` asks azure-cli itself to drop most warnings
+    before they are ever written, on top of the script's own stream split."""
+    text = CLEANUP_EXTERNAL.read_text()
+    rest_calls = [
+        command for command in _az_invocations(text) if command.startswith("az rest")
+    ]
+    assert rest_calls, "expected an `az rest` verification call"
+    assert all("--only-show-errors" in command for command in rest_calls)
 
 
 def test_cleanup_refuses_an_assignment_it_cannot_read(tmp_path):
@@ -394,7 +510,11 @@ def test_cleanup_rejects_an_unknown_option(tmp_path):
 
 def test_cleanup_runs_under_bash_32(tmp_path):
     """macOS ships Bash 3.2, where `"${ARRAY[@]}"` on an empty array aborts
-    under `set -u` and none of Bash 4's builtins exist."""
+    under `set -u` and none of Bash 4's builtins exist. The script must run
+    under the *system* `/bin/bash` specifically -- not whatever `bash`
+    happens to resolve first on PATH, which on a developer machine with a
+    newer Bash installed (Homebrew's, for example) would silently stop
+    exercising Bash 3.2 at all despite this test's name and purpose."""
     system_bash = "/bin/bash"
     version = subprocess.run(
         [system_bash, "-c", "echo ${BASH_VERSINFO[0]}"],
@@ -411,6 +531,7 @@ def test_cleanup_runs_under_bash_32(tmp_path):
             tmp_path / f"run-{len(arguments)}-{evidence is None}",
             arguments,
             evidence=evidence,
+            bash=system_bash,
         )
         assert run.returncode == 0, (
             f"cleanup-external.sh must run on bash {version}: {run.stderr}"
@@ -447,3 +568,19 @@ def test_readme_documents_the_teardown_hooks_and_manual_recovery():
     assert "postdown" in section
     assert "cleanup-external.sh" in section
     assert "--reset-image-env" in section
+    # azd runs `predown` before its own delete confirmation prompt (the
+    # prompt lives inside the same action the hook wraps), so canceling
+    # that prompt does not undo a predown hook that already ran. The
+    # recorded external role assignments are gone either way; only the
+    # README's claim about what "cancel" leaves behind must not overstate
+    # it as a fully working environment.
+    assert "취소" in section, "the README must describe what canceling azd down leaves behind"
+    assert "확인" in section, "the README must name azd's delete confirmation prompt"
+    assert not re.search(r"완전히\s*(작동|동작)", section), (
+        "the README must not claim canceling leaves a fully working environment "
+        "-- predown already removed the recorded roles before the prompt"
+    )
+    assert "acknowledge agent-setup" in section, (
+        "the README must name the recovery step (re-running Agent setup/role "
+        "assignment) an operator needs after canceling"
+    )

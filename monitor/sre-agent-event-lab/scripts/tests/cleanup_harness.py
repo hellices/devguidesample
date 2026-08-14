@@ -29,9 +29,20 @@ import json
 import os
 import shutil
 import subprocess
+from collections import namedtuple
 from pathlib import Path
 
 from azd_fake import write_azd_stub, write_executable
+
+# A staged `az rest` reply that also exercises the stderr/stdout split: the
+# fake `az` writes `stderr_extra` to its own stderr (simulating an
+# azure-cli warning -- a preview notice, an extension update nag -- that a
+# real, successful call can still print) and/or `stdout_noise` to its own
+# stdout (simulating stray content on a failing call, which a real `az
+# rest` never produces but which a robust reader must still not be misled
+# by) around the normal `document` reply.
+Staged = namedtuple("Staged", ["document", "stderr_extra", "stdout_noise"])
+Staged.__new__.__defaults__ = (None, None)
 
 
 SCRIPTS_DIR = Path(__file__).parents[1]
@@ -114,15 +125,28 @@ def _az_stub_source(log_path, state_dir):
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
 state="{state_dir}"
-case "${{1:-}} ${{2:-}}" in
-  "account show")
+# Real azure-cli global flags (`--only-show-errors`, etc.) can appear
+# anywhere before or between an azd/az command's own arguments, so the
+# fake dispatches on which recognisable sub-command is present anywhere in
+# "$@", not on the literal position of $1/$2.
+subcommand="other"
+case " $* " in
+  *" --method "*) subcommand="rest" ;;
+  *) case "${{1:-}} ${{2:-}}" in
+    "account show") subcommand="account-show" ;;
+    "role assignment") subcommand="role-assignment" ;;
+  esac ;;
+esac
+
+case "${{subcommand}}" in
+  "account-show")
     if [[ -f "${{state}}/signed_out" ]]; then
       echo "ERROR: Please run 'az login' to setup account." >&2
       exit 1
     fi
     cat "${{state}}/active_subscription"
     ;;
-  "rest --method")
+  "rest")
     url=""
     while [[ "$#" -gt 0 ]]; do
       if [[ "$1" == "--url" ]]; then
@@ -135,17 +159,28 @@ case "${{1:-}} ${{2:-}}" in
     name="${{url%%\\?*}}"
     name="${{name##*/}}"
     document="${{state}}/assignments/${{name}}.json"
+    stderr_extra="${{state}}/assignments/${{name}}.stderr_extra"
+    stdout_noise="${{state}}/assignments/${{name}}.stdout_noise"
     if [[ ! -f "${{document}}" ]]; then
       printf 'ERROR: Not Found({{"error":{{"code":"RoleAssignmentNotFound","message":"The role assignment %s is not found."}}}})\\n' "${{name}}" >&2
       exit 1
     fi
     if [[ "$(head -c 7 "${{document}}")" == "@error:" ]]; then
+      if [[ -f "${{stdout_noise}}" ]]; then
+        cat "${{stdout_noise}}"
+      fi
+      if [[ -f "${{stderr_extra}}" ]]; then
+        cat "${{stderr_extra}}" >&2
+      fi
       tail -c +8 "${{document}}" >&2
       exit 1
     fi
+    if [[ -f "${{stderr_extra}}" ]]; then
+      cat "${{stderr_extra}}" >&2
+    fi
     cat "${{document}}"
     ;;
-  "role assignment")
+  "role-assignment")
     if [[ -f "${{state}}/delete_fails" ]]; then
       echo "ERROR: AuthorizationFailed" >&2
       exit 1
@@ -196,6 +231,7 @@ def run_cleanup(
     delete_fails=False,
     env=None,
     script=CLEANUP_EXTERNAL,
+    bash=BASH,
 ):
     """Run `cleanup-external.sh` against a staged fake subscription."""
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -213,10 +249,24 @@ def run_cleanup(
     for name, document in (
         staged_assignments() if assignments is None else assignments
     ).items():
+        stderr_extra = None
+        stdout_noise = None
+        if isinstance(document, Staged):
+            stderr_extra = document.stderr_extra
+            stdout_noise = document.stdout_noise
+            document = document.document
         path = state_dir / "assignments" / f"{name}.json"
         path.write_text(
             document if isinstance(document, str) else json.dumps(document)
         )
+        if stderr_extra is not None:
+            (state_dir / "assignments" / f"{name}.stderr_extra").write_text(
+                stderr_extra
+            )
+        if stdout_noise is not None:
+            (state_dir / "assignments" / f"{name}.stdout_noise").write_text(
+                stdout_noise
+            )
 
     az_log = tmp_path / "az-calls.log"
     azd_log = tmp_path / "azd-calls.log"
@@ -248,7 +298,7 @@ def run_cleanup(
     process_env.update(env or {})
 
     result = subprocess.run(
-        [BASH, str(script), *args],
+        [bash, str(script), *args],
         capture_output=True,
         text=True,
         env=process_env,

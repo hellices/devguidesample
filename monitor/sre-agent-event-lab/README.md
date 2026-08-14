@@ -393,7 +393,9 @@ Dynamic rule은 3일·30 samples 전에는 발화하지 않으며 3주 전에는
 `azd`로 배포한 환경은 `azd down`으로 정리한다. resource group 삭제는 `azd`가 수행하고, azd가 볼 수 없는 두 가지만 hook이 처리한다.
 
 - predown hook `scripts/cleanup-external.sh --yes`: resource group 밖에 기록된 구독 범위 Monitoring Contributor assignment만 제거한다. 기록된 assignment ID가 현재 구독에 속하는지, Azure CLI가 그 구독에 로그인했는지, 실제 assignment의 principal·role·scope가 `evidence/agent-setup.json`의 기록과 일치하는지 확인한 뒤에만 삭제한다. 하나라도 어긋나면 아무것도 삭제하지 않고 중단한다. 기록이 없거나 이미 삭제된 assignment는 안전한 no-op다.
-- postdown hook `scripts/cleanup-external.sh --reset-image-env --yes`: `azd-postprovision.sh`가 기록한 `SRE_CONTAINER_IMAGE`와 `SRE_IMAGE_TAG`를 비운다. predown이 아니라 postdown인 이유는 predown이 azd의 삭제 확인 프롬프트보다 먼저 실행되기 때문이다. 삭제를 취소한 환경의 image 값을 미리 지우면 안 된다.
+- postdown hook `scripts/cleanup-external.sh --reset-image-env --yes`: `azd-postprovision.sh`가 기록한 `SRE_CONTAINER_IMAGE`와 `SRE_IMAGE_TAG`를 비운다. predown이 아니라 postdown인 이유는 postdown이 `azd down`의 리소스 삭제가 실제로 성공한 뒤에만 실행되기 때문이다 -- 삭제 자체가 취소되거나 실패한 환경의 image 값을 미리 지우면 안 된다.
+
+중요: predown hook은 `azd down`이 **삭제 확인 프롬프트를 띄우기 전에** 실행된다(azd의 command hook은 명령 전체를 감싸고, 그 확인 프롬프트는 명령 자체의 일부다). 즉 `azd down`을 실행하는 순간 기록된 Monitoring Contributor assignment는 이미 제거되며, 뒤이어 나오는 확인 프롬프트에서 **취소해도 이미 제거된 assignment는 되돌아오지 않는다**. resource group과 그 안의 리소스는 그대로 남지만, Agent의 구독 범위 role assignment는 사라진 상태가 된다 -- `azd down` 취소가 lab을 완전히 예전 상태로 되돌린다고 가정하면 안 된다. 취소한 뒤 lab을 계속 쓰려면 role assignment를 다시 만들고 `lab.sh acknowledge agent-setup`을 다시 실행해서 `evidence/agent-setup.json`을 새 assignment ID로 갱신해야 한다.
 
 ```bash
 cd monitor/sre-agent-event-lab

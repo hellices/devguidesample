@@ -212,7 +212,7 @@ def test_cleanup_removes_both_subscription_monitoring_assignments():
     assert "agent_principal_id" in script
     assert "agent_user_assigned_principal_id" in script
     assert "749f88d5-cbae-40b8-bcfc-e573ddc772fa" in script
-    assert "az rest --method get" in script
+    assert "az rest --only-show-errors --method get" in script
     assert "Incomplete Agent setup evidence" in script
     # A lab that never configured the Agent has no evidence file at all,
     # and `azd down` runs this hook with continueOnError: false -- so a
