@@ -64,6 +64,24 @@ def _is_unicode_whitespace(char) -> bool:
     return char is None or char.isspace()
 
 
+_THEMATIC_BREAK = re.compile(r" {0,3}(?:\*[ \t]*){3,}")
+
+
+def _is_list_bullet_marker(line: str, match) -> bool:
+    """True when `match` is a CommonMark ``*`` list bullet, not a delimiter run.
+
+    A single ``*`` starts a list item (and is never an emphasis delimiter)
+    when it sits at up to 3 spaces of line indentation and is followed by
+    whitespace or the end of the line — e.g. ``* 항목`` or ``  * item``.
+    """
+    if match.group() != "*":
+        return False
+    if not re.fullmatch(r" {0,3}", line[: match.start()]):
+        return False
+    after = line[match.end() : match.end() + 1]
+    return after in ("", " ", "\t")
+
+
 def unrendered_emphasis_markers(markdown: str) -> list:
     """Emphasis runs GitHub prints literally instead of rendering as bold/italic.
 
@@ -73,11 +91,19 @@ def unrendered_emphasis_markers(markdown: str) -> list:
     is not right-flanking, so it can never close emphasis and GitHub shows the
     raw asterisks to the reader. This is a general rule check, not a check for
     one known sentence.
+
+    Block-level ``*`` markers — a list bullet (``* 항목``) or a thematic break
+    line (``***``, ``* * *``) — are CommonMark structure, not inline emphasis
+    delimiters, so they are excluded from the scan before it runs.
     """
     offenders = []
     for number, line in enumerate(strip_code(markdown).splitlines(), start=1):
+        if _THEMATIC_BREAK.fullmatch(line):
+            continue
         open_runs = []
         for match in re.finditer(r"\*+", line):
+            if _is_list_bullet_marker(line, match):
+                continue
             before = line[match.start() - 1] if match.start() else None
             after = line[match.end()] if match.end() < len(line) else None
             left_flanking = not _is_unicode_whitespace(after) and (
@@ -220,6 +246,21 @@ def test_emphasis_lint_catches_markers_that_commonmark_leaves_literal():
     assert emphasis_glued_to_hangul(fixed) == []
     assert unrendered_emphasis_markers("서브넷은 **/28** 이상이어야 합니다.") == []
     assert unrendered_emphasis_markers("**Azure VNet**을 선택합니다.") == []
+
+
+def test_emphasis_lint_ignores_block_level_star_markers():
+    """CommonMark block-level `*` markers are not emphasis delimiters.
+
+    A `*` that starts a list item, or a line of 3+ `*` that forms a
+    thematic break, must never be reported as an unclosable emphasis
+    delimiter even though it is neither left- nor right-flanking under the
+    inline delimiter-run rules.
+    """
+    assert unrendered_emphasis_markers("* 항목") == []
+    assert unrendered_emphasis_markers("  * item") == []
+    assert unrendered_emphasis_markers("* item") == []
+    assert unrendered_emphasis_markers("***") == []
+    assert unrendered_emphasis_markers("* * *") == []
 
 
 def test_briefing_does_not_repeat_substantive_body_sentences():
