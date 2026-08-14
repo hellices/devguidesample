@@ -17,6 +17,16 @@ for command_name in az azd curl; do
   }
 done
 
+# `app/.venv` is not read by this hook itself, but this is the one place in
+# the documented azd-first flow (`azd up`) that always runs once
+# provisioning succeeds, so it is the natural place to make the local
+# Python environment `capture-scenario.sh` and the notification step need
+# ready before an operator ever reaches them. `setup-venv.sh` is its own
+# idempotent script (uv-only, no pip fallback) so it can also be re-run by
+# hand -- see its own actionable error output -- without repeating anything
+# below.
+"${SCRIPT_DIR}/setup-venv.sh"
+
 # Every value below comes from the current azd environment, which azd refreshes
 # from the deployment outputs before running this hook.
 : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID must be set by azd before running this hook}"

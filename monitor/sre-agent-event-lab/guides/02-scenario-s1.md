@@ -6,7 +6,8 @@
 
 - [01-agent-setup.md](01-agent-setup.md)를 마쳤고 `evidence/state.json`에 `baseline_passed`와 `agent_setup_acknowledged`가 기록되어 있습니다.
 - 현재 활성 구독이 azd 환경의 구독과 같습니다.
-- 진행 중인 다른 시나리오가 없습니다.
+
+이 두 가지만 `evidence/state.json`을 통해 실제로 강제됩니다. `state.json`에는 동시 실행을 막는 잠금이 없으므로(1인 운영자 전제), 다른 시나리오를 동시에 실행하지 않는 것은 운영자가 직접 지켜야 하는 규칙입니다.
 
 조건이 하나라도 없으면 실행이 시작 전에 거부되고 무엇을 먼저 하라는 안내가 출력됩니다.
 

@@ -210,16 +210,27 @@ exit 0
 """
 
 
-def _lab_python_stub_source(log_path, capture_timeline):
+def _lab_python_stub_source(log_path, capture_timeline, pillow_importable=True):
     """A fake `${LAB_ROOT}/app/.venv/bin/python`.
 
     Only the two scripts that would reach the SRE Agent data plane or write
     images are faked; every other script (notably `lab_state.py` and
     `score.py`, which are the behaviour under test) runs under the real
     interpreter.
+
+    Also answers the `-c "import PIL"` probe `capture-scenario.sh` and
+    doctor's "Python environment" check use to verify Pillow is importable,
+    per `pillow_importable` -- explicitly, rather than delegating to
+    whichever real interpreter happens to run the test suite, so this fake
+    behaves the same regardless of that interpreter's own installed
+    packages.
     """
+    pil_exit = 0 if pillow_importable else 1
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+if [[ "${{1:-}}" == "-c" && "${{2:-}}" == *PIL* ]]; then
+  exit {pil_exit}
+fi
 case "${{1:-}}" in
   *capture_agent.py)
     shift
@@ -269,6 +280,8 @@ def make_lab(
     alert_resolves=True,
     alert_fires=True,
     capture_timeline=CONCLUSION_TIMELINE,
+    venv_present=True,
+    pillow_importable=True,
 ):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
     lab = tmp_path / "lab"
@@ -306,10 +319,12 @@ def make_lab(
     write_executable(bin_dir / "python3", _python3_stub_source(python_log))
 
     venv_bin = lab / "app" / ".venv" / "bin"
-    venv_bin.mkdir(parents=True)
-    write_executable(
-        venv_bin / "python", _lab_python_stub_source(lab_python_log, capture_timeline)
-    )
+    if venv_present:
+        venv_bin.mkdir(parents=True)
+        write_executable(
+            venv_bin / "python",
+            _lab_python_stub_source(lab_python_log, capture_timeline, pillow_importable),
+        )
 
     workdir = tmp_path / "elsewhere"
     workdir.mkdir()

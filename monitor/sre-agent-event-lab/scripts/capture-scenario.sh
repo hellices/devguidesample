@@ -41,6 +41,12 @@ if [[ ! -f "${TIMELINE_FILE}" ]]; then
 fi
 if [[ ! -x "${PYTHON}" ]]; then
   echo "Missing Python environment: ${PYTHON}" >&2
+  echo "Cloud resources are already deployed; only this local step needs to be retried. Re-run: ./scripts/setup-venv.sh" >&2
+  exit 1
+fi
+if ! "${PYTHON}" -c "import PIL" >/dev/null 2>&1; then
+  echo "Python environment at ${PYTHON} is missing Pillow (PIL), which render_capture.py needs." >&2
+  echo "Cloud resources are already deployed; only this local step needs to be retried. Re-run: ./scripts/setup-venv.sh" >&2
   exit 1
 fi
 

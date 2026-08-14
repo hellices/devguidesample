@@ -18,6 +18,7 @@ GUIDES = LAB_ROOT / "guides"
 OFFICIAL_ASSETS = LAB_ROOT / "assets" / "official"
 RUNBOOK = LAB_ROOT / "runbooks" / "incident-response.md"
 LAB_SH = LAB_ROOT / "scripts" / "lab.sh"
+VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
 
 GUIDE_NAMES = (
     "01-agent-setup.md",
@@ -245,6 +246,69 @@ def test_incident_platform_path_is_the_documented_default():
     assert "Azure Monitor" in setup
     plan_index = setup.index("Review")
     assert setup.index("Builder > Incident platform") < plan_index
+
+
+def test_azuresre_dev_audience_fact_is_preserved_as_legacy_history():
+    """Finding #3: the Task 6 rewrite deleted a verified fact (the HTTP
+    Trigger endpoint only accepts an `https://azuresre.dev` audience token,
+    not `https://management.azure.com/`) instead of relocating it. It must
+    survive somewhere user-facing, framed as historical record for the
+    (non-default) Logic App bridge -- not restored as a default-flow
+    instruction anywhere in the README/guides."""
+    text = VALIDATION_RESULTS.read_text()
+
+    assert "azuresre.dev" in text
+    assert "management.azure.com" in text
+    audience_block = next(block for block in blocks(text) if "azuresre.dev" in block)
+    assert "레거시" in audience_block
+
+    for path in all_docs():
+        assert "azuresre.dev" not in path.read_text(), path.name
+
+
+def test_readme_and_guides_use_exactly_one_cd_per_document():
+    """Finding #4: every command in a document must be runnable
+    sequentially from the single working directory that document's own
+    (at most one) `cd` establishes -- a second `cd monitor/sre-agent-event-lab`
+    later in the same document would fail, since no such nested directory
+    exists once the first `cd` already landed there."""
+    for path in all_docs():
+        cd_count = len(re.findall(r"(?m)^cd\s+\S", path.read_text()))
+        assert cd_count <= 1, (path.name, cd_count)
+
+
+def test_readme_scorecard_row_states_per_scenario_and_overall_maximums():
+    """Finding #5: `scripts/score.py` computes MAX_POINTS = 10 per scenario
+    and MAX_POINTS * len(SCENARIOS) = 30 overall; the README's summary
+    table must describe both, not label the whole lab "10점 만점"."""
+    text = README.read_text()
+
+    row = next(line for line in text.splitlines() if "scorecard.json" in line)
+    assert "10점" in row
+    assert "30점" in row
+
+
+def test_guide02_start_conditions_do_not_claim_an_unenforced_concurrency_lock():
+    """Finding #6: `lab_state.py` has no concurrency lock (its own
+    docstring says so); S1's start conditions must only claim what
+    `RUN_REQUIREMENTS["s1"]` actually enforces."""
+    text = (GUIDES / "02-scenario-s1.md").read_text()
+    conditions = text.split("## 시작 조건", 1)[1].split("\n## ", 1)[0]
+
+    assert "진행 중인 다른 시나리오가 없습니다" not in conditions
+    assert "baseline_passed" in conditions
+    assert "agent_setup_acknowledged" in conditions
+
+
+def test_guide05_generate_notifications_runs_under_plain_python3():
+    """Finding #6: `generate_notifications.py` only imports the standard
+    library (html, json, re, email.*, pathlib, typing) -- unlike
+    `render_capture.py`, it has no Pillow/venv dependency, so the guide
+    must not invoke it through `app/.venv/bin/python`."""
+    text = (GUIDES / "05-results.md").read_text()
+
+    assert "python3 scripts/generate_notifications.py" in text
+    assert "app/.venv/bin/python scripts/generate_notifications.py" not in text
 
 
 # --- guide structure -----------------------------------------------------

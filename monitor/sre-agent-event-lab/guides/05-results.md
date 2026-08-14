@@ -63,10 +63,10 @@ cd monitor/sre-agent-event-lab
 - `evidence/` 아래 원본 스냅샷과 `scorecard.json`은 Git에서 제외됩니다. 필요하면 별도로 보관하세요.
 - 결론을 공유할 때는 구독 ID, 엔드포인트 FQDN, 토큰이 화면에 남지 않았는지 먼저 확인합니다.
 
-티켓과 이메일 초안 같은 운영 산출물은 정규화된 타임라인에서 다시 만들 수 있습니다.
+티켓과 이메일 초안 같은 운영 산출물은 정규화된 타임라인에서 다시 만들 수 있습니다. `generate_notifications.py`는 표준 라이브러리만 사용하므로(Pillow가 필요한 `render_capture.py`와 달리) `app/.venv` 없이 시스템 `python3`로 바로 실행합니다.
 
 ```bash
-app/.venv/bin/python scripts/generate_notifications.py \
+python3 scripts/generate_notifications.py \
   --timeline evidence/s1-<타임스탬프>/normalized-timeline.json \
   --output-dir assets/notifications \
   --report-url validation-results.md
@@ -77,7 +77,6 @@ app/.venv/bin/python scripts/generate_notifications.py \
 실습이 끝났으면 바로 정리합니다. 리소스를 남겨 두면 계속 과금됩니다.
 
 ```bash
-cd monitor/sre-agent-event-lab
 azd down --purge
 ```
 

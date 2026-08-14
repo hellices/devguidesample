@@ -160,6 +160,62 @@ def test_azd_postprovision_moves_ingress_to_the_app_port_and_records_the_image()
     assert ingress_at < healthz_at
 
 
+def test_azd_postprovision_runs_setup_venv_before_any_azure_cli_call():
+    text = AZD_POSTPROVISION.read_text()
+
+    assert "setup-venv.sh" in text
+    setup_venv_at = text.index("setup-venv.sh")
+    first_account_show_at = text.index("az account show")
+    assert setup_venv_at < first_account_show_at, (
+        "setup-venv.sh must run before the hook makes any Azure CLI call"
+    )
+
+
+def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp_path):
+    """`app/.venv` setup is local and has nothing to do with the Azure CLI,
+    but a broken corporate proxy or missing `uv` must still stop the hook
+    before it spends a single Azure API call -- the cloud side is already
+    provisioned by the time this hook runs, so failing fast here changes
+    nothing about that, but a failure must never be masked by continuing
+    on to the ACR build."""
+    scripts_copy = tmp_path / "scripts"
+    scripts_copy.mkdir()
+    (scripts_copy / "azd-postprovision.sh").write_text(AZD_POSTPROVISION.read_text())
+    (scripts_copy / "azd-postprovision.sh").chmod(0o755)
+    fake_setup_venv = scripts_copy / "setup-venv.sh"
+    fake_setup_venv.write_text(
+        "#!/usr/bin/env bash\n"
+        "echo 'uv is required to set up app/.venv but was not found on PATH.' >&2\n"
+        "echo 'azd hooks run postprovision' >&2\n"
+        "exit 1\n"
+    )
+    fake_setup_venv.chmod(0o755)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    az_log = tmp_path / "az-calls.log"
+    _write_az_stub(bin_dir, az_log)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
+    env["AZURE_RESOURCE_GROUP"] = "rg-test"
+    env["AZURE_ACR_NAME"] = "acrtest"
+    env["AZURE_CONTAINER_APP_NAME"] = "ca-test"
+    env["AZURE_CONTAINER_APP_FQDN"] = "ca-test.example.com"
+
+    result = subprocess.run(
+        [str(scripts_copy / "azd-postprovision.sh")],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert not az_log.exists() or az_log.read_text() == ""
+    assert "uv" in result.stderr
+
+
 def test_azd_configure_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path):
     """`az account show` fails with a generic Azure CLI error when signed
     out. Guard it so the hook fails fast with one unambiguous message

@@ -138,6 +138,13 @@ class FakeAz:
     reader_role_inherited: Dict[str, bool] = field(default_factory=_no_inherited_reader)
     baseline_orders_succeed: bool = True
     baseline_documents_succeed: bool = True
+    # Whether `app/.venv/bin/python` exists at all, and whether Pillow is
+    # importable from it -- the two facts `scripts/setup-venv.sh` (run from
+    # `postprovision`) is responsible for making true, and doctor's "Python
+    # environment" check reports on. Both default to a fully set-up venv so
+    # only the tests exercising this check need to touch either field.
+    venv_present: bool = True
+    pillow_importable: bool = True
     # None means "use the module default AZD_VALUES"; a test passes {} (or
     # a partial dict) to exercise the missing/partial-configuration paths.
     azd_values: "Dict[str, str] | None" = None
@@ -280,7 +287,7 @@ printf '%s' "{fake_az.healthz_status}"
 """
 
 
-def _python3_stub_source(fake_az: FakeAz, log_path: Path) -> str:
+def _python3_stub_source(fake_az: FakeAz, log_path: Path, is_venv_python: bool = False) -> str:
     """Fake `python3`/`.venv/bin/python` for `loadgen.py`: writes a minimal,
     valid summary and exits with loadgen's real contract (0 success, 2 a
     request mismatch), keyed by the target URL so orders/documents can be
@@ -288,12 +295,25 @@ def _python3_stub_source(fake_az: FakeAz, log_path: Path) -> str:
 
     Every other script -- notably `lab_state.py` and `score.py`, whose
     behaviour these tests are checking -- runs under the real interpreter,
-    so a lab script that records or reads state is exercised, not faked."""
+    so a lab script that records or reads state is exercised, not faked.
+
+    When `is_venv_python` is set, this stub also answers the
+    `-c "import PIL"` probe that `scripts/setup-venv.sh` and doctor's
+    "Python environment" check use to decide whether Pillow is importable
+    from `app/.venv`, per `fake_az.pillow_importable` -- loadgen never sends
+    that probe, so it cannot collide with the loadgen branch below."""
     orders_ok = 1 if fake_az.baseline_orders_succeed else 0
     documents_ok = 1 if fake_az.baseline_documents_succeed else 0
+    pil_probe = ""
+    if is_venv_python:
+        pil_exit = 0 if fake_az.pillow_importable else 1
+        pil_probe = f"""if [[ "${{1:-}}" == "-c" && "${{2:-}}" == *PIL* ]]; then
+  exit {pil_exit}
+fi
+"""
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
-case "${{1:-}}" in
+{pil_probe}case "${{1:-}}" in
   *loadgen.py) ;;
   *) exec "{REAL_PYTHON}" "$@" ;;
 esac
@@ -449,9 +469,20 @@ def _materialize(fake_az: FakeAz) -> LabRun:
     write_executable(bin_dir / "curl", _curl_stub_source(fake_az))
     write_executable(bin_dir / "python3", _python3_stub_source(fake_az, python_log))
 
-    venv_bin = lab / "app" / ".venv" / "bin"
-    venv_bin.mkdir(parents=True, exist_ok=True)
-    write_executable(venv_bin / "python", _python3_stub_source(fake_az, python_log))
+    # `app/.venv` is always removed and recreated (rather than only
+    # `mkdir -p`'d once) so a test that flips `venv_present`/
+    # `pillow_importable` between two `run_doctor` calls on the same
+    # `fake_az` -- exactly like every other mutable field here -- is
+    # honoured on the second call too.
+    venv_dir = lab / "app" / ".venv"
+    shutil.rmtree(venv_dir, ignore_errors=True)
+    if fake_az.venv_present:
+        venv_bin = venv_dir / "bin"
+        venv_bin.mkdir(parents=True, exist_ok=True)
+        write_executable(
+            venv_bin / "python",
+            _python3_stub_source(fake_az, python_log, is_venv_python=True),
+        )
 
     workdir = tmp_path / "elsewhere"
     workdir.mkdir(exist_ok=True)

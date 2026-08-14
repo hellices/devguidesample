@@ -331,6 +331,37 @@ def test_capture_scenario_without_a_recorded_run_names_the_command_to_run(tmp_pa
     assert "lab.sh run s1" in result.stderr
 
 
+def test_capture_scenario_fails_actionably_when_venv_is_missing(tmp_path):
+    """Finding #1: cloud resources (the alert rules, the app, etc.) may
+    already be deployed by the time this local-only precondition fails, so
+    the message must name the exact rerun command, not just what's wrong."""
+    lab_run = make_lab(tmp_path, venv_present=False)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert "Missing Python environment" in result.stderr
+    assert "setup-venv.sh" in result.stderr
+
+
+def test_capture_scenario_fails_actionably_when_pillow_is_not_importable(tmp_path):
+    lab_run = make_lab(tmp_path, pillow_importable=False)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert "Pillow" in result.stderr
+    assert "setup-venv.sh" in result.stderr
+
+
 def test_capture_scenario_renders_from_another_directory(tmp_path):
     lab_run = make_lab(tmp_path)
     lab_run.write_agent_setup()

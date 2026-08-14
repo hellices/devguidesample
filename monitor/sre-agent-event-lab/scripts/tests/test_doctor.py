@@ -77,6 +77,7 @@ def test_doctor_passes_fully_healthy_environment(fake_az):
     assert result.returncode == 0, result.stdout + result.stderr
     rows = _rows_of(result)
     assert rows["Required commands"] == "PASS"
+    assert rows["Python environment"] == "PASS"
     assert rows["Log Analytics CLI extension"] == "PASS"
     assert rows["Azure CLI login"] == "PASS"
     assert rows["azd authentication"] == "PASS"
@@ -120,6 +121,45 @@ def test_doctor_fails_when_healthz_does_not_return_200(fake_az):
     assert result.returncode == 1
     assert "Health endpoint\tFAIL" in result.stdout
     assert "503" in result.stdout
+
+
+def test_doctor_fails_when_venv_is_missing(fake_az):
+    """Finding #1: doctor must report on the venv `setup-venv.sh` (run from
+    `postprovision`) is responsible for creating, with a remedy pointing at
+    that exact script -- not just a generic "python3 missing" message,
+    since `python3` itself is still on PATH."""
+    fake_az.venv_present = False
+
+    result = run_doctor(fake_az)
+
+    assert result.returncode == 1
+    assert "Python environment\tFAIL" in result.stdout
+    assert "setup-venv.sh" in _detail_of(result, "Python environment")
+
+
+def test_doctor_fails_when_pillow_is_not_importable_from_the_venv(fake_az):
+    """A venv that exists but never finished installing (or was created by
+    something other than `setup-venv.sh`) must fail this check too, not
+    just an absent venv directory."""
+    fake_az.pillow_importable = False
+
+    result = run_doctor(fake_az)
+
+    assert result.returncode == 1
+    assert "Python environment\tFAIL" in result.stdout
+    assert "setup-venv.sh" in _detail_of(result, "Python environment")
+
+
+def test_doctor_passes_venv_check_independently_of_azure_reachability(fake_az):
+    """The venv/Pillow readiness check is a local precondition, not an
+    Azure fact: it must still report accurately (and PASS when the venv is
+    fine) even when every Azure-dependent check is blocked."""
+    fake_az.logged_in = False
+
+    result = run_doctor(fake_az)
+
+    assert "Python environment\tPASS" in result.stdout
+    assert "Azure CLI login\tFAIL" in result.stdout
 
 
 def test_doctor_fails_when_app_insights_has_no_recent_requests(fake_az):

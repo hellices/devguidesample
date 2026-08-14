@@ -244,6 +244,8 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 제품의 표준 Azure Monitor 경로는 incident platform과 response plan을 통해 Agent로 직접 전달된다. 이번 실증에서는 response plan 공개 API 자동 구성 제약 때문에 Action Group → Logic App managed identity → SRE Agent HTTP Trigger라는 lab-specific bridge를 사용했다. 이 bridge는 세 시나리오에서 자동 thread를 만들었지만 표준 Azure Monitor 도입의 필수 구성은 아니다.
 
+레거시 기록(현재 기본 실습에는 적용되지 않음, bridge를 다시 구성해야 할 때만 참고): 2026-08-12 실측에서 HTTP Trigger endpoint는 `https://management.azure.com/` audience token을 HTTP 401로 거부하고 `https://azuresre.dev` audience token을 수락했다. 당시 Logic App HTTP action의 managed identity audience를 `https://azuresre.dev`로 설정해서만 이 bridge가 동작했다.
+
 ### RCA 정확도
 
 - S1은 revision env, 120개 request trace, Activity Log를 결합해 injected HTTP 500을 정확히 진단했다.

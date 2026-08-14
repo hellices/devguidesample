@@ -44,6 +44,21 @@ else
   report "Required commands" FAIL "Install missing commands: ${MISSING_COMMANDS[*]}."
 fi
 
+# Python environment (app/.venv + Pillow) -------------------------------------
+# The documented azd-first flow prepares `app/.venv` from the `postprovision`
+# hook (`scripts/setup-venv.sh`), before any scenario is captured. This check
+# reports whether that step actually finished -- Pillow importable, not just
+# a venv directory present -- so a partially-run or pre-uv-created venv is
+# caught here rather than surfacing later as `capture-scenario.sh`'s "Missing
+# Python environment" failure. This is a local precondition, independent of
+# Azure reachability, so it neither reads AZURE_SAFE nor sets it.
+VENV_PYTHON="${SCRIPT_DIR}/../app/.venv/bin/python"
+if [[ -x "${VENV_PYTHON}" ]] && "${VENV_PYTHON}" -c "import PIL" >/dev/null 2>&1; then
+  report "Python environment" PASS "app/.venv is ready (Pillow importable) for capture-scenario.sh."
+else
+  report "Python environment" FAIL "app/.venv is missing or incomplete (Pillow not importable). Run: ./scripts/setup-venv.sh"
+fi
+
 # Log Analytics CLI extension ------------------------------------------------
 # `az monitor log-analytics query` -- the only read behind the telemetry
 # check and behind `baseline.sh`/`query-evidence.sh` -- ships in an extension

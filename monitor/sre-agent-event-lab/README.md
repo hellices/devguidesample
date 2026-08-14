@@ -10,7 +10,7 @@ Azure Container Apps에 장애를 세 번 주입하고, Azure Monitor 경고를 
 |---|---|
 | 시나리오별 Agent 조사 타임라인(PNG/GIF/Markdown) | `assets/captures/s1`, `s2`, `s3` |
 | 원본 API 근거와 실행 상태 | `evidence/`(Git 제외) |
-| 10점 만점 채점 결과 | `evidence/scorecard.json` |
+| 시나리오별 10점, 종합 30점 만점 채점 결과 | `evidence/scorecard.json` |
 
 ## 비용과 안전 경계
 
@@ -41,16 +41,20 @@ Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Ag
 - Azure SRE Agent를 만들 수 있는 [지원 지역](https://learn.microsoft.com/azure/sre-agent/supported-regions) 접근 권한
 - 브라우저에서 `https://sre.azure.com` 및 `*.azuresre.ai` 접근
 - Agent에 연결할 GitHub 저장소 권한
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — `app/.venv`를 만드는 `scripts/setup-venv.sh`가 이 도구만 사용하며, 사내 프록시로 구성된 `uv`의 인덱스 설정을 그대로 씁니다. 공개 PyPI로 우회하는 `pip` 폴백은 없습니다.
+
+이 실습의 모든 명령은 아래에서 한 번만 진입하는 이 디렉터리를 기준으로 합니다.
+
+```bash
+cd monitor/sre-agent-event-lab
+```
 
 로컬 검증만 먼저 해 보려면 다음을 실행합니다.
 
 ```bash
-cd monitor/sre-agent-event-lab/app
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q
+./scripts/setup-venv.sh
+app/.venv/bin/python -m pytest app -q
 
-cd ..
 bash -n scripts/*.sh
 az bicep build --file infra/main.bicep --stdout >/dev/null
 ```
@@ -58,7 +62,6 @@ az bicep build --file infra/main.bicep --stdout >/dev/null
 ## azd 환경 만들기
 
 ```bash
-cd monitor/sre-agent-event-lab
 azd env new sre-event-lab --location koreacentral
 ```
 
@@ -74,6 +77,8 @@ azd up 2>&1 | tee evidence/deploy.log
 ```
 
 Bicep provision → ACR 클라우드 빌드 → Container App 이미지 교체 순서로 진행되며 로컬 Docker는 필요 없습니다. 처음에는 공개 placeholder 이미지가 80 포트로 뜨고, postprovision hook이 ingress를 8000으로 옮긴 뒤 실습 이미지로 교체합니다.
+
+같은 postprovision hook이 `scripts/setup-venv.sh`로 `app/.venv`도 함께 준비합니다(`uv venv` + `uv pip install -r requirements-dev.txt`). 이 단계가 실패해도 클라우드 리소스는 이미 만들어진 뒤이므로 다시 `azd provision`부터 할 필요는 없습니다: 안내된 명령(`azd hooks run postprovision` 또는 `./scripts/setup-venv.sh`)만 다시 실행하면 됩니다.
 
 성공 조건은 provision 성공, 활성 revision `Healthy`, `/healthz` HTTP 200 세 가지입니다.
 
@@ -91,7 +96,7 @@ Bicep provision → ACR 클라우드 빌드 → Container App 이미지 교체 �
 ./scripts/lab.sh acknowledge agent-setup
 ```
 
-`doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 한 줄씩 출력하고 `FAIL`이 하나라도 있으면 종료 코드 1을 반환합니다. 저장소 연결, 지식 원본, incident platform, 응답 계획은 공식 안정 API로 읽을 수 없어 항상 `MANUAL`입니다.
+`doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 한 줄씩 출력하고 `FAIL`이 하나라도 있으면 종료 코드 1을 반환합니다. 저장소 연결, 지식 원본, incident platform, 응답 계획은 공식 안정 API로 읽을 수 없어 항상 `MANUAL`입니다. `Python environment` 행은 `app/.venv`와 Pillow가 캡처(`capture-scenario.sh`)에 쓸 준비가 됐는지 확인하며, `FAIL`이면 `./scripts/setup-venv.sh`를 다시 실행하라고 안내합니다.
 
 `baseline`은 정상 부하를 넣고 Application Insights에 두 요청 종류가 모두 보일 때까지 최대 10분 기다립니다. `acknowledge agent-setup`은 대화형이며, 설정 값을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 입력해야 기록됩니다.
 
