@@ -1,6 +1,6 @@
 # Azure Deployment Plan
 
-> **Status:** Ready for Validation
+> **Status:** Validated
 
 Updated: 2026-08-14 (alert query schema fix; PT1M restored)
 
@@ -292,12 +292,11 @@ Container Apps, ACR, Log Analytics/Application Insights, Storage, and Azure SRE 
 
 ## Section 7: Validation Proof
 
-Re-run after the two-phase refactor (the previous run predates it, so the
-earlier "Validated" status no longer applies):
+Re-run after the two-phase ACR gate and workspace-schema alert corrections:
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 468 passed (11 RED first for the workspace-schema alert fix) |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 472 passed (11 RED first for the workspace-schema alert fix) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
 | Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts}.bicep --stdout` | Passed (five templates; `alerts.bicep` emits `evaluationFrequency: PT1M`, `windowSize: PT5M`, workspace scope and `targetResourceTypes: Microsoft.OperationalInsights/workspaces`) |
@@ -308,13 +307,18 @@ earlier "Validated" status no longer applies):
 | Alert template preflight | `az deployment group validate --template-file infra/alerts.bicep ...` against the live lab resource group | `provisioningState: Succeeded`, `error: null`, three `scheduledQueryRules` validated (see the proof note above for what preflight does and does not cover) |
 | Alert queries | `az monitor log-analytics query` for the three rule queries against the live workspace | All three resolve (`Failures=0`, `P95DurationMs=None`, `DependencyFailures=0` with no traffic yet); legacy `requests` fails with `SEM0100` |
 
-Pending live validation (no resources were deployed by this change):
+## Live Deployment Proof
 
-| Check | Command | Status |
-|---|---|---|
-| Environment | `azd env new <unique> --location koreacentral` | To re-create for the live run |
-| Provision preview | `azd provision --preview --no-prompt` | To re-run |
-| Provision phase | `azd provision --no-prompt` leaves the placeholder image serving and `app/.venv` ready | Failed live for the three `scheduledQueryRules` alert rules (`QueryNotContainKnownTable`) while they queried the legacy Application Insights schema on the component scope; to re-verify live now that they query the workspace schema on the workspace scope at PT1M |
-| Deploy phase | `azd deploy --no-prompt` waits for `AcrPull`, builds in ACR, switches the image, `/healthz` returns 200 | To verify live |
-| Policy assignments | `az policy assignment list --scope <subscription> --disable-scope-strict-match` | Unchanged from the previous run; re-check at validation time |
-| Static RBAC | reviewed all `Microsoft.Authorization/roleAssignments` in `workload.bicep` | Unchanged: least-privilege AcrPull and container-scoped Blob Data Reader |
+Validation environment: `sre-lab-08141227`
+
+| Check | Result |
+|---|---|
+| Alert correction | Workspace-scoped `AppRequests`/`AppDependencies` replaced the rejected legacy component queries; all three PT1M rules deployed and enabled |
+| Two-phase deployment | `azd provision` completed with the public placeholder, live `AcrPull` was confirmed, then `azd deploy` built in ACR and switched the app |
+| Main user command | `azd up --no-prompt` completed end to end in 4 minutes 39 seconds |
+| Health | `/healthz` returned HTTP 200 and the active revision was Healthy |
+| Doctor | Workload, telemetry, alert rules, login, tags, and the local Python environment passed; Agent settings remained explicit FAIL/MANUAL because the user will configure them later |
+| Baseline | `/api/orders` and `/api/documents` baseline plus Log Analytics telemetry verification passed |
+| Safety gate | `lab.sh run s1` was rejected before `acknowledge agent-setup`; `FAILURE_MODE` remained `none` |
+| Cleanup | `azd down --purge --force --no-prompt` completed in 21 minutes 40 seconds |
+| Cleanup proof | Resource group absent; `SRE_CONTAINER_IMAGE` and `SRE_IMAGE_TAG` cleared; no external Agent setup record or role assignment existed |
