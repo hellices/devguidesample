@@ -14,6 +14,12 @@ param containerImage string
 @description('Whether to deploy the Container App and alert rules.')
 param deployContainerApp bool = false
 
+@description('Port the deployed container image listens on.')
+param containerTargetPort int = 8000
+
+@description('Whether to attach /healthz probes to the Container App.')
+param enableHealthProbes bool = true
+
 @description('Optional Azure Monitor Action Group resource ID for event-driven SRE invocation.')
 param actionGroupResourceId string = ''
 
@@ -36,6 +42,8 @@ module workload 'workload.bicep' = {
     suffix: suffix
     containerImage: containerImage
     deployContainerApp: deployContainerApp
+    containerTargetPort: containerTargetPort
+    enableHealthProbes: enableHealthProbes
     workspaceCustomerId: observability.outputs.workspaceCustomerId
     workspaceSharedKey: observability.outputs.workspaceSharedKey
     appInsightsConnectionString: observability.outputs.appInsightsConnectionString

@@ -8,13 +8,26 @@ for command_name in az azd jq curl python3; do
   }
 done
 
-az account show --output none
+: "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID must be set by azd before running this hook}"
+
+# The Azure CLI's active account is whatever the operator selected last, which
+# is not necessarily the subscription azd provisions into. Report the mismatch
+# and pin every operation below to the azd subscription explicitly.
+ACTIVE_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+readonly ACTIVE_SUBSCRIPTION_ID
+if [[ "${ACTIVE_SUBSCRIPTION_ID}" != "${AZURE_SUBSCRIPTION_ID}" ]]; then
+  echo "Azure CLI is signed in to ${ACTIVE_SUBSCRIPTION_ID}." >&2
+  echo "Every lab operation is pinned to ${AZURE_SUBSCRIPTION_ID} instead." >&2
+fi
+
+az account show --subscription "${AZURE_SUBSCRIPTION_ID}" --output none
 azd auth login --check-status
 
 for provider in Microsoft.App Microsoft.OperationalInsights Microsoft.Insights \
   Microsoft.Storage Microsoft.ContainerRegistry Microsoft.ManagedIdentity \
   Microsoft.Network; do
-  az provider register --namespace "${provider}" --wait
+  az provider register --namespace "${provider}" --wait \
+    --subscription "${AZURE_SUBSCRIPTION_ID}"
 done
 
 if [[ -z "$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null || true)" ]]; then

@@ -1,0 +1,2 @@
+# azd stores per-developer environment state (including subscription IDs) here.
+.azure/

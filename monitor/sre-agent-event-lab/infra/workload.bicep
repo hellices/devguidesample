@@ -10,6 +10,12 @@ param containerImage string
 @description('Whether to deploy the Container App.')
 param deployContainerApp bool
 
+@description('Port the deployed container image listens on. The public placeholder image serves port 80; the lab image serves 8000.')
+param containerTargetPort int = 8000
+
+@description('Whether to attach /healthz liveness and readiness probes. Disabled while the placeholder image runs, because it serves no /healthz.')
+param enableHealthProbes bool = true
+
 @description('Log Analytics workspace customer ID.')
 param workspaceCustomerId string
 
@@ -255,7 +261,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = if (deployConta
       ingress: {
         allowInsecure: false
         external: true
-        targetPort: 8000
+        targetPort: containerTargetPort
         traffic: [
           {
             latestRevision: true
@@ -309,12 +315,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = if (deployConta
               value: telemetryServiceName
             }
           ]
-          probes: [
+          probes: enableHealthProbes ? [
             {
               type: 'Liveness'
               httpGet: {
                 path: '/healthz'
-                port: 8000
+                port: containerTargetPort
                 scheme: 'HTTP'
               }
               initialDelaySeconds: 10
@@ -324,13 +330,13 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = if (deployConta
               type: 'Readiness'
               httpGet: {
                 path: '/healthz'
-                port: 8000
+                port: containerTargetPort
                 scheme: 'HTTP'
               }
               initialDelaySeconds: 5
               periodSeconds: 5
             }
-          ]
+          ] : []
           resources: {
             cpu: json('0.5')
             memory: '1Gi'

@@ -56,26 +56,22 @@ az bicep build --file monitor/sre-agent-event-lab/infra/main.bicep --stdout >/de
 
 ## Azure 배포
 
-필수 provider를 등록한다.
+배포는 `azd`가 담당한다. `azure.yaml`의 preprovision hook이 필수 provider를 등록하므로 별도 등록 명령은 필요 없다.
 
 ```bash
-az account set --subscription 95933ae5-0201-4a21-a1fc-8051a7437982
-for provider in Microsoft.App Microsoft.OperationalInsights Microsoft.Insights \
-  Microsoft.Storage Microsoft.ContainerRegistry Microsoft.ManagedIdentity; do
-  az provider register --namespace "$provider" --wait
-done
+cd monitor/sre-agent-event-lab
+azd env new sre-event-lab \
+  --subscription 95933ae5-0201-4a21-a1fc-8051a7437982 \
+  --location koreacentral
+mkdir -p evidence
+azd up 2>&1 | tee evidence/deploy.log
 ```
 
-배포는 base infrastructure → ACR cloud build → Container App/alert 순서로 진행된다. 로컬 Docker는 필요하지 않다.
-
-```bash
-monitor/sre-agent-event-lab/scripts/deploy.sh \
-  2>&1 | tee monitor/sre-agent-event-lab/evidence/deploy.log
-```
+`azd up`은 Bicep provision → ACR cloud build → Container App image 전환 순서로 진행된다. 로컬 Docker는 필요하지 않다. 초기 provision은 public placeholder image를 port 80으로 띄우고, postprovision hook이 ingress를 8000으로 옮긴 뒤 lab image로 교체한다. `scripts/deploy.sh`는 위 `azd up`을 호출하는 호환 wrapper로 남아 있다.
 
 성공 조건:
 
-1. 두 Bicep deployment가 성공한다.
+1. Bicep provision이 성공한다.
 2. ACR에 `sre-event-lab:run-20260812T094446Z` 형식의 실행별 immutable image tag가 존재한다.
 3. active Container App revision이 `Healthy`다.
 4. `/healthz`가 HTTP 200을 반환한다.
@@ -161,9 +157,7 @@ monitor/sre-agent-event-lab/app/.venv/bin/python \
 배포 output에서 FQDN을 확인하고 정상 요청을 만든다.
 
 ```bash
-FQDN=$(az deployment sub show \
-  -n sre-agent-event-lab-private \
-  --query properties.outputs.containerAppFqdn.value -o tsv)
+FQDN=$(azd env get-value AZURE_CONTAINER_APP_FQDN --cwd monitor/sre-agent-event-lab)
 
 python3 monitor/sre-agent-event-lab/scripts/loadgen.py \
   "https://${FQDN}/api/orders" \
@@ -328,7 +322,14 @@ Dynamic rule은 3일·30 samples 전에는 발화하지 않으며 3주 전에는
 
 ## 정리
 
-첫 명령은 dry-run이며 두 번째 명령만 삭제를 시작한다.
+`azd`로 배포한 환경은 `azd down`으로 정리한다. predown hook(`scripts/cleanup-external.sh`)이 resource group 밖에 기록된 구독 범위 Monitoring Contributor assignment만 먼저 제거하고, resource group 삭제는 `azd`가 수행한다.
+
+```bash
+cd monitor/sre-agent-event-lab
+azd down --purge
+```
+
+`scripts/cleanup.sh`는 azd 이전 방식으로 만든 `rg-sre-agent-event-lab-krc`를 정리하는 기존 스크립트다. 첫 명령은 dry-run이며 두 번째 명령만 삭제를 시작한다.
 
 ```bash
 monitor/sre-agent-event-lab/scripts/cleanup.sh

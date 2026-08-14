@@ -55,17 +55,51 @@ def test_verify_subscription_reports_only_subscription_id_on_mismatch():
     assert "95933ae5-0201-4a21-a1fc-8051a7437982" in result.stderr
 
 
-def test_deploy_uses_subscription_wrapper():
+def test_deploy_delegates_to_azd_up():
+    """The subscription-scope templates deploy.sh used to deploy were removed
+    when the lab moved to azd, so deploy.sh must not reference them any more.
+    It stays as a thin compatibility wrapper so the documented command keeps
+    working.
+    """
     script = DEPLOY_SH.read_text()
 
-    assert 'TEMPLATE_FILE="${LAB_ROOT}/infra/subscription.bicep"' in script
-    assert 'PARAMETER_FILE="${LAB_ROOT}/infra/subscription.bicepparam"' in script
-    assert "az deployment sub validate" in script
-    assert "az deployment sub create" in script
+    assert "azd up" in script
+    assert "subscription" + ".bicep" not in script
+    assert "az deployment sub validate" not in script
+    assert "az deployment sub create" not in script
     assert "az deployment group" not in script
     assert 'IMAGE_TAG="20260812.4"' not in script
-    assert "SRE_IMAGE_TAG" in script
-    assert "date -u +%Y%m%dT%H%M%SZ" in script
+
+
+def test_no_tracked_lab_file_references_the_deleted_subscription_templates():
+    lab_root = Path(__file__).parents[2]
+    tracked = subprocess.run(
+        ["git", "ls-files"],
+        cwd=lab_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    needle = "subscription" + ".bicep"
+    readable = {".sh", ".py", ".md", ".json", ".yaml", ".yml", ".bicep", ".bicepparam"}
+
+    offenders = []
+    for relative_path in tracked:
+        path = lab_root / relative_path
+        if path.suffix not in readable or not path.is_file():
+            continue
+        if needle in path.read_text(encoding="utf-8", errors="ignore"):
+            offenders.append(relative_path)
+
+    assert offenders == [], f"tracked files still reference deleted templates: {offenders}"
+
+
+def test_readme_documents_a_working_deployment_command():
+    readme = (Path(__file__).parents[2] / "README.md").read_text()
+
+    assert "azd up" in readme
+    assert "az deployment sub show" not in readme
+    assert "azd env get-value AZURE_CONTAINER_APP_FQDN" in readme
 
 
 def test_scenario_waits_for_new_revision_before_load():

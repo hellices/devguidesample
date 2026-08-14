@@ -9,8 +9,8 @@ param location string
 @description('Dedicated resource group for the disposable SRE lab. Defaults to rg-<environmentName> when not set.')
 param resourceGroupName string = 'rg-${environmentName}'
 
-@description('Container image deployed by the initial azd provision. postprovision replaces this with the ACR-built immutable image.')
-param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+@description('Container image deployed by azd. Leave empty for the first provision: the public placeholder image is used until the postprovision hook builds the lab image and records it in SRE_CONTAINER_IMAGE.')
+param containerImage string = ''
 
 @description('Optional Azure Monitor Action Group resource ID for event-driven SRE invocation.')
 param actionGroupResourceId string = ''
@@ -24,6 +24,21 @@ param expiresOn string = ''
 // Truncated to 8 characters to satisfy lab.bicep's @minLength(6)/@maxLength(12) suffix constraint.
 var suffix = substring(uniqueString(subscription().id, environmentName), 0, 8)
 
+// The public placeholder serves port 80 and has no /healthz, so the first
+// provision must expose port 80 without probes. Once postprovision records
+// the ACR-built image in SRE_CONTAINER_IMAGE, every later provision deploys
+// that image on port 8000 with matching /healthz probes instead of reverting
+// to the placeholder.
+var placeholderContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+var effectiveContainerImage = empty(containerImage) ? placeholderContainerImage : containerImage
+var usesPlaceholderImage = effectiveContainerImage == placeholderContainerImage
+
+// azd substitutes an unset ${AZURE_RESOURCE_GROUP} with an empty string and
+// passes it through, because this parameter's default is a non-empty
+// expression. Fall back here so provisioning never asks for a resource group
+// with an empty name.
+var effectiveResourceGroupName = empty(resourceGroupName) ? 'rg-${environmentName}' : resourceGroupName
+
 var requiredTags = union(tags, {
   purpose: 'sre-agent-event-lab'
   'azd-env-name': environmentName
@@ -32,7 +47,7 @@ var requiredTags = union(tags, {
 })
 
 resource labResourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: resourceGroupName
+  name: effectiveResourceGroupName
   location: location
   tags: requiredTags
 }
@@ -43,8 +58,10 @@ module lab 'lab.bicep' = {
   params: {
     location: location
     suffix: suffix
-    containerImage: containerImage
+    containerImage: effectiveContainerImage
     deployContainerApp: true
+    containerTargetPort: usesPlaceholderImage ? 80 : 8000
+    enableHealthProbes: !usesPlaceholderImage
     actionGroupResourceId: actionGroupResourceId
     tags: requiredTags
   }
@@ -59,3 +76,19 @@ output AZURE_APP_INSIGHTS_NAME string = lab.outputs.appInsightsName
 output AZURE_STORAGE_CONTAINER_SCOPE string = lab.outputs.storageContainerScope
 output AZURE_BLOB_ROLE_ASSIGNMENT_NAME string = lab.outputs.blobRoleAssignmentName
 output AZURE_TELEMETRY_SERVICE_NAME string = lab.outputs.telemetryServiceName
+
+// Deployment outputs the lab scripts (common.sh `deployment_output`,
+// run-scenario.sh, query-evidence.sh) still read by their original names.
+output acrName string = lab.outputs.acrName
+output acrLoginServer string = lab.outputs.acrLoginServer
+output containerAppName string = lab.outputs.containerAppName
+output containerAppFqdn string = lab.outputs.containerAppFqdn
+output containerAppPrincipalId string = lab.outputs.containerAppPrincipalId
+output storageContainerScope string = lab.outputs.storageContainerScope
+output blobRoleAssignmentName string = lab.outputs.blobRoleAssignmentName
+output workspaceId string = lab.outputs.workspaceId
+output workspaceCustomerId string = lab.outputs.workspaceCustomerId
+output appInsightsName string = lab.outputs.appInsightsName
+output appInsightsResourceId string = lab.outputs.appInsightsResourceId
+output alertRuleNames array = lab.outputs.alertRuleNames
+output telemetryServiceName string = lab.outputs.telemetryServiceName
