@@ -199,32 +199,45 @@ def test_readme_warns_about_cost_and_teardown_before_the_first_azure_command():
         assert driver in text, driver
 
 
-def test_readme_states_five_minute_alert_evaluation_not_one_minute():
-    """scheduledQueryRules@2023-12-01 rejects a one-minute evaluation
-    frequency for these requests/dependencies queries
-    (QueryNotContainKnownTable), so infra/alerts.bicep evaluates every
-    five minutes. The cost callout naming the log search alert rules
-    must state that same cadence.
+def test_readme_states_one_minute_alert_evaluation():
+    """The `QueryNotContainKnownTable` failure came from the legacy
+    Application Insights `requests`/`dependencies` schema on the component
+    scope, not from the one-minute cadence: `az deployment group validate`
+    accepts `evaluationFrequency: PT1M` for the workspace-scoped
+    `AppRequests`/`AppDependencies` rules. The cost callout must state the
+    one-minute cadence `infra/alerts.bicep` actually deploys.
     """
     text = README.read_text()
 
-    assert "5분 주기 로그 검색 경고 규칙 3개" in text
-    assert "1분 주기 로그 검색 경고 규칙" not in text
+    assert "1분 주기 로그 검색 경고 규칙 3개" in text
+    assert "5분 주기 로그 검색 경고 규칙" not in text
 
 
-def test_dynamic_thresholds_guide_states_five_minute_static_evaluation():
-    """The Static Threshold section of dynamic-thresholds.md describes
-    the deployed infra/alerts.bicep rules, which now evaluate every
-    five minutes (scheduledQueryRules@2023-12-01 rejects a one-minute
-    frequency for these queries). Only the unrelated fact that Log
-    Search dynamic thresholds themselves do not support one-minute
-    evaluation may still mention one minute.
+def test_dynamic_thresholds_guide_states_one_minute_static_evaluation():
+    """The Static Threshold section of dynamic-thresholds.md describes the
+    deployed infra/alerts.bicep rules, which evaluate every minute over a
+    five-minute window. The separate, still-true statement that Log Search
+    *dynamic* thresholds do not support one-minute evaluation stays.
     """
     text = DYNAMIC_THRESHOLDS.read_text()
 
-    assert "- evaluation: 5분" in text
-    assert "- evaluation: 1분" not in text
+    assert "- evaluation: 1분" in text
+    assert "- evaluation: 5분" not in text
     assert "Log Search dynamic threshold는 1분 evaluation을 지원하지 않는다." in text
+
+
+def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
+    """The recorded S1/S2/S3 run used a one-minute static threshold. That
+    result stays plausible because the later live failure was the legacy
+    Application Insights schema on the component scope, not the cadence, and
+    the report must say so instead of leaving readers to assume the run used
+    an unsupported configuration.
+    """
+    text = VALIDATION_RESULTS.read_text()
+
+    assert "1분 evaluation의 static threshold" in text
+    assert "QueryNotContainKnownTable" in text
+    assert "AppRequests" in text
 
 
 def test_readme_is_a_quickstart_not_the_full_walkthrough():

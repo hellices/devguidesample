@@ -2,7 +2,7 @@
 
 > **Status:** Ready for Validation
 
-Updated: 2026-08-14 (alert evaluation frequency fix)
+Updated: 2026-08-14 (alert query schema fix; PT1M restored)
 
 ## Goal
 
@@ -139,9 +139,9 @@ a `/healthz` failure is reported as a real regression as before. Stale
 `postprovision` (moved to the `postdeploy` hook in the two-phase refactor
 above) were also corrected.
 
-### Live deployment failure: alert evaluation frequency (2026-08-14)
+### Live deployment failure: alert query schema, not cadence (2026-08-14)
 
-A live `azd provision` attempt failed ARM validation for all three
+A live `azd provision` attempt failed for all three
 `Microsoft.Insights/scheduledQueryRules@2023-12-01` alert rules
 (`alert-sre-lab-s1-http500`, `-s2-latency`, `-s3-storage-rbac`) with:
 
@@ -150,26 +150,90 @@ QueryNotContainKnownTable: One-minute frequency is not supported for
 this query. Either switch to five-minute frequency or adapt the query.
 ```
 
-Root cause: `infra/alerts.bicep` set `evaluationFrequency: 'PT1M'` for
-all three rules while their `requests`/`dependencies` Application
-Insights queries only support a five-minute (or coarser) evaluation
-cadence -- the one-minute cadence was never deployable, only ever
-validated by `az bicep build`, which does not call ARM and cannot catch
-this. Fixed with strict TDD: added
-`test_evaluation_frequency_is_five_minutes_not_one_minute` to
-`infra/tests/test_alerts_bicep.py` (RED against the unmodified
-template), then changed `evaluationFrequency` to `'PT5M'` for all three
-rules (GREEN). `windowSize` stays `'PT5M'` and per-rule thresholds are
-unchanged, since nothing about the failure implicated them. Two
-user-facing docs asserted the now-incorrect one-minute cadence and were
-corrected under the same RED/GREEN discipline (new tests in
-`scripts/tests/test_lab_guides.py`): `README.md`'s cost callout ("1분
-주기 로그 검색 경고 규칙 3개" → "5분 주기 로그 검색 경고 규칙 3개") and
-`dynamic-thresholds.md`'s Static Threshold section ("evaluation: 1분" →
-"evaluation: 5분"); the unrelated, still-true statement that Log Search
-*dynamic* thresholds do not support one-minute evaluation was left
-as-is. No Azure resources were deployed or deleted while diagnosing or
-fixing this.
+The first fix read that message literally and moved every rule to
+`evaluationFrequency: 'PT5M'`. That was the wrong root cause, and it has
+been reverted.
+
+Real root cause: `infra/alerts.bicep` scoped the rules to the Application
+Insights **component** and queried the legacy resource-centric schema
+(`requests`, `dependencies`, `timestamp`, `cloud_RoleName`, `duration`).
+In a workspace-based Application Insights resource those legacy names are
+not tables -- they are functions over the workspace tables. The official
+one-minute-frequency limitations list ("the query calls a function that
+calls other tables", plus `search`/`union`/`take`, `ingestion_time()` and
+the `adx` pattern) is exactly what `QueryNotContainKnownTable` reports:
+the query contains no *known table*, so the one-minute optimization
+cannot be applied. Source: [Create a log search alert
+rule](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule#configure-alert-rule-conditions)
+(reached from `aka.ms/lsa_1m_limits`, the link the troubleshooting page
+gives for this error).
+
+Final fix (strict TDD, RED first): `infra/alerts.bicep` now takes a
+`workspaceResourceId`, queries the workspace schema known tables
+`AppRequests`/`AppDependencies` with the exact column casing already used
+by `scripts/query-evidence.sh` (`TimeGenerated`, `AppRoleName`, `Name`,
+`ResultCode`, `DurationMs`, `Target`; `percentile(DurationMs, 95)` needs
+no timespan conversion), scopes each rule to the Log Analytics workspace,
+declares `targetResourceTypes: ['Microsoft.OperationalInsights/workspaces']`,
+and restores `evaluationFrequency: 'PT1M'` with `windowSize: 'PT5M'`.
+`lab.bicep` passes `observability.outputs.workspaceId` into the alerts
+module; the `workspaceId` output chain (observability -> lab -> main ->
+`AZURE_WORKSPACE_ID`) is unchanged, and `appInsightsResourceId` is still
+exported for the scripts that read it. Per-rule thresholds and the
+default fire/resolve timeouts (`LAB_ALERT_FIRE_TIMEOUT_SECONDS=720`,
+`LAB_ALERT_RESOLVE_TIMEOUT_SECONDS=900`) are unchanged: the one-minute
+cadence they were sized for is back.
+
+Consequence for the recorded results: the S1/S2/S3 run in
+`monitor/sre-agent-event-lab/validation-results.md` was executed at a
+one-minute cadence and stays plausible, because the failure above was the
+legacy schema on the component scope, not the cadence. Both that report
+and `dynamic-thresholds.md` now carry that annotation, and `README.md`'s
+cost callout is back to "1분 주기 로그 검색 경고 규칙 3개".
+
+#### Live validation proof (2026-08-14, no resources deployed)
+
+Run against the partially provisioned lab resource group (only the
+observability resources exist in it), with placeholders for the real
+subscription ID and resource group:
+
+```
+az deployment group validate \
+  --resource-group <lab-rg> \
+  --name sre-lab-alerts-validate-workspace \
+  --template-file infra/alerts.bicep \
+  --parameters location=koreacentral \
+               workspaceResourceId=/subscriptions/<sub>/resourceGroups/<lab-rg>/providers/Microsoft.OperationalInsights/workspaces/law-sre-event-lab-<suffix> \
+               serviceName=sre-event-lab-<suffix> \
+               tags='{"purpose":"sre-agent-event-lab"}'
+```
+
+Result: `"provisioningState": "Succeeded"`, `"error": null`, and
+`validatedResources` listing exactly the three
+`Microsoft.Insights/scheduledQueryRules` IDs
+(`alert-sre-lab-s1-http500`, `alert-sre-lab-s2-latency`,
+`alert-sre-lab-s3-storage-rbac`) -- i.e. the workspace-scoped,
+`AppRequests`/`AppDependencies`, PT1M/PT5M template is accepted.
+
+Honest limit of that proof, measured on the same resource group: ARM
+preflight does **not** run the scheduled-query-rule query validation. The
+pre-fix template (component scope, `requests`/`dependencies`, PT1M) was
+re-validated on purpose and *also* returned `provisioningState:
+Succeeded`, even though the same template failed the real deployment with
+`QueryNotContainKnownTable`. So `az deployment group validate` proves the
+template shape, parameters and RBAC are deployable, not that the query is
+accepted at PUT time.
+
+The query side was therefore proven directly against the live workspace
+with `az monitor log-analytics query`:
+
+- `AppRequests | where TimeGenerated > ago(5m) | where AppRoleName == "<service>" | where Name has "/api/orders" | where ResultCode == "500" | summarize Failures=count()` returns `Failures = 0` (no traffic yet -- the Container App still runs the placeholder image), so the table and every column name/casing resolve.
+- The S2 (`percentile(DurationMs, 95)`) and S3 (`AppDependencies` ... `Target`, `ResultCode`) queries resolve the same way.
+- The legacy name fails in workspace scope: `requests | take 1` returns `SEM0100: 'take' operator: Failed to resolve table or column expression named 'requests'`, confirming it is not a known table there.
+
+Definitive confirmation still requires the pending live `azd provision`,
+which is why this plan stays **Ready for Validation**. No resources were
+deployed, modified or deleted while diagnosing or fixing this.
 
 ## Security and Safety
 
@@ -227,14 +291,16 @@ earlier "Validated" status no longer applies):
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 463 passed (added 3 for the PT5M alert-frequency fix) |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 468 passed (11 RED first for the workspace-schema alert fix) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
-| Bicep build | `az bicep build --file infra/{main,lab,workload,alerts}.bicep --stdout` | Passed (four templates; `alerts.bicep` now emits `evaluationFrequency: PT5M`) |
+| Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts}.bicep --stdout` | Passed (five templates; `alerts.bicep` emits `evaluationFrequency: PT1M`, `windowSize: PT5M`, workspace scope and `targetResourceTypes: Microsoft.OperationalInsights/workspaces`) |
 | AZD schema | `azure.yaml` validated against `schemas/v1.0/azure.yaml.json` from Azure/azure-dev | Passed; hooks = preprovision, postprovision, postdeploy, predown, postdown; no `services` |
 | AZD package | `azd package --all --no-prompt` | Passed |
 | Zero-service deploy hook | `azd deploy --no-prompt` against a marker-hook copy of this `azure.yaml` | `postdeploy` ran; hook exit 7 failed the command |
 | Authentication | `az account show`; `azd auth login --check-status --output json` | Authenticated |
+| Alert template preflight | `az deployment group validate --template-file infra/alerts.bicep ...` against the live lab resource group | `provisioningState: Succeeded`, `error: null`, three `scheduledQueryRules` validated (see the proof note above for what preflight does and does not cover) |
+| Alert queries | `az monitor log-analytics query` for the three rule queries against the live workspace | All three resolve (`Failures=0`, `P95DurationMs=None`, `DependencyFailures=0` with no traffic yet); legacy `requests` fails with `SEM0100` |
 
 Pending live validation (no resources were deployed by this change):
 
@@ -242,7 +308,7 @@ Pending live validation (no resources were deployed by this change):
 |---|---|---|
 | Environment | `azd env new <unique> --location koreacentral` | To re-create for the live run |
 | Provision preview | `azd provision --preview --no-prompt` | To re-run |
-| Provision phase | `azd provision --no-prompt` leaves the placeholder image serving and `app/.venv` ready | Failed live at ARM validation for the three `scheduledQueryRules` alert rules (`QueryNotContainKnownTable`, PT1M unsupported) before this fix; to re-verify live now that `alerts.bicep` uses PT5M |
+| Provision phase | `azd provision --no-prompt` leaves the placeholder image serving and `app/.venv` ready | Failed live for the three `scheduledQueryRules` alert rules (`QueryNotContainKnownTable`) while they queried the legacy Application Insights schema on the component scope; to re-verify live now that they query the workspace schema on the workspace scope at PT1M |
 | Deploy phase | `azd deploy --no-prompt` waits for `AcrPull`, builds in ACR, switches the image, `/healthz` returns 200 | To verify live |
 | Policy assignments | `az policy assignment list --scope <subscription> --disable-scope-strict-match` | Unchanged from the previous run; re-check at validation time |
 | Static RBAC | reviewed all `Microsoft.Authorization/roleAssignments` in `workload.bicep` | Unchanged: least-privilege AcrPull and container-scoped Blob Data Reader |

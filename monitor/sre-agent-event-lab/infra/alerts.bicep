@@ -1,8 +1,12 @@
 @description('Azure region for scheduled query alert rules.')
 param location string
 
-@description('Resource ID of the workspace-based Application Insights component.')
-param appInsightsResourceId string
+@description('''Resource ID of the Log Analytics workspace backing Application Insights.
+The alert queries read the workspace-schema tables (AppRequests,
+AppDependencies), which are known tables only when the rule is scoped to the
+workspace itself, so the same resource ID is both the query source and the
+rule scope.''')
+param workspaceResourceId string
 
 @description('Optional Action Group that forwards fired alerts to Azure SRE Agent.')
 param actionGroupResourceId string = ''
@@ -21,11 +25,11 @@ var alertDefinitions = [
     measureColumn: 'Failures'
     threshold: 10
     query: format('''
-requests
-| where timestamp > ago(5m)
-| where cloud_RoleName == "{0}"
-| where name has "/api/orders"
-| where resultCode == "500"
+AppRequests
+| where TimeGenerated > ago(5m)
+| where AppRoleName == "{0}"
+| where Name has "/api/orders"
+| where ResultCode == "500"
 | summarize Failures=count()
 ''', serviceName)
   }
@@ -36,11 +40,11 @@ requests
     measureColumn: 'P95DurationMs'
     threshold: 2000
     query: format('''
-requests
-| where timestamp > ago(5m)
-| where cloud_RoleName == "{0}"
-| where name has "/api/orders"
-| summarize P95DurationMs=percentile(duration, 95)
+AppRequests
+| where TimeGenerated > ago(5m)
+| where AppRoleName == "{0}"
+| where Name has "/api/orders"
+| summarize P95DurationMs=percentile(DurationMs, 95)
 ''', serviceName)
   }
   {
@@ -50,11 +54,11 @@ requests
     measureColumn: 'DependencyFailures'
     threshold: 5
     query: format('''
-dependencies
-| where timestamp > ago(5m)
-| where cloud_RoleName == "{0}"
-| where target has "{1}"
-| where resultCode == "403"
+AppDependencies
+| where TimeGenerated > ago(5m)
+| where AppRoleName == "{0}"
+| where Target has "{1}"
+| where ResultCode == "403"
 | summarize DependencyFailures=count()
 ''', serviceName, environment().suffixes.storage)
   }
@@ -92,14 +96,14 @@ resource alertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [
       description: definition.description
       displayName: definition.displayName
       enabled: true
-      evaluationFrequency: 'PT5M'
+      evaluationFrequency: 'PT1M'
       scopes: [
-        appInsightsResourceId
+        workspaceResourceId
       ]
       severity: 2
       skipQueryValidation: false
       targetResourceTypes: [
-        'Microsoft.Insights/components'
+        'Microsoft.OperationalInsights/workspaces'
       ]
       windowSize: 'PT5M'
     }

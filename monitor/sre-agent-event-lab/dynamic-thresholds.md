@@ -13,8 +13,9 @@ Dynamic Thresholds 자체는 이번 결과에 포함된 실증 대상이 아니�
 ### Static Threshold
 
 - 실험 목표: 정해진 장애가 짧은 시간 안에 반드시 alert를 발생시키는지 검증
-- evaluation: 5분
+- evaluation: 1분(window 5분)
 - 조건: 5xx count, p95 > 2000ms, Blob 403 count
+- 전제: rule scope는 Log Analytics workspace이고 query는 workspace schema known table(`AppRequests`, `AppDependencies`)을 사용한다. Application Insights component scope의 legacy `requests`/`dependencies`는 다른 table을 호출하는 function이라 1분 주기에서 `QueryNotContainKnownTable`로 거부된다.
 - 장점: 결정론적이고 당일 재현 가능
 - 한계: workload별 정상 범위와 계절성을 수동으로 관리
 

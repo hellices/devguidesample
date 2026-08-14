@@ -35,6 +35,9 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
+// The alert rules in alerts.bicep are scoped to this workspace resource ID:
+// their queries read the workspace-schema tables (AppRequests,
+// AppDependencies), which are known tables only under the workspace scope.
 output workspaceId string = workspace.id
 output workspaceCustomerId string = workspace.properties.customerId
 @secure()

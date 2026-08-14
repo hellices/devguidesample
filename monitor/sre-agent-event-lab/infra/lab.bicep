@@ -55,7 +55,7 @@ module alerts 'alerts.bicep' = if (deployContainerApp) {
   name: 'sre-lab-alerts'
   params: {
     location: location
-    appInsightsResourceId: observability.outputs.appInsightsResourceId
+    workspaceResourceId: observability.outputs.workspaceId
     actionGroupResourceId: actionGroupResourceId
     serviceName: workload.outputs.telemetryServiceName
     tags: tags

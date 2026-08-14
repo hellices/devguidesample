@@ -20,7 +20,7 @@ Azure Container Apps에 장애를 세 번 주입하고, Azure Monitor 경고를 
 - Container Registry Basic
 - Log Analytics 작업 영역(PerGB2018, 30일 보존)과 Application Insights 수집량
 - Storage 계정(Standard_LRS)
-- 5분 주기 로그 검색 경고 규칙 3개(평가 주기가 짧을수록 규칙당 단가가 올라갑니다)
+- 1분 주기 로그 검색 경고 규칙 3개(평가 주기가 짧을수록 규칙당 단가가 올라갑니다)
 
 Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Agent를 사용하며 [별도로 과금](https://azure.microsoft.com/pricing/details/sre-agent/)됩니다.
 

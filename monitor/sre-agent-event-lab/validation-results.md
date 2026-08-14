@@ -265,6 +265,8 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 이번 S1/S2/S3 실측은 1분 evaluation의 static threshold를 사용했다. 목적은 known failure를 같은 날 반드시 alert로 만들고 SRE Agent의 분석 품질을 비교하는 것이었다. 따라서 아래 Dynamic Threshold 설계는 운영 권고이며 현재 점수에 포함하지 않는다.
 
+> **1분 evaluation 기록에 대한 주석 (2026-08-14 추가).** 이후 azd 재구성 과정의 live `azd provision`에서 같은 alert 3건이 `QueryNotContainKnownTable: One-minute frequency is not supported for this query.`로 거부된 적이 있다. 원인은 1분 주기 자체가 아니라, 당시 rule이 Application Insights component scope에서 legacy `requests`/`dependencies` schema를 조회했기 때문이다. legacy 이름은 workspace에서 table이 아니라 다른 table을 호출하는 function이고, [공식 문서](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule#configure-alert-rule-conditions)는 그런 query를 1분 주기 미지원 사례로 명시한다. 현재 `infra/alerts.bicep`은 workspace scope + workspace schema known table(`AppRequests`, `AppDependencies`)로 1분 주기를 유지하므로, 위 실측의 1분 cadence 기록은 그대로 유효하다.
+
 | Scenario | Static 실증 signal | Dynamic 후보 numeric signal |
 |---|---|---|
 | S1 | 5분 5xx count > 10 | 5xx count 또는 error rate의 upper anomaly |
