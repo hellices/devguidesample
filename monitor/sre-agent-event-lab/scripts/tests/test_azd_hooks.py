@@ -5,14 +5,40 @@ active subscription is whatever the operator last selected -- not
 necessarily the subscription azd is deploying into. Every Azure CLI
 operation therefore has to be pinned to AZURE_SUBSCRIPTION_ID, and the
 `predown` hook has to survive a lab that never configured the Agent.
+
+Every test that *executes* a hook script runs it from a `lab_copy` --
+never the real, in-place `azd-configure.sh` / `azd-postprovision.sh` /
+`setup-venv.sh`. `azd-postprovision.sh` calls `setup-venv.sh`, and
+`setup-venv.sh` resolves its own `SCRIPT_DIR`/`LAB_ROOT`/`VENV_DIR` from
+its own `${BASH_SOURCE[0]}`, never from the caller's cwd -- so running the
+real, in-place `azd-postprovision.sh` (as this file once did, pointing
+only the *subprocess's* cwd or `AZURE_*` environment at a scratch
+`tmp_path`) still always resolves `VENV_DIR` to the real, developer-machine
+`app/.venv`, and setup-venv.sh's `uv venv --allow-existing` / `uv pip
+install` would then run for real against it -- a real filesystem mutation
+and a real network/package-index call, entirely unrelated to what the test
+claims to be checking (the Azure CLI login-failure message). `lab_copy`
+copies the whole `scripts/`+`app/` layout the scripts depend on into
+`tmp_path`, so every script's own path resolution lands entirely inside
+`tmp_path`; `real_lab_venv_tree_is_never_touched` (autouse, this whole
+file) is the regression tripwire proving it -- it fingerprints the real
+`app/.venv` tree before and after every test here and fails loudly on any
+drift; `test_no_execution_helper_runs_a_real_in_place_hook_script` is a
+second, purely static tripwire (a source-text scan of this very file, no
+subprocess involved) that keeps the same vulnerability from silently
+coming back.
 """
 
+import hashlib
 import os
 import re
+import shutil
 import stat
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 
 from azd_fake import write_azd_stub
 
@@ -20,10 +46,144 @@ SCRIPTS_DIR = Path(__file__).parents[1]
 LAB_ROOT = Path(__file__).parents[2]
 AZD_CONFIGURE = SCRIPTS_DIR / "azd-configure.sh"
 AZD_POSTPROVISION = SCRIPTS_DIR / "azd-postprovision.sh"
+SETUP_VENV = SCRIPTS_DIR / "setup-venv.sh"
+REQUIREMENTS = LAB_ROOT / "app" / "requirements.txt"
+REQUIREMENTS_DEV = LAB_ROOT / "app" / "requirements-dev.txt"
+REAL_VENV_DIR = LAB_ROOT / "app" / ".venv"
 SUBSCRIPTION_PIN = '--subscription "${AZURE_SUBSCRIPTION_ID}"'
 # The one deliberately unpinned call: it reads whichever account is active
 # so the hook can report a mismatch.
 ACTIVE_ACCOUNT_PROBE = "az account show --query id"
+
+
+# --- Regression tripwire: the real app/.venv must never move ---------------
+#
+# Two independent guards, deliberately redundant:
+#   1. `real_lab_venv_tree_is_never_touched` (below) is an *execution-time*
+#      safety net: it fingerprints the real tree and fails if any test in
+#      this file ever changes it, no matter how that test is written.
+#   2. `test_no_execution_helper_runs_a_real_in_place_hook_script` (further
+#      down) is a *static* safety net: it scans this file's own source for
+#      the exact patterns that caused the original vulnerability, and never
+#      executes anything -- so it is always safe to run, including on a
+#      version of this file that would otherwise mutate the real venv.
+
+
+def _venv_tree_fingerprint(root: Path):
+    """A manifest-style fingerprint of the whole real `app/.venv` tree.
+
+    For every entry under `root`, records its path relative to `root`,
+    whether it is a directory/file/symlink, its symlink target (if any),
+    its size, and its mtime for every entry -- then hashes the whole sorted
+    manifest into one digest, plus a byte-content sha256 of `bin/python`'s
+    *resolved* target (uv manages `bin/python` as a symlink to a real
+    interpreter binary that can live entirely outside `root`, e.g. under
+    `~/.local/share/uv/python/...`; `path.resolve()` follows it there).
+    This is deliberately a *tree* fingerprint, not a single file's: `uv
+    venv --allow-existing` / `uv pip install` mutate site-packages by
+    adding, removing, resizing, and retargeting many files and symlinks at
+    once, so a single canary file (or a bare directory mtime) could miss a
+    change a broader manifest catches. mtime is included as one signal
+    among several, deliberately not the only one -- comparing mtime alone
+    would be brittle (some legitimate changes leave mtime untouched at
+    second resolution; some incidental system activity touches mtime
+    without any content change) -- so a real regression must additionally
+    show up as a manifest entry that is new, missing, resized, retargeted,
+    or reclassified (file/dir/symlink), or as a changed interpreter content
+    hash, to be caught; mtime differences alone are deliberately not enough
+    for the assertion below to fire a false positive.
+    """
+    if not root.exists():
+        return ("absent", None, None, None)
+    entries = []
+    for path in sorted(root.rglob("*")):
+        try:
+            st = path.lstat()
+        except OSError:
+            continue
+        is_link = path.is_symlink()
+        kind = "symlink" if is_link else ("dir" if path.is_dir() else "file")
+        target = os.readlink(path) if is_link else None
+        entries.append(
+            (str(path.relative_to(root)), kind, target, st.st_size, st.st_mtime_ns)
+        )
+    manifest = repr(entries).encode()
+
+    venv_python = root / "bin" / "python"
+    interpreter_digest = None
+    if venv_python.exists() or venv_python.is_symlink():
+        resolved = venv_python.resolve()
+        if resolved.is_file():
+            interpreter_digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
+
+    return (
+        "present",
+        len(entries),
+        hashlib.sha256(manifest).hexdigest(),
+        interpreter_digest,
+    )
+
+
+@pytest.fixture(autouse=True)
+def real_lab_venv_tree_is_never_touched():
+    """Module-wide tripwire: fingerprints the real, developer-machine
+    `app/.venv` tree before and after every test in this file and fails
+    loudly if it ever changes. This must never fire; if it does, a test in
+    this file stopped running against a `lab_copy` and started running a
+    real hook script in place again -- exactly the vulnerability this
+    whole file's redesign fixes.
+    """
+    before = _venv_tree_fingerprint(REAL_VENV_DIR)
+    yield
+    after = _venv_tree_fingerprint(REAL_VENV_DIR)
+    assert after == before, (
+        "a test in this file mutated the REAL app/.venv tree "
+        f"(before={before!r} after={after!r}); every test that executes a "
+        "hook script must run it from a `lab_copy`, never the real script "
+        "in place"
+    )
+
+
+@pytest.fixture
+def lab_copy(tmp_path):
+    """A throwaway copy of exactly the layout the hook scripts depend on:
+    `azd-configure.sh`, `azd-postprovision.sh`, and the *real*
+    `setup-venv.sh` under `scripts/`, the real `app/requirements.txt` and
+    `app/requirements-dev.txt` under `app/` (setup-venv.sh's own
+    `REQUIREMENTS_FILE`), and a placeholder `azure.yaml` at the copied lab
+    root (azd-configure.sh's fake-`azd` stub requires one to exist at
+    whatever `--cwd` it is given, matching the real lab layout). Every
+    script's own `SCRIPT_DIR`/`LAB_ROOT`/`APP_DIR`/`VENV_DIR` resolution
+    (from its own `${BASH_SOURCE[0]}`) therefore lands entirely inside
+    `tmp_path`, never inside the real lab tree. `app/.venv` is deliberately
+    never created here -- a script under test creates it fresh, against
+    whatever fake `uv` a given test puts on `PATH`.
+    """
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    for source, name in (
+        (AZD_CONFIGURE, "azd-configure.sh"),
+        (AZD_POSTPROVISION, "azd-postprovision.sh"),
+        (SETUP_VENV, "setup-venv.sh"),
+    ):
+        copy = scripts_dir / name
+        shutil.copy2(source, copy)
+        copy.chmod(copy.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    shutil.copy2(REQUIREMENTS, app_dir / "requirements.txt")
+    shutil.copy2(REQUIREMENTS_DEV, app_dir / "requirements-dev.txt")
+
+    (tmp_path / "azure.yaml").write_text("name: sre-lab-hooktest\n")
+
+    return SimpleNamespace(
+        root=tmp_path,
+        configure=scripts_dir / "azd-configure.sh",
+        postprovision=scripts_dir / "azd-postprovision.sh",
+        setup_venv=scripts_dir / "setup-venv.sh",
+        app_dir=app_dir,
+    )
 
 
 def _az_invocations(script_text):
@@ -74,8 +234,47 @@ def _write_login_failing_az_stub(directory, log_path):
     return stub
 
 
+def _write_fake_uv(directory, log_path):
+    """A fake `uv` that logs every invocation, creates a runnable stub
+    interpreter under whatever target directory `uv venv` is given, and
+    always succeeds. This lets a *real*, copied `setup-venv.sh` run its
+    genuine `uv venv` / `uv pip install` / Pillow-import logic end to end
+    without ever reaching the real `uv` binary, a real virtual environment,
+    or a real package index -- `log_path` is what each test's assertion
+    inspects to prove the fake, not the real, `uv` ran.
+    """
+    stub = directory / "uv"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        f'printf "%s\\n" "$*" >> "{log_path}"\n'
+        'case "$1" in\n'
+        "  venv)\n"
+        '    target="${@: -1}"\n'
+        '    mkdir -p "${target}/bin"\n'
+        "    cat > \"${target}/bin/python\" <<'PYEOF'\n"
+        "#!/usr/bin/env bash\n"
+        'exit 0\n'
+        "PYEOF\n"
+        '    chmod +x "${target}/bin/python"\n'
+        "    ;;\n"
+        "  pip)\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "  *)\n"
+        "    exit 0\n"
+        "    ;;\n"
+        "esac\n"
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return stub
+
+
 def _run_hook_script(script_path, tmp_path, az_stub_factory, environment=None):
-    """Execute an azd hook script with a controllable fake `az` on PATH."""
+    """Execute a *copied* azd hook script with a controllable fake `az` on
+    PATH. `script_path` must come from a `lab_copy` -- see this module's
+    top-of-file docstring and `test_no_execution_helper_runs_a_real_in_place_hook_script`
+    for why the real, in-place script must never be passed here.
+    """
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     log_path = tmp_path / "az-calls.log"
@@ -95,6 +294,44 @@ def _run_hook_script(script_path, tmp_path, az_stub_factory, environment=None):
     )
     calls = log_path.read_text() if log_path.exists() else ""
     return result, calls
+
+
+def test_no_execution_helper_runs_a_real_in_place_hook_script():
+    """Regression tripwire for the vulnerability every `lab_copy`-based test
+    below fixes: executing the real, in-place `AZD_CONFIGURE` /
+    `AZD_POSTPROVISION` / `SETUP_VENV` path constants (as this file once
+    did) always resolves those scripts' own `SCRIPT_DIR`/`LAB_ROOT`/
+    `VENV_DIR` to the real, developer-machine `app/.venv`, regardless of
+    what `tmp_path`, `cwd`, or `AZURE_*` environment a test additionally
+    sets up -- only copying the whole `scripts/`+`app/` tree elsewhere
+    (`lab_copy`) actually moves that resolution. This is a pure
+    source-text scan of this file itself: it runs no subprocess and
+    touches no filesystem outside its own `__file__`, so it is always safe
+    to run -- unlike the execution pattern it guards against. Confirmed in
+    session: run against the pre-fix version of this file (the
+    git-committed HEAD revision before this test existed), every one of
+    `_run_hook_script`'s two direct hook-script call sites and
+    `_run_azd_configure`'s own subprocess call site matched, because that
+    revision passed the real, in-place path constants straight to a
+    subprocess line-wrapped across multiple lines. Patterns below are
+    regexes, not bare substrings, specifically so a call site line-wrapped
+    that way cannot dodge the scan by reformatting.
+    """
+    source = Path(__file__).read_text()
+    forbidden_execution_patterns = (
+        r"_run_hook_script\(\s*AZD_CONFIGURE\b",
+        r"_run_hook_script\(\s*AZD_POSTPROVISION\b",
+        r"_run_hook_script\(\s*SETUP_VENV\b",
+        r"\[\s*str\(\s*AZD_CONFIGURE\s*\)\s*\]",
+        r"\[\s*str\(\s*AZD_POSTPROVISION\s*\)\s*\]",
+        r"\[\s*str\(\s*SETUP_VENV\s*\)\s*\]",
+    )
+    for pattern in forbidden_execution_patterns:
+        assert not re.search(pattern, source), (
+            f"found a real, in-place hook script execution pattern {pattern!r} "
+            "in this test file; every executed hook script must come from "
+            "the `lab_copy` fixture instead"
+        )
 
 
 def test_azd_configure_pins_every_azure_cli_call_to_the_target_subscription():
@@ -171,25 +408,20 @@ def test_azd_postprovision_runs_setup_venv_before_any_azure_cli_call():
     )
 
 
-def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp_path):
+def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp_path, lab_copy):
     """`app/.venv` setup is local and has nothing to do with the Azure CLI,
     but a broken corporate proxy or missing `uv` must still stop the hook
     before it spends a single Azure API call -- the cloud side is already
     provisioned by the time this hook runs, so failing fast here changes
     nothing about that, but a failure must never be masked by continuing
     on to the ACR build."""
-    scripts_copy = tmp_path / "scripts"
-    scripts_copy.mkdir()
-    (scripts_copy / "azd-postprovision.sh").write_text(AZD_POSTPROVISION.read_text())
-    (scripts_copy / "azd-postprovision.sh").chmod(0o755)
-    fake_setup_venv = scripts_copy / "setup-venv.sh"
-    fake_setup_venv.write_text(
+    lab_copy.setup_venv.write_text(
         "#!/usr/bin/env bash\n"
         "echo 'uv is required to set up app/.venv but was not found on PATH.' >&2\n"
         "echo 'azd hooks run postprovision' >&2\n"
         "exit 1\n"
     )
-    fake_setup_venv.chmod(0o755)
+    lab_copy.setup_venv.chmod(0o755)
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -205,7 +437,7 @@ def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp
     env["AZURE_CONTAINER_APP_FQDN"] = "ca-test.example.com"
 
     result = subprocess.run(
-        [str(scripts_copy / "azd-postprovision.sh")],
+        [str(lab_copy.postprovision)],
         capture_output=True,
         text=True,
         env=env,
@@ -216,13 +448,13 @@ def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp
     assert "uv" in result.stderr
 
 
-def test_azd_configure_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path):
+def test_azd_configure_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path, lab_copy):
     """`az account show` fails with a generic Azure CLI error when signed
     out. Guard it so the hook fails fast with one unambiguous message
     instead of raw CLI stderr or an unexplained `set -e` abort.
     """
     result, calls = _run_hook_script(
-        AZD_CONFIGURE, tmp_path, _write_login_failing_az_stub
+        lab_copy.configure, tmp_path, _write_login_failing_az_stub
     )
 
     assert result.returncode != 0
@@ -234,34 +466,80 @@ def test_azd_configure_reports_a_clear_error_when_the_azure_cli_is_not_logged_in
     )
 
 
-def test_azd_postprovision_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path):
-    environment = {
-        "AZURE_RESOURCE_GROUP": "rg-test",
-        "AZURE_ACR_NAME": "acrtest",
-        "AZURE_CONTAINER_APP_NAME": "ca-test",
-        "AZURE_CONTAINER_APP_FQDN": "ca-test.example.com",
-    }
-    result, calls = _run_hook_script(
-        AZD_POSTPROVISION, tmp_path, _write_login_failing_az_stub, environment
+def test_azd_postprovision_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path, lab_copy):
+    """`azd-postprovision.sh` runs `setup-venv.sh` *before* it ever checks
+    the Azure CLI login state (see
+    `test_azd_postprovision_runs_setup_venv_before_any_azure_cli_call`), so
+    this test's `bin_dir` carries both a login-failing fake `az` and a
+    fake `uv` -- the real, copied `setup-venv.sh` genuinely runs its own
+    `uv venv` / `uv pip install` / Pillow-import logic against the fake
+    `uv` (never a stub that skips that logic outright), and only *then*
+    does the hook reach and fail the login check. `uv_calls` is the
+    call-log assertion proving the fake -- never the real -- `uv` did that
+    work, so no real virtual environment or package index was ever
+    touched.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    az_log = tmp_path / "az-calls.log"
+    uv_log = tmp_path / "uv-calls.log"
+    _write_login_failing_az_stub(bin_dir, az_log)
+    _write_fake_uv(bin_dir, uv_log)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
+    env["AZURE_RESOURCE_GROUP"] = "rg-test"
+    env["AZURE_ACR_NAME"] = "acrtest"
+    env["AZURE_CONTAINER_APP_NAME"] = "ca-test"
+    env["AZURE_CONTAINER_APP_FQDN"] = "ca-test.example.com"
+
+    result = subprocess.run(
+        [str(lab_copy.postprovision)],
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
     assert result.returncode != 0
     assert "az login" in result.stderr
     assert "Please run 'az login' to setup account." not in result.stderr
-    assert calls.strip() == "account show --query id -o tsv", (
+    az_calls = az_log.read_text() if az_log.exists() else ""
+    assert az_calls.strip() == "account show --query id -o tsv", (
         "the hook must exit immediately after the failed login check, "
-        f"before any other az call: {calls!r}"
+        f"before any other az call: {az_calls!r}"
+    )
+
+    uv_calls = uv_log.read_text() if uv_log.exists() else ""
+    assert "venv" in uv_calls, (
+        "setup-venv.sh must have run its real uv-venv logic against the "
+        f"fake uv before the login check failed: {uv_calls!r}"
+    )
+    assert "pip install" in uv_calls, (
+        "setup-venv.sh must have run its real uv-pip-install logic against "
+        f"the fake uv before the login check failed: {uv_calls!r}"
+    )
+    created_python = lab_copy.app_dir / ".venv" / "bin" / "python"
+    assert created_python.is_file(), (
+        "setup-venv.sh must have created its venv under lab_copy's "
+        "tmp_path, proving the fake uv -- not the real one -- ran"
+    )
+    assert not str(created_python).startswith(str(LAB_ROOT)), (
+        "the venv setup-venv.sh created must never live under the real lab tree"
     )
 
 
-
-def _run_azd_configure(tmp_path, azd_values, missing_key_mode="azd_1_29"):
-    """Run the preprovision hook with a fake `az` and a realistic fake `azd`.
+def _run_azd_configure(tmp_path, lab_copy, azd_values, missing_key_mode="azd_1_29"):
+    """Run the preprovision hook (a `lab_copy` copy) with a fake `az` and a
+    realistic fake `azd`.
 
     The fake `azd` reproduces azd 1.29.0: it reports a value it does not
     have with `ERROR: ...` on **stdout** and exit 1, and resolves the
     project from `--cwd` (else the process working directory). The hook is
-    started from a scratch directory that holds no `azure.yaml`.
+    started from a scratch directory that holds no `azure.yaml` -- distinct
+    from `lab_copy.root`, which does (matching the real lab layout), so
+    that `--cwd "${LAB_ROOT}"` inside the copied script is what makes the
+    lookups succeed, not the process's own cwd.
     """
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -278,7 +556,7 @@ def _run_azd_configure(tmp_path, azd_values, missing_key_mode="azd_1_29"):
     env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
 
     result = subprocess.run(
-        [str(AZD_CONFIGURE)],
+        [str(lab_copy.configure)],
         capture_output=True,
         text=True,
         env=env,
@@ -287,7 +565,7 @@ def _run_azd_configure(tmp_path, azd_values, missing_key_mode="azd_1_29"):
     return result, (azd_log.read_text() if azd_log.exists() else "")
 
 
-def test_azd_configure_defaults_the_resource_group_when_azd_has_no_value(tmp_path):
+def test_azd_configure_defaults_the_resource_group_when_azd_has_no_value(tmp_path, lab_copy):
     """A key azd does not have must read as absent, not as azd's error text.
 
     azd 1.29 prints `ERROR: ...` on stdout while exiting non-zero, so a
@@ -295,7 +573,7 @@ def test_azd_configure_defaults_the_resource_group_when_azd_has_no_value(tmp_pat
     the default the hook is there to write.
     """
     result, azd_calls = _run_azd_configure(
-        tmp_path, {"AZURE_ENV_NAME": "sre-lab-hooktest"}
+        tmp_path, lab_copy, {"AZURE_ENV_NAME": "sre-lab-hooktest"}
     )
 
     assert result.returncode == 0, result.stderr
@@ -308,9 +586,10 @@ def test_azd_configure_defaults_the_resource_group_when_azd_has_no_value(tmp_pat
     )
 
 
-def test_azd_configure_keeps_values_the_azd_environment_already_has(tmp_path):
+def test_azd_configure_keeps_values_the_azd_environment_already_has(tmp_path, lab_copy):
     result, azd_calls = _run_azd_configure(
         tmp_path,
+        lab_copy,
         {
             "AZURE_ENV_NAME": "sre-lab-hooktest",
             "AZURE_RESOURCE_GROUP": "rg-chosen-by-the-operator",
@@ -325,24 +604,24 @@ def test_azd_configure_keeps_values_the_azd_environment_already_has(tmp_path):
     assert "env set SRE_LAB_EXPIRES_ON" not in azd_calls
 
 
-def test_azd_configure_pins_every_azd_lookup_to_the_lab_project(tmp_path):
+def test_azd_configure_pins_every_azd_lookup_to_the_lab_project(tmp_path, lab_copy):
     """azd hooks are also run by hand while debugging a lab, so the hook
     must not depend on the working directory it inherits."""
     result, azd_calls = _run_azd_configure(
-        tmp_path, {"AZURE_ENV_NAME": "sre-lab-hooktest"}
+        tmp_path, lab_copy, {"AZURE_ENV_NAME": "sre-lab-hooktest"}
     )
 
     assert result.returncode == 0, result.stderr
-    assert f"cwd={LAB_ROOT}" in azd_calls, (
-        f"azd was not pinned to the lab project root: {azd_calls!r}"
+    assert f"cwd={lab_copy.root}" in azd_calls, (
+        f"azd was not pinned to the copied lab project root: {azd_calls!r}"
     )
     assert "no project exists" not in azd_calls
 
 
-def test_azd_configure_refuses_to_derive_a_resource_group_without_an_environment(tmp_path):
+def test_azd_configure_refuses_to_derive_a_resource_group_without_an_environment(tmp_path, lab_copy):
     """Deriving `rg-` from an unavailable environment name would create a
     resource group nobody can identify; the hook must stop instead."""
-    result, azd_calls = _run_azd_configure(tmp_path, {})
+    result, azd_calls = _run_azd_configure(tmp_path, lab_copy, {})
 
     assert result.returncode != 0
     assert "azd env new" in result.stderr
