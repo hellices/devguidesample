@@ -22,7 +22,7 @@ cd monitor/sre-agent-event-lab
 |---|---|
 | 1 | Container App에 `ORDER_DELAY_MS=4000`이 설정되어 새 revision이 만들어집니다 |
 | 2 | `/api/orders`에 요청 90건(동시 8)이 들어가고 모두 200이지만 4초 안팎이 걸립니다 |
-| 3 | Application Insights `requests`의 `duration`이 올라갑니다 |
+| 3 | Application Insights workspace 테이블 `AppRequests`의 `DurationMs`가 올라갑니다 |
 | 4 | 5분 창의 p95 지연이 2000ms를 넘으면 `alert-sre-lab-s2-latency`(Sev2)가 발생합니다 |
 | 5 | 복구로 `ORDER_DELAY_MS=0` revision이 배포되고 경고가 자동 해제됩니다 |
 

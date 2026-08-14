@@ -20,6 +20,16 @@ RUNBOOK = LAB_ROOT / "runbooks" / "incident-response.md"
 LAB_SH = LAB_ROOT / "scripts" / "lab.sh"
 VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
 DYNAMIC_THRESHOLDS = LAB_ROOT / "dynamic-thresholds.md"
+RESULTS_GUIDE = LAB_ROOT / "guides" / "05-results.md"
+DEPLOYMENT_PLAN = REPO_ROOT / ".azure" / "deployment-plan.md"
+
+# The table `infra/alerts.bicep` actually queries for each scenario --
+# workspace schema, not the legacy Application Insights component schema.
+SCENARIO_GUIDE_TABLES = {
+    "02-scenario-s1.md": "AppRequests",
+    "03-scenario-s2.md": "AppRequests",
+    "04-scenario-s3.md": "AppDependencies",
+}
 
 GUIDE_NAMES = (
     "01-agent-setup.md",
@@ -238,6 +248,78 @@ def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
     assert "1분 evaluation의 static threshold" in text
     assert "QueryNotContainKnownTable" in text
     assert "AppRequests" in text
+
+
+def test_scenario_guides_name_the_workspace_table_not_the_legacy_schema():
+    """`infra/alerts.bicep` scopes every rule to the Log Analytics workspace
+    and queries the workspace-schema `AppRequests`/`AppDependencies` tables.
+    The legacy Application Insights component-scope names (`requests`,
+    `dependencies`) are not tables there -- they are functions over the
+    workspace tables that reject one-minute evaluation (see
+    dynamic-thresholds.md and validation-results.md). Each scenario guide's
+    "Azure에서 발생하는 변화" table must name the table the deployed alert
+    rule actually queries, not the legacy schema, so a reader who only
+    reads the guide never learns a query the rule cannot run.
+    """
+    for name, table in SCENARIO_GUIDE_TABLES.items():
+        text = (GUIDES / name).read_text()
+        assert "`{0}`".format(table) in text, name
+        assert "`requests`" not in text, name
+        assert "`dependencies`" not in text, name
+
+
+def test_runbook_distinguishes_the_alert_scope_from_the_workload_impact():
+    """The alert rules are scoped to the Log Analytics workspace
+    (`infra/alerts.bicep`'s `scopes`/`targetResourceTypes:
+    Microsoft.OperationalInsights/workspaces`), so Azure Monitor's own
+    "affected resource" for the alert *is* that workspace -- not the
+    Container App. The `AppRequests`/`AppDependencies`/`AppExceptions` rows
+    the runbook queries next additionally carry a `_ResourceId` column that
+    resolves to the Application Insights component, one indirection closer
+    but still not the workload. Neither of those is the incident's impact
+    scope: the runbook must tell the Agent to identify the actually
+    affected Container App/service from the telemetry itself
+    (`AppRoleName`/`Name`), and must say not to report the alert's own
+    scope as that impact.
+    """
+    text = RUNBOOK.read_text()
+
+    assert "Log Analytics workspace" in text
+    assert "_ResourceId" in text
+    assert "AppRoleName" in text
+    assert re.search(r"[Nn]ot (the )?(Container App|workload)", text)
+    assert re.search(r"[Dd]o not report .*workspace.* as", text)
+
+
+def test_results_guide_impact_scope_rejects_the_alert_target_as_the_answer():
+    """Scoring guidance for `impact_scope` must not credit an answer that
+    only restates the alert rule's own scope (the Log Analytics workspace)
+    or the `_ResourceId` telemetry column (the Application Insights
+    component) -- both are one or two indirections away from the actually
+    affected Container App/service, which is what the criterion scores.
+    """
+    text = RESULTS_GUIDE.read_text()
+
+    assert "impact_scope" in text
+    assert "Log Analytics workspace" in text
+    assert "_ResourceId" in text
+    assert "AppRoleName" in text
+
+
+def test_deployment_plan_does_not_overclaim_appinsights_resource_id_usage():
+    """`appInsightsResourceId` (observability -> lab -> main.bicep) remains
+    an output for backward compatibility, but no lab script and no module
+    reads it anymore: `infra/alerts.bicep` takes `workspaceResourceId`, and
+    every script that queries telemetry reads `workspaceCustomerId`
+    (`scripts/common.sh`'s `deployment_output`/`load_lab_config`). The plan
+    must not claim scripts still consume `appInsightsResourceId`.
+    """
+    text = DEPLOYMENT_PLAN.read_text()
+
+    assert "appInsightsResourceId" in text
+    assert "workspaceCustomerId" in text
+    assert "scripts that read it" not in text
+    assert not re.search(r"appInsightsResourceId[^\n.]*scripts that read", text)
 
 
 def test_readme_is_a_quickstart_not_the_full_walkthrough():

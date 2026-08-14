@@ -22,7 +22,7 @@ cd monitor/sre-agent-event-lab
 |---|---|
 | 1 | 워크로드 관리 ID의 `Storage Blob Data Reader` 할당이 Blob 컨테이너 범위에서 삭제됩니다 |
 | 2 | `/api/documents`에 요청 60건(동시 4)이 들어가고 모두 HTTP 503을 받습니다 |
-| 3 | Application Insights `dependencies`에 Storage 대상 `resultCode == "403"`이 쌓입니다 |
+| 3 | Application Insights workspace 테이블 `AppDependencies`에 Storage 대상 `ResultCode == "403"`이 쌓입니다 |
 | 4 | 5분 창의 403 의존성 실패가 5건을 넘으면 `alert-sre-lab-s3-storage-rbac`(Sev2)이 발생합니다 |
 | 5 | 복구로 같은 이름·같은 범위의 역할 할당이 다시 만들어집니다 |
 

@@ -40,7 +40,7 @@ cd monitor/sre-agent-event-lab
 |---|---|
 | 1 | Container App에 `FAILURE_MODE=http500` 환경 변수가 설정되어 새 revision이 만들어집니다 |
 | 2 | `/api/orders`에 요청 120건(동시 4)이 들어가고 모두 HTTP 500을 받습니다 |
-| 3 | Application Insights `requests`에 `resultCode == "500"` 레코드가 쌓입니다 |
+| 3 | Application Insights workspace 테이블 `AppRequests`에 `ResultCode == "500"` 레코드가 쌓입니다 |
 | 4 | 5분 창의 500 응답이 10건을 넘으면 `alert-sre-lab-s1-http500`(Sev2)이 발생합니다 |
 | 5 | 복구로 `FAILURE_MODE=none` revision이 다시 배포되고 경고가 자동 해제됩니다 |
 

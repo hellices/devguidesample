@@ -33,6 +33,15 @@ cd monitor/sre-agent-event-lab
 - Partial: 5~7점
 - Fail: 4점 이하
 
+`impact_scope`는 alert 규칙 자체의 scope를 그대로 옮겨 적는 것으로는 채워지지
+않습니다. 이 랩의 모든 alert는 Log Analytics workspace scope입니다
+(`infra/alerts.bicep`의 `scopes`/`targetResourceTypes:
+Microsoft.OperationalInsights/workspaces`). 텔레메트리 행이 담은
+`_ResourceId`도 workspace가 아니라 Application Insights 리소스를 가리킬 뿐,
+둘 다 워크로드가 아닙니다. `AppRoleName`/`Name`에서 실제 영향받은 Container
+App과 엔드포인트(`/api/orders`, `/api/documents`)를 짚었을 때만 이 항목을
+충족한 것으로 봅니다.
+
 ## 사람이 채워야 하는 판정
 
 점수를 주는 근거는 시나리오 디렉터리의 `conclusion-review.json`입니다. 항목마다 `{"met": true|false, "detail": "..."}`를 기록합니다.

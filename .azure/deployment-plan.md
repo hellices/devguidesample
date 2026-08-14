@@ -178,8 +178,14 @@ declares `targetResourceTypes: ['Microsoft.OperationalInsights/workspaces']`,
 and restores `evaluationFrequency: 'PT1M'` with `windowSize: 'PT5M'`.
 `lab.bicep` passes `observability.outputs.workspaceId` into the alerts
 module; the `workspaceId` output chain (observability -> lab -> main ->
-`AZURE_WORKSPACE_ID`) is unchanged, and `appInsightsResourceId` is still
-exported for the scripts that read it. Per-rule thresholds and the
+`AZURE_WORKSPACE_ID`) is unchanged. `appInsightsResourceId` (observability
+-> lab -> main.bicep) remains an output too, kept only for backward
+compatibility -- no module and no lab script reads it anymore. The alerts
+module takes `workspaceResourceId`, not `appInsightsResourceId`, and every
+lab script that queries telemetry (`query-evidence.sh`, `run-scenario.sh`,
+`doctor.sh`, `baseline.sh`, all via `scripts/common.sh`'s
+`deployment_output`/`load_lab_config`) reads `workspaceCustomerId`, which
+is unrelated to `appInsightsResourceId`. Per-rule thresholds and the
 default fire/resolve timeouts (`LAB_ALERT_FIRE_TIMEOUT_SECONDS=720`,
 `LAB_ALERT_RESOLVE_TIMEOUT_SECONDS=900`) are unchanged: the one-minute
 cadence they were sized for is back.
