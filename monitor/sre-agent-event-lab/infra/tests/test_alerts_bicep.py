@@ -43,6 +43,21 @@ def test_http500_alert_isolated_to_orders_and_exact_500():
     assert "''', serviceName)" in template
 
 
+def test_evaluation_frequency_is_five_minutes_not_one_minute():
+    """Azure deployment of scheduledQueryRules@2023-12-01 rejects a
+    one-minute evaluationFrequency for these requests/dependencies
+    queries with QueryNotContainKnownTable: 'One-minute frequency is
+    not supported for this query. Either switch to five-minute
+    frequency or adapt the query.' All three alert rules must evaluate
+    on a five-minute cadence instead, matching the existing PT5M
+    windowSize.
+    """
+    template = ALERTS_BICEP.read_text()
+
+    assert "evaluationFrequency: 'PT5M'" in template
+    assert "evaluationFrequency: 'PT1M'" not in template
+
+
 def test_alert_rules_require_and_pass_through_caller_tags():
     """azure.yaml's azd main.bicep now centralizes tag construction
     (purpose, azd-env-name, expiresOn) and passes the merged object down

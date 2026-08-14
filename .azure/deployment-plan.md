@@ -2,7 +2,7 @@
 
 > **Status:** Ready for Validation
 
-Updated: 2026-08-14 (ACR gate review fixes)
+Updated: 2026-08-14 (alert evaluation frequency fix)
 
 ## Goal
 
@@ -139,6 +139,38 @@ a `/healthz` failure is reported as a real regression as before. Stale
 `postprovision` (moved to the `postdeploy` hook in the two-phase refactor
 above) were also corrected.
 
+### Live deployment failure: alert evaluation frequency (2026-08-14)
+
+A live `azd provision` attempt failed ARM validation for all three
+`Microsoft.Insights/scheduledQueryRules@2023-12-01` alert rules
+(`alert-sre-lab-s1-http500`, `-s2-latency`, `-s3-storage-rbac`) with:
+
+```
+QueryNotContainKnownTable: One-minute frequency is not supported for
+this query. Either switch to five-minute frequency or adapt the query.
+```
+
+Root cause: `infra/alerts.bicep` set `evaluationFrequency: 'PT1M'` for
+all three rules while their `requests`/`dependencies` Application
+Insights queries only support a five-minute (or coarser) evaluation
+cadence -- the one-minute cadence was never deployable, only ever
+validated by `az bicep build`, which does not call ARM and cannot catch
+this. Fixed with strict TDD: added
+`test_evaluation_frequency_is_five_minutes_not_one_minute` to
+`infra/tests/test_alerts_bicep.py` (RED against the unmodified
+template), then changed `evaluationFrequency` to `'PT5M'` for all three
+rules (GREEN). `windowSize` stays `'PT5M'` and per-rule thresholds are
+unchanged, since nothing about the failure implicated them. Two
+user-facing docs asserted the now-incorrect one-minute cadence and were
+corrected under the same RED/GREEN discipline (new tests in
+`scripts/tests/test_lab_guides.py`): `README.md`'s cost callout ("1분
+주기 로그 검색 경고 규칙 3개" → "5분 주기 로그 검색 경고 규칙 3개") and
+`dynamic-thresholds.md`'s Static Threshold section ("evaluation: 1분" →
+"evaluation: 5분"); the unrelated, still-true statement that Log Search
+*dynamic* thresholds do not support one-minute evaluation was left
+as-is. No Azure resources were deployed or deleted while diagnosing or
+fixing this.
+
 ## Security and Safety
 
 - Container Apps reach Blob Storage through private networking.
@@ -195,10 +227,10 @@ earlier "Validated" status no longer applies):
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 460 passed |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 463 passed (added 3 for the PT5M alert-frequency fix) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
-| Bicep build | `az bicep build --file infra/{main,lab,workload}.bicep --stdout` | Passed (three templates, with the new deploy-gate outputs) |
+| Bicep build | `az bicep build --file infra/{main,lab,workload,alerts}.bicep --stdout` | Passed (four templates; `alerts.bicep` now emits `evaluationFrequency: PT5M`) |
 | AZD schema | `azure.yaml` validated against `schemas/v1.0/azure.yaml.json` from Azure/azure-dev | Passed; hooks = preprovision, postprovision, postdeploy, predown, postdown; no `services` |
 | AZD package | `azd package --all --no-prompt` | Passed |
 | Zero-service deploy hook | `azd deploy --no-prompt` against a marker-hook copy of this `azure.yaml` | `postdeploy` ran; hook exit 7 failed the command |
@@ -210,7 +242,7 @@ Pending live validation (no resources were deployed by this change):
 |---|---|---|
 | Environment | `azd env new <unique> --location koreacentral` | To re-create for the live run |
 | Provision preview | `azd provision --preview --no-prompt` | To re-run |
-| Provision phase | `azd provision --no-prompt` leaves the placeholder image serving and `app/.venv` ready | To verify live |
+| Provision phase | `azd provision --no-prompt` leaves the placeholder image serving and `app/.venv` ready | Failed live at ARM validation for the three `scheduledQueryRules` alert rules (`QueryNotContainKnownTable`, PT1M unsupported) before this fix; to re-verify live now that `alerts.bicep` uses PT5M |
 | Deploy phase | `azd deploy --no-prompt` waits for `AcrPull`, builds in ACR, switches the image, `/healthz` returns 200 | To verify live |
 | Policy assignments | `az policy assignment list --scope <subscription> --disable-scope-strict-match` | Unchanged from the previous run; re-check at validation time |
 | Static RBAC | reviewed all `Microsoft.Authorization/roleAssignments` in `workload.bicep` | Unchanged: least-privilege AcrPull and container-scoped Blob Data Reader |

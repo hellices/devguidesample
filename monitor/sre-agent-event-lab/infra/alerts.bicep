@@ -92,7 +92,7 @@ resource alertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [
       description: definition.description
       displayName: definition.displayName
       enabled: true
-      evaluationFrequency: 'PT1M'
+      evaluationFrequency: 'PT5M'
       scopes: [
         appInsightsResourceId
       ]

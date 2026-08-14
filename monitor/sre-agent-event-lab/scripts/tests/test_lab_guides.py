@@ -19,6 +19,7 @@ OFFICIAL_ASSETS = LAB_ROOT / "assets" / "official"
 RUNBOOK = LAB_ROOT / "runbooks" / "incident-response.md"
 LAB_SH = LAB_ROOT / "scripts" / "lab.sh"
 VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
+DYNAMIC_THRESHOLDS = LAB_ROOT / "dynamic-thresholds.md"
 
 GUIDE_NAMES = (
     "01-agent-setup.md",
@@ -196,6 +197,34 @@ def test_readme_warns_about_cost_and_teardown_before_the_first_azure_command():
     assert text.index("azd down --purge") > text.index("azd up")
     for driver in ("Container Apps", "Log Analytics", "Azure SRE Agent"):
         assert driver in text, driver
+
+
+def test_readme_states_five_minute_alert_evaluation_not_one_minute():
+    """scheduledQueryRules@2023-12-01 rejects a one-minute evaluation
+    frequency for these requests/dependencies queries
+    (QueryNotContainKnownTable), so infra/alerts.bicep evaluates every
+    five minutes. The cost callout naming the log search alert rules
+    must state that same cadence.
+    """
+    text = README.read_text()
+
+    assert "5분 주기 로그 검색 경고 규칙 3개" in text
+    assert "1분 주기 로그 검색 경고 규칙" not in text
+
+
+def test_dynamic_thresholds_guide_states_five_minute_static_evaluation():
+    """The Static Threshold section of dynamic-thresholds.md describes
+    the deployed infra/alerts.bicep rules, which now evaluate every
+    five minutes (scheduledQueryRules@2023-12-01 rejects a one-minute
+    frequency for these queries). Only the unrelated fact that Log
+    Search dynamic thresholds themselves do not support one-minute
+    evaluation may still mention one minute.
+    """
+    text = DYNAMIC_THRESHOLDS.read_text()
+
+    assert "- evaluation: 5분" in text
+    assert "- evaluation: 1분" not in text
+    assert "Log Search dynamic threshold는 1분 evaluation을 지원하지 않는다." in text
 
 
 def test_readme_is_a_quickstart_not_the_full_walkthrough():
