@@ -2,7 +2,12 @@
 
 ## Scope and safety
 
-This runbook applies only to resources in `rg-sre-agent-event-lab-krc`.
+This runbook applies only to the disposable lab resource group that `azd`
+provisioned for the current environment: the group reported as
+`AZURE_RESOURCE_GROUP` in the deployment outputs, tagged
+`purpose=sre-agent-event-lab` together with the `azd-env-name` of that
+environment. Any resource outside that group is out of scope, including
+resources in other lab environments that carry the same purpose tag.
 
 - Investigate automatically, but do not execute a mitigation without approval.
 - Do not change resources, role assignments, alert rules, or traffic outside the lab resource group.
