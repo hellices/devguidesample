@@ -117,8 +117,8 @@ SECRET_ASSIGNMENTS = (
     "AZURE_CLIENT_SECRET=",
 )
 
-FIXED_SUBSCRIPTION_ID = "95933ae5-0201-4a21-a1fc-8051a7437982"
 FIXED_RESOURCE_GROUP = "rg-sre-agent-event-lab-krc"
+UUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
 
 
 def guide_paths():
@@ -354,7 +354,7 @@ def test_validation_results_opens_by_dating_itself_to_the_pre_azd_lab():
     assert note, "validation-results.md opens with no note about what it records"
     assert "azd" in note
     assert re.search(r"(이전|예전|과거)", note), note
-    assert FIXED_RESOURCE_GROUP in note or FIXED_SUBSCRIPTION_ID in note, note
+    assert FIXED_RESOURCE_GROUP in note, note
     assert re.search(r"(현재|지금).{0,40}(실습|lab)", note), note
 
 
@@ -826,10 +826,47 @@ def test_docs_never_show_a_credential_value():
 
 
 def test_docs_do_not_pin_the_original_subscription_or_resource_group():
+    """No subscription ID at all, not just the one the original validation
+    run used: the guides are followed against whatever subscription the
+    reader owns, and a GUID in the prose is either someone else's or a
+    disclosure. Forbidding the shape also keeps this file from having to
+    restate a real subscription ID in order to prove it is gone.
+    """
     for path in all_docs() + [RUNBOOK]:
         text = path.read_text()
-        assert FIXED_SUBSCRIPTION_ID not in text, path.name
+        leaked = UUID_PATTERN.search(text)
+        assert leaked is None, "{0}: {1}".format(path.name, leaked.group())
         assert FIXED_RESOURCE_GROUP not in text, path.name
+
+
+def test_the_guides_state_that_one_unfinished_run_stops_every_scenario():
+    """The S1 guide told operators that nothing stops two scenarios from
+    overlapping and that keeping them apart was their own discipline. It is
+    enforced now -- a scenario that is `running` or `failed` refuses every
+    other scenario's run, not just the next one -- and a guide that still
+    describes the old, unenforced rule teaches an operator to misread the
+    refusal they will actually hit.
+    """
+    text = (GUIDES / "02-scenario-s1.md").read_text()
+
+    assert "잠금이 없" not in text, (
+        "the S1 guide still says nothing stops two scenarios overlapping"
+    )
+    assert re.search(r"(running|failed|실행 중|실패)", text), text[:400]
+    assert "mark-failed" in text, (
+        "the guide must name the command that ends a run stuck at `running`"
+    )
+
+
+def test_the_later_scenario_guides_name_the_lab_wide_precondition():
+    """S2 and S3 list their own predecessor's recovery and capture. Neither
+    mentioned the condition that actually stops them most often after a
+    re-run: some *other* scenario left unfinished."""
+    for name in ("03-scenario-s2.md", "04-scenario-s3.md"):
+        text = (GUIDES / name).read_text()
+        conditions = text.split("## 시작 조건", 1)[1].split("\n## ", 1)[0]
+        assert re.search(r"(다른 시나리오|나머지 시나리오)", conditions), name
+        assert re.search(r"(running|failed|실행 중|실패)", conditions), name
 
 
 def test_runbook_scopes_itself_to_the_provisioned_resource_group():

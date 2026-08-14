@@ -9,18 +9,38 @@ step is allowed, and the single place that records what actually happened:
 * Ordering: a scenario may start only after the baseline passed, after a
   human acknowledged the portal-only Agent setup, and -- from S2 on --
   after the previous scenario both recovered and produced a real capture.
+  Those rules look exactly one scenario back and stay that way: a run that
+  *recovered* is finished, so a scenario whose capture is still
+  outstanding blocks only the scenario that names it, never the whole lab.
+* Exclusivity: on top of the ordered rules, no run may start while *any*
+  scenario is `running` or `failed`. All three scenarios share one
+  Container App, and an unfinished run is exactly the case where its fault
+  may still be live -- a rejected injection, a recovery the EXIT trap
+  could not complete, a Ctrl-C. The ordered rules cannot see that: after a
+  full lab, a broken S1 re-run leaves `s2_recovered`/`s2_captured`
+  untouched, so S3 was admitted and injected a third fault on top of an
+  incident nobody had resolved. Re-running the scenario that *failed* is
+  the one exception, because that is how an operator clears it; re-running
+  one that is still `running` is refused too, since two live injections of
+  the same fault leave neither capture readable. Only the *earliest*
+  unfinished run may be repaired, so working the list from the top always
+  terminates and no editable state can lock the lab.
 * Honesty: a capture is only "successful" when the normalized timeline
-  holds a real `conclusion` event. `thread-not-created`,
-  `investigation-missing` and `conclusion-missing` are recorded verbatim
-  and never promoted to success, by any code path. A re-run retires the
-  scenario's previous outcome the moment it *starts* -- `begin_run`
-  clears the whole entry and records `run_status: running` before the
-  first destructive call -- and `mark_recovered`/`mark_failed` clear the
-  previous `capture_status` again when they end one. A conclusion
-  captured against a run that no longer exists must never let a later
-  run's capture stage, or the scorer, reuse it, not even when the new run
-  dies before it can record an outcome of its own. Only a capture
-  recorded *after* the current run counts.
+  holds a real `conclusion` event, *and* the run it belongs to recovered.
+  `thread-not-created`, `investigation-missing` and `conclusion-missing`
+  are recorded verbatim whatever the run did -- they measure what the
+  Agent failed to produce and can neither unblock a scenario nor earn a
+  point -- but a `conclusion` is refused outright for a run that is
+  `running`, `failed` or unrecorded, because nothing downstream can tell
+  such a conclusion from a real one. A re-run retires the scenario's
+  previous outcome the moment it *starts* -- `begin_run` clears the whole
+  entry and records `run_status: running` before the first destructive
+  call -- and `mark_recovered`/`mark_failed` clear the previous
+  `capture_status` again when they end one. A conclusion captured against
+  a run that no longer exists must never let a later run's capture stage,
+  or the scorer, reuse it, not even when the new run dies before it can
+  record an outcome of its own. Only a capture recorded *after* the
+  current run counts.
 * Binding: the file records the azd environment, subscription and resource
   group it belongs to and refuses to be read against a different one, so a
   state file left behind by another lab can never unlock a run here.
@@ -53,7 +73,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 SCENARIOS = ("s1", "s2", "s3")
@@ -85,6 +105,12 @@ CAPTURE_STATES = (SUCCESSFUL_CAPTURE,) + MISSING_CAPTURE_STATES
 RUN_RUNNING = "running"
 RUN_RECOVERED = "recovered"
 RUN_FAILED = "failed"
+
+# A run that is neither recovered nor absent has not finished: `running`
+# may still have a fault injected right now, and `failed` ended with one
+# that recovery could not be confirmed for. Both mean the shared workload
+# is not known to be clean, so no scenario at all may start on top of one.
+UNFINISHED_RUN_STATUSES = (RUN_RUNNING, RUN_FAILED)
 
 # Every scenario needs the two lab-wide prerequisites; S2 and S3 also need
 # the previous scenario to have recovered *and* produced a real capture.
@@ -331,6 +357,34 @@ class LabState:
         return self._document["scenarios"].setdefault(scenario, {})
 
     def require_run(self, scenario: str) -> None:
+        """Refuse a scenario run the recorded state cannot justify.
+
+        Two independent rules, checked in this order:
+
+        1. The ordered prerequisites in `RUN_REQUIREMENTS` -- the lab-wide
+           ones, plus (from S2 on) the previous scenario's recovery and
+           capture. They look exactly one scenario back and are unchanged:
+           a run that *recovered* is finished, so a scenario whose capture
+           is still outstanding blocks only the scenario that names it, not
+           the whole lab.
+        2. The unfinished-run gate: no run may start while any scenario is
+           `running` or `failed`. The three scenarios share one Container
+           App, and an unfinished run is exactly the case where its fault
+           may still be live -- an injection that was rejected, a recovery
+           the EXIT trap could not complete, a Ctrl-C. The ordered rules
+           cannot see that: after a full lab, a broken S1 re-run leaves
+           `s2_recovered`/`s2_captured` untouched, so S3 was admitted and
+           injected a third fault on top of an unresolved incident. The one
+           exception is repairing the *earliest* unfinished run when it
+           failed, which is both the documented remedy and what keeps the
+           gate from ever locking the lab.
+
+        The ordered rules run first so the more specific message -- which
+        stage is missing, and for which scenario -- is what an operator
+        sees whenever it applies; `_remedy` then reports the *reachable*
+        next command for that stage, which is not "run it again" while the
+        run in question is still `running`.
+        """
         if scenario not in SCENARIOS:
             raise ValueError(
                 "Unknown scenario: {0}. Known scenarios: {1}".format(
@@ -344,9 +398,78 @@ class LabState:
                     scenario, ", ".join(missing), self._remedy(missing)
                 )
             )
+        self._require_no_unfinished_run(scenario)
+
+    def _unfinished_runs(self) -> List[Tuple[str, str]]:
+        """Every scenario whose run is `running` or `failed`, in lab order."""
+        return [
+            (scenario, self.run_status(scenario) or "")
+            for scenario in SCENARIOS
+            if self.run_status(scenario) in UNFINISHED_RUN_STATUSES
+        ]
+
+    def _blockers_for(self, scenario: str) -> List[Tuple[str, str]]:
+        """The unfinished runs that stand between `scenario` and a start.
+
+        Repairing the *earliest* failed run is always allowed, and is the
+        only exception: it is the documented remedy for a failure, and
+        making it unconditional is what guarantees the gate can always be
+        worked off from the top. Without that, two scenarios `failed` at
+        once -- unreachable through this API, but one hand-edit away --
+        would refuse every command the lab has.
+
+        `running` is never repairable this way: nobody can tell whether
+        that run is still working, so it has to be ended explicitly first.
+        """
+        unfinished = self._unfinished_runs()
+        if unfinished and unfinished[0] == (scenario, RUN_FAILED):
+            return []
+        return unfinished
+
+    def _require_no_unfinished_run(self, scenario: str) -> None:
+        """Refuse while any scenario's run is `running` or `failed`.
+
+        Every blocker is named, earliest first, with its status and the
+        command that resolves it, so an operator never has to read
+        `state.json` to find out what is holding the lab -- and never
+        clears one blocker only to hit the next one blind.
+        """
+        blockers = self._blockers_for(scenario)
+        if not blockers:
+            return
+        raise InvalidTransition(
+            "Cannot run {0}: {1}. All three scenarios share one workload, so "
+            "no run may start while another is unfinished; deal with the "
+            "first one listed first.".format(
+                scenario,
+                "; ".join(
+                    "{0} is {1} ({2})".format(
+                        blocked, status, self._unfinished_remedy(blocked, status)
+                    )
+                    for blocked, status in blockers
+                ),
+            )
+        )
 
     @staticmethod
-    def _remedy(missing: Sequence[str]) -> str:
+    def _unfinished_remedy(scenario: str, status: str) -> str:
+        if status == RUN_RUNNING:
+            return (
+                "wait for it to finish, or record how it ended with "
+                "lab_state.py mark-failed {0}".format(scenario)
+            )
+        return "Run: lab.sh run {0}".format(scenario)
+
+    def _remedy(self, missing: Sequence[str]) -> str:
+        """The next command that is actually reachable for a missing stage.
+
+        Naming the stage's own scenario is only useful when starting that
+        scenario would in fact be admitted. It is not while the scenario is
+        `running`, and not while some *other* unfinished run blocks it --
+        telling an operator to run a command the very next gate refuses is
+        how a refusal stops being actionable. So the remedy is whatever the
+        gate would demand first.
+        """
         remedies = {
             "baseline_passed": "Run: lab.sh baseline",
             "agent_setup_acknowledged": "Run: lab.sh acknowledge agent-setup",
@@ -357,6 +480,12 @@ class LabState:
             scenario_stage = _scenario_stage(stage)
             if scenario_stage is not None:
                 scenario, suffix = scenario_stage
+                blockers = self._blockers_for(scenario)
+                if blockers:
+                    blocked, status = blockers[0]
+                    return "{0} is {1}; {2}.".format(
+                        blocked, status, self._unfinished_remedy(blocked, status)
+                    )
                 if suffix == "recovered":
                     return "Run: lab.sh run {0}".format(scenario)
                 return "Run: lab.sh capture {0}".format(scenario)
@@ -455,6 +584,23 @@ class LabState:
         capture_status: str,
         evidence_dir: Optional[str] = None,
     ) -> None:
+        """Record what a capture actually proved about this scenario's run.
+
+        `conclusion` is the one outcome that satisfies `sX_captured`,
+        admits the next scenario and earns rubric points, so it may only
+        ever describe a run that recovered. A conclusion recorded while the
+        scenario is `running`, `failed`, or has no recorded run at all
+        describes an incident nobody resolved -- and nothing downstream can
+        tell the difference, because the captured timeline looks identical
+        either way. This is the only place that can refuse it, so it does.
+
+        The three missing markers stay recordable whatever the run did:
+        what the Agent failed to produce is a measurement worth keeping,
+        and none of them can unblock a scenario (`has('sX_captured')`
+        accepts only `conclusion`) or award a point (`score.py` fails every
+        criterion for them). Recording them is diagnostic honesty with no
+        way to inflate a result.
+        """
         if capture_status not in CAPTURE_STATES:
             raise ValueError(
                 "Unknown capture status: {0}. Known statuses: {1}".format(
@@ -462,6 +608,19 @@ class LabState:
                 )
             )
         entry = self._scenario(scenario)
+        run_status = entry.get("run_status")
+        if capture_status == SUCCESSFUL_CAPTURE and run_status != RUN_RECOVERED:
+            raise InvalidTransition(
+                "Cannot record a {0} for {1}: its run is {2}, not {3}. Only a "
+                "run whose fault was reverted and whose alert Azure Monitor "
+                "closed can be credited with a conclusion; {4}".format(
+                    SUCCESSFUL_CAPTURE,
+                    scenario,
+                    run_status or "none",
+                    RUN_RECOVERED,
+                    self._unfinished_remedy(scenario, run_status or ""),
+                )
+            )
         entry["capture_status"] = capture_status
         if evidence_dir:
             entry["evidence_dir"] = str(evidence_dir)

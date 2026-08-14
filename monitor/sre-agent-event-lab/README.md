@@ -122,7 +122,7 @@ postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `.
 ./scripts/lab.sh capture s3
 ```
 
-`run-scenario.sh`와 `capture-scenario.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다. 진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며 순서를 어기면 실행이 거부됩니다.
+`run-scenario.sh`와 `capture-scenario.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다. 진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며 순서를 어기면 실행이 거부됩니다. 순서와 별개로, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 Container App 하나를 공유하므로, 끝나지 않은 실행 하나가 남은 실습 전체를 막습니다.
 
 | 시나리오 | 주입하는 장애 | 안내 문서 |
 |---|---|---|

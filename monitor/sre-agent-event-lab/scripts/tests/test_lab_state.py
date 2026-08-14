@@ -104,8 +104,25 @@ def test_s1_runs_once_baseline_and_acknowledgement_are_recorded(tmp_path):
 
 
 def test_s2_requires_s1_recovery_even_when_s1_was_captured(tmp_path):
-    state = ready_for_s1(tmp_path / "state.json")
-    state.record_capture("s1", "conclusion")
+    """A `conclusion` next to a run that never recovered can only come from
+    a hand-edited or half-written state file -- `record_capture` refuses to
+    write one -- so it is stated as a file here. Reading it must still
+    refuse S2: the ordered rule asks for `s1_recovered`, and a capture can
+    never stand in for it.
+    """
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps(
+            {
+                "stages": {
+                    "baseline_passed": {"at": "2026-08-14T00:00:00Z"},
+                    "agent_setup_acknowledged": {"at": "2026-08-14T00:01:00Z"},
+                },
+                "scenarios": {"s1": {"capture_status": "conclusion"}},
+            }
+        )
+    )
+    state = LabState(path)
     with pytest.raises(InvalidTransition, match="s1_recovered"):
         state.require_run("s2")
 
@@ -135,7 +152,6 @@ def test_the_full_ordered_sequence_is_allowed(tmp_path):
 def test_a_failed_run_does_not_satisfy_the_next_scenario(tmp_path):
     state = ready_for_s1(tmp_path / "state.json")
     state.mark_failed("s1", str(tmp_path / "s1"), reason="alert never resolved")
-    state.record_capture("s1", "conclusion")
 
     assert state.run_status("s1") == "failed"
     with pytest.raises(InvalidTransition, match="s1_recovered"):
@@ -382,6 +398,309 @@ def test_require_run_rejects_an_unknown_scenario(tmp_path):
         state.require_run("s9")
 
 
+# --- One unfinished run blocks the whole lab, not just the next scenario ---
+
+
+def completed_lab(path, evidence_root):
+    """A lab whose three scenarios all ran, recovered and captured.
+
+    Built through the real API, in order, so the precondition is a state
+    the lab can actually reach -- the state an operator holds the moment
+    every scenario has produced a conclusion.
+    """
+    state = ready_for_s1(path)
+    for scenario in lab_state.SCENARIOS:
+        directory = str(evidence_root / "{0}-first".format(scenario))
+        state.begin_run(scenario, directory)
+        state.mark_recovered(scenario, directory)
+        state.record_capture(scenario, "conclusion", directory)
+    return state
+
+
+def break_rerun(state, scenario, evidence_dir, run_status):
+    """Re-run `scenario` and leave it unfinished, `running` or `failed`."""
+    state.begin_run(scenario, str(evidence_dir))
+    if run_status == "failed":
+        state.mark_failed(scenario, str(evidence_dir), reason="injection rejected")
+    assert state.run_status(scenario) == run_status
+    return state
+
+
+@pytest.mark.parametrize("run_status", ("running", "failed"))
+def test_a_broken_rerun_of_s1_blocks_s3_although_s2_is_still_captured(
+    tmp_path, run_status
+):
+    """The residual gap: the ordered rules only look *backwards* one step.
+
+    A finished lab re-runs S1; the re-run dies before it can record an
+    outcome, or records a failure. S1 is then `running`/`failed` -- its
+    fault may still be live in the shared workload -- but S3's own
+    prerequisites (`s2_recovered`, `s2_captured`) are untouched, so S3 was
+    admitted and injected a third fault on top of an incident nobody
+    resolved. Every scenario shares one Container App, so an unfinished
+    run has to block *every* other scenario, not only the next one.
+    """
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s1", tmp_path / "s1-second", run_status)
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.require_run("s3")
+
+    message = str(refusal.value)
+    assert "s1" in message
+    assert run_status in message
+
+
+@pytest.mark.parametrize("run_status", ("running", "failed"))
+@pytest.mark.parametrize("blocked", ("s2", "s3"))
+def test_an_unfinished_s1_blocks_s2_and_s3(tmp_path, run_status, blocked):
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s1", tmp_path / "s1-second", run_status)
+
+    with pytest.raises(InvalidTransition, match="s1"):
+        state.require_run(blocked)
+
+
+@pytest.mark.parametrize("run_status", ("running", "failed"))
+@pytest.mark.parametrize("blocked", ("s1", "s3"))
+def test_an_unfinished_s2_blocks_s1_and_s3(tmp_path, run_status, blocked):
+    """S1 is *earlier* than S2 and no ordered rule mentions it, so nothing
+    but the global gate can stop an operator from re-running S1 while S2's
+    fault is still injected."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s2", tmp_path / "s2-second", run_status)
+
+    with pytest.raises(InvalidTransition, match="s2"):
+        state.require_run(blocked)
+
+
+@pytest.mark.parametrize("run_status", ("running", "failed"))
+@pytest.mark.parametrize("blocked", ("s1", "s2"))
+def test_an_unfinished_s3_blocks_s1_and_s2(tmp_path, run_status, blocked):
+    """The case no ordered rule can reach at all: S3 is the last scenario,
+    so its unfinished run is invisible to every prerequisite list."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s3", tmp_path / "s3-second", run_status)
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.require_run(blocked)
+
+    message = str(refusal.value)
+    assert "s3" in message
+    assert run_status in message
+
+
+def test_a_running_scenario_cannot_be_started_again(tmp_path):
+    """Two concurrent runs of one scenario overlap two injections of the
+    same fault in one workload; the second one's evidence cannot be read."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+
+    with pytest.raises(InvalidTransition, match="running"):
+        state.require_run("s1")
+
+
+def test_a_failed_scenario_may_be_rerun_to_fix_itself(tmp_path):
+    """Re-running the failed scenario is the documented remedy, so the gate
+    must never block the one command that clears it."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s1", tmp_path / "s1-second", "failed")
+
+    state.require_run("s1")  # must not raise
+    state.begin_run("s1", str(tmp_path / "s1-third"))
+
+    assert state.run_status("s1") == "running"
+
+
+def test_two_failed_runs_at_once_still_leave_a_way_out(tmp_path):
+    """The gate must not be able to lock the lab.
+
+    Two scenarios `failed` at the same time is unreachable through the API
+    -- S2 cannot start until S1 recovered and was captured, and re-running
+    S1 is refused while S2 is failed -- but `state.json` is an editable
+    file, and a rule that has no exit in *any* state it can be put into is
+    a rule that eventually needs the file deleted. Repairing the earliest
+    unfinished scenario is therefore always allowed, so working the list
+    from the top always terminates.
+    """
+    path = tmp_path / "state.json"
+    completed_lab(path, tmp_path)
+    document = json.loads(path.read_text())
+    for scenario in ("s1", "s2"):
+        document["scenarios"][scenario]["run_status"] = "failed"
+        document["scenarios"][scenario].pop("capture_status", None)
+    path.write_text(json.dumps(document))
+    state = lab_state.LabState(path)
+
+    state.require_run("s1")  # the earliest failure may always be repaired
+
+    with pytest.raises(lab_state.InvalidTransition, match="s1"):
+        state.require_run("s2")
+    with pytest.raises(lab_state.InvalidTransition, match="s1"):
+        state.require_run("s3")
+
+
+def test_the_refusal_lists_every_blocker_earliest_first(tmp_path):
+    """One name is not enough when two runs are unfinished: an operator who
+    clears only the one they were told about hits the next refusal blind.
+    The list is ordered, so the first entry is the one to deal with.
+
+    S1 has no ordered prerequisite naming S2 or S3, so this refusal can
+    only come from the gate.
+    """
+    path = tmp_path / "state.json"
+    completed_lab(path, tmp_path)
+    document = json.loads(path.read_text())
+    document["scenarios"]["s2"]["run_status"] = "running"
+    document["scenarios"]["s3"]["run_status"] = "failed"
+    path.write_text(json.dumps(document))
+    state = lab_state.LabState(path)
+
+    with pytest.raises(lab_state.InvalidTransition) as error:
+        state.require_run("s1")
+
+    message = str(error.value)
+    assert message.index("s2") < message.index("s3"), message
+    assert "running" in message and "failed" in message
+    assert "mark-failed s2" in message
+    assert "lab.sh run s3" in message
+
+
+def test_a_repair_is_refused_while_an_earlier_run_is_still_running(tmp_path):
+    """`running` is not a repairable state -- nobody knows whether that run
+    is still working -- so it blocks the later failure's repair too, and the
+    remedy named is the one that ends it."""
+    path = tmp_path / "state.json"
+    completed_lab(path, tmp_path)
+    document = json.loads(path.read_text())
+    document["scenarios"]["s1"]["run_status"] = "running"
+    document["scenarios"]["s2"]["run_status"] = "failed"
+    path.write_text(json.dumps(document))
+    state = lab_state.LabState(path)
+
+    with pytest.raises(lab_state.InvalidTransition, match="mark-failed s1"):
+        state.require_run("s2")
+
+
+def test_the_refusal_names_the_blocking_scenario_its_status_and_a_remedy(tmp_path):
+    """S1 has no ordered prerequisite that mentions S2, so this refusal can
+    only come from the global gate: it has to carry everything the ordered
+    message would have carried."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s2", tmp_path / "s2-second", "failed")
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.require_run("s1")
+
+    message = str(refusal.value)
+    assert "s2" in message
+    assert "failed" in message
+    assert "lab.sh run s2" in message, message
+
+
+def test_the_refusal_for_a_running_scenario_names_how_to_end_it(tmp_path):
+    """A run that died leaves `running` behind for ever unless the operator
+    is told the one command that records how it ended."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.require_run("s3")
+
+    message = str(refusal.value)
+    assert "s1" in message
+    assert "running" in message
+    assert "mark-failed s1" in message, message
+
+
+def test_the_ordered_remedy_never_tells_an_operator_to_restart_a_running_run(tmp_path):
+    """S2's ordered refusal names `s1_recovered`, whose remedy is normally
+    "run S1 again". While S1 is still running that command is refused too,
+    so the remedy has to change with the run's status instead of sending
+    the operator into a second refusal.
+    """
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.require_run("s2")
+
+    message = str(refusal.value)
+    assert "s1_recovered" in message
+    assert "lab.sh run s1" not in message, message
+    assert "mark-failed s1" in message, message
+
+
+def test_a_finished_lab_still_allows_a_normal_rerun_of_every_scenario(tmp_path):
+    """`recovered` is a finished run: the gate must not turn the ordinary
+    "run it again to collect a second capture" flow into a refusal."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+
+    for scenario in lab_state.SCENARIOS:
+        state.require_run(scenario)  # must not raise
+
+
+def test_a_rerun_that_recovers_again_reopens_every_other_scenario(tmp_path):
+    """The gate has to *clear*: once the unfinished run recovers, the lab
+    goes back to being governed by the ordered rules alone."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s1", tmp_path / "s1-second", "failed")
+    with pytest.raises(InvalidTransition):
+        state.require_run("s3")
+
+    state.begin_run("s1", str(tmp_path / "s1-third"))
+    state.mark_recovered("s1", str(tmp_path / "s1-third"))
+
+    state.require_run("s3")  # must not raise
+
+
+def test_a_recovered_but_uncaptured_run_blocks_only_the_ordered_rules(tmp_path):
+    """The rule this pins down, deliberately unchanged: `recovered` is a
+    *finished* run -- the fault is reverted and the alert closed -- so it
+    never trips the unfinished-run gate. A re-run of S1 that recovered but
+    has not been captured yet therefore blocks S2 through the existing
+    ordered rule (`s1_captured`) and leaves S3, whose own prerequisites
+    (`s2_recovered`, `s2_captured`) are untouched, admitted. The ordered
+    rules keep looking exactly one scenario back; the new gate adds nothing
+    here because nothing is still running or failed.
+    """
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+    state.mark_recovered("s1", str(tmp_path / "s1-second"))
+    assert state.capture_status("s1") is None
+
+    with pytest.raises(InvalidTransition, match="s1_captured"):
+        state.require_run("s2")
+    state.require_run("s3")  # must not raise
+    state.require_run("s1")  # must not raise
+
+
+def test_begin_run_is_refused_while_another_scenario_is_unfinished(tmp_path):
+    """`begin_run` is what runs just before the injection, so it must refuse
+    exactly what `require_run` refuses -- and record nothing when it does."""
+    state = completed_lab(tmp_path / "state.json", tmp_path)
+    break_rerun(state, "s1", tmp_path / "s1-second", "failed")
+
+    with pytest.raises(InvalidTransition, match="s1"):
+        state.begin_run("s3", str(tmp_path / "s3-second"))
+
+    assert state.run_status("s3") == "recovered"
+    assert state.capture_status("s3") == "conclusion"
+    assert state.evidence_dir("s3") == str(tmp_path / "s3-first")
+
+
+def test_the_gate_reads_what_is_on_disk_not_this_process_memory(tmp_path):
+    path = tmp_path / "state.json"
+    state = completed_lab(path, tmp_path)
+    break_rerun(state, "s2", tmp_path / "s2-second", "failed")
+
+    with pytest.raises(InvalidTransition) as refusal:
+        LabState(path).require_run("s1")
+
+    assert "s2" in str(refusal.value)
+    assert "failed" in str(refusal.value)
+
+
 # --- Never promoting missing Agent output to success ------------------------
 
 
@@ -413,6 +732,134 @@ def test_record_capture_rejects_an_unknown_terminal_state(tmp_path):
     state = LabState(tmp_path / "state.json")
     with pytest.raises(ValueError):
         state.record_capture("s1", "looks-fine")
+
+
+# --- Only a recovered run may be credited with a conclusion -----------------
+
+
+@pytest.mark.parametrize(
+    "run_status", (None, "running", "failed"), ids=("none", "running", "failed")
+)
+def test_a_conclusion_cannot_be_recorded_against_a_run_that_never_recovered(
+    tmp_path, run_status
+):
+    """`conclusion` is the one capture outcome that unblocks the next
+    scenario and earns points, so it may only ever describe a run that
+    actually recovered. A conclusion recorded while the scenario is
+    `running`, `failed`, or has no recorded run at all belongs to an
+    incident nobody resolved -- and the state file is the only place that
+    can refuse it, because the timeline it came from looks identical.
+    """
+    state = ready_for_s1(tmp_path / "state.json")
+    if run_status == "running":
+        state.begin_run("s1", str(tmp_path / "s1"))
+    elif run_status == "failed":
+        state.mark_failed("s1", str(tmp_path / "s1"), reason="alert never resolved")
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.record_capture("s1", "conclusion", str(tmp_path / "s1"))
+
+    assert "conclusion" in str(refusal.value)
+    assert (run_status or "none") in str(refusal.value)
+    assert state.capture_status("s1") is None
+    assert not state.is_successful_capture("s1")
+
+
+@pytest.mark.parametrize(
+    "run_status, expected, forbidden",
+    (
+        ("running", "mark-failed s1", "lab.sh run s1"),
+        ("failed", "lab.sh run s1", "mark-failed s1"),
+        (None, "lab.sh run s1", "mark-failed s1"),
+    ),
+    ids=("running", "failed", "none"),
+)
+def test_the_capture_refusal_names_a_command_that_is_not_itself_refused(
+    tmp_path, run_status, expected, forbidden
+):
+    """Telling an operator to re-run a scenario that is still `running`
+    sends them straight into the unfinished-run gate. The remedy has to be
+    the one command the state actually admits."""
+    state = ready_for_s1(tmp_path / "state.json")
+    if run_status == "running":
+        state.begin_run("s1", str(tmp_path / "s1"))
+    elif run_status == "failed":
+        state.mark_failed("s1", str(tmp_path / "s1"), reason="alert never resolved")
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.record_capture("s1", "conclusion", str(tmp_path / "s1"))
+
+    assert expected in str(refusal.value)
+    assert forbidden not in str(refusal.value)
+
+
+@pytest.mark.parametrize(
+    "missing_status",
+    ("thread-not-created", "investigation-missing", "conclusion-missing"),
+)
+@pytest.mark.parametrize(
+    "run_status", (None, "running", "failed"), ids=("none", "running", "failed")
+)
+def test_a_missing_marker_is_still_recorded_for_any_run_status(
+    tmp_path, missing_status, run_status
+):
+    """Diagnostic honesty runs the other way: what the Agent failed to
+    produce is worth recording whatever the run did, because it is the
+    measurement an operator has to read. None of these markers can unblock
+    anything or earn a point, so recording them is free of risk.
+    """
+    state = ready_for_s1(tmp_path / "state.json")
+    if run_status == "running":
+        state.begin_run("s1", str(tmp_path / "s1"))
+    elif run_status == "failed":
+        state.mark_failed("s1", str(tmp_path / "s1"), reason="alert never resolved")
+
+    state.record_capture("s1", missing_status, str(tmp_path / "s1"))
+
+    assert state.capture_status("s1") == missing_status
+    assert not state.is_successful_capture("s1")
+    assert not state.has("s1_captured")
+
+
+def test_a_conclusion_is_recorded_once_the_run_recovered(tmp_path):
+    state = ready_for_s1(tmp_path / "state.json")
+    state.begin_run("s1", str(tmp_path / "s1"))
+    state.mark_recovered("s1", str(tmp_path / "s1"))
+
+    state.record_capture("s1", "conclusion", str(tmp_path / "s1"))
+
+    assert state.is_successful_capture("s1")
+
+
+def test_cli_record_capture_refuses_a_conclusion_for_a_failed_run(tmp_path):
+    path = tmp_path / "state.json"
+    evidence_dir = tmp_path / "s1-20260814T000000Z"
+    evidence_dir.mkdir()
+    (evidence_dir / "normalized-timeline.json").write_text(
+        json.dumps(
+            [{"state": "alert-fired"}, {"state": "thread-created"}, {"state": "conclusion"}]
+        )
+    )
+    run_cli(path, ["mark", "baseline_passed"])
+    run_cli(path, ["acknowledge-agent"], stdin="acknowledge\n")
+    run_cli(path, ["mark-failed", "s1", str(evidence_dir), "--reason", "no alert"])
+
+    result = run_cli(
+        path,
+        [
+            "record-capture",
+            "s1",
+            "--timeline",
+            str(evidence_dir / "normalized-timeline.json"),
+            "--evidence-dir",
+            str(evidence_dir),
+        ],
+    )
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "failed" in result.stderr
+    assert "capture_status" not in json.loads(path.read_text())["scenarios"]["s1"]
 
 
 @pytest.mark.parametrize(
@@ -783,6 +1230,59 @@ def test_cli_begin_run_without_the_prerequisites_records_nothing(tmp_path):
     assert "agent_setup_acknowledged" in result.stderr
     assert "Traceback" not in result.stderr
     assert not path.exists() or "s1" not in json.loads(path.read_text())["scenarios"]
+
+
+def seed_completed_lab(path, evidence_root):
+    """Drive the CLI through a whole lab: three recovered, captured runs."""
+    assert run_cli(path, ["mark", "baseline_passed"]).returncode == 0
+    assert run_cli(path, ["acknowledge-agent"], stdin="acknowledge\n").returncode == 0
+    for scenario in lab_state.SCENARIOS:
+        directory = str(evidence_root / "{0}-first".format(scenario))
+        assert run_cli(path, ["begin-run", scenario, directory]).returncode == 0
+        assert run_cli(path, ["mark-recovered", scenario, directory]).returncode == 0
+        recorded = run_cli(
+            path,
+            ["record-capture", scenario, "--status", "conclusion", "--evidence-dir", directory],
+        )
+        assert recorded.returncode == 0, recorded.stderr
+    return path
+
+
+def test_cli_require_run_refuses_every_scenario_while_one_run_is_unfinished(tmp_path):
+    """S3 is the last scenario, so no ordered rule mentions it: only the
+    global gate can refuse S1 and S2 while its run is unfinished."""
+    path = seed_completed_lab(tmp_path / "state.json", tmp_path)
+    assert run_cli(path, ["begin-run", "s3", str(tmp_path / "s3-second")]).returncode == 0
+    assert (
+        run_cli(
+            path, ["mark-failed", "s3", str(tmp_path / "s3-second"), "--reason", "rejected"]
+        ).returncode
+        == 0
+    )
+
+    for scenario in ("s1", "s2"):
+        refused = run_cli(path, ["require-run", scenario])
+        assert refused.returncode == 1, refused.stdout
+        assert "s3" in refused.stderr
+        assert "failed" in refused.stderr
+        assert "lab.sh run s3" in refused.stderr
+        assert "Traceback" not in refused.stderr
+
+    assert run_cli(path, ["require-run", "s3"]).returncode == 0
+
+
+def test_cli_begin_run_refuses_while_another_scenario_is_still_running(tmp_path):
+    path = seed_completed_lab(tmp_path / "state.json", tmp_path)
+    assert run_cli(path, ["begin-run", "s3", str(tmp_path / "s3-second")]).returncode == 0
+    before = path.read_text()
+
+    refused = run_cli(path, ["begin-run", "s1", str(tmp_path / "s1-second")])
+
+    assert refused.returncode == 1, refused.stdout
+    assert "s3" in refused.stderr
+    assert "running" in refused.stderr
+    assert "Traceback" not in refused.stderr
+    assert path.read_text() == before
 
 
 def test_cli_begin_run_refuses_a_state_file_from_another_environment(tmp_path):

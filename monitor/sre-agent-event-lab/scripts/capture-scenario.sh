@@ -80,10 +80,18 @@ fi
 # state of the normalized timeline is the honest outcome of this capture,
 # including `thread-not-created`, `investigation-missing` and
 # `conclusion-missing`. Only a real `conclusion` counts as a successful
-# capture and unblocks the next scenario.
-CAPTURE_STATE="$(lab_state record-capture "${SCENARIO}" \
+# capture and unblocks the next scenario -- and `lab_state.py` refuses even
+# that when the run it belongs to did not recover, because a conclusion
+# collected against an unresolved incident is indistinguishable from a real
+# one once it is on disk. That refusal must not look like a crash: the
+# capture pipeline has already written real files, and they stay.
+if ! CAPTURE_STATE="$(lab_state record-capture "${SCENARIO}" \
   --timeline "${NORMALIZED_FILE}" \
-  --evidence-dir "${EVIDENCE_DIR}")"
+  --evidence-dir "${EVIDENCE_DIR}")"; then
+  echo "The capture was collected but not recorded." >&2
+  echo "Raw evidence is on disk and unchanged: ${EVIDENCE_DIR}" >&2
+  exit 1
+fi
 readonly CAPTURE_STATE
 
 event_count="$(jq 'length' "${NORMALIZED_FILE}")"

@@ -20,6 +20,30 @@ DEPLOY_ACTIONS = (
     "az containerapp registry set",
 )
 
+UUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
+
+# Azure's own built-in role definition IDs. They are the same GUIDs in
+# every tenant -- they identify a role, not anybody's subscription -- so
+# the onboarding files below are allowed to name them.
+BUILTIN_ROLE_DEFINITION_IDS = frozenset(
+    {
+        "7f951dda-4ed3-4680-a7ca-43fe172d538d",  # AcrPull
+        "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",  # Storage Blob Data Reader
+        "749f88d5-cbae-40b8-bcfc-e573ddc772fa",  # Monitoring Contributor
+    }
+)
+
+
+def leaked_guids(text):
+    """Every GUID in `text` that is not a built-in Azure role definition."""
+    return sorted(
+        {
+            found
+            for found in UUID_PATTERN.findall(text)
+            if found.lower() not in BUILTIN_ROLE_DEFINITION_IDS
+        }
+    )
+
 
 def _git_ignores(path):
     """Whether git's ignore rules cover `path` (the file need not exist)."""
@@ -124,7 +148,7 @@ def test_subscription_template_uses_azd_environment_parameters():
     assert "targetScope = 'subscription'" in template
     assert "param environmentName string" in template
     assert "param resourceGroupName string = 'rg-${environmentName}'" in template
-    assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in template
+    assert leaked_guids(template) == []
     assert "2026-08-13" not in template
 
 
@@ -330,8 +354,12 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
     left out of `onboarding_paths` below only because `test_common.py`
     already covers it directly; `validation-results.md` (the historical
     record of that specific real run) is deliberately out of scope here.
+
+    What is forbidden is the *shape*, minus Azure's tenant-independent
+    built-in role definition IDs -- so the guard catches the next person's
+    subscription too, and so this test does not have to restate a real
+    subscription ID in order to prove it is absent.
     """
-    fixed_subscription_id = "95933ae5-0201-4a21-a1fc-8051a7437982"
     onboarding_paths = [
         LAB_ROOT / "README.md",
         LAB_ROOT / "azure.yaml",
@@ -346,15 +374,15 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
         LAB_ROOT / "scripts" / "deploy.sh",
     ]
 
-    offenders = [
-        str(path.relative_to(LAB_ROOT))
+    offenders = {
+        str(path.relative_to(LAB_ROOT)): leaked_guids(path.read_text())
         for path in onboarding_paths
-        if path.is_file() and fixed_subscription_id in path.read_text()
-    ]
+        if path.is_file() and leaked_guids(path.read_text())
+    }
 
-    assert offenders == [], (
-        "azd onboarding docs/config still hardcode the original validation "
-        f"subscription ID: {offenders}"
+    assert offenders == {}, (
+        "azd onboarding docs/config hardcode a subscription-shaped GUID: "
+        f"{offenders}"
     )
 
 

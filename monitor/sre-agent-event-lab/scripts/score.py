@@ -6,8 +6,13 @@ conclusion: did it identify the impact scope (2), the direct cause (3), did
 it use actual evidence (2), propose a safe minimum mitigation (2), and state
 its uncertainty (1)?
 
-Two rules keep the answer honest:
+Three rules keep the answer honest:
 
+* A scenario whose run did not end `recovered` scores zero, whatever its
+  capture says. `lab_state` already refuses to record a conclusion against
+  such a run; this is the second, independent check, because the state
+  file is editable and a conclusion left by a superseded attempt looks
+  exactly like a real one.
 * A scenario whose capture ended in one of the explicit missing markers
   (`thread-not-created`, `investigation-missing`, `conclusion-missing`)
   scores zero. The marker is printed with every criterion, because the
@@ -33,6 +38,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from lab_state import (
     MISSING_CAPTURE_STATES,
+    RUN_RECOVERED,
     SCENARIOS,
     SUCCESSFUL_CAPTURE,
     LabState,
@@ -105,8 +111,31 @@ def score_scenario(
     capture_status: Optional[str],
     timeline: Sequence[Dict[str, Any]],
     review: Optional[Dict[str, Any]],
+    run_status: Optional[str],
 ) -> Dict[str, Any]:
-    """Score one scenario from its capture outcome and structured review."""
+    """Score one scenario from its run outcome, capture outcome and review.
+
+    The run status is checked first and independently of the capture.
+    `lab_state.record_capture` already refuses to write a `conclusion`
+    against a run that is not `recovered`, but this scorer reads a file an
+    operator can edit and an interrupted write can truncate -- and a
+    conclusion from a superseded attempt is indistinguishable from a real
+    one once it is on disk. So a scenario whose run did not recover fails
+    every criterion here too, whatever the capture says. Two independent
+    checks have to be defeated before an unresolved incident can score.
+
+    The recorded `capture_status` is still reported verbatim: the point is
+    to refuse the points, not to hide what was measured.
+    """
+    run_failure = None
+    if run_status != RUN_RECOVERED:
+        run_failure = (
+            "Run ended as {0}, not {1}; nothing captured against an "
+            "unresolved incident can be scored.".format(
+                run_status or "none", RUN_RECOVERED
+            )
+        )
+
     failure = None
     if capture_status is None:
         failure = "no capture recorded"
@@ -119,10 +148,10 @@ def score_scenario(
     points = 0
     manual_points = 0
     for criterion in CRITERIA:
-        if failure is not None:
+        if run_failure is not None or failure is not None:
             status = "FAIL"
             awarded = 0
-            detail = (
+            detail = run_failure or (
                 "Capture ended as {0}; the Agent produced no conclusion to "
                 "score.".format(failure)
             )
@@ -156,6 +185,7 @@ def score_scenario(
     return {
         "scenario": scenario,
         "capture_status": capture_status,
+        "run_status": run_status,
         "timeline_events": len(timeline or []),
         "criteria": criteria,
         "points": points,
@@ -200,9 +230,10 @@ def build_scorecard(state: LabState, evidence_root: Path) -> Dict[str, Any]:
             directory = Path(evidence_dir)
             timeline = _read_json(directory / "normalized-timeline.json") or []
             review = _read_json(directory / REVIEW_FILE)
-        result = score_scenario(scenario, capture_status, timeline, review)
+        result = score_scenario(
+            scenario, capture_status, timeline, review, state.run_status(scenario)
+        )
         result["evidence_dir"] = evidence_dir
-        result["run_status"] = state.run_status(scenario)
         scenarios[scenario] = result
 
     points = sum(result["points"] for result in scenarios.values())
@@ -255,8 +286,10 @@ def render_table(scorecard: Dict[str, Any]) -> str:
                     result["verdict"],
                     "{0}/{1}".format(result["points"], result["max_points"]),
                     _cell(
-                        "capture={0} manual={1}".format(
-                            result["capture_status"] or "none", result["manual_points"]
+                        "run={0} capture={1} manual={2}".format(
+                            result["run_status"] or "none",
+                            result["capture_status"] or "none",
+                            result["manual_points"],
                         )
                     ),
                 )

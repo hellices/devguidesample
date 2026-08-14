@@ -45,6 +45,7 @@ MISSING_CONCLUSION_TIMELINE = [
     {"state": "investigating"},
     {"state": "conclusion-missing"},
 ]
+RECOVERED = lab_state.RUN_RECOVERED
 FULL_REVIEW = {
     "impact_scope": {"met": True, "detail": "Named the Container App and both routes."},
     "direct_cause": {"met": True, "detail": "Named FAILURE_MODE=http500."},
@@ -94,7 +95,9 @@ def test_the_rubric_is_the_documented_ten_point_one():
 
 
 def test_a_fully_reviewed_conclusion_earns_every_point():
-    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, FULL_REVIEW)
+    result = score.score_scenario(
+        "s1", "conclusion", CONCLUSION_TIMELINE, FULL_REVIEW, RECOVERED
+    )
 
     assert result["points"] == 10
     assert result["max_points"] == 10
@@ -106,7 +109,7 @@ def test_an_unmet_criterion_costs_exactly_its_points():
     review = dict(FULL_REVIEW)
     review["direct_cause"] = {"met": False, "detail": "Named a symptom, not the cause."}
 
-    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, review)
+    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, review, RECOVERED)
 
     assert criteria_by_id(result)["direct_cause"]["status"] == "FAIL"
     assert criteria_by_id(result)["direct_cause"]["points"] == 0
@@ -131,7 +134,7 @@ def test_any_manual_criterion_keeps_the_verdict_incomplete():
 
 
 def test_a_missing_review_is_manual_and_awards_nothing():
-    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, None)
+    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, None, RECOVERED)
 
     assert result["points"] == 0
     assert result["manual_points"] == 10
@@ -144,7 +147,7 @@ def test_a_missing_review_is_manual_and_awards_nothing():
 def test_one_unavailable_field_is_manual_while_the_rest_score():
     review = {key: value for key, value in FULL_REVIEW.items() if key != "uncertainty"}
 
-    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, review)
+    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, review, RECOVERED)
 
     assert criteria_by_id(result)["uncertainty"]["status"] == "MANUAL"
     assert criteria_by_id(result)["uncertainty"]["points"] == 0
@@ -158,7 +161,7 @@ def test_an_unusable_judgement_is_manual_never_a_pass(unusable):
     review = dict(FULL_REVIEW)
     review["impact_scope"] = unusable
 
-    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, review)
+    result = score.score_scenario("s1", "conclusion", CONCLUSION_TIMELINE, review, RECOVERED)
 
     assert criteria_by_id(result)["impact_scope"]["status"] == "MANUAL"
     assert criteria_by_id(result)["impact_scope"]["points"] == 0
@@ -171,7 +174,9 @@ def test_an_unusable_judgement_is_manual_never_a_pass(unusable):
     "capture_status", ("thread-not-created", "investigation-missing", "conclusion-missing")
 )
 def test_a_missing_agent_output_scores_zero_and_stays_visible(capture_status):
-    result = score.score_scenario("s1", capture_status, MISSING_CONCLUSION_TIMELINE, FULL_REVIEW)
+    result = score.score_scenario(
+        "s1", capture_status, MISSING_CONCLUSION_TIMELINE, FULL_REVIEW, RECOVERED
+    )
 
     assert result["points"] == 0
     assert result["manual_points"] == 0
@@ -186,11 +191,86 @@ def test_a_scenario_that_was_never_captured_is_not_manual():
     """No capture at all is a known failure, not an unknown: reporting it
     `MANUAL` would let an unrun scenario wait forever for a human instead of
     failing the lab."""
-    result = score.score_scenario("s3", None, [], None)
+    result = score.score_scenario("s3", None, [], None, RECOVERED)
 
     assert result["verdict"] == "FAIL"
     assert result["points"] == 0
     assert result["manual_points"] == 0
+
+
+# --- A conclusion is worthless unless its run recovered --------------------
+
+
+@pytest.mark.parametrize(
+    "run_status", (None, "running", "failed"), ids=("none", "running", "failed")
+)
+def test_a_conclusion_from_a_run_that_never_recovered_scores_zero(run_status):
+    """Defence in depth. `lab_state.record_capture` already refuses to write
+    a `conclusion` next to a run that is not `recovered`, but the scorer
+    reads a file an operator can edit and an interrupted write can truncate.
+    A stale conclusion left over from a superseded attempt must never be
+    scored: the run status is checked here too, independently, and forces
+    the whole scenario to FAIL with zero points.
+    """
+    result = score.score_scenario(
+        "s1", "conclusion", CONCLUSION_TIMELINE, FULL_REVIEW, run_status
+    )
+
+    assert result["points"] == 0
+    assert result["manual_points"] == 0
+    assert result["verdict"] == "FAIL"
+    assert result["run_status"] == run_status
+    assert result["capture_status"] == "conclusion", (
+        "the recorded capture status must stay visible, not be rewritten"
+    )
+    for item in result["criteria"]:
+        assert item["status"] == "FAIL"
+        assert item["points"] == 0
+        assert (run_status or "none") in item["detail"], item["detail"]
+
+
+def test_the_scorecard_fails_a_stale_conclusion_left_by_a_broken_rerun(tmp_path):
+    """The end-to-end shape of the same defence: a state file that still
+    carries a `conclusion` for a scenario whose run says `failed` -- exactly
+    what a half-written or hand-edited file looks like -- must score FAIL,
+    not the ten points its review would otherwise earn.
+    """
+    directories = {
+        scenario: write_evidence(tmp_path, scenario, CONCLUSION_TIMELINE, FULL_REVIEW)
+        for scenario in ("s1", "s2", "s3")
+    }
+    make_state(tmp_path, directories)
+    state_path = tmp_path / "state.json"
+    document = json.loads(state_path.read_text())
+    document["scenarios"]["s1"]["run_status"] = "failed"
+    state_path.write_text(json.dumps(document))
+
+    scorecard = score.build_scorecard(lab_state.LabState(state_path), tmp_path)
+
+    assert scorecard["scenarios"]["s1"]["verdict"] == "FAIL"
+    assert scorecard["scenarios"]["s1"]["points"] == 0
+    assert scorecard["scenarios"]["s1"]["run_status"] == "failed"
+    assert scorecard["overall"]["verdict"] == "FAIL"
+    assert scorecard["overall"]["points"] == 20
+
+
+def test_the_table_shows_the_run_status_behind_a_forced_failure(tmp_path):
+    directories = {
+        scenario: write_evidence(tmp_path, scenario, CONCLUSION_TIMELINE, FULL_REVIEW)
+        for scenario in ("s1", "s2", "s3")
+    }
+    make_state(tmp_path, directories)
+    state_path = tmp_path / "state.json"
+    document = json.loads(state_path.read_text())
+    document["scenarios"]["s1"]["run_status"] = "running"
+    state_path.write_text(json.dumps(document))
+
+    table = score.render_table(
+        score.build_scorecard(lab_state.LabState(state_path), tmp_path)
+    )
+
+    assert "s1\tTOTAL\tFAIL\t0/10" in table
+    assert "run=running" in table
 
 
 # --- Scorecard --------------------------------------------------------------

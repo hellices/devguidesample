@@ -8,6 +8,7 @@ that no variable a script assigns collides with a `readonly` name
 Azure operation.
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -419,6 +420,143 @@ def test_a_rerun_that_dies_early_retires_the_previous_success(tmp_path, break_th
     scored = lab_run.run("lab.sh", ["score"])
     assert scored.returncode != 0, scored.stdout
     assert "lab.sh run" in scored.stderr
+
+
+# --- One unfinished run stops the whole lab, not just the next scenario ----
+
+
+def finish_scenario(lab_run, scenario):
+    """Run and capture one scenario end to end, the way an operator does."""
+    run_result = lab_run.run("run-scenario.sh", [scenario], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stdout + run_result.stderr
+    capture = lab_run.run("capture-scenario.sh", [scenario])
+    assert capture.returncode == 0, capture.stdout + capture.stderr
+    assert lab_run.scenario_state(scenario)["capture_status"] == "conclusion"
+
+
+def test_a_broken_s1_rerun_stops_s3_although_s2_is_still_captured(tmp_path):
+    """The gap this closes, end to end.
+
+    All three scenarios run and capture cleanly, then S1 is re-run and the
+    re-run dies before it can record an outcome. S1 is now `running` or
+    `failed` -- its fault may still be live in the shared Container App --
+    but S2's entry is untouched, still `recovered` + `conclusion`. The
+    ordered rules only look one scenario back, so `run-scenario.sh s3` read
+    S2's stale success and was admitted: a third fault injected on top of an
+    incident nobody had resolved, and two captures that can no longer be
+    told apart.
+    """
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    for scenario in ("s1", "s2", "s3"):
+        finish_scenario(lab_run, scenario)
+    lab_run.break_injection()
+    rerun = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert rerun.returncode != 0, rerun.stdout
+    assert lab_run.scenario_state("s1")["run_status"] in ("running", "failed")
+    assert lab_run.scenario_state("s2")["capture_status"] == "conclusion"
+    az_before = lab_run.az_calls()
+
+    blocked = lab_run.run("run-scenario.sh", ["s3"], env=BOUNDED_WAITS)
+
+    assert blocked.returncode != 0, blocked.stdout
+    assert "s1" in blocked.stderr
+    new_calls = lab_run.az_calls()[len(az_before):]
+    assert "containerapp update" not in new_calls, new_calls
+    assert "role assignment delete" not in new_calls, (
+        f"a refused run injected S3's fault anyway: {new_calls!r}"
+    )
+    assert not sorted((lab_run.lab / "evidence").glob("s3-*"))[1:], (
+        "a refused run must not leave a second S3 evidence directory behind"
+    )
+
+
+def test_a_refused_run_leaves_no_evidence_directory_behind(tmp_path):
+    """The evidence directory is registered with the run, so its path has to
+    exist as a string before `begin-run` -- but the directory itself must
+    only be created once the run was admitted. Otherwise every refusal
+    litters `evidence/` with an empty `sN-<timestamp>/` that reads exactly
+    like an attempt that ran and produced nothing.
+    """
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    finish_scenario(lab_run, "s1")
+    lab_run.break_injection()
+    assert lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS).returncode != 0
+    before = sorted(path.name for path in (lab_run.lab / "evidence").glob("s2-*"))
+
+    blocked = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+
+    assert blocked.returncode != 0, blocked.stdout
+    after = sorted(path.name for path in (lab_run.lab / "evidence").glob("s2-*"))
+    assert after == before, f"a refused run created {set(after) - set(before)}"
+
+
+def test_the_evidence_directory_is_created_only_after_the_run_is_admitted(tmp_path):
+    """Ordering, observed at the moment it matters: when `begin-run` is
+    called the directory must not exist yet, and by the time the run does
+    its work it must."""
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    probes = lab_run.begin_run_probes()
+    assert probes, "begin-run was never called"
+    assert [existed for existed, _ in probes] == ["absent"], probes
+    registered = lab_run.scenario_state("s1")["evidence_dir"]
+    assert probes[0][1] == registered, (
+        "the path registered with the run must be the one that was created"
+    )
+    assert (lab_run.lab / registered).is_dir() or Path(registered).is_dir()
+
+
+def test_a_running_scenario_cannot_be_started_a_second_time(tmp_path):
+    """A run left `running` -- a Ctrl-C, a crashed terminal -- must not be
+    restarted blindly: two live injections of the same fault leave neither
+    capture readable. The operator has to record how the first one ended."""
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state(
+        scenarios={"s1": {"run_status": "running", "started_at": "2026-08-14T00:00:00Z"}}
+    )
+    az_before = lab_run.az_calls()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0, result.stdout
+    assert "running" in result.stderr
+    assert "mark-failed s1" in result.stderr
+    new_calls = lab_run.az_calls()[len(az_before):]
+    assert "containerapp update" not in new_calls, new_calls
+
+
+def test_capture_scenario_reports_a_refused_record_without_losing_evidence(tmp_path):
+    """`record-capture` now refuses a conclusion for a run that did not
+    recover. The capture pipeline has already written real files by then, so
+    the failure must say so and name where they are -- not exit on an
+    unexplained non-zero from a command substitution."""
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+    document = json.loads(lab_run.state_path.read_text())
+    document["scenarios"]["s1"]["run_status"] = "failed"
+    lab_run.state_path.write_text(json.dumps(document))
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0, result.stdout
+    assert "recovered" in result.stderr
+    evidence_dir = lab_run.scenario_state("s1")["evidence_dir"]
+    assert evidence_dir in result.stderr, (
+        f"the operator must be told the raw evidence survived: {result.stderr!r}"
+    )
+    assert (Path(evidence_dir) / "normalized-timeline.json").is_file()
+    assert "capture_status" not in lab_run.scenario_state("s1")
 
 
 def test_a_started_run_is_recorded_before_the_fault_is_injected(tmp_path):

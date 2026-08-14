@@ -6,6 +6,7 @@
 
 - [03-scenario-s2.md](03-scenario-s2.md)의 S2가 복구되고 캡처가 `conclusion`으로 끝났습니다.
 - `evidence/state.json`에 `s2_recovered`와 `s2_captured`가 있습니다.
+- 다른 시나리오의 실행이 `running`이나 `failed`로 남아 있지 않습니다. S1을 다시 돌리다 실패한 채로 두면 S2 기록이 멀쩡해도 S3는 거부됩니다.
 - 역할 할당을 만들고 지울 권한이 그대로 있습니다.
 
 ## 실행 명령

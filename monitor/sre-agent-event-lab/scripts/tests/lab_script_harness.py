@@ -244,7 +244,30 @@ exit 0
 """
 
 
-def _lab_python_stub_source(log_path, capture_timeline, pillow_importable=True):
+BEGIN_RUN_PROBE = r"""
+# Records whether the evidence directory already exists at the moment
+# `begin-run` is called, so a test can assert the ordering -- admit the run
+# first, create the directory only once it was admitted -- rather than just
+# the end state, which looks identical either way.
+if [[ "$*" == *begin-run* ]]; then
+  probe_last=""
+  for probe_arg in "$@"; do probe_last="$probe_arg"; done
+  if [[ -d "${probe_last}" ]]; then
+    printf 'exists\t%s\n' "${probe_last}" >> "PROBE_PATH"
+  else
+    printf 'absent\t%s\n' "${probe_last}" >> "PROBE_PATH"
+  fi
+fi
+"""
+
+
+def _begin_run_probe(probe_path):
+    return BEGIN_RUN_PROBE.replace("PROBE_PATH", str(probe_path))
+
+
+def _lab_python_stub_source(
+    log_path, capture_timeline, pillow_importable=True, probe_path=None
+):
     """A fake `${LAB_ROOT}/app/.venv/bin/python`.
 
     Only the two scripts that would reach the SRE Agent data plane or write
@@ -260,8 +283,10 @@ def _lab_python_stub_source(log_path, capture_timeline, pillow_importable=True):
     packages.
     """
     pil_exit = 0 if pillow_importable else 1
+    probe = _begin_run_probe(probe_path) if probe_path else ""
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+{probe}
 if [[ "${{1:-}}" == "-c" && "${{2:-}}" == *PIL* ]]; then
   exit {pil_exit}
 fi
@@ -296,10 +321,12 @@ exit 0
 """
 
 
-def _python3_stub_source(log_path):
+def _python3_stub_source(log_path, probe_path=None):
     """A fake `python3`: `loadgen.py` is faked, everything else is real."""
+    probe = _begin_run_probe(probe_path) if probe_path else ""
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+{probe}
 case "${{1:-}}" in
   *loadgen.py) exit 0 ;;
   *) exec "{REAL_PYTHON}" "$@" ;;
@@ -354,6 +381,7 @@ def make_lab(
     azd_log = tmp_path / "azd-calls.log"
     python_log = tmp_path / "python-calls.log"
     lab_python_log = tmp_path / "lab-python-calls.log"
+    begin_run_probe = tmp_path / "begin-run-probe.log"
 
     write_executable(bin_dir / "az", _az_stub_source(az_log, state_dir))
     write_azd_stub(
@@ -362,24 +390,47 @@ def make_lab(
         missing_key_mode,
         azd_log,
     )
-    write_executable(bin_dir / "python3", _python3_stub_source(python_log))
+    write_executable(
+        bin_dir / "python3", _python3_stub_source(python_log, begin_run_probe)
+    )
 
     venv_bin = lab / "app" / ".venv" / "bin"
     if venv_present:
         venv_bin.mkdir(parents=True)
         write_executable(
             venv_bin / "python",
-            _lab_python_stub_source(lab_python_log, capture_timeline, pillow_importable),
+            _lab_python_stub_source(
+                lab_python_log, capture_timeline, pillow_importable, begin_run_probe
+            ),
         )
 
     workdir = tmp_path / "elsewhere"
     workdir.mkdir()
 
-    return LabRun(lab, bin_dir, workdir, az_log, azd_log, lab_python_log, state_dir)
+    return LabRun(
+        lab,
+        bin_dir,
+        workdir,
+        az_log,
+        azd_log,
+        lab_python_log,
+        state_dir,
+        begin_run_probe,
+    )
 
 
 class LabRun:
-    def __init__(self, lab, bin_dir, workdir, az_log, azd_log, lab_python_log, state_dir):
+    def __init__(
+        self,
+        lab,
+        bin_dir,
+        workdir,
+        az_log,
+        azd_log,
+        lab_python_log,
+        state_dir,
+        begin_run_probe,
+    ):
         self.lab = lab
         self.bin_dir = bin_dir
         self.workdir = workdir
@@ -387,6 +438,7 @@ class LabRun:
         self.azd_log = azd_log
         self.lab_python_log = lab_python_log
         self.state_dir = state_dir
+        self.begin_run_probe = begin_run_probe
 
     def break_injection(self):
         """Make the *next* injecting `az containerapp update` fail.
@@ -474,3 +526,17 @@ class LabRun:
 
     def scenario_state(self, scenario):
         return self.state().get("scenarios", {}).get(scenario, {})
+
+    def begin_run_probes(self):
+        """One `(existed, evidence_dir)` pair per `begin-run` call, in order.
+
+        `existed` says whether the evidence directory was already on disk
+        when the run was submitted for admission.
+        """
+        if not self.begin_run_probe.exists():
+            return []
+        return [
+            tuple(line.split("\t", 1))
+            for line in self.begin_run_probe.read_text().splitlines()
+            if line.strip()
+        ]

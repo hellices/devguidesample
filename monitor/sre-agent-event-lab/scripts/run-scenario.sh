@@ -16,8 +16,10 @@ verify_lab_resource_group
 
 # The run order is a safety boundary, not a convenience: a scenario started
 # before the previous one recovered and was captured overlaps two incidents
-# in one workload, and neither capture can then be read. Checked before the
-# first Azure call that breaks anything.
+# in one workload, and neither capture can then be read. The same applies
+# to any scenario left `running` or `failed` -- its fault may still be live
+# -- so an unfinished run anywhere refuses every scenario, not just the
+# next one. Checked before the first Azure call that breaks anything.
 lab_state require-run "${SCENARIO}"
 
 # Overridable only for tests; production runs use the defaults.
@@ -37,7 +39,7 @@ BLOB_ROLE_ASSIGNMENT_NAME="$(deployment_output blobRoleAssignmentName)"
 readonly APP_NAME APP_FQDN WORKLOAD_PRINCIPAL_ID STORAGE_CONTAINER_SCOPE
 readonly BLOB_ROLE_ASSIGNMENT_NAME
 
-EVIDENCE_DIR="$(create_evidence_dir "${SCENARIO}")"
+EVIDENCE_DIR="$(evidence_dir_path "${SCENARIO}")"
 readonly EVIDENCE_DIR
 
 # The attempt is recorded before anything can break, and clears whatever
@@ -48,7 +50,13 @@ readonly EVIDENCE_DIR
 # already-captured scenario would otherwise leave `recovered` +
 # `conclusion` in place and admit the next scenario on evidence from a run
 # that no longer exists.
+#
+# `begin-run` is also the last gate: it re-reads `state.json` and refuses
+# while any scenario is still `running` or `failed`, which covers the
+# window between the `require-run` above and here. The directory is only
+# created afterwards, so a refusal leaves nothing behind in `evidence/`.
 lab_state begin-run "${SCENARIO}" "${EVIDENCE_DIR}"
+mkdir -p "${EVIDENCE_DIR}"
 
 RECOVERED=0
 INJECTED_AT=""

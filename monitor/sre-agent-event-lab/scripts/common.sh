@@ -250,11 +250,29 @@ deployment_output() {
   esac
 }
 
-create_evidence_dir() {
+# evidence_dir_path SCENARIO -- the name of this attempt's evidence
+# directory, without creating anything.
+#
+# A run has to register its evidence path with `lab_state.py begin-run`
+# *before* it starts, so the path has to exist as a string first. Creating
+# the directory at that point left an empty `<scenario>-<timestamp>/`
+# behind every time the run was then refused -- litter that reads exactly
+# like an attempt that ran and produced nothing. Naming and creating are
+# therefore separate steps, and the caller creates only once its run was
+# admitted.
+evidence_dir_path() {
   local scenario="$1"
   local timestamp
   timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  local directory="${EVIDENCE_ROOT}/${scenario}-${timestamp}"
+  printf '%s\n' "${EVIDENCE_ROOT}/${scenario}-${timestamp}"
+}
+
+# create_evidence_dir SCENARIO -- name it and create it in one step, for
+# callers that write into it immediately and have nothing left to refuse
+# them (`baseline.sh`).
+create_evidence_dir() {
+  local directory
+  directory="$(evidence_dir_path "$1")"
   mkdir -p "${directory}"
   printf '%s\n' "${directory}"
 }

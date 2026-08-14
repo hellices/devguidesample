@@ -1,3 +1,5 @@
+import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -12,6 +14,10 @@ QUERY_EVIDENCE_SH = Path(__file__).parents[1] / "query-evidence.sh"
 RUN_SCENARIO_SH = Path(__file__).parents[1] / "run-scenario.sh"
 CAPTURE_SCENARIO_SH = Path(__file__).parents[1] / "capture-scenario.sh"
 BASELINE_SH = Path(__file__).parents[1] / "baseline.sh"
+
+BASH = shutil.which("bash") or "/bin/bash"
+
+UUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
 
 LEGACY_RESOURCE_GROUP_FLAG = "--legacy-delete-resource-group"
 
@@ -82,10 +88,12 @@ def test_common_does_not_expose_personal_subscription_display_name():
     assert "SUBSCRIPTION_NAME" not in script
     assert "ME-MngEnvMCAP310512-inhwanhwang-3" not in script
     assert "inhwanhwang" not in script
-    # The one true fixed subscription this task removed: common.sh must
-    # never hardcode a subscription ID again, it must resolve one via
-    # load_lab_config (explicit env > azd env > default) instead.
-    assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in script
+    # common.sh must never hardcode *any* subscription ID again -- it
+    # resolves one via load_lab_config (explicit env > azd env > default).
+    # The shape is forbidden rather than the one value this task removed,
+    # so the guard also catches the next person's subscription, and so the
+    # test does not have to restate a real subscription ID to forbid it.
+    assert UUID_PATTERN.search(script) is None, UUID_PATTERN.search(script).group()
 
 
 def test_verify_subscription_reports_only_subscription_id_on_mismatch(tmp_path):
@@ -373,3 +381,67 @@ def test_scenario_query_capture_cleanup_scripts_are_exercised_as_programs():
             f"{script_name} has no execution test"
         )
 
+
+
+# --- The evidence directory is a name first, a directory second -------------
+
+
+def run_in_throwaway_lab(tmp_path, command):
+    """Source a copy of `common.sh` whose `EVIDENCE_ROOT` is disposable.
+
+    `EVIDENCE_ROOT` is `readonly` and derived from the script's own
+    location, so the only way to exercise the directory helpers without
+    writing into the repository's real `evidence/` is to source a copy that
+    lives somewhere else.
+    """
+    lab = tmp_path / "lab"
+    (lab / "scripts").mkdir(parents=True, exist_ok=True)
+    (lab / "evidence").mkdir(parents=True, exist_ok=True)
+    shutil.copy(str(COMMON_SH), str(lab / "scripts" / "common.sh"))
+    return subprocess.run(
+        [BASH, "-c", 'source "{0}"\n{1}\n'.format(lab / "scripts" / "common.sh", command)],
+        capture_output=True,
+        text=True,
+    ), lab / "evidence"
+
+
+def test_evidence_dir_path_names_a_directory_without_creating_it(tmp_path):
+    """`run-scenario.sh` needs the evidence path *before* it asks
+    `lab_state.py` to admit the run, because the path is what it registers.
+    Creating the directory at that point left an empty `sN-<timestamp>/`
+    behind whenever the run was then refused -- litter an operator has to
+    tell apart from a real attempt while reading `evidence/`. So naming and
+    creating are separate steps: this one only names.
+    """
+    result, evidence_root = run_in_throwaway_lab(
+        tmp_path, 'printf "%s" "$(evidence_dir_path s1)"'
+    )
+
+    assert result.returncode == 0, result.stderr
+    named = Path(result.stdout.strip())
+    assert named.parent == evidence_root
+    assert re.fullmatch(r"s1-\d{8}T\d{6}Z", named.name), named.name
+    assert not named.exists(), (
+        "naming an evidence directory must not create it: {0}".format(named)
+    )
+    assert list(evidence_root.iterdir()) == [], (
+        "a refused run must leave nothing behind in evidence/"
+    )
+
+
+def test_create_evidence_dir_still_creates_what_it_names(tmp_path):
+    """`baseline.sh` writes into the directory immediately, so the eager
+    helper must keep working -- the split adds a step, it does not move the
+    responsibility."""
+    result, evidence_root = run_in_throwaway_lab(
+        tmp_path,
+        'directory="$(create_evidence_dir baseline)"; '
+        '[[ -d "${directory}" ]] || exit 1; '
+        'printf "%s" "${directory}"',
+    )
+
+    assert result.returncode == 0, result.stderr
+    created = Path(result.stdout.strip())
+    assert created.is_dir()
+    assert created.parent == evidence_root
+    assert re.fullmatch(r"baseline-\d{8}T\d{6}Z", created.name), created.name

@@ -6,6 +6,7 @@
 
 - [02-scenario-s1.md](02-scenario-s1.md)의 S1이 복구되고 캡처가 `conclusion`으로 끝났습니다.
 - `evidence/state.json`에 `s1_recovered`와 `s1_captured`가 있습니다.
+- 다른 시나리오의 실행이 `running`이나 `failed`로 남아 있지 않습니다. 하나라도 남아 있으면 S2도 거부되고, 거부 메시지가 막고 있는 시나리오와 해결 명령을 알려 줍니다.
 - 워크로드가 정상이고 S1 경고가 해제되어 있습니다.
 
 ## 실행 명령
