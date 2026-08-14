@@ -25,6 +25,7 @@ OFFICIAL_PNGS = {
     "operations-hub-overview-tab.png",
 }
 OFFICIAL_ASSETS = OFFICIAL_SVGS | OFFICIAL_PNGS
+OFFICIAL_ASSET_PREFIX = "sre-agent-event-lab/assets/official/"
 
 
 def windows_after(text: str, anchor: str, size: int = 500) -> list:
@@ -149,9 +150,20 @@ def test_briefing_covers_adoption_critical_product_topics():
         assert source in text, source
 
 
+def rendered_image_targets(text: str) -> list:
+    """Every image target the briefing actually renders.
+
+    Covers Markdown image syntax and any raw HTML `<img>` fallback, so a file
+    can never be shown to a reader without its path being verified.
+    """
+    markdown_targets = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text)
+    html_targets = re.findall(r"<img[^>]*\ssrc=[\"']([^\"']+)[\"']", text)
+    return markdown_targets + html_targets
+
+
 def test_briefing_uses_only_local_images_and_no_storyboards():
     text = BRIEFING.read_text()
-    image_targets = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text)
+    image_targets = rendered_image_targets(text)
 
     assert image_targets
     assert all(not target.startswith(("http://", "https://")) for target in image_targets)
@@ -159,6 +171,23 @@ def test_briefing_uses_only_local_images_and_no_storyboards():
     assert ".gif" not in text.lower()
     for target in image_targets:
         assert (BRIEFING.parent / target).resolve().exists(), target
+
+
+def test_every_official_asset_is_rendered_as_a_markdown_image():
+    text = BRIEFING.read_text()
+    markdown_targets = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text)
+    rendered_official = {
+        target.rsplit("/", 1)[-1]
+        for target in markdown_targets
+        if "assets/official/" in target
+    }
+
+    assert rendered_official == OFFICIAL_ASSETS, sorted(
+        OFFICIAL_ASSETS - rendered_official
+    )
+    assert "<img" not in text, "use Markdown image syntax instead of raw HTML"
+    for name in OFFICIAL_ASSETS:
+        assert f"]({OFFICIAL_ASSET_PREFIX}{name})" in text, name
 
 
 def test_briefing_distinguishes_product_and_lab_behavior():
@@ -204,10 +233,65 @@ OFFICIAL_IMAGE_ALT_KEYWORDS = {
     "memory-unified-search.svg": ("과거", "문서", "검색"),
     "memory-auto-learning.svg": ("조사", "학습"),
     "custom-skill-flow.svg": ("스킬", "도구", "에이전트"),
+    "diagnose-azure-services.svg": (
+        "Application Insights",
+        "Log Analytics",
+        "Resource Graph",
+        "관리 ID",
+    ),
+    "notification-paths.svg": ("조치", "작업 항목", "알림"),
+    "incident-platform-flow.svg": ("대응 계획", "자동", "지표"),
+    "knowledge-sources.svg": ("업로드", "MCP", "지식"),
+    "run-modes-comparison.svg": ("검토 모드", "자율 모드", "승인"),
+    "permission-flow.svg": ("관리 ID", "RBAC", "승인"),
+    "azure-sre-agent-networking-vnet.png": (
+        "Unrestricted",
+        "Limited",
+        "Azure VNet",
+        "/28",
+        "Microsoft.App/environments",
+        "프라이빗 DNS",
+        "연결됨",
+        "우회",
+        "MCP",
+        "패키지",
+        "코드 저장소",
+        "추가 호스트",
+    ),
+    "portal-sub-agent-canvas-full.png": ("캔버스", "트리거", "도구", "자율"),
+    "managed-connectors-icon-grid.png": (
+        "Jira",
+        "Slack",
+        "GitLab",
+        "Notion",
+        "Asana",
+        "Box",
+        "Confluence",
+        "OneDrive",
+        "SharePoint",
+        "GitHub",
+        "Azure DevOps",
+        "Office 365 Users",
+        "Viva Engage",
+        "Security Copilot",
+        "Freshdesk",
+        "미리 보기",
+    ),
+    "operations-hub-overview-tab.png": (
+        "Operations Hub",
+        "개요",
+        "지표",
+        "대기 중인 작업",
+        "시스템 상태",
+    ),
+}
+
+FORBIDDEN_ALT_CLAIMS = {
+    "managed-connectors-icon-grid.png": ("Salesforce", "Google Drive"),
 }
 
 
-def official_image_alt_texts() -> dict[str, str]:
+def official_image_alt_texts() -> dict:
     pattern = re.compile(r"!\[([^\]]*)\]\(([^)]*assets/official/([^)]+))\)")
     return {
         match.group(3): match.group(1)
@@ -218,12 +302,24 @@ def official_image_alt_texts() -> dict[str, str]:
 def test_official_images_describe_themselves_in_alt_text():
     alt_texts = official_image_alt_texts()
 
-    assert set(alt_texts) == set(OFFICIAL_IMAGE_ALT_KEYWORDS)
+    assert set(OFFICIAL_IMAGE_ALT_KEYWORDS) == OFFICIAL_ASSETS
+    assert set(alt_texts) == OFFICIAL_ASSETS
     for name, keywords in OFFICIAL_IMAGE_ALT_KEYWORDS.items():
         alt = alt_texts[name]
+        assert alt.strip(), name
         assert len(alt) >= 40, (name, alt)
+        assert re.search(r"[가-힣]", alt), (name, alt)
         for keyword in keywords:
             assert keyword in alt, (name, keyword)
+
+
+def test_official_image_alt_text_does_not_claim_absent_content():
+    alt_texts = official_image_alt_texts()
+
+    for name, forbidden in FORBIDDEN_ALT_CLAIMS.items():
+        alt = alt_texts[name]
+        for claim in forbidden:
+            assert claim not in alt, (name, claim)
 
 
 def test_official_images_do_not_repeat_alt_text_as_body_prose():
@@ -241,6 +337,9 @@ def test_official_images_do_not_repeat_alt_text_as_body_prose():
         "Azure SRE Agent는 과거 조사 대화, 사용자가 기억하도록 지정한 내용",
         "에이전트는 이 흐름을 따라 판단합니다.",
         "조사가 완료되면 Azure SRE Agent는 확인한 증상",
+        "업로드한 운영 문서와 MCP로 연결한 외부 지식 원본도 같은 검색 범위에 포함됩니다.",
+        "조사를 마친 뒤 에이전트가 선택하는 다음 동작은 조치 실행, 작업 항목 생성, 담당자 알림 세 갈래로 나뉩니다.",
+        "사용자 지정 에이전트는 포털의 Agent Canvas 화면에서 만들고 연결합니다.",
     ):
         assert marker not in text, marker
 
@@ -403,3 +502,45 @@ def test_briefing_covers_private_network_connectivity():
         "https://learn.microsoft.com/azure/sre-agent/allow-list-key-vault-firewall",
     ):
         assert source in text, source
+
+
+def test_briefing_covers_official_vnet_operational_details():
+    text = BRIEFING.read_text()
+
+    for topic in (
+        "추가 호스트",
+        "*.example.com",
+        "미리 설치",
+        "pip",
+        "NuGet",
+        "Packages",
+        "azuresre.ai",
+        "sre.azure.com",
+        "management.azure.com",
+        "login.microsoftonline.com",
+        "Zscaler",
+        "WebSocket",
+    ):
+        assert topic in text, topic
+
+    disconnect_windows = windows_after(text, "연결을 해제")
+    assert disconnect_windows, "missing VNet disconnect guidance"
+    assert any(
+        any(keyword in window for keyword in ("모드", "Unrestricted", "Limited"))
+        for window in disconnect_windows
+    ), "briefing must state that the VNet must be disconnected before switching modes"
+    assert any(
+        "서브넷" in window for window in disconnect_windows
+    ), "briefing must state that changing the subnet requires disconnecting the VNet"
+
+    host_windows = windows_after(text, "추가 호스트")
+    assert any(
+        any(keyword in window for keyword in ("인프라 네트워크", "공개 인터넷"))
+        for window in host_windows
+    ), "briefing must state where additional hosts are routed"
+
+    package_windows = windows_after(text, "미리 설치")
+    assert any(
+        any(keyword in window for keyword in ("레지스트리", "패키지 관리자", "토글"))
+        for window in package_windows
+    ), "briefing must present preinstalled packages as an alternative to registry access"
