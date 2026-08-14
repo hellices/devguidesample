@@ -1,2 +1,5 @@
 # azd stores per-developer environment state (including subscription IDs) here.
 .azure/
+# Local overrides of the values documented in .env.example; never commit
+# real subscription IDs or other environment-specific values here.
+.env

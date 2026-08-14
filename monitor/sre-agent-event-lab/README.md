@@ -30,9 +30,9 @@ Azure SRE Agent Korea Central이 구독에 표시되지 않으면 [공식 regist
 
 ## 안전 경계
 
-- 스크립트는 현재 구독 ID를 고정 검증한다.
+- 스크립트는 현재 azd 환경(또는 명시적 환경 변수)이 지정한 구독 ID를 `az account show`의 활성 구독과 일치하는지 검증한다.
 - 기존 resource group을 재사용하지 않는다.
-- resource group의 `purpose=sre-agent-event-lab` 태그가 없으면 scenario와 cleanup을 거부한다.
+- resource group에 `purpose=sre-agent-event-lab`과 `azd-env-name=<현재 azd environment 이름>` 태그가 모두 일치하지 않으면 scenario와 cleanup을 거부한다.
 - 한 번에 한 시나리오만 실행한다.
 - `run-scenario.sh`는 종료 trap으로 장애 복구를 시도하고 복구 실패를 명시적으로 오류 처리한다.
 - S3는 출력으로 기록된 Blob container scope의 단일 역할만 삭제·복구한다.
@@ -68,6 +68,8 @@ azd up 2>&1 | tee evidence/deploy.log
 `azd env new`에 `--subscription`을 지정하지 않으면 azd가 로그인된 계정의 구독 목록에서 대화형으로 선택하도록 안내한다. 특정 구독을 고정하려면 `--subscription <YOUR_SUBSCRIPTION_ID>`를 추가한다(하드코딩된 예시 구독 ID를 그대로 복사해 사용하지 않는다).
 
 `azd up`은 Bicep provision → ACR cloud build → Container App image 전환 순서로 진행된다. 로컬 Docker는 필요하지 않다. 초기 provision은 public placeholder image를 port 80으로 띄우고, postprovision hook이 ingress를 8000으로 옮긴 뒤 lab image로 교체한다. `scripts/deploy.sh`는 위 `azd up`을 호출하는 호환 wrapper로 남아 있다.
+
+`monitor/sre-agent-event-lab/.env.example`은 스크립트가 읽는 설정 값의 이름과 허용 기본값만 문서화한 비밀 정보 없는 참고 파일이다(비밀 값은 커밋하지 않는다). 각 값은 `scripts/common.sh`의 `load_lab_config`가 "명시적 환경 변수 > `azd env get-value` > 허용된 기본값" 순서로 해석하므로, 로컬에서 다르게 override하려면 `.env.example`을 복사해 값을 채운 뒤 `export $(grep -v '^#' .env | xargs)`처럼 셸 환경에 불러오거나 `azd env set <NAME> <VALUE>`로 azd 환경에 저장한다.
 
 성공 조건:
 
@@ -174,13 +176,12 @@ Application Insights의 `AppRequests`와 `AppDependencies`에 현재 데이터�
 
 ## 시나리오 실행
 
-> ⚠️ **전환기 주의사항 (레거시)**: `run-scenario.sh`와 `query-evidence.sh`는 아직 `scripts/common.sh`의
-> `deployment_output` 함수(구독 스코프 배포 조회, 고정된 `rg-sre-agent-event-lab-krc`)로 배포 output을
-> 조회한다. 즉 이 절의 명령은 `azd up`이 provision한 현재 azd 환경이 아니라 최초 실측 실행에서 만든
-> 리소스 그룹만을 대상으로 동작한다. 새로 `azd up`한 환경에서는 아직 동작을 보장하지 않으며, `common.sh`가
-> `azd env get-value`를 읽도록 재작성되는 후속 작업(가이드된 CLI 제공) 전까지는 아래 명령을 레거시 전용으로
-> 취급한다. 새 azd 환경에서 baseline을 확인하려면 위 [Baseline](#baseline) 절의 `azd env get-value` 기반
-> 명령을 사용한다.
+> ℹ️ **azd 환경 설정**: `run-scenario.sh`, `query-evidence.sh`, `capture-scenario.sh`, `cleanup.sh`는
+> `scripts/common.sh`의 `load_lab_config`로 배포 output을 읽는다. `load_lab_config`는 각 값을
+> "명시적 프로세스 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 해석하므로, 고정된
+> 구독/리소스 그룹 값은 스크립트 안에 없다. `azd up`으로 provision한 현재 azd 환경(`azd env select`로
+> 선택한 environment)을 대상으로 동작하며, 안전 장치로 대상 resource group에 `purpose=sre-agent-event-lab`과
+> `azd-env-name=<현재 environment 이름>` 태그가 모두 일치해야 한다.
 
 각 명령은 장애 주입, 제한 부하, alert polling, 복구, timeline 저장을 수행한다.
 

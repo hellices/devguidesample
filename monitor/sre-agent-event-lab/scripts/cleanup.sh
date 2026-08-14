@@ -12,7 +12,7 @@ elif [[ "$#" -gt 0 ]]; then
   exit 2
 fi
 
-require_commands
+require_lab_config
 verify_subscription
 
 if ! resource_group_exists; then

@@ -2,19 +2,34 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from azd_common_harness import run_common
+
 
 COMMON_SH = Path(__file__).parents[1] / "common.sh"
 DEPLOY_SH = Path(__file__).parents[1] / "deploy.sh"
 CLEANUP_SH = Path(__file__).parents[1] / "cleanup.sh"
 QUERY_EVIDENCE_SH = Path(__file__).parents[1] / "query-evidence.sh"
 
+REQUIRED_ENV = {
+    "AZURE_SUBSCRIPTION_ID": "11111111-2222-3333-4444-555555555555",
+    "AZURE_RESOURCE_GROUP": "rg-sre-lab-test",
+    "AZURE_ENV_NAME": "sre-lab-test",
+}
 
-def test_outputs_come_from_latest_subscription_deployment():
+
+def test_deployment_output_reads_the_current_azd_environment():
+    """`deployment_output` used to look up a fixed subscription-scope
+    deployment name; it must now read the values `load_lab_config` already
+    resolved from the current azd environment, so a fresh `azd up` in any
+    environment works without editing common.sh.
+    """
     script = COMMON_SH.read_text()
 
-    assert 'FINAL_DEPLOYMENT_NAME="sre-agent-event-lab-private"' in script
-    assert "az deployment sub show" in script
+    assert "FINAL_DEPLOYMENT_NAME" not in script
+    assert "az deployment sub show" not in script
     assert "az deployment group show" not in script
+    assert "azd env get-value" in script
+    assert 'containerAppName) printf \'%s\\n\' "${AZURE_CONTAINER_APP_NAME}"' in script
 
 
 def test_common_does_not_expose_personal_subscription_display_name():
@@ -23,36 +38,43 @@ def test_common_does_not_expose_personal_subscription_display_name():
     assert "SUBSCRIPTION_NAME" not in script
     assert "ME-MngEnvMCAP310512-inhwanhwang-3" not in script
     assert "inhwanhwang" not in script
+    # The one true fixed subscription this task removed: common.sh must
+    # never hardcode a subscription ID again, it must resolve one via
+    # load_lab_config (explicit env > azd env > default) instead.
+    assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in script
+    assert 'SUBSCRIPTION_ID="$(require_setting AZURE_SUBSCRIPTION_ID' in script
     # The subscription ID equality check is the real safety boundary and
     # must remain intact.
-    assert 'readonly SUBSCRIPTION_ID="95933ae5-0201-4a21-a1fc-8051a7437982"' in script
+    assert '"${current_subscription}" != "${SUBSCRIPTION_ID}"' in script
 
 
-def test_verify_subscription_reports_only_subscription_id_on_mismatch():
+def test_verify_subscription_reports_only_subscription_id_on_mismatch(tmp_path):
     """verify_subscription must not reference an undeclared SUBSCRIPTION_NAME.
 
     Regression guard for `set -u`: after removing SUBSCRIPTION_NAME, the
-    mismatch message must only report the expected SUBSCRIPTION_ID, or the
-    function will crash under `set -u` when the variable no longer exists.
+    mismatch message must only report the resolved SUBSCRIPTION_ID (now
+    loaded via `load_lab_config`, not a hardcoded literal), or the function
+    will crash under `set -u` when the variable no longer exists.
     """
-    bash_path = shutil.which("bash") or "/bin/bash"
-
-    harness = (
-        "set -euo pipefail\n"
-        'source "$1"\n'
-        "az() {\n  echo \"wrong-subscription-id\"\n}\n"
-        "verify_subscription\n"
+    az_script = (
+        'if [[ "$1 $2" == "account show" ]]; then\n'
+        '  echo "wrong-subscription-id"\n'
+        "  exit 0\n"
+        "fi\n"
+        "exit 0\n"
     )
-    result = subprocess.run(
-        [bash_path, "-c", harness, "bash", str(COMMON_SH)],
-        capture_output=True,
-        text=True,
+    result = run_common(
+        tmp_path,
+        env=dict(REQUIRED_ENV),
+        azd_values=dict(REQUIRED_ENV),
+        command="load_lab_config; verify_subscription",
+        az_script=az_script,
     )
 
     assert result.returncode != 0
     assert "unbound variable" not in result.stderr
     assert "SUBSCRIPTION_NAME" not in result.stderr
-    assert "95933ae5-0201-4a21-a1fc-8051a7437982" in result.stderr
+    assert REQUIRED_ENV["AZURE_SUBSCRIPTION_ID"] in result.stderr
 
 
 def test_deploy_delegates_to_azd_up():
@@ -102,26 +124,27 @@ def test_readme_documents_a_working_deployment_command():
     assert "azd env get-value AZURE_CONTAINER_APP_FQDN" in readme
 
 
-def test_readme_marks_legacy_scenario_scripts_as_transitional():
-    """`run-scenario.sh` and `query-evidence.sh` still resolve deployment
-    outputs through `common.sh`'s `deployment_output` (`az deployment sub
-    show --name sre-agent-event-lab-private` against the hardcoded
-    `rg-sre-agent-event-lab-krc`), not through the `azd`-provisioned
-    environment introduced by this task. The README must not present them as
-    working against a fresh `azd up` environment without saying so.
+def test_readme_documents_scenario_scripts_read_the_current_azd_environment():
+    """`run-scenario.sh` and `query-evidence.sh` now resolve deployment
+    outputs through `common.sh`'s `load_lab_config` (explicit env > current
+    `azd env get-value` > allowed default), so they work against whatever
+    azd environment is currently selected -- not a fixed pre-azd resource
+    group. The README's scenario-execution section must describe that
+    mechanism instead of the old "legacy, not yet rewritten" caveat.
     """
     readme = (Path(__file__).parents[2] / "README.md").read_text()
 
     scenario_heading = "## 시나리오 실행"
     assert scenario_heading in readme
-    section = readme.split(scenario_heading, 1)[1]
+    section = readme.split(scenario_heading, 1)[1].split("##", 1)[0]
 
-    assert "run-scenario.sh" in section.split("##", 1)[0]
-    caveat_markers = ("common.sh", "레거시", "azd 환경")
-    assert any(marker in section.split("##", 1)[0] for marker in caveat_markers), (
-        "README's scenario-execution section must caveat that "
-        "run-scenario.sh/query-evidence.sh still read the pre-azd "
-        "common.sh deployment lookup, not the current azd environment"
+    assert "run-scenario.sh" in section
+    assert "load_lab_config" in section
+    assert "레거시" not in section, (
+        "README's scenario-execution section must no longer describe "
+        "run-scenario.sh/query-evidence.sh as reading a legacy, pre-azd "
+        "deployment lookup -- load_lab_config now reads the current azd "
+        "environment."
     )
 
 
@@ -224,3 +247,38 @@ az() {{
     calls = call_log.read_text() if call_log.exists() else ""
     assert "az role assignment delete" not in calls
     assert "az group delete" in calls
+
+
+def test_scenario_query_capture_cleanup_scripts_load_lab_config_before_use():
+    """Every script that reads SUBSCRIPTION_ID/RESOURCE_GROUP/deployment_output
+    must resolve them via `load_lab_config` (through `require_lab_config`)
+    first, and must do so before `verify_subscription`/`verify_lab_resource_group`
+    or any deployment_output() call that depends on those values.
+    """
+    scripts_dir = Path(__file__).parents[1]
+    for script_name in (
+        "run-scenario.sh",
+        "query-evidence.sh",
+        "capture-scenario.sh",
+        "cleanup.sh",
+    ):
+        script = (scripts_dir / script_name).read_text()
+        assert "require_lab_config" in script, (
+            f"{script_name} must call require_lab_config (which calls "
+            "load_lab_config) before using SUBSCRIPTION_ID/RESOURCE_GROUP"
+        )
+        config_index = script.index("require_lab_config")
+
+        for later_use in ("verify_subscription", "verify_lab_resource_group"):
+            if later_use in script:
+                assert config_index < script.index(later_use), (
+                    f"{script_name} must call require_lab_config before {later_use}"
+                )
+
+        if "deployment_output " in script:
+            first_output_call = script.index("deployment_output ")
+            assert config_index < first_output_call, (
+                f"{script_name} must call require_lab_config before reading "
+                "any deployment_output() value"
+            )
+

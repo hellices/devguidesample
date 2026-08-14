@@ -16,7 +16,7 @@ readonly NORMALIZED_FILE="${EVIDENCE_DIR}/normalized-timeline.json"
 readonly ASSET_DIR="${LAB_ROOT}/assets/captures/${SCENARIO}"
 readonly PYTHON="${LAB_ROOT}/app/.venv/bin/python"
 
-require_commands
+require_lab_config
 verify_subscription
 verify_lab_resource_group
 

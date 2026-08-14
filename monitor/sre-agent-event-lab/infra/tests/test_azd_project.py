@@ -151,10 +151,13 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
     subscription, so no file that documents or drives the current `azd`
     onboarding path may hardcode it.
 
-    `scripts/common.sh` (the pre-azd legacy flow, still intentionally pinned
-    per `test_common_does_not_expose_personal_subscription_display_name`) and
-    `validation-results.md` (the historical record of that specific real run)
-    are deliberately out of scope here.
+    `scripts/common.sh` no longer hardcodes a subscription ID either --
+    `load_lab_config` resolves it from the explicit process environment or
+    the current `azd env get-value`, per `test_common.py`'s
+    `test_common_does_not_expose_personal_subscription_display_name`. It is
+    left out of `onboarding_paths` below only because `test_common.py`
+    already covers it directly; `validation-results.md` (the historical
+    record of that specific real run) is deliberately out of scope here.
     """
     fixed_subscription_id = "95933ae5-0201-4a21-a1fc-8051a7437982"
     onboarding_paths = [

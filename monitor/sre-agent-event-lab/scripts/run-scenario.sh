@@ -10,7 +10,7 @@ if [[ "$#" -ne 1 ]] || [[ ! "$1" =~ ^s[123]$ ]]; then
 fi
 
 readonly SCENARIO="$1"
-require_commands
+require_lab_config
 verify_subscription
 verify_lab_resource_group
 
