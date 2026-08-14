@@ -4,13 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 
-if [[ "$#" -lt 1 || "$#" -gt 2 ]] || [[ ! "$1" =~ ^s[123]$ ]]; then
-  echo "Usage: $0 s1|s2|s3 [EVIDENCE_DIR]" >&2
+if [[ "$#" -ne 1 ]] || [[ ! "$1" =~ ^s[123]$ ]]; then
+  echo "Usage: $0 s1|s2|s3" >&2
   exit 2
 fi
 
 readonly SCENARIO="$1"
-readonly EXPLICIT_EVIDENCE_DIR="${2:-}"
 readonly ASSET_DIR="${LAB_ROOT}/assets/captures/${SCENARIO}"
 readonly PYTHON="${LAB_ROOT}/app/.venv/bin/python"
 
@@ -20,11 +19,15 @@ verify_lab_resource_group
 
 # The public command is `lab.sh capture s1`, with no timestamped path: the
 # directory this scenario's run recorded in `evidence/state.json` is the
-# only one whose timeline belongs to the alert being captured. An explicit
-# directory still wins, so an operator can re-render an older run.
-if [[ -n "${EXPLICIT_EVIDENCE_DIR}" ]]; then
-  EVIDENCE_DIR="${EXPLICIT_EVIDENCE_DIR}"
-elif ! EVIDENCE_DIR="$(lab_state evidence-dir "${SCENARIO}")"; then
+# only one whose timeline belongs to the alert being captured. No override
+# is accepted -- capturing an arbitrary directory would record its outcome
+# as this environment's current capture status and could unblock the next
+# scenario on evidence from another run. Re-rendering an archived run is a
+# read-only job for the lower-level tools instead, which touch no state:
+#
+#   app/.venv/bin/python scripts/capture_agent.py --output-dir <dir> ...
+#   app/.venv/bin/python scripts/render_capture.py <dir>/normalized-timeline.json <assets> --scenario s1
+if ! EVIDENCE_DIR="$(lab_state evidence-dir "${SCENARIO}")"; then
   exit 1
 fi
 readonly EVIDENCE_DIR

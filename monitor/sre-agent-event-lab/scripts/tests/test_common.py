@@ -191,10 +191,13 @@ def test_readme_documents_scenario_scripts_read_the_current_azd_environment():
 def test_scenario_waits_for_new_revision_before_load():
     common = COMMON_SH.read_text()
     scenario = (Path(__file__).parents[1] / "run-scenario.sh").read_text()
+    # Line continuations are formatting, not behaviour: the call is checked
+    # with its own wrapping collapsed.
+    collapsed = " ".join(scenario.replace("\\\n", " ").split())
 
     assert "wait_for_new_revision_ready()" in common
     assert 'OLD_REVISION="$(latest_revision_name "${APP_NAME}")"' in scenario
-    assert 'wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}"' in scenario
+    assert 'wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}"' in collapsed
 
 
 def test_cleanup_removes_both_subscription_monitoring_assignments():

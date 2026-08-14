@@ -126,6 +126,16 @@ def _az_stub_source(log_path, state_dir):
     which reproduces an alert that never closes. That is the only way to
     exercise the recovery gate honestly: `run-scenario.sh` must not record
     a recovery Azure Monitor never confirmed.
+
+    Recovery itself can fail, which is the other half of that gate. Three
+    markers reproduce the ways Azure refuses to restore the workload:
+    `${state}/recovery_update_fails` (the `az containerapp update` that
+    clears the injected setting exits non-zero),
+    `${state}/recovery_revision_stalls` (the update is accepted but no new
+    revision ever appears, so the wait times out) and
+    `${state}/role_create_fails` (S3's blob role cannot be re-created).
+    Only the *recovering* call is affected in each case: injection still
+    has to succeed, otherwise there would be nothing to recover from.
     """
     return f"""#!/usr/bin/env bash
 printf '%s\\t%s\\n' "$*" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "{log_path}"
@@ -134,6 +144,9 @@ resolve_alert() {{
   if [[ ! -f "${{state}}/alert_stays_fired" ]]; then
     printf 'Resolved\\n' > "${{state}}/alert_condition"
   fi
+}}
+next_revision() {{
+  printf '%s\\n' "$(( $(cat "${{state}}/revision") + 1 ))" > "${{state}}/revision"
 }}
 # Real azure-cli global flags (`--only-show-errors`, etc.) can land before
 # or between an az command's own arguments, shifting whatever the
@@ -160,9 +173,17 @@ case "${{dispatch_key}}" in
   "containerapp show")
     printf 'rev-%s\\n' "$(cat "${{state}}/revision")" ;;
   "containerapp update")
-    printf '%s\\n' "$(( $(cat "${{state}}/revision") + 1 ))" > "${{state}}/revision"
     if [[ "$*" == *"FAILURE_MODE=none"* || "$*" == *"ORDER_DELAY_MS=0"* ]]; then
+      if [[ -f "${{state}}/recovery_update_fails" ]]; then
+        printf 'ERROR: (ContainerAppOperationError) the update was rejected.\\n' >&2
+        exit 1
+      fi
+      if [[ ! -f "${{state}}/recovery_revision_stalls" ]]; then
+        next_revision
+      fi
       resolve_alert
+    else
+      next_revision
     fi ;;
   "containerapp revision")
     if [[ "$*" == *"healthState"* ]]; then
@@ -180,6 +201,10 @@ case "${{dispatch_key}}" in
     printf '[]\\n' ;;
   "role assignment")
     if [[ "${{3:-}}" == "create" ]]; then
+      if [[ -f "${{state}}/role_create_fails" ]]; then
+        printf 'ERROR: (RoleAssignmentUpdateNotPermitted) the assignment was refused.\\n' >&2
+        exit 1
+      fi
       resolve_alert
     elif [[ "${{3:-}}" == "list" && "$*" != *"-o tsv"* ]]; then
       printf '[]\\n'
@@ -282,6 +307,9 @@ def make_lab(
     capture_timeline=CONCLUSION_TIMELINE,
     venv_present=True,
     pillow_importable=True,
+    recovery_update_fails=False,
+    recovery_revision_stalls=False,
+    role_create_fails=False,
 ):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
     lab = tmp_path / "lab"
@@ -303,6 +331,12 @@ def make_lab(
         (state_dir / "alert_stays_fired").write_text("1\n")
     if not alert_fires:
         (state_dir / "alert_never_fires").write_text("1\n")
+    if recovery_update_fails:
+        (state_dir / "recovery_update_fails").write_text("1\n")
+    if recovery_revision_stalls:
+        (state_dir / "recovery_revision_stalls").write_text("1\n")
+    if role_create_fails:
+        (state_dir / "role_create_fails").write_text("1\n")
 
     az_log = tmp_path / "az-calls.log"
     azd_log = tmp_path / "azd-calls.log"

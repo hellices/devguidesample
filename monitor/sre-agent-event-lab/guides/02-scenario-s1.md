@@ -80,6 +80,8 @@ cd monitor/sre-agent-event-lab
 
 경고 해제는 최대 15분, 워크로드 정상화는 최대 10분까지 기다립니다. 둘 중 하나라도 시간 안에 확인되지 않으면 실행은 실패로 기록되고 S2는 계속 막힙니다. 실패한 실행은 원인을 고친 뒤 `./scripts/lab.sh run s1`을 다시 실행하면 새 시도로 이어집니다.
 
+되돌리기 자체가 실패하면(예: `az containerapp update` 거부, 새 revision이 준비되지 않음) 스크립트는 `CRITICAL:` 두 줄을 출력하고 0이 아닌 코드로 끝냅니다. 주입한 장애가 그대로 남아 있다는 뜻이므로, 다음 시나리오를 실행하기 전에 `FAILURE_MODE=none`을 수동으로 되돌리고 revision이 정상인지 확인하세요.
+
 ```bash
 azd env get-value AZURE_CONTAINER_APP_FQDN
 ```

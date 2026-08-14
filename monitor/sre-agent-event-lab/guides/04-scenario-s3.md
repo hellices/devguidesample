@@ -55,6 +55,8 @@ cd monitor/sre-agent-event-lab
 
 역할 전파에는 몇 분이 걸릴 수 있습니다. `/api/documents`가 200을 돌려주는지 직접 호출해 확인하고, 실패로 기록되었다면 `./scripts/lab.sh run s3`으로 새 시도를 시작합니다.
 
+역할 복구 자체가 실패하면 스크립트는 `CRITICAL:` 두 줄을 출력하고 0이 아닌 코드로 끝냅니다. 워크로드에 Blob 권한이 없는 상태가 그대로 남으므로, 같은 이름·같은 범위의 `Storage Blob Data Reader` 할당을 수동으로 다시 만든 뒤 다음 단계로 넘어가세요.
+
 ## 다음 단계
 
 수집한 근거를 채점합니다: [05-results.md](05-results.md)

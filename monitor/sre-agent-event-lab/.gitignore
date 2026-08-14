@@ -3,3 +3,13 @@
 # Local overrides of the values documented in .env.example; never commit
 # real subscription IDs or other environment-specific values here.
 .env
+# Compiled ARM output of the Bicep templates: `az bicep build --file
+# infra/<name>.bicep` writes `infra/<name>.json` next to its source unless
+# it is given `--stdout` (which is how this lab validates its templates).
+# Only those build outputs are listed by name -- `infra/main.parameters.json`
+# is a real azd input and stays tracked, so no blanket `*.json` here.
+infra/main.json
+infra/lab.json
+infra/workload.json
+infra/observability.json
+infra/alerts.json

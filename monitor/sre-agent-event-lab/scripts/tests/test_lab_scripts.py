@@ -28,7 +28,15 @@ BOUNDED_WAITS = {
     "LAB_ALERT_RESOLVE_TIMEOUT_SECONDS": "5",
     "LAB_ALERT_RESOLVE_POLL_INTERVAL_SECONDS": "1",
     "LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS": "5",
+    "LAB_REVISION_READY_TIMEOUT_SECONDS": "5",
+    "LAB_REVISION_READY_POLL_INTERVAL_SECONDS": "1",
 }
+
+NO_ALERT_WAITS = dict(
+    BOUNDED_WAITS,
+    LAB_ALERT_FIRE_TIMEOUT_SECONDS="3",
+    LAB_ALERT_FIRE_POLL_INTERVAL_SECONDS="1",
+)
 
 
 def captured(scenario, evidence_dir):
@@ -229,7 +237,7 @@ def test_run_scenario_marks_failed_when_the_alert_never_fires(tmp_path):
     result = lab_run.run(
         "run-scenario.sh",
         ["s1"],
-        env=dict(BOUNDED_WAITS, LAB_ALERT_FIRE_TIMEOUT_SECONDS="3", LAB_ALERT_FIRE_POLL_INTERVAL_SECONDS="1"),
+        env=NO_ALERT_WAITS,
     )
 
     assert result.returncode != 0
@@ -242,6 +250,99 @@ def test_run_scenario_marks_failed_when_the_alert_never_fires(tmp_path):
     assert "did not fire" in scenario_state.get("failure_reason", "")
     evidence_dir = sorted((lab_run.lab / "evidence").glob("s1-*"))[-1]
     assert scenario_state["evidence_dir"] == str(evidence_dir)
+
+
+def test_run_scenario_s1_reports_a_rejected_recovery_update_as_critical(tmp_path):
+    """`recover` runs both directly and from the EXIT trap, and the trap
+    calls it as `if ! recover`, which turns `set -e` off for the whole
+    function body. A recovery whose `az containerapp update` was rejected
+    must therefore report the failure by return value: otherwise the fault
+    is still injected in a live Container App while the script exits
+    claiming it recovered."""
+    lab_run = make_lab(tmp_path, recovery_update_fails=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "CRITICAL" in result.stderr, (
+        "a failed recovery must be reported as CRITICAL, not swallowed: "
+        f"{result.stderr!r}"
+    )
+    assert lab_run.scenario_state("s1").get("run_status") != "recovered", (
+        "a run whose recovery failed must never be recorded as recovered"
+    )
+    attempts = [
+        line
+        for line in lab_run.az_calls().splitlines()
+        if "containerapp update" in line and "FAILURE_MODE=none" in line
+    ]
+    assert len(attempts) >= 2, (
+        "a failed recovery must not mark itself recovered, so the EXIT trap "
+        f"has to try again: {attempts!r}"
+    )
+
+
+def test_run_scenario_s2_reports_a_stalled_recovery_revision_as_critical(tmp_path):
+    """The recovery update is accepted but no new healthy revision ever
+    becomes active: the workload is still slow, so the wait timing out has
+    to fail the recovery instead of falling through to success."""
+    lab_run = make_lab(tmp_path, recovery_revision_stalls=True)
+    lab_run.seed_state(scenarios=captured("s1", tmp_path / "s1"))
+
+    result = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "CRITICAL" in result.stderr, (
+        f"a timed-out recovery wait must be reported as CRITICAL: {result.stderr!r}"
+    )
+    assert lab_run.scenario_state("s2").get("run_status") != "recovered"
+    assert "ORDER_DELAY_MS=0" in lab_run.az_calls(), "recovery was never attempted"
+
+
+def test_run_scenario_s3_reports_a_failed_role_restore_from_the_exit_trap(tmp_path):
+    """The S3 fault is a deleted role assignment and the alert never fires,
+    so recovery only ever runs from the EXIT trap -- the exact path where
+    `if ! recover` disables `set -e`. A refused `az role assignment create`
+    must still surface: the workload is left without its blob permission
+    until an operator restores it."""
+    lab_run = make_lab(tmp_path, alert_fires=False, role_create_fails=True)
+    lab_run.seed_state(
+        scenarios=dict(
+            captured("s1", tmp_path / "s1"), **captured("s2", tmp_path / "s2")
+        )
+    )
+
+    result = lab_run.run("run-scenario.sh", ["s3"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    assert "role assignment create" in lab_run.az_calls(), (
+        "the exit trap never tried to restore the deleted role assignment"
+    )
+    assert "CRITICAL" in result.stderr, (
+        "a refused role restore must be reported as CRITICAL, not swallowed: "
+        f"{result.stderr!r}"
+    )
+    assert lab_run.scenario_state("s3").get("run_status") != "recovered"
+
+
+def test_run_scenario_s3_recovers_and_records_a_successful_run(tmp_path):
+    """The unchanged happy path: the blob role is restored, the alert
+    resolves, and the run is recorded as recovered."""
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state(
+        scenarios=dict(
+            captured("s1", tmp_path / "s1"), **captured("s2", tmp_path / "s2")
+        )
+    )
+
+    result = lab_run.run("run-scenario.sh", ["s3"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "CRITICAL" not in result.stderr
+    assert "role assignment delete" in lab_run.az_calls()
+    assert "role assignment create" in lab_run.az_calls()
+    assert lab_run.scenario_state("s3")["run_status"] == "recovered"
 
 
 def test_a_failed_run_blocks_the_next_scenario(tmp_path):
@@ -297,9 +398,50 @@ def test_capture_scenario_resolves_the_evidence_directory_from_the_state(tmp_pat
 
     result = lab_run.run("capture-scenario.sh", ["s1"])
 
+    _assert_loaded_config(result, lab_run)
     assert result.returncode == 0, result.stdout + result.stderr
     assert (evidence_dir / "normalized-timeline.json").is_file()
+    assert (lab_run.lab / "assets" / "captures" / "s1" / "investigation.gif").is_file()
     assert lab_run.scenario_state("s1")["capture_status"] == "conclusion"
+
+
+def test_capture_scenario_refuses_an_explicit_evidence_directory(tmp_path):
+    """The legacy second argument let a capture of *any* directory be
+    recorded as this environment's current capture status -- re-rendering an
+    old run would unblock the next scenario on evidence that does not belong
+    to the alert being captured. The public script takes the scenario only;
+    regenerating artifacts from an archived directory is a `capture_agent.py`
+    / `render_capture.py` job, which records no state."""
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    stale_dir = tmp_path / "evidence-out"
+    stale_dir.mkdir()
+    (stale_dir / "timeline.json").write_text(
+        json.dumps({"scenario": "s1", "alert_id": "/alerts/aaaa0000"})
+    )
+
+    result = lab_run.run("capture-scenario.sh", ["s1", str(stale_dir)])
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Usage:" in result.stderr
+    assert str(stale_dir) not in result.stderr
+    assert not (stale_dir / "normalized-timeline.json").exists(), (
+        "an explicit directory must never be captured"
+    )
+    assert not lab_run.scenario_state("s1"), (
+        "a rejected invocation must not record a capture status"
+    )
+
+
+def test_capture_scenario_usage_documents_only_the_scenario_argument(tmp_path):
+    lab_run = make_lab(tmp_path)
+
+    result = lab_run.run("capture-scenario.sh", [])
+
+    assert result.returncode == 2
+    assert "Usage:" in result.stderr
+    assert "EVIDENCE_DIR" not in result.stderr
 
 
 def test_capture_scenario_records_a_missing_conclusion_as_itself(tmp_path):
@@ -360,23 +502,6 @@ def test_capture_scenario_fails_actionably_when_pillow_is_not_importable(tmp_pat
     assert result.returncode != 0
     assert "Pillow" in result.stderr
     assert "setup-venv.sh" in result.stderr
-
-
-def test_capture_scenario_renders_from_another_directory(tmp_path):
-    lab_run = make_lab(tmp_path)
-    lab_run.write_agent_setup()
-    evidence_dir = tmp_path / "evidence-out"
-    evidence_dir.mkdir()
-    (evidence_dir / "timeline.json").write_text(
-        json.dumps({"scenario": "s1", "alert_id": "/alerts/aaaa0000"})
-    )
-
-    result = lab_run.run("capture-scenario.sh", ["s1", str(evidence_dir)])
-
-    _assert_loaded_config(result, lab_run)
-    assert result.returncode == 0, result.stderr
-    assert (evidence_dir / "normalized-timeline.json").is_file()
-    assert (lab_run.lab / "assets" / "captures" / "s1" / "investigation.gif").is_file()
 
 
 def test_cleanup_dry_run_plans_without_deleting_from_another_directory(tmp_path):
@@ -456,7 +581,7 @@ def test_every_caller_fails_closed_when_configuration_is_missing(script_name, tm
             "2026-08-14T00:00:00Z",
             "2026-08-14T01:00:00Z",
         ],
-        "capture-scenario.sh": ["s1", str(tmp_path / "out")],
+        "capture-scenario.sh": ["s1"],
         "cleanup.sh": [],
     }[script_name]
 
@@ -481,7 +606,7 @@ def test_every_caller_refuses_a_foreign_subscription(script_name, tmp_path):
             "2026-08-14T00:00:00Z",
             "2026-08-14T01:00:00Z",
         ],
-        "capture-scenario.sh": ["s1", str(tmp_path / "out")],
+        "capture-scenario.sh": ["s1"],
         "cleanup.sh": ["--yes"],
     }[script_name]
 

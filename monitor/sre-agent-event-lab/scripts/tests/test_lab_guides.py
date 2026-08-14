@@ -236,6 +236,109 @@ def test_dynamic_thresholds_guide_states_one_minute_static_evaluation():
     assert "Log Search dynamic threshold는 1분 evaluation을 지원하지 않는다." in text
 
 
+def test_dynamic_thresholds_sections_are_numbered_without_gaps():
+    """A reader following "8절 참고" would find no section 8: the document
+    jumped from 7 to 9. Numbered top-level sections must be consecutive."""
+    numbers = [
+        int(match)
+        for match in re.findall(
+            r"^## (\d+)\. ", DYNAMIC_THRESHOLDS.read_text(), re.MULTILINE
+        )
+    ]
+
+    assert numbers, "dynamic-thresholds.md has no numbered sections"
+    assert numbers == list(range(1, len(numbers) + 1)), numbers
+
+
+def test_deployment_plan_status_matches_what_was_actually_deployed():
+    """The plan carried both a `Validated` status *and* the pre-deployment
+    notes it was written with: "Ready for Validation", "no resources
+    deployed", a fresh environment still being needed and an unchecked
+    provision preview. A live `azd up`/`azd down --purge` cycle has since
+    run, so those cannot both be true. `Validated` is kept for the base azd
+    deployment only, and it has to say so on the status line itself.
+    """
+    text = DEPLOYMENT_PLAN.read_text()
+
+    status = re.search(r"^> \*\*Status:\*\* (.+)$", text, re.MULTILINE)
+    assert status, "the plan has no status line"
+    assert status.group(1).startswith("Validated — base azd deployment only"), (
+        status.group(1)
+    )
+
+    for stale in (
+        "Ready for Validation",
+        "no resources deployed",
+        "a fresh environment is needed",
+    ):
+        assert stale not in text, stale
+    assert "- [ ]" not in text, (
+        "an unchecked preflight item contradicts the recorded live deployment"
+    )
+
+
+def test_deployment_plan_does_not_claim_the_manual_scenario_sequence_ran():
+    """The operator said they would connect the Agent and run S1/S2/S3 one
+    by one themselves. Only the pre-acknowledgement refusal (`lab.sh run s1`
+    rejected before `acknowledge agent-setup`) was exercised, so the plan
+    must record the scenario sequence as pending -- in the Live Deployment
+    Proof table, where a reader looks for what the deployment proved.
+    """
+    text = DEPLOYMENT_PLAN.read_text()
+
+    proof = text.split("## Live Deployment Proof", 1)
+    assert len(proof) == 2, "the plan has no Live Deployment Proof section"
+    proof_table = proof[1]
+
+    pending = re.search(r"^\| Manual scenario sequence \| (.+) \|$", proof_table, re.MULTILINE)
+    assert pending, "no Live Deployment Proof row for the pending manual sequence"
+    row = pending.group(1)
+    assert row.startswith("Pending"), row
+    for expected in ("S1", "S2", "S3", "capture", "score", "one by one"):
+        assert expected in row, expected
+
+    assert "have not been run" in text
+    assert "pre-acknowledgement" in text or "pre-ack" in text
+
+
+def test_deployment_plan_records_one_current_test_and_bicep_count():
+    """The preflight list still claimed the 460-test, three-template run
+    that predates the workspace-schema fix, while Section 7 records the
+    current one. Two different suite sizes in one plan is exactly the kind
+    of drift this document is read for.
+    """
+    text = DEPLOYMENT_PLAN.read_text()
+
+    preflight = re.search(r"Build Verification — (\d+) tests and (\w+) Bicep builds", text)
+    assert preflight, "the preflight list records no build verification count"
+    section_seven = re.search(r"\| (\d+) passed", text)
+    assert section_seven, "Section 7 records no test count"
+
+    assert preflight.group(1) == section_seven.group(1), (
+        preflight.group(1),
+        section_seven.group(1),
+    )
+    assert int(preflight.group(1)) >= 472, "the recorded suite shrank"
+    assert preflight.group(2) == "five", "five Bicep templates are built, not three"
+    assert "460 tests" not in text
+
+
+def test_scenario_guides_document_the_critical_recovery_failure_path():
+    """`run-scenario.sh` reverts the injected fault from an EXIT trap, and
+    that revert can itself fail (a rejected `az containerapp update`, a
+    revision that never becomes ready, a refused role restore). It then
+    prints `CRITICAL:` and exits non-zero with the fault still live, so each
+    scenario guide has to tell the operator to revert it by hand instead of
+    starting the next scenario.
+    """
+    for name in SCENARIO_GUIDES:
+        recovery = (GUIDES / name).read_text().split("## 복구 확인", 1)
+        assert len(recovery) == 2, name
+        section = recovery[1].split("\n## ", 1)[0]
+        assert "CRITICAL" in section, name
+        assert "수동" in section or "직접 되돌" in section, name
+
+
 def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
     """The recorded S1/S2/S3 run used a one-minute static threshold. That
     result stays plausible because the later live failure was the legacy

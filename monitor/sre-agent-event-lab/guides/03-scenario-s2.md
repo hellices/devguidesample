@@ -51,6 +51,8 @@ cd monitor/sre-agent-event-lab
 
 경고가 해제되지 않으면 부하가 남아 있는지, 새 revision으로 트래픽이 100% 넘어갔는지 확인합니다. 실패로 기록된 실행은 `./scripts/lab.sh run s2`를 다시 실행해 새 시도로 이어 갑니다.
 
+되돌리기 자체가 실패하면 스크립트는 `CRITICAL:` 두 줄을 출력하고 0이 아닌 코드로 끝냅니다. 지연이 그대로 남아 있다는 뜻이므로, 다음 시나리오를 실행하기 전에 `ORDER_DELAY_MS=0`을 수동으로 되돌리고 새 revision이 정상인지 확인하세요.
+
 ## 다음 단계
 
 권한 장애로 넘어갑니다: [04-scenario-s3.md](04-scenario-s3.md)

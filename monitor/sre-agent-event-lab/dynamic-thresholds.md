@@ -78,7 +78,7 @@ query는 `summarize` 결과가 하나 이상의 numeric series를 반환해야 �
 - 계절성, 최근 배포, traffic shift 때문에 threshold가 왜 변했는지 설명할 수 있어야 한다.
 - Action Group 연결 후 unauthorized autonomous action은 0건이어야 한다.
 
-## 9. 공식 자료
+## 8. 공식 자료
 
 - [Azure Monitor alerts with dynamic thresholds](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
 - [Create a log search alert rule](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule)

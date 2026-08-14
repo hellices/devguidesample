@@ -1,8 +1,8 @@
 # Azure Deployment Plan
 
-> **Status:** Validated
+> **Status:** Validated — base azd deployment only (provision, deploy, doctor, baseline, pre-acknowledgement safety gate, `azd down --purge`). The manual Agent connection in the portal and the live S1/S2/S3 run/capture/score sequence have not been run: the operator will run them one by one.
 
-Updated: 2026-08-14 (alert query schema fix; PT1M restored)
+Updated: 2026-08-15 (recovery failure propagation; plan reconciled with the live deployment that has run and the scenario sequence that has not)
 
 ## Goal
 
@@ -191,17 +191,18 @@ default fire/resolve timeouts (`LAB_ALERT_FIRE_TIMEOUT_SECONDS=720`,
 cadence they were sized for is back.
 
 Consequence for the recorded results: the S1/S2/S3 run in
-`monitor/sre-agent-event-lab/validation-results.md` was executed at a
+`monitor/sre-agent-event-lab/validation-results.md` -- an earlier execution
+of this lab, not the deployment recorded below -- was executed at a
 one-minute cadence and stays plausible, because the failure above was the
 legacy schema on the component scope, not the cadence. Both that report
 and `dynamic-thresholds.md` now carry that annotation, and `README.md`'s
 cost callout is back to "1분 주기 로그 검색 경고 규칙 3개".
 
-#### Live validation proof (2026-08-14, no resources deployed)
+#### Alert template preflight, before the live deployment (2026-08-14)
 
 Run against the partially provisioned lab resource group (only the
-observability resources exist in it), with placeholders for the real
-subscription ID and resource group:
+observability resources existed in it at that point), with placeholders for
+the real subscription ID and resource group:
 
 ```
 az deployment group validate \
@@ -237,9 +238,11 @@ with `az monitor log-analytics query`:
 - The S2 (`percentile(DurationMs, 95)`) and S3 (`AppDependencies` ... `Target`, `ResultCode`) queries resolve the same way.
 - The legacy name fails in workspace scope: `requests | take 1` returns `SEM0100: 'take' operator: Failed to resolve table or column expression named 'requests'`, confirming it is not a known table there.
 
-Definitive confirmation still requires the pending live `azd provision`,
-which is why this plan stays **Ready for Validation**. No resources were
-deployed, modified or deleted while diagnosing or fixing this.
+Definitive confirmation came from the live `azd up` recorded under **Live
+Deployment Proof** below: the three PT1M workspace-scoped rules deployed
+and were enabled, which ARM preflight alone could not have shown. Nothing
+was deployed, modified or deleted *while diagnosing and fixing this*; the
+live deployment came afterwards, from the fixed template.
 
 ## Security and Safety
 
@@ -265,26 +268,26 @@ deployed, modified or deleted while diagnosing or fixing this.
 
 - [x] 1. AZD Installation — azd 1.29.0
 - [x] 2. Schema Validation — official azd v1.0 schema; hooks include `postdeploy`, no `services`
-- [ ] 3. Environment Setup — a fresh environment is needed for the live run (`sre-lab-08141227` predates this change)
+- [x] 3. Environment Setup — the live run used the azd environment `sre-lab-08141227`, provisioned from the corrected template and purged afterwards
 - [x] 4. Authentication Check — Azure CLI and azd authenticated
 - [x] 5. Subscription/Location Check — current authenticated subscription, Korea Central
 - [x] 6. Aspire Pre-Provisioning Checks — not applicable
-- [ ] 7. Provision Preview — to re-run against the updated template outputs
-- [x] 8. Build Verification — 460 tests and three Bicep builds passed
+- [x] 7. Provision Preview — superseded: no separate `--preview` pass was run; the live `azd provision` below deployed the real plan and is recorded in full
+- [x] 8. Build Verification — 483 tests and five Bicep builds passed
 - [x] 9. Docker Build Context Validation — Dockerfile and requirements present; the image is built by ACR from `app/`, never locally
 - [x] 10. Package Validation — `azd package --all --no-prompt` passed
 - [x] 11. Azure Policy Validation — three assigned Defender policies are unrelated to planned resources
 - [x] 12. Aspire Post-Provisioning Checks — not applicable
 - [x] 13. Deploy-Hook Reachability — `postdeploy` runs for this service-less project shape on azd 1.29.0, and its failure fails the command
 
-1. Run the complete pytest suite, Bash syntax checks, Python 3.9 imports, Bicep compilation, and azure.yaml schema validation.
-2. Create a unique azd environment in Korea Central.
-3. Run infrastructure preview and inspect the resource plan.
-4. Run `azd up` (provision phase leaves the placeholder image; deploy phase waits for `AcrPull`, builds and switches the image), then `lab.sh doctor` and `lab.sh baseline`.
-5. Complete the portal Agent setup guide and acknowledge it explicitly.
-6. Run and capture S1, S2, and S3 sequentially; generate the scorecard.
-7. Run `azd down --purge`.
-8. Verify the resource group and recorded external assignments are absent.
+1. Run the complete pytest suite, Bash syntax checks, Python 3.9 imports, Bicep compilation, and azure.yaml schema validation. **Done.**
+2. Create a unique azd environment in Korea Central. **Done.**
+3. Run infrastructure preview and inspect the resource plan. **Superseded by the live provision in step 4.**
+4. Run `azd up` (provision phase leaves the placeholder image; deploy phase waits for `AcrPull`, builds and switches the image), then `lab.sh doctor` and `lab.sh baseline`. **Done.**
+5. Complete the portal Agent setup guide and acknowledge it explicitly. **Not run** — consent-sensitive portal steps the operator performs by hand; only the refusal *before* the acknowledgement was exercised.
+6. Run and capture S1, S2, and S3 sequentially; generate the scorecard. **Not run** — the operator runs these one by one after connecting the Agent.
+7. Run `azd down --purge`. **Done.**
+8. Verify the resource group and recorded external assignments are absent. **Done.**
 
 ## Expected Cost
 
@@ -296,7 +299,7 @@ Re-run after the two-phase ACR gate and workspace-schema alert corrections:
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 472 passed (11 RED first for the workspace-schema alert fix) |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 483 passed (RED first for the workspace-schema alert fix and for the swallowed scenario-recovery failures) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
 | Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts}.bicep --stdout` | Passed (five templates; `alerts.bicep` emits `evaluationFrequency: PT1M`, `windowSize: PT5M`, workspace scope and `targetResourceTypes: Microsoft.OperationalInsights/workspaces`) |
@@ -311,6 +314,10 @@ Re-run after the two-phase ACR gate and workspace-schema alert corrections:
 
 Validation environment: `sre-lab-08141227`
 
+What this table proves is the base azd deployment path. The incident
+exercise itself -- connecting Azure SRE Agent and running the three
+scenarios -- is deliberately not part of it (last row).
+
 | Check | Result |
 |---|---|
 | Alert correction | Workspace-scoped `AppRequests`/`AppDependencies` replaced the rejected legacy component queries; all three PT1M rules deployed and enabled |
@@ -322,3 +329,4 @@ Validation environment: `sre-lab-08141227`
 | Safety gate | `lab.sh run s1` was rejected before `acknowledge agent-setup`; `FAILURE_MODE` remained `none` |
 | Cleanup | `azd down --purge --force --no-prompt` completed in 21 minutes 40 seconds |
 | Cleanup proof | Resource group absent; `SRE_CONTAINER_IMAGE` and `SRE_IMAGE_TAG` cleared; no external Agent setup record or role assignment existed |
+| Manual scenario sequence | Pending — the operator connects the Agent in the portal, then runs S1 → capture → S2 → capture → S3 → capture → score one by one. Only the pre-acknowledgement refusal above was exercised: no fault was ever injected, no capture was taken and no scorecard was produced against a live Agent. Scenario behaviour is covered by the test suite (fake `az`/`azd`), not by this deployment. |

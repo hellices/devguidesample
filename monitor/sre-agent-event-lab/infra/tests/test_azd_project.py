@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -18,6 +19,20 @@ DEPLOY_ACTIONS = (
     "az containerapp ingress update",
     "az containerapp registry set",
 )
+
+
+def _git_ignores(path):
+    """Whether git's ignore rules cover `path` (the file need not exist)."""
+    result = subprocess.run(
+        ["git", "check-ignore", "--quiet", str(path)],
+        cwd=str(LAB_ROOT),
+        capture_output=True,
+    )
+    assert result.returncode in (0, 1), (
+        "git check-ignore failed: "
+        f"{result.returncode} {result.stderr.decode(errors='replace')!r}"
+    )
+    return result.returncode == 0
 
 
 def _hook_commands():
@@ -269,6 +284,36 @@ def test_lab_ignores_local_azd_environment_directory():
 
     assert ignore_file.is_file(), "the lab must ignore its own .azure/ azd state directory"
     assert ".azure/" in ignore_file.read_text()
+
+
+def test_lab_ignores_compiled_bicep_output_but_not_parameter_files(tmp_path):
+    """`az bicep build --file infra/main.bicep` (without `--stdout`) writes
+    the compiled ARM template as `infra/main.json` next to its source, and
+    those build outputs must never be committed or shown as untracked noise.
+    The ignore has to name the Bicep outputs: a blanket `*.json` would also
+    hide `infra/main.parameters.json`, the real, tracked azd input.
+    """
+    ignore_file = LAB_ROOT / ".gitignore"
+    ignore_text = ignore_file.read_text()
+    patterns = [
+        line.strip()
+        for line in ignore_text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+    assert "*.json" not in patterns, "a blanket *.json ignore hides real inputs"
+    for broad in ("infra/*.json", "*.json", "**/*.json"):
+        assert broad not in patterns, broad
+
+    templates = sorted(path.stem for path in (LAB_ROOT / "infra").glob("*.bicep"))
+    assert templates, "no Bicep templates found"
+    for name in templates:
+        assert _git_ignores(LAB_ROOT / "infra" / f"{name}.json"), (
+            f"compiled output infra/{name}.json is not ignored"
+        )
+    assert not _git_ignores(LAB_ROOT / "infra" / "main.parameters.json"), (
+        "main.parameters.json is a tracked azd input and must stay visible"
+    )
 
 
 def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():

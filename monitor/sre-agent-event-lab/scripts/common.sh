@@ -338,6 +338,7 @@ wait_for_new_revision_ready() {
   local app_name="$1"
   local previous_revision="$2"
   local timeout_seconds="${3:-600}"
+  local interval_seconds="${4:-10}"
   local started="${SECONDS}"
 
   while (( SECONDS - started < timeout_seconds )); do
@@ -360,7 +361,7 @@ wait_for_new_revision_ready() {
         return 0
       fi
     fi
-    sleep 10
+    sleep "${interval_seconds}"
   done
 
   echo "A new healthy revision did not become active within ${timeout_seconds}s." >&2

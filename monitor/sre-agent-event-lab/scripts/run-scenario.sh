@@ -26,6 +26,8 @@ readonly ALERT_RESOLVE_POLL_INTERVAL_SECONDS="${LAB_ALERT_RESOLVE_POLL_INTERVAL_
 readonly RECOVERY_HEALTH_TIMEOUT_SECONDS="${LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS:-600}"
 readonly ALERT_FIRE_TIMEOUT_SECONDS="${LAB_ALERT_FIRE_TIMEOUT_SECONDS:-720}"
 readonly ALERT_FIRE_POLL_INTERVAL_SECONDS="${LAB_ALERT_FIRE_POLL_INTERVAL_SECONDS:-20}"
+readonly REVISION_READY_TIMEOUT_SECONDS="${LAB_REVISION_READY_TIMEOUT_SECONDS:-600}"
+readonly REVISION_READY_POLL_INTERVAL_SECONDS="${LAB_REVISION_READY_POLL_INTERVAL_SECONDS:-10}"
 
 APP_NAME="$(deployment_output containerAppName)"
 APP_FQDN="$(deployment_output containerAppFqdn)"
@@ -45,47 +47,89 @@ ALERT_RULE_NAME=""
 ALERT_ID=""
 ALERT_FIRED_AT=""
 
+# restore_container_app_env SETTING -- reverts one injected Container App
+# setting and waits for the revision that carries it to become active.
+#
+# Every step is checked explicitly. `recover` is also called as
+# `if ! recover` from the EXIT trap, and bash disables `set -e` inside a
+# function invoked in a condition: an unchecked `az` failure or a timed-out
+# wait would fall through to `RECOVERED=1` and report a recovery that never
+# happened, leaving the fault live in the Container App.
+restore_container_app_env() {
+  local setting="$1"
+  local old_revision
+
+  if ! old_revision="$(latest_revision_name "${APP_NAME}")"; then
+    echo "Recovery failed: could not read the current revision of ${APP_NAME}." >&2
+    return 1
+  fi
+  if ! az containerapp update \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --set-env-vars "${setting}" \
+    --output none; then
+    echo "Recovery failed: az containerapp update ${setting} was rejected." >&2
+    return 1
+  fi
+  if ! wait_for_new_revision_ready \
+    "${APP_NAME}" \
+    "${old_revision}" \
+    "${REVISION_READY_TIMEOUT_SECONDS}" \
+    "${REVISION_READY_POLL_INTERVAL_SECONDS}" >/dev/null; then
+    echo "Recovery failed: no new healthy revision carrying ${setting}." >&2
+    return 1
+  fi
+}
+
+# Restores S3's deleted `Storage Blob Data Reader` assignment. A read that
+# fails is not "the assignment is missing": it is an unknown state, and
+# creating on top of an unknown state is not a recovery either, so both
+# propagate.
+restore_blob_role() {
+  local existing_assignment
+
+  if ! existing_assignment="$(az role assignment list \
+    --scope "${STORAGE_CONTAINER_SCOPE}" \
+    --assignee-object-id "${WORKLOAD_PRINCIPAL_ID}" \
+    --query "[?roleDefinitionName=='Storage Blob Data Reader'].id | [0]" \
+    -o tsv)"; then
+    echo "Recovery failed: could not read the blob role assignments of ${STORAGE_CONTAINER_SCOPE}." >&2
+    return 1
+  fi
+  if [[ -n "${existing_assignment}" ]]; then
+    return 0
+  fi
+  if ! az role assignment create \
+    --name "${BLOB_ROLE_ASSIGNMENT_NAME}" \
+    --assignee-object-id "${WORKLOAD_PRINCIPAL_ID}" \
+    --assignee-principal-type ServicePrincipal \
+    --role "Storage Blob Data Reader" \
+    --scope "${STORAGE_CONTAINER_SCOPE}" \
+    --output none; then
+    echo "Recovery failed: could not restore Storage Blob Data Reader for ${WORKLOAD_PRINCIPAL_ID}." >&2
+    return 1
+  fi
+}
+
+# `RECOVERED=1` is reached only when the whole branch succeeded, so a failed
+# attempt is retried by the EXIT trap instead of being remembered as done.
 recover() {
   if [[ "${RECOVERED}" -eq 1 ]]; then
     return 0
   fi
 
   case "${SCENARIO}" in
-    s1)
-      OLD_REVISION="$(latest_revision_name "${APP_NAME}")"
-      az containerapp update \
-        --resource-group "${RESOURCE_GROUP}" \
-        --name "${APP_NAME}" \
-        --set-env-vars FAILURE_MODE=none \
-        --output none
-      wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
-      ;;
-    s2)
-      OLD_REVISION="$(latest_revision_name "${APP_NAME}")"
-      az containerapp update \
-        --resource-group "${RESOURCE_GROUP}" \
-        --name "${APP_NAME}" \
-        --set-env-vars ORDER_DELAY_MS=0 \
-        --output none
-      wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
-      ;;
-    s3)
-      if ! az role assignment list \
-        --scope "${STORAGE_CONTAINER_SCOPE}" \
-        --assignee-object-id "${WORKLOAD_PRINCIPAL_ID}" \
-        --query "[?roleDefinitionName=='Storage Blob Data Reader'].id | [0]" \
-        -o tsv | grep -q .; then
-        az role assignment create \
-          --name "${BLOB_ROLE_ASSIGNMENT_NAME}" \
-          --assignee-object-id "${WORKLOAD_PRINCIPAL_ID}" \
-          --assignee-principal-type ServicePrincipal \
-          --role "Storage Blob Data Reader" \
-          --scope "${STORAGE_CONTAINER_SCOPE}" \
-          --output none
-      fi
+    s1) restore_container_app_env FAILURE_MODE=none || return 1 ;;
+    s2) restore_container_app_env ORDER_DELAY_MS=0 || return 1 ;;
+    s3) restore_blob_role || return 1 ;;
+    *)
+      echo "Recovery failed: no recovery is defined for ${SCENARIO}." >&2
+      return 1
       ;;
   esac
+
   RECOVERED=1
+  return 0
 }
 
 recover_on_exit() {
@@ -93,6 +137,7 @@ recover_on_exit() {
   trap - EXIT
   if ! recover; then
     echo "CRITICAL: scenario recovery failed for ${SCENARIO}." >&2
+    echo "CRITICAL: the injected fault is still active. Revert it by hand before running any other scenario." >&2
     exit 1
   fi
   exit "${original_status}"
@@ -109,7 +154,11 @@ case "${SCENARIO}" in
       --name "${APP_NAME}" \
       --set-env-vars FAILURE_MODE=http500 \
       --output none
-    wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
+    wait_for_new_revision_ready \
+      "${APP_NAME}" \
+      "${OLD_REVISION}" \
+      "${REVISION_READY_TIMEOUT_SECONDS}" \
+      "${REVISION_READY_POLL_INTERVAL_SECONDS}" >/dev/null
     REVISION_READY_AT="$(utc_now)"
     python3 "${SCRIPT_DIR}/loadgen.py" \
       "https://${APP_FQDN}/api/orders" \
@@ -127,7 +176,11 @@ case "${SCENARIO}" in
       --name "${APP_NAME}" \
       --set-env-vars ORDER_DELAY_MS=4000 \
       --output none
-    wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}" 600 >/dev/null
+    wait_for_new_revision_ready \
+      "${APP_NAME}" \
+      "${OLD_REVISION}" \
+      "${REVISION_READY_TIMEOUT_SECONDS}" \
+      "${REVISION_READY_POLL_INTERVAL_SECONDS}" >/dev/null
     REVISION_READY_AT="$(utc_now)"
     python3 "${SCRIPT_DIR}/loadgen.py" \
       "https://${APP_FQDN}/api/orders" \
