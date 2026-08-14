@@ -9,7 +9,7 @@ param location string
 @description('Dedicated resource group for the disposable SRE lab. Defaults to rg-<environmentName> when not set.')
 param resourceGroupName string = 'rg-${environmentName}'
 
-@description('Container image deployed by azd. Leave empty for the first provision: the public placeholder image is used until the postprovision hook builds the lab image and records it in SRE_CONTAINER_IMAGE.')
+@description('Container image deployed by azd. Leave empty for the first provision: the public placeholder image is used until the deploy phase (`postdeploy` hook, scripts/azd-deploy-app.sh) builds the lab image and records it in SRE_CONTAINER_IMAGE.')
 param containerImage string = ''
 
 @description('Optional Azure Monitor Action Group resource ID for event-driven SRE invocation.')
@@ -25,10 +25,11 @@ param expiresOn string = ''
 var suffix = substring(uniqueString(subscription().id, environmentName), 0, 8)
 
 // The public placeholder serves port 80 and has no /healthz, so the first
-// provision must expose port 80 without probes. Once postprovision records
-// the ACR-built image in SRE_CONTAINER_IMAGE, every later provision deploys
-// that image on port 8000 with matching /healthz probes instead of reverting
-// to the placeholder.
+// provision must expose port 80 without probes. Once the deploy phase
+// (`postdeploy` hook, scripts/azd-deploy-app.sh) records the ACR-built
+// image in SRE_CONTAINER_IMAGE, every later provision deploys that image
+// on port 8000 with matching /healthz probes instead of reverting to the
+// placeholder.
 var placeholderContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 var effectiveContainerImage = empty(containerImage) ? placeholderContainerImage : containerImage
 var usesPlaceholderImage = effectiveContainerImage == placeholderContainerImage

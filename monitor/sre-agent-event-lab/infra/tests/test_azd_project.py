@@ -209,6 +209,26 @@ def test_main_bicep_keeps_placeholder_port_and_probes_consistent():
     )
 
 
+def test_main_bicep_does_not_attribute_the_deploy_gate_to_postprovision():
+    """The image build/switch was moved out of `postprovision` into the
+    `postdeploy` hook (`scripts/azd-deploy-app.sh`) behind the AcrPull gate
+    (see `test_deploy_phase_runs_the_gated_application_deployment`). A
+    comment that still says "postprovision" for that work is stale and
+    would send a reader to the wrong script.
+    """
+    template = (LAB_ROOT / "infra" / "main.bicep").read_text()
+
+    assert "postprovision" not in template, (
+        "main.bicep still attributes the deploy-phase image build/switch to "
+        "postprovision; it belongs to the postdeploy hook "
+        "(scripts/azd-deploy-app.sh)"
+    )
+    assert "SRE_CONTAINER_IMAGE" in template, (
+        "the placeholder-vs-lab-image comments must still explain where "
+        "SRE_CONTAINER_IMAGE comes from"
+    )
+
+
 def test_main_bicep_restores_outputs_consumed_by_lab_scripts():
     template = (LAB_ROOT / "infra" / "main.bicep").read_text()
 

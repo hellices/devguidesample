@@ -123,6 +123,45 @@ def test_doctor_fails_when_healthz_does_not_return_200(fake_az):
     assert "503" in result.stdout
 
 
+def test_doctor_explains_the_pre_deploy_placeholder_state_instead_of_misclassifying_it(fake_az):
+    """`azd provision` alone leaves the public placeholder image running
+    (port 80, no `/healthz`) until `azd deploy` builds and switches to the
+    lab image (see infra/main.bicep, scripts/azd-deploy-app.sh). Without
+    SRE_CONTAINER_IMAGE recorded, a failing `/healthz` is that documented,
+    expected intermediate state -- not a broken deployment -- so doctor
+    must name the exact remedy (`azd deploy --no-prompt`) instead of the
+    generic "investigate with curl -v" wording that implies something is
+    actually broken."""
+    fake_az.healthz_status = 404
+
+    result = run_doctor(fake_az)
+
+    assert result.returncode == 1
+    assert "Health endpoint\tFAIL" in result.stdout
+    detail = _detail_of(result, "Health endpoint")
+    assert "azd deploy --no-prompt" in detail
+    assert "curl -v" not in detail
+
+
+def test_doctor_reports_a_genuine_health_failure_once_the_lab_image_is_deployed(fake_az):
+    """Once SRE_CONTAINER_IMAGE is recorded, the deploy phase already
+    replaced the placeholder with the lab image and its /healthz probes;
+    a failure at that point is a real regression and must not be softened
+    into the pre-deploy placeholder message."""
+    fake_az.healthz_status = 503
+
+    result = run_doctor(
+        fake_az,
+        sre_container_image="acrsrelabtest.azurecr.io/sre-event-lab:abc123",
+    )
+
+    assert result.returncode == 1
+    assert "Health endpoint\tFAIL" in result.stdout
+    detail = _detail_of(result, "Health endpoint")
+    assert "azd deploy --no-prompt" not in detail
+    assert "curl -v" in detail
+
+
 def test_doctor_fails_when_venv_is_missing(fake_az):
     """Finding #1: doctor must report on the venv `setup-venv.sh` (run from
     `postprovision`) is responsible for creating, with a remedy pointing at

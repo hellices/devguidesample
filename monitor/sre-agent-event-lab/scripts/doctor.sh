@@ -187,6 +187,16 @@ if [[ "${AZURE_SAFE}" -eq 1 && -n "${APP_FQDN}" ]]; then
   http_status="$(curl --max-time 10 --silent --output /dev/null --write-out '%{http_code}' "https://${APP_FQDN}/healthz" 2>/dev/null || echo 000)"
   if [[ "${http_status}" == "200" ]]; then
     report "Health endpoint" PASS "https://${APP_FQDN}/healthz returned HTTP 200."
+  elif [[ -z "${SRE_CONTAINER_IMAGE}" ]]; then
+    # SRE_CONTAINER_IMAGE is only set once the deploy phase (`postdeploy`
+    # hook, scripts/azd-deploy-app.sh) has built the lab image and switched
+    # the Container App onto it. Empty here means `azd provision` ran but
+    # `azd deploy` has not (yet): the app is still the public placeholder
+    # image (port 80, no /healthz -- see infra/main.bicep), which is the
+    # documented, expected intermediate state, not a broken deployment. The
+    # generic "investigate with curl -v" wording below would misclassify
+    # that state, so this branch names the actual remedy instead.
+    report "Health endpoint" FAIL "https://${APP_FQDN}/healthz returned HTTP ${http_status}, and SRE_CONTAINER_IMAGE is not recorded -- the deploy phase has not run yet (this is the expected placeholder state after 'azd provision' alone, not a broken deployment). Run: azd deploy --no-prompt"
   else
     report "Health endpoint" FAIL "https://${APP_FQDN}/healthz returned HTTP ${http_status}. Investigate: curl -v https://${APP_FQDN}/healthz"
   fi

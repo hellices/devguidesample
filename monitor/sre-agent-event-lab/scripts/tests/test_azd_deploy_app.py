@@ -158,6 +158,32 @@ def test_never_builds_the_image_locally():
     assert "docker build" not in text
 
 
+def test_role_poll_has_no_unsupported_flags_and_no_graph_dependency():
+    """`az role assignment list` has no `--assignee-principal-type` option
+    (verified against the installed Azure CLI 2.89.1: passing it fails with
+    `ERROR: unrecognized arguments: --assignee-principal-type ...`, exit
+    2) -- that flag only exists on `az role assignment create`. The poll
+    must not send it, and must instead pass `--fill-principal-name false
+    --fill-role-definition-name false` so it never depends on Microsoft
+    Graph: `--assignee-object-id` already bypasses Graph for the *filter*,
+    but `--fill-principal-name` defaults to `true` and queries Graph anyway
+    to populate a field this hook never reads."""
+    commands = _az_invocations(DEPLOY_APP.read_text())
+    poll_calls = [c for c in commands if c.startswith("az role assignment list")]
+
+    assert poll_calls, "the hook never calls az role assignment list"
+    for call in poll_calls:
+        assert "--assignee-principal-type" not in call, (
+            f"az role assignment list does not support --assignee-principal-type: {call}"
+        )
+        assert "--fill-principal-name false" in call, (
+            f"the poll must set --fill-principal-name false to avoid Graph: {call}"
+        )
+        assert "--fill-role-definition-name false" in call, (
+            f"the poll must set --fill-role-definition-name false to avoid Graph: {call}"
+        )
+
+
 # --- Behaviour: the gate ---------------------------------------------------
 
 
@@ -219,6 +245,21 @@ def test_stops_without_building_when_acr_pull_never_appears(tmp_path):
     assert run.first_index("containerapp update") is None
     assert run.first_index("containerapp ingress update") is None
     assert "SRE_CONTAINER_IMAGE" not in run.azd_calls
+
+
+def test_polls_successfully_without_any_unsupported_flag_or_graph_call(tmp_path):
+    """Behavioural counterpart to the static flag check: the fake `az` here
+    models the real CLI's `role assignment list` parser (see
+    `deploy_app_harness`) and fails closed on any flag that parser does not
+    recognise, `--assignee-principal-type` included. A hook that regresses
+    back to sending it would make every poll fail with `ERROR: fake az:
+    unrecognized arguments: --assignee-principal-type ...` and the whole
+    run would abort without ever building the image."""
+    run = run_deploy_app(tmp_path)
+
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "unrecognized arguments" not in run.stderr
+    assert run.first_index("acr build") is not None
 
 
 def test_ignores_an_acr_pull_grant_at_a_wider_scope(tmp_path):

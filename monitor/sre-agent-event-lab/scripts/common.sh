@@ -96,6 +96,12 @@ load_lab_config() {
   AZURE_WORKSPACE_ID="$(setting AZURE_WORKSPACE_ID "${AZURE_WORKSPACE_ID:-}" "")"
   AZURE_APP_INSIGHTS_NAME="$(setting AZURE_APP_INSIGHTS_NAME "${AZURE_APP_INSIGHTS_NAME:-}" "")"
   AZURE_TELEMETRY_SERVICE_NAME="$(setting AZURE_TELEMETRY_SERVICE_NAME "${AZURE_TELEMETRY_SERVICE_NAME:-}" "")"
+  # Set by the deploy phase (`postdeploy` hook, scripts/azd-deploy-app.sh)
+  # once it has built the lab image and switched the Container App onto it;
+  # empty until then, which is the reliable "has azd deploy run yet?" signal
+  # doctor.sh needs to tell the intermediate placeholder state (expected)
+  # apart from a real post-deploy health regression (not expected).
+  SRE_CONTAINER_IMAGE="$(setting SRE_CONTAINER_IMAGE "${SRE_CONTAINER_IMAGE:-}" "")"
   # Deployment outputs without an AZURE_-prefixed duplicate (see
   # infra/main.bicep): read straight from their own azd output name. They
   # are stored under LAB_-prefixed names because `load_lab_config` makes
@@ -108,6 +114,7 @@ load_lab_config() {
   readonly AZURE_CONTAINER_APP_NAME AZURE_CONTAINER_APP_FQDN AZURE_STORAGE_CONTAINER_SCOPE
   readonly AZURE_BLOB_ROLE_ASSIGNMENT_NAME AZURE_WORKSPACE_ID AZURE_APP_INSIGHTS_NAME
   readonly AZURE_TELEMETRY_SERVICE_NAME LAB_CONTAINER_APP_PRINCIPAL_ID LAB_WORKSPACE_CUSTOMER_ID
+  readonly SRE_CONTAINER_IMAGE
 
   # Azure SRE Agent settings (.env.example documents these). None of the
   # current scripts read them yet, but they resolve through the same

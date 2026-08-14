@@ -2,7 +2,7 @@
 
 > **Status:** Ready for Validation
 
-Updated: 2026-08-14
+Updated: 2026-08-14 (ACR gate review fixes)
 
 ## Goal
 
@@ -104,6 +104,41 @@ No `services:` entry is declared: the only service host that would apply
 here (`containerapp` + `docker`) makes `azd deploy`/`azd up` require a
 local Docker build, which this lab deliberately avoids.
 
+### ACR gate review fixes (2026-08-14)
+
+A follow-up review of the AcrPull poll (`acr_pull_is_visible` in
+`scripts/azd-deploy-app.sh`) found it calling `az role assignment list`
+with `--assignee-principal-type ServicePrincipal`, an option that does not
+exist for `list` (only for `role assignment create`). Verified against the
+installed Azure CLI (2.89.1): passing it fails with `ERROR: unrecognized
+arguments: --assignee-principal-type ServicePrincipal`, exit 2, which
+would have made every poll fail and the deploy phase never build the
+image. Fixed by removing that flag and adding `--fill-principal-name
+false --fill-role-definition-name false` (both real, supported flags),
+so the poll never depends on Microsoft Graph reachability -- `--assignee-
+object-id` already bypasses Graph for the filter, but the two `--fill-*`
+flags default to `true` and would each still query Graph to populate
+fields this poll never reads. `scripts/tests/deploy_app_harness.py`'s fake
+`az` was hardened to reject any `role assignment list` flag the real
+parser does not recognise, so a regression back to the unsupported flag
+fails the test suite instead of silently passing against a permissive
+fake. Confirmed RED (11 tests failing with `ERROR: unrecognized
+arguments`) before the fix and GREEN (30/30 in
+`test_azd_deploy_app.py`) after.
+
+Also fixed while reviewing the two-phase gate: `doctor.sh`'s `/healthz`
+check previously reported the same generic "Investigate: curl -v" FAIL
+whether `azd deploy` had simply not run yet (the documented, expected
+placeholder state -- port 80, no `/healthz`) or the lab image was
+genuinely unhealthy after deployment. It now checks the azd environment's
+`SRE_CONTAINER_IMAGE` (set only once the deploy phase succeeds): when it
+is empty, the failure explicitly names the state and the remedy (`Run:
+azd deploy --no-prompt`) instead of the generic message; once it is set,
+a `/healthz` failure is reported as a real regression as before. Stale
+`main.bicep` comments attributing this image build/switch to
+`postprovision` (moved to the `postdeploy` hook in the two-phase refactor
+above) were also corrected.
+
 ## Security and Safety
 
 - Container Apps reach Blob Storage through private networking.
@@ -133,7 +168,7 @@ local Docker build, which this lab deliberately avoids.
 - [x] 5. Subscription/Location Check — current authenticated subscription, Korea Central
 - [x] 6. Aspire Pre-Provisioning Checks — not applicable
 - [ ] 7. Provision Preview — to re-run against the updated template outputs
-- [x] 8. Build Verification — 455 tests and three Bicep builds passed
+- [x] 8. Build Verification — 460 tests and three Bicep builds passed
 - [x] 9. Docker Build Context Validation — Dockerfile and requirements present; the image is built by ACR from `app/`, never locally
 - [x] 10. Package Validation — `azd package --all --no-prompt` passed
 - [x] 11. Azure Policy Validation — three assigned Defender policies are unrelated to planned resources
@@ -160,7 +195,7 @@ earlier "Validated" status no longer applies):
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 455 passed |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 460 passed |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
 | Bicep build | `az bicep build --file infra/{main,lab,workload}.bicep --stdout` | Passed (three templates, with the new deploy-gate outputs) |

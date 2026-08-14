@@ -20,6 +20,13 @@ stub -- it models the tenant:
   projection. An assignment at the resource group, or a different role at
   the registry, is therefore invisible to the hook exactly as it would be
   against a real subscription.
+* `az role assignment list` also rejects any flag its real parser does not
+  recognise -- `--assignee-principal-type` included, an option that exists
+  only on `az role assignment create` (verified against the installed
+  Azure CLI 2.89.1: passing it to `list` fails with `ERROR: unrecognized
+  arguments`, exit 2) -- so a hook that regresses to sending it fails the
+  poll here exactly as it would against a real subscription, instead of
+  the fake silently ignoring a flag it does not happen to read.
 * `available_after_attempts` models RBAC propagation: the assignment
   exists but the first N `role assignment list` calls do not return it
   yet, which is the delay the whole poll exists for.
@@ -164,6 +171,38 @@ def main():
         return
 
     if argv[:3] == ["role", "assignment", "list"]:
+        # Reject anything the real `az role assignment list` parser would
+        # reject (verified against the installed Azure CLI 2.89.1), so a
+        # hook that regresses to an unsupported flag -- `--assignee-
+        # principal-type` included, which exists only on `role assignment
+        # create` -- fails here exactly as it would against a real
+        # subscription, instead of silently succeeding against a fake that
+        # only reads the flags it happens to recognise.
+        value_flags = {{
+            "--assignee", "--assignee-object-id", "--resource-group", "-g",
+            "--role", "--scope", "--subscription", "--query", "--output", "-o",
+            "--fill-principal-name", "--fill-role-definition-name",
+        }}
+        flag_only_flags = {{
+            "--all", "--include-groups", "--include-inherited",
+            "--debug", "--only-show-errors", "--verbose",
+        }}
+        rest = argv[3:]
+        unrecognized = []
+        index = 0
+        while index < len(rest):
+            token = rest[index]
+            if token in value_flags:
+                index += 2
+                continue
+            if token in flag_only_flags:
+                index += 1
+                continue
+            unrecognized.append(token)
+            index += 1
+        if unrecognized:
+            fail(f"ERROR: unrecognized arguments: {{' '.join(unrecognized)}}")
+
         state["role_list_attempts"] = state.get("role_list_attempts", 0) + 1
         attempt = state["role_list_attempts"]
         save(state)

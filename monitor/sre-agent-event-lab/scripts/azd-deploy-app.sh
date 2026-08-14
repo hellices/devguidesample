@@ -122,13 +122,23 @@ lowercase() {
 # deliberately not accepted here: it is not the assignment this lab
 # creates, and treating it as one would let the gate pass while the lab's
 # own assignment is still propagating.
+#
+# `--assignee-principal-type` is not a `role assignment list` option --
+# verified against the installed Azure CLI (2.89.1): passing it here fails
+# with `ERROR: unrecognized arguments: --assignee-principal-type
+# ServicePrincipal`. `--assignee-object-id` alone already bypasses
+# Microsoft Graph for the assignee *filter*; `--fill-principal-name` and
+# `--fill-role-definition-name` default to `true` and each would still
+# query Graph to populate fields this poll never reads, so both are set to
+# `false` to keep the poll working with no Graph reachability at all.
 acr_pull_is_visible() {
   local granted expected line
   granted="$(az role assignment list \
     --assignee-object-id "${AZURE_CONTAINER_APP_PRINCIPAL_ID}" \
-    --assignee-principal-type ServicePrincipal \
     --scope "${ACR_RESOURCE_ID}" \
     --subscription "${AZURE_SUBSCRIPTION_ID}" \
+    --fill-principal-name false \
+    --fill-role-definition-name false \
     --query "[?ends_with(roleDefinitionId, '${ACR_PULL_ROLE_DEFINITION_ID}')].scope" \
     -o tsv 2>/dev/null || true)"
   expected="$(lowercase "${ACR_RESOURCE_ID}")"
