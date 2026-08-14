@@ -390,18 +390,28 @@ Dynamic rule은 3일·30 samples 전에는 발화하지 않으며 3주 전에는
 
 ## 정리
 
-`azd`로 배포한 환경은 `azd down`으로 정리한다. predown hook(`scripts/cleanup-external.sh`)이 resource group 밖에 기록된 구독 범위 Monitoring Contributor assignment만 먼저 제거하고, resource group 삭제는 `azd`가 수행한다.
+`azd`로 배포한 환경은 `azd down`으로 정리한다. resource group 삭제는 `azd`가 수행하고, azd가 볼 수 없는 두 가지만 hook이 처리한다.
+
+- predown hook `scripts/cleanup-external.sh --yes`: resource group 밖에 기록된 구독 범위 Monitoring Contributor assignment만 제거한다. 기록된 assignment ID가 현재 구독에 속하는지, Azure CLI가 그 구독에 로그인했는지, 실제 assignment의 principal·role·scope가 `evidence/agent-setup.json`의 기록과 일치하는지 확인한 뒤에만 삭제한다. 하나라도 어긋나면 아무것도 삭제하지 않고 중단한다. 기록이 없거나 이미 삭제된 assignment는 안전한 no-op다.
+- postdown hook `scripts/cleanup-external.sh --reset-image-env --yes`: `azd-postprovision.sh`가 기록한 `SRE_CONTAINER_IMAGE`와 `SRE_IMAGE_TAG`를 비운다. predown이 아니라 postdown인 이유는 predown이 azd의 삭제 확인 프롬프트보다 먼저 실행되기 때문이다. 삭제를 취소한 환경의 image 값을 미리 지우면 안 된다.
 
 ```bash
 cd monitor/sre-agent-event-lab
 azd down --purge
 ```
 
-`scripts/cleanup.sh`는 azd 이전 방식으로 만든 `rg-sre-agent-event-lab-krc`를 정리하는 기존 스크립트다. 첫 명령은 dry-run이며 두 번째 명령만 삭제를 시작한다.
+hook이 실패해 수동으로 다시 실행할 때는 아래처럼 직접 호출한다. 두 명령 모두 `--yes` 없이는 계획만 출력하며, 실행 위치와 무관하게 이 lab의 azd project(`--cwd`)를 대상으로 한다.
 
 ```bash
-monitor/sre-agent-event-lab/scripts/cleanup.sh
-monitor/sre-agent-event-lab/scripts/cleanup.sh --yes
+monitor/sre-agent-event-lab/scripts/cleanup-external.sh --yes
+monitor/sre-agent-event-lab/scripts/cleanup-external.sh --reset-image-env --yes
+```
+
+`scripts/cleanup.sh`는 기존 명령을 유지하기 위한 호환 wrapper다. 기본 동작은 `cleanup-external.sh` 위임뿐이며 resource group을 삭제하지 않는다. azd environment를 잃어버린 lab을 손으로 정리해야 할 때만 `--legacy-delete-resource-group`으로 예전 삭제 경로를 사용한다. 이 경로도 구독 일치와 `purpose=sre-agent-event-lab`/`azd-env-name` 태그 확인을 거치며, 첫 명령은 dry-run이고 두 번째 명령만 삭제를 시작한다.
+
+```bash
+monitor/sre-agent-event-lab/scripts/cleanup.sh --legacy-delete-resource-group
+monitor/sre-agent-event-lab/scripts/cleanup.sh --legacy-delete-resource-group --yes
 ```
 
 정리 후 resource group 부재와 기록된 Monitoring Contributor assignment 제거를 별도로 확인한다.

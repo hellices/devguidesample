@@ -1,109 +1,253 @@
 #!/usr/bin/env bash
-# Removes only the lab resources that live outside the azd-owned resource
-# group, so `azd down` can delete everything else itself, and clears the
-# azd environment values that `azd-postprovision.sh` set for this run.
+# Teardown hook for `azd down`. Two modes, one per hook:
 #
-# Today the external resources are the subscription-scoped Monitoring
-# Contributor assignments recorded by the Azure SRE Agent setup. Nothing
-# else is ever deleted here: no resource groups, no resources, no
-# unrecorded role assignments. When the evidence file is missing the lab
-# never configured the Agent, so the hook reports that and succeeds --
-# `azd down` must not fail because an optional step was skipped.
+#   predown  (default)          Remove the lab resources that live *outside*
+#                               the azd-owned resource group, so azd can
+#                               delete everything else itself.
+#   postdown --reset-image-env  Clear the azd environment values
+#                               `azd-postprovision.sh` recorded, once the
+#                               resources they point at are really gone.
 #
-# `azd down` may delete the resource group (and the ACR inside it) that
-# `azd-postprovision.sh` recorded in SRE_CONTAINER_IMAGE/SRE_IMAGE_TAG. If
-# those azd environment values survive, reusing the same environment would
-# make a later `azd provision` try to redeploy an immutable image tag that
-# no longer exists instead of falling back to the placeholder image. So
-# this hook always clears both values -- independent of whether the Agent
-# was ever configured -- before doing anything else.
+# The only external resources are the subscription-scoped Monitoring
+# Contributor assignments the Azure SRE Agent setup recorded in
+# `evidence/agent-setup.json`. Nothing else is ever deleted here: no
+# resource groups, no resources, no unrecorded role assignment. When the
+# evidence file is missing the lab never configured the Agent, so the hook
+# reports that and succeeds -- `azd down` must not fail because an optional
+# step was skipped.
+#
+# Before deleting anything, every recorded record has to survive four
+# checks, because the evidence file is a plain JSON file an operator can
+# edit:
+#
+#   1. the assignment ID names a role assignment in the subscription this
+#      run resolved (`AZURE_SUBSCRIPTION_ID` > the current azd environment);
+#   2. the Azure CLI is signed in to exactly that subscription;
+#   3. the record carries the Agent principal the assignment was created
+#      for;
+#   4. the live assignment really holds that principal, the Monitoring
+#      Contributor role definition, and subscription scope.
+#
+# A record that fails any of them stops the hook before *any* deletion. A
+# recorded assignment that is empty or already gone is a safe no-op, so
+# re-running `azd down` works.
+#
+# Why the image values are cleared in `postdown` and not here: `predown`
+# runs before azd asks the operator to confirm the deletion. An operator who
+# answers "no" keeps every resource, so clearing SRE_CONTAINER_IMAGE /
+# SRE_IMAGE_TAG at that point would break an environment nothing happened
+# to. `postdown` is the documented counterpart hook (azd command hooks:
+# pre/post for restore, provision, package, deploy, publish, up and down),
+# and azd runs a post hook only after the action itself succeeded --
+# `HooksRunner.Invoke` returns early when the action fails
+# (cli/azd/pkg/ext/hooks_runner.go), so a cancelled or failed `azd down`
+# leaves the recorded image values alone.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly SCRIPT_DIR
-LAB_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
-readonly LAB_ROOT
-EVIDENCE_ROOT="${SRE_LAB_EVIDENCE_ROOT:-${LAB_ROOT}/evidence}"
-readonly EVIDENCE_ROOT
-readonly AGENT_SETUP_FILE="${EVIDENCE_ROOT}/agent-setup.json"
+CLEANUP_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=./common.sh
+source "${CLEANUP_SCRIPT_DIR}/common.sh"
 
-CONFIRMED=0
-case "${1:-}" in
-  "") ;;
-  --yes) CONFIRMED=1 ;;
-  *)
-    echo "Usage: $0 [--yes]" >&2
-    exit 2
-    ;;
-esac
+# `SRE_LAB_EVIDENCE_ROOT` lets a test point the hook at a scratch evidence
+# directory; every real run reads the lab's own `evidence/`.
+readonly CLEANUP_EVIDENCE_ROOT="${SRE_LAB_EVIDENCE_ROOT:-${EVIDENCE_ROOT}}"
+readonly CLEANUP_SETUP_FILE="${CLEANUP_EVIDENCE_ROOT}/agent-setup.json"
+readonly MONITORING_CONTRIBUTOR_ROLE_ID="749f88d5-cbae-40b8-bcfc-e573ddc772fa"
 
-command -v azd >/dev/null 2>&1 || {
-  echo "Required command not found: azd" >&2
-  exit 1
+usage() {
+  cat <<'USAGE'
+Usage: cleanup-external.sh [--reset-image-env] [--yes]
+
+  (default)          Remove the recorded subscription-scoped Monitoring
+                     Contributor assignments that live outside the azd
+                     resource group. Run by `azd down` as its predown hook.
+  --reset-image-env  Clear the azd environment values azd-postprovision.sh
+                     recorded (SRE_CONTAINER_IMAGE, SRE_IMAGE_TAG) instead.
+                     Run by `azd down` as its postdown hook.
+  --yes              Execute. Without it, both modes only print their plan.
+USAGE
 }
 
-if [[ "${CONFIRMED}" -eq 1 ]]; then
-  azd env set SRE_CONTAINER_IMAGE ""
-  azd env set SRE_IMAGE_TAG ""
-  echo "Cleared hook-set SRE_CONTAINER_IMAGE and SRE_IMAGE_TAG."
-else
-  echo "Dry run: would clear hook-set SRE_CONTAINER_IMAGE and SRE_IMAGE_TAG."
-fi
+MODE="roles"
+CONFIRMED=0
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --yes) CONFIRMED=1 ;;
+    --reset-image-env) MODE="image-env" ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+readonly MODE CONFIRMED
 
-if [[ ! -f "${AGENT_SETUP_FILE}" ]]; then
-  echo "No Azure SRE Agent setup evidence at ${AGENT_SETUP_FILE}."
-  echo "Nothing outside the azd resource group to clean up."
-  exit 0
-fi
-
-for command_name in az jq; do
-  command -v "${command_name}" >/dev/null 2>&1 || {
-    echo "Required command not found: ${command_name}" >&2
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "Required command not found: $1" >&2
     exit 1
   }
-done
-
-: "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID must be set to clean up recorded role assignments}"
-readonly SUBSCRIPTION_SCOPE="/subscriptions/${AZURE_SUBSCRIPTION_ID}"
+}
 
 lowercase() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
-# Guards against a hand-edited evidence file pointing cleanup at a role
-# assignment in another subscription or at a different resource type.
-validate_recorded_assignment() {
+if [[ "${MODE}" == "image-env" ]]; then
+  require_command azd
+  if [[ "${CONFIRMED}" -ne 1 ]]; then
+    echo "Planned azd environment reset:"
+    echo "  Clear hook-set SRE_CONTAINER_IMAGE and SRE_IMAGE_TAG."
+    echo "Dry run only. Re-run with --yes to execute."
+    exit 0
+  fi
+  # `--cwd` pins the write to this lab's azd project, so running the hook
+  # by hand from the repository root does not resolve another project.
+  azd env set SRE_CONTAINER_IMAGE "" --cwd "${LAB_ROOT}"
+  azd env set SRE_IMAGE_TAG "" --cwd "${LAB_ROOT}"
+  echo "Cleared hook-set SRE_CONTAINER_IMAGE and SRE_IMAGE_TAG."
+  exit 0
+fi
+
+if [[ ! -f "${CLEANUP_SETUP_FILE}" ]]; then
+  echo "No Azure SRE Agent setup evidence at ${CLEANUP_SETUP_FILE}."
+  echo "Nothing outside the azd resource group to clean up."
+  exit 0
+fi
+
+require_command az
+require_command jq
+
+SUBSCRIPTION_ID="$(require_setting AZURE_SUBSCRIPTION_ID "${AZURE_SUBSCRIPTION_ID:-}")"
+readonly SUBSCRIPTION_ID
+readonly SUBSCRIPTION_SCOPE="/subscriptions/${SUBSCRIPTION_ID}"
+
+# The Azure CLI's active subscription is whatever the operator last
+# selected, so it is read (the one deliberately unpinned call) and compared
+# before anything is verified or deleted. A signed-out CLI is reported as
+# itself instead of as a raw CLI error.
+if ! ACTIVE_SUBSCRIPTION_ID="$(az account show --query id -o tsv 2>/dev/null)"; then
+  echo "Azure CLI is not signed in, so recorded role assignments cannot be removed." >&2
+  echo "Run: az login" >&2
+  exit 1
+fi
+readonly ACTIVE_SUBSCRIPTION_ID
+if [[ "${ACTIVE_SUBSCRIPTION_ID}" != "${SUBSCRIPTION_ID}" ]]; then
+  echo "Refusing to continue in subscription ${ACTIVE_SUBSCRIPTION_ID}." >&2
+  echo "Expected ${SUBSCRIPTION_ID}." >&2
+  echo "Run: az account set --subscription ${SUBSCRIPTION_ID}" >&2
+  exit 1
+fi
+
+# Only these two keys are ever read, each with the Agent principal it was
+# created for. Any other content of the evidence file is ignored.
+if ! RECORDED_ASSIGNMENTS="$(jq -r '
+  [
+    {
+      assignment: (.monitoring_contributor_assignment_id // ""),
+      principal: (.agent_principal_id // "")
+    },
+    {
+      assignment: (.uami_monitoring_contributor_assignment_id // ""),
+      principal: (.agent_user_assigned_principal_id // "")
+    }
+  ]
+  | .[]
+  | [.assignment, .principal]
+  | @tsv
+' "${CLEANUP_SETUP_FILE}" 2>/dev/null)"; then
+  echo "Agent setup evidence is not valid JSON: ${CLEANUP_SETUP_FILE}" >&2
+  echo "Recreate it: lab.sh acknowledge agent-setup" >&2
+  exit 1
+fi
+readonly RECORDED_ASSIGNMENTS
+
+# verify_recorded_assignment ID PRINCIPAL -- 0 when the live assignment is
+# the recorded Agent one, 2 when it is already gone, 1 when the record
+# cannot be trusted.
+verify_recorded_assignment() {
   local assignment_id="$1"
-  local assignment_id_lower expected_prefix
-
-  assignment_id_lower="$(lowercase "${assignment_id}")"
+  local expected_principal_id="$2"
+  local expected_prefix
   expected_prefix="$(lowercase "${SUBSCRIPTION_SCOPE}")/providers/microsoft.authorization/roleassignments/"
+  if [[ "$(lowercase "${assignment_id}")" != "${expected_prefix}"* ]]; then
+    echo "Recorded role assignment does not belong to current subscription ${SUBSCRIPTION_ID}: ${assignment_id}" >&2
+    return 1
+  fi
 
-  if [[ "${assignment_id_lower}" != "${expected_prefix}"* ]]; then
-    echo "Refusing role assignment outside ${SUBSCRIPTION_SCOPE}: ${assignment_id}" >&2
+  local assignment_json
+  # A role assignment that no longer exists answers, verbatim (recorded
+  # from azure-cli against a live subscription on 2026-08-14):
+  #   ERROR: Not Found({"error":{"code":"RoleAssignmentNotFound", ...}})
+  # which is an expected state during teardown, not a failure.
+  if ! assignment_json="$(az rest --method get --url "https://management.azure.com${assignment_id}?api-version=2022-04-01" --subscription "${SUBSCRIPTION_ID}" 2>&1)"; then
+    case "${assignment_json}" in
+      *RoleAssignmentNotFound* | *RoleAssignmentDoesNotExist* | *ResourceNotFound*)
+        echo "Recorded role assignment is already absent: ${assignment_id}"
+        return 2
+        ;;
+    esac
+    echo "Unable to verify recorded role assignment: ${assignment_id}" >&2
+    echo "${assignment_json}" >&2
+    return 1
+  fi
+
+  local actual_principal_id actual_role_id actual_scope
+  actual_principal_id="$(jq -r '.properties.principalId // empty' <<<"${assignment_json}" 2>/dev/null || true)"
+  actual_role_id="$(jq -r '.properties.roleDefinitionId // empty' <<<"${assignment_json}" 2>/dev/null || true)"
+  actual_scope="$(jq -r '.properties.scope // empty' <<<"${assignment_json}" 2>/dev/null || true)"
+  local expected_role_id="${SUBSCRIPTION_SCOPE}/providers/Microsoft.Authorization/roleDefinitions/${MONITORING_CONTRIBUTOR_ROLE_ID}"
+
+  if [[ "$(lowercase "${actual_principal_id}")" != "$(lowercase "${expected_principal_id}")" ]]; then
+    echo "Refusing role assignment held by another principal: ${assignment_id}" >&2
+    echo "Recorded principal ${expected_principal_id}, assigned principal ${actual_principal_id:-unknown}." >&2
+    return 1
+  fi
+  if [[ "$(lowercase "${actual_role_id}")" != "$(lowercase "${expected_role_id}")" ]]; then
+    echo "Refusing role assignment of another role definition: ${assignment_id}" >&2
+    return 1
+  fi
+  if [[ "$(lowercase "${actual_scope}")" != "$(lowercase "${SUBSCRIPTION_SCOPE}")" ]]; then
+    echo "Refusing role assignment scoped to ${actual_scope:-unknown}, not ${SUBSCRIPTION_SCOPE}: ${assignment_id}" >&2
     return 1
   fi
 }
 
-RECORDED_ASSIGNMENT_IDS=""
-while IFS= read -r assignment_id; do
-  [[ -n "${assignment_id}" ]] || continue
-  validate_recorded_assignment "${assignment_id}"
-  case "${RECORDED_ASSIGNMENT_IDS}" in
+# Every record is verified before the first deletion, so a single untrusted
+# record leaves the whole subscription untouched. Held as a newline-joined
+# string: Bash 3.2 (macOS) aborts under `set -u` when an empty array is
+# expanded.
+VERIFIED_ASSIGNMENT_IDS=""
+while IFS=$'\t' read -r assignment_id expected_principal_id; do
+  if [[ -z "${assignment_id}" ]]; then
+    continue
+  fi
+  if [[ -z "${expected_principal_id}" ]]; then
+    echo "Incomplete Agent setup evidence: ${assignment_id} was recorded without its Agent principal ID." >&2
+    echo "Recreate it: lab.sh acknowledge agent-setup" >&2
+    exit 1
+  fi
+  case "${VERIFIED_ASSIGNMENT_IDS}" in
     *"${assignment_id}"$'\n'*) continue ;;
   esac
-  RECORDED_ASSIGNMENT_IDS="${RECORDED_ASSIGNMENT_IDS}${assignment_id}"$'\n'
-done < <(jq -r '
-  [
-    .monitoring_contributor_assignment_id,
-    .uami_monitoring_contributor_assignment_id
-  ]
-  | map(select(. != null and . != ""))
-  | .[]
-' "${AGENT_SETUP_FILE}")
 
-if [[ -z "${RECORDED_ASSIGNMENT_IDS}" ]]; then
-  echo "Agent setup evidence records no subscription role assignment."
+  verification_status=0
+  verify_recorded_assignment "${assignment_id}" "${expected_principal_id}" || verification_status="$?"
+  case "${verification_status}" in
+    0) VERIFIED_ASSIGNMENT_IDS="${VERIFIED_ASSIGNMENT_IDS}${assignment_id}"$'\n' ;;
+    2) ;;
+    *) exit 1 ;;
+  esac
+done <<<"${RECORDED_ASSIGNMENTS}"
+readonly VERIFIED_ASSIGNMENT_IDS
+
+if [[ -z "${VERIFIED_ASSIGNMENT_IDS}" ]]; then
+  echo "Agent setup evidence records no subscription role assignment to remove."
   exit 0
 fi
 
@@ -111,21 +255,28 @@ echo "Planned external cleanup in ${SUBSCRIPTION_SCOPE}:"
 while IFS= read -r assignment_id; do
   [[ -n "${assignment_id}" ]] || continue
   echo "  Remove recorded role assignment: ${assignment_id}"
-done <<<"${RECORDED_ASSIGNMENT_IDS}"
+done <<<"${VERIFIED_ASSIGNMENT_IDS}"
 
 if [[ "${CONFIRMED}" -ne 1 ]]; then
   echo "Dry run only. Re-run with --yes to execute."
   exit 0
 fi
 
+# A role assignment left behind is the one outcome this hook exists to
+# prevent, so a failed deletion stops `azd down` before it destroys the
+# resource group -- nothing is lost, and the run can be repeated.
+DELETION_FAILED=0
 while IFS= read -r assignment_id; do
   [[ -n "${assignment_id}" ]] || continue
-  if ! az role assignment delete \
-    --ids "${assignment_id}" \
-    --subscription "${AZURE_SUBSCRIPTION_ID}" \
-    --output none; then
-    echo "Could not remove ${assignment_id}; remove it manually." >&2
+  if ! az role assignment delete --ids "${assignment_id}" --subscription "${SUBSCRIPTION_ID}" --output none; then
+    echo "Could not remove recorded role assignment: ${assignment_id}" >&2
+    DELETION_FAILED=1
   fi
-done <<<"${RECORDED_ASSIGNMENT_IDS}"
+done <<<"${VERIFIED_ASSIGNMENT_IDS}"
+
+if [[ "${DELETION_FAILED}" -ne 0 ]]; then
+  echo "External cleanup incomplete; remove the assignment above and re-run." >&2
+  exit 1
+fi
 
 echo "External cleanup complete."

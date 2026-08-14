@@ -349,22 +349,28 @@ def test_capture_scenario_renders_from_another_directory(tmp_path):
 
 
 def test_cleanup_dry_run_plans_without_deleting_from_another_directory(tmp_path):
+    """`cleanup.sh` is a compatibility wrapper around the external cleanup
+    `azd down` runs: it plans the recorded role-assignment removal and never
+    proposes a resource-group deletion of its own."""
     lab_run = make_lab(tmp_path)
     lab_run.write_agent_setup()
 
     result = lab_run.run("cleanup.sh")
 
-    _assert_loaded_config(result, lab_run)
     assert result.returncode == 0, result.stderr
-    assert "Planned cleanup:" in result.stdout
-    assert f"Delete tagged resource group: {RESOURCE_GROUP}" in result.stdout
+    assert "azd down --purge" in result.stdout
+    assert "Planned external cleanup" in result.stdout
+    assert f"Delete tagged resource group: {RESOURCE_GROUP}" not in result.stdout
     assert "Dry run only" in result.stdout
     az_calls = lab_run.az_calls()
     assert "group delete" not in az_calls, "a dry run must delete nothing"
     assert "role assignment delete" not in az_calls
 
 
-def test_cleanup_deletes_only_after_confirmation(tmp_path):
+def test_cleanup_deletes_only_the_recorded_external_assignments(tmp_path):
+    """Even with --yes, the wrapper must not delete a resource group: that
+    is `azd down`'s job, and a broad deletion here would take resources azd
+    never created with it."""
     lab_run = make_lab(tmp_path)
     lab_run.write_agent_setup()
 
@@ -372,8 +378,37 @@ def test_cleanup_deletes_only_after_confirmation(tmp_path):
 
     assert result.returncode == 0, result.stderr
     az_calls = lab_run.az_calls()
+    assert "role assignment delete --ids /subscriptions/" in az_calls
+    assert "group delete" not in az_calls
+
+
+def test_cleanup_legacy_flag_deletes_the_tagged_resource_group(tmp_path):
+    """The pre-azd resource groups still have to be recoverable by hand, so
+    the broad deletion stays available behind an explicit flag -- after the
+    same tag and subscription checks it always ran."""
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+
+    result = lab_run.run(
+        "cleanup.sh", ["--legacy-delete-resource-group", "--yes"]
+    )
+
+    _assert_loaded_config(result, lab_run)
+    assert result.returncode == 0, result.stderr
+    az_calls = lab_run.az_calls()
     assert f"group delete --name {RESOURCE_GROUP} --yes --no-wait" in az_calls
     assert "role assignment delete --ids /subscriptions/" in az_calls
+
+
+def test_cleanup_legacy_dry_run_plans_the_resource_group_deletion(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+
+    result = lab_run.run("cleanup.sh", ["--legacy-delete-resource-group"])
+
+    assert result.returncode == 0, result.stderr
+    assert f"Delete tagged resource group: {RESOURCE_GROUP}" in result.stdout
+    assert "group delete" not in lab_run.az_calls()
 
 
 @pytest.mark.parametrize("script_name", CALLERS)
@@ -436,13 +471,14 @@ def test_every_caller_refuses_a_foreign_subscription(script_name, tmp_path):
 
 def test_environment_name_tag_mismatch_stops_every_caller(tmp_path):
     """A resource group tagged for another azd environment is refused even
-    when its purpose tag matches."""
+    when its purpose tag matches -- including on the legacy recovery path,
+    the only one that still deletes a resource group."""
     lab_run = make_lab(tmp_path)
     lab_run.write_agent_setup()
 
     result = lab_run.run(
         "cleanup.sh",
-        ["--yes"],
+        ["--legacy-delete-resource-group", "--yes"],
         env={"AZURE_ENV_NAME": f"{ENV_NAME}-other"},
     )
 

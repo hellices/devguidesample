@@ -1,4 +1,3 @@
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -8,10 +7,13 @@ from azd_common_harness import run_common
 COMMON_SH = Path(__file__).parents[1] / "common.sh"
 DEPLOY_SH = Path(__file__).parents[1] / "deploy.sh"
 CLEANUP_SH = Path(__file__).parents[1] / "cleanup.sh"
+CLEANUP_EXTERNAL_SH = Path(__file__).parents[1] / "cleanup-external.sh"
 QUERY_EVIDENCE_SH = Path(__file__).parents[1] / "query-evidence.sh"
 RUN_SCENARIO_SH = Path(__file__).parents[1] / "run-scenario.sh"
 CAPTURE_SCENARIO_SH = Path(__file__).parents[1] / "capture-scenario.sh"
 BASELINE_SH = Path(__file__).parents[1] / "baseline.sh"
+
+LEGACY_RESOURCE_GROUP_FLAG = "--legacy-delete-resource-group"
 
 REQUIRED_ENV = {
     "AZURE_SUBSCRIPTION_ID": "11111111-2222-3333-4444-555555555555",
@@ -196,7 +198,14 @@ def test_scenario_waits_for_new_revision_before_load():
 
 
 def test_cleanup_removes_both_subscription_monitoring_assignments():
-    script = CLEANUP_SH.read_text()
+    """The verified deletion of the two subscription-scoped assignments now
+    lives in `cleanup-external.sh` -- the script `azd down`'s `predown` hook
+    runs and the one `cleanup.sh` forwards to -- so both recorded records,
+    their principals, the Monitoring Contributor role definition and the
+    read-back that verifies them must be there. `test_cleanup_external.py`
+    exercises the resulting behaviour against a staged subscription.
+    """
+    script = CLEANUP_EXTERNAL_SH.read_text()
 
     assert "monitoring_contributor_assignment_id" in script
     assert "uami_monitoring_contributor_assignment_id" in script
@@ -204,8 +213,13 @@ def test_cleanup_removes_both_subscription_monitoring_assignments():
     assert "agent_user_assigned_principal_id" in script
     assert "749f88d5-cbae-40b8-bcfc-e573ddc772fa" in script
     assert "az rest --method get" in script
-    assert "Agent setup evidence is required for cleanup" in script
     assert "Incomplete Agent setup evidence" in script
+    # A lab that never configured the Agent has no evidence file at all,
+    # and `azd down` runs this hook with continueOnError: false -- so a
+    # missing file is a no-op here, not the refusal the standalone script
+    # used to report.
+    assert "Agent setup evidence is required for cleanup" not in script
+    assert "Nothing outside the azd resource group to clean up." in script
 
 
 def test_s1_and_s2_record_injection_before_container_app_update():
@@ -317,51 +331,24 @@ def test_activity_log_export_projects_only_incident_fields():
     assert "claims:" not in script
 
 
-def test_cleanup_deletion_loop_tolerates_empty_role_assignments_on_bash32(tmp_path):
-    """Regression test for the macOS Bash 3.2 empty-array bug.
-
-    Bash 3.2 (macOS's default /bin/bash) raises "unbound variable" when
-    expanding "${ARRAY[@]}" for an empty array under `set -u`, even though
-    Bash 4+ treats it as an empty expansion. cleanup.sh must guard the
-    ROLE_ASSIGNMENT_IDS deletion loop so a lab run with zero recorded role
-    assignments still proceeds to delete the resource group instead of
-    crashing.
+def test_cleanup_delegates_to_external_cleanup_and_keeps_recovery_deletion_behind_a_flag():
+    """`cleanup.sh` used to delete the whole resource group itself, which is
+    now `azd down`'s job. It stays as a compatibility wrapper: it names the
+    supported command, forwards to `cleanup-external.sh`, and only deletes a
+    resource group when an operator explicitly asks for the documented
+    recovery path. `test_lab_scripts.py` runs both paths as programs.
     """
-    bash_path = shutil.which("bash") or "/bin/bash"
-
     script = CLEANUP_SH.read_text()
-    dry_run_marker = (
-        'if [[ "${CONFIRMED}" -ne 1 ]]; then\n'
-        '  echo "Dry run only. Re-run with --yes to execute."\n'
-        "  exit 0\n"
-        "fi\n"
-    )
-    assert dry_run_marker in script
-    deletion_tail = script.split(dry_run_marker, 1)[1]
+    readme = (Path(__file__).parents[2] / "README.md").read_text()
 
-    call_log = tmp_path / "az-calls.log"
-    harness = f"""
-set -euo pipefail
-RESOURCE_GROUP="rg-test-empty-assignments"
-ROLE_ASSIGNMENT_IDS=()
-az() {{
-  echo "az $*" >> "{call_log}"
-}}
-{deletion_tail}
-"""
-    result = subprocess.run(
-        [bash_path, "-c", harness],
-        capture_output=True,
-        text=True,
+    assert "azd down --purge" in script
+    assert "cleanup-external.sh" in script
+    assert LEGACY_RESOURCE_GROUP_FLAG in script
+    assert LEGACY_RESOURCE_GROUP_FLAG in readme, (
+        "the legacy resource-group deletion must be documented for recovery"
     )
-
-    assert result.returncode == 0, (
-        "cleanup.sh's deletion loop must not crash on Bash 3.2 when "
-        f"ROLE_ASSIGNMENT_IDS is empty. stderr:\n{result.stderr}"
-    )
-    calls = call_log.read_text() if call_log.exists() else ""
-    assert "az role assignment delete" not in calls
-    assert "az group delete" in calls
+    # Nothing may delete a resource group before the legacy flag is parsed.
+    assert script.index(LEGACY_RESOURCE_GROUP_FLAG) < script.index("az group delete")
 
 
 def test_scenario_query_capture_cleanup_scripts_are_exercised_as_programs():

@@ -82,7 +82,12 @@ def azd_stub_source(azd_values, missing_key_mode="azd_1_29", log_path=None, logg
         "done",
     ]
     if log_path is not None:
-        lines.append(f'printf \'%s\\n\' "${{argv[*]:-}}" >> "{log_path}"')
+        # `%q` per argument, not `"${argv[*]}"`: a value azd is asked to
+        # clear (`azd env set KEY ""`) is an empty argument, which would
+        # otherwise vanish from the log and read exactly like a call that
+        # never happened.
+        lines.append(f'printf \'%q \' "${{argv[@]}}" >> "{log_path}"')
+        lines.append(f'printf \'\\n\' >> "{log_path}"')
         lines.append(f'printf \'cwd=%s\\n\' "${{project_dir}}" >> "{log_path}"')
     status_json = (
         '{"status": "success", "expiresOn": "2026-08-14T07:57:15Z"}'
