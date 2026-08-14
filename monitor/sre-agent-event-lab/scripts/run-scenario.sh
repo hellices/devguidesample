@@ -24,6 +24,8 @@ lab_state require-run "${SCENARIO}"
 readonly ALERT_RESOLVE_TIMEOUT_SECONDS="${LAB_ALERT_RESOLVE_TIMEOUT_SECONDS:-900}"
 readonly ALERT_RESOLVE_POLL_INTERVAL_SECONDS="${LAB_ALERT_RESOLVE_POLL_INTERVAL_SECONDS:-20}"
 readonly RECOVERY_HEALTH_TIMEOUT_SECONDS="${LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS:-600}"
+readonly ALERT_FIRE_TIMEOUT_SECONDS="${LAB_ALERT_FIRE_TIMEOUT_SECONDS:-720}"
+readonly ALERT_FIRE_POLL_INTERVAL_SECONDS="${LAB_ALERT_FIRE_POLL_INTERVAL_SECONDS:-20}"
 
 APP_NAME="$(deployment_output containerAppName)"
 APP_FQDN="$(deployment_output containerAppFqdn)"
@@ -153,7 +155,7 @@ esac
 readonly ALERT_RULE_NAME
 
 started="${SECONDS}"
-while (( SECONDS - started < 720 )); do
+while (( SECONDS - started < ALERT_FIRE_TIMEOUT_SECONDS )); do
   alerts_json="$(az rest \
     --method get \
     --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-03-01&targetResourceGroup=${RESOURCE_GROUP}&monitorCondition=Fired")"
@@ -168,11 +170,20 @@ while (( SECONDS - started < 720 )); do
       <<<"${alerts_json}")"
     break
   fi
-  sleep 20
+  sleep "${ALERT_FIRE_POLL_INTERVAL_SECONDS}"
 done
 
+# No alert ever firing is a distinct failure from one that fires and never
+# resolves, but it is just as unusable as evidence: recorded as a failed
+# run -- with the evidence directory and a reason -- before this exits, so
+# a later `lab.sh score` or the next scenario's gate can never read this
+# attempt as anything but failed. The EXIT trap (still armed here) still
+# reverts whatever was injected above.
 if [[ -z "${ALERT_ID}" ]]; then
-  echo "Alert ${ALERT_RULE_NAME} did not fire within 720s." >&2
+  ALERT_NEVER_FIRED_REASON="alert ${ALERT_RULE_NAME} did not fire within ${ALERT_FIRE_TIMEOUT_SECONDS}s."
+  lab_state mark-failed "${SCENARIO}" "${EVIDENCE_DIR}" --reason "${ALERT_NEVER_FIRED_REASON}"
+  echo "${ALERT_NEVER_FIRED_REASON}" >&2
+  echo "Evidence directory: ${EVIDENCE_DIR}" >&2
   exit 1
 fi
 

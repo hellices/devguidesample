@@ -183,7 +183,11 @@ case "${{1:-}} ${{2:-}}" in
       printf '{{"properties": {{"principalId": "%s", "roleDefinitionId": "/subscriptions/{SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleDefinitions/{MONITORING_CONTRIBUTOR_ROLE_ID}", "scope": "/subscriptions/{SUBSCRIPTION_ID}"}}}}\\n' \\
         "${{principal_id}}"
     elif [[ "$*" == *"monitorCondition=Fired"* ]]; then
-      printf '%s\\n' '{ALERTS_JSON}'
+      if [[ -f "${{state}}/alert_never_fires" ]]; then
+        printf '{{"value": []}}\\n'
+      else
+        printf '%s\\n' '{ALERTS_JSON}'
+      fi
     elif [[ "$*" == *"/Microsoft.AlertsManagement/alerts/"* ]]; then
       printf '{{"properties": {{"essentials": {{"monitorCondition": "%s", "startDateTime": "2026-08-14T00:05:00Z"}}}}}}\\n' \\
         "$(cat "${{state}}/alert_condition")"
@@ -254,6 +258,7 @@ def make_lab(
     azd_values=None,
     missing_key_mode="azd_1_29",
     alert_resolves=True,
+    alert_fires=True,
     capture_timeline=CONCLUSION_TIMELINE,
 ):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
@@ -274,6 +279,8 @@ def make_lab(
     (state_dir / "alert_condition").write_text("Fired\n")
     if not alert_resolves:
         (state_dir / "alert_stays_fired").write_text("1\n")
+    if not alert_fires:
+        (state_dir / "alert_never_fires").write_text("1\n")
 
     az_log = tmp_path / "az-calls.log"
     azd_log = tmp_path / "azd-calls.log"

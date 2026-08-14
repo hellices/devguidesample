@@ -216,6 +216,34 @@ def test_run_scenario_fails_when_the_alert_never_resolves(tmp_path):
     assert timeline["alert_resolved_at"] is None
 
 
+def test_run_scenario_marks_failed_when_the_alert_never_fires(tmp_path):
+    """No alert ever firing is a different failure than one that fires and
+    never resolves: nothing to recover from Azure Monitor's point of view,
+    but the run is still unusable evidence. It must be recorded as failed
+    -- with the evidence directory and a reason -- exactly like every other
+    failed run, and the fault that was injected must still be reverted by
+    the same recovery trap that protects every other exit path."""
+    lab_run = make_lab(tmp_path, alert_fires=False)
+    lab_run.seed_state()
+
+    result = lab_run.run(
+        "run-scenario.sh",
+        ["s1"],
+        env=dict(BOUNDED_WAITS, LAB_ALERT_FIRE_TIMEOUT_SECONDS="3", LAB_ALERT_FIRE_POLL_INTERVAL_SECONDS="1"),
+    )
+
+    assert result.returncode != 0
+    assert "did not fire" in result.stderr
+    assert "FAILURE_MODE=none" in lab_run.az_calls(), (
+        "the injected failure must still be reverted even though no alert ever fired"
+    )
+    scenario_state = lab_run.scenario_state("s1")
+    assert scenario_state["run_status"] == "failed"
+    assert "did not fire" in scenario_state.get("failure_reason", "")
+    evidence_dir = sorted((lab_run.lab / "evidence").glob("s1-*"))[-1]
+    assert scenario_state["evidence_dir"] == str(evidence_dir)
+
+
 def test_a_failed_run_blocks_the_next_scenario(tmp_path):
     lab_run = make_lab(tmp_path, alert_resolves=False)
     lab_run.seed_state()

@@ -142,6 +142,60 @@ def test_a_failed_run_does_not_satisfy_the_next_scenario(tmp_path):
         state.require_run("s2")
 
 
+# --- Re-runs never let a stale capture_status linger -----------------------
+
+
+def test_rerunning_a_recovered_scenario_clears_the_stale_capture_status(tmp_path):
+    """A scenario that already produced a real conclusion, then gets
+    re-run (e.g. an operator re-injects the same fault to collect a second
+    capture), must not let the *previous* run's conclusion satisfy the next
+    scenario's gate before the *new* run has actually been captured."""
+    state = ready_for_s1(tmp_path / "state.json")
+    state.mark_recovered("s1", str(tmp_path / "s1-first"))
+    state.record_capture("s1", "conclusion")
+    assert state.is_successful_capture("s1")
+
+    state.mark_recovered("s1", str(tmp_path / "s1-second"))
+
+    assert state.capture_status("s1") is None
+    assert not state.is_successful_capture("s1")
+    with pytest.raises(InvalidTransition, match="s1_captured"):
+        state.require_run("s2")
+
+
+def test_rerunning_a_failed_scenario_clears_the_stale_capture_status(tmp_path):
+    """The same guarantee applies when the re-run ends in failure: a
+    conclusion captured on an earlier, since-superseded run must not let a
+    failed re-run's scenario entry keep reporting yesterday's success."""
+    state = ready_for_s1(tmp_path / "state.json")
+    state.mark_recovered("s1", str(tmp_path / "s1-first"))
+    state.record_capture("s1", "conclusion")
+    assert state.is_successful_capture("s1")
+
+    state.mark_failed("s1", str(tmp_path / "s1-second"), reason="alert never resolved")
+
+    assert state.capture_status("s1") is None
+    assert not state.is_successful_capture("s1")
+    assert state.run_status("s1") == "failed"
+    with pytest.raises(InvalidTransition, match="s1_recovered"):
+        state.require_run("s2")
+
+
+def test_reloading_after_a_rerun_still_shows_the_cleared_capture_status(tmp_path):
+    """The cleared status must be what is actually persisted, not just an
+    in-memory artifact of the same `LabState` instance."""
+    path = tmp_path / "state.json"
+    state = ready_for_s1(path)
+    state.mark_recovered("s1", str(tmp_path / "s1-first"))
+    state.record_capture("s1", "conclusion")
+    state.mark_recovered("s1", str(tmp_path / "s1-second"))
+
+    reloaded = LabState(path)
+
+    assert reloaded.capture_status("s1") is None
+    assert not reloaded.is_successful_capture("s1")
+
+
 def test_require_run_rejects_an_unknown_scenario(tmp_path):
     state = ready_for_s1(tmp_path / "state.json")
     with pytest.raises(ValueError):
@@ -350,6 +404,76 @@ def test_a_corrupt_state_file_is_reported_not_silently_reset(tmp_path):
 
     with pytest.raises(lab_state.LabStateError):
         LabState(path)
+
+
+# --- Decoded JSON with the wrong shape is refused, never silently reset ----
+
+
+@pytest.mark.parametrize(
+    "document",
+    (
+        {"stages": []},
+        {"stages": "baseline_passed"},
+        {"stages": 1},
+        {"stages": None},
+        {"stages": {"baseline_passed": "yesterday"}},
+        {"stages": {"baseline_passed": ["yesterday"]}},
+        {"scenarios": []},
+        {"scenarios": "s1"},
+        {"scenarios": {"s1": "conclusion"}},
+        {"scenarios": {"s1": ["conclusion"]}},
+    ),
+    ids=(
+        "stages-list",
+        "stages-string",
+        "stages-int",
+        "stages-null",
+        "stage-entry-string",
+        "stage-entry-list",
+        "scenarios-list",
+        "scenarios-string",
+        "scenario-entry-string",
+        "scenario-entry-list",
+    ),
+)
+def test_a_state_file_with_the_wrong_json_shape_is_refused_not_reset(tmp_path, document):
+    """Every field the module treats as a container (`stages`, `scenarios`,
+    and each entry inside them) must actually be a JSON object once decoded.
+    A wrong type here must become the same clean `LabStateError` a corrupt
+    file produces -- never a raw `TypeError`/`AttributeError` traceback, and
+    never a silent reset back to `{}` that would erase whatever an operator
+    had already recorded."""
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps(document))
+
+    with pytest.raises(lab_state.LabStateError):
+        LabState(path)
+
+    # The refusal must not have rewritten the file with a fresh default.
+    assert json.loads(path.read_text()) == document
+
+
+def test_cli_reports_a_malformed_state_file_without_a_python_traceback(tmp_path):
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"scenarios": "not-an-object"}))
+
+    result = run_cli(path, ["show"])
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "scenarios" in result.stderr
+
+
+# --- Concurrency is documented, not silently assumed away -------------------
+
+
+def test_module_documents_that_concurrent_operators_are_unsupported():
+    """No file locking guards `state.json` against two processes mutating
+    it at once; that is a deliberate simplicity choice for a lab one person
+    drives at a time, but it must be written down rather than left for
+    someone to discover by racing two runs together."""
+    assert lab_state.__doc__ is not None
+    assert "concurrent" in lab_state.__doc__.lower()
 
 
 # --- Command line -----------------------------------------------------------

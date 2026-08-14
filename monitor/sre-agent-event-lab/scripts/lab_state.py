@@ -12,7 +12,11 @@ step is allowed, and the single place that records what actually happened:
 * Honesty: a capture is only "successful" when the normalized timeline
   holds a real `conclusion` event. `thread-not-created`,
   `investigation-missing` and `conclusion-missing` are recorded verbatim
-  and never promoted to success, by any code path.
+  and never promoted to success, by any code path. A re-run -- whether it
+  ends in `mark_recovered` or `mark_failed` -- clears the scenario's
+  previous `capture_status` first: a conclusion captured against a run
+  that no longer exists must never let a later run's capture stage, or the
+  scorer, reuse it. Only a capture recorded *after* the current run counts.
 * Binding: the file records the azd environment, subscription and resource
   group it belongs to and refuses to be read against a different one, so a
   state file left behind by another lab can never unlock a run here.
@@ -20,7 +24,20 @@ step is allowed, and the single place that records what actually happened:
 Storage is `evidence/state.json`, written by rendering the whole document
 into a sibling temporary file and `os.replace`-ing it into place; a
 rename within a directory is the only write that cannot leave a
-half-written state file behind.
+half-written state file behind. Decoded JSON is validated before use:
+`stages`, `scenarios`, and every entry inside them must be JSON objects,
+or the file is refused with a clean `LabStateError` -- never a raw
+`TypeError`/`AttributeError` traceback, and never a silent reset that
+would discard whatever an operator had already recorded.
+
+Concurrency: this module assumes one operator drives the lab at a time.
+Nothing here locks `state.json` across processes, so two commands that
+read-modify-write it at the same moment can race and the later write
+wins; the atomic `os.replace` only guarantees each individual write is
+whole, not that concurrent writes are serialized. That is a deliberate
+trade for a single-operator lab -- add real file locking (e.g.
+`fcntl.flock` around load-mutate-save) only if concurrent operators
+become a real, observed need, not in anticipation of one.
 
 Python 3.9 compatible (the lab's documented floor): no PEP 604 unions, no
 structural pattern matching, and no third-party imports.
@@ -175,6 +192,7 @@ class LabState:
             )
         document.setdefault("stages", {})
         document.setdefault("scenarios", {})
+        self._verify_shape(document)
         self._verify_binding(document)
         for key, value in (
             ("environment", self.environment),
@@ -184,6 +202,42 @@ class LabState:
             if value and not document.get(key):
                 document[key] = value
         return document
+
+    def _verify_shape(self, document: Dict[str, Any]) -> None:
+        """Refuse decoded JSON whose containers are not JSON objects.
+
+        `stages` and `scenarios`, and every entry inside them, are always
+        treated as objects (subscripted, `.setdefault`-ed, mutated in
+        place). A wrong type there -- a list, a string, `null`, a number --
+        would otherwise surface many calls later as a raw `TypeError` or
+        `AttributeError` from deep inside `mark`/`mark_recovered`/
+        `record_capture`. Catching it here, once, turns every such case
+        into the same clean `LabStateError` a corrupt file already
+        produces, and never silently discards the bad value by resetting
+        it to `{}`.
+        """
+        for container_key in ("stages", "scenarios"):
+            container = document.get(container_key)
+            if not isinstance(container, dict):
+                raise LabStateError(
+                    "Lab state {0} field {1!r} must be a JSON object, not "
+                    "{2}. Inspect or remove the file before "
+                    "continuing.".format(
+                        self.path, container_key, type(container).__name__
+                    )
+                )
+            for entry_name, entry in container.items():
+                if not isinstance(entry, dict):
+                    raise LabStateError(
+                        "Lab state {0} field {1}.{2!r} must be a JSON "
+                        "object, not {3}. Inspect or remove the file "
+                        "before continuing.".format(
+                            self.path,
+                            container_key,
+                            entry_name,
+                            type(entry).__name__,
+                        )
+                    )
 
     def _verify_binding(self, document: Dict[str, Any]) -> None:
         for key, current in (
@@ -303,8 +357,25 @@ class LabState:
                 return "Run: lab.sh capture {0}".format(scenario)
         return ""
 
+    @staticmethod
+    def _start_new_attempt(entry: Dict[str, Any]) -> None:
+        """Discard the previous run's terminal capture outcome.
+
+        `mark_recovered` and `mark_failed` both mean "a run of this
+        scenario just ended"; every previous `capture_status` (and the
+        capture-side `evidence_dir` it was recorded against) describes a
+        run that no longer exists once a new one starts. Leaving it in
+        place would let a stale `conclusion` from an earlier attempt keep
+        satisfying `sX_captured` -- and therefore the next scenario's gate,
+        and the scorer -- even though nothing has been captured for *this*
+        run yet. A fresh capture, recorded after this call, is the only
+        thing that can set it again.
+        """
+        entry.pop("capture_status", None)
+
     def mark_recovered(self, scenario: str, evidence_dir: Optional[str] = None) -> None:
         entry = self._scenario(scenario)
+        self._start_new_attempt(entry)
         entry["run_status"] = RUN_RECOVERED
         entry.pop("failure_reason", None)
         if evidence_dir:
@@ -318,6 +389,7 @@ class LabState:
         reason: str = "",
     ) -> None:
         entry = self._scenario(scenario)
+        self._start_new_attempt(entry)
         entry["run_status"] = RUN_FAILED
         if reason:
             entry["failure_reason"] = reason
