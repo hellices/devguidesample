@@ -357,6 +357,99 @@ def test_a_failed_run_blocks_the_next_scenario(tmp_path):
     assert "s1_recovered" in result.stderr
 
 
+# --- A re-run that dies early never leaves the previous success standing ---
+
+
+@pytest.mark.parametrize("break_the_rerun", ("injection", "recovery"))
+def test_a_rerun_that_dies_early_retires_the_previous_success(tmp_path, break_the_rerun):
+    """S1 recovers and captures a real conclusion, then is re-run and the
+    re-run fails *before* it can record any outcome of its own -- the
+    injecting `az containerapp update` is rejected, or the recovery is and
+    the EXIT trap gives up.
+
+    Without an attempt recorded before the first destructive call, the
+    scenario entry still read `recovered` + `conclusion` from the run that
+    was just superseded, so `run-scenario.sh s2` was admitted and injected
+    a second fault into a workload whose first incident had not been
+    reproduced. The started attempt has to clear that, so every later gate
+    -- the next scenario and the scorer -- refuses.
+    """
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    first_run = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert first_run.returncode == 0, first_run.stderr
+    first_capture = lab_run.run("capture-scenario.sh", ["s1"])
+    assert first_capture.returncode == 0, first_capture.stderr
+    finished = lab_run.scenario_state("s1")
+    assert set(finished) == {
+        "run_status",
+        "started_at",
+        "capture_status",
+        "evidence_dir",
+    }, finished
+    assert finished["run_status"] == "recovered"
+    assert finished["capture_status"] == "conclusion"
+    first_evidence_dir = finished["evidence_dir"]
+
+    if break_the_rerun == "injection":
+        lab_run.break_injection()
+    else:
+        lab_run.break_recovery()
+    rerun = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert rerun.returncode != 0, rerun.stdout
+    entry = lab_run.scenario_state("s1")
+    assert entry.get("run_status") in ("running", "failed"), entry
+    assert "capture_status" not in entry, (
+        "a conclusion captured against the superseded run must not survive "
+        f"the re-run: {entry!r}"
+    )
+    assert entry.get("evidence_dir") != first_evidence_dir, (
+        "the re-run must not keep pointing at the previous attempt's evidence"
+    )
+
+    blocked = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
+
+    assert blocked.returncode != 0, blocked.stdout
+    assert "s1_recovered" in blocked.stderr
+    assert "ORDER_DELAY_MS=4000" not in lab_run.az_calls(), (
+        "S2 injected its fault although S1's re-run never recovered"
+    )
+    scored = lab_run.run("lab.sh", ["score"])
+    assert scored.returncode != 0, scored.stdout
+    assert "lab.sh run" in scored.stderr
+
+
+def test_a_started_run_is_recorded_before_the_fault_is_injected(tmp_path):
+    """Ordering is the whole point: the attempt must be persisted *before*
+    the first destructive Azure call, because that call is what can fail
+    and leave nothing else to write the state."""
+    lab_run = make_lab(tmp_path, injection_update_fails=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    entry = lab_run.scenario_state("s1")
+    assert entry.get("run_status") in ("running", "failed"), entry
+    assert entry.get("started_at", "").endswith("Z"), entry
+    evidence_dirs = sorted((lab_run.lab / "evidence").glob("s1-*"))
+    assert entry.get("evidence_dir") == str(evidence_dirs[-1])
+
+
+def test_a_started_run_is_completed_by_a_healthy_run(tmp_path):
+    """The started attempt is a transition, not a terminal state: a run
+    that recovers must end as `recovered`, with no `running` left behind."""
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert lab_run.scenario_state("s1")["run_status"] == "recovered"
+
+
 def test_run_scenario_refuses_a_state_file_from_another_environment(tmp_path):
     """A `state.json` left behind by another lab must never unlock a run
     here: the file records the environment, subscription and resource group

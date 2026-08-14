@@ -136,6 +136,11 @@ def _az_stub_source(log_path, state_dir):
     `${state}/role_create_fails` (S3's blob role cannot be re-created).
     Only the *recovering* call is affected in each case: injection still
     has to succeed, otherwise there would be nothing to recover from.
+
+    The mirror image is `${state}/injection_update_fails`: the *injecting*
+    `az containerapp update` is rejected, which aborts a run before it can
+    record any outcome of its own. Every marker is read from disk on each
+    call, so a test can start a healthy run and break a later one.
     """
     return f"""#!/usr/bin/env bash
 printf '%s\\t%s\\n' "$*" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "{log_path}"
@@ -183,6 +188,10 @@ case "${{dispatch_key}}" in
       fi
       resolve_alert
     else
+      if [[ -f "${{state}}/injection_update_fails" ]]; then
+        printf 'ERROR: (ContainerAppOperationError) the update was rejected.\\n' >&2
+        exit 1
+      fi
       next_revision
     fi ;;
   "containerapp revision")
@@ -310,6 +319,7 @@ def make_lab(
     recovery_update_fails=False,
     recovery_revision_stalls=False,
     role_create_fails=False,
+    injection_update_fails=False,
 ):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
     lab = tmp_path / "lab"
@@ -337,6 +347,8 @@ def make_lab(
         (state_dir / "recovery_revision_stalls").write_text("1\n")
     if role_create_fails:
         (state_dir / "role_create_fails").write_text("1\n")
+    if injection_update_fails:
+        (state_dir / "injection_update_fails").write_text("1\n")
 
     az_log = tmp_path / "az-calls.log"
     azd_log = tmp_path / "azd-calls.log"
@@ -363,17 +375,30 @@ def make_lab(
     workdir = tmp_path / "elsewhere"
     workdir.mkdir()
 
-    return LabRun(lab, bin_dir, workdir, az_log, azd_log, lab_python_log)
+    return LabRun(lab, bin_dir, workdir, az_log, azd_log, lab_python_log, state_dir)
 
 
 class LabRun:
-    def __init__(self, lab, bin_dir, workdir, az_log, azd_log, lab_python_log):
+    def __init__(self, lab, bin_dir, workdir, az_log, azd_log, lab_python_log, state_dir):
         self.lab = lab
         self.bin_dir = bin_dir
         self.workdir = workdir
         self.az_log = az_log
         self.azd_log = azd_log
         self.lab_python_log = lab_python_log
+        self.state_dir = state_dir
+
+    def break_injection(self):
+        """Make the *next* injecting `az containerapp update` fail.
+
+        Set after a healthy run so one lab can execute a successful
+        scenario and then a re-run that dies before recording anything.
+        """
+        (self.state_dir / "injection_update_fails").write_text("1\n")
+
+    def break_recovery(self):
+        """Make the *next* recovering `az containerapp update` fail."""
+        (self.state_dir / "recovery_update_fails").write_text("1\n")
 
     def run(self, script_name, args=(), env=None):
         process_env = {

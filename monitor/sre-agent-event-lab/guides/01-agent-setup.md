@@ -63,6 +63,8 @@ Monitoring Contributor는 [Azure Monitor 스캐너](https://learn.microsoft.com/
 ![왼쪽 탐색의 Builder 메뉴가 펼쳐져 Agent Canvas, Skills, Incident response plans, Scheduled tasks, Plugins, Hooks, Connectors, Knowledge base 항목이 보이고 그중 Incident response plans가 선택되어 있다. 오른쪽 위에는 초록색 체크 아이콘과 함께 Azure Monitor is connected 문구가 있다. 표에는 계획 한 건이 있고 Status 열은 On, Autonomy level 열은 Autonomous로 표시되며, 위쪽에는 New incident response plan, Refresh, Delete, Turn off 버튼과 Severity equals All 필터가 있다.](../assets/official/portal-incident-response-plans-list.png)
 
 > 출처: [Tutorial: Automate incident response in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/automate-incidents)
+>
+> **주의.** 이 캡처의 Autonomy level 열은 공식 문서 화면 그대로 `Autonomous`입니다. 이 실습에서는 계획의 자율 수준을 반드시 `Review`로 고릅니다.
 
 ## 응답 계획 만들기
 
@@ -76,6 +78,8 @@ Monitoring Contributor는 [Azure Monitor 스캐너](https://learn.microsoft.com/
 ![응답 계획 마법사의 세 번째 화면. 왼쪽 단계 목록에서 Set up incident filters와 Preview filter results는 초록색 체크로 완료되어 있고 3번 Save response plan이 진행 중이다. 오른쪽에는 Choose agent autonomy level for this handler 문구 아래 Review (Default)와 Autonomous 두 개의 라디오 버튼이 설명과 함께 있으며 Autonomous 쪽이 파란 점으로 켜져 있다. 그 아래 Turn on deep investigation 항목의 Run deep investigation autonomously 체크박스는 비어 있고, 화면 맨 아래에 Back, Save, Cancel 버튼이 있다.](../assets/official/portal-response-plan-autonomy-step.png)
 
 > 출처: [Tutorial: Automate incident response in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/automate-incidents)
+>
+> **주의.** 이 캡처는 공식 문서 화면이라 `Autonomous` 라디오 버튼이 켜져 있습니다. 같은 화면에서 이 실습은 `Review (Default)`를 고릅니다.
 
 ## 설정 값을 azd 환경에 저장
 

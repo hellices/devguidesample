@@ -339,6 +339,98 @@ def test_scenario_guides_document_the_critical_recovery_failure_path():
         assert "수동" in section or "직접 되돌" in section, name
 
 
+def test_validation_results_opens_by_dating_itself_to_the_pre_azd_lab():
+    """Everything in this report -- the fixed subscription, the
+    `rg-sre-agent-event-lab-krc` resource group, the Logic App bridge --
+    comes from a hand-built lab that ran before the azd rewrite. A reader
+    who takes the header at face value goes looking for resources `azd up`
+    never creates, so the note has to be at the top, above the numbers, not
+    inferred from a bridge caveat 240 lines down.
+    """
+    text = VALIDATION_RESULTS.read_text()
+    header = text.split("\n## ", 1)[0]
+    note = "\n".join(block for block in blocks(header) if block.lstrip().startswith(">"))
+
+    assert note, "validation-results.md opens with no note about what it records"
+    assert "azd" in note
+    assert re.search(r"(이전|예전|과거)", note), note
+    assert FIXED_RESOURCE_GROUP in note or FIXED_SUBSCRIPTION_ID in note, note
+    assert re.search(r"(현재|지금).{0,40}(실습|lab)", note), note
+
+
+def test_dynamic_thresholds_labels_the_logic_app_event_path_as_legacy():
+    """The recommended-settings section proposed the Action Group → Logic
+    App → HTTP Trigger chain as *the* event path. That bridge is the
+    historical one this lab no longer deploys; naming it without the label
+    tells an operator to rebuild it for a dynamic rule that should ride the
+    same Azure Monitor incident platform the standard exercise uses.
+    """
+    text = DYNAMIC_THRESHOLDS.read_text()
+
+    logic_app_lines = [line for line in text.splitlines() if "Logic App" in line]
+    assert logic_app_lines, "the document no longer mentions the bridge at all"
+    for line in logic_app_lines:
+        assert re.search(r"(레거시|legacy)", line), line
+    assert "incident platform" in text
+    assert re.search(r"(기본|표준).{0,60}incident platform", text) or re.search(
+        r"incident platform.{0,60}(기본|표준)", text
+    ), "the standard Azure Monitor path is not named as the default"
+
+
+def test_autonomy_screenshots_warn_that_the_lab_must_choose_review():
+    """Both response-plan screenshots come from the Learn tutorial and show
+    `Autonomous`, which is the mode this lab must not use: the scripts own
+    fault injection and recovery, so an autonomous Agent and the scripts
+    would revert the same resources at once. The alt text may not claim the
+    picture shows `Review` (see FORBIDDEN_ALT_CLAIMS), which leaves the
+    caption as the only place that can warn a reader copying the screen.
+    """
+    autonomy_screenshots = (
+        "portal-incident-response-plans-list.png",
+        "portal-response-plan-autonomy-step.png",
+    )
+    captions = {}
+    for path in guide_paths():
+        lines = path.read_text().splitlines()
+        for index, line in enumerate(lines):
+            match = re.match(r"!\[[^\]]*\]\(\.\./assets/official/([^)]+)\)", line.strip())
+            if not match:
+                continue
+            caption = []
+            for following in lines[index + 1 :]:
+                stripped = following.strip()
+                if stripped.startswith(">"):
+                    caption.append(stripped)
+                elif stripped:
+                    break
+            captions[match.group(1)] = "\n".join(caption)
+
+    for name in autonomy_screenshots:
+        caption = captions.get(name, "")
+        assert caption, name
+        assert "Autonomous" in caption, name
+        assert "Review" in caption, name
+        assert re.search(r"(주의|경고)", caption), (name, caption)
+        assert re.search(r"(고릅니다|선택합니다|골라야|선택해야)", caption), (name, caption)
+
+
+def test_scenario_guides_say_a_rerun_retires_the_previous_attempt():
+    """`run-scenario.sh` records the new attempt before it injects
+    anything, which clears whatever the previous attempt recorded --
+    including a `conclusion` that was already unblocking the next
+    scenario. An operator who re-runs a captured scenario to collect a
+    second capture has to know the gate closes again at that moment, and
+    stays closed if the re-run dies before it recovers.
+    """
+    for name, scenario in SCENARIO_GUIDES.items():
+        text = (GUIDES / name).read_text()
+        rerun = [line for line in text.splitlines() if "다시" in line or "새 시도" in line]
+        assert rerun, name
+        joined = "\n".join(rerun)
+        assert "{0}_captured".format(scenario) in joined, name
+        assert re.search(r"(지워|지웁|초기화|사라)", joined), (name, joined)
+
+
 def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
     """The recorded S1/S2/S3 run used a one-minute static threshold. That
     result stays plausible because the later live failure was the legacy

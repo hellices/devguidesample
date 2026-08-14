@@ -12,11 +12,15 @@ step is allowed, and the single place that records what actually happened:
 * Honesty: a capture is only "successful" when the normalized timeline
   holds a real `conclusion` event. `thread-not-created`,
   `investigation-missing` and `conclusion-missing` are recorded verbatim
-  and never promoted to success, by any code path. A re-run -- whether it
-  ends in `mark_recovered` or `mark_failed` -- clears the scenario's
-  previous `capture_status` first: a conclusion captured against a run
-  that no longer exists must never let a later run's capture stage, or the
-  scorer, reuse it. Only a capture recorded *after* the current run counts.
+  and never promoted to success, by any code path. A re-run retires the
+  scenario's previous outcome the moment it *starts* -- `begin_run`
+  clears the whole entry and records `run_status: running` before the
+  first destructive call -- and `mark_recovered`/`mark_failed` clear the
+  previous `capture_status` again when they end one. A conclusion
+  captured against a run that no longer exists must never let a later
+  run's capture stage, or the scorer, reuse it, not even when the new run
+  dies before it can record an outcome of its own. Only a capture
+  recorded *after* the current run counts.
 * Binding: the file records the azd environment, subscription and resource
   group it belongs to and refuses to be read against a different one, so a
   state file left behind by another lab can never unlock a run here.
@@ -78,6 +82,7 @@ MISSING_CAPTURE_STATES = (
 )
 CAPTURE_STATES = (SUCCESSFUL_CAPTURE,) + MISSING_CAPTURE_STATES
 
+RUN_RUNNING = "running"
 RUN_RECOVERED = "recovered"
 RUN_FAILED = "failed"
 
@@ -370,8 +375,52 @@ class LabState:
         and the scorer -- even though nothing has been captured for *this*
         run yet. A fresh capture, recorded after this call, is the only
         thing that can set it again.
+
+        `begin_run` clears the same thing (and everything else) when the
+        attempt starts; this stays because a run that ends is proof the
+        previous one is over even if nothing recorded its start -- an
+        operator marking an outcome by hand, or a state file written by an
+        older version of this module.
         """
         entry.pop("capture_status", None)
+
+    def begin_run(self, scenario: str, evidence_dir: Optional[str] = None) -> None:
+        """Record that a new attempt of `scenario` has started.
+
+        Called after `require_run` and *before* the first destructive
+        Azure call, which is the only ordering that holds when the run
+        does not survive to record an outcome. A rejected injection, a
+        recovery the EXIT trap could not complete, an operator's Ctrl-C:
+        each of those exits before `mark_recovered`/`mark_failed`, and
+        until this existed they left the *previous* attempt's
+        `recovered` + `conclusion` in the file. The next scenario's gate
+        and the scorer read exactly those two fields, so a re-run that
+        broke early was indistinguishable from the successful run it
+        replaced.
+
+        The whole entry is cleared rather than a named list of fields:
+        every value in it -- `run_status`, `capture_status`,
+        `failure_reason`, `alert_resolved_at`, the evidence directory, any
+        terminal capture metadata a later version records -- describes the
+        attempt that just ended, and a field added later must not silently
+        start surviving a re-run. What replaces it is the new attempt:
+        `run_status: running`, when it started, and the evidence directory
+        it writes into.
+
+        `running` deliberately satisfies nothing: `has('sX_recovered')`
+        only accepts `recovered`, `has('sX_captured')` only a recorded
+        `conclusion`. An attempt that never finishes therefore keeps the
+        next scenario blocked and scores as "no capture recorded" until a
+        run really recovers and a capture really lands.
+        """
+        self.require_run(scenario)
+        entry = self._scenario(scenario)
+        entry.clear()
+        entry["run_status"] = RUN_RUNNING
+        entry["started_at"] = utc_now()
+        if evidence_dir:
+            entry["evidence_dir"] = str(evidence_dir)
+        self._save()
 
     def mark_recovered(self, scenario: str, evidence_dir: Optional[str] = None) -> None:
         entry = self._scenario(scenario)
@@ -525,6 +574,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     require_run = commands.add_parser("require-run", help="allow a scenario run")
     require_run.add_argument("scenario", choices=SCENARIOS)
 
+    begin_run = commands.add_parser(
+        "begin-run", help="start a scenario run, retiring the previous attempt"
+    )
+    begin_run.add_argument("scenario", choices=SCENARIOS)
+    begin_run.add_argument("evidence_dir", nargs="?")
+
     mark = commands.add_parser("mark", help="record a lab stage")
     mark.add_argument("stage", choices=STAGES)
     mark.add_argument("--evidence-dir")
@@ -577,6 +632,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         state = state_from_environment(args.state)
         if args.command == "require-run":
             state.require_run(args.scenario)
+            return 0
+        if args.command == "begin-run":
+            state.begin_run(args.scenario, args.evidence_dir)
             return 0
         if args.command == "mark":
             state.mark(args.stage, evidence_dir=args.evidence_dir)

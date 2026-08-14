@@ -196,6 +196,186 @@ def test_reloading_after_a_rerun_still_shows_the_cleared_capture_status(tmp_path
     assert not reloaded.is_successful_capture("s1")
 
 
+# --- Starting an attempt clears the previous one, before anything breaks ---
+
+
+def finished_run(path, scenario="s1", evidence_dir="/lab/evidence/s1-first"):
+    """A scenario entry as a *finished*, fully successful run leaves it.
+
+    Written as JSON rather than through the API so the precondition holds
+    every field a completed attempt can carry -- including the terminal
+    capture metadata (`alert_resolved_at`, `captured_at`) that a future
+    field addition would put here -- instead of only the ones today's
+    `mark_recovered`/`record_capture` happen to write.
+    """
+    path.write_text(
+        json.dumps(
+            {
+                "environment": "",
+                "subscription_id": "",
+                "resource_group": "",
+                "stages": {
+                    "baseline_passed": {"at": "2026-08-14T00:00:00Z"},
+                    "agent_setup_acknowledged": {"at": "2026-08-14T00:01:00Z"},
+                },
+                "scenarios": {
+                    scenario: {
+                        "run_status": "recovered",
+                        "capture_status": "conclusion",
+                        "failure_reason": "an earlier attempt timed out",
+                        "alert_resolved_at": "2026-08-14T00:20:00Z",
+                        "captured_at": "2026-08-14T00:30:00Z",
+                        "evidence_dir": evidence_dir,
+                    }
+                },
+            }
+        )
+    )
+    return LabState(path)
+
+
+def test_begin_run_requires_the_same_prerequisites_as_require_run(tmp_path):
+    """`begin_run` is what a scenario calls just before it breaks something,
+    so it must refuse exactly what `require_run` refuses -- and record
+    nothing when it does."""
+    path = tmp_path / "state.json"
+    state = LabState(path)
+
+    with pytest.raises(InvalidTransition) as refusal:
+        state.begin_run("s1", str(tmp_path / "s1-first"))
+
+    assert "baseline_passed" in str(refusal.value)
+    assert "agent_setup_acknowledged" in str(refusal.value)
+    assert state.run_status("s1") is None
+    assert not path.exists() or LabState(path).run_status("s1") is None
+
+
+def test_begin_run_for_s2_is_refused_until_s1_recovered_and_was_captured(tmp_path):
+    state = ready_for_s1(tmp_path / "state.json")
+    state.mark_recovered("s1", str(tmp_path / "s1"))
+
+    with pytest.raises(InvalidTransition, match="s1_captured"):
+        state.begin_run("s2", str(tmp_path / "s2"))
+
+    assert state.run_status("s2") is None
+
+
+def test_begin_run_clears_every_trace_of_the_finished_attempt(tmp_path):
+    """The gap this closes: a scenario that already recovered and captured,
+    re-run, and then failing *before* `mark_recovered`/`mark_failed` could
+    run (a rejected injection, an early trap exit) left the previous
+    attempt's `recovered`/`conclusion` in place -- so the next scenario was
+    admitted on evidence from a run that no longer exists. Starting the
+    attempt is what clears it, before the first destructive call."""
+    path = tmp_path / "state.json"
+    state = finished_run(path, evidence_dir=str(tmp_path / "s1-first"))
+
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+
+    entry = state.document["scenarios"]["s1"]
+    assert entry["run_status"] == "running"
+    assert entry["evidence_dir"] == str(tmp_path / "s1-second")
+    assert entry["started_at"].endswith("Z")
+    for stale in ("capture_status", "failure_reason", "alert_resolved_at", "captured_at"):
+        assert stale not in entry, stale
+
+
+def test_begin_run_blocks_the_next_scenario_and_the_capture_gate(tmp_path):
+    """A started-but-unfinished attempt satisfies nothing: neither the
+    `sX_recovered`/`sX_captured` stages, nor the next scenario's gate."""
+    path = tmp_path / "state.json"
+    state = finished_run(path, evidence_dir=str(tmp_path / "s1-first"))
+    assert state.has("s1_recovered") and state.has("s1_captured")
+
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+
+    assert not state.has("s1_recovered")
+    assert not state.has("s1_captured")
+    assert not state.is_successful_capture("s1")
+    assert state.capture_status("s1") is None
+    with pytest.raises(InvalidTransition, match="s1_recovered"):
+        state.require_run("s2")
+
+
+def test_begin_run_without_an_evidence_directory_drops_the_previous_one(tmp_path):
+    """`capture-scenario.sh` captures whatever directory the state names.
+    Keeping the finished attempt's directory across a new attempt would let
+    a capture of the *old* timeline be recorded as this attempt's outcome."""
+    path = tmp_path / "state.json"
+    state = finished_run(path, evidence_dir=str(tmp_path / "s1-first"))
+
+    state.begin_run("s1")
+
+    assert state.evidence_dir("s1") is None
+
+
+def test_begin_run_is_persisted_not_only_held_in_memory(tmp_path):
+    """The attempt starts before the injection, and the process that
+    injected it may never get another chance to write: what a *later*
+    command reads from disk is the only thing that blocks the next
+    scenario."""
+    path = tmp_path / "state.json"
+    finished_run(path, evidence_dir=str(tmp_path / "s1-first")).begin_run(
+        "s1", str(tmp_path / "s1-second")
+    )
+
+    reloaded = LabState(path)
+
+    assert reloaded.run_status("s1") == "running"
+    assert reloaded.capture_status("s1") is None
+    assert reloaded.evidence_dir("s1") == str(tmp_path / "s1-second")
+    with pytest.raises(InvalidTransition, match="s1_recovered"):
+        reloaded.require_run("s2")
+
+
+def test_a_started_run_scores_as_no_capture_at_all(tmp_path):
+    """`score.py` reads `capture_status`; a started attempt must leave it
+    empty so a re-run that died early can never be scored on the previous
+    attempt's conclusion."""
+    path = tmp_path / "state.json"
+    state = finished_run(path, evidence_dir=str(tmp_path / "s1-first"))
+
+    state.begin_run("s1", str(tmp_path / "s1-second"))
+
+    assert state.capture_status("s1") is None
+
+
+def test_a_started_run_completes_through_mark_recovered(tmp_path):
+    path = tmp_path / "state.json"
+    state = ready_for_s1(path)
+    state.begin_run("s1", str(tmp_path / "s1"))
+
+    state.mark_recovered("s1", str(tmp_path / "s1"))
+
+    assert state.run_status("s1") == "recovered"
+    assert state.evidence_dir("s1") == str(tmp_path / "s1")
+    with pytest.raises(InvalidTransition, match="s1_captured"):
+        state.require_run("s2")
+
+    state.record_capture("s1", "conclusion", str(tmp_path / "s1"))
+
+    state.require_run("s2")  # must not raise
+
+
+def test_a_started_run_completes_through_mark_failed(tmp_path):
+    path = tmp_path / "state.json"
+    state = ready_for_s1(path)
+    state.begin_run("s1", str(tmp_path / "s1"))
+
+    state.mark_failed("s1", str(tmp_path / "s1"), reason="alert never resolved")
+
+    assert state.run_status("s1") == "failed"
+    assert state.document["scenarios"]["s1"]["failure_reason"] == "alert never resolved"
+    with pytest.raises(InvalidTransition, match="s1_recovered"):
+        state.require_run("s2")
+
+
+def test_begin_run_rejects_an_unknown_scenario(tmp_path):
+    state = ready_for_s1(tmp_path / "state.json")
+    with pytest.raises(ValueError):
+        state.begin_run("s9")
+
+
 def test_require_run_rejects_an_unknown_scenario(tmp_path):
     state = ready_for_s1(tmp_path / "state.json")
     with pytest.raises(ValueError):
@@ -566,6 +746,82 @@ def test_cli_evidence_dir_without_a_run_names_the_command_to_run(tmp_path):
     assert result.returncode == 1
     assert "lab.sh run s1" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_cli_begin_run_starts_a_new_attempt_and_blocks_the_next_scenario(tmp_path):
+    """The command `run-scenario.sh` runs between `require-run` and the
+    first destructive Azure call: it must clear the finished attempt and
+    leave the scenario `running`, which satisfies no gate."""
+    path = tmp_path / "state.json"
+    first = tmp_path / "s1-first"
+    second = tmp_path / "s1-second"
+    run_cli(path, ["mark", "baseline_passed"])
+    run_cli(path, ["acknowledge-agent"], stdin="acknowledge\n")
+    run_cli(path, ["mark-recovered", "s1", str(first)])
+    run_cli(path, ["record-capture", "s1", "--status", "conclusion", "--evidence-dir", str(first)])
+    assert run_cli(path, ["require-run", "s2"]).returncode == 0
+
+    started = run_cli(path, ["begin-run", "s1", str(second)])
+
+    assert started.returncode == 0, started.stderr
+    entry = json.loads(path.read_text())["scenarios"]["s1"]
+    assert entry["run_status"] == "running"
+    assert entry["evidence_dir"] == str(second)
+    assert "capture_status" not in entry
+    blocked = run_cli(path, ["require-run", "s2"])
+    assert blocked.returncode == 1
+    assert "s1_recovered" in blocked.stderr
+
+
+def test_cli_begin_run_without_the_prerequisites_records_nothing(tmp_path):
+    path = tmp_path / "state.json"
+
+    result = run_cli(path, ["begin-run", "s1", str(tmp_path / "s1")])
+
+    assert result.returncode == 1
+    assert "baseline_passed" in result.stderr
+    assert "agent_setup_acknowledged" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not path.exists() or "s1" not in json.loads(path.read_text())["scenarios"]
+
+
+def test_cli_begin_run_refuses_a_state_file_from_another_environment(tmp_path):
+    """A run must never start against a state file another lab wrote: the
+    binding check has to fail before the attempt is recorded, so the file
+    keeps describing the lab it belongs to."""
+    path = tmp_path / "state.json"
+    run_cli(path, ["mark", "baseline_passed"])
+    run_cli(path, ["acknowledge-agent"], stdin="acknowledge\n")
+    before = path.read_text()
+
+    result = run_cli(
+        path,
+        ["begin-run", "s1", str(tmp_path / "s1")],
+        env={"AZURE_RESOURCE_GROUP": "rg-somewhere-else"},
+    )
+
+    assert result.returncode == 1
+    assert "rg-somewhere-else" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert path.read_text() == before
+
+
+def test_cli_marks_a_started_run_recovered_and_then_captured(tmp_path):
+    path = tmp_path / "state.json"
+    evidence_dir = tmp_path / "s1-20260814T000000Z"
+    evidence_dir.mkdir()
+    run_cli(path, ["mark", "baseline_passed"])
+    run_cli(path, ["acknowledge-agent"], stdin="acknowledge\n")
+    assert run_cli(path, ["begin-run", "s1", str(evidence_dir)]).returncode == 0
+
+    assert run_cli(path, ["mark-recovered", "s1", str(evidence_dir)]).returncode == 0
+    recorded = run_cli(
+        path,
+        ["record-capture", "s1", "--status", "conclusion", "--evidence-dir", str(evidence_dir)],
+    )
+
+    assert recorded.returncode == 0, recorded.stderr
+    assert run_cli(path, ["require-run", "s2"]).returncode == 0
 
 
 def test_cli_refuses_a_state_file_bound_to_another_environment(tmp_path):

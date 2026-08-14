@@ -2,7 +2,7 @@
 
 > **Status:** Validated — base azd deployment only (provision, deploy, doctor, baseline, pre-acknowledgement safety gate, `azd down --purge`). The manual Agent connection in the portal and the live S1/S2/S3 run/capture/score sequence have not been run: the operator will run them one by one.
 
-Updated: 2026-08-15 (recovery failure propagation; plan reconciled with the live deployment that has run and the scenario sequence that has not)
+Updated: 2026-08-15 (run-attempt state gate; recovery failure propagation; plan reconciled with the live deployment that has run and the scenario sequence that has not)
 
 ## Goal
 
@@ -244,6 +244,55 @@ and were enabled, which ARM preflight alone could not have shown. Nothing
 was deployed, modified or deleted *while diagnosing and fixing this*; the
 live deployment came afterwards, from the fixed template.
 
+### State gate: a re-run retires the previous attempt (2026-08-15)
+
+Review finding (Important): `run-scenario.sh` recorded a scenario's
+outcome only at the end, through `mark-recovered`/`mark-failed`. Every
+exit path *before* that -- a rejected injecting `az containerapp update`,
+a recovery the EXIT trap could not complete, an operator's Ctrl-C -- left
+the previous attempt's `run_status: recovered` and
+`capture_status: conclusion` untouched. Re-running an already-captured S1
+and breaking early therefore left the state file describing a run that no
+longer existed, and `lab.sh run s2` was admitted on it: two overlapping
+incidents in one workload, with neither capture readable.
+
+Reproduced first (RED), as the finding describes: S1 recovered and
+captured a real conclusion, S1 re-run, the re-run's injection rejected ->
+the scenario entry still read `recovered` + `conclusion` and S2 injected
+`ORDER_DELAY_MS=4000`.
+
+Fix (strict TDD): `LabState.begin_run(scenario, evidence_dir=None)` and
+the `begin-run` CLI command start an attempt atomically -- they re-check
+the same prerequisites `require_run` enforces (and the same environment
+binding every command checks), clear the whole scenario entry (previous
+`run_status`, `capture_status`, `failure_reason`, `alert_resolved_at`,
+evidence directory and any terminal capture metadata a later version
+records) and write `run_status: running` plus `started_at` and the new
+evidence directory. `run-scenario.sh` calls it after `require-run` and
+before the first destructive Azure call. `running` satisfies no gate:
+`has('sX_recovered')` accepts only `recovered`, `has('sX_captured')` only
+a recorded `conclusion`, so an attempt that dies early keeps the next
+scenario blocked and scores as "no capture recorded" until a run really
+recovers and a capture really lands. `mark_recovered`/`mark_failed`
+complete a started attempt unchanged, and still clear a stale
+`capture_status` themselves for state written without a recorded start.
+
+Confirmed RED (17 state/CLI/doc tests plus 3 end-to-end script tests
+failing, including the exact old-success -> broken re-run -> S2 admitted
+sequence) and GREEN afterwards, with the full suite and all five Bicep
+templates rebuilt.
+
+Documentation fixed in the same pass: `validation-results.md` now opens by
+dating itself to the pre-azd, hand-built lab (its subscription, resource
+group and Logic App bridge are not what `azd up` creates);
+`dynamic-thresholds.md` labels the Action Group -> Logic App -> HTTP
+Trigger event path as the legacy bridge and names the Azure Monitor
+incident platform path as the default; and both Learn screenshots that
+show `Autonomous` now carry a caption warning that this lab must choose
+`Review` (the pictures themselves are unchanged). The scenario guides
+state that re-running a scenario clears its previous
+`sX_recovered`/`sX_captured` record before the fault is injected.
+
 ## Security and Safety
 
 - Container Apps reach Blob Storage through private networking.
@@ -273,7 +322,7 @@ live deployment came afterwards, from the fixed template.
 - [x] 5. Subscription/Location Check — current authenticated subscription, Korea Central
 - [x] 6. Aspire Pre-Provisioning Checks — not applicable
 - [x] 7. Provision Preview — superseded: no separate `--preview` pass was run; the live `azd provision` below deployed the real plan and is recorded in full
-- [x] 8. Build Verification — 483 tests and five Bicep builds passed
+- [x] 8. Build Verification — 505 tests and five Bicep builds passed
 - [x] 9. Docker Build Context Validation — Dockerfile and requirements present; the image is built by ACR from `app/`, never locally
 - [x] 10. Package Validation — `azd package --all --no-prompt` passed
 - [x] 11. Azure Policy Validation — three assigned Defender policies are unrelated to planned resources
@@ -299,7 +348,7 @@ Re-run after the two-phase ACR gate and workspace-schema alert corrections:
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 483 passed (RED first for the workspace-schema alert fix and for the swallowed scenario-recovery failures) |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 505 passed (RED first for the workspace-schema alert fix, the swallowed scenario-recovery failures, and the re-run state gate) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
 | Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts}.bicep --stdout` | Passed (five templates; `alerts.bicep` emits `evaluationFrequency: PT1M`, `windowSize: PT5M`, workspace scope and `targetResourceTypes: Microsoft.OperationalInsights/workspaces`) |

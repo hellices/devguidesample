@@ -39,6 +39,17 @@ readonly BLOB_ROLE_ASSIGNMENT_NAME
 
 EVIDENCE_DIR="$(create_evidence_dir "${SCENARIO}")"
 readonly EVIDENCE_DIR
+
+# The attempt is recorded before anything can break, and clears whatever
+# the previous attempt left behind. Everything below this line can exit
+# without reaching `mark-recovered`/`mark-failed` -- a rejected injection,
+# a recovery the EXIT trap cannot complete, a Ctrl-C -- and the state file
+# must never keep describing the run this one replaces: a re-run of an
+# already-captured scenario would otherwise leave `recovered` +
+# `conclusion` in place and admit the next scenario on evidence from a run
+# that no longer exists.
+lab_state begin-run "${SCENARIO}" "${EVIDENCE_DIR}"
+
 RECOVERED=0
 INJECTED_AT=""
 REVISION_READY_AT=""

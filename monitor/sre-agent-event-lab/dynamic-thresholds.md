@@ -55,7 +55,8 @@ query는 `summarize` 결과가 하나 이상의 numeric series를 반환해야 �
 - Failing periods: 4회 평가 중 2회 위반
 - `ignoreDataBefore`: 정상 telemetry가 안정적으로 쌓이기 시작한 UTC
 - Action Group: 기존 `ag-sre-agent-event-lab`
-- Event path: Dynamic alert → Action Group → Logic App managed identity → SRE HTTP Trigger → Review-mode investigation
+- Event path(기본): Dynamic alert → Azure Monitor incident platform 연결 → Review 모드 response plan → investigation. 현재 실습이 배포하는 표준 경로이며 Dynamic rule도 같은 경로를 그대로 쓴다.
+- Event path(레거시 bridge): Dynamic alert → Action Group → Logic App managed identity → SRE HTTP Trigger → Review-mode investigation. 2026-08-12 실측에 쓰인 legacy 구성이고 기본 실습에는 배포하지 않는다([validation-results.md](validation-results.md)).
 
 이는 시작점이지 모든 workload의 정답이 아니다. Preview Chart와 incident 결과를 보고 sensitivity와 failing periods를 조정한다.
 

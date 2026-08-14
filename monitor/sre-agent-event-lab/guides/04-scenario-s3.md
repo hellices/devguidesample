@@ -53,7 +53,7 @@ cd monitor/sre-agent-event-lab
 1. `Storage Blob Data Reader` 할당이 원래 Blob 컨테이너 범위에 다시 존재합니다.
 2. `alert-sre-lab-s3-storage-rbac`가 `Resolved`입니다.
 
-역할 전파에는 몇 분이 걸릴 수 있습니다. `/api/documents`가 200을 돌려주는지 직접 호출해 확인하고, 실패로 기록되었다면 `./scripts/lab.sh run s3`으로 새 시도를 시작합니다.
+역할 전파에는 몇 분이 걸릴 수 있습니다. `/api/documents`가 200을 돌려주는지 직접 호출해 확인하고, 실패로 기록되었다면 `./scripts/lab.sh run s3`으로 새 시도를 시작합니다. 다시 실행하면 이전 시도의 `s3_recovered`와 `s3_captured` 기록이 주입 전에 지워지므로, 새 시도가 복구되고 `capture`될 때까지 채점은 막힙니다.
 
 역할 복구 자체가 실패하면 스크립트는 `CRITICAL:` 두 줄을 출력하고 0이 아닌 코드로 끝냅니다. 워크로드에 Blob 권한이 없는 상태가 그대로 남으므로, 같은 이름·같은 범위의 `Storage Blob Data Reader` 할당을 수동으로 다시 만든 뒤 다음 단계로 넘어가세요.
 
