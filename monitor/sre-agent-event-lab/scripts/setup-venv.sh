@@ -17,13 +17,18 @@ set -euo pipefail
 # silently reaching the public index.
 #
 # Idempotency matters because this script is invoked from the `postprovision`
-# hook, which runs after `azd provision` has already created every cloud
-# resource: by the time this step can fail, the Azure spend for this run has
-# already started. So every failure message below states the exact command
-# to re-run -- re-running never repeats the (already-succeeded) cloud
-# provisioning, only this local step -- and `uv venv --allow-existing` plus
-# `uv pip install` make re-running safe even when a previous attempt got
-# partway through.
+# hook *before* that hook's ACR build and Container App update -- see
+# `azd-postprovision.sh` -- so a failure here happens before the cloud app
+# deployment for this run has even started, not after it. Re-running only
+# this script would leave that deployment never attempted, so every failure
+# message below points at re-running the *whole* hook (`azd hooks run
+# postprovision`), never at running this script directly -- and `uv venv
+# --allow-existing` plus `uv pip install` make that safe to re-run even when
+# a previous attempt got partway through. (Running this script directly is
+# still the right move for a purely local `app/.venv` problem noticed well
+# after a deployment already succeeded -- see `doctor.sh` and
+# `capture-scenario.sh`'s own remediation text -- just never as the response
+# to a failure reported by *this* script.)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
@@ -42,7 +47,13 @@ readonly REQUIREMENTS_FILE="${APP_DIR}/requirements-dev.txt"
 # interpreter left behind by a pre-uv `python3 -m venv` (uv recreates the
 # venv in place when the existing interpreter doesn't satisfy the request).
 readonly VENV_PYTHON_VERSION=">=3.10"
-readonly RERUN_HINT="Cloud resources from 'azd provision' are already deployed; only this local step needs to be retried. Re-run: azd hooks run postprovision (or directly: ./scripts/setup-venv.sh)"
+# Cloud resources from `azd provision` are already deployed by the time this
+# hook (and so this script) runs, but this hook's own ACR build and Container
+# App update -- the cloud *app* deployment -- run after this script, not
+# before it, so a failure here must not be answered by re-running only this
+# script: that would leave the app deployment never attempted. `cd` pins the
+# rerun to this lab's project directory regardless of the operator's shell.
+readonly RERUN_HINT="Cloud infrastructure from 'azd provision' is already deployed, but this hook's Container App image build and deployment run *after* this step and have not happened yet -- re-running only this script would silently skip them. Re-run the whole hook instead: cd ${LAB_ROOT} && azd hooks run postprovision"
 
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv is required to set up ${VENV_DIR} but was not found on PATH." >&2
@@ -51,11 +62,22 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! uv venv --python "${VENV_PYTHON_VERSION}" --allow-existing "${VENV_DIR}"; then
+if ! UV_VENV_OUTPUT="$(uv venv --python "${VENV_PYTHON_VERSION}" --allow-existing "${VENV_DIR}" 2>&1)"; then
+  printf '%s\n' "${UV_VENV_OUTPUT}" >&2
   echo "Failed to create the virtual environment at ${VENV_DIR}." >&2
+  if grep -qi "no interpreter found" <<<"${UV_VENV_OUTPUT}"; then
+    # uv's own message ("No interpreter found for Python >=3.10 ...") means
+    # no installed Python clears the floor yet -- not a proxy or install
+    # failure -- so the fix is installing one, and `uv python install` is
+    # the one installer that reuses this network's corporate proxy/mirror
+    # already configured for `uv`; a public `pip`/`pip install` bypasses
+    # that configuration entirely and must never be suggested here.
+    echo "No installed Python satisfies ${VENV_PYTHON_VERSION} yet. Install one through uv itself -- it uses the corporate proxy/mirror already configured for uv, not the public PyPI index: uv python install 3.12" >&2
+  fi
   echo "${RERUN_HINT}" >&2
   exit 1
 fi
+printf '%s\n' "${UV_VENV_OUTPUT}"
 
 if ! uv pip install --python "${VENV_PYTHON}" -r "${REQUIREMENTS_FILE}"; then
   echo "Failed to install ${REQUIREMENTS_FILE} into ${VENV_DIR}." >&2

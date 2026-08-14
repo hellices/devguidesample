@@ -123,6 +123,7 @@ JSON
 
 | 증상 | 조치 |
 |---|---|
+| `doctor`의 `Python environment` 검사가 `FAIL` | `app/.venv`가 없거나 Pillow가 안 잡힙니다. 로컬 문제이며 클라우드 배포와는 무관하니 바로 실행: `./scripts/setup-venv.sh` |
 | `doctor`의 Reader 검사가 `FAIL` | 두 principal ID가 근거 파일과 같은지 확인하고 리소스 그룹에 Reader를 다시 부여합니다 |
 | `baseline`이 telemetry 없음으로 종료 | 10분 더 기다린 뒤 다시 실행합니다. 계속 실패하면 `azd env get-value AZURE_CONTAINER_APP_FQDN`으로 앱을 직접 호출해 봅니다 |
 | `acknowledge`가 기록되지 않음 | 입력한 단어가 정확한지, `azd env select`로 올바른 환경을 골랐는지 확인합니다 |

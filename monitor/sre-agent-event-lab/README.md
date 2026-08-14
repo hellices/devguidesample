@@ -78,7 +78,7 @@ azd up 2>&1 | tee evidence/deploy.log
 
 Bicep provision → ACR 클라우드 빌드 → Container App 이미지 교체 순서로 진행되며 로컬 Docker는 필요 없습니다. 처음에는 공개 placeholder 이미지가 80 포트로 뜨고, postprovision hook이 ingress를 8000으로 옮긴 뒤 실습 이미지로 교체합니다.
 
-같은 postprovision hook이 `scripts/setup-venv.sh`로 `app/.venv`도 함께 준비합니다(`uv venv` + `uv pip install -r requirements-dev.txt`). 이 단계가 실패해도 클라우드 리소스는 이미 만들어진 뒤이므로 다시 `azd provision`부터 할 필요는 없습니다: 안내된 명령(`azd hooks run postprovision` 또는 `./scripts/setup-venv.sh`)만 다시 실행하면 됩니다.
+같은 postprovision hook의 첫 단계가 `scripts/setup-venv.sh`로 `app/.venv`를 준비하는 것입니다(`uv venv` + `uv pip install -r requirements-dev.txt`). 이 단계는 위 ACR 빌드·Container App 이미지 교체보다 먼저 실행되므로, 여기서 실패하면 클라우드 앱 배포(ACR 빌드, 이미지 교체, 헬스체크)는 아직 시작되지 않은 상태입니다 -- `./scripts/setup-venv.sh`만 따로 다시 실행하면 이 배포 단계를 건너뛰게 되므로, 반드시 hook 전체를 다시 실행하세요: `azd hooks run postprovision`.
 
 성공 조건은 provision 성공, 활성 revision `Healthy`, `/healthz` HTTP 200 세 가지입니다.
 

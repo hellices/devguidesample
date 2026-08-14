@@ -433,6 +433,44 @@ def test_agent_setup_guide_offers_azd_env_set_without_storing_secrets():
         assert key in text, key
 
 
+def test_agent_setup_guide_offers_a_python_environment_remedy():
+    """Finding #4 (Task 6 follow-up): `doctor.sh` gained a `Python
+    environment` check, but the guide's failure table never told an
+    operator what to do about it. The remedy is local-only and independent
+    of the postprovision-hook ordering contract (see
+    `test_setup_venv_orders_local_recovery_correctly` below), so it may --
+    and should -- name `./scripts/setup-venv.sh` directly.
+    """
+    text = (GUIDES / "01-agent-setup.md").read_text()
+    heading = "## 실패했을 때"
+
+    assert heading in text
+    section = text.split(heading, 1)[1]
+    assert "Python environment" in section
+    assert "./scripts/setup-venv.sh" in section
+
+
+def test_readme_does_not_claim_only_a_local_step_remains_after_postprovision():
+    """Finding #2 (Task 6 follow-up): `setup-venv.sh` runs *before* the same
+    postprovision hook's ACR build and Container App update, so a failure
+    there means the cloud app deployment has not happened yet -- not merely
+    that "only a local step" is left. The README must send an operator to
+    re-run the whole hook, not offer `./scripts/setup-venv.sh` as an
+    equally-valid alternative for this specific failure.
+    """
+    text = README.read_text()
+    heading = "## 배포"
+
+    assert heading in text
+    section = text.split(heading, 1)[1].split("## ", 1)[0]
+    assert "setup-venv.sh" in section
+    assert "azd hooks run postprovision" in section
+    assert "또는 `./scripts/setup-venv.sh`" not in section, (
+        "the README must not offer running setup-venv.sh directly as an "
+        "alternative recovery for a postprovision-hook failure"
+    )
+
+
 def test_guides_do_not_request_secrets_in_environment():
     text = "\n".join(path.read_text() for path in GUIDES.glob("*.md"))
     for forbidden in ("GITHUB_PAT=", "OAUTH_TOKEN=", "CLIENT_SECRET="):
