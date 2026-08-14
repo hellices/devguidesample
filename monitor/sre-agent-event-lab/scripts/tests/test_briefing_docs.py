@@ -1,4 +1,6 @@
 import re
+import unicodedata
+from collections import Counter
 from pathlib import Path
 
 
@@ -46,6 +48,122 @@ def windows_after(text: str, anchor: str, size: int = 500) -> list:
     return windows
 
 
+UNICODE_PUNCTUATION_CATEGORIES = {"Pc", "Pd", "Pe", "Pf", "Pi", "Po", "Ps"}
+
+
+def strip_code(markdown: str) -> str:
+    markdown = re.sub(r"```.*?```", "", markdown, flags=re.DOTALL)
+    return re.sub(r"`[^`]*`", "", markdown)
+
+
+def _is_unicode_punctuation(char) -> bool:
+    return char is not None and unicodedata.category(char) in UNICODE_PUNCTUATION_CATEGORIES
+
+
+def _is_unicode_whitespace(char) -> bool:
+    return char is None or char.isspace()
+
+
+def unrendered_emphasis_markers(markdown: str) -> list:
+    """Emphasis runs GitHub prints literally instead of rendering as bold/italic.
+
+    Implements the CommonMark left/right-flanking delimiter rules. A closing
+    ``**`` that follows punctuation and is glued to a letter — the common
+    Korean pattern ``**굵게(bold)**을`` where a particle follows the marker —
+    is not right-flanking, so it can never close emphasis and GitHub shows the
+    raw asterisks to the reader. This is a general rule check, not a check for
+    one known sentence.
+    """
+    offenders = []
+    for number, line in enumerate(strip_code(markdown).splitlines(), start=1):
+        open_runs = []
+        for match in re.finditer(r"\*+", line):
+            before = line[match.start() - 1] if match.start() else None
+            after = line[match.end()] if match.end() < len(line) else None
+            left_flanking = not _is_unicode_whitespace(after) and (
+                not _is_unicode_punctuation(after)
+                or _is_unicode_whitespace(before)
+                or _is_unicode_punctuation(before)
+            )
+            right_flanking = not _is_unicode_whitespace(before) and (
+                not _is_unicode_punctuation(before)
+                or _is_unicode_whitespace(after)
+                or _is_unicode_punctuation(after)
+            )
+            if right_flanking and open_runs:
+                open_runs.pop()
+            elif left_flanking:
+                open_runs.append(match)
+            else:
+                offenders.append((number, match.group(), line.strip()))
+        offenders.extend((number, run.group(), line.strip()) for run in open_runs)
+    return offenders
+
+
+def emphasis_glued_to_hangul(markdown: str) -> list:
+    """Closing ``**`` markers immediately followed by a Hangul letter/particle."""
+    pattern = re.compile(r"[^\s*]\*{1,2}[가-힣]")
+    return [
+        match.group()
+        for match in pattern.finditer(strip_code(markdown))
+        if _is_unicode_punctuation(match.group()[0])
+    ]
+
+
+def table_rows(markdown: str) -> list:
+    rows = []
+    for line in strip_code(markdown).splitlines():
+        line = line.strip()
+        if not line.startswith("|") or not line.endswith("|"):
+            continue
+        if re.fullmatch(r"\|[\s:\-|]+\|", line):
+            continue
+        cells = [
+            re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", cell).replace("**", "").strip()
+            for cell in line.strip("|").split("|")
+        ]
+        if len(cells) >= 2:
+            rows.append(cells)
+    return rows
+
+
+def body_sentences(markdown: str, minimum_length: int = 30) -> list:
+    """Substantive body sentences, with images, captions and code removed.
+
+    Table cells count as body prose, so a sentence copied between a table row
+    and a bullet list is detected. Short labels and fragments are ignored so
+    that legitimately repeated table values do not register as duplicates.
+    """
+    markdown = re.sub(r"```.*?```", "", markdown, flags=re.DOTALL)
+    markdown = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", markdown)
+    markdown = re.sub(r"<img[^>]*>", "", markdown)
+
+    fragments = []
+    for line in markdown.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ">")):
+            continue
+        if re.fullmatch(r"\|[\s:\-|]+\|", line):
+            continue
+        cells = line.strip("|").split("|") if line.startswith("|") else [line]
+        for cell in cells:
+            cell = re.sub(r"^[-*+]\s+", "", cell.strip())
+            cell = re.sub(r"^\d+\.\s+", "", cell)
+            cell = re.sub(r"^\[[ x]\]\s+", "", cell)
+            cell = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", cell)
+            cell = cell.replace("**", "").replace("`", "").strip()
+            if cell:
+                fragments.append(cell)
+
+    sentences = []
+    for fragment in fragments:
+        for sentence in re.split(r"(?<=다\.)\s+", fragment):
+            sentence = re.sub(r"\s+", " ", sentence).strip()
+            if len(sentence) >= minimum_length and re.search(r"(다|요)\.$", sentence):
+                sentences.append(sentence)
+    return sentences
+
+
 def prose_only(markdown: str) -> str:
     markdown = re.sub(r"```.*?```", "", markdown, flags=re.DOTALL)
     markdown = re.sub(r"`[^`]+`", "", markdown)
@@ -83,6 +201,60 @@ def test_briefing_uses_natural_korean_terms():
 
     for pattern in forbidden:
         assert not re.search(pattern, prose, re.IGNORECASE), pattern
+
+
+def test_briefing_has_no_emphasis_markers_github_renders_literally():
+    text = BRIEFING.read_text()
+
+    assert unrendered_emphasis_markers(text) == [], unrendered_emphasis_markers(text)
+    assert emphasis_glued_to_hangul(text) == [], emphasis_glued_to_hangul(text)
+
+
+def test_emphasis_lint_catches_markers_that_commonmark_leaves_literal():
+    broken = "이 기능은 **VNet 통합(VNet integration)**을 사용합니다."
+    fixed = "이 기능은 **VNet 통합**(VNet integration)을 사용합니다."
+
+    assert unrendered_emphasis_markers(broken), "lint must flag unclosable markers"
+    assert emphasis_glued_to_hangul(broken), "lint must flag Hangul-glued markers"
+    assert unrendered_emphasis_markers(fixed) == []
+    assert emphasis_glued_to_hangul(fixed) == []
+    assert unrendered_emphasis_markers("서브넷은 **/28** 이상이어야 합니다.") == []
+    assert unrendered_emphasis_markers("**Azure VNet**을 선택합니다.") == []
+
+
+def test_briefing_does_not_repeat_substantive_body_sentences():
+    sentences = body_sentences(BRIEFING.read_text())
+    counts = Counter(sentences)
+
+    assert len(sentences) >= 100, "duplicate check must inspect the whole briefing"
+    repeated = sorted(sentence for sentence, count in counts.items() if count > 1)
+    assert repeated == [], repeated
+
+
+def test_briefing_tables_do_not_repeat_row_labels_in_descriptions():
+    offenders = [
+        row
+        for row in table_rows(BRIEFING.read_text())
+        if len(row[0]) >= 8 and row[0] in row[-1]
+    ]
+
+    assert offenders == [], offenders
+
+
+def test_briefing_uses_consistent_private_network_terms():
+    text = BRIEFING.read_text()
+
+    assert "비공개 네트워크" in text
+    assert "프라이빗 엔드포인트" in text
+    for inconsistent in (
+        "사설 네트워크",
+        "사설 엔드포인트",
+        "개인 엔드포인트",
+        "전용 엔드포인트",
+        "비공개 엔드포인트",
+        "프라이빗 네트워크",
+    ):
+        assert inconsistent not in text, inconsistent
 
 
 def test_briefing_uses_customer_facing_honorific_style():
@@ -227,7 +399,24 @@ def test_official_images_are_placed_with_sections_and_sources():
 
 
 OFFICIAL_IMAGE_ALT_KEYWORDS = {
-    "incident-response-flow.svg": ("경고", "조사", "근본 원인"),
+    "incident-response-flow.svg": (
+        "0:00",
+        "0:30",
+        "1:30",
+        "3:00",
+        "5:00",
+        "경고",
+        "접수",
+        "조사",
+        "메트릭",
+        "배포",
+        "근본 원인",
+        "제안",
+        "자율",
+        "해결",
+        "작업 항목",
+        "알림",
+    ),
     "root-cause-analysis.svg": ("근거", "가설", "근본 원인"),
     "agent-reasoning-flow.svg": ("맥락", "추론", "승인"),
     "memory-unified-search.svg": ("과거", "문서", "검색"),
@@ -283,11 +472,23 @@ OFFICIAL_IMAGE_ALT_KEYWORDS = {
         "지표",
         "대기 중인 작업",
         "시스템 상태",
+        "최근 7일",
+        "41",
+        "선택",
+        "데이터가 없",
     ),
 }
 
 FORBIDDEN_ALT_CLAIMS = {
     "managed-connectors-icon-grid.png": ("Salesforce", "Google Drive"),
+    "operations-hub-overview-tab.png": (
+        "추이",
+        "증가",
+        "감소",
+        "막대",
+        "그래프가 그려",
+    ),
+    "incident-response-flow.svg": ("담당자에게 넘기", "에스컬레이션"),
 }
 
 
@@ -311,6 +512,50 @@ def test_official_images_describe_themselves_in_alt_text():
         assert re.search(r"[가-힣]", alt), (name, alt)
         for keyword in keywords:
             assert keyword in alt, (name, keyword)
+
+
+def test_operations_hub_alt_text_matches_the_captured_screen_state():
+    alt = official_image_alt_texts()["operations-hub-overview-tab.png"]
+
+    assert re.search(r"Operations Hub[^.]{0,40}(선택|강조)", alt), alt
+    assert any(
+        phrase in alt for phrase in ("선택한 기간", "선택된 기간")
+    ), alt
+    assert re.search(r"(표시할 )?데이터가 없", alt), alt
+
+
+def test_incident_response_flow_alt_text_follows_the_diagram_timeline():
+    alt = official_image_alt_texts()["incident-response-flow.svg"]
+
+    positions = [alt.find(mark) for mark in ("0:00", "0:30", "1:30", "3:00", "5:00")]
+    assert all(position >= 0 for position in positions), alt
+    assert positions == sorted(positions), "timeline must be described in order"
+    assert re.search(r"(제안|권고)", alt), alt
+    assert "자율" in alt, alt
+    assert re.search(r"(작업 항목|티켓)", alt), alt
+
+
+def test_every_rendered_image_has_descriptive_korean_alt_text():
+    pattern = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+    images = pattern.findall(BRIEFING.read_text())
+
+    assert len(images) == 21, len(images)
+    for alt, target in images:
+        assert alt.strip(), target
+        assert re.search(r"[가-힣]", alt), target
+
+
+def test_image_alt_text_is_not_repeated_as_body_prose():
+    text = BRIEFING.read_text()
+    body = re.sub(r"\s+", " ", re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text))
+
+    repeated = []
+    for alt in re.findall(r"!\[([^\]]*)\]\([^)]*\)", text):
+        for sentence in body_sentences(alt):
+            if sentence in body:
+                repeated.append(sentence)
+
+    assert repeated == [], repeated
 
 
 def test_official_image_alt_text_does_not_claim_absent_content():
@@ -538,9 +783,72 @@ def test_briefing_covers_official_vnet_operational_details():
         any(keyword in window for keyword in ("인프라 네트워크", "공개 인터넷"))
         for window in host_windows
     ), "briefing must state where additional hosts are routed"
+    assert any(
+        "패키지" in window
+        and "커넥터" in window
+        and any(keyword in window for keyword in ("자동으로 허용", "자동 허용"))
+        for window in host_windows
+    ), (
+        "briefing must state that configured packages and connectors "
+        "auto-allow their own hosts"
+    )
 
     package_windows = windows_after(text, "미리 설치")
     assert any(
         any(keyword in window for keyword in ("레지스트리", "패키지 관리자", "토글"))
         for window in package_windows
     ), "briefing must present preinstalled packages as an alternative to registry access"
+
+
+def test_briefing_explains_official_reasons_for_network_control():
+    text = BRIEFING.read_text()
+
+    exfiltration_windows = windows_after(text, "데이터 유출")
+    assert exfiltration_windows, "briefing must state the data exfiltration risk"
+    assert any(
+        any(keyword in window for keyword in ("인터넷", "조직 밖", "외부로"))
+        for window in exfiltration_windows
+    ), "data exfiltration risk must be explained, not just named"
+
+    injection_windows = windows_after(text, "프롬프트 인젝션")
+    assert injection_windows, "briefing must state the prompt injection risk"
+    assert any(
+        any(keyword in window for keyword in ("조작", "악의", "공격"))
+        for window in injection_windows
+    ), "prompt injection risk must be explained, not just named"
+
+    bypass_windows = windows_after(text, "토글")
+    assert any(
+        any(keyword in window for keyword in ("과도기", "임시", "한시적"))
+        and any(keyword in window for keyword in ("FQDN", "호스트 이름"))
+        and any(
+            keyword in window
+            for keyword in ("대신하지", "대체하지", "영구적인 해결책은 아닙니다")
+        )
+        for window in bypass_windows
+    ), (
+        "briefing must present infra network toggles as a transitional tool that "
+        "does not replace hostname-aware or FQDN-based egress filtering"
+    )
+
+
+def test_briefing_describes_official_network_blocked_call_behavior():
+    text = BRIEFING.read_text()
+
+    blocked_windows = windows_after(text, "차단") + windows_after(text, "경로가 없")
+    assert any(
+        any(keyword in window for keyword in ("네트워크 오류", "연결에 실패", "시간 초과"))
+        and any(keyword in window for keyword in ("조사 결과", "조사 내용", "보고"))
+        for window in blocked_windows
+    ), (
+        "briefing must state that a blocked outbound call surfaces as a normal "
+        "network error the agent reports in its investigation output"
+    )
+    assert any(
+        any(keyword in window for keyword in ("이어", "계속"))
+        and any(keyword in window for keyword in ("완전하지 않", "불완전"))
+        for window in blocked_windows
+    ), (
+        "briefing must state that the agent continues with reachable data and "
+        "reports an incomplete investigation when a critical source is blocked"
+    )
