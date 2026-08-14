@@ -39,6 +39,25 @@ Azure SRE Agent Korea Central이 구독에 표시되지 않으면 [공식 regist
 - Agent response plan은 모두 `Review` 모드로 구성한다.
 - evidence에는 secret, connection string, access token을 저장하지 않는다.
 
+## 안내형 단일 진입점: `lab.sh`
+
+매 단계 azd output과 명령을 직접 조합하는 대신, 아래 단일 명령으로 환경 점검부터 채점까지 안내받을 수 있다. 각 하위 명령은 이 문서의 해당 절이 설명하는 스크립트를 그대로 호출하므로 동작은 동일하다.
+
+```bash
+monitor/sre-agent-event-lab/scripts/lab.sh doctor                  # 환경 점검 (아래 참고)
+monitor/sre-agent-event-lab/scripts/lab.sh baseline                # Baseline 부하 및 telemetry 확인
+monitor/sre-agent-event-lab/scripts/lab.sh run s1|s2|s3            # 시나리오 실행 (run-scenario.sh와 동일)
+monitor/sre-agent-event-lab/scripts/lab.sh capture s1|s2|s3        # 최신 evidence 디렉터리를 자동 탐색해 캡처
+monitor/sre-agent-event-lab/scripts/lab.sh acknowledge agent-setup # (예정) Agent 설정 수기 확인 기록
+monitor/sre-agent-event-lab/scripts/lab.sh score                   # (예정) 수집한 evidence 채점
+```
+
+`acknowledge`와 `score`는 향후 작업에서 추가될 `lab_state.py`/`score.py`에 의존한다. 아직 해당 파일이 없으면 원인을 알 수 없는 오류 대신 "not yet available" 메시지와 함께 종료 코드 3으로 종료한다.
+
+### `doctor` 점검 항목
+
+`lab.sh doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 형식으로 한 줄에 하나씩 점검 결과를 출력한다. `STATUS`는 `PASS`, `FAIL`, `MANUAL` 중 하나이며, `FAIL`이 하나라도 있으면 종료 코드 1을 반환한다. 필수 명령, 로그인, azd 구성, 구독/리소스 그룹, Container App 상태, `/healthz`, Application Insights telemetry, alert rule 활성화, SRE Agent 리소스(설정된 경우), Reader 역할 할당을 공식 안정 API로 검증한다. Repository connection, Knowledge source, Incident platform, Response plan은 공식 API로 확인할 수 없으므로 항상 `MANUAL`로 표시되며 portal에서 직접 확인해야 한다.
+
 ## 로컬 검증
 
 ```bash
