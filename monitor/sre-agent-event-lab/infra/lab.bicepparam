@@ -1,4 +1,4 @@
-using './main.bicep'
+using './lab.bicep'
 
 param location = 'koreacentral'
 param suffix = '95933ae5'

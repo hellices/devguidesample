@@ -1,0 +1,21 @@
+name: sre-agent-event-lab
+infra:
+  provider: bicep
+  path: infra
+  module: main
+hooks:
+  preprovision:
+    shell: sh
+    run: ./scripts/azd-configure.sh
+    interactive: true
+    continueOnError: false
+  postprovision:
+    shell: sh
+    run: ./scripts/azd-postprovision.sh
+    interactive: true
+    continueOnError: false
+  predown:
+    shell: sh
+    run: ./scripts/cleanup-external.sh --yes
+    interactive: true
+    continueOnError: false

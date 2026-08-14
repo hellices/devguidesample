@@ -41,3 +41,17 @@ def test_http500_alert_isolated_to_orders_and_exact_500():
     assert 'param serviceName string' in template
     assert 'cloud_RoleName == "{0}"' in template
     assert "''', serviceName)" in template
+
+
+def test_alert_rules_require_and_pass_through_caller_tags():
+    """azure.yaml's azd main.bicep now centralizes tag construction
+    (purpose, azd-env-name, expiresOn) and passes the merged object down
+    through lab.bicep. alerts.bicep must keep accepting an arbitrary,
+    required tags object and applying it verbatim to each alert rule
+    rather than defaulting or hardcoding its own tags.
+    """
+    template = ALERTS_BICEP.read_text()
+
+    assert "param tags object\n" in template
+    assert "tags: tags" in template
+

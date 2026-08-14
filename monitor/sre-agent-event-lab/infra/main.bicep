@@ -1,69 +1,61 @@
-targetScope = 'resourceGroup'
+targetScope = 'subscription'
 
-@description('Azure region for all regional lab resources.')
-param location string = resourceGroup().location
+@description('Name of the azd environment. Used to derive the resource group and a stable resource suffix.')
+param environmentName string
 
-@description('Stable alphanumeric suffix used for globally unique names.')
-@minLength(6)
-@maxLength(12)
-param suffix string
+@description('Azure region for the resource group and all regional lab resources.')
+param location string
 
-@description('Container image deployed after the ACR build completes.')
-param containerImage string
+@description('Dedicated resource group for the disposable SRE lab. Defaults to rg-<environmentName> when not set.')
+param resourceGroupName string = 'rg-${environmentName}'
 
-@description('Whether to deploy the Container App and alert rules.')
-param deployContainerApp bool = false
+@description('Container image deployed by the initial azd provision. postprovision replaces this with the ACR-built immutable image.')
+param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 @description('Optional Azure Monitor Action Group resource ID for event-driven SRE invocation.')
 param actionGroupResourceId string = ''
 
-@description('Tags applied to all resources that support tags.')
-param tags object
+@description('Base tags applied to the resource group and lab resources.')
+param tags object = {}
 
-module observability 'observability.bicep' = {
-  name: 'sre-lab-observability'
-  params: {
-    location: location
-    suffix: suffix
-    tags: tags
-  }
+@description('Optional ISO-8601 date after which the lab resources are considered expired.')
+param expiresOn string = ''
+
+// Truncated to 8 characters to satisfy lab.bicep's @minLength(6)/@maxLength(12) suffix constraint.
+var suffix = substring(uniqueString(subscription().id, environmentName), 0, 8)
+
+var requiredTags = union(tags, {
+  purpose: 'sre-agent-event-lab'
+  'azd-env-name': environmentName
+}, empty(expiresOn) ? {} : {
+  expiresOn: expiresOn
+})
+
+resource labResourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
+  name: resourceGroupName
+  location: location
+  tags: requiredTags
 }
 
-module workload 'workload.bicep' = {
-  name: 'sre-lab-workload'
+module lab 'lab.bicep' = {
+  name: 'sre-agent-event-lab'
+  scope: labResourceGroup
   params: {
     location: location
     suffix: suffix
     containerImage: containerImage
-    deployContainerApp: deployContainerApp
-    workspaceCustomerId: observability.outputs.workspaceCustomerId
-    workspaceSharedKey: observability.outputs.workspaceSharedKey
-    appInsightsConnectionString: observability.outputs.appInsightsConnectionString
-    tags: tags
-  }
-}
-
-module alerts 'alerts.bicep' = if (deployContainerApp) {
-  name: 'sre-lab-alerts'
-  params: {
-    location: location
-    appInsightsResourceId: observability.outputs.appInsightsResourceId
+    deployContainerApp: true
     actionGroupResourceId: actionGroupResourceId
-    serviceName: workload.outputs.telemetryServiceName
-    tags: tags
+    tags: requiredTags
   }
 }
 
-output acrName string = workload.outputs.acrName
-output acrLoginServer string = workload.outputs.acrLoginServer
-output containerAppName string = workload.outputs.containerAppName
-output containerAppFqdn string = workload.outputs.containerAppFqdn
-output containerAppPrincipalId string = workload.outputs.workloadPrincipalId
-output storageContainerScope string = workload.outputs.storageContainerScope
-output blobRoleAssignmentName string = workload.outputs.blobRoleAssignmentName
-output workspaceId string = observability.outputs.workspaceId
-output workspaceCustomerId string = observability.outputs.workspaceCustomerId
-output appInsightsName string = observability.outputs.appInsightsName
-output appInsightsResourceId string = observability.outputs.appInsightsResourceId
-output alertRuleNames array = deployContainerApp ? alerts!.outputs.alertRuleNames : []
-output telemetryServiceName string = workload.outputs.telemetryServiceName
+output AZURE_RESOURCE_GROUP string = labResourceGroup.name
+output AZURE_ACR_NAME string = lab.outputs.acrName
+output AZURE_CONTAINER_APP_NAME string = lab.outputs.containerAppName
+output AZURE_CONTAINER_APP_FQDN string = lab.outputs.containerAppFqdn
+output AZURE_WORKSPACE_ID string = lab.outputs.workspaceId
+output AZURE_APP_INSIGHTS_NAME string = lab.outputs.appInsightsName
+output AZURE_STORAGE_CONTAINER_SCOPE string = lab.outputs.storageContainerScope
+output AZURE_BLOB_ROLE_ASSIGNMENT_NAME string = lab.outputs.blobRoleAssignmentName
+output AZURE_TELEMETRY_SERVICE_NAME string = lab.outputs.telemetryServiceName
