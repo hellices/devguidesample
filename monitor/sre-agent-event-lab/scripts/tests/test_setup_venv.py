@@ -1,5 +1,6 @@
 """Behaviour tests for `setup-venv.sh`, the idempotent preparer of
-`app/.venv` invoked from the `postprovision` azd hook.
+`app/.venv` and the entire job of the `postprovision` azd hook
+(`scripts/azd-postprovision-local.sh`).
 
 Every test drives the real script's *logic* against a fake `uv` on PATH
 (never a real network install) -- but never the real script *file in
@@ -191,8 +192,7 @@ def test_fails_actionably_with_no_pip_fallback_when_uv_is_missing(tmp_path, lab_
     assert result.returncode != 0
     assert "uv" in result.stderr
     assert "install uv" in result.stderr.lower() or "uv is required" in result.stderr
-    assert "azd hooks run postprovision" in result.stderr
-    assert "already deployed" in result.stderr
+    _assert_hint_explains_the_deploy_phase(result.stderr)
 
 
 def test_succeeds_and_calls_uv_venv_then_uv_pip_install_with_requirements_dev(tmp_path, lab_copy):
@@ -260,8 +260,7 @@ def test_fails_actionably_when_uv_venv_creation_fails(tmp_path, lab_copy):
     result = _run(lab_copy, bin_dir, tmp_path)
 
     assert result.returncode != 0
-    assert "azd hooks run postprovision" in result.stderr
-    assert "already deployed" in result.stderr
+    _assert_hint_explains_the_deploy_phase(result.stderr)
     assert "pip install" not in log_path.read_text()
 
 
@@ -274,8 +273,7 @@ def test_fails_actionably_when_uv_pip_install_fails(tmp_path, lab_copy):
     result = _run(lab_copy, bin_dir, tmp_path)
 
     assert result.returncode != 0
-    assert "azd hooks run postprovision" in result.stderr
-    assert "already deployed" in result.stderr
+    _assert_hint_explains_the_deploy_phase(result.stderr)
     assert "proxy" in result.stderr
 
 
@@ -289,7 +287,7 @@ def test_fails_actionably_when_pillow_is_still_not_importable(tmp_path, lab_copy
 
     assert result.returncode != 0
     assert "Pillow" in result.stderr
-    assert "azd hooks run postprovision" in result.stderr
+    _assert_hint_explains_the_deploy_phase(result.stderr)
 
 
 def test_installs_the_labs_real_requirements_dev_file():
@@ -309,39 +307,43 @@ def test_script_never_executes_a_bare_pip_or_pip3_command():
             raise AssertionError(("bare pip invocation found", stripped))
 
 
-# --- Finding #2: postprovision ordering/recovery contract -----------------
+# --- The provision/deploy split: what a failure here does and does not mean
+
 #
-# `setup-venv.sh` runs before `azd-postprovision.sh`'s ACR build and
-# Container App update (see `test_azd_hooks.py`'s
-# `test_azd_postprovision_runs_setup_venv_before_any_azure_cli_call`), so a
-# failure here means the cloud *app* deployment for this run has not
-# happened yet, only the Bicep infrastructure has. Re-running just this
-# script would silently leave that deployment never attempted; every
-# failure hint this script prints must send the operator to re-run the
-# whole hook, and must never recommend running this script directly.
-# (Doctor/capture-scenario's *own* remediation text is a separate,
-# still-valid case for a local-only venv problem noticed well after a
-# deployment already succeeded -- see test_lab_guides.py /
-# test_doctor.py -- this contract is only about setup-venv.sh's own
-# messages.)
+# `setup-venv.sh` is the whole job of the `postprovision` hook now: the
+# Container App image build and the image switch moved to the deploy phase
+# (`scripts/azd-deploy-app.sh`, run by `azd deploy` / `azd up`'s deploy
+# phase behind the AcrPull gate). So a failure here no longer sits in the
+# middle of a half-finished cloud deployment -- re-running just this script
+# is a complete fix for the local part, and every failure message must say
+# what still has to happen afterwards (`azd deploy`) instead of claiming the
+# app deployment is about to run inside this same hook.
 
 
-def _assert_hint_never_recommends_direct_rerun(stderr: str):
-    assert "azd hooks run postprovision" in stderr
+def _assert_hint_explains_the_deploy_phase(stderr: str):
+    assert "./scripts/setup-venv.sh" in stderr, (
+        "the local environment is the only thing this hook prepares, so "
+        "re-running this script directly is now a complete recovery"
+    )
+    assert "azd deploy" in stderr, (
+        "the application deployment is a separate phase the operator still "
+        "has to run; the hint must name it"
+    )
     lowered = stderr.lower()
-    assert "run: ./scripts/setup-venv.sh" not in lowered
-    assert "directly: ./scripts/setup-venv.sh" not in lowered
-    assert "or ./scripts/setup-venv.sh" not in lowered
+    assert "run *after* this step" not in lowered, (
+        "the ACR build no longer runs later inside this same hook"
+    )
+    assert "this hook's container app image build" not in lowered
 
 
-def test_missing_uv_hint_never_recommends_running_this_script_directly(tmp_path, lab_copy):
+def test_missing_uv_hint_explains_the_separate_deploy_phase(tmp_path, lab_copy):
     result = _run(lab_copy, tmp_path / "bin-unused", tmp_path, extra_path=False)
 
     assert result.returncode != 0
-    _assert_hint_never_recommends_direct_rerun(result.stderr)
+    _assert_hint_explains_the_deploy_phase(result.stderr)
 
 
-def test_venv_creation_failure_hint_never_recommends_running_this_script_directly(tmp_path, lab_copy):
+def test_venv_creation_failure_hint_explains_the_separate_deploy_phase(tmp_path, lab_copy):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log_path = tmp_path / "uv-calls.log"
@@ -350,10 +352,10 @@ def test_venv_creation_failure_hint_never_recommends_running_this_script_directl
     result = _run(lab_copy, bin_dir, tmp_path)
 
     assert result.returncode != 0
-    _assert_hint_never_recommends_direct_rerun(result.stderr)
+    _assert_hint_explains_the_deploy_phase(result.stderr)
 
 
-def test_pip_install_failure_hint_never_recommends_running_this_script_directly(tmp_path, lab_copy):
+def test_pip_install_failure_hint_explains_the_separate_deploy_phase(tmp_path, lab_copy):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log_path = tmp_path / "uv-calls.log"
@@ -362,10 +364,10 @@ def test_pip_install_failure_hint_never_recommends_running_this_script_directly(
     result = _run(lab_copy, bin_dir, tmp_path)
 
     assert result.returncode != 0
-    _assert_hint_never_recommends_direct_rerun(result.stderr)
+    _assert_hint_explains_the_deploy_phase(result.stderr)
 
 
-def test_pillow_failure_hint_never_recommends_running_this_script_directly(tmp_path, lab_copy):
+def test_pillow_failure_hint_explains_the_separate_deploy_phase(tmp_path, lab_copy):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log_path = tmp_path / "uv-calls.log"
@@ -374,7 +376,7 @@ def test_pillow_failure_hint_never_recommends_running_this_script_directly(tmp_p
     result = _run(lab_copy, bin_dir, tmp_path)
 
     assert result.returncode != 0
-    _assert_hint_never_recommends_direct_rerun(result.stderr)
+    _assert_hint_explains_the_deploy_phase(result.stderr)
 
 
 # --- Finding #3: actionable "no matching Python" guidance ------------------

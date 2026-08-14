@@ -6,18 +6,26 @@ necessarily the subscription azd is deploying into. Every Azure CLI
 operation therefore has to be pinned to AZURE_SUBSCRIPTION_ID, and the
 `predown` hook has to survive a lab that never configured the Agent.
 
+The `postprovision` hook is deliberately *local only*: it prepares
+`app/.venv` and nothing else. Building the lab image and moving the
+Container App onto it belongs to the deploy phase
+(`scripts/azd-deploy-app.sh`, tested in `test_azd_deploy_app.py`), because
+the workload identity's `AcrPull` grant is not necessarily usable the
+moment provisioning returns.
+
 Every test that *executes* a hook script runs it from a `lab_copy` --
-never the real, in-place `azd-configure.sh` / `azd-postprovision.sh` /
-`setup-venv.sh`. `azd-postprovision.sh` calls `setup-venv.sh`, and
-`setup-venv.sh` resolves its own `SCRIPT_DIR`/`LAB_ROOT`/`VENV_DIR` from
+never the real, in-place `azd-configure.sh` /
+`azd-postprovision-local.sh` / `setup-venv.sh`.
+`azd-postprovision-local.sh` calls `setup-venv.sh`, and `setup-venv.sh`
+resolves its own `SCRIPT_DIR`/`LAB_ROOT`/`VENV_DIR` from
 its own `${BASH_SOURCE[0]}`, never from the caller's cwd -- so running the
-real, in-place `azd-postprovision.sh` (as this file once did, pointing
+real, in-place hook (as this file once did, pointing
 only the *subprocess's* cwd or `AZURE_*` environment at a scratch
 `tmp_path`) still always resolves `VENV_DIR` to the real, developer-machine
 `app/.venv`, and setup-venv.sh's `uv venv --allow-existing` / `uv pip
 install` would then run for real against it -- a real filesystem mutation
 and a real network/package-index call, entirely unrelated to what the test
-claims to be checking (the Azure CLI login-failure message). `lab_copy`
+claims to be checking. `lab_copy`
 copies the whole `scripts/`+`app/` layout the scripts depend on into
 `tmp_path`, so every script's own path resolution lands entirely inside
 `tmp_path`; `real_lab_venv_tree_is_never_touched` (autouse, this whole
@@ -45,7 +53,8 @@ from azd_fake import write_azd_stub
 SCRIPTS_DIR = Path(__file__).parents[1]
 LAB_ROOT = Path(__file__).parents[2]
 AZD_CONFIGURE = SCRIPTS_DIR / "azd-configure.sh"
-AZD_POSTPROVISION = SCRIPTS_DIR / "azd-postprovision.sh"
+AZD_POSTPROVISION = SCRIPTS_DIR / "azd-postprovision-local.sh"
+AZD_DEPLOY_APP = SCRIPTS_DIR / "azd-deploy-app.sh"
 SETUP_VENV = SCRIPTS_DIR / "setup-venv.sh"
 REQUIREMENTS = LAB_ROOT / "app" / "requirements.txt"
 REQUIREMENTS_DEV = LAB_ROOT / "app" / "requirements-dev.txt"
@@ -54,6 +63,14 @@ SUBSCRIPTION_PIN = '--subscription "${AZURE_SUBSCRIPTION_ID}"'
 # The one deliberately unpinned call: it reads whichever account is active
 # so the hook can report a mismatch.
 ACTIVE_ACCOUNT_PROBE = "az account show --query id"
+# Everything that changes the deployed application. The provision phase
+# must contain none of it.
+DEPLOY_ACTIONS = (
+    "az acr build",
+    "az containerapp update",
+    "az containerapp ingress update",
+    "az containerapp registry set",
+)
 
 
 # --- Regression tripwire: the real app/.venv must never move ---------------
@@ -147,7 +164,7 @@ def real_lab_venv_tree_is_never_touched():
 @pytest.fixture
 def lab_copy(tmp_path):
     """A throwaway copy of exactly the layout the hook scripts depend on:
-    `azd-configure.sh`, `azd-postprovision.sh`, and the *real*
+    `azd-configure.sh`, `azd-postprovision-local.sh`, and the *real*
     `setup-venv.sh` under `scripts/`, the real `app/requirements.txt` and
     `app/requirements-dev.txt` under `app/` (setup-venv.sh's own
     `REQUIREMENTS_FILE`), and a placeholder `azure.yaml` at the copied lab
@@ -163,7 +180,7 @@ def lab_copy(tmp_path):
     scripts_dir.mkdir()
     for source, name in (
         (AZD_CONFIGURE, "azd-configure.sh"),
-        (AZD_POSTPROVISION, "azd-postprovision.sh"),
+        (AZD_POSTPROVISION, "azd-postprovision-local.sh"),
         (SETUP_VENV, "setup-venv.sh"),
     ):
         copy = scripts_dir / name
@@ -180,7 +197,7 @@ def lab_copy(tmp_path):
     return SimpleNamespace(
         root=tmp_path,
         configure=scripts_dir / "azd-configure.sh",
-        postprovision=scripts_dir / "azd-postprovision.sh",
+        postprovision=scripts_dir / "azd-postprovision-local.sh",
         setup_venv=scripts_dir / "setup-venv.sh",
         app_dir=app_dir,
     )
@@ -344,81 +361,120 @@ def test_azd_configure_pins_every_azure_cli_call_to_the_target_subscription():
 
 
 def test_azd_postprovision_pins_every_azure_cli_call_to_the_target_subscription():
+    """Vacuously true today -- the provision-phase hook makes no Azure CLI
+    call at all -- but kept so that any Azure call added back to it has to
+    carry the same subscription pin as every other lab entry point."""
     for command in _az_invocations(AZD_POSTPROVISION.read_text()):
         if command.startswith(ACTIVE_ACCOUNT_PROBE):
             continue
         assert SUBSCRIPTION_PIN in command, (
-            f"azd-postprovision.sh runs an unpinned Azure CLI command: {command}"
+            f"azd-postprovision-local.sh runs an unpinned Azure CLI command: {command}"
         )
 
 
-def test_azd_hooks_require_the_target_subscription_and_verify_the_active_account():
-    for script in (AZD_CONFIGURE, AZD_POSTPROVISION):
-        text = script.read_text()
-        assert "AZURE_SUBSCRIPTION_ID:?" in text, (
-            f"{script.name} must fail fast when azd did not provide a subscription"
-        )
-        assert ACTIVE_ACCOUNT_PROBE in text, (
-            f"{script.name} must verify which subscription the Azure CLI is signed in to"
-        )
-
-
-def test_azd_postprovision_targets_only_current_azd_values():
-    text = AZD_POSTPROVISION.read_text()
-
-    assert "rg-sre-agent-event-lab-krc" not in text
-    assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in text
-    assert "common.sh" not in text
-    for value in (
-        "AZURE_RESOURCE_GROUP:?",
-        "AZURE_ACR_NAME:?",
-        "AZURE_CONTAINER_APP_NAME:?",
-        "AZURE_CONTAINER_APP_FQDN:?",
-    ):
-        assert value in text
-
-
-def test_azd_postprovision_moves_ingress_to_the_app_port_and_records_the_image():
-    """The provisioned placeholder listens on port 80; the lab image listens
-    on 8000. postprovision must move ingress before verifying /healthz, and
-    persist the built image so a later `azd provision` does not revert the
-    Container App to the placeholder.
-    """
-    text = AZD_POSTPROVISION.read_text()
-
-    assert "az containerapp ingress update" in text
-    assert "--target-port" in text
-    assert "8000" in text
-    assert "azd env set SRE_CONTAINER_IMAGE" in text
-    assert "/healthz" in text
-
-    ingress_at = text.index("az containerapp ingress update")
-    healthz_at = text.index("/healthz")
-    assert ingress_at < healthz_at
-
-
-def test_azd_postprovision_runs_setup_venv_before_any_azure_cli_call():
-    text = AZD_POSTPROVISION.read_text()
-
-    assert "setup-venv.sh" in text
-    setup_venv_at = text.index("setup-venv.sh")
-    first_account_show_at = text.index("az account show")
-    assert setup_venv_at < first_account_show_at, (
-        "setup-venv.sh must run before the hook makes any Azure CLI call"
+def test_azd_configure_requires_the_target_subscription_and_verifies_the_active_account():
+    text = AZD_CONFIGURE.read_text()
+    assert "AZURE_SUBSCRIPTION_ID:?" in text, (
+        "azd-configure.sh must fail fast when azd did not provide a subscription"
+    )
+    assert ACTIVE_ACCOUNT_PROBE in text, (
+        "azd-configure.sh must verify which subscription the Azure CLI is signed in to"
     )
 
 
-def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp_path, lab_copy):
-    """`app/.venv` setup is local and has nothing to do with the Azure CLI,
-    but a broken corporate proxy or missing `uv` must still stop the hook
-    before it spends a single Azure API call -- the cloud side is already
-    provisioned by the time this hook runs, so failing fast here changes
-    nothing about that, but a failure must never be masked by continuing
-    on to the ACR build."""
+def test_postprovision_never_builds_or_updates_the_container_app():
+    """The provision phase must leave the public placeholder image running.
+
+    Bicep creates the registry, the workload identity, its `AcrPull`
+    assignment and a placeholder-image Container App in one deployment.
+    Building and switching the image straight afterwards -- what this hook
+    used to do -- starts an ACR pull with a role assignment that has just
+    been created, with no check that it is usable yet. Those steps belong
+    to `azd-deploy-app.sh`, behind the AcrPull poll.
+    """
+    text = AZD_POSTPROVISION.read_text()
+
+    for action in DEPLOY_ACTIONS:
+        assert action not in text, (
+            f"the provision-phase hook still runs `{action}`"
+        )
+    assert "SRE_CONTAINER_IMAGE" not in text, (
+        "recording a built image is part of the deploy phase"
+    )
+    assert "/healthz" not in text, (
+        "the placeholder image serves no /healthz; verifying it belongs to "
+        "the deploy phase"
+    )
+
+
+def test_postprovision_only_prepares_the_local_python_environment(tmp_path, lab_copy):
+    """Executed, not read: the hook runs `setup-venv.sh` (against a fake
+    `uv`) and spends no Azure API call at all -- not even the login probe,
+    which has nothing to check when nothing is deployed."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    az_log = tmp_path / "az-calls.log"
+    uv_log = tmp_path / "uv-calls.log"
+    azd_log = tmp_path / "azd-calls.log"
+    _write_az_stub(bin_dir, az_log)
+    _write_fake_uv(bin_dir, uv_log)
+    write_azd_stub(bin_dir, {}, "azd_1_29", azd_log)
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
+
+    result = subprocess.run(
+        [str(lab_copy.postprovision)],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not az_log.exists() or az_log.read_text().strip() == "", (
+        f"the provision-phase hook made an Azure CLI call: {az_log.read_text()!r}"
+    )
+    uv_calls = uv_log.read_text() if uv_log.exists() else ""
+    assert "venv" in uv_calls and "pip install" in uv_calls, (
+        f"the hook did not prepare the local environment: {uv_calls!r}"
+    )
+    created_python = lab_copy.app_dir / ".venv" / "bin" / "python"
+    assert created_python.is_file()
+    assert not str(created_python).startswith(str(LAB_ROOT))
+
+
+def test_postprovision_says_where_the_application_deployment_happens(tmp_path, lab_copy):
+    """`azd provision` on its own leaves the placeholder image running, so
+    the hook that ends the provision phase has to say what still has to
+    happen -- otherwise a successful `azd provision` looks like a finished
+    lab."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_fake_uv(bin_dir, tmp_path / "uv-calls.log")
+
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+
+    result = subprocess.run(
+        [str(lab_copy.postprovision)],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "azd deploy" in result.stdout + result.stderr
+
+
+def test_postprovision_fails_when_the_local_environment_cannot_be_prepared(
+    tmp_path, lab_copy
+):
+    """A broken corporate proxy or a missing `uv` must fail the hook rather
+    than let `azd provision` report success over a half-prepared lab."""
     lab_copy.setup_venv.write_text(
         "#!/usr/bin/env bash\n"
         "echo 'uv is required to set up app/.venv but was not found on PATH.' >&2\n"
-        "echo 'azd hooks run postprovision' >&2\n"
         "exit 1\n"
     )
     lab_copy.setup_venv.chmod(0o755)
@@ -430,11 +486,6 @@ def test_azd_postprovision_stops_before_any_azure_call_when_setup_venv_fails(tmp
 
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
-    env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
-    env["AZURE_RESOURCE_GROUP"] = "rg-test"
-    env["AZURE_ACR_NAME"] = "acrtest"
-    env["AZURE_CONTAINER_APP_NAME"] = "ca-test"
-    env["AZURE_CONTAINER_APP_FQDN"] = "ca-test.example.com"
 
     result = subprocess.run(
         [str(lab_copy.postprovision)],
@@ -466,67 +517,17 @@ def test_azd_configure_reports_a_clear_error_when_the_azure_cli_is_not_logged_in
     )
 
 
-def test_azd_postprovision_reports_a_clear_error_when_the_azure_cli_is_not_logged_in(tmp_path, lab_copy):
-    """`azd-postprovision.sh` runs `setup-venv.sh` *before* it ever checks
-    the Azure CLI login state (see
-    `test_azd_postprovision_runs_setup_venv_before_any_azure_cli_call`), so
-    this test's `bin_dir` carries both a login-failing fake `az` and a
-    fake `uv` -- the real, copied `setup-venv.sh` genuinely runs its own
-    `uv venv` / `uv pip install` / Pillow-import logic against the fake
-    `uv` (never a stub that skips that logic outright), and only *then*
-    does the hook reach and fail the login check. `uv_calls` is the
-    call-log assertion proving the fake -- never the real -- `uv` did that
-    work, so no real virtual environment or package index was ever
-    touched.
-    """
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    az_log = tmp_path / "az-calls.log"
-    uv_log = tmp_path / "uv-calls.log"
-    _write_login_failing_az_stub(bin_dir, az_log)
-    _write_fake_uv(bin_dir, uv_log)
-
-    env = dict(os.environ)
-    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
-    env["AZURE_SUBSCRIPTION_ID"] = "11111111-2222-3333-4444-555555555555"
-    env["AZURE_RESOURCE_GROUP"] = "rg-test"
-    env["AZURE_ACR_NAME"] = "acrtest"
-    env["AZURE_CONTAINER_APP_NAME"] = "ca-test"
-    env["AZURE_CONTAINER_APP_FQDN"] = "ca-test.example.com"
-
-    result = subprocess.run(
-        [str(lab_copy.postprovision)],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-
-    assert result.returncode != 0
-    assert "az login" in result.stderr
-    assert "Please run 'az login' to setup account." not in result.stderr
-    az_calls = az_log.read_text() if az_log.exists() else ""
-    assert az_calls.strip() == "account show --query id -o tsv", (
-        "the hook must exit immediately after the failed login check, "
-        f"before any other az call: {az_calls!r}"
-    )
-
-    uv_calls = uv_log.read_text() if uv_log.exists() else ""
-    assert "venv" in uv_calls, (
-        "setup-venv.sh must have run its real uv-venv logic against the "
-        f"fake uv before the login check failed: {uv_calls!r}"
-    )
-    assert "pip install" in uv_calls, (
-        "setup-venv.sh must have run its real uv-pip-install logic against "
-        f"the fake uv before the login check failed: {uv_calls!r}"
-    )
-    created_python = lab_copy.app_dir / ".venv" / "bin" / "python"
-    assert created_python.is_file(), (
-        "setup-venv.sh must have created its venv under lab_copy's "
-        "tmp_path, proving the fake uv -- not the real one -- ran"
-    )
-    assert not str(created_python).startswith(str(LAB_ROOT)), (
-        "the venv setup-venv.sh created must never live under the real lab tree"
-    )
+def test_deploy_actions_live_only_in_the_deploy_phase_hook():
+    """One place, and only one place, changes the running application."""
+    deploy_text = AZD_DEPLOY_APP.read_text()
+    for action in DEPLOY_ACTIONS:
+        assert action in deploy_text, (
+            f"`{action}` must live in the deploy-phase hook"
+        )
+        for script in (AZD_CONFIGURE, AZD_POSTPROVISION):
+            assert action not in script.read_text(), (
+                f"`{action}` must not run in the provision phase ({script.name})"
+            )
 
 
 def _run_azd_configure(tmp_path, lab_copy, azd_values, missing_key_mode="azd_1_29"):

@@ -46,7 +46,8 @@ fi
 
 # Python environment (app/.venv + Pillow) -------------------------------------
 # The documented azd-first flow prepares `app/.venv` from the `postprovision`
-# hook (`scripts/setup-venv.sh`), before any scenario is captured. This check
+# hook (`scripts/azd-postprovision-local.sh` -> `scripts/setup-venv.sh`, its
+# whole job), before any scenario is captured. This check
 # reports whether that step actually finished -- Pillow importable, not just
 # a venv directory present -- so a partially-run or pre-uv-created venv is
 # caught here rather than surfacing later as `capture-scenario.sh`'s "Missing

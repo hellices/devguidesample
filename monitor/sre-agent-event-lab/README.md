@@ -76,9 +76,20 @@ mkdir -p evidence
 azd up 2>&1 | tee evidence/deploy.log
 ```
 
-Bicep provision → ACR 클라우드 빌드 → Container App 이미지 교체 순서로 진행되며 로컬 Docker는 필요 없습니다. 처음에는 공개 placeholder 이미지가 80 포트로 뜨고, postprovision hook이 ingress를 8000으로 옮긴 뒤 실습 이미지로 교체합니다.
+배포는 두 단계입니다. 로컬 Docker는 필요 없습니다.
 
-같은 postprovision hook의 첫 단계가 `scripts/setup-venv.sh`로 `app/.venv`를 준비하는 것입니다(`uv venv` + `uv pip install -r requirements-dev.txt`). 이 단계는 위 ACR 빌드·Container App 이미지 교체보다 먼저 실행되므로, 여기서 실패하면 클라우드 앱 배포(ACR 빌드, 이미지 교체, 헬스체크)는 아직 시작되지 않은 상태입니다 -- `./scripts/setup-venv.sh`만 따로 다시 실행하면 이 배포 단계를 건너뛰게 되므로, 반드시 hook 전체를 다시 실행하세요: `azd hooks run postprovision`.
+1. **provision 단계** — Bicep이 ACR, 워크로드 ID(user-assigned managed identity), 그 ID의 AcrPull 역할 할당, 그리고 공개 placeholder 이미지(80 포트)로 뜨는 Container App까지 만듭니다. 이어지는 postprovision hook(`scripts/azd-postprovision-local.sh`)은 `scripts/setup-venv.sh`로 `app/.venv`만 준비하고(`uv venv` + `uv pip install -r requirements-dev.txt`) Azure를 전혀 건드리지 않습니다. 즉 `azd provision`만 실행하면 앱은 계속 placeholder 상태입니다.
+2. **deploy 단계** — postdeploy hook(`scripts/azd-deploy-app.sh`)이 워크로드 ID의 **AcrPull** 할당이 ACR 스코프에 정확히 보일 때까지 최대 5분(`SRE_ACR_PULL_TIMEOUT_SECONDS`) 기다린 뒤에야 ACR 클라우드 빌드 → registry/identity 설정 → ingress 8000 이동 → 이미지 교체 → revision·`/healthz` 확인 순서로 진행합니다. 역할이 끝내 보이지 않으면 아무것도 빌드·교체하지 않고 실패합니다.
+
+`azd up`은 이 두 단계를 순서대로 실행하므로 위 명령 하나로 충분합니다. 단계별로 나눠 실행하거나 다시 실행하려면:
+
+```bash
+azd provision           # 인프라 + placeholder + 로컬 venv
+azd deploy              # AcrPull 대기 → 빌드 → 이미지 교체 → 헬스체크
+azd hooks run postdeploy   # 배포 단계만 다시 실행
+```
+
+postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `./scripts/setup-venv.sh`로 그 단계를 고친 뒤 `azd deploy`로 앱 배포를 마무리하세요.
 
 성공 조건은 provision 성공, 활성 revision `Healthy`, `/healthz` HTTP 200 세 가지입니다.
 

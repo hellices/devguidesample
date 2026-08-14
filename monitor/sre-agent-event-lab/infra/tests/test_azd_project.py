@@ -7,6 +7,18 @@ from pathlib import Path
 LAB_ROOT = Path(__file__).parents[2]
 PLACEHOLDER_IMAGE = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
+# Everything that changes the deployed application. `azd provision` must do
+# none of it: the Container App's managed identity has no usable `AcrPull`
+# grant the instant the ARM deployment returns, so the image build and the
+# image switch belong to the deploy phase, behind the role-propagation gate
+# in `scripts/azd-deploy-app.sh`.
+DEPLOY_ACTIONS = (
+    "az acr build",
+    "az containerapp update",
+    "az containerapp ingress update",
+    "az containerapp registry set",
+)
+
 
 def _hook_commands():
     """Every `run:` command declared in azure.yaml, hook name unknown."""
@@ -14,10 +26,80 @@ def _hook_commands():
     return re.findall(r"^\s*run:\s*(\S+)", config, flags=re.MULTILINE)
 
 
-def test_azure_yaml_runs_remote_build_after_provision():
+def _hook_command(hook_name):
+    """The `run:` command declared for one azure.yaml hook, or None."""
     config = (LAB_ROOT / "azure.yaml").read_text()
-    assert "postprovision" in config
-    assert "./scripts/azd-postprovision.sh" in config
+    match = re.search(
+        rf"^\s*{hook_name}:\s*$(.*?)(?=^\s{{2}}\S|\Z)",
+        config,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if match is None:
+        return None
+    run = re.search(r"^\s*run:\s*(\S+)", match.group(1), flags=re.MULTILINE)
+    return run.group(1) if run else None
+
+
+def test_provision_hooks_only_configure_and_prepare_the_local_environment():
+    """`azd provision` leaves the public placeholder image running.
+
+    The Container Apps + ACR managed-identity flow is two-phase: Bicep
+    creates the registry, the identity, the AcrPull assignment and a
+    placeholder-image app, and only the deploy phase -- after the role has
+    propagated -- builds the lab image and moves the app onto it. A
+    postprovision hook that builds and updates collapses those phases and
+    can start an ACR pull the identity is not yet allowed to make.
+    """
+    assert _hook_command("preprovision") == "./scripts/azd-configure.sh"
+    assert _hook_command("postprovision") == "./scripts/azd-postprovision-local.sh"
+
+    postprovision = LAB_ROOT / "scripts" / "azd-postprovision-local.sh"
+    assert postprovision.is_file()
+    text = postprovision.read_text()
+    for action in DEPLOY_ACTIONS:
+        assert action not in text, (
+            f"the postprovision hook still runs `{action}`; that belongs to "
+            "the deploy phase, behind the AcrPull gate"
+        )
+    assert "setup-venv.sh" in text, (
+        "the postprovision hook's remaining job is the local Python environment"
+    )
+
+
+def test_deploy_phase_runs_the_gated_application_deployment():
+    """azd 1.29 runs project-level `predeploy`/`postdeploy` hooks even when
+    the project declares no services -- confirmed against azd 1.29.0 by
+    running `azd deploy --all --no-prompt` and `azd deploy --no-prompt`
+    against a service-less project (both hooks ran; a non-zero hook exit
+    failed the command), and in azd's own source, where
+    `cli/azd/internal/cmd/up_graph.go` builds the `cmdhook-predeploy` /
+    `cmdhook-postdeploy` steps unconditionally and keeps them for
+    "Zero-service projects". So `azd deploy` and `azd up` both reach this
+    hook without the lab having to declare a service it does not have.
+    """
+    assert _hook_command("postdeploy") == "./scripts/azd-deploy-app.sh"
+
+    deploy_hook = LAB_ROOT / "scripts" / "azd-deploy-app.sh"
+    assert deploy_hook.is_file()
+    text = deploy_hook.read_text()
+    assert "az role assignment list" in text
+    assert "az acr build" in text
+    assert "az containerapp update" in text
+
+
+def test_project_declares_no_service_azd_would_try_to_build_locally():
+    """The lab image is built in ACR, never on the operator's machine. A
+    `services:` entry with a Docker host would make `azd deploy`/`azd up`
+    require a local Docker daemon before any hook could run.
+    """
+    config = (LAB_ROOT / "azure.yaml").read_text()
+
+    assert not re.search(r"^services:", config, flags=re.MULTILINE)
+    assert "docker:" not in config
+
+
+def test_azure_yaml_still_cleans_up_external_state_on_down():
+    config = (LAB_ROOT / "azure.yaml").read_text()
     assert "predown" in config
     assert "./scripts/cleanup-external.sh" in config
 
@@ -45,6 +127,31 @@ def test_azd_outputs_have_stable_names():
         "AZURE_TELEMETRY_SERVICE_NAME",
     ):
         assert f"output {name} " in template
+
+
+def test_main_bicep_publishes_what_the_deploy_gate_reads():
+    """The deploy hook has to check `AcrPull` for one principal at one
+    registry scope, and then point the app's registry configuration at the
+    same identity. azd stores outputs under the name the template declares
+    (`OutputParametersFromArmOutputs` keeps the template's canonical
+    casing), so these are the names the hook can rely on being exported
+    into its environment.
+    """
+    template = (LAB_ROOT / "infra" / "main.bicep").read_text()
+
+    for name in (
+        "AZURE_CONTAINER_APP_PRINCIPAL_ID",
+        "AZURE_WORKLOAD_IDENTITY_RESOURCE_ID",
+        "AZURE_ACR_LOGIN_SERVER",
+    ):
+        assert f"output {name} " in template, (
+            f"scripts/azd-deploy-app.sh reads {name} from the azd environment"
+        )
+
+    workload = (LAB_ROOT / "infra" / "workload.bicep").read_text()
+    assert "output workloadIdentityResourceId string" in workload
+    lab = (LAB_ROOT / "infra" / "lab.bicep").read_text()
+    assert "output workloadIdentityResourceId string" in lab
 
 
 def test_every_azure_yaml_hook_references_an_existing_executable_script():
@@ -168,7 +275,8 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
         LAB_ROOT / "infra" / "workload.bicep",
         LAB_ROOT / "infra" / "main.parameters.json",
         LAB_ROOT / "scripts" / "azd-configure.sh",
-        LAB_ROOT / "scripts" / "azd-postprovision.sh",
+        LAB_ROOT / "scripts" / "azd-postprovision-local.sh",
+        LAB_ROOT / "scripts" / "azd-deploy-app.sh",
         LAB_ROOT / "scripts" / "cleanup-external.sh",
         LAB_ROOT / "scripts" / "deploy.sh",
     ]

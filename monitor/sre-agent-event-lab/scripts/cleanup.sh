@@ -5,7 +5,7 @@
 # down: azd deletes the resource group it created, and its predown/postdown
 # hooks run `cleanup-external.sh` for the two things azd cannot see (the
 # recorded subscription-scoped role assignments, and the image values the
-# postprovision hook stored). This script therefore only forwards to
+# postdeploy hook stored). This script therefore only forwards to
 # `cleanup-external.sh` -- it never deletes a resource group of its own,
 # because a broad deletion here would also take resources azd did not
 # create and knows nothing about.

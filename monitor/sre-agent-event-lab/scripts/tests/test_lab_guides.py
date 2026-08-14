@@ -450,25 +450,45 @@ def test_agent_setup_guide_offers_a_python_environment_remedy():
     assert "./scripts/setup-venv.sh" in section
 
 
-def test_readme_does_not_claim_only_a_local_step_remains_after_postprovision():
-    """Finding #2 (Task 6 follow-up): `setup-venv.sh` runs *before* the same
-    postprovision hook's ACR build and Container App update, so a failure
-    there means the cloud app deployment has not happened yet -- not merely
-    that "only a local step" is left. The README must send an operator to
-    re-run the whole hook, not offer `./scripts/setup-venv.sh` as an
-    equally-valid alternative for this specific failure.
+def test_readme_documents_the_two_phase_provision_and_deploy_flow():
+    """`azd provision` alone leaves the public placeholder image running:
+    the lab image is built and switched in only during the deploy phase,
+    after the workload identity's `AcrPull` grant is observable at the
+    registry. The README's deployment section is the one place an operator
+    learns that, so it must name both phases and the gate between them --
+    and must not describe the image build as part of postprovision.
     """
     text = README.read_text()
     heading = "## 배포"
 
     assert heading in text
     section = text.split(heading, 1)[1].split("## ", 1)[0]
-    assert "setup-venv.sh" in section
-    assert "azd hooks run postprovision" in section
-    assert "또는 `./scripts/setup-venv.sh`" not in section, (
-        "the README must not offer running setup-venv.sh directly as an "
-        "alternative recovery for a postprovision-hook failure"
+
+    assert "azd up" in section
+    assert "azd provision" in section
+    assert "azd deploy" in section
+    assert "AcrPull" in section, (
+        "the gate the deploy phase waits on has to be named"
     )
+    assert "postprovision" not in section or "setup-venv.sh" in section
+    assert not re.search(r"postprovision[^\n]*(ACR 빌드|이미지 교체)", section), (
+        "the README must not describe the ACR build or the image switch as "
+        "part of the postprovision hook"
+    )
+
+
+def test_readme_recovery_matches_the_hook_that_actually_failed():
+    """The provision-phase hook only prepares `app/.venv`, so
+    `./scripts/setup-venv.sh` is a complete recovery for it -- and the
+    application deployment is a separate `azd deploy` the operator still
+    has to run.
+    """
+    text = README.read_text()
+    heading = "## 배포"
+    section = text.split(heading, 1)[1].split("## ", 1)[0]
+
+    assert "setup-venv.sh" in section
+    assert "azd deploy" in section
 
 
 def test_guides_do_not_request_secrets_in_environment():

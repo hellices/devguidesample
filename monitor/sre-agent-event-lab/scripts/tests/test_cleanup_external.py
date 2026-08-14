@@ -13,7 +13,7 @@ Two lifecycle rules are covered as well:
   destroys anything, and must never touch the azd environment values -- an
   operator who answers "no" at azd's delete prompt keeps a working
   environment.
-* `postdown` clears the image values `azd-postprovision.sh` recorded, once
+* `postdown` clears the image values `azd-deploy-app.sh` recorded, once
   the resources they point at are really gone.
 """
 import os
@@ -464,7 +464,7 @@ def test_role_cleanup_leaves_the_azd_environment_untouched(tmp_path):
 
 
 def test_reset_image_env_clears_only_the_hook_set_image_values(tmp_path):
-    """`azd down` deletes the ACR that `azd-postprovision.sh` recorded in
+    """`azd down` deletes the ACR that `azd-deploy-app.sh` recorded in
     SRE_CONTAINER_IMAGE/SRE_IMAGE_TAG. Reusing the environment afterwards
     would make `azd provision` redeploy an image tag that no longer exists,
     so `postdown` clears both once the resources are really gone."""

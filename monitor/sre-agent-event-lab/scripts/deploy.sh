@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Compatibility wrapper. The lab is an azd project now: azure.yaml owns the
-# Bicep entry point, the preprovision/postprovision hooks register providers,
-# build the image in ACR, and move the Container App onto it. This script only
-# forwards to `azd up` so the previously documented command keeps working.
+# Bicep entry point, the preprovision/postprovision hooks register providers
+# and prepare the local environment, and the postdeploy hook builds the image
+# in ACR and moves the Container App onto it once AcrPull has propagated. This
+# script only forwards to `azd up` -- which runs both phases -- so the
+# previously documented command keeps working.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"

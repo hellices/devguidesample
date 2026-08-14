@@ -67,6 +67,7 @@ output acrLoginServer string = workload.outputs.acrLoginServer
 output containerAppName string = workload.outputs.containerAppName
 output containerAppFqdn string = workload.outputs.containerAppFqdn
 output containerAppPrincipalId string = workload.outputs.workloadPrincipalId
+output workloadIdentityResourceId string = workload.outputs.workloadIdentityResourceId
 output storageContainerScope string = workload.outputs.storageContainerScope
 output blobRoleAssignmentName string = workload.outputs.blobRoleAssignmentName
 output workspaceId string = observability.outputs.workspaceId

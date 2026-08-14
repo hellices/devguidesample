@@ -11,7 +11,12 @@ hooks:
     continueOnError: false
   postprovision:
     shell: sh
-    run: ./scripts/azd-postprovision.sh
+    run: ./scripts/azd-postprovision-local.sh
+    interactive: true
+    continueOnError: false
+  postdeploy:
+    shell: sh
+    run: ./scripts/azd-deploy-app.sh
     interactive: true
     continueOnError: false
   predown:

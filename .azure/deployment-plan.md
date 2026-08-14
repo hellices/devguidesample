@@ -1,253 +1,181 @@
 # Azure Deployment Plan
 
-> **Status:** Deployed
+> **Status:** Ready for Validation
 
-Generated: 2026-08-12T03:35:07Z
+Updated: 2026-08-14
 
----
+## Goal
 
-## 1. Project Overview
+Validate the Azure SRE Agent event lab as a repeatable guided exercise:
 
-**Goal:** Deploy an isolated Azure Container Apps incident lab, connect Azure Monitor alerts to Azure SRE Agent, execute three deterministic failures, and publish an evidence-based analysis report.
+1. deploy the disposable workload and monitoring stack with `azd up`;
+2. connect Azure SRE Agent through consent-sensitive portal steps;
+3. run S1/S2/S3 in order and capture explicit conclusions or missing states;
+4. remove the environment with `azd down --purge`.
 
-**Path:** Add Components
-
-**Design:** `monitor/sre-agent-event-lab/README.md`
-
-**Execution plan:** `monitor/sre-agent-event-lab/README.md`
-
----
-
-## 2. Requirements
+## Deployment Context
 
 | Attribute | Value |
 |---|---|
+| Mode | Modify existing lab |
 | Classification | Development / disposable incident lab |
 | Scale | Small |
-| Budget | Cost-Optimized |
-| Subscription | `95933ae5-0201-4a21-a1fc-8051a7437982` |
+| Budget | Cost-optimized; delete immediately after validation |
+| Subscription | Current authenticated subscription selected through `AZURE_SUBSCRIPTION_ID` |
 | Location | `koreacentral` |
-| Resource group | `rg-sre-agent-event-lab-krc` |
-| Required tags | `purpose=sre-agent-event-lab`, `expiresOn=2026-08-13` |
+| Resource group | `rg-${AZURE_ENV_NAME}` unless explicitly overridden |
+| Required tags | `purpose=sre-agent-event-lab`, `azd-env-name=${AZURE_ENV_NAME}`, one-day `expiresOn` |
 | Agent autonomy | Review |
 
-The current Azure CLI context matches the recorded subscription. Korea Central supports Azure SRE Agent and the selected workload services.
+No subscription ID, resource group, global name suffix, or expiry date is fixed in source.
 
----
+## Components
 
-## 3. Components Detected
+| Component | Azure service |
+|---|---|
+| Incident API | Azure Container Apps |
+| Image build and storage | Azure Container Registry Basic, remote ACR build |
+| Dependency failure target | Storage account with Blob private endpoint |
+| Workload identity | User-assigned managed identity |
+| Logs and traces | Log Analytics and workspace-based Application Insights |
+| Incident detection | Three Sev2 scheduled-query alert rules |
+| Incident analysis | Existing or disposable Azure SRE Agent in Review mode |
 
-| Component | Type | Technology | Path |
+## Deployment Recipe
+
+- Azure Developer CLI project: `monitor/sre-agent-event-lab/azure.yaml`
+- Subscription-scope entry template: `monitor/sre-agent-event-lab/infra/main.bicep`
+- Resource-group module: `monitor/sre-agent-event-lab/infra/lab.bicep`
+- Parameters: `monitor/sre-agent-event-lab/infra/main.parameters.json`
+- Preprovision: dependency/login/provider checks and non-secret defaults
+- Postprovision (`scripts/azd-postprovision-local.sh`): local uv environment setup only; no Azure call, so `azd provision` ends with the public placeholder image still serving
+- Postdeploy (`scripts/azd-deploy-app.sh`): wait for `AcrPull` propagation, then ACR remote build, registry/identity configuration, ingress move to 8000, Container App image update, revision and `/healthz` verification, and image persistence
+- Predown: validate and delete only recorded external Monitoring Contributor role assignments
+- Postdown: clear persisted image/tag environment values
+
+The standard exercise uses the Azure Monitor incident platform and Review-mode response plans. The historical Logic App/HTTP Trigger bridge is not deployed.
+
+## Two-Phase Container Apps + ACR Flow (deploy gate)
+
+Discovered while preparing live validation: this lab is a Container Apps
+workload pulling from ACR with a user-assigned managed identity, which
+cannot be provisioned and deployed in one step.
+
+- One ARM deployment creates the registry, the identity, the `AcrPull`
+  assignment and the Container App, but the lab image does not exist yet
+  (it is built *by* the registry), and a role assignment created moments
+  earlier is not necessarily usable by a pull issued immediately after.
+- Therefore provisioning deploys a **public placeholder image** (ingress
+  80, no probes) and performs no image work at all, and the deploy phase
+  performs every image action behind an explicit gate.
+
+| Phase | Command | What runs | What it must not do |
 |---|---|---|---|
-| Incident lab API | API | Python 3.12, FastAPI, Azure Monitor OpenTelemetry | `monitor/sre-agent-event-lab/app/` |
-| Azure infrastructure | IaC | Bicep | `monitor/sre-agent-event-lab/infra/` |
-| Deployment and incident tooling | Operations | Azure CLI, Bash, Python | `monitor/sre-agent-event-lab/scripts/` |
-| Agent knowledge | Runbook | Markdown | `monitor/sre-agent-event-lab/runbooks/` |
-| Results | Report | Markdown | `monitor/sre-agent-event-lab/validation-results.md` |
+| Provision | `azd provision` | Bicep (infra + placeholder app) → `postprovision` = `scripts/setup-venv.sh` only | No `az acr build`, no `az containerapp update`/`ingress update`/`registry set`, no image env values |
+| Deploy | `azd deploy` | `postdeploy` = poll exact `AcrPull` (principal + role definition `7f951dda-4ed3-4680-a7ca-43fe172d538d` + registry scope) up to 300s, then ACR build → `registry set --identity` → `ingress update --target-port 8000` → `update --image` → new healthy revision → `/healthz` → `azd env set SRE_IMAGE_TAG`/`SRE_CONTAINER_IMAGE` | Nothing may run before the grant is observed; nothing is persisted unless `/healthz` returned 200 |
 
----
+`azd up` runs both phases in order, so the user-facing command stays a
+single command and still passes through the same gate.
 
-## 4. Recipe Selection
+Deploy-phase outputs consumed from the azd environment:
+`AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_ACR_NAME`,
+`AZURE_ACR_LOGIN_SERVER`, `AZURE_CONTAINER_APP_NAME`,
+`AZURE_CONTAINER_APP_FQDN`, `AZURE_CONTAINER_APP_PRINCIPAL_ID`,
+`AZURE_WORKLOAD_IDENTITY_RESOURCE_ID`.
 
-**Selected:** Bicep + AZCLI
+Behaviour verified against the installed azd (1.29.0), because the project
+declares no services:
 
-**Rationale:**
+- `azd deploy --no-prompt` on a project with this exact `azure.yaml` shape
+  (bicep `infra:`, five hooks, no `services:`) runs the `postdeploy` hook,
+  and a non-zero hook exit fails the command
+  (`ERROR: failed running post hooks: 'postdeploy' hook failed with exit
+  code: '7'`).
+- `azd deploy` before any provision fails fast with
+  `ERROR: infrastructure has not been provisioned` — the guard is a plain
+  environment check (`env.GetSubscriptionId() == ""` in
+  `cli/azd/internal/cmd/deploy.go`), so the deploy phase is reachable
+  exactly when provisioning has run.
+- `azd up` uses the same project hooks: `cli/azd/internal/cmd/up_graph.go`
+  adds `cmdhook-predeploy`/`cmdhook-postdeploy` unconditionally and keeps
+  the deploy events for "Zero-service projects".
 
-- The repository already uses direct Bicep and Azure CLI patterns.
-- The deployment requires a two-phase flow: base resources, ACR cloud build, then Container App and alert rules.
-- The incident runner needs explicit control over revision configuration, RBAC removal/recovery, alert polling, evidence export, and cleanup.
-- Local Docker is not required; `az acr build` performs the image build.
+No `services:` entry is declared: the only service host that would apply
+here (`containerapp` + `docker`) makes `azd deploy`/`azd up` require a
+local Docker build, which this lab deliberately avoids.
 
----
+## Security and Safety
 
-## 5. Architecture
+- Container Apps reach Blob Storage through private networking.
+- Managed identities and Azure RBAC are used; no credentials are stored in the repository or azd environment examples.
+- Every destructive script verifies the current subscription, `purpose`, and `azd-env-name` tags.
+- S3 removes only the recorded Blob Data Reader assignment and restores it through an exit trap.
+- Scenario progression is bound to the current azd environment and requires workload recovery, alert resolution, and an explicit capture status.
+- Cleanup validates recorded assignment subscription, principal, role definition, and scope before any deletion.
 
-**Stack:** Containers
-
-### Service Mapping
-
-| Component | Azure Service | SKU |
-|---|---|---|
-| FastAPI incident API | Azure Container Apps | Consumption, 0.5 CPU / 1 GiB, min 1, max 2 |
-| Container image | Azure Container Registry | Basic |
-| Blob dependency | Azure Storage | Standard_LRS StorageV2 |
-| Central logs | Log Analytics | PerGB2018, 30-day retention |
-| APM | Workspace-based Application Insights | Web |
-| Incident detection | Azure Monitor scheduled-query rules | 3 Sev2 rules |
-| Workload authentication | User-assigned managed identity | No SKU |
-| Incident analysis | Azure SRE Agent | Korea Central, Review response plans |
-
-### Data and Incident Flow
-
-1. Public HTTPS requests reach the Container App.
-2. OpenTelemetry exports request, exception, and Blob dependency telemetry to Application Insights.
-3. Scheduled-query rules evaluate every minute over a five-minute window.
-4. Azure SRE Agent's Azure Monitor scanner receives matching Sev2 incidents.
-5. Response plans investigate with repository, runbook, resource, Activity Log, and observability context.
-6. The operator records and scores the analysis, then verifies scenario recovery.
-
-### Security Controls
-
-- ACR admin access and anonymous pull are disabled.
-- Container App pulls with a user-assigned managed identity and `AcrPull`.
-- Blob access uses the same managed identity and `Storage Blob Data Reader` scoped to the `documents` container.
-- Storage shared-key authentication and public blob access are disabled.
-- Application Insights connection string is a Container Apps secret.
-- Agent workload access is Reader; remediation remains in Review mode.
-- Scenario and cleanup scripts refuse untagged or wrong-subscription targets.
-
----
-
-## 6. Provisioning Limit Checklist
-
-Quota CLI was used first for Microsoft.App and Microsoft.Storage. Azure Resource Graph plus official service-limit documentation was used where quota CLI is unsupported or no adjustable count quota exists.
-
-| Resource Type | Number to Deploy | Current in Korea Central | Total After Deployment | Limit/Quota | Source and result |
-|---|---:|---:|---:|---:|---|
-| `Microsoft.App/managedEnvironments` | 1 | 0 | 1 | 50 | `azure-quotas`, `ManagedEnvironmentCount`: sufficient |
-| `Microsoft.Storage/storageAccounts` | 1 | 0 | 1 | 250 | `azure-quotas`, `StorageAccounts`: sufficient |
-| `Microsoft.ContainerRegistry/registries` | 1 | 1 | 2 | 100 per subscription per region | quota CLI returned `BadRequest`; Azure Resource Graph + official limits: sufficient |
-| `Microsoft.App/containerApps` | 1 | 0 | 1 | governed by Container Apps environment/consumption quotas | Azure Resource Graph + deployment validation: sufficient |
-| `Microsoft.OperationalInsights/workspaces` | 1 | 1 | 2 | no adjustable regional creation quota exposed | Azure Resource Graph + deployment validation |
-| `Microsoft.Insights/components` | 1 | 1 | 2 | no adjustable regional creation quota exposed | Azure Resource Graph + deployment validation |
-| `Microsoft.Insights/scheduledQueryRules` | 3 | 0 | 3 | within Azure Monitor alert-rule limits | Azure Resource Graph + deployment validation |
-| `Microsoft.ManagedIdentity/userAssignedIdentities` | 1 | 5 | 6 | no adjustable regional creation quota exposed | Azure Resource Graph + deployment validation |
-
-**Status:** All quota-metered resources are within limits. Resource names `acrsrelab95933ae5` and `stsrelab95933ae5` are globally available. The target resource group does not exist.
-
----
-
-## 7. Deployment Sequence
-
-1. Register `Microsoft.App`, `Microsoft.OperationalInsights`, `Microsoft.Insights`, `Microsoft.Storage`, `Microsoft.ContainerRegistry`, `Microsoft.ManagedIdentity`, and `Microsoft.AlertsManagement`.
-2. Run local tests, shell parse checks, Bicep compilation, group validation, and deployment what-if.
-3. Create the tagged resource group.
-4. Deploy observability, ACR, Storage, managed identity, RBAC, and Container Apps environment with `deployContainerApp=false`.
-5. Build `sre-event-lab:20260812.4` with ACR Tasks.
-6. Deploy the Container App and three scheduled-query alert rules with `deployContainerApp=true`.
-7. Poll revision health and `/healthz`.
-8. Generate normal baseline request and dependency telemetry.
-9. Create and configure Azure SRE Agent through `https://sre.azure.com`.
-10. Execute S1, S2, and S3 sequentially with recovery gates.
-11. Complete the report, remove the recorded Agent subscription role assignment, and delete the tagged resource group.
-
----
-
-## 8. Validation Criteria
-
-- Python tests pass with no failures.
-- Shell scripts pass `bash -n`.
-- Bicep compiles without warnings or errors.
-- ARM validation and what-if succeed before resource creation.
-- ACR cloud build succeeds.
-- Container App revision is Healthy and `/healthz` returns HTTP 200.
-- Normal AppRequests and AppDependencies telemetry arrives before incident injection.
-- Each scenario produces the intended alert and returns to healthy state.
-- Cleanup removes only the recorded role assignment and tagged lab resource group.
-
----
-
-## 9. Execution Checklist
-
-### Phase 1: Planning
-
-- [x] Analyze workspace
-- [x] Gather requirements
-- [x] Confirm subscription and location
-- [x] Prepare resource inventory
-- [x] Fetch quotas and validate capacity
-- [x] Scan codebase
-- [x] Select recipe
-- [x] Plan architecture
-- [x] User approved the design; unavailable review gates selected the recommended option under autopilot instructions
-
-### Phase 2: Preparation
-
-- [x] Install and update official `microsoft/azure-skills` globally
-- [x] Research Azure SRE Agent, Container Apps, Application Insights, Azure Monitor alerts, Storage, and managed identity requirements
-- [x] Generate application and tests
-- [x] Generate Bicep infrastructure
-- [x] Generate deployment, scenario, evidence, and cleanup tooling
-- [x] Apply managed identity and least-privilege RBAC
-- [x] Add runbook, operator guide, and results report
-- [x] Set status to `Ready for Validation`
-
-### Phase 3: Validation and Deployment
-
-- [x] All validation checks pass
-  - [x] Core Validation (CLI, auth, build, validate, what-if) using the official `validate-deployment.sh`
-  - [x] Bicep compilation/lint validation
-  - [x] Azure Policy validation
-- [ ] Fix all validation blockers and repeat the validation workflow
-- [x] Invoke `azure-deploy`
-- [x] Verify baseline telemetry
-- [x] Configure Azure SRE Agent
-- [x] Execute and score S1-S3
-- [x] Publish results and evidence captures
-- [ ] Cleanup pending explicit confirmation; lab retained with `expiresOn=2026-08-13`
-
----
-
-## 10. Validation Proof
-
-Validated: 2026-08-12T03:40:00Z
-
-| Check | Result | Evidence |
-|---|---|---|
-| Azure CLI | PASS | CLI installed and current account authenticated |
-| Subscription | PASS | `95933ae5-0201-4a21-a1fc-8051a7437982` |
-| Bicep build/lint | PASS | `subscription.bicep` compiled with no warnings |
-| ARM validation | PASS | subscription-scope deployment validation succeeded in `koreacentral` |
-| What-if | PASS | Create 12, Modify 0, Delete 0 |
-| Azure Policy | PASS | 3 assignments inspected; all target SQL/Data Protection and do not conflict with this deployment |
-| Name availability | PASS | `acrsrelab95933ae5`, `stsrelab95933ae5` available |
-| Quota | PASS | Container Apps environments 0/50; Storage accounts 0/250 |
-
-Commands:
-
-```bash
-bash ~/.agents/skills/azure-validate/references/recipes/scripts/validate-deployment.sh \
-  --scope sub \
-  --location koreacentral \
-  --template monitor/sre-agent-event-lab/infra/subscription.bicep \
-  --parameters monitor/sre-agent-event-lab/infra/subscription.bicepparam \
-  --subscription 95933ae5-0201-4a21-a1fc-8051a7437982
-
-monitor/sre-agent-event-lab/app/.venv/bin/python -m pytest \
-  monitor/sre-agent-event-lab/app/tests \
-  monitor/sre-agent-event-lab/scripts/tests -q
-
-bash -n monitor/sre-agent-event-lab/scripts/*.sh
-az bicep build \
-  --file monitor/sre-agent-event-lab/infra/subscription.bicep \
-  --stdout >/dev/null
-
-az policy assignment list \
-  --scope /subscriptions/95933ae5-0201-4a21-a1fc-8051a7437982 \
-  --disable-scope-strict-match -o json
-```
-
-Results:
-
-```text
-Official deployment validator: OVERALL PASS
-What-if: Create 12, Modify 0, Delete 0
-Tests: 11 passed, 0 warnings
-Shell parse: PASS
-Bicep build/lint: PASS, 0 warnings
-Azure Policy: PASS, no assignment conflicts
-Static RBAC review: PASS
-```
-
----
-
-## 11. Role Assignment Verification
+## Role Assignment Verification
 
 - Status: Verified
-- Identity checked: `id-sre-event-lab-95933ae5` user-assigned managed identity
-- `AcrPull` (`7f951dda-4ed3-4680-a7ca-43fe172d538d`): registry scope, required for Container App image pulls
-- `Storage Blob Data Reader` (`2a2b9908-6ea1-4ae2-8e65-a410df84e7d1`): `documents` container scope, matches the application's read-only `list_blobs` operation
-- Assignment names: deterministic GUIDs derived from scope, identity, and role definition
-- Principal type: `ServicePrincipal`
-- Local user data-plane role: not required because Blob functional validation runs through the deployed managed identity
+- Identity checked: Container App user-assigned managed identity
+- ACR access: `AcrPull` (`7f951dda-4ed3-4680-a7ca-43fe172d538d`) scoped to the lab registry
+- Blob access: `Storage Blob Data Reader` (`2a2b9908-6ea1-4ae2-8e65-a410df84e7d1`) scoped to the single documents container
+- Local developer data access: not required; baseline and scenarios call the public lab API rather than Blob data plane directly
 - Issues: none
+
+## Validation Plan
+
+### Preflight checks (re-run after the two-phase refactor)
+
+- [x] 1. AZD Installation — azd 1.29.0
+- [x] 2. Schema Validation — official azd v1.0 schema; hooks include `postdeploy`, no `services`
+- [ ] 3. Environment Setup — a fresh environment is needed for the live run (`sre-lab-08141227` predates this change)
+- [x] 4. Authentication Check — Azure CLI and azd authenticated
+- [x] 5. Subscription/Location Check — current authenticated subscription, Korea Central
+- [x] 6. Aspire Pre-Provisioning Checks — not applicable
+- [ ] 7. Provision Preview — to re-run against the updated template outputs
+- [x] 8. Build Verification — 455 tests and three Bicep builds passed
+- [x] 9. Docker Build Context Validation — Dockerfile and requirements present; the image is built by ACR from `app/`, never locally
+- [x] 10. Package Validation — `azd package --all --no-prompt` passed
+- [x] 11. Azure Policy Validation — three assigned Defender policies are unrelated to planned resources
+- [x] 12. Aspire Post-Provisioning Checks — not applicable
+- [x] 13. Deploy-Hook Reachability — `postdeploy` runs for this service-less project shape on azd 1.29.0, and its failure fails the command
+
+1. Run the complete pytest suite, Bash syntax checks, Python 3.9 imports, Bicep compilation, and azure.yaml schema validation.
+2. Create a unique azd environment in Korea Central.
+3. Run infrastructure preview and inspect the resource plan.
+4. Run `azd up` (provision phase leaves the placeholder image; deploy phase waits for `AcrPull`, builds and switches the image), then `lab.sh doctor` and `lab.sh baseline`.
+5. Complete the portal Agent setup guide and acknowledge it explicitly.
+6. Run and capture S1, S2, and S3 sequentially; generate the scorecard.
+7. Run `azd down --purge`.
+8. Verify the resource group and recorded external assignments are absent.
+
+## Expected Cost
+
+Container Apps, ACR, Log Analytics/Application Insights, Storage, and Azure SRE Agent can incur charges. Use a uniquely named disposable environment and remove it immediately after validation.
+
+## Section 7: Validation Proof
+
+Re-run after the two-phase refactor (the previous run predates it, so the
+earlier "Validated" status no longer applies):
+
+| Check | Command | Result |
+|---|---|---|
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 455 passed |
+| Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
+| Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
+| Bicep build | `az bicep build --file infra/{main,lab,workload}.bicep --stdout` | Passed (three templates, with the new deploy-gate outputs) |
+| AZD schema | `azure.yaml` validated against `schemas/v1.0/azure.yaml.json` from Azure/azure-dev | Passed; hooks = preprovision, postprovision, postdeploy, predown, postdown; no `services` |
+| AZD package | `azd package --all --no-prompt` | Passed |
+| Zero-service deploy hook | `azd deploy --no-prompt` against a marker-hook copy of this `azure.yaml` | `postdeploy` ran; hook exit 7 failed the command |
+| Authentication | `az account show`; `azd auth login --check-status --output json` | Authenticated |
+
+Pending live validation (no resources were deployed by this change):
+
+| Check | Command | Status |
+|---|---|---|
+| Environment | `azd env new <unique> --location koreacentral` | To re-create for the live run |
+| Provision preview | `azd provision --preview --no-prompt` | To re-run |
+| Provision phase | `azd provision --no-prompt` leaves the placeholder image serving and `app/.venv` ready | To verify live |
+| Deploy phase | `azd deploy --no-prompt` waits for `AcrPull`, builds in ACR, switches the image, `/healthz` returns 200 | To verify live |
+| Policy assignments | `az policy assignment list --scope <subscription> --disable-scope-strict-match` | Unchanged from the previous run; re-check at validation time |
+| Static RBAC | reviewed all `Microsoft.Authorization/roleAssignments` in `workload.bicep` | Unchanged: least-privilege AcrPull and container-scoped Blob Data Reader |

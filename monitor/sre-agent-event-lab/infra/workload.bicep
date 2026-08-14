@@ -371,6 +371,9 @@ output acrLoginServer string = registry.properties.loginServer
 output containerAppName string = deployContainerApp ? containerApp.name : appName
 output containerAppFqdn string = deployContainerApp ? containerApp!.properties.configuration.ingress.fqdn : ''
 output workloadPrincipalId string = workloadIdentity.properties.principalId
+// The `--identity` the Container App pulls with, and the identity whose
+// AcrPull assignment the deploy phase waits for.
+output workloadIdentityResourceId string = workloadIdentity.id
 output storageContainerScope string = documentsContainer.id
 output blobRoleAssignmentName string = blobReaderAssignment.name
 output telemetryServiceName string = telemetryServiceName

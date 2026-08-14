@@ -5,7 +5,7 @@
 #                               the azd-owned resource group, so azd can
 #                               delete everything else itself.
 #   postdown --reset-image-env  Clear the azd environment values
-#                               `azd-postprovision.sh` recorded, once the
+#                               `azd-deploy-app.sh` recorded, once the
 #                               resources they point at are really gone.
 #
 # The only external resources are the subscription-scoped Monitoring
@@ -61,7 +61,7 @@ Usage: cleanup-external.sh [--reset-image-env] [--yes]
   (default)          Remove the recorded subscription-scoped Monitoring
                      Contributor assignments that live outside the azd
                      resource group. Run by `azd down` as its predown hook.
-  --reset-image-env  Clear the azd environment values azd-postprovision.sh
+  --reset-image-env  Clear the azd environment values azd-deploy-app.sh
                      recorded (SRE_CONTAINER_IMAGE, SRE_IMAGE_TAG) instead.
                      Run by `azd down` as its postdown hook.
   --yes              Execute. Without it, both modes only print their plan.

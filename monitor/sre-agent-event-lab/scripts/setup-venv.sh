@@ -16,19 +16,16 @@ set -euo pipefail
 # missing, this script fails with an actionable install pointer instead of
 # silently reaching the public index.
 #
-# Idempotency matters because this script is invoked from the `postprovision`
-# hook *before* that hook's ACR build and Container App update -- see
-# `azd-postprovision.sh` -- so a failure here happens before the cloud app
-# deployment for this run has even started, not after it. Re-running only
-# this script would leave that deployment never attempted, so every failure
-# message below points at re-running the *whole* hook (`azd hooks run
-# postprovision`), never at running this script directly -- and `uv venv
-# --allow-existing` plus `uv pip install` make that safe to re-run even when
-# a previous attempt got partway through. (Running this script directly is
-# still the right move for a purely local `app/.venv` problem noticed well
-# after a deployment already succeeded -- see `doctor.sh` and
-# `capture-scenario.sh`'s own remediation text -- just never as the response
-# to a failure reported by *this* script.)
+# Idempotency matters because this script is the whole job of the
+# `postprovision` hook (`azd-postprovision-local.sh`): the Container App
+# image build and the image switch live in the deploy phase
+# (`azd-deploy-app.sh`), behind its AcrPull gate. So a failure here is a
+# purely local failure -- re-running this script directly is a complete
+# fix, and `uv venv --allow-existing` plus `uv pip install` make that safe
+# even when a previous attempt got partway through. What a failure here
+# does mean is that `azd up` stopped before its deploy phase, so the
+# application deployment still has to be finished with `azd deploy` --
+# which every failure message below says.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
@@ -47,13 +44,14 @@ readonly REQUIREMENTS_FILE="${APP_DIR}/requirements-dev.txt"
 # interpreter left behind by a pre-uv `python3 -m venv` (uv recreates the
 # venv in place when the existing interpreter doesn't satisfy the request).
 readonly VENV_PYTHON_VERSION=">=3.10"
-# Cloud resources from `azd provision` are already deployed by the time this
-# hook (and so this script) runs, but this hook's own ACR build and Container
-# App update -- the cloud *app* deployment -- run after this script, not
-# before it, so a failure here must not be answered by re-running only this
-# script: that would leave the app deployment never attempted. `cd` pins the
-# rerun to this lab's project directory regardless of the operator's shell.
-readonly RERUN_HINT="Cloud infrastructure from 'azd provision' is already deployed, but this hook's Container App image build and deployment run *after* this step and have not happened yet -- re-running only this script would silently skip them. Re-run the whole hook instead: cd ${LAB_ROOT} && azd hooks run postprovision"
+# What a failure here does and does not mean: `azd provision` has created
+# the infrastructure and left the Container App on its public placeholder
+# image, and the deploy phase -- the ACR build and the image switch -- has
+# not run yet, because a failing `postprovision` hook stops `azd up`
+# before it. Re-running this script fixes the local half; `azd deploy`
+# still has to finish the cloud half. `cd` pins both commands to this
+# lab's project directory regardless of the operator's shell.
+readonly RERUN_HINT="Only the local Python environment failed: infrastructure from 'azd provision' is up, and the lab image is built and switched in separately by the deploy phase. Fix this step with: cd ${LAB_ROOT} && ./scripts/setup-venv.sh -- then finish the application deployment with: cd ${LAB_ROOT} && azd deploy"
 
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv is required to set up ${VENV_DIR} but was not found on PATH." >&2

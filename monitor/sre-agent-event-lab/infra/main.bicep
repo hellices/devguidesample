@@ -71,6 +71,12 @@ output AZURE_RESOURCE_GROUP string = labResourceGroup.name
 output AZURE_ACR_NAME string = lab.outputs.acrName
 output AZURE_CONTAINER_APP_NAME string = lab.outputs.containerAppName
 output AZURE_CONTAINER_APP_FQDN string = lab.outputs.containerAppFqdn
+// Read by scripts/azd-deploy-app.sh: the deploy phase waits for AcrPull on
+// exactly the registry below for exactly this principal, then points the
+// app's registry configuration at the identity that holds it.
+output AZURE_CONTAINER_APP_PRINCIPAL_ID string = lab.outputs.containerAppPrincipalId
+output AZURE_WORKLOAD_IDENTITY_RESOURCE_ID string = lab.outputs.workloadIdentityResourceId
+output AZURE_ACR_LOGIN_SERVER string = lab.outputs.acrLoginServer
 output AZURE_WORKSPACE_ID string = lab.outputs.workspaceId
 output AZURE_APP_INSIGHTS_NAME string = lab.outputs.appInsightsName
 output AZURE_STORAGE_CONTAINER_SCOPE string = lab.outputs.storageContainerScope
