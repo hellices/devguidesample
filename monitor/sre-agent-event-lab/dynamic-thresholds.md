@@ -13,8 +13,9 @@ Dynamic Thresholds 자체는 이번 결과에 포함된 실증 대상이 아니�
 ### Static Threshold
 
 - 실험 목표: 정해진 장애가 짧은 시간 안에 반드시 alert를 발생시키는지 검증
-- evaluation: 1분
+- evaluation: 1분(window 5분)
 - 조건: 5xx count, p95 > 2000ms, Blob 403 count
+- 전제: rule scope는 Log Analytics workspace이고 query는 workspace schema known table(`AppRequests`, `AppDependencies`)을 사용한다. Application Insights component scope의 legacy `requests`/`dependencies`는 다른 table을 호출하는 function이라 1분 주기에서 `QueryNotContainKnownTable`로 거부된다.
 - 장점: 결정론적이고 당일 재현 가능
 - 한계: workload별 정상 범위와 계절성을 수동으로 관리
 
@@ -54,7 +55,8 @@ query는 `summarize` 결과가 하나 이상의 numeric series를 반환해야 �
 - Failing periods: 4회 평가 중 2회 위반
 - `ignoreDataBefore`: 정상 telemetry가 안정적으로 쌓이기 시작한 UTC
 - Action Group: 기존 `ag-sre-agent-event-lab`
-- Event path: Dynamic alert → Action Group → Logic App managed identity → SRE HTTP Trigger → Review-mode investigation
+- Event path(기본): Dynamic alert → Azure Monitor incident platform 연결 → Review 모드 response plan → investigation. 현재 실습이 배포하는 표준 경로이며 Dynamic rule도 같은 경로를 그대로 쓴다.
+- Event path(레거시 bridge): Dynamic alert → Action Group → Logic App managed identity → SRE HTTP Trigger → Review-mode investigation. 2026-08-12 실측에 쓰인 legacy 구성이고 기본 실습에는 배포하지 않는다([validation-results.md](validation-results.md)).
 
 이는 시작점이지 모든 workload의 정답이 아니다. Preview Chart와 incident 결과를 보고 sensitivity와 failing periods를 조정한다.
 
@@ -77,7 +79,7 @@ query는 `summarize` 결과가 하나 이상의 numeric series를 반환해야 �
 - 계절성, 최근 배포, traffic shift 때문에 threshold가 왜 변했는지 설명할 수 있어야 한다.
 - Action Group 연결 후 unauthorized autonomous action은 0건이어야 한다.
 
-## 9. 공식 자료
+## 8. 공식 자료
 
 - [Azure Monitor alerts with dynamic thresholds](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
 - [Create a log search alert rule](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule)

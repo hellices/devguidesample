@@ -1,4 +1,5 @@
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -6,6 +7,8 @@ from PIL import Image
 
 
 MODULE_PATH = Path(__file__).parents[1] / "render_briefing_assets.py"
+
+UUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
 
 
 def load_module():
@@ -87,6 +90,11 @@ def test_public_assets_do_not_expose_sensitive_identifiers(tmp_path):
     serialized = "\n".join(
         path.read_text(errors="ignore") for path in tmp_path.glob("*.svg")
     )
-    assert "95933ae5-0201-4a21-a1fc-8051a7437982" not in serialized
+    # Any GUID at all: a rendered asset is published, and a subscription,
+    # tenant or resource ID leaked into one is the same disclosure whoever
+    # ran the lab. Forbidding the shape also keeps this test from having to
+    # name a real subscription in order to prove it is absent.
+    leaked = UUID_PATTERN.search(serialized)
+    assert leaked is None, leaked.group() if leaked else ""
     assert "sig=" not in serialized
     assert "Thread status:" not in serialized

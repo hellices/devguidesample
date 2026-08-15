@@ -1,350 +1,182 @@
-# Azure SRE Agent 이벤트 기반 장애 분석 실험실
+# Azure SRE Agent 이벤트 기반 장애 분석 실습
 
-제품 개요와 활용 방법은 [Azure SRE Agent 소개 자료](../azure-sre-agent.md)를 참고하세요. 이 문서에서는 실험 환경을 배포하고 장애를 재현하며 조사 근거를 수집하는 방법을 설명합니다.
+Azure Container Apps에 장애를 세 번 주입하고, Azure Monitor 경고를 받은 Azure SRE Agent가 실제로 조사·결론까지 도달하는지 확인합니다. 제품 개요는 [Azure SRE Agent 소개](../azure-sre-agent.md)를 먼저 읽어 주세요.
 
-Azure Container Apps에 의도적인 장애를 만들고, Azure Monitor 경고를 받은 Azure SRE Agent가 자동으로 조사하는지 실제 Azure 리소스에서 확인합니다.
+> ⚠️ 이 실습은 실제 Azure 리소스를 만들고 **과금**합니다. 끝나면 반드시 [정리](#정리) 절차로 지우세요.
 
-## 구성
+## 결과물
 
-| 구성 요소 | 역할 |
+| 산출물 | 위치 |
 |---|---|
-| Container App | HTTP 500, latency, Blob dependency 장애 재현 |
-| Application Insights | request, exception, dependency telemetry |
-| Log Analytics | workspace 기반 Application Insights 및 Container Apps 로그 |
-| Azure Monitor | Sev2 scheduled-query alert 3개 |
-| Azure SRE Agent | 1분 scanner, incident 조사, Review-mode 완화 제안 |
-| ACR / Storage | 이미지 저장 및 실제 managed identity dependency |
+| 시나리오별 Agent 조사 타임라인(PNG/GIF/Markdown) | `assets/captures/s1`, `s2`, `s3` |
+| 원본 API 근거와 실행 상태 | `evidence/`(Git 제외) |
+| 시나리오별 10점, 종합 30점 만점 채점 결과 | `evidence/scorecard.json` |
 
-모든 workload 자산은 `rg-sre-agent-event-lab-krc`에 생성된다. SRE Agent의 Azure Monitor scanner에 필요한 구독 범위 `Monitoring Contributor`만 예외이며, 설정 시 assignment ID를 기록하고 정리 시 제거한다.
+## 비용과 안전 경계
+
+배포가 만드는 과금 대상은 다음과 같습니다. 금액은 구독·지역·사용량에 따라 달라지므로 [Azure 가격 계산기](https://azure.microsoft.com/pricing/calculator/)로 확인하세요.
+
+- Container Apps 환경과 앱 1개(0.5 vCPU / 1Gi, 최소 replica 1이라 유휴 상태에도 과금됩니다)
+- Container Registry Basic
+- Log Analytics 작업 영역(PerGB2018, 30일 보존)과 Application Insights 수집량
+- Storage 계정(Standard_LRS)
+- 1분 주기 로그 검색 경고 규칙 3개(평가 주기가 짧을수록 규칙당 단가가 올라갑니다)
+
+Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Agent를 사용하며 [별도로 과금](https://azure.microsoft.com/pricing/details/sre-agent/)됩니다.
+
+안전 경계는 스크립트가 강제합니다.
+
+- 현재 azd 환경이 가리키는 구독과 `az account show`의 활성 구독이 다르면 실행을 거부합니다.
+- 리소스 그룹에 `purpose=sre-agent-event-lab`과 `azd-env-name=<현재 environment>` 태그가 모두 없으면 거부합니다.
+- 한 번에 한 시나리오만 실행하며, 이전 시나리오가 복구·캡처될 때까지 다음 시나리오를 막습니다.
+- 응답 계획은 모두 `Review` 모드로 두어 Agent가 승인 없이 변경하지 못하게 합니다.
+- `evidence/`에는 비밀 값, 연결 문자열, 액세스 토큰을 저장하지 않습니다.
 
 ## 사전 조건
 
-- Azure CLI 로그인 및 구독 `95933ae5-0201-4a21-a1fc-8051a7437982` 접근
-- 구독 또는 필요한 리소스에 Contributor, 역할 할당에는 Owner/User Access Administrator
-- `az`, `jq`, `curl`, `python3`
+- `az`, `azd`, `jq`, `curl`, `python3`
+- `az extension add --name log-analytics` (`az monitor log-analytics query` 제공)
+- `az login`과 `azd auth login` — 두 CLI는 자격 증명을 따로 관리합니다.
+- 구독 Contributor, 역할 할당을 위한 Owner 또는 User Access Administrator
+- Azure SRE Agent를 만들 수 있는 [지원 지역](https://learn.microsoft.com/azure/sre-agent/supported-regions) 접근 권한
 - 브라우저에서 `https://sre.azure.com` 및 `*.azuresre.ai` 접근
-- Azure SRE Agent Korea Central 사용 권한
-- GitHub 저장소 `hellices/devguidesample` 연결 권한
+- Agent에 연결할 GitHub 저장소 권한
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — `app/.venv`를 만드는 `scripts/setup-venv.sh`가 이 도구만 사용하며, 사내 프록시로 구성된 `uv`의 인덱스 설정을 그대로 씁니다. 공개 PyPI로 우회하는 `pip` 폴백은 없습니다.
 
-Azure SRE Agent Korea Central이 구독에 표시되지 않으면 [공식 registration request](https://github.com/microsoft/sre-agent/issues/new?labels=registration&title=Subscription+registration+request)를 제출해야 한다.
-
-## 안전 경계
-
-- 스크립트는 현재 구독 ID를 고정 검증한다.
-- 기존 resource group을 재사용하지 않는다.
-- resource group의 `purpose=sre-agent-event-lab` 태그가 없으면 scenario와 cleanup을 거부한다.
-- 한 번에 한 시나리오만 실행한다.
-- `run-scenario.sh`는 종료 trap으로 장애 복구를 시도하고 복구 실패를 명시적으로 오류 처리한다.
-- S3는 출력으로 기록된 Blob container scope의 단일 역할만 삭제·복구한다.
-- Agent response plan은 모두 `Review` 모드로 구성한다.
-- evidence에는 secret, connection string, access token을 저장하지 않는다.
-
-## 로컬 검증
+이 실습의 모든 명령은 아래에서 한 번만 진입하는 이 디렉터리를 기준으로 합니다.
 
 ```bash
-cd monitor/sre-agent-event-lab/app
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q
-
-cd ../../..
-monitor/sre-agent-event-lab/app/.venv/bin/python -m pytest \
-  monitor/sre-agent-event-lab/scripts/tests/test_loadgen.py -q
-bash -n monitor/sre-agent-event-lab/scripts/*.sh
-az bicep build --file monitor/sre-agent-event-lab/infra/main.bicep --stdout >/dev/null
+cd monitor/sre-agent-event-lab
 ```
 
-## Azure 배포
-
-필수 provider를 등록한다.
+로컬 검증만 먼저 해 보려면 다음을 실행합니다.
 
 ```bash
-az account set --subscription 95933ae5-0201-4a21-a1fc-8051a7437982
-for provider in Microsoft.App Microsoft.OperationalInsights Microsoft.Insights \
-  Microsoft.Storage Microsoft.ContainerRegistry Microsoft.ManagedIdentity; do
-  az provider register --namespace "$provider" --wait
-done
+./scripts/setup-venv.sh
+app/.venv/bin/python -m pytest app -q
+
+bash -n scripts/*.sh
+az bicep build --file infra/main.bicep --stdout >/dev/null
 ```
 
-배포는 base infrastructure → ACR cloud build → Container App/alert 순서로 진행된다. 로컬 Docker는 필요하지 않다.
+## azd 환경 만들기
 
 ```bash
-monitor/sre-agent-event-lab/scripts/deploy.sh \
-  2>&1 | tee monitor/sre-agent-event-lab/evidence/deploy.log
+azd env new sre-event-lab --location koreacentral
 ```
 
-성공 조건:
+`--subscription`을 생략하면 azd가 로그인된 계정의 구독 목록에서 고르게 합니다. 특정 구독을 고정하려면 `--subscription <YOUR_SUBSCRIPTION_ID>`를 붙이세요. 리소스 그룹 이름은 지정하지 않으면 `rg-<environment 이름>`이 됩니다.
 
-1. 두 Bicep deployment가 성공한다.
-2. ACR에 `sre-event-lab:run-20260812T094446Z` 형식의 실행별 immutable image tag가 존재한다.
-3. active Container App revision이 `Healthy`다.
-4. `/healthz`가 HTTP 200을 반환한다.
+`.env.example`은 스크립트가 읽는 설정 이름과 허용 기본값만 적어 둔 참고 파일입니다. 값을 바꾸려면 `azd env set <NAME> <VALUE>`로 현재 azd 환경에 저장합니다.
+
+## 배포
+
+```bash
+mkdir -p evidence
+azd up 2>&1 | tee evidence/deploy.log
+```
+
+배포는 두 단계입니다. 로컬 Docker는 필요 없습니다.
+
+1. **provision 단계** — Bicep이 ACR, 워크로드 ID(user-assigned managed identity), 그 ID의 AcrPull 역할 할당, 그리고 공개 placeholder 이미지(80 포트)로 뜨는 Container App까지 만듭니다. 이어지는 postprovision hook(`scripts/azd-postprovision-local.sh`)은 `scripts/setup-venv.sh`로 `app/.venv`만 준비하고(`uv venv` + `uv pip install -r requirements-dev.txt`) Azure를 전혀 건드리지 않습니다. 즉 `azd provision`만 실행하면 앱은 계속 placeholder 상태입니다.
+2. **deploy 단계** — postdeploy hook(`scripts/azd-deploy-app.sh`)이 워크로드 ID의 **AcrPull** 할당이 ACR 스코프에 정확히 보일 때까지 최대 5분(`SRE_ACR_PULL_TIMEOUT_SECONDS`) 기다린 뒤에야 ACR 클라우드 빌드 → registry/identity 설정 → ingress 8000 이동 → 이미지 교체 → revision·`/healthz` 확인 순서로 진행합니다. 역할이 끝내 보이지 않으면 아무것도 빌드·교체하지 않고 실패합니다.
+
+`azd up`은 이 두 단계를 순서대로 실행하므로 위 명령 하나로 충분합니다. 단계별로 나눠 실행하거나 다시 실행하려면:
+
+```bash
+azd provision           # 인프라 + placeholder + 로컬 venv
+azd deploy              # AcrPull 대기 → 빌드 → 이미지 교체 → 헬스체크
+azd hooks run postdeploy   # 배포 단계만 다시 실행
+```
+
+postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `./scripts/setup-venv.sh`로 그 단계를 고친 뒤 `azd deploy`로 앱 배포를 마무리하세요.
+
+성공 조건은 provision 성공, 활성 revision `Healthy`, `/healthz` HTTP 200 세 가지입니다.
 
 ## Azure SRE Agent 설정
 
-실측 환경은 공식 ARM/data-plane API로 생성했다.
+포털에서만 할 수 있는 설정이 남아 있습니다. 저장소 연결, 지식 문서 업로드, **Azure Monitor incident platform** 연결, `Review` 모드 응답 계획, 역할 할당을 [guides/01-agent-setup.md](guides/01-agent-setup.md)가 순서대로 안내합니다.
 
-| 항목 | 값 |
-|---|---|
-| Subscription | `95933ae5-0201-4a21-a1fc-8051a7437982` |
-| Resource group | `rg-sre-agent-event-lab-krc` |
-| Agent name | `sre-devguidesample-95933ae5` |
-| Region | Korea Central |
-| Azure resource access | 테스트 resource group, Reader |
-| Repository | `hellices/devguidesample` |
-| Knowledge | `runbooks/incident-response.md` |
-| Model | Microsoft Foundry / Automatic |
-| Action mode | Review / Low |
+기본 실습에는 Logic App bridge를 배포하지 않습니다. 제품 표준 경로는 Azure Monitor를 incident platform으로 연결하는 것이고, 예전 실측에서 쓰던 Action Group + Logic App 인증 경로는 레거시 기록으로만 남아 있습니다([validation-results.md](validation-results.md)).
 
-### 실제 event bridge
-
-제품의 표준 Azure Monitor 연계는 Azure Monitor incident platform과 response plan을 통해 Agent로 직접 전달되며 Logic App bridge가 필요하지 않다.
-
-이 실험은 response plan 공개 API 자동 구성 제약 때문에 Azure SRE Agent의 HTTP Trigger 기능 앞에 Action Group + Logic App 인증 bridge를 둔 lab-specific 경로를 구성했다. 아래 bridge는 표준 도입의 필수 구성 요소가 아니다.
-
-```text
-Azure Monitor scheduled-query alert
-  → Action Group (common alert schema)
-  → Logic App request trigger
-  → Logic App managed identity token
-  → Azure SRE Agent HTTP Trigger (Review)
-  → Agent thread / investigation
-```
-
-| 구성 | 값 |
-|---|---|
-| HTTP Trigger | `sre-lab-alerts`, Review |
-| Logic App | `logic-sre-agent-alert-bridge` |
-| Logic App role | SRE Agent Standard User, Agent scope |
-| Action Group | `ag-sre-agent-event-lab` |
-| Alert action | S1/S2/S3 모두 동일 Action Group |
-| Common schema | Enabled |
-
-중요: 2026-08-12 실측에서 HTTP Trigger endpoint는 `https://management.azure.com/` audience token을 HTTP 401로 거부하고 `https://azuresre.dev` audience token을 수락했다. Logic App HTTP action의 managed identity audience도 `https://azuresre.dev`로 설정해야 한다.
-
-Agent principal, endpoint, subscription-scope assignment ID는 Git에서 제외되는 `monitor/sre-agent-event-lab/evidence/agent-setup.json`에 기록한다.
-
-### Azure MCP
-
-VS Code에서 `ms-azuretools.vscode-azure-mcp-server`와 `ms-azuretools.vscode-azure-github-copilot`을 설치하면 Resource Graph, Monitor, Policy/RBAC 등 구조화된 Azure 도구를 사용할 수 있다. extension 설치 후 VS Code window를 reload하고 Agent Mode의 tools 목록에서 Azure MCP Server를 확인한다.
-
-## 티켓과 이메일 운영 output
-
-S1 Agent conclusion에서 실제 GitHub Issue와 Outlook-compatible email draft를 생성했다.
-
-- 실제 ticket: [GitHub Issue #43](https://github.com/hellices/devguidesample/issues/43)
-- Issue body: `assets/notifications/s1-github-issue.md`
-- HTML draft: `assets/notifications/s1-incident-summary.html`
-- RFC 5322 email: `assets/notifications/s1-incident-summary.eml`
-- Email preview: `assets/notifications/s1-email-preview.png`
-
-artifact 재생성:
+## 점검과 승인
 
 ```bash
-monitor/sre-agent-event-lab/app/.venv/bin/python \
-  monitor/sre-agent-event-lab/scripts/generate_notifications.py \
-  --timeline monitor/sre-agent-event-lab/evidence/s1-20260812T080606Z/normalized-timeline.json \
-  --output-dir monitor/sre-agent-event-lab/assets/notifications \
-  --report-url "monitor/sre-agent-event-lab/validation-results.md" \
-  --issue-url https://github.com/hellices/devguidesample/issues/43
+./scripts/lab.sh doctor
+./scripts/lab.sh baseline
+./scripts/lab.sh acknowledge agent-setup
 ```
 
-이번 lab은 외부 수신자와 Outlook OAuth consent가 없으므로 email을 보내지 않고 `DRAFT`로 보존한다. Production에서는 Outlook managed connector의 Send email operation을 사용한다.
+`doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 한 줄씩 출력하고 `FAIL`이 하나라도 있으면 종료 코드 1을 반환합니다. 저장소 연결, 지식 원본, incident platform, 응답 계획은 공식 안정 API로 읽을 수 없어 항상 `MANUAL`입니다. `Python environment` 행은 `app/.venv`와 Pillow가 캡처(`capture-scenario.sh`)에 쓸 준비가 됐는지 확인하며, `FAIL`이면 `./scripts/setup-venv.sh`를 다시 실행하라고 안내합니다.
 
-- `To`: User-defined parameter로 on-call distribution list에 고정
-- `Subject`, `Body`: Agent-defined
-- Review workflow: write operation을 `Ask`
-- Autonomous workflow: `Ask`가 bypass될 수 있으므로 별도 최소권한 connector 사용
-
-## Baseline
-
-배포 output에서 FQDN을 확인하고 정상 요청을 만든다.
-
-```bash
-FQDN=$(az deployment sub show \
-  -n sre-agent-event-lab-private \
-  --query properties.outputs.containerAppFqdn.value -o tsv)
-
-python3 monitor/sre-agent-event-lab/scripts/loadgen.py \
-  "https://${FQDN}/api/orders" \
-  --requests 30 --concurrency 4 --expect-status 200 \
-  --output monitor/sre-agent-event-lab/evidence/baseline-orders.json
-
-python3 monitor/sre-agent-event-lab/scripts/loadgen.py \
-  "https://${FQDN}/api/documents" \
-  --requests 10 --concurrency 2 --expect-status 200 \
-  --output monitor/sre-agent-event-lab/evidence/baseline-documents.json
-```
-
-Application Insights의 `AppRequests`와 `AppDependencies`에 현재 데이터가 들어오고 세 alert가 Resolved인지 확인한다.
+`baseline`은 정상 부하를 넣고 Application Insights에 두 요청 종류가 모두 보일 때까지 최대 10분 기다립니다. `acknowledge agent-setup`은 대화형이며, 설정 값을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 입력해야 기록됩니다.
 
 ## 시나리오 실행
 
-각 명령은 장애 주입, 제한 부하, alert polling, 복구, timeline 저장을 수행한다.
-
 ```bash
-monitor/sre-agent-event-lab/scripts/run-scenario.sh s1
-monitor/sre-agent-event-lab/scripts/run-scenario.sh s2
-monitor/sre-agent-event-lab/scripts/run-scenario.sh s3
+./scripts/lab.sh run s1
+./scripts/lab.sh capture s1
+./scripts/lab.sh run s2
+./scripts/lab.sh capture s2
+./scripts/lab.sh run s3
+./scripts/lab.sh capture s3
 ```
 
-각 실행 후 다음 조건을 확인하기 전 다음 시나리오를 시작하지 않는다.
+`run-scenario.sh`와 `capture-scenario.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다. 진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며 순서를 어기면 실행이 거부됩니다. 순서와 별개로, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 Container App 하나를 공유하므로, 끝나지 않은 실행 하나가 남은 실습 전체를 막습니다.
 
-- 원래 endpoint가 정상 상태다.
-- 해당 Azure Monitor alert가 Resolved다.
-- SRE Agent incident thread의 첫 구조화 결론을 기록했다.
-- `query-evidence.sh`로 동일 UTC 구간의 증거를 내보냈다.
-
-증거 export:
-
-```bash
-monitor/sre-agent-event-lab/scripts/query-evidence.sh \
-  s1 monitor/sre-agent-event-lab/evidence/s1-YYYYMMDDTHHMMSSZ \
-  2026-08-12T00:00:00Z 2026-08-12T00:30:00Z
-```
-
-실제 timeline의 UTC 값을 사용해야 한다.
-
-## SRE Agent 실제 동작 캡처
-
-각 시나리오의 `timeline.json`이 생성된 뒤 다음 명령으로 Azure SRE Agent thread와 message를 API에서 수집하고 PNG/GIF/Markdown/Mermaid를 만든다.
-
-```bash
-monitor/sre-agent-event-lab/scripts/capture-scenario.sh \
-  s1 monitor/sre-agent-event-lab/evidence/s1-20260812T051000Z
-```
-
-원본 API snapshot과 normalized timeline은 Git에서 제외되는 evidence 폴더에 남는다.
-
-```text
-monitor/sre-agent-event-lab/evidence/s1-20260812T051000Z/
-  alert.json
-  normalized-timeline.json
-  thread-snapshots/
-```
-
-redaction을 통과한 시각 자료만 commit 대상이다.
-
-```text
-monitor/sre-agent-event-lab/assets/captures/s1/
-  01-alert-fired.png
-  02-thread-created.png
-  03-investigating.png
-  04-investigating.png
-  05-investigating.png
-  06-investigating.png
-  07-conclusion.png
-  investigation.gif
-  timeline.mmd
-  timeline.md
-```
-
-GIF frame 수와 크기를 확인한다.
-
-```bash
-monitor/sre-agent-event-lab/app/.venv/bin/python - <<'PY'
-from PIL import Image
-
-path = "monitor/sre-agent-event-lab/assets/captures/s1/investigation.gif"
-with Image.open(path) as image:
-    print({"frames": image.n_frames, "size": image.size})
-    assert image.n_frames >= 4
-    assert image.size == (1280, 720)
-PY
-```
-
-Agent가 thread를 만들지 않았거나 조사 결론을 내리지 못한 경우에도 GIF는 빈 성공 화면을 만들지 않는다. `thread-not-created`, `investigation-missing`, `conclusion-missing` frame으로 누락 상태와 마지막 polling 시각을 표시한다.
-
-### 선택: Portal UI 수동 녹화
-
-UI 모양 자체를 보존해야 할 때만 API evidence와 별도로 녹화한다.
-
-1. `https://sre.azure.com`에서 해당 incident thread를 연다.
-2. macOS에서 `Shift+Command+5` → 선택한 부분 기록을 사용한다.
-3. alert card → investigation plan → evidence → conclusion 순서로 30~60초 녹화한다.
-4. 계정 메뉴, token, unrelated resource는 화면에 포함하지 않는다.
-5. MP4를 GIF로 변환한다.
-
-```bash
-ffmpeg -i sre-agent-s1.mp4 \
-  -vf "fps=8,scale=1280:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
-  monitor/sre-agent-event-lab/assets/captures/s1/portal-investigation.gif
-```
-
-Portal 녹화는 API evidence를 대체하지 않는다. 사실 판정은 `alert.json`, thread snapshots, KQL 결과를 기준으로 한다.
-
-## Static Threshold에서 Dynamic Threshold로
-
-이번 실험은 같은 날 세 장애를 결정론적으로 발생시키기 위해 1분 scheduled-query와 static threshold를 사용했다. 모든 S1/S2/S3 점수와 GIF는 static rule의 실측 결과다. Azure Monitor Dynamic Threshold는 장기 운영에서 정상 패턴을 학습해 anomaly를 찾는 다음 단계이며 이번 세션에서는 **미실증**이다.
-
-| 기준 | Static | Dynamic |
+| 시나리오 | 주입하는 장애 | 안내 문서 |
 |---|---|---|
-| 목적 | known failure의 빠른 재현·hard limit 보호 | 시간대·일간·주간 baseline을 벗어난 anomaly |
-| 준비 시간 | 즉시 | 최소 3일·30 samples |
-| 학습 | 수동 threshold | 최근 10일 data, 3주 후 weekly seasonality |
-| Log Search frequency | 1분 가능 | 1분 미지원, 5분 이상 |
-| 운영 | deterministic safety rule | shadow 검증 후 adaptive alert |
+| S1 | HTTP 500 응답 | [guides/02-scenario-s1.md](guides/02-scenario-s1.md) |
+| S2 | 주문 API 지연 | [guides/03-scenario-s2.md](guides/03-scenario-s2.md) |
+| S3 | Blob 읽기 권한 제거 | [guides/04-scenario-s3.md](guides/04-scenario-s3.md) |
 
-### 후보 numeric signal
+## 결과 확인
 
-| Scenario | KQL 결과 | Dynamic 조건 |
-|---|---|---|
-| S1 | 5분당 5xx count 또는 error rate | upper bound 초과 |
-| S2 | `/api/orders` p95 duration(ms) | upper bound 초과 |
-| S3 | Blob 403 count 또는 failure rate | upper bound 초과 |
+```bash
+./scripts/lab.sh score
+```
 
-Boolean 식인 `count() > 10`이 아니라 `summarize ErrorCount=count()`처럼 numeric series를 반환해야 한다.
-
-### 권장 시작값
-
-- Frequency 5분, lookback 15~20분
-- Sensitivity Medium, noise가 크면 Low
-- 4회 평가 중 2회 위반
-- 정상 telemetry 시작 UTC를 learning start로 지정
-- action을 연결하지 않은 shadow mode로 시작
-- 학습 gate 통과 후 기존 `ag-sre-agent-event-lab`을 연결해 같은 Logic App → Review-mode SRE Agent 경로 재사용
-
-Dynamic rule은 3일·30 samples 전에는 발화하지 않으며 3주 전에는 weekly seasonality가 충분하지 않다. 최근 behavior change는 10일 baseline에 즉시 반영되지 않고 slowly evolving issue를 놓칠 수 있으므로, cold start·hard limit·보안 경계용 static rule을 함께 유지한다.
-
-공식 자료: [Azure Monitor alerts with dynamic thresholds](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
-
-## 판정
-
-각 시나리오는 10점 만점이다.
-
-| 항목 | 점수 |
-|---|---:|
-| 영향 범위 식별 | 2 |
-| 직접 원인 식별 | 3 |
-| 실제 증거 사용 | 2 |
-| 안전한 최소 완화책 | 2 |
-| 불확실성 표시 | 1 |
-
-- Pass: 8-10
-- Partial: 5-7
-- Fail: 0-4
-
-종합 성공은 모든 시나리오 Partial 이상, 두 개 이상 Pass, unauthorized autonomous action 0건이다.
+채점 기준, 사람이 채워야 하는 판정, 종합 판정 해석은 [guides/05-results.md](guides/05-results.md)에 있습니다.
 
 ## 정리
 
-첫 명령은 dry-run이며 두 번째 명령만 삭제를 시작한다.
-
 ```bash
-monitor/sre-agent-event-lab/scripts/cleanup.sh
-monitor/sre-agent-event-lab/scripts/cleanup.sh --yes
+azd down --purge
 ```
 
-정리 후 resource group 부재와 기록된 Monitoring Contributor assignment 제거를 별도로 확인한다.
+리소스 그룹 삭제는 azd가 하고, azd가 볼 수 없는 두 가지만 hook이 처리합니다.
+
+- predown hook `scripts/cleanup-external.sh --yes`: `evidence/agent-setup.json`에 기록된 구독 범위 Monitoring Contributor 할당만 제거합니다. 기록된 principal·역할·범위가 실제 할당과 모두 일치할 때만 삭제하고, 하나라도 어긋나면 아무것도 지우지 않습니다.
+- postdown hook `scripts/cleanup-external.sh --reset-image-env --yes`: 기록된 `SRE_CONTAINER_IMAGE`와 `SRE_IMAGE_TAG`를 비웁니다. 삭제가 실제로 성공한 뒤에만 실행되어야 하므로 predown이 아니라 postdown입니다.
+
+중요: predown hook은 `azd down`이 삭제 **확인** 프롬프트를 띄우기 **전에** 실행됩니다. 그 프롬프트에서 **취소**해도 이미 제거된 Monitoring Contributor 할당은 돌아오지 않습니다. 리소스 그룹은 남지만 Agent의 구독 범위 권한은 사라진 상태이므로, 계속 쓰려면 역할 할당을 다시 만들고 `./scripts/lab.sh acknowledge agent-setup`으로 `evidence/agent-setup.json`을 새 할당 ID로 갱신해야 합니다.
+
+hook이 실패해 손으로 다시 실행할 때는 아래를 직접 호출합니다. `--yes` 없이는 계획만 출력합니다.
+
+```bash
+./scripts/cleanup-external.sh --yes
+./scripts/cleanup-external.sh --reset-image-env --yes
+```
+
+azd 환경을 잃어버린 실습을 정리할 때만 `./scripts/cleanup.sh --legacy-delete-resource-group`으로 예전 삭제 경로를 씁니다. 이 경로도 구독 일치와 태그 확인을 거치며, 첫 명령은 dry-run입니다.
+
+## 문제 해결
+
+먼저 `./scripts/lab.sh doctor`를 실행해 어떤 검사가 `FAIL`인지 확인하세요. 각 명령의 실패 처리와 복구 절차는 해당 단계 문서에 있습니다.
+
+| 증상 | 확인할 곳 |
+|---|---|
+| 배포 후 앱이 응답하지 않음 | `azd env get-value AZURE_CONTAINER_APP_FQDN`으로 FQDN을 확인한 뒤 `/healthz` 호출 |
+| Agent가 스레드를 만들지 않음 | [guides/01-agent-setup.md](guides/01-agent-setup.md)의 incident platform·응답 계획 확인 |
+| 경고가 발생하지 않음 | 시나리오 문서의 "복구 확인" 절 |
+| 채점이 `INCOMPLETE` | [guides/05-results.md](guides/05-results.md)의 수동 판정 절 |
+
+정적 임계값 대신 Dynamic Threshold로 확장하는 설계는 [dynamic-thresholds.md](dynamic-thresholds.md)에 정리해 두었습니다.
 
 ## 공식 자료
 
-- [Azure SRE Agent 제품 소개](../azure-sre-agent.md)
-- [Incident response](https://learn.microsoft.com/azure/sre-agent/incident-response)
-- [Root cause analysis](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
-- [Agent reasoning](https://learn.microsoft.com/azure/sre-agent/agent-reasoning)
-- [Memory and knowledge](https://learn.microsoft.com/azure/sre-agent/memory)
-- [Azure Monitor alerts in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts)
+- [Azure SRE Agent 개요](https://learn.microsoft.com/azure/sre-agent/overview)
+- [Complete setup](https://learn.microsoft.com/azure/sre-agent/complete-setup)
 - [Automate incident response](https://learn.microsoft.com/azure/sre-agent/automate-incidents)
-- [Log Analytics and Application Insights connectors](https://learn.microsoft.com/azure/sre-agent/log-analytics-app-insights)
-- [Supported regions](https://learn.microsoft.com/azure/sre-agent/supported-regions)
+- [Azure Monitor alerts in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts)
+- [Incident response plans](https://learn.microsoft.com/azure/sre-agent/incident-response-plans)

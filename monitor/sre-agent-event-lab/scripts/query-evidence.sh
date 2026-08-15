@@ -14,7 +14,7 @@ readonly EVIDENCE_DIR="$2"
 readonly START_UTC="$3"
 readonly END_UTC="$4"
 
-require_commands
+require_lab_config
 verify_subscription
 verify_lab_resource_group
 mkdir -p "${EVIDENCE_DIR}"

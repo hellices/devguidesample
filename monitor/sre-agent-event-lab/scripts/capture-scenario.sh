@@ -4,21 +4,35 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 
-if [[ "$#" -ne 2 ]] || [[ ! "$1" =~ ^s[123]$ ]]; then
-  echo "Usage: $0 s1|s2|s3 EVIDENCE_DIR" >&2
+if [[ "$#" -ne 1 ]] || [[ ! "$1" =~ ^s[123]$ ]]; then
+  echo "Usage: $0 s1|s2|s3" >&2
   exit 2
 fi
 
 readonly SCENARIO="$1"
-readonly EVIDENCE_DIR="$2"
-readonly TIMELINE_FILE="${EVIDENCE_DIR}/timeline.json"
-readonly NORMALIZED_FILE="${EVIDENCE_DIR}/normalized-timeline.json"
 readonly ASSET_DIR="${LAB_ROOT}/assets/captures/${SCENARIO}"
 readonly PYTHON="${LAB_ROOT}/app/.venv/bin/python"
 
-require_commands
+require_lab_config
 verify_subscription
 verify_lab_resource_group
+
+# The public command is `lab.sh capture s1`, with no timestamped path: the
+# directory this scenario's run recorded in `evidence/state.json` is the
+# only one whose timeline belongs to the alert being captured. No override
+# is accepted -- capturing an arbitrary directory would record its outcome
+# as this environment's current capture status and could unblock the next
+# scenario on evidence from another run. Re-rendering an archived run is a
+# read-only job for the lower-level tools instead, which touch no state:
+#
+#   app/.venv/bin/python scripts/capture_agent.py --output-dir <dir> ...
+#   app/.venv/bin/python scripts/render_capture.py <dir>/normalized-timeline.json <assets> --scenario s1
+if ! EVIDENCE_DIR="$(lab_state evidence-dir "${SCENARIO}")"; then
+  exit 1
+fi
+readonly EVIDENCE_DIR
+readonly TIMELINE_FILE="${EVIDENCE_DIR}/timeline.json"
+readonly NORMALIZED_FILE="${EVIDENCE_DIR}/normalized-timeline.json"
 
 if [[ ! -f "${AGENT_SETUP_FILE}" ]]; then
   echo "Missing Agent setup evidence: ${AGENT_SETUP_FILE}" >&2
@@ -30,6 +44,12 @@ if [[ ! -f "${TIMELINE_FILE}" ]]; then
 fi
 if [[ ! -x "${PYTHON}" ]]; then
   echo "Missing Python environment: ${PYTHON}" >&2
+  echo "Cloud resources are already deployed; only this local step needs to be retried. Re-run: ./scripts/setup-venv.sh" >&2
+  exit 1
+fi
+if ! "${PYTHON}" -c "import PIL" >/dev/null 2>&1; then
+  echo "Python environment at ${PYTHON} is missing Pillow (PIL), which render_capture.py needs." >&2
+  echo "Cloud resources are already deployed; only this local step needs to be retried. Re-run: ./scripts/setup-venv.sh" >&2
   exit 1
 fi
 
@@ -56,6 +76,24 @@ if [[ "${capture_status}" -ne 0 && "${capture_status}" -ne 3 ]]; then
   exit "${capture_status}"
 fi
 
+# Recorded before any further check can abort the script: the terminal
+# state of the normalized timeline is the honest outcome of this capture,
+# including `thread-not-created`, `investigation-missing` and
+# `conclusion-missing`. Only a real `conclusion` counts as a successful
+# capture and unblocks the next scenario -- and `lab_state.py` refuses even
+# that when the run it belongs to did not recover, because a conclusion
+# collected against an unresolved incident is indistinguishable from a real
+# one once it is on disk. That refusal must not look like a crash: the
+# capture pipeline has already written real files, and they stay.
+if ! CAPTURE_STATE="$(lab_state record-capture "${SCENARIO}" \
+  --timeline "${NORMALIZED_FILE}" \
+  --evidence-dir "${EVIDENCE_DIR}")"; then
+  echo "The capture was collected but not recorded." >&2
+  echo "Raw evidence is on disk and unchanged: ${EVIDENCE_DIR}" >&2
+  exit 1
+fi
+readonly CAPTURE_STATE
+
 event_count="$(jq 'length' "${NORMALIZED_FILE}")"
 if (( event_count < 4 )); then
   echo "Capture has fewer than four explicit states: ${event_count}" >&2
@@ -74,6 +112,11 @@ find "${ASSET_DIR}" -maxdepth 1 -type f \
 
 echo "Raw evidence: ${EVIDENCE_DIR}"
 echo "Rendered capture: ${ASSET_DIR}/investigation.gif"
+echo "Capture status: ${CAPTURE_STATE}"
+if [[ "${CAPTURE_STATE}" != "conclusion" ]]; then
+  echo "The Agent produced no conclusion for ${SCENARIO} (${CAPTURE_STATE})."
+  echo "Recorded as-is; the next scenario stays blocked until a capture ends in a conclusion."
+fi
 if [[ "${capture_status}" -eq 3 ]]; then
   echo "Capture ended at the deadline; missing states are explicit in the output."
 fi

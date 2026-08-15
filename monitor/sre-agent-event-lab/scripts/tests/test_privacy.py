@@ -81,3 +81,84 @@ def test_relocated_lab_docs_drop_internal_workflow_directives():
         ).read_text()
         for marker in ("승인된 설계", "보고서 반영", "검증 부록"):
             assert marker not in content, (name, marker)
+
+
+LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
+VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
+UUID_PATTERN = re.compile(
+    r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b"
+)
+
+
+def extract_subscription_id(header_text):
+    """Return the first GUID-shaped token, or None when the text is redacted."""
+    found = UUID_PATTERN.findall(header_text)
+    return found[0] if found else None
+
+
+def recorded_subscription_id():
+    """Return the historical subscription ID when it is still recorded."""
+    header = VALIDATION_RESULTS.read_text().split("\n## ", 1)[0]
+    return extract_subscription_id(header)
+
+
+def test_extract_subscription_id_accepts_a_redacted_historical_doc():
+    redacted = "# Validation Results\n\nSubscription: [REDACTED]\n"
+    assert extract_subscription_id(redacted) is None
+
+    empty_header = "# Validation Results\n\nNo subscription recorded.\n"
+    assert extract_subscription_id(empty_header) is None
+
+
+def test_extract_subscription_id_finds_a_present_guid():
+    header = "# Validation Results\n\nSubscription: 11111111-2222-3333-4444-555555555555\n"
+    assert extract_subscription_id(header) == "11111111-2222-3333-4444-555555555555"
+
+
+def test_historical_validation_header_redacts_subscription_id():
+    assert recorded_subscription_id() is None
+
+
+def test_no_test_source_restates_the_real_subscription_id():
+    """A test that proves a file does not leak the subscription by writing
+    the subscription into the test is self-defeating: the value is in the
+    repository either way, and every copy is one more place to miss when it
+    has to change. The guards state the *shape* they forbid instead, and
+    the fixtures use obvious dummies.
+    """
+    subscription_id = recorded_subscription_id()
+    if subscription_id is None:
+        return
+
+    test_sources = sorted(
+        [
+            *(LAB_ROOT / "scripts" / "tests").glob("*.py"),
+            *(LAB_ROOT / "infra" / "tests").glob("*.py"),
+            *(LAB_ROOT / "app" / "tests").glob("*.py"),
+        ]
+    )
+    assert test_sources
+
+    offenders = [
+        str(path.relative_to(LAB_ROOT))
+        for path in test_sources
+        if subscription_id in path.read_text()
+    ]
+
+    assert offenders == [], (
+        "test sources still hardcode the real validation subscription ID; "
+        f"forbid the UUID shape instead: {offenders}"
+    )
+
+
+def test_test_fixtures_never_reuse_the_real_subscription_id():
+    """Fixture IDs must be GUID-shaped and never match a recorded live ID."""
+    subscription_id = recorded_subscription_id()
+    from lab_script_harness import SUBSCRIPTION_ID as harness_subscription_id
+    from test_common import REQUIRED_ENV
+
+    dummies = (harness_subscription_id, REQUIRED_ENV["AZURE_SUBSCRIPTION_ID"])
+    for dummy in dummies:
+        assert UUID_PATTERN.fullmatch(dummy), dummy
+        if subscription_id is not None:
+            assert dummy != subscription_id

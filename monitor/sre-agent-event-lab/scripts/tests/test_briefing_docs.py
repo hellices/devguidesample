@@ -29,6 +29,17 @@ OFFICIAL_PNGS = {
 OFFICIAL_ASSETS = OFFICIAL_SVGS | OFFICIAL_PNGS
 OFFICIAL_ASSET_PREFIX = "sre-agent-event-lab/assets/official/"
 
+# Screenshots the ordered walkthrough under `guides/` renders. They share the
+# `assets/official/` directory because they come from the same Learn articles,
+# but they are not part of the briefing's selected set: `guides/` owns them and
+# `scripts/tests/test_lab_guides.py` checks their captions and alt text.
+GUIDE_SCREENSHOT_PNGS = {
+    "portal-setup-status-bar.png",
+    "portal-complete-setup-page.png",
+    "portal-incident-response-plans-list.png",
+    "portal-response-plan-autonomy-step.png",
+}
+
 
 def windows_after(text: str, anchor: str, size: int = 500) -> list:
     """Return a text window following each occurrence of `anchor`.
@@ -681,7 +692,12 @@ def test_official_asset_set_has_16_selected_files():
     )
 
     assert len(OFFICIAL_ASSETS) == 16
-    assert {path.name for path in asset_dir.glob("*")} == OFFICIAL_ASSETS
+    # The directory also stores the guide screenshots; nothing else may
+    # accumulate here, and the two sets stay disjoint.
+    assert OFFICIAL_ASSETS & GUIDE_SCREENSHOT_PNGS == set()
+    assert {path.name for path in asset_dir.glob("*")} == (
+        OFFICIAL_ASSETS | GUIDE_SCREENSHOT_PNGS
+    )
 
 
 def test_official_sre_agent_svgs_are_stored_locally():
@@ -709,8 +725,10 @@ def test_official_sre_agent_pngs_are_stored_locally():
         / "official"
     )
 
-    assert {path.name for path in asset_dir.glob("*.png")} == OFFICIAL_PNGS
-    for name in OFFICIAL_PNGS:
+    assert {path.name for path in asset_dir.glob("*.png")} == (
+        OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS
+    )
+    for name in OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS:
         header = (asset_dir / name).read_bytes()[:8]
         assert header == b"\x89PNG\r\n\x1a\n", name
 

@@ -3,8 +3,10 @@
 > 제품 개요와 실사용 패턴은 [Azure SRE Agent 소개 자료](../azure-sre-agent.md)를 먼저 참고한다.
 >
 > 이 문서는 S1/S2/S3 시나리오에서 측정한 수치, timeline, evidence, 한계를 정리한다.
+>
+> **기록 시점 주의.** 아래 결과는 azd 재구성 이전에 손으로 구축한 실습(2026-08-12)의 측정치다. 여기 적힌 `rg-sre-agent-event-lab-krc` 같은 리소스 그룹과 리소스 이름, Action Group + Logic App bridge는 모두 그때의 환경이고, 현재 실습의 `azd up`은 이 이름들을 만들지 않는다. 지금 실행하는 절차와 실제로 배포되는 구성은 [README](README.md)와 [guides/](guides/)를 따르고, 이 문서는 그 절차로 무엇을 관찰할 수 있었는지 보여 주는 과거 기록으로 읽는다.
 
-- 실행일: 2026-08-12 | 리전: Korea Central | 구독: `95933ae5-0201-4a21-a1fc-8051a7437982`
+- 실행일: 2026-08-12 | 리전: Korea Central | 구독: 비식별화
 - 목표: Azure Monitor 경고를 Azure SRE Agent가 자동 수신해 원인과 안전한 완화책을 올바르게 도출하는지 실증
 - 테스트베드: Azure Container Apps + Application Insights + Log Analytics + Azure Storage
 - Agent 모드: Review
@@ -244,6 +246,8 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 제품의 표준 Azure Monitor 경로는 incident platform과 response plan을 통해 Agent로 직접 전달된다. 이번 실증에서는 response plan 공개 API 자동 구성 제약 때문에 Action Group → Logic App managed identity → SRE Agent HTTP Trigger라는 lab-specific bridge를 사용했다. 이 bridge는 세 시나리오에서 자동 thread를 만들었지만 표준 Azure Monitor 도입의 필수 구성은 아니다.
 
+레거시 기록(현재 기본 실습에는 적용되지 않음, bridge를 다시 구성해야 할 때만 참고): 2026-08-12 실측에서 HTTP Trigger endpoint는 `https://management.azure.com/` audience token을 HTTP 401로 거부하고 `https://azuresre.dev` audience token을 수락했다. 당시 Logic App HTTP action의 managed identity audience를 `https://azuresre.dev`로 설정해서만 이 bridge가 동작했다.
+
 ### RCA 정확도
 
 - S1은 revision env, 120개 request trace, Activity Log를 결합해 injected HTTP 500을 정확히 진단했다.
@@ -262,6 +266,8 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 ### Static에서 Dynamic으로 — 운영 확장 (미실증)
 
 이번 S1/S2/S3 실측은 1분 evaluation의 static threshold를 사용했다. 목적은 known failure를 같은 날 반드시 alert로 만들고 SRE Agent의 분석 품질을 비교하는 것이었다. 따라서 아래 Dynamic Threshold 설계는 운영 권고이며 현재 점수에 포함하지 않는다.
+
+> **1분 evaluation 기록에 대한 주석 (2026-08-14 추가).** 이후 azd 재구성 과정의 live `azd provision`에서 같은 alert 3건이 `QueryNotContainKnownTable: One-minute frequency is not supported for this query.`로 거부된 적이 있다. 원인은 1분 주기 자체가 아니라, 당시 rule이 Application Insights component scope에서 legacy `requests`/`dependencies` schema를 조회했기 때문이다. legacy 이름은 workspace에서 table이 아니라 다른 table을 호출하는 function이고, [공식 문서](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule#configure-alert-rule-conditions)는 그런 query를 1분 주기 미지원 사례로 명시한다. 현재 `infra/alerts.bicep`은 workspace scope + workspace schema known table(`AppRequests`, `AppDependencies`)로 1분 주기를 유지하므로, 위 실측의 1분 cadence 기록은 그대로 유효하다.
 
 | Scenario | Static 실증 signal | Dynamic 후보 numeric signal |
 |---|---|---|
