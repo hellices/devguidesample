@@ -15,34 +15,29 @@
 
 이 절의 명령을 순서대로 실행하면 스크립트 없이 시나리오 하나를 끝까지 진행할 수 있습니다. 무엇이 Azure에 적용되는지 명령 그대로 보이는 것이 목적입니다. 각 블록은 앞 단계가 성공했는지 플래그로 확인하고 진행합니다.
 
-먼저 이번 실행에서 계속 쓸 값을 셸 변수로 읽습니다. 아래 블록부터 마지막 `record-capture`까지는 같은 셸에서 실행합니다.
+Codespaces에서 이 저장소를 열었다면 `az login`을 마친 뒤 아래 한 줄로 이번 실습에 필요한 값이 모두 셸에 준비됩니다. 여기서부터 마지막 `record-capture`까지는 같은 셸에서 실행합니다.
 
 ```bash
 cd monitor/sre-agent-event-lab
-LAB_READY=1
+source ./scripts/lab-env.sh
+```
 
-RESOURCE_GROUP="$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null)" || LAB_READY=0
-SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID 2>/dev/null)" || LAB_READY=0
-APP_NAME="$(azd env get-value AZURE_CONTAINER_APP_NAME 2>/dev/null)" || LAB_READY=0
-APP_FQDN="$(azd env get-value AZURE_CONTAINER_APP_FQDN 2>/dev/null)" || LAB_READY=0
+`lab-env.sh`는 `azd`가 게시한 배포 출력만 읽어 `RESOURCE_GROUP`, `SUBSCRIPTION_ID`, `APP_NAME`, `APP_FQDN`, `WORKLOAD_PRINCIPAL_ID`, `STORAGE_CONTAINER_SCOPE`, `BLOB_ROLE_ASSIGNMENT_NAME`을 export하고, 하나라도 읽지 못하면 `LAB_READY=0`으로 알려 줍니다. 비밀 값은 읽지도 출력하지도 않습니다.
 
+이번 시나리오에서만 쓰는 값을 정하고 시도를 기록합니다.
+
+```bash
 ALERT_RULE_NAME="alert-sre-lab-s1-http500"
 EVIDENCE_DIR="${PWD}/evidence/s1-$(date -u +%Y%m%dT%H%M%SZ)"
-
-for value in "${RESOURCE_GROUP}" "${SUBSCRIPTION_ID}" "${APP_NAME}" "${APP_FQDN}"; do
-  [[ -n "${value// /}" ]] || LAB_READY=0
-done
 
 if (( LAB_READY )); then
   mkdir -p "${EVIDENCE_DIR}"
   python3 scripts/lab_state.py begin-run s1 "${EVIDENCE_DIR}" || LAB_READY=0
-else
-  echo "azd 환경 값을 읽지 못했습니다. 먼저 azd provision을 실행하세요." >&2
 fi
 (( LAB_READY )) || echo "준비되지 않았습니다. 아래 단계는 모두 건너뜁니다." >&2
 ```
 
-`azd env get-value`는 실패해도 오류 문장을 표준 출력으로 내보내므로 위 검사가 필요합니다. `begin-run`은 이번 시도를 기록하면서 순서·중복 실행 게이트도 함께 적용하고, 거부되면 `LAB_READY`가 0이 되어 이후 단계가 모두 건너뜁니다. 근거 디렉터리를 절대 경로로 두는 이유는 채점기와 캡처 도구가 기록된 경로를 실행 위치와 무관하게 다시 열기 때문입니다.
+`begin-run`은 이번 시도를 기록하면서 순서·중복 실행 게이트도 함께 적용하고, 거부되면 `LAB_READY`가 0이 되어 이후 단계가 모두 건너뜁니다. 근거 디렉터리를 절대 경로로 두는 이유는 채점기와 캡처 도구가 기록된 경로를 실행 위치와 무관하게 다시 열기 때문입니다.
 
 ### 1. 장애 주입
 
@@ -58,6 +53,7 @@ if (( LAB_READY )); then
     --query properties.latestRevisionName -o tsv)"
 
   az containerapp update \
+    --subscription "${SUBSCRIPTION_ID}" \
     --resource-group "${RESOURCE_GROUP}" \
     --name "${APP_NAME}" \
     --set-env-vars FAILURE_MODE=http500 \
@@ -150,6 +146,7 @@ RECOVERY_OLD_REVISION="$(az containerapp show \
   --query properties.latestRevisionName -o tsv)"
 
 az containerapp update \
+  --subscription "${SUBSCRIPTION_ID}" \
   --resource-group "${RESOURCE_GROUP}" \
   --name "${APP_NAME}" \
   --set-env-vars FAILURE_MODE=none \

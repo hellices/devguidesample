@@ -4,6 +4,7 @@
 
 ## 시작 조건
 
+- **이 저장소를 본인 계정으로 fork했습니다.** Agent에 연결하는 저장소는 fork여야 합니다. 아래 "연결할 원본"에서 설명하듯 조사 결과 이슈가 연결된 저장소에 생성되므로, 원본 저장소를 연결하면 참가자 전원의 이슈가 한곳에 쌓입니다.
 - [README](../README.md)의 `azd up`이 성공했고 `/healthz`가 HTTP 200을 반환합니다.
 - `https://sre.azure.com`에 로그인할 수 있고, 대상 구독에 Azure SRE Agent가 **Running** 상태로 하나 있습니다.
 - 역할을 만들 수 있는 권한(Owner 또는 User Access Administrator)이 있습니다.
@@ -11,9 +12,10 @@
 
 ```bash
 cd monitor/sre-agent-event-lab
-azd env get-value AZURE_SUBSCRIPTION_ID
-azd env get-value AZURE_RESOURCE_GROUP
+source ./scripts/lab-env.sh
 ```
+
+`lab-env.sh`는 구독 ID, 리소스 그룹, 그리고 `origin` 원격에서 유추한 저장소 URL을 출력합니다. fork를 열었는지까지 확인하지는 않으므로, `Repository` 줄이 **본인 계정의 저장소**인지 직접 확인하세요. 원본 저장소가 찍혀 있다면 fork를 clone해 다시 시작합니다.
 
 ## 설정 페이지 열기
 
@@ -33,12 +35,14 @@ Agent를 열면 위쪽 상태 표시줄이 아직 연결하지 않은 데이터 
 
 | 원본 | 이 실습에서 넣는 값 | 왜 필요한가 |
 |---|---|---|
-| Code | 이 저장소(`hellices/devguidesample`)와 브랜치 | 조사 결론이 코드와 최근 변경을 짚게 합니다 |
-| Azure resources | `azd env get-value AZURE_RESOURCE_GROUP`이 출력한 리소스 그룹 | 메트릭·리소스 상태·Activity Log를 읽습니다 |
+| Code | **본인이 fork한 저장소**와 브랜치 (`source ./scripts/lab-env.sh`가 출력한 `Repository` 값) | 조사 결론이 코드와 최근 변경을 짚게 합니다 |
+| Azure resources | `lab-env.sh`가 출력한 `Resource group` 값 | 메트릭·리소스 상태·Activity Log를 읽습니다 |
 | Knowledge files | [runbooks/incident-response.md](../runbooks/incident-response.md) | 조사 순서와 금지 사항을 팀 규칙으로 강제합니다 |
 | Incidents | Azure Monitor | 경고를 자동으로 받아 조사 스레드를 엽니다 |
 
 저장소는 [Connect source code](https://learn.microsoft.com/azure/sre-agent/connect-source-code)로 연결합니다. 이슈·PR 조작까지 맡기려면 [GitHub connector](https://learn.microsoft.com/azure/sre-agent/setup-github-connector)를 추가로 설정하되, 토큰 값은 포털 입력창에만 넣고 이 저장소의 어떤 파일에도 남기지 않습니다.
+
+**연결 대상은 반드시 본인 fork여야 합니다.** GitHub connector를 붙이면 Agent가 조사 결과를 **이슈로 생성**하는데, 그 이슈는 연결된 저장소에 만들어집니다. 원본 저장소를 연결하면 본인 실습의 장애 이슈가 원본에 쌓이고, 원본에 쓰기 권한이 없으면 연결 자체가 실패합니다.
 
 ## 역할 부여
 
@@ -134,10 +138,12 @@ UAMI_MONITORING_CONTRIBUTOR_ASSIGNMENT_ID="$(az role assignment create \
 ```bash
 azd env set SRE_AGENT_NAME "<포털에 보이는 Agent 이름>"
 azd env set SRE_AGENT_RESOURCE_ID "<az resource list로 확인한 Agent 리소스 ID>"
-azd env set SRE_REPOSITORY_URL "https://github.com/<owner>/<repo>"
+azd env set SRE_REPOSITORY_URL "${SRE_REPOSITORY_URL}"
 azd env set SRE_REPOSITORY_BRANCH "main"
 azd env set SRE_KNOWLEDGE_PATH "runbooks/incident-response.md"
 ```
+
+`SRE_REPOSITORY_URL`은 `source ./scripts/lab-env.sh`가 fork의 `origin`에서 감지한 값입니다. 다른 저장소를 쓰려면 `azd env set SRE_REPOSITORY_URL "https://github.com/<본인 계정>/<저장소>"`처럼 직접 지정하되, 본인이 이슈를 만들 수 있는 저장소여야 합니다.
 
 토큰, 연결 문자열, 클라이언트 비밀은 azd 환경에도 저장하지 않습니다. 인증은 Agent의 관리 ID와 포털 OAuth 흐름이 처리합니다.
 

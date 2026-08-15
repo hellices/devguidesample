@@ -1,0 +1,35 @@
+{
+  "name": "Azure SRE Agent Event Lab",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+      "version": "latest",
+      "extensions": "log-analytics,containerapp"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": true,
+      "toolsToInstall": "uv"
+    },
+    "ghcr.io/azure/azure-dev/azd:0": {
+      "version": "latest"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-azurecontainerapps",
+        "ms-azuretools.vscode-bicep",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postCreateCommand": "cd monitor/sre-agent-event-lab && ./scripts/setup-venv.sh",
+  "postAttachCommand": {
+    "next-steps": "echo 'Next: az login --use-device-code, then cd monitor/sre-agent-event-lab && source ./scripts/lab-env.sh'"
+  },
+  "remoteUser": "vscode"
+}
