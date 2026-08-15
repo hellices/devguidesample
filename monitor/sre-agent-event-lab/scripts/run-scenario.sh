@@ -78,6 +78,7 @@ readonly ALERT_LIST_ATTEMPT_ERROR_FILE="${EVIDENCE_DIR}/.alert-list-error.tmp"
 
 RECOVERED=0
 OUTCOME_RECORDED=0
+PENDING_FAILURE_REASON=""
 ALERT_LIST_FAILURES=0
 ALERT_LIST_VALID_RESPONSES=0
 ALERT_LIST_POLLS=0
@@ -90,10 +91,12 @@ ALERT_FIRED_AT=""
 
 record_failed_run() {
   local reason="$1"
+  PENDING_FAILURE_REASON="${reason}"
   if ! lab_state mark-failed "${SCENARIO}" "${EVIDENCE_DIR}" --reason "${reason}"; then
     return 1
   fi
   OUTCOME_RECORDED=1
+  PENDING_FAILURE_REASON=""
 }
 
 wait_for_s3_fault() {
@@ -213,7 +216,7 @@ recover_on_exit() {
     echo "CRITICAL: the injected fault is still active. Revert it by hand before running any other scenario." >&2
   fi
   if [[ "${OUTCOME_RECORDED}" -eq 0 ]]; then
-    failure_reason="run aborted with status ${original_status}"
+    failure_reason="${PENDING_FAILURE_REASON:-run aborted with status ${original_status}}"
     if [[ "${recovery_status}" -ne 0 ]]; then
       failure_reason="${failure_reason}; automatic recovery failed"
     fi

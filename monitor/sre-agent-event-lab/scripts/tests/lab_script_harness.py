@@ -311,6 +311,11 @@ case "${{1:-}}" in
     if [[ "$*" == *" mark-failed "* && -f "${{state}}/mark_failed_fails" ]]; then
       exit 3
     fi
+    if [[ "$*" == *" mark-failed "* && -f "${{state}}/mark_failed_failures" ]] \
+      && (( $(cat "${{state}}/mark_failed_failures") > 0 )); then
+      printf '%s\n' "$(( $(cat "${{state}}/mark_failed_failures") - 1 ))" > "${{state}}/mark_failed_failures"
+      exit 3
+    fi
     exec "{REAL_PYTHON}" "$@"
     ;;
   *capture_agent.py)
@@ -410,6 +415,7 @@ def make_lab(
     alert_failure_after_success=False,
     render_fails=False,
     alert_list_empty_body=False,
+    mark_failed_failures=0,
 ):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
     lab = tmp_path / "lab"
@@ -449,6 +455,8 @@ def make_lab(
         (state_dir / "s3_probe_failures").write_text(f"{s3_probe_failures}\n")
     if mark_failed_fails:
         (state_dir / "mark_failed_fails").write_text("1\n")
+    if mark_failed_failures:
+        (state_dir / "mark_failed_failures").write_text(f"{mark_failed_failures}\n")
     if alert_failure_after_success:
         (state_dir / "alert_failure_after_success").write_text("1\n")
     if render_fails:

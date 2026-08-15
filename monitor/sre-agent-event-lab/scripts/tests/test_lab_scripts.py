@@ -384,6 +384,23 @@ def test_run_scenario_preserves_reason_when_failure_state_write_fails(tmp_path):
     assert "CRITICAL: could not record" in result.stderr
 
 
+def test_run_scenario_retries_the_original_failure_reason_from_the_exit_trap(tmp_path):
+    lab_run = make_lab(
+        tmp_path,
+        alert_fires=False,
+        mark_failed_failures=1,
+    )
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    scenario = lab_run.scenario_state("s1")
+    assert scenario["run_status"] == "failed"
+    assert "did not fire" in scenario["failure_reason"]
+    assert "run aborted" not in scenario["failure_reason"]
+
+
 def test_run_scenario_s1_reports_a_rejected_recovery_update_as_critical(tmp_path):
     """`recover` runs both directly and from the EXIT trap, and the trap
     calls it as `if ! recover`, which turns `set -e` off for the whole
