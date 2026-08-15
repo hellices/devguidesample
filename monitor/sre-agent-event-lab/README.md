@@ -22,9 +22,7 @@ Azure Container Apps에 장애를 세 번 주입하고, Azure Monitor 경고를 
 - Storage 계정(Standard_LRS)
 - 1분 주기 로그 검색 경고 규칙 3개(평가 주기가 짧을수록 규칙당 단가가 올라갑니다)
 
-Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Agent를 사용하며 [별도로 과금](https://azure.microsoft.com/pricing/details/sre-agent/)됩니다.
-
-안전 경계는 스크립트가 강제합니다.
+Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Agent를 사용하며 [별도로 과금](https://azure.microsoft.com/pricing/details/sre-agent/)됩니다. 안전 경계는 스크립트가 강제합니다.
 
 - 현재 azd 환경이 가리키는 구독과 `az account show`의 활성 구독이 다르면 실행을 거부합니다.
 - 리소스 그룹에 `purpose=sre-agent-event-lab`과 `azd-env-name=<현재 environment>` 태그가 모두 없으면 거부합니다.
@@ -32,16 +30,34 @@ Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Ag
 - 응답 계획은 모두 `Review` 모드로 두어 Agent가 승인 없이 변경하지 못하게 합니다.
 - `evidence/`에는 비밀 값, 연결 문자열, 액세스 토큰을 저장하지 않습니다.
 
+## 시작하기: fork와 Codespaces
+
+이 실습은 **본인 fork에서** 진행합니다. Agent에 저장소를 연결하면 조사 결과 이슈가 그 저장소에 생성되므로, 원본을 연결하면 참가자 전원의 이슈가 한곳에 쌓이고 쓰기 권한도 없습니다.
+
+1. 이 저장소를 본인 계정으로 fork합니다.
+2. fork에서 **Code > Codespaces > New with options**를 열고 dev container로 `Azure SRE Agent Event Lab`을 고릅니다. `az`, `azd`, `gh`, Python, `uv`가 설치되고 `postCreateCommand`가 `setup-venv.sh`를 실행해 `app/.venv`까지 만듭니다.
+3. 터미널에서 로그인한 뒤 환경을 한 번 읽습니다.
+
+```bash
+az login --use-device-code
+azd auth login
+
+source ./monitor/sre-agent-event-lab/scripts/lab-env.sh
+```
+
+`lab-env.sh`는 `azd`가 게시한 배포 출력만 읽어 리소스 그룹·구독·Container App·Storage 범위 등을 현재 셸에 export하고, 값이 하나라도 없으면 `LAB_READY=0`으로 알려 줍니다. 이후 가이드의 명령은 이 값들을 그대로 사용하므로 단계마다 다시 조회하지 않습니다. 비밀 값은 읽지도 출력하지도 않습니다.
+
+로컬에서 진행한다면 아래 사전 조건을 직접 갖춘 뒤 같은 `source` 한 줄로 시작합니다. Codespaces에서는 dev container가 이미 갖춰 줍니다.
+
 ## 사전 조건
 
-- `az`, `azd`, `jq`, `curl`, `python3`
+- `az`, `azd`, `jq`, `curl`, `python3`, [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — `uv`는 `app/.venv`를 만드는 `scripts/setup-venv.sh`가 쓰는 유일한 도구이며, 사내 프록시로 구성된 인덱스 설정을 그대로 씁니다(공개 PyPI `pip` 폴백 없음).
 - `az extension add --name log-analytics` (`az monitor log-analytics query` 제공)
 - `az login`과 `azd auth login` — 두 CLI는 자격 증명을 따로 관리합니다.
 - 구독 Contributor, 역할 할당을 위한 Owner 또는 User Access Administrator
 - Azure SRE Agent를 만들 수 있는 [지원 지역](https://learn.microsoft.com/azure/sre-agent/supported-regions) 접근 권한
 - 브라우저에서 `https://sre.azure.com` 및 `*.azuresre.ai` 접근
-- Agent에 연결할 GitHub 저장소 권한
-- [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — `app/.venv`를 만드는 `scripts/setup-venv.sh`가 이 도구만 사용하며, 사내 프록시로 구성된 `uv`의 인덱스 설정을 그대로 씁니다. 공개 PyPI로 우회하는 `pip` 폴백은 없습니다.
+- Agent에 연결할 GitHub 저장소 권한 — 본인 fork처럼 이슈를 만들 수 있는 저장소여야 합니다
 
 이 실습의 모든 명령은 아래에서 한 번만 진입하는 이 디렉터리를 기준으로 합니다.
 
@@ -49,12 +65,11 @@ Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Ag
 cd monitor/sre-agent-event-lab
 ```
 
-로컬 검증만 먼저 해 보려면 다음을 실행합니다.
+로컬 검증만 먼저 해 보려면 다음을 실행합니다. Codespaces에서는 `setup-venv.sh`가 이미 실행된 상태입니다.
 
 ```bash
 ./scripts/setup-venv.sh
 app/.venv/bin/python -m pytest app -q
-
 bash -n scripts/*.sh
 az bicep build --file infra/main.bicep --stdout >/dev/null
 ```
@@ -65,9 +80,7 @@ az bicep build --file infra/main.bicep --stdout >/dev/null
 azd env new sre-event-lab --location koreacentral
 ```
 
-`--subscription`을 생략하면 azd가 로그인된 계정의 구독 목록에서 고르게 합니다. 특정 구독을 고정하려면 `--subscription <YOUR_SUBSCRIPTION_ID>`를 붙이세요. 리소스 그룹 이름은 지정하지 않으면 `rg-<environment 이름>`이 됩니다.
-
-`.env.example`은 스크립트가 읽는 설정 이름과 허용 기본값만 적어 둔 참고 파일입니다. 값을 바꾸려면 `azd env set <NAME> <VALUE>`로 현재 azd 환경에 저장합니다.
+`--subscription`을 생략하면 azd가 로그인된 계정의 구독 목록에서 고르게 합니다. 특정 구독을 고정하려면 `--subscription <YOUR_SUBSCRIPTION_ID>`를 붙이세요. 리소스 그룹 이름은 지정하지 않으면 `rg-<environment 이름>`이 됩니다. `.env.example`은 스크립트가 읽는 설정 이름과 허용 기본값만 적어 둔 참고 파일이며, 값을 바꾸려면 `azd env set <NAME> <VALUE>`로 현재 azd 환경에 저장합니다.
 
 ## 배포
 

@@ -13,46 +13,43 @@
 
 이 시나리오만 환경 변수가 아니라 RBAC를 건드립니다. 삭제·복구 대상은 출력에 기록된 Blob 컨테이너 범위의 단일 역할 하나뿐입니다.
 
+Codespaces에서 이 저장소를 열었다면 `az login`을 마친 뒤 아래 한 줄로 이번 실습에 필요한 값이 모두 셸에 준비됩니다. 여기서부터 마지막 `record-capture`까지는 같은 셸에서 실행합니다.
+
 ```bash
 cd monitor/sre-agent-event-lab
-LAB_READY=1
+source ./scripts/lab-env.sh
+```
 
-RESOURCE_GROUP="$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null)" || LAB_READY=0
-SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID 2>/dev/null)" || LAB_READY=0
-APP_FQDN="$(azd env get-value AZURE_CONTAINER_APP_FQDN 2>/dev/null)" || LAB_READY=0
-WORKLOAD_PRINCIPAL_ID="$(azd env get-value AZURE_CONTAINER_APP_PRINCIPAL_ID 2>/dev/null)" || LAB_READY=0
-STORAGE_CONTAINER_SCOPE="$(azd env get-value AZURE_STORAGE_CONTAINER_SCOPE 2>/dev/null)" || LAB_READY=0
-BLOB_ROLE_ASSIGNMENT_NAME="$(azd env get-value AZURE_BLOB_ROLE_ASSIGNMENT_NAME 2>/dev/null)" || LAB_READY=0
+`lab-env.sh`는 `azd`가 게시한 배포 출력만 읽어 `RESOURCE_GROUP`, `SUBSCRIPTION_ID`, `APP_NAME`, `APP_FQDN`, `WORKLOAD_PRINCIPAL_ID`, `STORAGE_CONTAINER_SCOPE`, `BLOB_ROLE_ASSIGNMENT_NAME`을 export하고, 하나라도 읽지 못하면 `LAB_READY=0`으로 알려 줍니다. 비밀 값은 읽지도 출력하지도 않습니다.
 
+이번 시나리오에서만 쓰는 값을 정하고 시도를 기록합니다.
+
+```bash
 ALERT_RULE_NAME="alert-sre-lab-s3-storage-rbac"
 EVIDENCE_DIR="${PWD}/evidence/s3-$(date -u +%Y%m%dT%H%M%SZ)"
-
-for value in "${RESOURCE_GROUP}" "${SUBSCRIPTION_ID}" "${APP_FQDN}" "${WORKLOAD_PRINCIPAL_ID}" "${STORAGE_CONTAINER_SCOPE}" "${BLOB_ROLE_ASSIGNMENT_NAME}"; do
-  [[ -n "${value// /}" ]] || LAB_READY=0
-done
 
 if (( LAB_READY )); then
   mkdir -p "${EVIDENCE_DIR}"
   python3 scripts/lab_state.py begin-run s3 "${EVIDENCE_DIR}" || LAB_READY=0
-else
-  echo "azd 환경 값을 읽지 못했습니다. 먼저 azd provision을 실행하세요." >&2
 fi
 (( LAB_READY )) || echo "준비되지 않았습니다. 아래 단계는 모두 건너뜁니다." >&2
 ```
 
-`azd env get-value`는 실패해도 오류 문장을 표준 출력으로 내보내므로 위 검사가 필요합니다. `begin-run`은 이번 시도를 기록하면서 순서·중복 실행 게이트도 함께 적용하고, 거부되면 `LAB_READY`가 0이 되어 이후 단계가 모두 건너뜁니다. 근거 디렉터리를 절대 경로로 두는 이유는 채점기와 캡처 도구가 기록된 경로를 실행 위치와 무관하게 다시 열기 때문입니다.
+`begin-run`은 이번 시도를 기록하면서 순서·중복 실행 게이트도 함께 적용하고, 거부되면 `LAB_READY`가 0이 되어 이후 단계가 모두 건너뜁니다.
 
-복구에 필요한 세 값이 비어 있으면 권한을 지운 뒤 되돌릴 수 없고, 빈 범위로 역할을 만들면 구독 전체에 권한이 부여됩니다. 그래서 위 검사를 통과하지 못하면 삭제 자체가 실행되지 않습니다.
+복구에 필요한 `WORKLOAD_PRINCIPAL_ID`, `STORAGE_CONTAINER_SCOPE`, `BLOB_ROLE_ASSIGNMENT_NAME`이 비어 있으면 권한을 지운 뒤 되돌릴 수 없고, 빈 범위로 역할을 만들면 구독 전체에 권한이 부여됩니다. `lab-env.sh`가 이 값들을 확인하지 못하면 `LAB_READY`가 0이 되어 삭제 자체가 실행되지 않습니다.
 
 ### 1. 권한 삭제
 
 ```bash
 INJECTED=0
-if (( LAB_READY )); then
+if (( LAB_READY )) \
+  && [[ -n "${STORAGE_CONTAINER_SCOPE}" && -n "${BLOB_ROLE_ASSIGNMENT_NAME}" && -n "${WORKLOAD_PRINCIPAL_ID}" ]]; then
   ROLE_ASSIGNMENT_ID="${STORAGE_CONTAINER_SCOPE}/providers/Microsoft.Authorization/roleAssignments/${BLOB_ROLE_ASSIGNMENT_NAME}"
   INJECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   ROLE_DELETED_AT=""
-  az role assignment delete --ids "${ROLE_ASSIGNMENT_ID}" \
+  az role assignment delete --subscription "${SUBSCRIPTION_ID}" \
+    --ids "${ROLE_ASSIGNMENT_ID}" \
     && INJECTED=1 && ROLE_DELETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 fi
 ```
@@ -133,6 +130,7 @@ if (( INJECTED )); then
     RECOVERY_OK=1
   else
     az role assignment create \
+      --subscription "${SUBSCRIPTION_ID}" \
       --name "${BLOB_ROLE_ASSIGNMENT_NAME}" \
       --assignee-object-id "${WORKLOAD_PRINCIPAL_ID}" \
       --assignee-principal-type ServicePrincipal \

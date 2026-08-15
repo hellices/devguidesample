@@ -479,7 +479,8 @@ MANUAL_SCENARIO_COMMANDS = {
         "--set-env-vars ORDER_DELAY_MS=0",
     ),
     "04-scenario-s3.md": (
-        "az role assignment delete --ids",
+        "az role assignment delete",
+        "--ids",
         "az role assignment create",
     ),
 }
@@ -1071,3 +1072,34 @@ def test_screenshot_alt_text_is_not_repeated_as_body_prose():
             if sentence in body
         ]
         assert repeated == [], (path.name, repeated)
+
+
+# --- The lab runs against the operator's own fork --------------------------
+
+# The Agent's GitHub connector writes issues into the repository it is
+# connected to. Naming this repository as that target would send every
+# participant's incident into it, so the guides must point at a fork the
+# operator owns.
+UPSTREAM_SLUG = "hellices/devguidesample"
+
+
+def test_agent_setup_tells_the_operator_to_connect_their_own_fork():
+    text = (GUIDES / "01-agent-setup.md").read_text()
+
+    assert "fork" in text.lower() or "포크" in text
+    assert "SRE_REPOSITORY_URL" in text
+
+
+def test_no_operator_facing_document_names_the_upstream_as_the_connected_repo():
+    """`validation-results.md` and the captured assets are a record of one
+    past run and may keep their URLs; the documents an operator follows must
+    not hand the upstream repository to the Agent as its issue target."""
+    for path in [README] + [GUIDES / name for name in GUIDE_NAMES]:
+        assert UPSTREAM_SLUG not in path.read_text(), path.name
+
+
+def test_agent_setup_warns_that_issues_land_in_the_connected_repository():
+    text = (GUIDES / "01-agent-setup.md").read_text()
+
+    section = text.split("## 연결할 원본", 1)[1].split("\n## ", 1)[0]
+    assert "이슈" in section
