@@ -8,6 +8,8 @@ exit code and is distinguishable from a portal-only MANUAL check, and that
 the script never queries Azure once its own safety gate (commands, login,
 azd configuration, subscription equality, resource-group tags) has failed.
 """
+import json
+
 import pytest
 
 from doctor_harness import (
@@ -242,7 +244,51 @@ def test_doctor_fails_when_agent_setup_evidence_is_missing(fake_az):
 
     assert result.returncode == 1
     assert "Reader role assignment\tFAIL" in result.stdout
+    assert "agent-setup.json" in result.stdout
+    assert "guides/01-agent-setup.md" in result.stdout
     assert "lab.sh acknowledge agent-setup" in result.stdout
+
+
+def test_doctor_fails_when_subscription_assignment_ids_are_empty(fake_az):
+    fake_az.agent_setup_body = json.dumps(
+        {
+            "agent_endpoint": "https://sre-agent.example.com/api/incidents",
+            "monitoring_contributor_assignment_id": "",
+            "agent_principal_id": AGENT_PRINCIPAL_ID,
+            "uami_monitoring_contributor_assignment_id": (
+                f"{SUBSCRIPTION_SCOPE}/providers/Microsoft.Authorization/"
+                "roleAssignments/principal-two"
+            ),
+            "agent_user_assigned_principal_id": AGENT_UAMI_PRINCIPAL_ID,
+        }
+    )
+
+    result = run_doctor(fake_az)
+
+    assert result.returncode == 1
+    assert "Monitoring Contributor cleanup evidence\tFAIL" in result.stdout
+    assert "monitoring_contributor_assignment_id" in result.stdout
+    assert "az role assignment list" in result.stdout
+
+
+def test_doctor_accepts_case_insensitive_arm_assignment_ids(fake_az):
+    assignment_prefix = (
+        f"{SUBSCRIPTION_SCOPE}/providers/microsoft.authorization/roleassignments/"
+    )
+    fake_az.agent_setup_body = json.dumps(
+        {
+            "agent_endpoint": "https://sre-agent.example.com/api/incidents",
+            "monitoring_contributor_assignment_id": assignment_prefix + "principal-one",
+            "agent_principal_id": AGENT_PRINCIPAL_ID,
+            "uami_monitoring_contributor_assignment_id": assignment_prefix + "principal-two",
+            "agent_user_assigned_principal_id": AGENT_UAMI_PRINCIPAL_ID,
+        }
+    )
+
+    result = run_doctor(fake_az)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Monitoring Contributor cleanup evidence\tPASS" in result.stdout
 
 
 def test_doctor_fails_when_one_recorded_identity_lacks_reader(fake_az):
@@ -483,6 +529,8 @@ def test_doctor_fails_gracefully_on_malformed_agent_setup_evidence(fake_az):
     assert "Reader role assignment\tFAIL" in result.stdout
     detail = _detail_of(result, "Reader role assignment")
     assert "valid JSON" in detail
+    assert "agent-setup.json" in detail
+    assert "guides/01-agent-setup.md" in detail
     assert "lab.sh acknowledge agent-setup" in detail
 
 

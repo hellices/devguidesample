@@ -92,10 +92,6 @@ require_command() {
   }
 }
 
-lowercase() {
-  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
-}
-
 if [[ "${MODE}" == "image-env" ]]; then
   require_command azd
   if [[ "${CONFIRMED}" -ne 1 ]]; then
@@ -147,20 +143,24 @@ fi
 if ! RECORDED_ASSIGNMENTS="$(jq -r '
   [
     {
+      assignment_key: "monitoring_contributor_assignment_id",
       assignment: (.monitoring_contributor_assignment_id // ""),
+      principal_key: "agent_principal_id",
       principal: (.agent_principal_id // "")
     },
     {
+      assignment_key: "uami_monitoring_contributor_assignment_id",
       assignment: (.uami_monitoring_contributor_assignment_id // ""),
+      principal_key: "agent_user_assigned_principal_id",
       principal: (.agent_user_assigned_principal_id // "")
     }
   ]
   | .[]
-  | [.assignment, .principal]
-  | @tsv
+  | [.assignment_key, .assignment, .principal_key, .principal]
+  | join("|")
 ' "${CLEANUP_SETUP_FILE}" 2>/dev/null)"; then
   echo "Agent setup evidence is not valid JSON: ${CLEANUP_SETUP_FILE}" >&2
-  echo "Recreate it: lab.sh acknowledge agent-setup" >&2
+  echo "Rewrite evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup" >&2
   exit 1
 fi
 readonly RECORDED_ASSIGNMENTS
@@ -252,13 +252,20 @@ verify_recorded_assignment() {
 # a duplicate. Bash 3.2 (macOS) aborts under `set -u` when an empty array
 # is expanded, which is why this stays a string instead of an array.
 VERIFIED_ASSIGNMENT_IDS=$'\n'
-while IFS=$'\t' read -r assignment_id expected_principal_id; do
-  if [[ -z "${assignment_id}" ]]; then
+while IFS='|' read -r assignment_key assignment_id principal_key expected_principal_id; do
+  if [[ -z "${assignment_id}" && -z "${expected_principal_id}" ]]; then
     continue
   fi
+  if [[ -z "${assignment_id}" ]]; then
+    echo "${assignment_key} is empty for principal ${expected_principal_id:-unknown}." >&2
+    echo "Find the live ID: az role assignment list --assignee-object-id ${expected_principal_id:-<principalId>} --role \"Monitoring Contributor\" --scope ${SUBSCRIPTION_SCOPE} --query \"[0].id\" -o tsv" >&2
+    echo "If no assignment is returned and teardown should continue, clear both ${assignment_key} and ${principal_key} in the evidence file." >&2
+    echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup" >&2
+    exit 1
+  fi
   if [[ -z "${expected_principal_id}" ]]; then
-    echo "Incomplete Agent setup evidence: ${assignment_id} was recorded without its Agent principal ID." >&2
-    echo "Recreate it: lab.sh acknowledge agent-setup" >&2
+    echo "Incomplete Agent setup evidence: ${assignment_id} was recorded without ${principal_key}." >&2
+    echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup" >&2
     exit 1
   fi
   case "${VERIFIED_ASSIGNMENT_IDS}" in

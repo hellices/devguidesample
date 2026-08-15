@@ -831,6 +831,17 @@ def test_a_conclusion_is_recorded_once_the_run_recovered(tmp_path):
     assert state.is_successful_capture("s1")
 
 
+def test_record_capture_refuses_to_downgrade_a_conclusion(tmp_path):
+    state = lab_state.LabState(tmp_path / "state.json")
+    state.mark_recovered("s1", str(tmp_path / "s1"))
+    state.record_capture("s1", "conclusion")
+
+    with pytest.raises(lab_state.InvalidTransition, match="already has a conclusion"):
+        state.record_capture("s1", "thread-not-created")
+
+    assert state.capture_status("s1") == "conclusion"
+
+
 def test_cli_record_capture_refuses_a_conclusion_for_a_failed_run(tmp_path):
     path = tmp_path / "state.json"
     evidence_dir = tmp_path / "s1-20260814T000000Z"

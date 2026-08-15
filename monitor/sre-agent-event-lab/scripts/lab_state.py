@@ -609,6 +609,16 @@ class LabState:
             )
         entry = self._scenario(scenario)
         run_status = entry.get("run_status")
+        previous_capture_status = entry.get("capture_status")
+        if (
+            previous_capture_status == SUCCESSFUL_CAPTURE
+            and capture_status != SUCCESSFUL_CAPTURE
+        ):
+            raise InvalidTransition(
+                "{0} already has a conclusion for its current run. Re-run the "
+                "scenario before collecting another capture; the successful "
+                "result will not be replaced by {1}.".format(scenario, capture_status)
+            )
         if capture_status == SUCCESSFUL_CAPTURE and run_status != RUN_RECOVERED:
             raise InvalidTransition(
                 "Cannot record a {0} for {1}: its run is {2}, not {3}. Only a "
@@ -758,6 +768,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     capture.add_argument("--status", choices=CAPTURE_STATES)
     capture.add_argument("--evidence-dir")
 
+    capture_status = commands.add_parser(
+        "capture-status", help="print a scenario's recorded capture status"
+    )
+    capture_status.add_argument("scenario", choices=SCENARIOS)
+
     evidence = commands.add_parser("evidence-dir", help="print a scenario's evidence dir")
     evidence.add_argument("scenario", choices=SCENARIOS)
 
@@ -808,6 +823,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             status = _capture_status_from(args)
             state.record_capture(args.scenario, status, args.evidence_dir)
             print(status)
+            return 0
+        if args.command == "capture-status":
+            print(state.capture_status(args.scenario) or "")
             return 0
         if args.command == "evidence-dir":
             directory = state.evidence_dir(args.scenario)

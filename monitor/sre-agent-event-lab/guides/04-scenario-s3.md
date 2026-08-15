@@ -22,12 +22,15 @@ cd monitor/sre-agent-event-lab
 | 순서 | 변화 |
 |---|---|
 | 1 | 워크로드 관리 ID의 `Storage Blob Data Reader` 할당이 Blob 컨테이너 범위에서 삭제됩니다 |
-| 2 | `/api/documents`에 요청 60건(동시 4)이 들어가고 모두 HTTP 503을 받습니다 |
-| 3 | Application Insights workspace 테이블 `AppDependencies`에 Storage 대상 `ResultCode == "403"`이 쌓입니다 |
-| 4 | 5분 창의 403 의존성 실패가 5건을 넘으면 `alert-sre-lab-s3-storage-rbac`(Sev2)이 발생합니다 |
-| 5 | 복구로 같은 이름·같은 범위의 역할 할당이 다시 만들어집니다 |
+| 2 | 데이터 평면에 권한 삭제가 전파되어 단건 probe가 HTTP 503을 받을 때까지 최대 5분 기다립니다 |
+| 3 | `/api/documents`에 요청 60건(동시 4)이 들어가고 모두 HTTP 503을 받습니다 |
+| 4 | Application Insights workspace 테이블 `AppDependencies`에 Storage 대상 `ResultCode == "403"`이 쌓입니다 |
+| 5 | 5분 창의 403 의존성 실패가 5건을 넘으면 `alert-sre-lab-s3-storage-rbac`(Sev2)이 발생합니다 |
+| 6 | 복구로 같은 이름·같은 범위의 역할 할당이 다시 만들어집니다 |
 
 삭제와 복구는 출력에 기록된 Blob 컨테이너 범위의 단일 역할에만 적용됩니다. 구독이나 리소스 그룹 범위의 다른 할당은 건드리지 않습니다.
+
+단건 probe가 제한 시간 안에 503을 확인하지 못하면 `Storage RBAC deletion did not produce HTTP 503 within 300s`를 출력하고 본 부하를 시작하지 않은 채 역할을 복구합니다.
 
 ## SRE Agent에서 확인할 항목
 
@@ -57,6 +60,16 @@ cd monitor/sre-agent-event-lab
 역할 전파에는 몇 분이 걸릴 수 있습니다. `/api/documents`가 200을 돌려주는지 직접 호출해 확인하고, 실패로 기록되었다면 `./scripts/lab.sh run s3`으로 새 시도를 시작합니다. 다시 실행하면 이전 시도의 `s3_recovered`와 `s3_captured` 기록이 주입 전에 지워지므로, 새 시도가 복구되고 `capture`될 때까지 채점은 막힙니다.
 
 역할 복구 자체가 실패하면 스크립트는 `CRITICAL:` 두 줄을 출력하고 0이 아닌 코드로 끝냅니다. 워크로드에 Blob 권한이 없는 상태가 그대로 남으므로, 같은 이름·같은 범위의 `Storage Blob Data Reader` 할당을 수동으로 다시 만든 뒤 다음 단계로 넘어가세요.
+
+```bash
+az role assignment create \
+  --name "$(azd env get-value AZURE_BLOB_ROLE_ASSIGNMENT_NAME)" \
+  --assignee-object-id "$(azd env get-value AZURE_CONTAINER_APP_PRINCIPAL_ID)" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Reader" \
+  --scope "$(azd env get-value AZURE_STORAGE_CONTAINER_SCOPE)" \
+  --output none
+```
 
 ## 다음 단계
 

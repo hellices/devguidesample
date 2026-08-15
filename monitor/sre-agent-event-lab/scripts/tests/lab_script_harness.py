@@ -25,6 +25,7 @@ BASH = shutil.which("bash") or "/bin/bash"
 # images (`loadgen.py`, `capture_agent.py`, `render_capture.py`) and hand
 # every other script to the real interpreter running the suite.
 REAL_PYTHON = sys.executable
+REAL_JQ = shutil.which("jq") or "/usr/bin/jq"
 
 SUBSCRIPTION_ID = "11111111-2222-3333-4444-555555555555"
 RESOURCE_GROUP = "rg-sre-lab-exec"
@@ -226,7 +227,21 @@ case "${{dispatch_key}}" in
       printf '{{"properties": {{"principalId": "%s", "roleDefinitionId": "/subscriptions/{SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleDefinitions/{MONITORING_CONTRIBUTOR_ROLE_ID}", "scope": "/subscriptions/{SUBSCRIPTION_ID}"}}}}\\n' \\
         "${{principal_id}}"
     elif [[ "$*" == *"monitorCondition=Fired"* ]]; then
-      if [[ -f "${{state}}/alert_never_fires" ]]; then
+      if [[ -f "${{state}}/alert_failure_after_success" ]] && [[ -f "${{state}}/alert_list_seen_success" ]]; then
+        printf 'ERROR: (Forbidden) alert read permission expired.\n' >&2
+        exit 1
+      elif [[ -f "${{state}}/alert_failure_after_success" ]]; then
+        : > "${{state}}/alert_list_seen_success"
+        printf '{{"value": []}}\\n'
+      elif [[ -f "${{state}}/alert_list_failures" ]] && (( $(cat "${{state}}/alert_list_failures") > 0 )); then
+        printf '%s\n' "$(( $(cat "${{state}}/alert_list_failures") - 1 ))" > "${{state}}/alert_list_failures"
+        printf 'ERROR: (TooManyRequests) transient alert list failure.\n' >&2
+        exit 1
+      elif [[ -f "${{state}}/alert_list_invalid_json" ]]; then
+        printf '%s trailing-garbage\n' '{ALERTS_JSON}'
+      elif [[ -f "${{state}}/alert_list_empty_body" ]]; then
+        :
+      elif [[ -f "${{state}}/alert_never_fires" ]]; then
         printf '{{"value": []}}\\n'
       else
         printf '%s\\n' '{ALERTS_JSON}'
@@ -266,7 +281,7 @@ def _begin_run_probe(probe_path):
 
 
 def _lab_python_stub_source(
-    log_path, capture_timeline, pillow_importable=True, probe_path=None
+    log_path, state_dir, capture_timeline, pillow_importable=True, probe_path=None
 ):
     """A fake `${LAB_ROOT}/app/.venv/bin/python`.
 
@@ -286,11 +301,18 @@ def _lab_python_stub_source(
     probe = _begin_run_probe(probe_path) if probe_path else ""
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+state="{state_dir}"
 {probe}
 if [[ "${{1:-}}" == "-c" && "${{2:-}}" == *PIL* ]]; then
   exit {pil_exit}
 fi
 case "${{1:-}}" in
+  *lab_state.py)
+    if [[ "$*" == *" mark-failed "* && -f "${{state}}/mark_failed_fails" ]]; then
+      exit 3
+    fi
+    exec "{REAL_PYTHON}" "$@"
+    ;;
   *capture_agent.py)
     shift
     output_dir=""
@@ -307,6 +329,9 @@ case "${{1:-}}" in
     normalized="${{1:-}}"
     asset_dir="${{2:-}}"
     [[ -f "${{normalized}}" ]] || exit 1
+    if [[ -f "${{state}}/render_fails" ]]; then
+      exit 5
+    fi
     mkdir -p "${{asset_dir}}"
     printf 'GIF89a' > "${{asset_dir}}/investigation.gif"
     printf 'timeline\\n' > "${{asset_dir}}/timeline.mmd"
@@ -321,16 +346,45 @@ exit 0
 """
 
 
-def _python3_stub_source(log_path, probe_path=None):
+def _python3_stub_source(log_path, state_dir, probe_path=None):
     """A fake `python3`: `loadgen.py` is faked, everything else is real."""
     probe = _begin_run_probe(probe_path) if probe_path else ""
     return f"""#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "{log_path}"
+state="{state_dir}"
 {probe}
 case "${{1:-}}" in
-  *loadgen.py) exit 0 ;;
+  *lab_state.py)
+    if [[ "$*" == *" mark-failed "* && -f "${{state}}/mark_failed_fails" ]]; then
+      exit 3
+    fi
+    exec "{REAL_PYTHON}" "$@"
+    ;;
+  *loadgen.py)
+    if [[ -f "${{state}}/loadgen_fails" ]]; then
+      exit 2
+    fi
+    if [[ "$*" == *"/api/documents"* && "$*" == *"--requests 1"* ]] \
+      && [[ -f "${{state}}/s3_probe_failures" ]] \
+      && (( $(cat "${{state}}/s3_probe_failures") > 0 )); then
+      printf '%s\n' "$(( $(cat "${{state}}/s3_probe_failures") - 1 ))" > "${{state}}/s3_probe_failures"
+      exit 2
+    fi
+    exit 0
+    ;;
   *) exec "{REAL_PYTHON}" "$@" ;;
 esac
+"""
+
+
+def _jq_stub_source(timeline_jq_fails):
+    if not timeline_jq_fails:
+        return None
+    return f"""#!/usr/bin/env bash
+if [[ "${{1:-}}" == "-n" ]]; then
+  exit 4
+fi
+exec "{REAL_JQ}" "$@"
 """
 
 
@@ -347,6 +401,15 @@ def make_lab(
     recovery_revision_stalls=False,
     role_create_fails=False,
     injection_update_fails=False,
+    alert_list_failures=0,
+    alert_list_invalid_json=False,
+    loadgen_fails=False,
+    s3_probe_failures=0,
+    mark_failed_fails=False,
+    timeline_jq_fails=False,
+    alert_failure_after_success=False,
+    render_fails=False,
+    alert_list_empty_body=False,
 ):
     """A throwaway copy of the lab plus fake CLIs; returns a run context."""
     lab = tmp_path / "lab"
@@ -376,6 +439,22 @@ def make_lab(
         (state_dir / "role_create_fails").write_text("1\n")
     if injection_update_fails:
         (state_dir / "injection_update_fails").write_text("1\n")
+    if alert_list_failures:
+        (state_dir / "alert_list_failures").write_text(f"{alert_list_failures}\n")
+    if alert_list_invalid_json:
+        (state_dir / "alert_list_invalid_json").write_text("1\n")
+    if loadgen_fails:
+        (state_dir / "loadgen_fails").write_text("1\n")
+    if s3_probe_failures:
+        (state_dir / "s3_probe_failures").write_text(f"{s3_probe_failures}\n")
+    if mark_failed_fails:
+        (state_dir / "mark_failed_fails").write_text("1\n")
+    if alert_failure_after_success:
+        (state_dir / "alert_failure_after_success").write_text("1\n")
+    if render_fails:
+        (state_dir / "render_fails").write_text("1\n")
+    if alert_list_empty_body:
+        (state_dir / "alert_list_empty_body").write_text("1\n")
 
     az_log = tmp_path / "az-calls.log"
     azd_log = tmp_path / "azd-calls.log"
@@ -391,8 +470,12 @@ def make_lab(
         azd_log,
     )
     write_executable(
-        bin_dir / "python3", _python3_stub_source(python_log, begin_run_probe)
+        bin_dir / "python3",
+        _python3_stub_source(python_log, state_dir, begin_run_probe),
     )
+    jq_stub = _jq_stub_source(timeline_jq_fails)
+    if jq_stub:
+        write_executable(bin_dir / "jq", jq_stub)
 
     venv_bin = lab / "app" / ".venv" / "bin"
     if venv_present:
@@ -400,7 +483,11 @@ def make_lab(
         write_executable(
             venv_bin / "python",
             _lab_python_stub_source(
-                lab_python_log, capture_timeline, pillow_importable, begin_run_probe
+                lab_python_log,
+                state_dir,
+                capture_timeline,
+                pillow_importable,
+                begin_run_probe,
             ),
         )
 
@@ -413,6 +500,7 @@ def make_lab(
         workdir,
         az_log,
         azd_log,
+        python_log,
         lab_python_log,
         state_dir,
         begin_run_probe,
@@ -427,6 +515,7 @@ class LabRun:
         workdir,
         az_log,
         azd_log,
+        python_log,
         lab_python_log,
         state_dir,
         begin_run_probe,
@@ -436,6 +525,7 @@ class LabRun:
         self.workdir = workdir
         self.az_log = az_log
         self.azd_log = azd_log
+        self.python_log = python_log
         self.lab_python_log = lab_python_log
         self.state_dir = state_dir
         self.begin_run_probe = begin_run_probe
@@ -471,6 +561,9 @@ class LabRun:
 
     def azd_calls(self):
         return self.azd_log.read_text() if self.azd_log.exists() else ""
+
+    def python_calls(self):
+        return self.python_log.read_text() if self.python_log.exists() else ""
 
     def write_agent_setup(self, principal_ids=("principal-one", "principal-two")):
         assignment_ids = [

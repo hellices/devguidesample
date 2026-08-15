@@ -17,7 +17,6 @@ readonly END_UTC="$4"
 require_lab_config
 verify_subscription
 verify_lab_resource_group
-mkdir -p "${EVIDENCE_DIR}"
 
 APP_NAME="$(deployment_output containerAppName)"
 WORKSPACE_CUSTOMER_ID="$(deployment_output workspaceCustomerId)"
@@ -26,6 +25,19 @@ STORAGE_CONTAINER_SCOPE="$(deployment_output storageContainerScope)"
 TELEMETRY_SERVICE_NAME="$(deployment_output telemetryServiceName)"
 readonly APP_NAME WORKSPACE_CUSTOMER_ID WORKLOAD_PRINCIPAL_ID
 readonly STORAGE_CONTAINER_SCOPE TELEMETRY_SERVICE_NAME
+
+MISSING_OUTPUTS=""
+[[ -n "${APP_NAME}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} containerAppName"
+[[ -n "${WORKSPACE_CUSTOMER_ID}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} workspaceCustomerId"
+[[ -n "${WORKLOAD_PRINCIPAL_ID}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} containerAppPrincipalId"
+[[ -n "${STORAGE_CONTAINER_SCOPE}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} storageContainerScope"
+[[ -n "${TELEMETRY_SERVICE_NAME}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} telemetryServiceName"
+if [[ -n "${MISSING_OUTPUTS}" ]]; then
+  echo "Missing deployment outputs:${MISSING_OUTPUTS}. Run: azd provision" >&2
+  exit 1
+fi
+
+mkdir -p "${EVIDENCE_DIR}"
 
 query_workspace() {
   local query="$1"

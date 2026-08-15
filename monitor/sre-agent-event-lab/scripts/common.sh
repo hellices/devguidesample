@@ -18,6 +18,10 @@ require_commands() {
   done
 }
 
+lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 # azd_value NAME -- the current azd environment's value for NAME, or empty
 # when azd has no such value (e.g. before the environment was provisioned).
 #
@@ -410,7 +414,7 @@ alert_monitor_condition() {
 # an open incident, and both incidents' evidence would be unreadable.
 wait_for_alert_resolved() {
   local alert_id="$1"
-  local timeout_seconds="${2:-900}"
+  local timeout_seconds="${2:-1500}"
   local interval_seconds="${3:-20}"
   local deadline=$(( SECONDS + timeout_seconds ))
   local condition=""

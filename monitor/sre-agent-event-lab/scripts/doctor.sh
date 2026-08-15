@@ -275,16 +275,27 @@ fi
 if [[ "${AZURE_SAFE}" -eq 1 ]]; then
   RESOURCE_GROUP_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}"
   if [[ ! -f "${AGENT_SETUP_FILE}" ]]; then
-    report "Reader role assignment" FAIL "Agent setup evidence missing: ${AGENT_SETUP_FILE}. Run: lab.sh acknowledge agent-setup after recording the Agent identities."
+    report "Reader role assignment" FAIL "Agent setup evidence missing: ${AGENT_SETUP_FILE}. Create evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup."
   elif ! AGENT_SETUP_JSON="$(jq '.' "${AGENT_SETUP_FILE}" 2>/dev/null)"; then
     # A hand-edited or truncated evidence file is one FAIL row, not a raw
     # `jq` abort: under `set -e` an unguarded parse would kill the run and
     # swallow every remaining check, including the MANUAL rows an operator
     # still needs.
-    report "Reader role assignment" FAIL "Agent setup evidence is not valid JSON: ${AGENT_SETUP_FILE}. Recreate it: lab.sh acknowledge agent-setup"
+    report "Reader role assignment" FAIL "Agent setup evidence is not valid JSON: ${AGENT_SETUP_FILE}. Rewrite evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup."
   else
     agent_principal_id="$(jq -r '.agent_principal_id // empty' <<<"${AGENT_SETUP_JSON}" 2>/dev/null || true)"
     agent_uami_principal_id="$(jq -r '.agent_user_assigned_principal_id // empty' <<<"${AGENT_SETUP_JSON}" 2>/dev/null || true)"
+    monitoring_assignment_id="$(jq -r '.monitoring_contributor_assignment_id // empty' <<<"${AGENT_SETUP_JSON}" 2>/dev/null || true)"
+    uami_monitoring_assignment_id="$(jq -r '.uami_monitoring_contributor_assignment_id // empty' <<<"${AGENT_SETUP_JSON}" 2>/dev/null || true)"
+    EXPECTED_ASSIGNMENT_PREFIX="/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.Authorization/roleAssignments/"
+    MISSING_CLEANUP_KEYS=()
+    [[ "$(lowercase "${monitoring_assignment_id}")" == "$(lowercase "${EXPECTED_ASSIGNMENT_PREFIX}")"* ]] || MISSING_CLEANUP_KEYS+=("monitoring_contributor_assignment_id")
+    [[ "$(lowercase "${uami_monitoring_assignment_id}")" == "$(lowercase "${EXPECTED_ASSIGNMENT_PREFIX}")"* ]] || MISSING_CLEANUP_KEYS+=("uami_monitoring_contributor_assignment_id")
+    if [[ "${#MISSING_CLEANUP_KEYS[@]}" -gt 0 ]]; then
+      report "Monitoring Contributor cleanup evidence" FAIL "Missing or invalid: ${MISSING_CLEANUP_KEYS[*]}. Find each live ID with: az role assignment list --assignee-object-id <principalId> --role \"Monitoring Contributor\" --scope /subscriptions/${SUBSCRIPTION_ID} --query \"[0].id\" -o tsv; then update ${AGENT_SETUP_FILE}."
+    else
+      report "Monitoring Contributor cleanup evidence" PASS "Both subscription-scoped role assignment IDs are recorded."
+    fi
     if [[ -z "${agent_principal_id}" || -z "${agent_uami_principal_id}" ]]; then
       report "Reader role assignment" FAIL "Agent setup evidence is missing agent_principal_id/agent_user_assigned_principal_id: ${AGENT_SETUP_FILE}."
     else
