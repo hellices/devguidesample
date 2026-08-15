@@ -51,6 +51,52 @@ Agent가 실습 리소스를 읽고 구독의 경고를 훑을 수 있어야 합
 
 Monitoring Contributor는 [Azure Monitor 스캐너](https://learn.microsoft.com/azure/sre-agent/azure-monitor-alerts)가 요구하는 유일한 구독 범위 권한입니다. 할당 ID는 아래에서 기록해 두고 정리 단계에서 자동으로 제거합니다.
 
+포털에서 확인한 두 관리 ID의 object ID를 넣고 역할을 만듭니다. Reader는 azd가 삭제할 리소스 그룹 범위이고, Monitoring Contributor 두 건만 구독 범위이므로 ID를 변수에 보관합니다.
+
+```bash
+SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID)"
+RESOURCE_GROUP="$(azd env get-value AZURE_RESOURCE_GROUP)"
+SUBSCRIPTION_SCOPE="/subscriptions/${SUBSCRIPTION_ID}"
+RESOURCE_GROUP_SCOPE="${SUBSCRIPTION_SCOPE}/resourceGroups/${RESOURCE_GROUP}"
+AGENT_PRINCIPAL_ID="<Agent 시스템 할당 ID의 objectId>"
+AGENT_UAMI_PRINCIPAL_ID="<Agent 사용자 할당 ID의 objectId>"
+SRE_AGENT_ENDPOINT="https://<agent>.<region>.azuresre.ai"
+
+az role assignment create \
+  --assignee-object-id "${AGENT_PRINCIPAL_ID}" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Reader" \
+  --scope "${RESOURCE_GROUP_SCOPE}" \
+  --output none
+az role assignment create \
+  --assignee-object-id "${AGENT_UAMI_PRINCIPAL_ID}" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Reader" \
+  --scope "${RESOURCE_GROUP_SCOPE}" \
+  --output none
+
+MONITORING_CONTRIBUTOR_ASSIGNMENT_ID="$(az role assignment create \
+  --assignee-object-id "${AGENT_PRINCIPAL_ID}" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Monitoring Contributor" \
+  --scope "${SUBSCRIPTION_SCOPE}" \
+  --query id -o tsv 2>/dev/null || az role assignment list \
+    --assignee-object-id "${AGENT_PRINCIPAL_ID}" \
+    --role "Monitoring Contributor" \
+    --scope "${SUBSCRIPTION_SCOPE}" \
+    --query "[0].id" -o tsv)"
+UAMI_MONITORING_CONTRIBUTOR_ASSIGNMENT_ID="$(az role assignment create \
+  --assignee-object-id "${AGENT_UAMI_PRINCIPAL_ID}" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Monitoring Contributor" \
+  --scope "${SUBSCRIPTION_SCOPE}" \
+  --query id -o tsv 2>/dev/null || az role assignment list \
+    --assignee-object-id "${AGENT_UAMI_PRINCIPAL_ID}" \
+    --role "Monitoring Contributor" \
+    --scope "${SUBSCRIPTION_SCOPE}" \
+    --query "[0].id" -o tsv)"
+```
+
 ## Builder > Incident platform 연결
 
 1. 왼쪽에서 **Builder > Incident platform**을 엽니다.
@@ -98,17 +144,31 @@ azd env set SRE_KNOWLEDGE_PATH "runbooks/incident-response.md"
 ## 근거 파일 만들기
 
 `evidence/agent-setup.json`은 Git에서 제외되며, 정리 단계가 되돌릴 대상을 이 파일에서만 읽습니다. 값은 모두 식별자와 엔드포인트 URL입니다.
+아래 블록은 역할을 만든 위 블록과 같은 셸에서 실행해야 앞에서 설정한 변수와 할당 ID를 그대로 사용합니다.
 
 ```bash
-cat > evidence/agent-setup.json <<'JSON'
+mkdir -p evidence
+cat > evidence/agent-setup.json <<JSON
 {
-  "agent_principal_id": "<Agent 시스템 할당 ID의 objectId>",
-  "agent_user_assigned_principal_id": "<Agent 사용자 할당 ID의 objectId>",
-  "agent_endpoint": "https://<agent>.<region>.azuresre.ai",
-  "monitoring_contributor_assignment_id": "/subscriptions/<id>/providers/Microsoft.Authorization/roleAssignments/<guid>",
-  "uami_monitoring_contributor_assignment_id": "/subscriptions/<id>/providers/Microsoft.Authorization/roleAssignments/<guid>"
+  "agent_principal_id": "${AGENT_PRINCIPAL_ID}",
+  "agent_user_assigned_principal_id": "${AGENT_UAMI_PRINCIPAL_ID}",
+  "agent_endpoint": "${SRE_AGENT_ENDPOINT}",
+  "monitoring_contributor_assignment_id": "${MONITORING_CONTRIBUTOR_ASSIGNMENT_ID}",
+  "uami_monitoring_contributor_assignment_id": "${UAMI_MONITORING_CONTRIBUTOR_ASSIGNMENT_ID}"
 }
 JSON
+
+jq -e \
+  --arg scope "${SUBSCRIPTION_SCOPE}/providers/Microsoft.Authorization/roleAssignments/" \
+  '(.monitoring_contributor_assignment_id | startswith($scope))
+   and (.uami_monitoring_contributor_assignment_id | startswith($scope))
+   and (.agent_principal_id | length > 0)
+   and (.agent_user_assigned_principal_id | length > 0)
+   and (.agent_endpoint | test("^https://[^<>]+$"))' \
+   evidence/agent-setup.json >/dev/null || {
+     echo "agent-setup.json is incomplete; re-check the principals, endpoint, and assignment IDs above." >&2
+     false
+   }
 ```
 
 ## 점검과 승인

@@ -387,6 +387,21 @@ def test_cleanup_succeeds_when_the_evidence_records_no_assignment(tmp_path):
     assert "no subscription role assignment" in run.stdout
 
 
+def test_cleanup_refuses_an_empty_assignment_recorded_with_a_principal(tmp_path):
+    run = run_cleanup(
+        tmp_path,
+        ["--yes"],
+        evidence=agent_setup(monitoring_assignment_id=""),
+    )
+
+    assert run.returncode != 0
+    assert "monitoring_contributor_assignment_id is empty" in run.stderr
+    assert AGENT_PRINCIPAL_ID in run.stderr
+    assert "az role assignment list" in run.stderr
+    assert "agent_principal_id" in run.stderr
+    assert "role assignment delete" not in run.az_calls
+
+
 def test_cleanup_refuses_an_assignment_recorded_without_its_principal(tmp_path):
     """Without the principal the record cannot be verified, and an
     unverifiable deletion is exactly what this hook must never do."""
@@ -403,6 +418,8 @@ def test_cleanup_refuses_malformed_evidence(tmp_path):
     run = run_cleanup(tmp_path, ["--yes"], raw_evidence="{not json at all")
 
     assert run.returncode != 0
+    assert "guides/01-agent-setup.md" in run.stderr
+    assert "agent-setup.json" in run.stderr
     assert "role assignment delete" not in run.az_calls
 
 
@@ -584,3 +601,6 @@ def test_readme_documents_the_teardown_hooks_and_manual_recovery():
         "the README must name the recovery step (re-running Agent setup/role "
         "assignment) an operator needs after canceling"
     )
+    assert "agent-setup.json" in section
+    assert "새 할당 ID" in section
+    assert "직접 갱신한 뒤" in section

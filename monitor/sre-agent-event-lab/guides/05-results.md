@@ -35,6 +35,8 @@ cd monitor/sre-agent-event-lab
 
 시나리오의 `run_status`가 `recovered`가 아니면 채점기는 capture 내용과 관계없이 모든 항목을 `FAIL`·0점으로 기록합니다.
 
+한 번 `conclusion`으로 끝난 capture는 같은 실행에서 다시 수집할 수 없습니다. 두 번째 결과가 필요하면 해당 시나리오를 다시 실행해 새 attempt와 evidence 디렉터리를 만든 뒤 capture합니다.
+
 `impact_scope`는 alert 규칙 자체의 scope를 그대로 옮겨 적는 것으로는 채워지지
 않습니다. 이 랩의 모든 alert는 Log Analytics workspace scope입니다
 (`infra/alerts.bicep`의 `scopes`/`targetResourceTypes:

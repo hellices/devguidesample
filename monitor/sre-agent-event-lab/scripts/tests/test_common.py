@@ -300,6 +300,13 @@ def test_run_scenario_records_recovery_only_after_health_and_alert_checks():
     assert "lab_state mark-failed" in script
 
 
+def test_run_scenario_default_alert_resolution_budget_covers_stateful_log_alerts():
+    script = RUN_SCENARIO_SH.read_text()
+
+    assert 'LAB_ALERT_RESOLVE_TIMEOUT_SECONDS:-1500' in script
+    assert 'local timeout_seconds="${2:-1500}"' in COMMON_SH.read_text()
+
+
 def test_capture_scenario_records_the_terminal_state_from_the_timeline():
     """The capture status is derived from the normalized timeline, so a
     missing thread/investigation/conclusion is recorded as itself and can

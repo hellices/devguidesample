@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from lab_script_harness import (
+    AZD_VALUES,
     ENV_NAME,
     MISSING_CONCLUSION_TIMELINE,
     RESOURCE_GROUP,
@@ -31,6 +32,8 @@ BOUNDED_WAITS = {
     "LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS": "5",
     "LAB_REVISION_READY_TIMEOUT_SECONDS": "5",
     "LAB_REVISION_READY_POLL_INTERVAL_SECONDS": "1",
+    "LAB_S3_PROPAGATION_TIMEOUT_SECONDS": "5",
+    "LAB_S3_PROPAGATION_POLL_INTERVAL_SECONDS": "1",
 }
 
 NO_ALERT_WAITS = dict(
@@ -253,6 +256,151 @@ def test_run_scenario_marks_failed_when_the_alert_never_fires(tmp_path):
     assert scenario_state["evidence_dir"] == str(evidence_dir)
 
 
+def test_run_scenario_retries_a_transient_alert_list_failure(tmp_path):
+    lab_run = make_lab(tmp_path, alert_list_failures=1)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    alert_reads = [
+        line
+        for line in lab_run.az_calls().splitlines()
+        if "monitorCondition=Fired" in line
+    ]
+    assert len(alert_reads) >= 2
+    assert lab_run.scenario_state("s1")["run_status"] == "recovered"
+
+
+def test_run_scenario_records_an_unexpected_abort_as_failed(tmp_path):
+    lab_run = make_lab(tmp_path, loadgen_fails=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "FAILURE_MODE=none" in lab_run.az_calls()
+    scenario = lab_run.scenario_state("s1")
+    assert scenario["run_status"] == "failed"
+    assert "aborted" in scenario["failure_reason"]
+
+
+def test_run_scenario_reports_when_aborted_state_cannot_be_recorded(tmp_path):
+    lab_run = make_lab(tmp_path, loadgen_fails=True, mark_failed_fails=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "CRITICAL: could not record the aborted s1 run as failed" in result.stderr
+    assert lab_run.scenario_state("s1")["run_status"] == "running"
+
+
+def test_run_scenario_records_a_post_recovery_timeline_failure(tmp_path):
+    lab_run = make_lab(tmp_path, timeline_jq_fails=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    scenario = lab_run.scenario_state("s1")
+    assert scenario["run_status"] == "failed"
+    assert "aborted" in scenario["failure_reason"]
+
+
+def test_run_scenario_discards_partial_jq_output_from_invalid_alert_json(tmp_path):
+    lab_run = make_lab(tmp_path, alert_list_invalid_json=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    scenario = lab_run.scenario_state("s1")
+    assert scenario["run_status"] == "failed"
+    assert "could not query Azure Alerts" in scenario["failure_reason"]
+
+
+def test_run_scenario_records_persistent_alert_api_errors_separately(tmp_path):
+    lab_run = make_lab(tmp_path, alert_list_failures=100)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    scenario = lab_run.scenario_state("s1")
+    assert "could not query Azure Alerts" in scenario["failure_reason"]
+    assert "did not fire" not in scenario["failure_reason"]
+    error_file = Path(scenario["evidence_dir"]) / "alert-list-error.log"
+    assert error_file.is_file()
+    assert "TooManyRequests" in error_file.read_text()
+
+
+def test_run_scenario_reports_alert_errors_after_an_earlier_valid_poll(tmp_path):
+    lab_run = make_lab(
+        tmp_path,
+        alert_fires=False,
+        alert_failure_after_success=True,
+    )
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    reason = lab_run.scenario_state("s1")["failure_reason"]
+    assert "did not fire" in reason
+    assert "polls failed" in reason
+    assert "alert-list-error.log" in reason
+    error_file = Path(lab_run.scenario_state("s1")["evidence_dir"]) / "alert-list-error.log"
+    assert "Forbidden" in error_file.read_text()
+
+
+def test_run_scenario_rejects_an_empty_successful_alert_response(tmp_path):
+    lab_run = make_lab(tmp_path, alert_list_empty_body=True)
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    reason = lab_run.scenario_state("s1")["failure_reason"]
+    assert "could not query Azure Alerts" in reason
+    assert "empty response" in (
+        Path(lab_run.scenario_state("s1")["evidence_dir"]) / "alert-list-error.log"
+    ).read_text()
+
+
+def test_run_scenario_preserves_reason_when_failure_state_write_fails(tmp_path):
+    lab_run = make_lab(
+        tmp_path,
+        alert_fires=False,
+        mark_failed_fails=True,
+    )
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    assert "did not fire" in result.stderr
+    assert "Evidence directory:" in result.stderr
+    assert "CRITICAL: could not record" in result.stderr
+
+
+def test_run_scenario_retries_the_original_failure_reason_from_the_exit_trap(tmp_path):
+    lab_run = make_lab(
+        tmp_path,
+        alert_fires=False,
+        mark_failed_failures=1,
+    )
+    lab_run.seed_state()
+
+    result = lab_run.run("run-scenario.sh", ["s1"], env=NO_ALERT_WAITS)
+
+    assert result.returncode != 0
+    scenario = lab_run.scenario_state("s1")
+    assert scenario["run_status"] == "failed"
+    assert "did not fire" in scenario["failure_reason"]
+    assert "run aborted" not in scenario["failure_reason"]
+
+
 def test_run_scenario_s1_reports_a_rejected_recovery_update_as_critical(tmp_path):
     """`recover` runs both directly and from the EXIT trap, and the trap
     calls it as `if ! recover`, which turns `set -e` off for the whole
@@ -344,6 +492,72 @@ def test_run_scenario_s3_recovers_and_records_a_successful_run(tmp_path):
     assert "role assignment delete" in lab_run.az_calls()
     assert "role assignment create" in lab_run.az_calls()
     assert lab_run.scenario_state("s3")["run_status"] == "recovered"
+
+
+def test_run_scenario_s3_waits_for_rbac_revocation_before_the_final_load(tmp_path):
+    lab_run = make_lab(tmp_path, s3_probe_failures=2)
+    lab_run.seed_state(
+        scenarios=dict(
+            captured("s1", tmp_path / "s1"), **captured("s2", tmp_path / "s2")
+        )
+    )
+
+    result = lab_run.run("run-scenario.sh", ["s3"], env=BOUNDED_WAITS)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = lab_run.python_calls().splitlines()
+    probe_indexes = [
+        index
+        for index, call in enumerate(calls)
+        if "/api/documents" in call and "--requests 1" in call
+    ]
+    final_index = next(
+        index
+        for index, call in enumerate(calls)
+        if "/api/documents" in call and "--requests 60" in call
+    )
+    assert len(probe_indexes) >= 3
+    assert max(probe_indexes) < final_index
+
+
+def test_run_scenario_s3_records_the_propagation_timeout_reason(tmp_path):
+    lab_run = make_lab(tmp_path, s3_probe_failures=1000)
+    lab_run.seed_state(
+        scenarios=dict(
+            captured("s1", tmp_path / "s1"), **captured("s2", tmp_path / "s2")
+        )
+    )
+    waits = dict(BOUNDED_WAITS, LAB_S3_PROPAGATION_TIMEOUT_SECONDS="2")
+
+    result = lab_run.run("run-scenario.sh", ["s3"], env=waits)
+
+    assert result.returncode != 0
+    scenario = lab_run.scenario_state("s3")
+    assert scenario["run_status"] == "failed"
+    assert "did not produce HTTP 503 within 2s" in scenario["failure_reason"]
+
+
+def test_run_scenario_s3_refuses_missing_recovery_outputs_before_deletion(tmp_path):
+    values = dict(AZD_VALUES)
+    values["containerAppPrincipalId"] = ""
+    values["AZURE_STORAGE_CONTAINER_SCOPE"] = ""
+    values["AZURE_BLOB_ROLE_ASSIGNMENT_NAME"] = ""
+    lab_run = make_lab(tmp_path, azd_values=values)
+    lab_run.seed_state(
+        scenarios=dict(
+            captured("s1", tmp_path / "s1"), **captured("s2", tmp_path / "s2")
+        )
+    )
+
+    result = lab_run.run("run-scenario.sh", ["s3"], env=BOUNDED_WAITS)
+
+    assert result.returncode != 0
+    assert "containerAppPrincipalId" in result.stderr
+    assert "storageContainerScope" in result.stderr
+    assert "blobRoleAssignmentName" in result.stderr
+    assert "azd provision" in result.stderr
+    assert "role assignment delete" not in lab_run.az_calls()
+    assert not sorted((lab_run.lab / "evidence").glob("s3-*"))
 
 
 def test_a_failed_run_blocks_the_next_scenario(tmp_path):
@@ -690,6 +904,128 @@ def test_capture_scenario_records_a_missing_conclusion_as_itself(tmp_path):
     blocked = lab_run.run("run-scenario.sh", ["s2"], env=BOUNDED_WAITS)
     assert blocked.returncode != 0
     assert "s1_captured" in blocked.stderr
+
+
+def test_capture_scenario_refuses_to_replace_a_successful_capture(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+    first = lab_run.run("capture-scenario.sh", ["s1"])
+    assert first.returncode == 0, first.stdout + first.stderr
+    calls_before = lab_run.lab_python_log.read_text().count("capture_agent.py")
+
+    second = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert second.returncode != 0
+    assert "already has a conclusion" in second.stderr
+    assert "lab.sh run s1" in second.stderr
+    assert lab_run.scenario_state("s1")["capture_status"] == "conclusion"
+    assert lab_run.lab_python_log.read_text().count("capture_agent.py") == calls_before
+
+
+def test_capture_scenario_render_failure_names_the_direct_retry(tmp_path):
+    lab_run = make_lab(tmp_path, render_fails=True)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+    first = lab_run.run("capture-scenario.sh", ["s1"])
+    assert first.returncode != 0
+    assert lab_run.scenario_state("s1")["capture_status"] == "conclusion"
+
+    second = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert second.returncode != 0
+    assert "render_capture.py" in second.stderr
+    assert "normalized-timeline.json" in second.stderr
+
+
+def test_query_evidence_refuses_missing_outputs_before_writing_artifacts(tmp_path):
+    values = dict(AZD_VALUES)
+    values["containerAppPrincipalId"] = ""
+    values["AZURE_STORAGE_CONTAINER_SCOPE"] = ""
+    lab_run = make_lab(tmp_path, azd_values=values)
+    evidence_dir = tmp_path / "evidence-out"
+
+    result = lab_run.run(
+        "query-evidence.sh",
+        ["s1", str(evidence_dir), "2026-08-14T00:00:00Z", "2026-08-14T01:00:00Z"],
+    )
+
+    assert result.returncode != 0
+    assert "containerAppPrincipalId" in result.stderr
+    assert "storageContainerScope" in result.stderr
+    assert "azd provision" in result.stderr
+    assert not evidence_dir.exists()
+
+
+def test_capture_scenario_missing_setup_names_the_file_and_guide(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert "evidence/agent-setup.json" in result.stderr
+    assert "guides/01-agent-setup.md" in result.stderr
+
+
+def test_capture_scenario_missing_endpoint_names_the_setup_file(tmp_path):
+    lab_run = make_lab(tmp_path)
+    setup_path = lab_run.write_agent_setup()
+    setup = json.loads(setup_path.read_text())
+    setup["agent_endpoint"] = ""
+    setup_path.write_text(json.dumps(setup))
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert "agent_endpoint" in result.stderr
+    assert "evidence/agent-setup.json" in result.stderr
+    assert "guides/01-agent-setup.md" in result.stderr
+
+
+def test_capture_scenario_rejects_a_placeholder_endpoint(tmp_path):
+    lab_run = make_lab(tmp_path)
+    setup_path = lab_run.write_agent_setup()
+    setup = json.loads(setup_path.read_text())
+    setup["agent_endpoint"] = "https://<agent>.<region>.azuresre.ai"
+    setup_path.write_text(json.dumps(setup))
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert "valid HTTPS" in result.stderr
+    assert "agent-setup.json" in result.stderr
+
+
+def test_capture_scenario_missing_alert_id_names_the_timeline_and_rerun(tmp_path):
+    lab_run = make_lab(tmp_path)
+    lab_run.write_agent_setup()
+    lab_run.seed_state()
+    run_result = lab_run.run("run-scenario.sh", ["s1"], env=BOUNDED_WAITS)
+    assert run_result.returncode == 0, run_result.stderr
+    evidence_dir = Path(lab_run.scenario_state("s1")["evidence_dir"])
+    timeline_path = evidence_dir / "timeline.json"
+    timeline = json.loads(timeline_path.read_text())
+    timeline["alert_id"] = ""
+    timeline_path.write_text(json.dumps(timeline))
+
+    result = lab_run.run("capture-scenario.sh", ["s1"])
+
+    assert result.returncode != 0
+    assert str(timeline_path) in result.stderr
+    assert "lab.sh run s1" in result.stderr
 
 
 def test_capture_scenario_without_a_recorded_run_names_the_command_to_run(tmp_path):

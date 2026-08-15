@@ -149,7 +149,7 @@ azd down --purge
 - predown hook `scripts/cleanup-external.sh --yes`: `evidence/agent-setup.json`에 기록된 구독 범위 Monitoring Contributor 할당만 제거합니다. 기록된 principal·역할·범위가 실제 할당과 모두 일치할 때만 삭제하고, 하나라도 어긋나면 아무것도 지우지 않습니다.
 - postdown hook `scripts/cleanup-external.sh --reset-image-env --yes`: 기록된 `SRE_CONTAINER_IMAGE`와 `SRE_IMAGE_TAG`를 비웁니다. 삭제가 실제로 성공한 뒤에만 실행되어야 하므로 predown이 아니라 postdown입니다.
 
-중요: predown hook은 `azd down`이 삭제 **확인** 프롬프트를 띄우기 **전에** 실행됩니다. 그 프롬프트에서 **취소**해도 이미 제거된 Monitoring Contributor 할당은 돌아오지 않습니다. 리소스 그룹은 남지만 Agent의 구독 범위 권한은 사라진 상태이므로, 계속 쓰려면 역할 할당을 다시 만들고 `./scripts/lab.sh acknowledge agent-setup`으로 `evidence/agent-setup.json`을 새 할당 ID로 갱신해야 합니다.
+중요: predown hook은 `azd down`이 삭제 **확인** 프롬프트를 띄우기 **전에** 실행됩니다. 그 프롬프트에서 **취소**해도 이미 제거된 Monitoring Contributor 할당은 돌아오지 않습니다. 리소스 그룹은 남지만 Agent의 구독 범위 권한은 사라진 상태이므로, 계속 쓰려면 역할 할당을 다시 만들고 `evidence/agent-setup.json`을 새 할당 ID로 직접 갱신한 뒤 `./scripts/lab.sh acknowledge agent-setup`을 실행해야 합니다.
 
 hook이 실패해 손으로 다시 실행할 때는 아래를 직접 호출합니다. `--yes` 없이는 계획만 출력합니다.
 

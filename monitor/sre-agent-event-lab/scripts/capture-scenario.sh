@@ -34,8 +34,17 @@ readonly EVIDENCE_DIR
 readonly TIMELINE_FILE="${EVIDENCE_DIR}/timeline.json"
 readonly NORMALIZED_FILE="${EVIDENCE_DIR}/normalized-timeline.json"
 
+CURRENT_CAPTURE_STATE="$(lab_state capture-status "${SCENARIO}")"
+if [[ "${CURRENT_CAPTURE_STATE}" == "conclusion" ]]; then
+  echo "${SCENARIO} already has a conclusion for this run." >&2
+  echo "To collect another capture, start a new attempt first: ./scripts/lab.sh run ${SCENARIO}" >&2
+  echo "To regenerate only the rendered assets, run: ${PYTHON} ${SCRIPT_DIR}/render_capture.py ${NORMALIZED_FILE} ${ASSET_DIR} --scenario ${SCENARIO}" >&2
+  exit 1
+fi
+
 if [[ ! -f "${AGENT_SETUP_FILE}" ]]; then
   echo "Missing Agent setup evidence: ${AGENT_SETUP_FILE}" >&2
+  echo "Create evidence/agent-setup.json as shown in guides/01-agent-setup.md." >&2
   exit 1
 fi
 if [[ ! -f "${TIMELINE_FILE}" ]]; then
@@ -55,8 +64,14 @@ fi
 
 AGENT_ENDPOINT="$(jq -r '.agent_endpoint // empty' "${AGENT_SETUP_FILE}")"
 ALERT_ID="$(jq -r '.alert_id // empty' "${TIMELINE_FILE}")"
-if [[ -z "${AGENT_ENDPOINT}" || -z "${ALERT_ID}" ]]; then
-  echo "Agent endpoint or alert ID is missing from evidence." >&2
+if [[ -z "${AGENT_ENDPOINT}" || "${AGENT_ENDPOINT}" != https://* || "${AGENT_ENDPOINT}" == *"<"* || "${AGENT_ENDPOINT}" == *">"* ]]; then
+  echo "agent_endpoint is missing or is not a valid HTTPS endpoint in ${AGENT_SETUP_FILE}." >&2
+  echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md." >&2
+  exit 1
+fi
+if [[ -z "${ALERT_ID}" ]]; then
+  echo "alert_id is missing from ${TIMELINE_FILE}." >&2
+  echo "Create a new scenario timeline by running: ./scripts/lab.sh run ${SCENARIO}" >&2
   exit 1
 fi
 readonly AGENT_ENDPOINT ALERT_ID

@@ -431,6 +431,42 @@ def test_scenario_guides_say_a_rerun_retires_the_previous_attempt():
         assert re.search(r"(지워|지웁|초기화|사라)", joined), (name, joined)
 
 
+def test_s1_guide_documents_the_full_stateful_alert_resolution_budget():
+    text = (GUIDES / "02-scenario-s1.md").read_text()
+
+    assert "25분" in text
+
+
+def test_agent_setup_guide_creates_roles_and_captures_assignment_ids():
+    text = (GUIDES / "01-agent-setup.md").read_text()
+
+    assert text.count("az role assignment create") >= 4
+    assert "--assignee-object-id" in text
+    assert '"Reader"' in text
+    assert '"Monitoring Contributor"' in text
+    assert "--query id" in text
+    assert "MONITORING_CONTRIBUTOR_ASSIGNMENT_ID" in text
+    assert "UAMI_MONITORING_CONTRIBUTOR_ASSIGNMENT_ID" in text
+    assert "az role assignment list" in text
+    assert "jq -e" in text
+    assert "같은 셸" in text
+    assert "agent-setup.json is incomplete" in text
+    assert "exit 1" not in text
+    assert re.search(r"\n\s+false\n", text)
+    assert 'test("^https://[^<>]+$")' in text
+
+
+def test_s3_guide_documents_propagation_wait_and_manual_restore_command():
+    text = (GUIDES / "04-scenario-s3.md").read_text()
+
+    assert "최대 5분" in text
+    assert "did not produce HTTP 503 within 300s" in text
+    assert "AZURE_BLOB_ROLE_ASSIGNMENT_NAME" in text
+    assert "AZURE_CONTAINER_APP_PRINCIPAL_ID" in text
+    assert "AZURE_STORAGE_CONTAINER_SCOPE" in text
+    assert "az role assignment create" in text
+
+
 def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
     """The recorded S1/S2/S3 run used a one-minute static threshold. That
     result stays plausible because the later live failure was the legacy

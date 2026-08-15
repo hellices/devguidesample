@@ -23,13 +23,15 @@ verify_lab_resource_group
 lab_state require-run "${SCENARIO}"
 
 # Overridable only for tests; production runs use the defaults.
-readonly ALERT_RESOLVE_TIMEOUT_SECONDS="${LAB_ALERT_RESOLVE_TIMEOUT_SECONDS:-900}"
+readonly ALERT_RESOLVE_TIMEOUT_SECONDS="${LAB_ALERT_RESOLVE_TIMEOUT_SECONDS:-1500}"
 readonly ALERT_RESOLVE_POLL_INTERVAL_SECONDS="${LAB_ALERT_RESOLVE_POLL_INTERVAL_SECONDS:-20}"
 readonly RECOVERY_HEALTH_TIMEOUT_SECONDS="${LAB_RECOVERY_HEALTH_TIMEOUT_SECONDS:-600}"
 readonly ALERT_FIRE_TIMEOUT_SECONDS="${LAB_ALERT_FIRE_TIMEOUT_SECONDS:-720}"
 readonly ALERT_FIRE_POLL_INTERVAL_SECONDS="${LAB_ALERT_FIRE_POLL_INTERVAL_SECONDS:-20}"
 readonly REVISION_READY_TIMEOUT_SECONDS="${LAB_REVISION_READY_TIMEOUT_SECONDS:-600}"
 readonly REVISION_READY_POLL_INTERVAL_SECONDS="${LAB_REVISION_READY_POLL_INTERVAL_SECONDS:-10}"
+readonly S3_PROPAGATION_TIMEOUT_SECONDS="${LAB_S3_PROPAGATION_TIMEOUT_SECONDS:-300}"
+readonly S3_PROPAGATION_POLL_INTERVAL_SECONDS="${LAB_S3_PROPAGATION_POLL_INTERVAL_SECONDS:-10}"
 
 APP_NAME="$(deployment_output containerAppName)"
 APP_FQDN="$(deployment_output containerAppFqdn)"
@@ -38,6 +40,19 @@ STORAGE_CONTAINER_SCOPE="$(deployment_output storageContainerScope)"
 BLOB_ROLE_ASSIGNMENT_NAME="$(deployment_output blobRoleAssignmentName)"
 readonly APP_NAME APP_FQDN WORKLOAD_PRINCIPAL_ID STORAGE_CONTAINER_SCOPE
 readonly BLOB_ROLE_ASSIGNMENT_NAME
+
+MISSING_OUTPUTS=""
+[[ -n "${APP_NAME}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} containerAppName"
+[[ -n "${APP_FQDN}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} containerAppFqdn"
+if [[ "${SCENARIO}" == "s3" ]]; then
+  [[ -n "${WORKLOAD_PRINCIPAL_ID}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} containerAppPrincipalId"
+  [[ -n "${STORAGE_CONTAINER_SCOPE}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} storageContainerScope"
+  [[ -n "${BLOB_ROLE_ASSIGNMENT_NAME}" ]] || MISSING_OUTPUTS="${MISSING_OUTPUTS} blobRoleAssignmentName"
+fi
+if [[ -n "${MISSING_OUTPUTS}" ]]; then
+  echo "Missing deployment outputs:${MISSING_OUTPUTS}. Run: azd provision" >&2
+  exit 1
+fi
 
 EVIDENCE_DIR="$(evidence_dir_path "${SCENARIO}")"
 readonly EVIDENCE_DIR
@@ -57,14 +72,53 @@ readonly EVIDENCE_DIR
 # created afterwards, so a refusal leaves nothing behind in `evidence/`.
 lab_state begin-run "${SCENARIO}" "${EVIDENCE_DIR}"
 mkdir -p "${EVIDENCE_DIR}"
+readonly ALERT_LIST_RESPONSE_FILE="${EVIDENCE_DIR}/alert-list-response.json"
+readonly ALERT_LIST_ERROR_FILE="${EVIDENCE_DIR}/alert-list-error.log"
+readonly ALERT_LIST_ATTEMPT_ERROR_FILE="${EVIDENCE_DIR}/.alert-list-error.tmp"
 
 RECOVERED=0
+OUTCOME_RECORDED=0
+PENDING_FAILURE_REASON=""
+ALERT_LIST_FAILURES=0
+ALERT_LIST_VALID_RESPONSES=0
+ALERT_LIST_POLLS=0
 INJECTED_AT=""
 REVISION_READY_AT=""
 ROLE_DELETED_AT=""
 ALERT_RULE_NAME=""
 ALERT_ID=""
 ALERT_FIRED_AT=""
+
+record_failed_run() {
+  local reason="$1"
+  PENDING_FAILURE_REASON="${reason}"
+  if ! lab_state mark-failed "${SCENARIO}" "${EVIDENCE_DIR}" --reason "${reason}"; then
+    return 1
+  fi
+  OUTCOME_RECORDED=1
+  PENDING_FAILURE_REASON=""
+}
+
+wait_for_s3_fault() {
+  local started="${SECONDS}"
+  local probe_file="${EVIDENCE_DIR}/rbac-probe.json"
+
+  while (( SECONDS - started < S3_PROPAGATION_TIMEOUT_SECONDS )); do
+    if python3 "${SCRIPT_DIR}/loadgen.py" \
+      "https://${APP_FQDN}/api/documents" \
+      --requests 1 \
+      --concurrency 1 \
+      --expect-status 503 \
+      --output "${probe_file}"; then
+      return 0
+    fi
+    echo "Waiting for the Storage RBAC deletion to reach the data plane..." >&2
+    sleep "${S3_PROPAGATION_POLL_INTERVAL_SECONDS}"
+  done
+
+  echo "Storage RBAC deletion did not produce HTTP 503 within ${S3_PROPAGATION_TIMEOUT_SECONDS}s." >&2
+  return 1
+}
 
 # restore_container_app_env SETTING -- reverts one injected Container App
 # setting and waits for the revision that carries it to become active.
@@ -153,10 +207,24 @@ recover() {
 
 recover_on_exit() {
   local original_status="$?"
+  local recovery_status=0
+  local failure_reason
   trap - EXIT
   if ! recover; then
+    recovery_status=1
     echo "CRITICAL: scenario recovery failed for ${SCENARIO}." >&2
     echo "CRITICAL: the injected fault is still active. Revert it by hand before running any other scenario." >&2
+  fi
+  if [[ "${OUTCOME_RECORDED}" -eq 0 ]]; then
+    failure_reason="${PENDING_FAILURE_REASON:-run aborted with status ${original_status}}"
+    if [[ "${recovery_status}" -ne 0 ]]; then
+      failure_reason="${failure_reason}; automatic recovery failed"
+    fi
+    if ! record_failed_run "${failure_reason}"; then
+      echo "CRITICAL: could not record the aborted ${SCENARIO} run as failed." >&2
+    fi
+  fi
+  if [[ "${recovery_status}" -ne 0 ]]; then
     exit 1
   fi
   exit "${original_status}"
@@ -216,6 +284,11 @@ case "${SCENARIO}" in
     INJECTED_AT="$(utc_now)"
     az role assignment delete --ids "${ROLE_ASSIGNMENT_ID}"
     ROLE_DELETED_AT="$(utc_now)"
+    if ! wait_for_s3_fault; then
+      S3_PROPAGATION_FAILURE="Storage RBAC deletion did not produce HTTP 503 within ${S3_PROPAGATION_TIMEOUT_SECONDS}s."
+      record_failed_run "${S3_PROPAGATION_FAILURE}"
+      exit 1
+    fi
     python3 "${SCRIPT_DIR}/loadgen.py" \
       "https://${APP_FQDN}/api/documents" \
       --requests 60 \
@@ -228,13 +301,41 @@ readonly ALERT_RULE_NAME
 
 started="${SECONDS}"
 while (( SECONDS - started < ALERT_FIRE_TIMEOUT_SECONDS )); do
-  alerts_json="$(az rest \
+  ALERT_LIST_POLLS=$((ALERT_LIST_POLLS + 1))
+  if ! az rest \
     --method get \
-    --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-03-01&targetResourceGroup=${RESOURCE_GROUP}&monitorCondition=Fired")"
-  ALERT_ID="$(jq -r \
+    --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-03-01&targetResourceGroup=${RESOURCE_GROUP}&monitorCondition=Fired" \
+    >"${ALERT_LIST_RESPONSE_FILE}" 2>"${ALERT_LIST_ATTEMPT_ERROR_FILE}"; then
+    ALERT_LIST_FAILURES=$((ALERT_LIST_FAILURES + 1))
+    mv "${ALERT_LIST_ATTEMPT_ERROR_FILE}" "${ALERT_LIST_ERROR_FILE}"
+    echo "Azure Alerts list request failed; the last error is in ${ALERT_LIST_ERROR_FILE}. Retrying within the ${ALERT_FIRE_TIMEOUT_SECONDS}s budget." >&2
+    sleep "${ALERT_FIRE_POLL_INTERVAL_SECONDS}"
+    continue
+  fi
+  rm -f "${ALERT_LIST_ATTEMPT_ERROR_FILE}"
+  if [[ ! -s "${ALERT_LIST_RESPONSE_FILE}" ]]; then
+    ALERT_LIST_FAILURES=$((ALERT_LIST_FAILURES + 1))
+    ALERT_ID=""
+    echo "Azure Alerts list returned an empty response." >"${ALERT_LIST_ERROR_FILE}"
+    echo "Azure Alerts list returned an empty response; details are in ${ALERT_LIST_ERROR_FILE}. Retrying within the ${ALERT_FIRE_TIMEOUT_SECONDS}s budget." >&2
+    sleep "${ALERT_FIRE_POLL_INTERVAL_SECONDS}"
+    continue
+  fi
+  alerts_json="$(cat "${ALERT_LIST_RESPONSE_FILE}")"
+  candidate_alert_id=""
+  if ! candidate_alert_id="$(jq -r \
     --arg rule "${ALERT_RULE_NAME}" \
     'first(.value[] | select(.properties.essentials.alertRule | endswith($rule)) | .id) // ""' \
-    <<<"${alerts_json}")"
+    <<<"${alerts_json}" 2>/dev/null)"; then
+    ALERT_LIST_FAILURES=$((ALERT_LIST_FAILURES + 1))
+    ALERT_ID=""
+    printf 'Azure Alerts list returned invalid JSON. Response: %s\n' "${alerts_json}" >"${ALERT_LIST_ERROR_FILE}"
+    echo "Azure Alerts list returned invalid JSON; details are in ${ALERT_LIST_ERROR_FILE}. Retrying within the ${ALERT_FIRE_TIMEOUT_SECONDS}s budget." >&2
+    sleep "${ALERT_FIRE_POLL_INTERVAL_SECONDS}"
+    continue
+  fi
+  ALERT_LIST_VALID_RESPONSES=$((ALERT_LIST_VALID_RESPONSES + 1))
+  ALERT_ID="${candidate_alert_id}"
   if [[ -n "${ALERT_ID}" ]]; then
     ALERT_FIRED_AT="$(jq -r \
       --arg id "${ALERT_ID}" \
@@ -252,17 +353,23 @@ done
 # attempt as anything but failed. The EXIT trap (still armed here) still
 # reverts whatever was injected above.
 if [[ -z "${ALERT_ID}" ]]; then
-  ALERT_NEVER_FIRED_REASON="alert ${ALERT_RULE_NAME} did not fire within ${ALERT_FIRE_TIMEOUT_SECONDS}s."
-  lab_state mark-failed "${SCENARIO}" "${EVIDENCE_DIR}" --reason "${ALERT_NEVER_FIRED_REASON}"
+  if [[ "${ALERT_LIST_VALID_RESPONSES}" -eq 0 && "${ALERT_LIST_FAILURES}" -gt 0 ]]; then
+    ALERT_NEVER_FIRED_REASON="could not query Azure Alerts after ${ALERT_LIST_FAILURES} failed attempts within ${ALERT_FIRE_TIMEOUT_SECONDS}s; last error: ${ALERT_LIST_ERROR_FILE}"
+  else
+    ALERT_NEVER_FIRED_REASON="alert ${ALERT_RULE_NAME} did not fire within ${ALERT_FIRE_TIMEOUT_SECONDS}s."
+    if [[ "${ALERT_LIST_FAILURES}" -gt 0 ]]; then
+      ALERT_NEVER_FIRED_REASON="${ALERT_NEVER_FIRED_REASON} ${ALERT_LIST_FAILURES} of ${ALERT_LIST_POLLS} polls failed; last error: ${ALERT_LIST_ERROR_FILE}"
+    fi
+  fi
   echo "${ALERT_NEVER_FIRED_REASON}" >&2
   echo "Evidence directory: ${EVIDENCE_DIR}" >&2
+  record_failed_run "${ALERT_NEVER_FIRED_REASON}"
   exit 1
 fi
 
 recover
 RECOVERED_AT="$(utc_now)"
 readonly RECOVERED_AT
-trap - EXIT
 
 # Recovery is only real when the workload is healthy again *and* Azure
 # Monitor closed the alert this run fired. Both are waited for before any
@@ -313,12 +420,13 @@ jq -n \
   }' | tee "${EVIDENCE_DIR}/timeline.json"
 
 if [[ "${RECOVERY_CONFIRMED}" -ne 1 ]]; then
-  lab_state mark-failed "${SCENARIO}" "${EVIDENCE_DIR}" --reason "${RECOVERY_FAILURE}"
   echo "Scenario ${SCENARIO} is recorded as failed: ${RECOVERY_FAILURE}." >&2
   echo "Evidence directory: ${EVIDENCE_DIR}" >&2
+  record_failed_run "${RECOVERY_FAILURE}"
   exit 1
 fi
 
 lab_state mark-recovered "${SCENARIO}" "${EVIDENCE_DIR}"
+OUTCOME_RECORDED=1
 
 printf 'Evidence directory: %s\n' "${EVIDENCE_DIR}"
