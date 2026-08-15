@@ -12,6 +12,7 @@ distinguishes one: a directory with its own `azure.yaml`, i.e. something
 listed here.
 """
 import re
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -31,15 +32,20 @@ IGNORED_PARTS = {
 }
 
 
+@lru_cache(maxsize=1)
 def runnable_labs():
-    """Every directory an operator can provision with `azd up`."""
+    """Every directory an operator can provision with `azd up`.
+
+    Cached: this walks the whole repository, and every test below needs the
+    same answer.
+    """
     labs = []
     for azure_yaml in REPO_ROOT.rglob("azure.yaml"):
         relative = azure_yaml.relative_to(REPO_ROOT)
         if IGNORED_PARTS & set(relative.parts):
             continue
         labs.append(relative.parent)
-    return sorted(labs)
+    return tuple(sorted(labs))
 
 
 def lab_section():
