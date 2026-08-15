@@ -115,6 +115,10 @@ def test_extract_subscription_id_finds_a_present_guid():
     assert extract_subscription_id(header) == "11111111-2222-3333-4444-555555555555"
 
 
+def test_historical_validation_header_redacts_subscription_id():
+    assert recorded_subscription_id() is None
+
+
 def test_no_test_source_restates_the_real_subscription_id():
     """A test that proves a file does not leak the subscription by writing
     the subscription into the test is self-defeating: the value is in the

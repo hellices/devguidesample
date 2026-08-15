@@ -33,15 +33,13 @@
 # re-running `azd down` works.
 #
 # Why the image values are cleared in `postdown` and not here: `predown`
-# runs before azd asks the operator to confirm the deletion. An operator who
-# answers "no" keeps every resource, so clearing SRE_CONTAINER_IMAGE /
-# SRE_IMAGE_TAG at that point would break an environment nothing happened
-# to. `postdown` is the documented counterpart hook (azd command hooks:
-# pre/post for restore, provision, package, deploy, publish, up and down),
-# and azd runs a post hook only after the action itself succeeded --
-# `HooksRunner.Invoke` returns early when the action fails
-# (cli/azd/pkg/ext/hooks_runner.go), so a cancelled or failed `azd down`
-# leaves the recorded image values alone.
+# runs before azd asks the operator to confirm the deletion. At that point
+# this hook may already have removed the recorded external role assignments.
+# Cancelling keeps the resource group and image values, but does not restore
+# those assignments; README documents how to recreate and re-record them.
+# `postdown` runs only after the action itself succeeds, so a cancelled or
+# failed `azd down` leaves SRE_CONTAINER_IMAGE / SRE_IMAGE_TAG available for
+# the retained workload.
 set -euo pipefail
 
 CLEANUP_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
