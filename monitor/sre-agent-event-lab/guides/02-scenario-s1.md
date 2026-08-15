@@ -7,32 +7,301 @@
 - [01-agent-setup.md](01-agent-setup.md)를 마쳤고 `evidence/state.json`에 `baseline_passed`와 `agent_setup_acknowledged`가 기록되어 있습니다.
 - 현재 활성 구독이 azd 환경의 구독과 같습니다.
 
-이 두 가지만 `evidence/state.json`을 통해 실제로 강제됩니다. 여기에 더해, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 같은 Container App 하나를 쓰고, 끝나지 않은 실행은 장애가 아직 살아 있을 수 있는 상태이기 때문입니다. 거부 메시지는 어떤 시나리오가 어떤 상태로 막고 있는지와 해결 명령을 함께 알려 줍니다. `failed`는 그 시나리오를 다시 실행하면 풀리고, `running`은 실행이 끝나기를 기다리거나 `python3 scripts/lab_state.py mark-failed s1`처럼 끝난 방식을 기록해야 풀립니다. 잠금까지 제공하지는 않으므로(1인 운영자 전제) 두 터미널에서 같은 명령을 정확히 동시에 띄우는 경우는 여전히 운영자가 피해야 합니다.
+이 두 가지만 `evidence/state.json`을 통해 실제로 강제됩니다. 아래 "수동 실행"은 이 게이트를 거치지 않으므로, 이미 다른 시나리오의 장애가 살아 있지 않은지는 직접 확인해야 합니다. "지름길"의 `lab.sh`는 이 확인까지 대신합니다.
 
 조건이 하나라도 없으면 실행이 시작 전에 거부되고 무엇을 먼저 하라는 안내가 출력됩니다.
 
-## 실행 명령
+## 수동 실행
+
+이 절의 명령을 순서대로 실행하면 스크립트 없이 시나리오 하나를 끝까지 진행할 수 있습니다. 무엇이 Azure에 적용되는지 명령 그대로 보이는 것이 목적입니다. 각 블록은 앞 단계가 성공했는지 플래그로 확인하고 진행합니다.
+
+먼저 이번 실행에서 계속 쓸 값을 셸 변수로 읽습니다. 아래 블록부터 마지막 `record-capture`까지는 같은 셸에서 실행합니다.
 
 ```bash
 cd monitor/sre-agent-event-lab
-./scripts/lab.sh run s1
+LAB_READY=1
+
+RESOURCE_GROUP="$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null)" || LAB_READY=0
+SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID 2>/dev/null)" || LAB_READY=0
+APP_NAME="$(azd env get-value AZURE_CONTAINER_APP_NAME 2>/dev/null)" || LAB_READY=0
+APP_FQDN="$(azd env get-value AZURE_CONTAINER_APP_FQDN 2>/dev/null)" || LAB_READY=0
+
+ALERT_RULE_NAME="alert-sre-lab-s1-http500"
+EVIDENCE_DIR="${PWD}/evidence/s1-$(date -u +%Y%m%dT%H%M%SZ)"
+
+for value in "${RESOURCE_GROUP}" "${SUBSCRIPTION_ID}" "${APP_NAME}" "${APP_FQDN}"; do
+  [[ -n "${value// /}" ]] || LAB_READY=0
+done
+
+if (( LAB_READY )); then
+  mkdir -p "${EVIDENCE_DIR}"
+  python3 scripts/lab_state.py begin-run s1 "${EVIDENCE_DIR}" || LAB_READY=0
+else
+  echo "azd 환경 값을 읽지 못했습니다. 먼저 azd provision을 실행하세요." >&2
+fi
+(( LAB_READY )) || echo "준비되지 않았습니다. 아래 단계는 모두 건너뜁니다." >&2
 ```
 
-한 번의 실행이 장애 주입 → 부하 → 경고 대기 → 복구 → 타임라인 저장까지 진행합니다. 경고가 발생하지 않으면 12분 뒤 실패로 기록하고 종료합니다. 스크립트를 중간에 끊어도 종료 트랩이 복구를 시도합니다.
+`azd env get-value`는 실패해도 오류 문장을 표준 출력으로 내보내므로 위 검사가 필요합니다. `begin-run`은 이번 시도를 기록하면서 순서·중복 실행 게이트도 함께 적용하고, 거부되면 `LAB_READY`가 0이 되어 이후 단계가 모두 건너뜁니다. 근거 디렉터리를 절대 경로로 두는 이유는 채점기와 캡처 도구가 기록된 경로를 실행 위치와 무관하게 다시 열기 때문입니다.
 
-경고가 발생하고 복구까지 끝나면 조사 근거를 수집합니다.
+### 1. 장애 주입
+
+`FAILURE_MODE=http500`을 설정하면 새 revision이 배포되고 `/api/orders`가 500을 반환합니다.
 
 ```bash
+INJECTED=0
+INJECTED_AT=""
+if (( LAB_READY )); then
+  OLD_REVISION="$(az containerapp show \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --query properties.latestRevisionName -o tsv)"
+
+  az containerapp update \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --set-env-vars FAILURE_MODE=http500 \
+    --output none \
+    && INJECTED=1 && INJECTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+fi
+```
+
+부하를 넣기 전에 **새** revision이 활성·정상이 될 때까지 최대 10분 기다립니다. 이 확인을 건너뛰면 이전 revision에 부하가 들어가 경고가 발생하지 않습니다.
+
+```bash
+REVISION_OK=0
+if (( INJECTED )); then
+  DEADLINE=$(( SECONDS + 600 ))
+  while (( SECONDS < DEADLINE )); do
+    NEW_REVISION="$(az containerapp show \
+      --resource-group "${RESOURCE_GROUP}" \
+      --name "${APP_NAME}" \
+      --query properties.latestRevisionName -o tsv)"
+    STATE="$(az containerapp revision list \
+      --resource-group "${RESOURCE_GROUP}" \
+      --name "${APP_NAME}" \
+      --query "[?name=='${NEW_REVISION}'].{health:properties.healthState, active:properties.active} | [0]" -o json)"
+    echo "${NEW_REVISION} ${STATE}"
+    if [[ -n "${NEW_REVISION}" && "${NEW_REVISION}" != "${OLD_REVISION}" ]] \
+      && [[ "$(jq -r '.health // empty' <<<"${STATE}")" == "Healthy" ]] \
+      && [[ "$(jq -r '.active // empty' <<<"${STATE}")" == "true" ]]; then
+      REVISION_OK=1
+      break
+    fi
+    sleep 10
+  done
+  (( REVISION_OK )) || echo "새 revision이 시간 안에 정상이 되지 않았습니다." >&2
+fi
+```
+
+### 2. 부하 발생
+
+경고 임계값을 넘길 만큼의 500 응답을 만듭니다. `loadgen.py`는 요청을 보내고 상태 코드를 집계하는 것 외에는 하지 않습니다.
+
+```bash
+if (( REVISION_OK )); then
+  python3 scripts/loadgen.py \
+    "https://${APP_FQDN}/api/orders" \
+    --requests 120 \
+    --concurrency 4 \
+    --expect-status 500 \
+    --output "${EVIDENCE_DIR}/load.json"
+else
+  echo "장애가 적용되지 않아 부하를 넣지 않습니다. 4단계 복구로 넘어가세요." >&2
+fi
+```
+
+### 3. 경고 확인
+
+Sev2 경고가 발생할 때까지 최대 12분 기다립니다. 보통 1~3분 걸립니다.
+
+```bash
+ALERT_ID=""
+ALERT_FIRED_AT=""
+if (( REVISION_OK )); then
+  DEADLINE=$(( SECONDS + 720 ))
+  while (( SECONDS < DEADLINE )); do
+    ALERT_JSON="$(az rest \
+      --method get \
+      --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/providers/Microsoft.AlertsManagement/alerts?api-version=2019-03-01&targetResourceGroup=${RESOURCE_GROUP}&monitorCondition=Fired" \
+      --query "value[?contains(properties.essentials.alertRule, '${ALERT_RULE_NAME}')] | [0].{id:id, started:properties.essentials.startDateTime}" \
+      -o json)"
+    ALERT_ID="$(jq -r '.id // empty' <<<"${ALERT_JSON}")"
+    ALERT_FIRED_AT="$(jq -r '.started // empty' <<<"${ALERT_JSON}")"
+    [[ -n "${ALERT_ID}" ]] && break
+    sleep 20
+  done
+fi
+echo "${ALERT_ID:-경고가 아직 없습니다}"
+```
+
+경고가 끝내 발생하지 않아도 4단계 복구는 반드시 실행합니다. 5단계의 조건 분기가 실패로 기록합니다.
+
+### 4. 복구
+
+장애를 되돌립니다. 이 명령을 잊으면 워크로드는 계속 500을 반환합니다.
+
+```bash
+RECOVERY_OK=0
+if (( INJECTED )); then
+RECOVERY_OLD_REVISION="$(az containerapp show \
+  --resource-group "${RESOURCE_GROUP}" \
+  --name "${APP_NAME}" \
+  --query properties.latestRevisionName -o tsv)"
+
+az containerapp update \
+  --resource-group "${RESOURCE_GROUP}" \
+  --name "${APP_NAME}" \
+  --set-env-vars FAILURE_MODE=none \
+  --output none
+
+REVISION_OK=0
+DEADLINE=$(( SECONDS + 600 ))
+while (( SECONDS < DEADLINE )); do
+  NEW_REVISION="$(az containerapp show \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --query properties.latestRevisionName -o tsv)"
+  STATE="$(az containerapp revision list \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --query "[?name=='${NEW_REVISION}'].{health:properties.healthState, active:properties.active} | [0]" -o json)"
+  echo "${NEW_REVISION} ${STATE}"
+  if [[ -n "${NEW_REVISION}" && "${NEW_REVISION}" != "${RECOVERY_OLD_REVISION}" ]] \
+    && [[ "$(jq -r '.health // empty' <<<"${STATE}")" == "Healthy" ]] \
+    && [[ "$(jq -r '.active // empty' <<<"${STATE}")" == "true" ]]; then
+    REVISION_OK=1
+    break
+  fi
+  sleep 10
+done
+(( REVISION_OK )) || echo "새 revision이 시간 안에 정상이 되지 않았습니다." >&2
+RECOVERY_OK=${REVISION_OK}
+RECOVERED_AT=""
+(( RECOVERY_OK )) && RECOVERED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+curl -s --max-time 15 -o /dev/null -w '%{http_code}\n' "https://${APP_FQDN}/api/orders"
+else
+  echo "주입된 장애가 없어 복구를 건너뜁니다." >&2
+  RECOVERY_OK=1
+fi
+```
+
+`RECOVERY_OK`가 0이면 장애가 아직 살아 있다는 뜻입니다. 다음 시나리오로 넘어가기 전에 `FAILURE_MODE=none`을 직접 다시 적용하고 revision 상태를 확인하세요.
+
+경고가 `Resolved`로 바뀔 때까지 기다립니다. 1분 주기 stateful log alert는 조건이 10분간 불충족이어야 해제되므로 최대 25분까지 걸립니다.
+
+```bash
+ALERT_CONDITION=""
+if [[ -n "${ALERT_ID}" ]]; then
+  DEADLINE=$(( SECONDS + 1500 ))
+  while (( SECONDS < DEADLINE )); do
+    ALERT_CONDITION="$(az rest \
+      --method get \
+      --url "https://management.azure.com${ALERT_ID}?api-version=2019-03-01" \
+      --query "properties.essentials.monitorCondition" -o tsv)"
+    echo "${ALERT_CONDITION}"
+    [[ "${ALERT_CONDITION}" == "Resolved" ]] && break
+    sleep 20
+  done
+fi
+```
+
+### 5. 실행 결과 기록
+
+채점기가 읽는 상태와 타임라인을 남깁니다.
+
+```bash
+if (( LAB_READY )); then
+ALERT_RESOLVED_AT=""
+[[ "${ALERT_CONDITION}" == "Resolved" ]] && ALERT_RESOLVED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+jq -n \
+  --arg scenario s1 \
+  --arg injectedAt "${INJECTED_AT}" \
+  --arg alertRule "${ALERT_RULE_NAME}" \
+  --arg alertId "${ALERT_ID}" \
+  --arg alertFiredAt "${ALERT_FIRED_AT}" \
+  --arg recoveredAt "${RECOVERED_AT}" \
+  --arg alertResolvedAt "${ALERT_RESOLVED_AT}" \
+  '{scenario: $scenario, injected_at: $injectedAt, alert_rule: $alertRule,
+    alert_id: $alertId, alert_fired_at: $alertFiredAt, recovered_at: (if $recoveredAt == "" then null else $recoveredAt end),
+    alert_resolved_at: (if $alertResolvedAt == "" then null else $alertResolvedAt end)}' \
+  > "${EVIDENCE_DIR}/timeline.json"
+
+if (( RECOVERY_OK )) && [[ "${ALERT_CONDITION}" == "Resolved" ]]; then
+  python3 scripts/lab_state.py mark-recovered s1 "${EVIDENCE_DIR}"
+else
+  python3 scripts/lab_state.py mark-failed s1 "${EVIDENCE_DIR}" \
+    --reason "recovery_ok=${RECOVERY_OK} alert=${ALERT_CONDITION:-unknown}"
+fi
+fi
+```
+
+복구는 워크로드 정상화(`RECOVERY_OK`)와 경고 해제가 모두 확인될 때만 인정합니다. 둘 중 하나라도 어긋나면 실패로 기록되므로, 장애가 남아 있는 실행이 성공으로 채점되지 않습니다.
+
+`timeline.json`은 캡처 도구가 대상 경고를 찾는 파일이며, 이 파일이 없으면 지름길의 `lab.sh capture`도 진행하지 못합니다.
+
+### 6. 조사 근거 수집
+
+Agent 스레드를 내려받아 정규화하고, 관측 결과를 먼저 기록한 뒤 그림을 만듭니다.
+
+```bash
+AGENT_ENDPOINT="$(jq -r '.agent_endpoint // empty' evidence/agent-setup.json)"
+case "${AGENT_ENDPOINT}" in
+  https://*"<"* | https://*">"* | "https://") AGENT_ENDPOINT="" ;;
+  https://*) ;;
+  *) AGENT_ENDPOINT="" ;;
+esac
+
+if [[ -z "${ALERT_ID}" || -z "${AGENT_ENDPOINT}" ]]; then
+  echo "ALERT_ID가 없거나 agent_endpoint가 https URL이 아니어서 캡처를 건너뜁니다." >&2
+else
+  app/.venv/bin/python scripts/capture_agent.py \
+    --scenario s1 \
+    --alert-id "${ALERT_ID}" \
+    --endpoint "${AGENT_ENDPOINT}" \
+    --output-dir "${EVIDENCE_DIR}" \
+    --timeout 1200 \
+    --interval 15 || true
+
+  if [[ -f "${EVIDENCE_DIR}/normalized-timeline.json" ]]; then
+    python3 scripts/lab_state.py record-capture s1 \
+      --timeline "${EVIDENCE_DIR}/normalized-timeline.json" \
+      --evidence-dir "${EVIDENCE_DIR}"
+
+    app/.venv/bin/python scripts/render_capture.py \
+      "${EVIDENCE_DIR}/normalized-timeline.json" \
+      assets/captures/s1 \
+      --scenario s1
+  else
+    echo "정규화된 타임라인이 없어 캡처를 기록하지 않았습니다." >&2
+  fi
+fi
+```
+
+`agent_endpoint`는 `https://`로 시작하고 자리표시자 괄호가 없어야 합니다. `http://`를 쓰면 데이터 평면 토큰이 평문으로 나갑니다. `capture_agent.py`는 제한 시간까지 결론을 받지 못하면 종료 코드 3으로 끝나며, 이는 "결론 없음"을 그대로 기록하는 정상 경로입니다. 결과 기록을 렌더링보다 먼저 하는 이유는 이미지 생성이 실패해도 관측한 결과를 잃지 않기 위해서입니다.
+
+같은 UTC 구간의 KQL 근거가 필요하면 다음을 실행합니다.
+
+```bash
+if (( LAB_READY )) && [[ -n "${INJECTED_AT}" ]]; then
+  ./scripts/query-evidence.sh s1 "${EVIDENCE_DIR}" \
+    "${INJECTED_AT}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+fi
+```
+
+## 지름길
+
+위 여섯 단계를 그대로 자동화한 것이 아래 두 명령입니다. 같은 Azure 호출을 같은 순서로 실행하고, 추가로 실행 상태 기록과 종료 시 자동 복구를 처리합니다. 무엇이 실행되는지 이미 알고 반복할 때만 쓰세요.
+
+```bash
+./scripts/lab.sh run s1
 ./scripts/lab.sh capture s1
 ```
 
-수집 대상 디렉터리는 방금 실행이 `evidence/state.json`에 기록한 값에서 정해지므로 경로를 직접 입력하지 않습니다.
+`run`은 장애 주입 → 부하 → 경고 대기 → 복구 → 타임라인 저장까지 진행하고, 경고가 발생하지 않으면 12분 뒤 실패로 기록합니다. 중간에 끊어도 종료 트랩이 복구를 시도합니다. `capture`는 대상 디렉터리를 `evidence/state.json`에서 찾으므로 경로를 입력하지 않습니다.
 
-같은 UTC 구간의 KQL 근거를 따로 내보내려면 실행이 남긴 `timeline.json`의 시각을 그대로 넣어 호출합니다.
-
-```bash
-./scripts/query-evidence.sh s1 evidence/s1-<타임스탬프> <시작 UTC> <끝 UTC>
-```
+지름길은 순서 게이트도 적용합니다. 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 같은 Container App 하나를 쓰고, 끝나지 않은 실행은 장애가 아직 살아 있을 수 있는 상태이기 때문입니다. `failed`는 그 시나리오를 다시 실행하면 풀리고, `running`은 실행이 끝나기를 기다리거나 `python3 scripts/lab_state.py mark-failed s1`처럼 끝난 방식을 기록해야 풀립니다. 수동 실행은 이 게이트를 거치지 않으므로 시나리오를 겹쳐 돌리지 않는 책임은 운영자에게 있습니다.
 
 ## Azure에서 발생하는 변화
 
