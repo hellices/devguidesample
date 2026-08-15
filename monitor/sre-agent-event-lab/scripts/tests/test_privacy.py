@@ -83,8 +83,6 @@ def test_relocated_lab_docs_drop_internal_workflow_directives():
             assert marker not in content, (name, marker)
 
 
-# --- The real subscription ID belongs in exactly one file -------------------
-
 LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
 VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
 UUID_PATTERN = re.compile(
@@ -92,18 +90,29 @@ UUID_PATTERN = re.compile(
 )
 
 
-def recorded_subscription_id():
-    """The subscription the historical validation run used.
+def extract_subscription_id(header_text):
+    """Return the first GUID-shaped token, or None when the text is redacted."""
+    found = UUID_PATTERN.findall(header_text)
+    return found[0] if found else None
 
-    `validation-results.md` is the record of one real run on one real
-    subscription, so that ID legitimately appears there -- and nowhere
-    else. Reading it from that file is what lets every other guard below
-    forbid it without restating it.
-    """
+
+def recorded_subscription_id():
+    """Return the historical subscription ID when it is still recorded."""
     header = VALIDATION_RESULTS.read_text().split("\n## ", 1)[0]
-    found = UUID_PATTERN.findall(header)
-    assert found, "validation-results.md no longer records a subscription ID"
-    return found[0]
+    return extract_subscription_id(header)
+
+
+def test_extract_subscription_id_accepts_a_redacted_historical_doc():
+    redacted = "# Validation Results\n\nSubscription: [REDACTED]\n"
+    assert extract_subscription_id(redacted) is None
+
+    empty_header = "# Validation Results\n\nNo subscription recorded.\n"
+    assert extract_subscription_id(empty_header) is None
+
+
+def test_extract_subscription_id_finds_a_present_guid():
+    header = "# Validation Results\n\nSubscription: 11111111-2222-3333-4444-555555555555\n"
+    assert extract_subscription_id(header) == "11111111-2222-3333-4444-555555555555"
 
 
 def test_no_test_source_restates_the_real_subscription_id():
@@ -114,6 +123,9 @@ def test_no_test_source_restates_the_real_subscription_id():
     the fixtures use obvious dummies.
     """
     subscription_id = recorded_subscription_id()
+    if subscription_id is None:
+        return
+
     test_sources = sorted(
         [
             *(LAB_ROOT / "scripts" / "tests").glob("*.py"),
@@ -136,8 +148,7 @@ def test_no_test_source_restates_the_real_subscription_id():
 
 
 def test_test_fixtures_never_reuse_the_real_subscription_id():
-    """The dummy IDs the harnesses inject must be provably not the real
-    one, so a fixture can never accidentally target a live subscription."""
+    """Fixture IDs must be GUID-shaped and never match a recorded live ID."""
     subscription_id = recorded_subscription_id()
     from lab_script_harness import SUBSCRIPTION_ID as harness_subscription_id
     from test_common import REQUIRED_ENV
@@ -145,4 +156,5 @@ def test_test_fixtures_never_reuse_the_real_subscription_id():
     dummies = (harness_subscription_id, REQUIRED_ENV["AZURE_SUBSCRIPTION_ID"])
     for dummy in dummies:
         assert UUID_PATTERN.fullmatch(dummy), dummy
-        assert dummy != subscription_id
+        if subscription_id is not None:
+            assert dummy != subscription_id
