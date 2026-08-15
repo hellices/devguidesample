@@ -113,6 +113,10 @@ postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `.
 
 ## 시나리오 실행
 
+각 시나리오 문서는 **수동 실행**을 먼저 설명합니다. `az containerapp update`, `az role assignment delete`처럼 실제로 Azure에 적용되는 명령을 그대로 실행하면서 무엇이 바뀌는지 확인하는 경로입니다. 처음 진행할 때는 이 경로를 권장합니다.
+
+같은 절차를 한 번에 실행하는 지름길도 각 문서 뒤쪽에 있습니다.
+
 ```bash
 ./scripts/lab.sh run s1
 ./scripts/lab.sh capture s1
@@ -122,7 +126,7 @@ postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `.
 ./scripts/lab.sh capture s3
 ```
 
-`run-scenario.sh`와 `capture-scenario.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다. 진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며 순서를 어기면 실행이 거부됩니다. 순서와 별개로, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 Container App 하나를 공유하므로, 끝나지 않은 실행 하나가 남은 실습 전체를 막습니다.
+`run-scenario.sh`와 `capture-scenario.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다. 진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며 순서를 어기면 실행이 거부됩니다. 순서와 별개로, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 Container App 하나를 공유하므로, 끝나지 않은 실행 하나가 남은 실습 전체를 막습니다. 수동 실행도 첫 단계에서 `lab_state.py begin-run`을 호출해 같은 게이트를 적용받습니다. 차이는 복구입니다. 지름길은 종료 트랩이 장애를 자동으로 되돌리지만, 수동 실행에서는 복구 명령을 직접 완료해야 합니다.
 
 | 시나리오 | 주입하는 장애 | 안내 문서 |
 |---|---|---|

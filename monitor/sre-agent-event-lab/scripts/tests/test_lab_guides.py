@@ -467,6 +467,66 @@ def test_s3_guide_documents_propagation_wait_and_manual_restore_command():
     assert "az role assignment create" in text
 
 
+MANUAL_SCENARIO_COMMANDS = {
+    "02-scenario-s1.md": (
+        "az containerapp update",
+        "--set-env-vars FAILURE_MODE=http500",
+        "--set-env-vars FAILURE_MODE=none",
+    ),
+    "03-scenario-s2.md": (
+        "az containerapp update",
+        "--set-env-vars ORDER_DELAY_MS=4000",
+        "--set-env-vars ORDER_DELAY_MS=0",
+    ),
+    "04-scenario-s3.md": (
+        "az role assignment delete --ids",
+        "az role assignment create",
+    ),
+}
+
+
+def test_scenario_guides_lead_with_the_real_azure_commands():
+    """`lab.sh run sX` hides the operation it performs, which is the part
+    worth learning. Each scenario guide states the injection and the revert
+    as commands the operator runs, so the lab teaches the Azure change
+    instead of a wrapper."""
+    for name, commands in MANUAL_SCENARIO_COMMANDS.items():
+        text = (GUIDES / name).read_text()
+        manual_index = text.index("## 수동 실행")
+        shortcut_index = text.index("## 지름길")
+        assert manual_index < shortcut_index, name
+        manual_section = text[manual_index:shortcut_index]
+        for command in commands:
+            assert command in manual_section, (name, command)
+
+
+def test_scenario_guides_keep_every_manual_step_runnable_without_lab_sh():
+    """A manual run still has to produce the same evidence and recorded
+    state the scorer reads, or the manual path dead-ends at scoring."""
+    for name, scenario in SCENARIO_GUIDES.items():
+        text = (GUIDES / name).read_text()
+        manual_section = text[text.index("## 수동 실행"):text.index("## 지름길")]
+        assert "scripts/loadgen.py" in manual_section, name
+        assert "az rest" in manual_section, name
+        assert (
+            "scripts/lab_state.py mark-recovered {0}".format(scenario)
+            in manual_section
+        ), name
+        assert "scripts/capture_agent.py" in manual_section, name
+        assert (
+            "scripts/lab_state.py record-capture {0}".format(scenario)
+            in manual_section
+        ), name
+
+
+def test_scenario_guides_present_lab_sh_as_an_optional_shortcut():
+    for name, scenario in SCENARIO_GUIDES.items():
+        text = (GUIDES / name).read_text()
+        shortcut_section = text[text.index("## 지름길"):]
+        assert "./scripts/lab.sh run {0}".format(scenario) in shortcut_section, name
+        assert "./scripts/lab.sh capture {0}".format(scenario) in shortcut_section, name
+
+
 def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
     """The recorded S1/S2/S3 run used a one-minute static threshold. That
     result stays plausible because the later live failure was the legacy
@@ -684,7 +744,8 @@ def test_every_guide_opens_with_prerequisites_and_closes_with_a_next_step():
 def test_scenario_guides_use_the_required_section_order():
     required = [
         "## 시작 조건",
-        "## 실행 명령",
+        "## 수동 실행",
+        "## 지름길",
         "## Azure에서 발생하는 변화",
         "## SRE Agent에서 확인할 항목",
         "## 성공·부분 성공·실패 판정",
