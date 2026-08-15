@@ -138,12 +138,17 @@ UAMI_MONITORING_CONTRIBUTOR_ASSIGNMENT_ID="$(az role assignment create \
 ```bash
 azd env set SRE_AGENT_NAME "<포털에 보이는 Agent 이름>"
 azd env set SRE_AGENT_RESOURCE_ID "<az resource list로 확인한 Agent 리소스 ID>"
-azd env set SRE_REPOSITORY_URL "${SRE_REPOSITORY_URL}"
 azd env set SRE_REPOSITORY_BRANCH "main"
 azd env set SRE_KNOWLEDGE_PATH "runbooks/incident-response.md"
+
+if [[ -n "${SRE_REPOSITORY_URL}" ]]; then
+  azd env set SRE_REPOSITORY_URL "${SRE_REPOSITORY_URL}"
+else
+  echo "저장소 URL을 직접 지정하세요: azd env set SRE_REPOSITORY_URL \"https://github.com/<본인 계정>/<저장소>\"" >&2
+fi
 ```
 
-`SRE_REPOSITORY_URL`은 `source ./scripts/lab-env.sh`가 fork의 `origin`에서 감지한 값입니다. 다른 저장소를 쓰려면 `azd env set SRE_REPOSITORY_URL "https://github.com/<본인 계정>/<저장소>"`처럼 직접 지정하되, 본인이 이슈를 만들 수 있는 저장소여야 합니다.
+`SRE_REPOSITORY_URL`은 `source ./scripts/lab-env.sh`가 `origin`에서 유추한 값입니다. 원격 URL에 자격 증명이 들어 있으면 `lab-env.sh`가 값을 비워 두므로, 위 분기가 직접 지정하라고 알려 줍니다. 어느 경우든 **본인이 이슈를 만들 수 있는 저장소**여야 합니다.
 
 토큰, 연결 문자열, 클라이언트 비밀은 azd 환경에도 저장하지 않습니다. 인증은 Agent의 관리 ID와 포털 OAuth 흐름이 처리합니다.
 
