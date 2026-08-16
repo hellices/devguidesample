@@ -11,6 +11,7 @@ driven through stdin), never by reading the module's source.
 import importlib.util
 import json
 import os
+import pathlib
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +41,19 @@ ENVIRONMENT = {
     "AZURE_SUBSCRIPTION_ID": "11111111-2222-3333-4444-555555555555",
     "AZURE_RESOURCE_GROUP": "rg-sre-lab-state",
 }
+
+
+def test_every_scenario_has_a_guide_to_send_an_operator_to():
+    """A refusal names the document that walks the step. If the two lists
+    drift, the message degrades to "the matching guide under guides/" --
+    which is a direction, not an answer -- so they are pinned together.
+    """
+    import lab_state
+
+    assert set(lab_state.SCENARIO_GUIDES) == set(lab_state.SCENARIOS)
+    lab_root = pathlib.Path(__file__).parents[2]
+    for scenario, guide in lab_state.SCENARIO_GUIDES.items():
+        assert (lab_root / guide).is_file(), (scenario, guide)
 
 
 def run_cli(state_path, args, stdin="", env=None):

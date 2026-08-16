@@ -32,6 +32,10 @@ REQUIRED_FEATURES = ("azure-cli", "azure-dev/azd", "github-cli", "python")
 
 
 def config():
+    assert DEVCONTAINER.is_file(), (
+        "VS Code and Codespaces read .devcontainer/devcontainer.json by "
+        f"default; expected {DEVCONTAINER}"
+    )
     return json.loads(DEVCONTAINER.read_text())
 
 

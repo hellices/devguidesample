@@ -185,7 +185,9 @@ SCENARIO_GUIDES = {
 
 
 def scenario_guide(scenario: str) -> str:
-    return SCENARIO_GUIDES.get(scenario, "the scenario guide")
+    # A remedy that cannot be acted on is not a remedy: an unmapped
+    # scenario still has to say where to look.
+    return SCENARIO_GUIDES.get(scenario, "the matching guide under guides/")
 
 
 def _scenario_stage(stage: str) -> Optional[Sequence[str]]:

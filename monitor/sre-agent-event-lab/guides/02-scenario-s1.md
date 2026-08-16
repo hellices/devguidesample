@@ -244,6 +244,8 @@ fi
 
 Agent 스레드를 내려받아 정규화하고, 관측 결과를 먼저 기록한 뒤 그림을 만듭니다.
 
+이 단계부터는 `app/.venv`의 인터프리터를 씁니다. 렌더링에 Pillow가 필요하기 때문입니다. `azd up`의 postprovision 단계가 만들어 두므로 보통 그대로 있고, 없다면 `./scripts/setup-venv.sh`를 실행한 뒤 이어서 진행합니다.
+
 ```bash
 AGENT_ENDPOINT="$(jq -r '.agent_endpoint // empty' evidence/agent-setup.json)"
 case "${AGENT_ENDPOINT}" in

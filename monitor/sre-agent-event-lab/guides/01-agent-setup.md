@@ -228,7 +228,7 @@ python3 scripts/lab_state.py acknowledge-agent
 
 | 증상 | 조치 |
 |---|---|
-| `loadgen.py`가 `app/.venv` 없이 실패 | 로컬 문제이며 클라우드 배포와는 무관합니다. 바로 실행: `./scripts/setup-venv.sh` |
+| `app/.venv`가 없음 (다음 문서의 캡처 단계가 Pillow를 씁니다) | `azd up`의 postprovision 단계가 만들어 둡니다. 없거나 깨졌다면 로컬 문제이므로 바로 실행: `./scripts/setup-venv.sh` |
 | 두 principal ID로 Reader 권한이 확인되지 않음 | 두 ID가 근거 파일과 같은지 확인하고 리소스 그룹에 Reader를 다시 부여합니다 |
 | 쿼리에 요청이 보이지 않음 | 10분 더 기다린 뒤 다시 조회합니다. 계속 비어 있으면 `curl -sS -o /dev/null -w '%{http_code}\n' "https://${APP_FQDN}/healthz"`로 앱을 직접 호출해 봅니다 |
 | `acknowledge-agent`가 기록되지 않음 | 입력한 단어가 정확한지, `azd env select`로 올바른 환경을 골랐는지 확인합니다 |

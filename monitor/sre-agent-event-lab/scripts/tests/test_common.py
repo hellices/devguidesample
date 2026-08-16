@@ -1,7 +1,6 @@
 import re
 import shutil
 import subprocess
-import re
 from pathlib import Path
 
 from azd_common_harness import run_common
