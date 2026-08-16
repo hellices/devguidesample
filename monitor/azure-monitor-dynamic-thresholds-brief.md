@@ -49,7 +49,7 @@ directly from Microsoft's documented behavior:
 | Alert type | What it evaluates | Notes |
 |---|---|---|
 | Metric alerts | Most Azure Monitor platform and custom metrics | Some metrics are excluded — see the [unsupported metrics list](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds#metrics-not-supported-by-dynamic-thresholds) |
-| Log Search alerts | A numeric KQL query result (not a Boolean expression) | Minimum 5-minute evaluation frequency; 1-minute frequency is not supported |
+| Log Search alerts | A numeric KQL query result | Minimum 5-minute evaluation frequency; 1-minute frequency is not supported |
 | PromQL query-based metric alerts | A numeric PromQL expression over Prometheus or OTel metrics | Currently in **Preview**; works best with expressions that resolve to numeric values rather than Boolean comparisons |
 
 ## Safe adoption flow
