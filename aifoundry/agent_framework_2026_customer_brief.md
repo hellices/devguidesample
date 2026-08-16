@@ -181,6 +181,22 @@ Progressive Tools is a related but separate, narrower capability: a tool handler
 | Execution | `context.Context`, `ResponseStream`, `iter.Seq2` |
 | Typed tools | generics, schema derivation, separate approval |
 | Workflow runtime | builder, execution environment, checkpoint ownership |
+
+## What "idiomatic Go" means in this SDK
+
+The important point is not that Go introduces a different agent model. The same domain concepts — Agent, Message, Tool, and Workflow — remain, but the SDK does not reproduce the .NET `Microsoft.Extensions.AI` surface member for member. It expresses those concepts through Go's own package, construction, composition, and error-handling conventions.
+
+| Shared concept | Go SDK expression | Practical meaning |
+|---|---|---|
+| Agent construction | package-owned concrete types plus `agent.New(...)` or provider constructors | Callers receive a valid agent from a constructor instead of assembling framework objects through inheritance or a public struct literal. |
+| Extensibility | small structural interfaces such as `tool.Tool`, used only at substitution boundaries | Application types satisfy an interface by implementing its methods; no base class or explicit `implements` declaration is required. |
+| Per-run configuration | variadic typed `agent.Option` values such as `agent.Stream(true)` and `agent.WithTool(t)` | Optional behavior stays local to the call without introducing a large run-configuration hierarchy. |
+| Cancellation and streaming | `context.Context` plus `ResponseStream`, defined over `iter.Seq2[*ResponseUpdate, error]` | Deadlines and cancellation are explicit, and each streamed item carries either an update or an error through normal Go control flow. |
+| Typed tools | `functool.New[In, Out](...)` with handlers shaped as `func(context.Context, In) (Out, error)` | Tool input, output, context propagation, and failure are visible in the function signature. |
+| Workflow composition | `workflow.NewBuilder(...)`, executor bindings, and an explicit execution environment | A workflow is assembled from package-level building blocks rather than hidden framework or dependency-injection wiring. |
+
+This is an intentional design direction, not only an interpretation of the current API. [PR #26, "Make the agent package more idiomatic"](https://github.com/microsoft/agent-framework-go/pull/26), records a refactoring based on demo feedback that simplified the agent boundary and changed run parameters to values "easier to identify as a Go developer." The current [feature comparison](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/dotnet-go-sdk-feature-comparison.md) likewise maps the .NET SDK's `Microsoft.Extensions.AI`-based abstractions to Go-specific packages and types. In short: Microsoft kept the cross-language concepts, but designed the Go API for Go callers rather than translating the .NET object model mechanically.
+
 ## 1. Construction Model
 
 ### API surface
