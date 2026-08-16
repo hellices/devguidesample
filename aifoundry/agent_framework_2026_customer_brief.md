@@ -196,15 +196,14 @@ flowchart LR
 ### What is worth noting
 
 - **A new official language implementation:** Go extends MAF's reach to Go teams while retaining the framework's shared Agent, Tool, Middleware, and Workflow concepts.
-- **Designed for Go developers:** it is not a mechanical translation of the .NET object model. The maintainers explicitly refactored the API to be more idiomatic and easier for Go developers to identify and use ([PR #26](https://github.com/microsoft/agent-framework-go/pull/26)).
+- **Go-native rather than a direct port:** shared MAF concepts are expressed through Go conventions rather than mirroring the .NET API.
 - **Still a preview:** feature coverage and alignment are evolving. Use the official comparison for the current gap list rather than assuming parity with .NET or Python.
 
 ### Official resources
 
 - [Microsoft Agent Framework for Go repository](https://github.com/microsoft/agent-framework-go)
 - [Go package reference](https://pkg.go.dev/github.com/microsoft/agent-framework-go)
-- [Go examples](https://github.com/microsoft/agent-framework-go/tree/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/examples)
-- [.NET and Go SDK feature comparison](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/dotnet-go-sdk-feature-comparison.md)
+- [.NET and Go SDK feature comparison](https://github.com/microsoft/agent-framework-go/blob/main/docs/dotnet-go-sdk-feature-comparison.md)
 - [Microsoft Learn: Agent Framework](https://learn.microsoft.com/agent-framework/)
 - [Official Agent Framework introduction video](https://www.youtube.com/watch?v=AAgdMhftj8w)
 
