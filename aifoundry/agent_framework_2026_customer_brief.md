@@ -1,7 +1,7 @@
 # Microsoft Agent Framework 2026: Python Highlights and the Go Implementation
 
-Python highlights Agent Harness and Agent Skills. The Go section focuses on
-construction, execution, typed tools, and workflow runtime.
+Python highlights Agent Harness and Agent Skills. The Go section briefly
+positions the official Go implementation within the MAF ecosystem.
 
 ---
 
@@ -172,390 +172,45 @@ Progressive Tools is a related but separate, narrower capability: a tool handler
 
 ---
 
-## Part II — Go: Implementation Characteristics
+## Part II — Go: A New Language Implementation in the MAF Ecosystem
 
-## At a glance
-| Characteristic | Concrete API |
-|---|---|
-| Construction | concrete structs, small interfaces, constructors, options |
-| Execution | `context.Context`, `ResponseStream`, `iter.Seq2` |
-| Typed tools | generics, schema derivation, separate approval |
-| Workflow runtime | builder, execution environment, checkpoint ownership |
+![Microsoft Agent Framework for Go](https://raw.githubusercontent.com/microsoft/agent-framework-go/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/assets/readme-banner.png)
 
-## What "idiomatic Go" means in this SDK
+*Official banner from the [Microsoft Agent Framework for Go repository](https://github.com/microsoft/agent-framework-go).*
 
-The important point is not that Go introduces a different agent model. The same domain concepts — Agent, Message, Tool, and Workflow — remain, but the SDK does not reproduce the .NET `Microsoft.Extensions.AI` surface member for member. It expresses those concepts through Go's own package, construction, composition, and error-handling conventions.
+### Where Go sits today
 
-| Shared concept | Go SDK expression | Practical meaning |
-|---|---|---|
-| Agent construction | package-owned concrete types plus `agent.New(...)` or provider constructors | Callers receive a valid agent from a constructor instead of assembling framework objects through inheritance or a public struct literal. |
-| Extensibility | small structural interfaces such as `tool.Tool`, used only at substitution boundaries | Application types satisfy an interface by implementing its methods; no base class or explicit `implements` declaration is required. |
-| Per-run configuration | variadic typed `agent.Option` values such as `agent.Stream(true)` and `agent.WithTool(t)` | Optional behavior stays local to the call without introducing a large run-configuration hierarchy. |
-| Cancellation and streaming | `context.Context` plus `ResponseStream`, defined over `iter.Seq2[*ResponseUpdate, error]` | Deadlines and cancellation are explicit, and each streamed item carries either an update or an error through normal Go control flow. |
-| Typed tools | `functool.New[In, Out](...)` with handlers shaped as `func(context.Context, In) (Out, error)` | Tool input, output, context propagation, and failure are visible in the function signature. |
-| Workflow composition | `workflow.NewBuilder(...)`, executor bindings, and an explicit execution environment | A workflow is assembled from package-level building blocks rather than hidden framework or dependency-injection wiring. |
+Microsoft describes this repository as **the Go implementation of Microsoft Agent Framework**. It is therefore part of the official MAF language family, alongside .NET and Python, rather than an unrelated community SDK.
 
-This is an intentional design direction, not only an interpretation of the current API. [PR #26, "Make the agent package more idiomatic"](https://github.com/microsoft/agent-framework-go/pull/26), records a refactoring based on demo feedback that simplified the agent boundary and changed run parameters to values "easier to identify as a Go developer." The current [feature comparison](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/dotnet-go-sdk-feature-comparison.md) likewise maps the .NET SDK's `Microsoft.Extensions.AI`-based abstractions to Go-specific packages and types. In short: Microsoft kept the cross-language concepts, but designed the Go API for Go callers rather than translating the .NET object model mechanically.
+There is one important qualification: Go has not yet been merged into the core upstream repository. The pinned README states that it is in **Public Preview** and is "currently evolving outside the core upstream codebase." Microsoft expects "closer alignment with the broader MAF ecosystem" as adoption and feedback grow.
 
-## 1. Construction Model
-
-### API surface
-- The central, stateful objects — `agent.Agent`, `message.Message`, `workflow.Workflow`, and `workflow.Builder` — are concrete structs, not interfaces. `agent.Agent`'s fields are unexported, so a caller cannot build one from an `agent.Agent{...}` literal outside the `agent` package; the only paths to a value are the package-level constructor `agent.New(prov ProviderConfig, cfg Config) *Agent` or a provider constructor such as `foundryprovider.NewAgent(...)`.
-- Small interfaces appear only at points where an application is expected to substitute its own implementation: `tool.Tool` requires exactly `Name() string` and `Description() string`, satisfied structurally with no `implements` declaration; `agent.Middleware`/`agent.MiddlewareFunc` wrap the request/response chain; `checkpoint.Store[json.RawMessage]` is the substitution point for a checkpoint backend.
-- `AgentTarget`, used by `foundryprovider.NewAgent`, is a different shape: its sole method, `foundryAgentTarget()`, is unexported, making it a sealed, closed interface implemented only by the two defined string types `ModelDeployment` and `ServerAgent` in the same package — a caller selects one of those two values rather than substituting an external implementation. Provider packages (`foundryprovider`, `openaiprovider`, `anthropicprovider`, `geminiprovider`, `copilotprovider`) each expose their own constructor rather than a shared cross-package struct literal.
-- Per-run behavior is passed through variadic values conventionally called functional options, but `agent.Option` is a typed interface (`Value() any`) implemented by distinct option types — such as `agent.Stream(true)`, `agent.WithSession(session)`, and `agent.WithTool(t)` — rather than the more common `func(*Config)` closure form; `agent.GetOption(options, agent.WithSession)` looks up a concrete value by its setter function as a key. Generics are used at specific construction points — `functool.New[In, Out any]` and the checkpoint `Store[json.RawMessage]` interface — but `agent.Agent` itself is not a generic type.
-
-| Construct | Verified signature | Package |
-|---|---|---|
-| Core constructor | `func New(prov ProviderConfig, cfg Config) *Agent` | `agent` |
-| Foundry provider constructor | `func NewAgent(endpoint string, credential azcore.TokenCredential, target AgentTarget, config AgentConfig) *agent.Agent` | `provider/foundryprovider` |
-| Deployment/server target conversion | `type ModelDeployment string`, `type ServerAgent string` | `provider/foundryprovider` |
-| Small substitution interface | `type Tool interface { Name() string; Description() string }` | `tool` |
-| Typed tool constructor | `func New[In, Out any](cfg Config, h HandlerFor[In, Out]) (tool.FuncTool, error)` | `tool/functool` |
-| Workflow builder constructor | `func NewBuilder(start ExecutorBinding) *Builder` | `workflow` |
-## 2. Execution Model
-
-### API surface
-The pinned signatures for running an agent are:
-
-```go-signature
-func (a *Agent) RunText(ctx context.Context, msg string, options ...Option) ResponseStream
-func (a *Agent) Run(ctx context.Context, messages []*message.Message, options ...Option) ResponseStream
-func NewText(text string) *Message
-
-type ResponseStream iter.Seq2[*ResponseUpdate, error]
-func (r ResponseStream) Collect() (*Response, error)
-```
-
-### Execution behavior
-- `RunText` builds a single user message with `message.NewText(msg)` and delegates to `Run`. `Run` accepts `context.Context`, a `[]*message.Message`, and variadic `agent.Option` values, and returns a `ResponseStream` — a defined type over `iter.Seq2[*ResponseUpdate, error]`. `Run` itself is not lazy: before it returns, it resolves the configured run options and, unless the caller passed `WithSession`, calls `a.CreateSession`, which invokes the provider's `CreateSession` and can make a provider round-trip before the stream is ever consumed. Only the underlying provider *run* call is deferred — it starts once the caller ranges over the stream or calls `Collect()`.
-- `context.Context` is the single path for cancellation, deadlines, and trace propagation; the same `ctx` is threaded through middleware, the provider call, and tool handlers. When ranging directly, each loop iteration yields exactly one of an update or a non-nil error, never both meaningfully at once: a non-nil `err` means that item is an error, not a response fragment, so consuming `update` after an error risks a nil pointer or corrupted text. Returning from inside the loop causes the range's internal `yield` to return `false`, which lets the middleware/provider chain clean up.
-
-### Operational detail
-`Collect()` drains the stream, merges the updates, and returns `(*Response, error)`; on error it returns `nil, err` immediately, leaving the error-wrapping decision to the caller.
-
-### Example
-<details>
-<summary><strong>Complete validated example</strong></summary>
-
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-	"time"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/microsoft/agent-framework-go/agent"
-	"github.com/microsoft/agent-framework-go/provider/foundryprovider"
-)
-
-func main() {
-	endpoint := os.Getenv("FOUNDRY_PROJECT_ENDPOINT")
-	model := os.Getenv("FOUNDRY_MODEL")
-	if endpoint == "" || model == "" {
-		log.Fatal("FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL are required")
-	}
-	credential, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	a := foundryprovider.NewAgent(
-		endpoint,
-		credential,
-		foundryprovider.ModelDeployment(model),
-		foundryprovider.AgentConfig{
-			Instructions: "Answer questions concisely.",
-			Config: agent.Config{
-				Name: "GuideAgent",
-			},
-		},
-	)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Collect drains the stream; range iterates it directly.
-	resp, err := a.RunText(ctx, "Explain the difference between Agent and Workflow in one sentence.").Collect()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(resp.String())
-
-	var streamed string
-	for update, err := range a.RunText(ctx, "Give one more sentence.", agent.Stream(true)) {
-		if err != nil {
-			log.Fatal(fmt.Errorf("stream agent: %w", err))
-		}
-		streamed += update.String()
-	}
-	fmt.Println(streamed)
-}
-```
-</details>
-
-## 3. Typed Tools
-
-### API surface
-The pinned signatures for `tool/functool` show it builds a `tool.FuncTool` from a generic handler:
-
-```go-signature
-type Config struct {
-	Name        string
-	Description string
-}
-
-type HandlerFor[In, Out any] func(context.Context, In) (Out, error)
-
-func New[In, Out any](cfg Config, h HandlerFor[In, Out]) (tool.FuncTool, error)
-func MustNew[In, Out any](cfg Config, h HandlerFor[In, Out]) tool.FuncTool
-```
-
-### Execution behavior
-- `New` derives a JSON schema for `In` (via an internal `jsonformat.Format`) and validates that `Out` can also be normalized into a schema-compatible result, returning a `%w`-wrapped error if either construction fails. `MustNew` panics on the same failure instead of returning an error, which fits package-level initialization where a schema-construction failure is a programming error; `New` is the better choice when a tool is constructed from runtime input, where a returned error can be handled.
-- The returned value satisfies `tool.FuncTool` (a `SchemaTool` plus `Call(ctx, args string) (any, error)`). When a model calls the tool, the framework decodes the raw JSON arguments into `In`, validates them against the derived schema, invokes `h(ctx, in)`, and normalizes the handler's `Out` value (via `outputFormat.Normalize`) into the content returned to the provider.
-
-### Operational detail
-Approval marking is a separate concern from schema generation and typing: a tool becomes subject to approval only when explicitly wrapped with `tool.ApprovalRequiredFunc(t)`, which makes the provider return a `*message.ToolApprovalRequestContent` instead of an executed result. The application resolves that request and calls `request.CreateResponse(approved, reason)` to build the response content for the next `Run`/`RunMessage` call.
-
-### Example
-<details>
-<summary><strong>Complete validated example</strong></summary>
-
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/microsoft/agent-framework-go/agent"
-	"github.com/microsoft/agent-framework-go/message"
-	"github.com/microsoft/agent-framework-go/provider/foundryprovider"
-	"github.com/microsoft/agent-framework-go/tool"
-	"github.com/microsoft/agent-framework-go/tool/functool"
-)
-
-var weatherTool = functool.MustNew(
-	functool.Config{
-		Name:        "weather",
-		Description: "Get the current weather for a given location",
-	},
-	func(ctx context.Context, location string) (string, error) {
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("%s: cloudy, 15C", location), nil
-	},
-)
-
-func main() {
-	endpoint := os.Getenv("FOUNDRY_PROJECT_ENDPOINT")
-	model := os.Getenv("FOUNDRY_MODEL")
-	if endpoint == "" || model == "" {
-		log.Fatal("FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL are required")
-	}
-	credential, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	a := foundryprovider.NewAgent(
-		endpoint,
-		credential,
-		foundryprovider.ModelDeployment(model),
-		foundryprovider.AgentConfig{
-			Instructions: "Use the weather tool when it helps answer the question.",
-			Config: agent.Config{
-				Tools: []tool.Tool{tool.ApprovalRequiredFunc(weatherTool)},
-			},
-		},
-	)
-	ctx := context.Background()
-	session, err := a.CreateSession(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp, err := a.RunText(ctx, "What is the weather in Amsterdam?", agent.WithSession(session)).Collect()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(resp.String())
-	var responses []message.Content
-	for c := range resp.Contents() {
-		request, ok := c.(*message.ToolApprovalRequestContent)
-		if !ok {
-			continue
-		}
-		// A real service would obtain approval from a person or policy engine here.
-		responses = append(responses, request.CreateResponse(true, ""))
-	}
-	if len(responses) == 0 {
-		return
-	}
-	final, err := a.RunMessage(ctx, message.New(responses...), agent.WithSession(session)).Collect()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(final.String())
-}
-```
-</details>
-
-## 4. Workflow Runtime
 ```mermaid
 flowchart LR
-    Bind[Bind executors] --> Edges[Add edges]
-    Edges --> Build[Build workflow]
-    Build --> Env[ExecutionEnvironment]
-    Env --> Run[StreamingRun owns workflow]
-    Run --> Events[Range events]
-    Run --> Save[Checkpoint manager saves to store]
-    Run --> Close[Close releases ownership]
-    Close --> Resume[ResumeStreaming with saved checkpoint]
+    MAF[Microsoft Agent Framework] --> Core["Core upstream repository<br/>.NET and Python"]
+    MAF --> Go["Official Go repository<br/>Public Preview"]
+    Go -.->|"adoption + feedback"| Alignment[Closer MAF ecosystem alignment]
 ```
-*Source-derived diagram based on the pinned Go API.*
 
-### API surface
-`workflow.NewBuilder(start ExecutorBinding) *Builder` begins a graph; `AddEdge`/`AddDirectEdge`/`AddFanOutEdge`/`AddFanInBarrierEdge` register edges, `WithOutputFrom` designates outputs, and `Build() (*Workflow, error)` validates the graph. Builder methods store errors internally, so only the final `Build()` call's returned error needs checking. `agentworkflow.NewSequentialWorkflowBuilder`, `NewConcurrentWorkflowBuilder`, and `NewGroupChatWorkflowBuilder` are convenience adapters over this same `workflow.Builder`/`ExecutionEnvironment` model, not a separate execution engine.
+*Current repository position described by the [Go README](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/README.md), pinned to 2026-08-14.*
 
-### Execution behavior
-- Execution is owned by `workflow/inproc.ExecutionEnvironment`. The package variable `inproc.Default` (itself equal to `inproc.OffThread`) supplies a default environment, and `(*ExecutionEnvironment).WithCheckpointing(mgr checkpoint.Manager)` returns a new environment with checkpointing attached. `RunStreaming(ctx, wf, msg, opts...)` returns a `*StreamingRun`, whose `WatchStream(ctx)` method yields `workflow.Event` values one at a time. When a super step completes and a checkpoint is produced, it arrives as `workflow.SuperStepCompletedEvent.CompletionInfo.CheckpointInfo`.
-- A `*StreamingRun` owns the `*Workflow` it was started from until it is closed: calling `ResumeStreaming` on the same workflow while the first run remains open returns an "already owned by another runner" error. Calling `run.Close(ctx)` releases that ownership; `Close` is implemented as an idempotent compare-and-swap, so calling it a second time (for example from a deferred cleanup after an explicit `Close` on the success path) is safe. Only after that release does `(*ExecutionEnvironment).ResumeStreaming(ctx, wf, savedCheckpoint, opts...)` successfully resume execution from a previously saved `workflow.CheckpointInfo`.
+### What is worth noting
 
-### Operational detail
-A checkpoint `Manager` is constructed with `checkpoint.NewInMemoryManager()` or `checkpoint.NewJSONManager(store)`, where `store` is a `checkpoint.Store[json.RawMessage]`. A file-backed store comes from the two-value `checkpoint.NewFileSystemJSONStore(rootDir)`, or an application can supply its own `Store[json.RawMessage]`. This mechanism saves and restores in-process execution state; it is not a durable orchestrator and does not by itself guarantee crash recovery, so surviving a process restart requires a store the application has verified for consistency.
+- **A new official language implementation:** Go extends MAF's reach to Go teams while retaining the framework's shared Agent, Tool, Middleware, and Workflow concepts.
+- **Designed for Go developers:** it is not a mechanical translation of the .NET object model. The maintainers explicitly refactored the API to be more idiomatic and easier for Go developers to identify and use ([PR #26](https://github.com/microsoft/agent-framework-go/pull/26)).
+- **Still a preview:** feature coverage and alignment are evolving. Use the official comparison for the current gap list rather than assuming parity with .NET or Python.
 
-### Example
-<details>
-<summary><strong>Complete validated example</strong></summary>
+### Official resources
 
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"strings"
-
-	"github.com/microsoft/agent-framework-go/workflow"
-	"github.com/microsoft/agent-framework-go/workflow/checkpoint"
-	"github.com/microsoft/agent-framework-go/workflow/inproc"
-)
-
-func buildPipeline() (*workflow.Workflow, error) {
-	uppercase := workflow.NewExecutor("Uppercase", func(input string) string {
-		return strings.ToUpper(input)
-	}).Bind()
-	reverse := workflow.NewExecutor("Reverse", func(input string) string {
-		runes := []rune(input)
-		for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
-			runes[i], runes[j] = runes[j], runes[i]
-		}
-		return string(runes)
-	}).Bind()
-
-	return workflow.NewBuilder(uppercase).
-		AddEdge(uppercase, reverse).
-		WithOutputFrom(reverse).
-		Build()
-}
-
-func main() {
-	wf, err := buildPipeline()
-	if err != nil {
-		fmt.Println(fmt.Errorf("build workflow: %w", err))
-		return
-	}
-
-	manager := checkpoint.NewInMemoryManager()
-	env := inproc.Default.WithCheckpointing(manager)
-	ctx := context.Background()
-	run, err := env.RunStreaming(ctx, wf, "Hello, World!")
-	if err != nil {
-		fmt.Println(fmt.Errorf("start streaming run: %w", err))
-		return
-	}
-	defer func() { _ = run.Close(ctx) }()
-
-	var output string
-	var checkpoints []workflow.CheckpointInfo
-	for evt, err := range run.WatchStream(ctx) {
-		if err != nil {
-			fmt.Println(fmt.Errorf("watch stream: %w", err))
-			return
-		}
-		switch e := evt.(type) {
-		case workflow.SuperStepCompletedEvent:
-			if e.CompletionInfo != nil && e.CompletionInfo.CheckpointInfo != nil {
-				checkpoints = append(checkpoints, *e.CompletionInfo.CheckpointInfo)
-			}
-		case workflow.OutputEvent:
-			if s, ok := e.Output.(string); ok {
-				output = s
-			}
-		case workflow.ErrorEvent:
-			fmt.Println(fmt.Errorf("workflow error event: %w", e.Error))
-			return
-		case workflow.ExecutorFailedEvent:
-			fmt.Println(fmt.Errorf("executor %q failed: %w", e.ExecutorID, e.Error))
-			return
-		}
-	}
-	fmt.Println("output:", output)
-	// Close is idempotent; ResumeStreaming needs the earlier run's ownership released first.
-	if err := run.Close(ctx); err != nil {
-		fmt.Println(fmt.Errorf("close initial run: %w", err))
-		return
-	}
-	if len(checkpoints) == 0 {
-		return
-	}
-	resumed, err := env.ResumeStreaming(ctx, wf, checkpoints[0])
-	if err != nil {
-		fmt.Println(fmt.Errorf("resume from checkpoint: %w", err))
-		return
-	}
-	defer func() { _ = resumed.Close(ctx) }()
-	for evt, err := range resumed.WatchStream(ctx) {
-		if err != nil {
-			fmt.Println(fmt.Errorf("watch resumed stream: %w", err))
-			return
-		}
-		if out, ok := evt.(workflow.OutputEvent); ok {
-			fmt.Println("resumed output:", out.Output)
-		}
-	}
-}
-```
-</details>
-
-Running this example against the pinned commit prints:
-
-```
-output: !DLROW ,OLLEH
-resumed output: !DLROW ,OLLEH
-```
-Both lines match because the checkpoint captured after the first run restores the same completed output; the second line only appears if `ResumeStreaming` actually replays the saved graph state rather than returning an empty result.
-
----
-
-## Go Public Preview constraints
-
-### Current preview limits
-The pinned README states that "Microsoft Agent Framework for Go is in public preview and is currently evolving outside the core upstream codebase," and `go.mod` requires Go `1.25.0`. The README's "Preview status" section states that "Declarative agents, RAG, CodeAct, and functional workflows are not yet available." The linked [`docs/dotnet-go-sdk-feature-comparison.md`](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/dotnet-go-sdk-feature-comparison.md) states that the Harness utility packages (`agent/harness/loop`, `agent/harness/todo`, `agent/harness/agentmode`, `agent/harness/toolapproval`, `agent/harness/toolautocall`) are a partial match against .NET's Harness utilities, and that the Go SDK does not yet include integrated Harness file access, file memory, or file store. The same document states the Go SDK has "No evaluation package" and no DevUI package. (Source: [`README.md`](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/README.md); [feature comparison](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/dotnet-go-sdk-feature-comparison.md).)
-
-### Repository status
-The absence of a tagged release at this baseline is a GitHub API observation, not a README claim: neither the README nor the feature comparison says anything about releases or tags. A direct query of the GitHub API for `microsoft/agent-framework-go` returns zero entries from both the `/releases` and `/tags` endpoints as of 2026-08-16, so no Git tag and no GitHub Release exist at the pinned commit. This baseline is pinned to commit 726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e (pseudo-version v0.0.0-20260814094849-726b03baa4f8) and requires Go 1.25.0.
+- [Microsoft Agent Framework for Go repository](https://github.com/microsoft/agent-framework-go)
+- [Go package reference](https://pkg.go.dev/github.com/microsoft/agent-framework-go)
+- [Go examples](https://github.com/microsoft/agent-framework-go/tree/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/examples)
+- [.NET and Go SDK feature comparison](https://github.com/microsoft/agent-framework-go/blob/726b03baa4f8fe5eacd8ec78b08c0b6b37b9c31e/docs/dotnet-go-sdk-feature-comparison.md)
+- [Microsoft Learn: Agent Framework](https://learn.microsoft.com/agent-framework/)
+- [Official Agent Framework introduction video](https://www.youtube.com/watch?v=AAgdMhftj8w)
 
 ---
 
 ## Questions for your framework team
 1. Which runtime capabilities does your framework bundle by default, and how can teams inspect or override them?
 2. How does your framework package and load reusable expertise without placing all instructions and tools in every initial context?
-3. How are cancellation, streaming errors, and per-run options represented in each supported language?
-4. What ownership and persistence rules must be satisfied before a workflow can resume from a checkpoint?
+3. When adding another language implementation, which concepts should remain consistent and which APIs should be redesigned for that language's conventions?
