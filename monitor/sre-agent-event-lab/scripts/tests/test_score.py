@@ -412,5 +412,5 @@ def test_cli_without_any_state_explains_what_to_run_first(tmp_path):
     result = run_cli(tmp_path)
 
     assert result.returncode == 1
-    assert "lab.sh run" in result.stderr
+    assert "guides/02-scenario-s1.md" in result.stderr
     assert "Traceback" not in result.stderr

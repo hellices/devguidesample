@@ -12,7 +12,7 @@
 
 ```bash
 cd monitor/sre-agent-event-lab
-./scripts/lab.sh score
+app/.venv/bin/python scripts/score.py --evidence-root evidence
 ```
 
 `evidence/scorecard.json`과 `SCENARIO<TAB>CRITERION<TAB>STATUS<TAB>POINTS<TAB>DETAIL` 표를 출력합니다. 종합 판정이 `FAIL`일 때만 종료 코드 1을 반환합니다.

@@ -1,5 +1,5 @@
 {
-  "name": "Azure SRE Agent Event Lab",
+  "name": "Azure DevGuide Sample",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/azure-cli:1": {
@@ -26,10 +26,6 @@
         "ms-python.python"
       ]
     }
-  },
-  "postCreateCommand": "cd monitor/sre-agent-event-lab && ./scripts/setup-venv.sh",
-  "postAttachCommand": {
-    "next-steps": "echo 'Next: az login --use-device-code, then cd monitor/sre-agent-event-lab && source ./scripts/lab-env.sh'"
   },
   "remoteUser": "vscode"
 }

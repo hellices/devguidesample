@@ -182,26 +182,56 @@ jq -e \
    }
 ```
 
-## 점검과 승인
+## 정상 상태 확인과 승인
+
+장애를 주입하기 전에, 정상 상태의 요청이 Application Insights까지 도달하는지 확인합니다. 이 확인이 통과해야 S1을 시작할 수 있습니다. 텔레메트리가 도착하지 않는 워크로드에 장애를 넣으면, 주입한 장애와 원래부터 안 보이던 상태를 구별할 수 없기 때문입니다.
+
+먼저 정상 부하를 넣습니다. 두 엔드포인트 모두 200이어야 합니다.
 
 ```bash
-./scripts/lab.sh doctor
-./scripts/lab.sh baseline
-./scripts/lab.sh acknowledge agent-setup
+EVIDENCE_DIR="${PWD}/evidence/baseline-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "${EVIDENCE_DIR}"
+
+python3 scripts/loadgen.py "https://${APP_FQDN}/api/orders" \
+  --requests 30 --concurrency 4 --expect-status 200 \
+  --output "${EVIDENCE_DIR}/orders.json"
+
+python3 scripts/loadgen.py "https://${APP_FQDN}/api/documents" \
+  --requests 10 --concurrency 2 --expect-status 200 \
+  --output "${EVIDENCE_DIR}/documents.json"
 ```
 
-`doctor`가 출력하는 네 줄은 언제나 `MANUAL`입니다. 저장소 연결, 지식 원본, incident platform, 응답 계획을 읽을 수 있는 공식 안정 API가 없기 때문입니다. 나머지 검사에 `FAIL`이 남아 있으면 먼저 해결합니다.
+두 요청 종류가 워크스페이스에 보이는지 확인합니다. 수집에는 보통 2~5분이 걸리므로, 결과가 비어 있으면 잠시 뒤 다시 실행합니다.
 
-`acknowledge agent-setup`은 설정 값을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 받아야 기록합니다. 어떤 환경 변수로도 대체할 수 없습니다. 값이 하나라도 다르면 그대로 중단하고 위 단계로 돌아가세요.
+```bash
+az monitor log-analytics query \
+  --workspace "${WORKSPACE_CUSTOMER_ID}" \
+  --analytics-query "AppRequests | where AppRoleName == '${TELEMETRY_SERVICE_NAME}' | where TimeGenerated > ago(30m) | summarize count() by Name" \
+  --output table
+```
+
+`/api/orders`와 `/api/documents`가 모두 보이면 통과입니다. 그 사실을 기록해야 S1이 열립니다.
+
+```bash
+python3 scripts/lab_state.py mark baseline_passed --evidence-dir "${EVIDENCE_DIR}"
+```
+
+마지막으로 Agent 설정을 승인합니다. 이 명령은 설정 값을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 받아야 기록합니다. 어떤 환경 변수로도 대체할 수 없습니다. 값이 하나라도 다르면 그대로 중단하고 위 단계로 돌아가세요.
+
+```bash
+python3 scripts/lab_state.py acknowledge-agent
+```
+
+저장소 연결, 지식 원본, incident platform, 응답 계획은 읽을 수 있는 공식 안정 API가 없으므로 위 표를 보고 포털에서 직접 확인하는 것이 유일한 방법입니다.
 
 ## 실패했을 때
 
 | 증상 | 조치 |
 |---|---|
-| `doctor`의 `Python environment` 검사가 `FAIL` | `app/.venv`가 없거나 Pillow가 안 잡힙니다. 로컬 문제이며 클라우드 배포와는 무관하니 바로 실행: `./scripts/setup-venv.sh` |
-| `doctor`의 Reader 검사가 `FAIL` | 두 principal ID가 근거 파일과 같은지 확인하고 리소스 그룹에 Reader를 다시 부여합니다 |
-| `baseline`이 telemetry 없음으로 종료 | 10분 더 기다린 뒤 다시 실행합니다. 계속 실패하면 `azd env get-value AZURE_CONTAINER_APP_FQDN`으로 앱을 직접 호출해 봅니다 |
-| `acknowledge`가 기록되지 않음 | 입력한 단어가 정확한지, `azd env select`로 올바른 환경을 골랐는지 확인합니다 |
+| `loadgen.py`가 `app/.venv` 없이 실패 | 로컬 문제이며 클라우드 배포와는 무관합니다. 바로 실행: `./scripts/setup-venv.sh` |
+| 두 principal ID로 Reader 권한이 확인되지 않음 | 두 ID가 근거 파일과 같은지 확인하고 리소스 그룹에 Reader를 다시 부여합니다 |
+| 쿼리에 요청이 보이지 않음 | 10분 더 기다린 뒤 다시 조회합니다. 계속 비어 있으면 `curl -sS -o /dev/null -w '%{http_code}\n' "https://${APP_FQDN}/healthz"`로 앱을 직접 호출해 봅니다 |
+| `acknowledge-agent`가 기록되지 않음 | 입력한 단어가 정확한지, `azd env select`로 올바른 환경을 골랐는지 확인합니다 |
 | 경고가 Agent에 도착하지 않음 | Monitoring Contributor 범위가 구독인지, 응답 계획이 `On`인지 확인합니다 |
 
 ## 다음 단계

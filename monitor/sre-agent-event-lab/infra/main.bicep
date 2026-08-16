@@ -83,6 +83,7 @@ output AZURE_APP_INSIGHTS_NAME string = lab.outputs.appInsightsName
 output AZURE_STORAGE_CONTAINER_SCOPE string = lab.outputs.storageContainerScope
 output AZURE_BLOB_ROLE_ASSIGNMENT_NAME string = lab.outputs.blobRoleAssignmentName
 output AZURE_TELEMETRY_SERVICE_NAME string = lab.outputs.telemetryServiceName
+output AZURE_WORKSPACE_CUSTOMER_ID string = lab.outputs.workspaceCustomerId
 
 // Deployment outputs the lab scripts (common.sh `deployment_output`,
 // run-scenario.sh, query-evidence.sh) still read by their original names.

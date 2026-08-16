@@ -118,6 +118,8 @@ lab_env_bind APP_FQDN AZURE_CONTAINER_APP_FQDN || true
 lab_env_bind WORKLOAD_PRINCIPAL_ID AZURE_CONTAINER_APP_PRINCIPAL_ID || true
 lab_env_bind STORAGE_CONTAINER_SCOPE AZURE_STORAGE_CONTAINER_SCOPE || true
 lab_env_bind BLOB_ROLE_ASSIGNMENT_NAME AZURE_BLOB_ROLE_ASSIGNMENT_NAME || true
+lab_env_bind WORKSPACE_CUSTOMER_ID AZURE_WORKSPACE_CUSTOMER_ID || true
+lab_env_bind TELEMETRY_SERVICE_NAME AZURE_TELEMETRY_SERVICE_NAME || true
 
 # The manual walkthrough issues `az` commands that inherit the CLI's active
 # subscription, so a mismatch would inject the failure into a same-named

@@ -597,7 +597,7 @@ def test_readme_documents_the_teardown_hooks_and_manual_recovery():
         "the README must not claim canceling leaves a fully working environment "
         "-- predown already removed the recorded roles before the prompt"
     )
-    assert "acknowledge agent-setup" in section, (
+    assert "acknowledge-agent" in section, (
         "the README must name the recovery step (re-running Agent setup/role "
         "assignment) an operator needs after canceling"
     )

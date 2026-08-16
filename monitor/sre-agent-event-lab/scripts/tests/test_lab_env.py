@@ -1,12 +1,12 @@
-"""Contract tests for the one-shot lab environment and its Codespaces entry.
+"""Contract tests for the one-shot lab environment.
 
-An operator who opens the lab in Codespaces runs `az login` once and then
-one `source`; every later command reads exported values instead of binding
-each one by hand. These tests pin the pieces that promise makes: the
-devcontainer Codespaces actually offers, the sourced script that resolves
-and exports the values, and the guides that stopped re-binding them.
+An operator runs `az login` once and then one `source`; every later command
+reads exported values instead of binding each one by hand. These tests pin
+the pieces that promise makes: the sourced script that resolves and exports
+the values, and the guides that stopped re-binding them. The container that
+supplies the tools is the whole repository's, and is pinned separately in
+`test_repo_devcontainer.py`.
 """
-import json
 import os
 import re
 import subprocess
@@ -19,11 +19,6 @@ LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
 LAB_ENV_SH = LAB_ROOT / "scripts" / "lab-env.sh"
 GUIDES = LAB_ROOT / "guides"
 README = LAB_ROOT / "README.md"
-
-# GitHub only offers configurations stored at the repository root, either as
-# `.devcontainer/devcontainer.json` or one level deep under `.devcontainer/`.
-# A file anywhere else is invisible in the Codespaces creation UI.
-DEVCONTAINER = REPO_ROOT / ".devcontainer" / "sre-agent-event-lab" / "devcontainer.json"
 
 SCENARIO_GUIDES = {
     "02-scenario-s1.md": "s1",
@@ -41,49 +36,14 @@ EXPORTED_VALUES = {
     "WORKLOAD_PRINCIPAL_ID": "AZURE_CONTAINER_APP_PRINCIPAL_ID",
     "STORAGE_CONTAINER_SCOPE": "AZURE_STORAGE_CONTAINER_SCOPE",
     "BLOB_ROLE_ASSIGNMENT_NAME": "AZURE_BLOB_ROLE_ASSIGNMENT_NAME",
+    "WORKSPACE_CUSTOMER_ID": "AZURE_WORKSPACE_CUSTOMER_ID",
+    "TELEMETRY_SERVICE_NAME": "AZURE_TELEMETRY_SERVICE_NAME",
 }
 
 
 def manual_section(name):
     text = (GUIDES / name).read_text()
-    return text[text.index("## 수동 실행"):text.index("## 지름길")]
-
-
-# --- Codespaces entry point ------------------------------------------------
-
-
-def test_codespaces_offers_a_configuration_for_this_lab():
-    assert DEVCONTAINER.is_file(), (
-        "Codespaces only lists configurations under the repository's own "
-        f".devcontainer directory; expected {DEVCONTAINER}"
-    )
-    config = json.loads(DEVCONTAINER.read_text())
-    assert config["name"]
-    features = " ".join(config.get("features", {}))
-    for required in ("azure-cli", "azure-dev/azd", "github-cli", "python"):
-        assert required in features, required
-
-
-def test_devcontainer_records_no_secret_and_no_subscription():
-    raw = DEVCONTAINER.read_text()
-    assert not re.search(
-        r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b", raw
-    ), "a GUID in the devcontainer would pin every user to one subscription"
-    for forbidden in ("PASSWORD", "SECRET", "TOKEN", "_KEY", "CONNECTION_STRING"):
-        assert forbidden not in raw.upper(), forbidden
-
-
-def test_devcontainer_prepares_the_lab_without_logging_in_for_the_user():
-    """`az login` is interactive and account-specific: the container may
-    prepare the workspace, but it must never attempt a login or bake in
-    credentials of whoever authored the file."""
-    config = json.loads(DEVCONTAINER.read_text())
-    lifecycle = " ".join(
-        str(config.get(hook, ""))
-        for hook in ("onCreateCommand", "postCreateCommand", "postStartCommand")
-    )
-    assert "setup-venv.sh" in lifecycle
-    assert "az login" not in lifecycle
+    return text[text.index("## 수동 실행"):].split("\n## ", 1)[0]
 
 
 # --- One-shot environment --------------------------------------------------
@@ -128,6 +88,8 @@ def run_sourced(tmp_path, azd_mode="ok", az_mode="ok", extra=""):
               AZURE_CONTAINER_APP_PRINCIPAL_ID) echo 8c8a4f0e-0000-4000-8000-2b1f9a0c1234 ;;
               AZURE_STORAGE_CONTAINER_SCOPE) echo /subscriptions/s/rg/containers/documents ;;
               AZURE_BLOB_ROLE_ASSIGNMENT_NAME) echo 3f2504e0-4f89-11d3-9a0c-0305e82c3301 ;;
+              AZURE_WORKSPACE_CUSTOMER_ID) echo 9d1a0b2c-3d4e-5f60-7182-93a4b5c6d7e8 ;;
+              AZURE_TELEMETRY_SERVICE_NAME) echo sre-lab-app ;;
               *) echo "" ;;
             esac
             """
@@ -186,6 +148,7 @@ def test_sourcing_exports_the_resolved_values(tmp_path):
     assert values["RESOURCE_GROUP"] == "rg-sre-lab"
     assert values["APP_FQDN"] == "ca-sre-lab.example.io"
     assert values["BLOB_ROLE_ASSIGNMENT_NAME"] == "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+    assert values["WORKSPACE_CUSTOMER_ID"] == "9d1a0b2c-3d4e-5f60-7182-93a4b5c6d7e8"
 
 
 def test_a_failed_lookup_reports_zero_and_exports_nothing(tmp_path):
@@ -241,26 +204,6 @@ def test_scenario_guides_still_refuse_to_run_when_the_environment_is_missing():
         section = manual_section(name)
         assert "LAB_READY" in section, name
         assert "begin-run {0}".format(scenario) in section, name
-
-
-# --- The container can actually run what it promises ------------------------
-
-
-def test_devcontainer_provides_uv_because_setup_venv_requires_it():
-    """`setup-venv.sh` is uv-only by design and exits 1 without it, so a
-    container that runs it in postCreate must install uv or every Codespace
-    starts with a failed lifecycle hook and no `app/.venv`."""
-    config = json.loads(DEVCONTAINER.read_text())
-    lifecycle = " ".join(
-        str(config.get(hook, ""))
-        for hook in ("onCreateCommand", "postCreateCommand", "postStartCommand")
-    )
-    if "setup-venv.sh" not in lifecycle:
-        return
-    raw = DEVCONTAINER.read_text()
-    assert "uv" in raw, (
-        "setup-venv.sh refuses to run without uv; the container must supply it"
-    )
 
 
 # --- The repository URL never carries a credential --------------------------

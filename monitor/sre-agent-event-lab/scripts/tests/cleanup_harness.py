@@ -99,7 +99,7 @@ def agent_setup(
     uami_assignment_id=None,
     uami_principal_id=AGENT_UAMI_PRINCIPAL_ID,
 ):
-    """The evidence file `lab.sh acknowledge agent-setup` leaves behind."""
+    """The evidence file `lab_state.py acknowledge-agent` leaves behind."""
     if monitoring_assignment_id is None:
         monitoring_assignment_id = assignment_id(AGENT_ASSIGNMENT_NAME)
     if uami_assignment_id is None:

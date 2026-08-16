@@ -25,7 +25,7 @@ Three rules keep the answer honest:
 
 Output is `evidence/scorecard.json` plus a tab-separated table
 (`SCENARIO<TAB>CRITERION<TAB>STATUS<TAB>POINTS<TAB>DETAIL`), the same
-machine-readable shape `doctor.sh` prints.
+machine-readable shape the evidence files carry.
 
 Python 3.9 compatible: no PEP 604 unions and no third-party imports.
 """
@@ -332,8 +332,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         state = state_from_environment(state_path)
         if not any(state.capture_status(scenario) for scenario in SCENARIOS):
             print(
-                "No captured scenario evidence in {0}. Run: lab.sh run s1, "
-                "then lab.sh capture s1.".format(evidence_root),
+                "No captured scenario evidence in {0}. Run the s1 steps in "
+                "guides/02-scenario-s1.md, capture included.".format(evidence_root),
                 file=sys.stderr,
             )
             return 1
