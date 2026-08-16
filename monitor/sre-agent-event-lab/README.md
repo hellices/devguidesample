@@ -35,7 +35,7 @@ Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Ag
 이 실습은 **본인 fork에서** 진행합니다. Agent에 저장소를 연결하면 조사 결과 이슈가 그 저장소에 생성되므로, 원본을 연결하면 참가자 전원의 이슈가 한곳에 쌓이고 쓰기 권한도 없습니다.
 
 1. 이 저장소를 본인 계정으로 fork합니다.
-2. fork에서 **Code > Codespaces > New with options**를 열고 dev container로 `Azure SRE Agent Event Lab`을 고릅니다. `az`, `azd`, `gh`, Python, `uv`가 설치되고 `postCreateCommand`가 `setup-venv.sh`를 실행해 `app/.venv`까지 만듭니다.
+2. fork에서 **Code > Codespaces > Create codespace**를 엽니다. 저장소 기본 dev container가 `az`, `azd`, `gh`, Python, `uv`, `jq`를 갖춰 줍니다. 도구 목록과 로컬 설치 방법은 [.devcontainer/README.md](../../.devcontainer/README.md)에 있습니다.
 3. 터미널에서 로그인한 뒤 환경을 한 번 읽습니다.
 
 ```bash
@@ -47,11 +47,11 @@ source ./monitor/sre-agent-event-lab/scripts/lab-env.sh
 
 `lab-env.sh`는 `azd`가 게시한 배포 출력만 읽어 리소스 그룹·구독·Container App·Storage 범위 등을 현재 셸에 export하고, 값이 하나라도 없으면 `LAB_READY=0`으로 알려 줍니다. 이후 가이드의 명령은 이 값들을 그대로 사용하므로 단계마다 다시 조회하지 않습니다. 비밀 값은 읽지도 출력하지도 않습니다.
 
-로컬에서 진행한다면 아래 사전 조건을 직접 갖춘 뒤 같은 `source` 한 줄로 시작합니다. Codespaces에서는 dev container가 이미 갖춰 줍니다.
+로컬에서 진행한다면 아래 사전 조건을 직접 갖춘 뒤 같은 `source` 한 줄로 시작합니다.
 
 ## 사전 조건
 
-- `az`, `azd`, `jq`, `curl`, `python3`, [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — `uv`는 `app/.venv`를 만드는 `scripts/setup-venv.sh`가 쓰는 유일한 도구이며, 사내 프록시로 구성된 인덱스 설정을 그대로 씁니다(공개 PyPI `pip` 폴백 없음).
+- `az`, `azd`, `jq`, `curl`, `python3`, `uv` — 설치 명령은 [.devcontainer/README.md](../../.devcontainer/README.md)가 관리합니다. `uv`는 `app/.venv`를 만드는 `scripts/setup-venv.sh`가 쓰는 유일한 도구이며, 사내 프록시로 구성된 인덱스 설정을 그대로 씁니다(공개 PyPI `pip` 폴백 없음).
 - `az extension add --name log-analytics` (`az monitor log-analytics query` 제공)
 - `az login`과 `azd auth login` — 두 CLI는 자격 증명을 따로 관리합니다.
 - 구독 Contributor, 역할 할당을 위한 Owner 또는 User Access Administrator
@@ -65,7 +65,7 @@ source ./monitor/sre-agent-event-lab/scripts/lab-env.sh
 cd monitor/sre-agent-event-lab
 ```
 
-로컬 검증만 먼저 해 보려면 다음을 실행합니다. Codespaces에서는 `setup-venv.sh`가 이미 실행된 상태입니다.
+로컬 검증만 먼저 해 보려면 다음을 실행합니다. `setup-venv.sh`는 `azd up`의 postprovision 단계에서도 실행되므로, 배포를 먼저 한 경우에는 이미 준비된 상태입니다.
 
 ```bash
 ./scripts/setup-venv.sh
@@ -112,34 +112,24 @@ postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `.
 
 기본 실습에는 Logic App bridge를 배포하지 않습니다. 제품 표준 경로는 Azure Monitor를 incident platform으로 연결하는 것이고, 예전 실측에서 쓰던 Action Group + Logic App 인증 경로는 레거시 기록으로만 남아 있습니다([validation-results.md](validation-results.md)).
 
-## 점검과 승인
+## 정상 상태 확인과 승인
+
+장애를 주입하기 전에 정상 부하가 Application Insights까지 도달하는지 확인하고, 그 사실을 기록해야 S1이 열립니다. 텔레메트리가 없는 워크로드에 장애를 넣으면 주입한 장애와 원래부터 안 보이던 상태를 구별할 수 없습니다. 명령은 [guides/01-agent-setup.md](guides/01-agent-setup.md)에 있습니다.
 
 ```bash
-./scripts/lab.sh doctor
-./scripts/lab.sh baseline
-./scripts/lab.sh acknowledge agent-setup
+python3 scripts/lab_state.py mark baseline_passed --evidence-dir "${EVIDENCE_DIR}"
+python3 scripts/lab_state.py acknowledge-agent
 ```
 
-`doctor`는 `CHECK<TAB>STATUS<TAB>DETAIL` 한 줄씩 출력하고 `FAIL`이 하나라도 있으면 종료 코드 1을 반환합니다. 저장소 연결, 지식 원본, incident platform, 응답 계획은 공식 안정 API로 읽을 수 없어 항상 `MANUAL`입니다. `Python environment` 행은 `app/.venv`와 Pillow가 캡처(`capture-scenario.sh`)에 쓸 준비가 됐는지 확인하며, `FAIL`이면 `./scripts/setup-venv.sh`를 다시 실행하라고 안내합니다.
-
-`baseline`은 정상 부하를 넣고 Application Insights에 두 요청 종류가 모두 보일 때까지 최대 10분 기다립니다. `acknowledge agent-setup`은 대화형이며, 설정 값을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 입력해야 기록됩니다.
+`acknowledge-agent`는 설정 값을 출력한 뒤 표준 입력으로 정확히 `acknowledge`를 입력해야 기록됩니다.
 
 ## 시나리오 실행
 
-각 시나리오 문서는 **수동 실행**을 먼저 설명합니다. `az containerapp update`, `az role assignment delete`처럼 실제로 Azure에 적용되는 명령을 그대로 실행하면서 무엇이 바뀌는지 확인하는 경로입니다. 처음 진행할 때는 이 경로를 권장합니다.
+각 시나리오 문서는 실제로 Azure에 적용되는 명령을 그대로 실행하도록 안내합니다. `az containerapp update`, `az role assignment delete`처럼 무엇이 바뀌는지 보이는 명령만 씁니다. 시나리오를 대신 실행해 주는 스크립트는 없습니다. 장애를 넣고 되돌리는 일이 이 실습에서 배우는 내용이기 때문입니다.
 
-같은 절차를 한 번에 실행하는 지름길도 각 문서 뒤쪽에 있습니다.
+진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며, 순서를 어기면 첫 단계의 `lab_state.py begin-run`이 거부합니다. 순서와 별개로, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 Container App 하나를 공유하므로, 끝나지 않은 실행 하나가 남은 실습 전체를 막습니다. 복구 명령은 운영자가 직접 완료해야 합니다.
 
-```bash
-./scripts/lab.sh run s1
-./scripts/lab.sh capture s1
-./scripts/lab.sh run s2
-./scripts/lab.sh capture s2
-./scripts/lab.sh run s3
-./scripts/lab.sh capture s3
-```
-
-`run-scenario.sh`와 `capture-scenario.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다. 진행 상태는 현재 azd 환경에 묶인 `evidence/state.json`에 기록되며 순서를 어기면 실행이 거부됩니다. 순서와 별개로, 어떤 시나리오든 실행이 `running`이나 `failed`로 남아 있으면 세 시나리오 모두 새 실행이 거부됩니다. 세 시나리오는 Container App 하나를 공유하므로, 끝나지 않은 실행 하나가 남은 실습 전체를 막습니다. 수동 실행도 첫 단계에서 `lab_state.py begin-run`을 호출해 같은 게이트를 적용받습니다. 차이는 복구입니다. 지름길은 종료 트랩이 장애를 자동으로 되돌리지만, 수동 실행에서는 복구 명령을 직접 완료해야 합니다.
+증거 수집에 쓰는 `scripts/query-evidence.sh`는 `scripts/common.sh`의 `load_lab_config`로 "명시적 환경 변수 > 현재 `azd env get-value` > 허용된 기본값" 순서로 설정을 읽으므로, 고정된 구독이나 리소스 그룹이 스크립트 안에 없습니다.
 
 | 시나리오 | 주입하는 장애 | 안내 문서 |
 |---|---|---|
@@ -150,7 +140,7 @@ postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `.
 ## 결과 확인
 
 ```bash
-./scripts/lab.sh score
+app/.venv/bin/python scripts/score.py --evidence-root evidence
 ```
 
 채점 기준, 사람이 채워야 하는 판정, 종합 판정 해석은 [guides/05-results.md](guides/05-results.md)에 있습니다.
@@ -166,7 +156,7 @@ azd down --purge
 - predown hook `scripts/cleanup-external.sh --yes`: `evidence/agent-setup.json`에 기록된 구독 범위 Monitoring Contributor 할당만 제거합니다. 기록된 principal·역할·범위가 실제 할당과 모두 일치할 때만 삭제하고, 하나라도 어긋나면 아무것도 지우지 않습니다.
 - postdown hook `scripts/cleanup-external.sh --reset-image-env --yes`: 기록된 `SRE_CONTAINER_IMAGE`와 `SRE_IMAGE_TAG`를 비웁니다. 삭제가 실제로 성공한 뒤에만 실행되어야 하므로 predown이 아니라 postdown입니다.
 
-중요: predown hook은 `azd down`이 삭제 **확인** 프롬프트를 띄우기 **전에** 실행됩니다. 그 프롬프트에서 **취소**해도 이미 제거된 Monitoring Contributor 할당은 돌아오지 않습니다. 리소스 그룹은 남지만 Agent의 구독 범위 권한은 사라진 상태이므로, 계속 쓰려면 역할 할당을 다시 만들고 `evidence/agent-setup.json`을 새 할당 ID로 직접 갱신한 뒤 `./scripts/lab.sh acknowledge agent-setup`을 실행해야 합니다.
+중요: predown hook은 `azd down`이 삭제 **확인** 프롬프트를 띄우기 **전에** 실행됩니다. 그 프롬프트에서 **취소**해도 이미 제거된 Monitoring Contributor 할당은 돌아오지 않습니다. 리소스 그룹은 남지만 Agent의 구독 범위 권한은 사라진 상태이므로, 계속 쓰려면 역할 할당을 다시 만들고 `evidence/agent-setup.json`을 새 할당 ID로 직접 갱신한 뒤 `python3 scripts/lab_state.py acknowledge-agent`를 실행해야 합니다.
 
 hook이 실패해 손으로 다시 실행할 때는 아래를 직접 호출합니다. `--yes` 없이는 계획만 출력합니다.
 
@@ -175,11 +165,19 @@ hook이 실패해 손으로 다시 실행할 때는 아래를 직접 호출합�
 ./scripts/cleanup-external.sh --reset-image-env --yes
 ```
 
-azd 환경을 잃어버린 실습을 정리할 때만 `./scripts/cleanup.sh --legacy-delete-resource-group`으로 예전 삭제 경로를 씁니다. 이 경로도 구독 일치와 태그 확인을 거치며, 첫 명령은 dry-run입니다.
+azd 환경을 잃어버려 `azd down`을 쓸 수 없다면 리소스 그룹을 직접 지웁니다. 반드시 태그로 대상을 먼저 확인하세요. 이 실습이 만든 그룹만 두 태그를 모두 가집니다.
+
+```bash
+az group list --subscription "${SUBSCRIPTION_ID}" \
+  --query "[?tags.purpose=='sre-agent-event-lab'].{name:name, env:tags.\"azd-env-name\"}" \
+  --output table
+
+az group delete --subscription "${SUBSCRIPTION_ID}" --name "${RESOURCE_GROUP}" --yes
+```
 
 ## 문제 해결
 
-먼저 `./scripts/lab.sh doctor`를 실행해 어떤 검사가 `FAIL`인지 확인하세요. 각 명령의 실패 처리와 복구 절차는 해당 단계 문서에 있습니다.
+각 명령의 실패 처리와 복구 절차는 해당 단계 문서에 있습니다.
 
 | 증상 | 확인할 곳 |
 |---|---|

@@ -160,7 +160,7 @@ if ! RECORDED_ASSIGNMENTS="$(jq -r '
   | join("|")
 ' "${CLEANUP_SETUP_FILE}" 2>/dev/null)"; then
   echo "Agent setup evidence is not valid JSON: ${CLEANUP_SETUP_FILE}" >&2
-  echo "Rewrite evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup" >&2
+  echo "Rewrite evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: python3 scripts/lab_state.py acknowledge-agent" >&2
   exit 1
 fi
 readonly RECORDED_ASSIGNMENTS
@@ -260,12 +260,12 @@ while IFS='|' read -r assignment_key assignment_id principal_key expected_princi
     echo "${assignment_key} is empty for principal ${expected_principal_id:-unknown}." >&2
     echo "Find the live ID: az role assignment list --assignee-object-id ${expected_principal_id:-<principalId>} --role \"Monitoring Contributor\" --scope ${SUBSCRIPTION_SCOPE} --query \"[0].id\" -o tsv" >&2
     echo "If no assignment is returned and teardown should continue, clear both ${assignment_key} and ${principal_key} in the evidence file." >&2
-    echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup" >&2
+    echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: python3 scripts/lab_state.py acknowledge-agent" >&2
     exit 1
   fi
   if [[ -z "${expected_principal_id}" ]]; then
     echo "Incomplete Agent setup evidence: ${assignment_id} was recorded without ${principal_key}." >&2
-    echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: lab.sh acknowledge agent-setup" >&2
+    echo "Update evidence/agent-setup.json as shown in guides/01-agent-setup.md, then run: python3 scripts/lab_state.py acknowledge-agent" >&2
     exit 1
   fi
   case "${VERIFIED_ASSIGNMENT_IDS}" in

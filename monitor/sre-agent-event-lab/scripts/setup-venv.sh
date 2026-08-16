@@ -5,7 +5,8 @@ set -euo pipefail
 # needs: the app's own runtime dependencies (`requirements.txt`, pulled in
 # by `-r requirements.txt` at the top of `requirements-dev.txt`), Pillow for
 # `render_capture.py`'s PNG/GIF rendering, and pytest/httpx for `app/tests`.
-# `capture-scenario.sh` and `guides/05-results.md`'s notification step both
+# The capture step in each scenario guide and `guides/05-results.md`'s
+# notification step both
 # run under this interpreter.
 #
 # `uv` is mandatory here, not merely preferred: this lab runs behind a

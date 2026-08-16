@@ -103,7 +103,7 @@ load_lab_config() {
   # Set by the deploy phase (`postdeploy` hook, scripts/azd-deploy-app.sh)
   # once it has built the lab image and switched the Container App onto it;
   # empty until then, which is the reliable "has azd deploy run yet?" signal
-  # doctor.sh needs to tell the intermediate placeholder state (expected)
+  # Callers need to tell the intermediate placeholder state (expected)
   # apart from a real post-deploy health regression (not expected).
   SRE_CONTAINER_IMAGE="$(setting SRE_CONTAINER_IMAGE "${SRE_CONTAINER_IMAGE:-}" "")"
   # Deployment outputs without an AZURE_-prefixed duplicate (see
@@ -273,7 +273,7 @@ evidence_dir_path() {
 
 # create_evidence_dir SCENARIO -- name it and create it in one step, for
 # callers that write into it immediately and have nothing left to refuse
-# them (`baseline.sh`).
+# them (the baseline step in `guides/01-agent-setup.md`).
 create_evidence_dir() {
   local directory
   directory="$(evidence_dir_path "$1")"
@@ -393,7 +393,7 @@ wait_for_new_revision_ready() {
 # alert_monitor_condition ALERT_ID -- Azure Monitor's own word for the
 # alert's current state: `Fired`, `Resolved`, or empty when the read failed.
 # ALERT_ID is the alert's full ARM resource ID, exactly as
-# `run-scenario.sh` recorded it from the Alerts Management list.
+# the scenario's timeline recorded it from the Alerts Management list.
 alert_monitor_condition() {
   local alert_id="$1"
   az rest \

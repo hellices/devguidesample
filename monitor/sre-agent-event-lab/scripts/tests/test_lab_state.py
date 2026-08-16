@@ -11,6 +11,7 @@ driven through stdin), never by reading the module's source.
 import importlib.util
 import json
 import os
+import pathlib
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +41,19 @@ ENVIRONMENT = {
     "AZURE_SUBSCRIPTION_ID": "11111111-2222-3333-4444-555555555555",
     "AZURE_RESOURCE_GROUP": "rg-sre-lab-state",
 }
+
+
+def test_every_scenario_has_a_guide_to_send_an_operator_to():
+    """A refusal names the document that walks the step. If the two lists
+    drift, the message degrades to "the matching guide under guides/" --
+    which is a direction, not an answer -- so they are pinned together.
+    """
+    import lab_state
+
+    assert set(lab_state.SCENARIO_GUIDES) == set(lab_state.SCENARIOS)
+    lab_root = pathlib.Path(__file__).parents[2]
+    for scenario, guide in lab_state.SCENARIO_GUIDES.items():
+        assert (lab_root / guide).is_file(), (scenario, guide)
 
 
 def run_cli(state_path, args, stdin="", env=None):
@@ -314,7 +328,7 @@ def test_begin_run_blocks_the_next_scenario_and_the_capture_gate(tmp_path):
 
 
 def test_begin_run_without_an_evidence_directory_drops_the_previous_one(tmp_path):
-    """`capture-scenario.sh` captures whatever directory the state names.
+    """The capture step uses whatever directory the state names.
     Keeping the finished attempt's directory across a new attempt would let
     a capture of the *old* timeline be recorded as this attempt's outcome."""
     path = tmp_path / "state.json"
@@ -563,7 +577,7 @@ def test_the_refusal_lists_every_blocker_earliest_first(tmp_path):
     assert message.index("s2") < message.index("s3"), message
     assert "running" in message and "failed" in message
     assert "mark-failed s2" in message
-    assert "lab.sh run s3" in message
+    assert "guides/04-scenario-s3.md" in message
 
 
 def test_a_repair_is_refused_while_an_earlier_run_is_still_running(tmp_path):
@@ -595,7 +609,7 @@ def test_the_refusal_names_the_blocking_scenario_its_status_and_a_remedy(tmp_pat
     message = str(refusal.value)
     assert "s2" in message
     assert "failed" in message
-    assert "lab.sh run s2" in message, message
+    assert "guides/03-scenario-s2.md" in message, message
 
 
 def test_the_refusal_for_a_running_scenario_names_how_to_end_it(tmp_path):
@@ -627,7 +641,7 @@ def test_the_ordered_remedy_never_tells_an_operator_to_restart_a_running_run(tmp
 
     message = str(refusal.value)
     assert "s1_recovered" in message
-    assert "lab.sh run s1" not in message, message
+    assert "guides/02-scenario-s1.md" not in message, message
     assert "mark-failed s1" in message, message
 
 
@@ -768,9 +782,9 @@ def test_a_conclusion_cannot_be_recorded_against_a_run_that_never_recovered(
 @pytest.mark.parametrize(
     "run_status, expected, forbidden",
     (
-        ("running", "mark-failed s1", "lab.sh run s1"),
-        ("failed", "lab.sh run s1", "mark-failed s1"),
-        (None, "lab.sh run s1", "mark-failed s1"),
+        ("running", "mark-failed s1", "guides/02-scenario-s1.md"),
+        ("failed", "guides/02-scenario-s1.md", "mark-failed s1"),
+        (None, "guides/02-scenario-s1.md", "mark-failed s1"),
     ),
     ids=("running", "failed", "none"),
 )
@@ -1202,12 +1216,12 @@ def test_cli_evidence_dir_without_a_run_names_the_command_to_run(tmp_path):
     result = run_cli(tmp_path / "state.json", ["evidence-dir", "s1"])
 
     assert result.returncode == 1
-    assert "lab.sh run s1" in result.stderr
+    assert "guides/02-scenario-s1.md" in result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_cli_begin_run_starts_a_new_attempt_and_blocks_the_next_scenario(tmp_path):
-    """The command `run-scenario.sh` runs between `require-run` and the
+    """The command an operator runs between `require-run` and the
     first destructive Azure call: it must clear the finished attempt and
     leave the scenario `running`, which satisfies no gate."""
     path = tmp_path / "state.json"
@@ -1276,7 +1290,7 @@ def test_cli_require_run_refuses_every_scenario_while_one_run_is_unfinished(tmp_
         assert refused.returncode == 1, refused.stdout
         assert "s3" in refused.stderr
         assert "failed" in refused.stderr
-        assert "lab.sh run s3" in refused.stderr
+        assert "guides/04-scenario-s3.md" in refused.stderr
         assert "Traceback" not in refused.stderr
 
     assert run_cli(path, ["require-run", "s3"]).returncode == 0

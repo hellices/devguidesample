@@ -19,7 +19,7 @@ $ azd auth login --check-status --output json
 rc=0, stdout='{"status": "success", "expiresOn": "2026-08-14T07:57:15Z"}'
 ```
 
-Three properties matter for `common.sh`/`doctor.sh` and are therefore
+Three properties matter for `common.sh` and its callers, and are therefore
 modelled here:
 
 1. azd writes its `ERROR:` diagnostics to **stdout**, not stderr, and signals

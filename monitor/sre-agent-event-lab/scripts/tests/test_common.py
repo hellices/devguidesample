@@ -7,19 +7,13 @@ from azd_common_harness import run_common
 
 
 COMMON_SH = Path(__file__).parents[1] / "common.sh"
-DEPLOY_SH = Path(__file__).parents[1] / "deploy.sh"
-CLEANUP_SH = Path(__file__).parents[1] / "cleanup.sh"
 CLEANUP_EXTERNAL_SH = Path(__file__).parents[1] / "cleanup-external.sh"
 QUERY_EVIDENCE_SH = Path(__file__).parents[1] / "query-evidence.sh"
-RUN_SCENARIO_SH = Path(__file__).parents[1] / "run-scenario.sh"
-CAPTURE_SCENARIO_SH = Path(__file__).parents[1] / "capture-scenario.sh"
-BASELINE_SH = Path(__file__).parents[1] / "baseline.sh"
 
 BASH = shutil.which("bash") or "/bin/bash"
 
 UUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b")
 
-LEGACY_RESOURCE_GROUP_FLAG = "--legacy-delete-resource-group"
 
 REQUIRED_ENV = {
     "AZURE_SUBSCRIPTION_ID": "11111111-2222-3333-4444-555555555555",
@@ -125,22 +119,6 @@ def test_verify_subscription_reports_only_subscription_id_on_mismatch(tmp_path):
     assert REQUIRED_ENV["AZURE_SUBSCRIPTION_ID"] in result.stderr
 
 
-def test_deploy_delegates_to_azd_up():
-    """The subscription-scope templates deploy.sh used to deploy were removed
-    when the lab moved to azd, so deploy.sh must not reference them any more.
-    It stays as a thin compatibility wrapper so the documented command keeps
-    working.
-    """
-    script = DEPLOY_SH.read_text()
-
-    assert "azd up" in script
-    assert "subscription" + ".bicep" not in script
-    assert "az deployment sub validate" not in script
-    assert "az deployment sub create" not in script
-    assert "az deployment group" not in script
-    assert 'IMAGE_TAG="20260812.4"' not in script
-
-
 def test_no_tracked_lab_file_references_the_deleted_subscription_templates():
     lab_root = Path(__file__).parents[2]
     tracked = subprocess.run(
@@ -172,13 +150,13 @@ def test_readme_documents_a_working_deployment_command():
     assert "azd env get-value AZURE_CONTAINER_APP_FQDN" in readme
 
 
-def test_readme_documents_scenario_scripts_read_the_current_azd_environment():
-    """`run-scenario.sh` and `query-evidence.sh` now resolve deployment
-    outputs through `common.sh`'s `load_lab_config` (explicit env > current
-    `azd env get-value` > allowed default), so they work against whatever
-    azd environment is currently selected -- not a fixed pre-azd resource
-    group. The README's scenario-execution section must describe that
-    mechanism instead of the old "legacy, not yet rewritten" caveat.
+def test_readme_documents_that_evidence_collection_reads_the_current_azd_environment():
+    """`query-evidence.sh` resolves deployment outputs through `common.sh`'s
+    `load_lab_config` (explicit env > current `azd env get-value` > allowed
+    default), so it works against whatever azd environment is currently
+    selected -- not a fixed pre-azd resource group. The README's
+    scenario-execution section must describe that mechanism instead of the
+    old "legacy, not yet rewritten" caveat.
     """
     readme = (Path(__file__).parents[2] / "README.md").read_text()
 
@@ -186,35 +164,22 @@ def test_readme_documents_scenario_scripts_read_the_current_azd_environment():
     assert scenario_heading in readme
     section = readme.split(scenario_heading, 1)[1].split("##", 1)[0]
 
-    assert "run-scenario.sh" in section
+    assert "query-evidence.sh" in section
     assert "load_lab_config" in section
     assert "레거시" not in section, (
         "README's scenario-execution section must no longer describe "
-        "run-scenario.sh/query-evidence.sh as reading a legacy, pre-azd "
-        "deployment lookup -- load_lab_config now reads the current azd "
-        "environment."
+        "query-evidence.sh as reading a legacy, pre-azd deployment lookup "
+        "-- load_lab_config now reads the current azd environment."
     )
 
 
-def test_scenario_waits_for_new_revision_before_load():
-    common = COMMON_SH.read_text()
-    scenario = (Path(__file__).parents[1] / "run-scenario.sh").read_text()
-    # Line continuations are formatting, not behaviour: the call is checked
-    # with its own wrapping collapsed.
-    collapsed = " ".join(scenario.replace("\\\n", " ").split())
-
-    assert "wait_for_new_revision_ready()" in common
-    assert 'OLD_REVISION="$(latest_revision_name "${APP_NAME}")"' in scenario
-    assert 'wait_for_new_revision_ready "${APP_NAME}" "${OLD_REVISION}"' in collapsed
-
-
 def test_cleanup_removes_both_subscription_monitoring_assignments():
-    """The verified deletion of the two subscription-scoped assignments now
+    """The verified deletion of the two subscription-scoped assignments
     lives in `cleanup-external.sh` -- the script `azd down`'s `predown` hook
-    runs and the one `cleanup.sh` forwards to -- so both recorded records,
-    their principals, the Monitoring Contributor role definition and the
-    read-back that verifies them must be there. `test_cleanup_external.py`
-    exercises the resulting behaviour against a staged subscription.
+    runs -- so both recorded records, their principals, the Monitoring
+    Contributor role definition and the read-back that verifies them must be
+    there. `test_cleanup_external.py` exercises the resulting behaviour
+    against a staged subscription.
     """
     script = CLEANUP_EXTERNAL_SH.read_text()
 
@@ -231,29 +196,6 @@ def test_cleanup_removes_both_subscription_monitoring_assignments():
     # used to report.
     assert "Agent setup evidence is required for cleanup" not in script
     assert "Nothing outside the azd resource group to clean up." in script
-
-
-def test_s1_and_s2_record_injection_before_container_app_update():
-    script = (Path(__file__).parents[1] / "run-scenario.sh").read_text()
-    main_case = script.rsplit('case "${SCENARIO}" in', 1)[1]
-
-    for branch, next_branch in (("  s1)", "  s2)"), ("  s2)", "  s3)")):
-        section = main_case.split(branch, 1)[1].split(next_branch, 1)[0]
-        assert section.index('INJECTED_AT="$(utc_now)"') < section.index(
-            "az containerapp update"
-        )
-        assert 'REVISION_READY_AT="$(utc_now)"' in section
-
-
-def test_s3_records_injection_before_role_deletion():
-    script = (Path(__file__).parents[1] / "run-scenario.sh").read_text()
-    main_case = script.rsplit('case "${SCENARIO}" in', 1)[1]
-    section = main_case.split("  s3)", 1)[1].split("esac", 1)[0]
-
-    assert section.index('INJECTED_AT="$(utc_now)"') < section.index(
-        "az role assignment delete"
-    )
-    assert 'ROLE_DELETED_AT="$(utc_now)"' in section
 
 
 def test_lab_state_runs_bound_to_the_resolved_configuration():
@@ -274,57 +216,6 @@ def test_lab_state_runs_bound_to_the_resolved_configuration():
     assert 'AZURE_ENV_NAME="${AZURE_ENV_NAME}"' in tool_helper
     assert 'AZURE_SUBSCRIPTION_ID="${SUBSCRIPTION_ID}"' in tool_helper
     assert 'AZURE_RESOURCE_GROUP="${RESOURCE_GROUP}"' in tool_helper
-
-
-def test_run_scenario_checks_the_run_order_before_injecting_a_failure():
-    """The gate is worthless after the fact: `require-run` has to run before
-    the first `az` call that breaks the workload."""
-    script = RUN_SCENARIO_SH.read_text()
-
-    assert script.index('lab_state require-run "${SCENARIO}"') < script.index(
-        "az containerapp update"
-    )
-    assert script.index('lab_state require-run "${SCENARIO}"') < script.index(
-        "az role assignment delete"
-    )
-
-
-def test_run_scenario_records_recovery_only_after_health_and_alert_checks():
-    script = RUN_SCENARIO_SH.read_text()
-
-    assert "wait_for_app_ready" in script
-    assert "wait_for_alert_resolved" in script
-    assert script.index("wait_for_alert_resolved") < script.index(
-        'lab_state mark-recovered'
-    )
-    assert "lab_state mark-failed" in script
-
-
-def test_run_scenario_default_alert_resolution_budget_covers_stateful_log_alerts():
-    script = RUN_SCENARIO_SH.read_text()
-
-    assert 'LAB_ALERT_RESOLVE_TIMEOUT_SECONDS:-1500' in script
-    assert 'local timeout_seconds="${2:-1500}"' in COMMON_SH.read_text()
-
-
-def test_capture_scenario_records_the_terminal_state_from_the_timeline():
-    """The capture status is derived from the normalized timeline, so a
-    missing thread/investigation/conclusion is recorded as itself and can
-    never be reported as a successful capture."""
-    script = CAPTURE_SCENARIO_SH.read_text()
-
-    assert 'lab_state record-capture "${SCENARIO}"' in script
-    assert '--timeline "${NORMALIZED_FILE}"' in script
-    assert 'lab_state evidence-dir "${SCENARIO}"' in script
-
-
-def test_baseline_records_the_passing_baseline_stage():
-    script = BASELINE_SH.read_text()
-
-    assert "lab_state mark baseline_passed" in script
-    assert script.index("lab_state mark baseline_passed") > script.index(
-        "did not show both request types"
-    )
 
 
 def test_lab_state_and_score_are_exercised_as_programs():
@@ -349,45 +240,68 @@ def test_activity_log_export_projects_only_incident_fields():
     assert "claims:" not in script
 
 
-def test_cleanup_delegates_to_external_cleanup_and_keeps_recovery_deletion_behind_a_flag():
-    """`cleanup.sh` used to delete the whole resource group itself, which is
-    now `azd down`'s job. It stays as a compatibility wrapper: it names the
-    supported command, forwards to `cleanup-external.sh`, and only deletes a
-    resource group when an operator explicitly asks for the documented
-    recovery path. `test_lab_scripts.py` runs both paths as programs.
-    """
-    script = CLEANUP_SH.read_text()
-    readme = (Path(__file__).parents[2] / "README.md").read_text()
+def test_the_lab_keeps_only_the_shell_scripts_it_cannot_do_without():
+    """The walkthrough is manual: the guides run `az` and the Python tools
+    directly, and no script runs a scenario on the operator's behalf. What
+    survives is the set nothing else can cover -- the four hooks
+    `azure.yaml` invokes, the environment `uv` needs, the values exported
+    once per shell, the shared library those read, and the evidence
+    collection that is eight queries in a row.
 
-    assert "azd down --purge" in script
-    assert "cleanup-external.sh" in script
-    assert LEGACY_RESOURCE_GROUP_FLAG in script
-    assert LEGACY_RESOURCE_GROUP_FLAG in readme, (
-        "the legacy resource-group deletion must be documented for recovery"
+    Pinning the set keeps a new wrapper from arriving unnoticed: adding one
+    means changing this list, in review.
+    """
+    scripts = sorted(
+        path.name for path in (Path(__file__).parents[1]).glob("*.sh")
     )
-    # Nothing may delete a resource group before the legacy flag is parsed.
-    assert script.index(LEGACY_RESOURCE_GROUP_FLAG) < script.index("az group delete")
 
-
-def test_scenario_query_capture_cleanup_scripts_are_exercised_as_programs():
-    """The four entry points are covered by execution tests, not by reading
-    their text: `test_lab_scripts.py` runs each one against fake
-    `az`/`azd`/`python` executables from a working directory outside the
-    lab, which is the only way to catch a caller that reassigns a name
-    `common.sh` already made readonly.
-    """
-    lab_script_tests = (Path(__file__).parent / "test_lab_scripts.py").read_text()
-
-    for script_name in (
-        "run-scenario.sh",
+    assert scripts == [
+        "azd-configure.sh",
+        "azd-deploy-app.sh",
+        "azd-postprovision-local.sh",
+        "cleanup-external.sh",
+        "common.sh",
+        "lab-env.sh",
         "query-evidence.sh",
-        "capture-scenario.sh",
-        "cleanup.sh",
-    ):
-        assert f'"{script_name}"' in lab_script_tests, (
-            f"{script_name} has no execution test"
-        )
+        "setup-venv.sh",
+    ], scripts
 
+
+def test_nothing_points_an_operator_at_a_script_that_is_gone():
+    """A refusal message or an instruction that names a deleted script is
+    worse than no message: it sends the operator to `No such file or
+    directory` at the moment they are already stuck. Scripts, tools and
+    documents are all checked, because all three talk to the operator.
+    """
+    lab_root = Path(__file__).parents[2]
+    scripts_dir = lab_root / "scripts"
+    sources = (
+        list(scripts_dir.glob("*.sh"))
+        + list(scripts_dir.glob("*.py"))
+        + [lab_root / "README.md"]
+        + sorted((lab_root / "guides").glob("*.md"))
+    )
+
+    for path in sources:
+        # A URL is not a script reference: `https://astral.sh/uv/...` ends in
+        # a country-code domain that looks exactly like a shell script.
+        text = re.sub(r"https?://\S+", " ", path.read_text())
+        for name in set(re.findall(r"\b([a-z0-9_-]+\.sh)\b", text)):
+            assert (scripts_dir / name).is_file(), (path.name, name)
+
+
+def test_every_shell_script_is_exercised_by_a_test():
+    """Reading a script's text cannot catch a caller that reassigns a name
+    `common.sh` already made readonly; only running it can."""
+    tests_dir = Path(__file__).parent
+    corpus = "\n".join(
+        path.read_text() for path in tests_dir.glob("*.py") if path != Path(__file__)
+    )
+
+    for path in sorted((Path(__file__).parents[1]).glob("*.sh")):
+        assert f'"{path.name}"' in corpus or path.name in corpus, (
+            f"{path.name} has no test that runs or sources it"
+        )
 
 
 # --- The evidence directory is a name first, a directory second -------------
@@ -413,7 +327,7 @@ def run_in_throwaway_lab(tmp_path, command):
 
 
 def test_evidence_dir_path_names_a_directory_without_creating_it(tmp_path):
-    """`run-scenario.sh` needs the evidence path *before* it asks
+    """A scenario needs the evidence path *before* it asks
     `lab_state.py` to admit the run, because the path is what it registers.
     Creating the directory at that point left an empty `sN-<timestamp>/`
     behind whenever the run was then refused -- litter an operator has to
@@ -437,7 +351,7 @@ def test_evidence_dir_path_names_a_directory_without_creating_it(tmp_path):
 
 
 def test_create_evidence_dir_still_creates_what_it_names(tmp_path):
-    """`baseline.sh` writes into the directory immediately, so the eager
+    """Some callers write into the directory immediately, so the eager
     helper must keep working -- the split adds a step, it does not move the
     responsibility."""
     result, evidence_root = run_in_throwaway_lab(

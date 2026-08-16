@@ -2,7 +2,7 @@
 
 The README is the quickstart an operator reads first, and `guides/` holds
 the step-by-step documents it hands off to. These tests check behaviour a
-reader depends on -- that the commands are the ones `lab.sh` really
+reader depends on -- that the commands are the ones the lab really
 accepts, in the order `lab_state.py` really enforces; that every path,
 link and screenshot resolves; and that nothing here asks anyone to paste a
 credential into a file or an environment variable.
@@ -17,7 +17,6 @@ README = LAB_ROOT / "README.md"
 GUIDES = LAB_ROOT / "guides"
 OFFICIAL_ASSETS = LAB_ROOT / "assets" / "official"
 RUNBOOK = LAB_ROOT / "runbooks" / "incident-response.md"
-LAB_SH = LAB_ROOT / "scripts" / "lab.sh"
 VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
 DYNAMIC_THRESHOLDS = LAB_ROOT / "dynamic-thresholds.md"
 RESULTS_GUIDE = LAB_ROOT / "guides" / "05-results.md"
@@ -179,23 +178,32 @@ def blocks(text: str):
 
 def test_readme_is_azd_first_and_ordered():
     text = README.read_text()
-    commands = [
-        "azd env new",
-        "azd up",
-        "./scripts/lab.sh doctor",
-        "./scripts/lab.sh baseline",
-        "./scripts/lab.sh acknowledge agent-setup",
-        "./scripts/lab.sh run s1",
-        "./scripts/lab.sh capture s1",
-        "./scripts/lab.sh run s2",
-        "./scripts/lab.sh capture s2",
-        "./scripts/lab.sh run s3",
-        "./scripts/lab.sh capture s3",
-        "./scripts/lab.sh score",
-        "azd down --purge",
+    headings = [
+        "## 시작하기: fork와 Codespaces",
+        "## 사전 조건",
+        "## azd 환경 만들기",
+        "## 배포",
+        "## Azure SRE Agent 설정",
+        "## 정상 상태 확인과 승인",
+        "## 시나리오 실행",
+        "## 결과 확인",
+        "## 정리",
     ]
-    positions = [text.index(command) for command in commands]
+    positions = [text.index(heading) for heading in headings]
     assert positions == sorted(positions)
+
+    # The commands that carry each step, in the section that owns them.
+    def section(heading):
+        return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+    assert "azd env new" in section("## azd 환경 만들기")
+    assert "azd up" in section("## 배포")
+    assert "lab_state.py acknowledge-agent" in section("## 정상 상태 확인과 승인")
+    assert "scripts/score.py" in section("## 결과 확인")
+    assert "azd down --purge" in section("## 정리")
+    scenarios = section("## 시나리오 실행")
+    for name in ("02-scenario-s1.md", "03-scenario-s2.md", "04-scenario-s3.md"):
+        assert name in scenarios, name
 
 
 def test_readme_warns_about_cost_and_teardown_before_the_first_azure_command():
@@ -279,8 +287,8 @@ def test_deployment_plan_status_matches_what_was_actually_deployed():
 
 def test_deployment_plan_does_not_claim_the_manual_scenario_sequence_ran():
     """The operator said they would connect the Agent and run S1/S2/S3 one
-    by one themselves. Only the pre-acknowledgement refusal (`lab.sh run s1`
-    rejected before `acknowledge agent-setup`) was exercised, so the plan
+    by one themselves. Only the pre-acknowledgement refusal (a scenario
+    rejected before `acknowledge-agent`) was exercised, so the plan
     must record the scenario sequence as pending -- in the Live Deployment
     Proof table, where a reader looks for what the deployment proved.
     """
@@ -324,7 +332,7 @@ def test_deployment_plan_records_one_current_test_and_bicep_count():
 
 
 def test_scenario_guides_document_the_critical_recovery_failure_path():
-    """`run-scenario.sh` reverts the injected fault from an EXIT trap, and
+    """The operator reverts the injected fault by hand, and
     that revert can itself fail (a rejected `az containerapp update`, a
     revision that never becomes ready, a refused role restore). It then
     prints `CRITICAL:` and exits non-zero with the fault still live, so each
@@ -415,7 +423,7 @@ def test_autonomy_screenshots_warn_that_the_lab_must_choose_review():
 
 
 def test_scenario_guides_say_a_rerun_retires_the_previous_attempt():
-    """`run-scenario.sh` records the new attempt before it injects
+    """The guide records the new attempt before injecting
     anything, which clears whatever the previous attempt recorded --
     including a `conclusion` that was already unblocking the next
     scenario. An operator who re-runs a captured scenario to collect a
@@ -487,26 +495,24 @@ MANUAL_SCENARIO_COMMANDS = {
 
 
 def test_scenario_guides_lead_with_the_real_azure_commands():
-    """`lab.sh run sX` hides the operation it performs, which is the part
-    worth learning. Each scenario guide states the injection and the revert
+    """A script that runs the scenario hides the operation it performs,
+    which is the part worth learning. Each scenario guide states the injection and the revert
     as commands the operator runs, so the lab teaches the Azure change
     instead of a wrapper."""
     for name, commands in MANUAL_SCENARIO_COMMANDS.items():
         text = (GUIDES / name).read_text()
         manual_index = text.index("## 수동 실행")
-        shortcut_index = text.index("## 지름길")
-        assert manual_index < shortcut_index, name
-        manual_section = text[manual_index:shortcut_index]
+        manual_section = text[manual_index:].split("\n## ", 1)[0]
         for command in commands:
             assert command in manual_section, (name, command)
 
 
-def test_scenario_guides_keep_every_manual_step_runnable_without_lab_sh():
+def test_scenario_guides_keep_every_manual_step_runnable():
     """A manual run still has to produce the same evidence and recorded
     state the scorer reads, or the manual path dead-ends at scoring."""
     for name, scenario in SCENARIO_GUIDES.items():
         text = (GUIDES / name).read_text()
-        manual_section = text[text.index("## 수동 실행"):text.index("## 지름길")]
+        manual_section = text[text.index("## 수동 실행"):].split("\n## ", 1)[0]
         assert "scripts/loadgen.py" in manual_section, name
         assert "az rest" in manual_section, name
         assert (
@@ -520,12 +526,15 @@ def test_scenario_guides_keep_every_manual_step_runnable_without_lab_sh():
         ), name
 
 
-def test_scenario_guides_present_lab_sh_as_an_optional_shortcut():
-    for name, scenario in SCENARIO_GUIDES.items():
-        text = (GUIDES / name).read_text()
-        shortcut_section = text[text.index("## 지름길"):]
-        assert "./scripts/lab.sh run {0}".format(scenario) in shortcut_section, name
-        assert "./scripts/lab.sh capture {0}".format(scenario) in shortcut_section, name
+def test_no_guide_offers_a_script_that_runs_the_scenario_for_the_operator():
+    """A one-command shortcut is the fastest way to finish the lab having
+    learned nothing: the operator watches a script scroll instead of making
+    the Azure change and seeing what the Agent does with it. There is no
+    shortcut section, and nothing dispatches the scenarios."""
+    for path in guide_paths() + [README]:
+        text = path.read_text()
+        assert "## 지름길" not in text, path.name
+        assert "lab.sh" not in text, path.name
 
 
 def test_validation_results_keeps_the_one_minute_static_run_and_explains_it():
@@ -631,13 +640,13 @@ def test_readme_links_every_numbered_guide_in_order():
     assert positions == sorted(positions)
 
 
-def test_readme_troubleshooting_index_routes_to_doctor_and_guides():
+def test_readme_troubleshooting_index_routes_to_the_step_documents():
     text = README.read_text()
     heading = "## 문제 해결"
 
     assert heading in text
     section = text.split(heading, 1)[1]
-    assert "lab.sh doctor" in section
+    assert "azd env get-value" in section
     assert "guides/" in section
 
 
@@ -746,7 +755,6 @@ def test_scenario_guides_use_the_required_section_order():
     required = [
         "## 시작 조건",
         "## 수동 실행",
-        "## 지름길",
         "## Azure에서 발생하는 변화",
         "## SRE Agent에서 확인할 항목",
         "## 성공·부분 성공·실패 판정",
@@ -794,8 +802,8 @@ def test_scenario_guides_judge_success_partial_and_failure_with_recovery():
         recovery = text.split("## 복구 확인", 1)[1].split("\n## ", 1)[0]
         assert "Resolved" in recovery, name
         assert "state.json" in text, name
-        assert "./scripts/lab.sh run {0}".format(scenario) in text, name
-        assert "./scripts/lab.sh capture {0}".format(scenario) in text, name
+        assert "lab_state.py begin-run {0}".format(scenario) in text, name
+        assert "lab_state.py record-capture {0}".format(scenario) in text, name
 
 
 def test_results_guide_documents_the_scoring_thresholds_and_manual_gap():
@@ -816,18 +824,20 @@ def test_results_guide_documents_the_scoring_thresholds_and_manual_gap():
 # --- commands match the scripts -----------------------------------------
 
 
-def test_documented_lab_commands_exist_in_lab_sh():
-    documented = set(re.findall(r"lab\.sh\s+([a-z-]+)", joined_docs()))
-    supported = set(re.findall(r"^\s{2}([a-z-]+)\)", LAB_SH.read_text(), re.MULTILINE))
+def test_every_script_the_docs_name_actually_exists():
+    """Deleting a script has to delete the instructions that call it, or the
+    operator meets `No such file or directory` mid-lab."""
+    referenced = set(re.findall(r"scripts/([A-Za-z0-9_.-]+\.(?:sh|py))", joined_docs()))
 
-    assert documented, "no lab.sh commands are documented"
-    assert documented <= supported, sorted(documented - supported)
+    assert referenced, "the documents name no script at all"
+    for name in sorted(referenced):
+        assert (LAB_ROOT / "scripts" / name).is_file(), name
 
 
 def test_agent_setup_guide_matches_the_interactive_acknowledge_contract():
     text = (GUIDES / "01-agent-setup.md").read_text()
 
-    assert "./scripts/lab.sh acknowledge agent-setup" in text
+    assert "scripts/lab_state.py acknowledge-agent" in text
     assert "acknowledge" in text
     assert "표준 입력" in text or "stdin" in text
     assert re.search(r"환경 변수[^.]{0,60}(대체할 수 없|불가)", text), (
@@ -851,10 +861,10 @@ def test_agent_setup_guide_offers_azd_env_set_without_storing_secrets():
 
 
 def test_agent_setup_guide_offers_a_python_environment_remedy():
-    """Finding #4 (Task 6 follow-up): `doctor.sh` gained a `Python
-    environment` check, but the guide's failure table never told an
-    operator what to do about it. The remedy is local-only and independent
-    of the postprovision-hook ordering contract (see
+    """The first commands an operator runs need `app/.venv`, and a missing
+    or half-built one is a local failure with a local fix. The guide's
+    failure table has to say so: the remedy is independent of the
+    postprovision-hook ordering contract (see
     `test_setup_venv_orders_local_recovery_correctly` below), so it may --
     and should -- name `./scripts/setup-venv.sh` directly.
     """
@@ -863,7 +873,7 @@ def test_agent_setup_guide_offers_a_python_environment_remedy():
 
     assert heading in text
     section = text.split(heading, 1)[1]
-    assert "Python environment" in section
+    assert "app/.venv" in section
     assert "./scripts/setup-venv.sh" in section
 
 

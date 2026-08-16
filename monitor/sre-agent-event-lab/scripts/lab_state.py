@@ -174,6 +174,22 @@ def terminal_state(events: Iterable[Dict[str, Any]]) -> str:
     return "thread-not-created"
 
 
+# The document that walks an operator through each scenario. Refusal
+# messages name it instead of a command, because the lab is run by hand:
+# there is no script that performs a scenario.
+SCENARIO_GUIDES = {
+    "s1": "guides/02-scenario-s1.md",
+    "s2": "guides/03-scenario-s2.md",
+    "s3": "guides/04-scenario-s3.md",
+}
+
+
+def scenario_guide(scenario: str) -> str:
+    # A remedy that cannot be acted on is not a remedy: an unmapped
+    # scenario still has to say where to look.
+    return SCENARIO_GUIDES.get(scenario, "the matching guide under guides/")
+
+
 def _scenario_stage(stage: str) -> Optional[Sequence[str]]:
     """('s1', 'recovered') for `s1_recovered`, else None."""
     for scenario in SCENARIOS:
@@ -458,7 +474,7 @@ class LabState:
                 "wait for it to finish, or record how it ended with "
                 "lab_state.py mark-failed {0}".format(scenario)
             )
-        return "Run: lab.sh run {0}".format(scenario)
+        return "follow {0}".format(scenario_guide(scenario))
 
     def _remedy(self, missing: Sequence[str]) -> str:
         """The next command that is actually reachable for a missing stage.
@@ -471,8 +487,11 @@ class LabState:
         gate would demand first.
         """
         remedies = {
-            "baseline_passed": "Run: lab.sh baseline",
-            "agent_setup_acknowledged": "Run: lab.sh acknowledge agent-setup",
+            "baseline_passed": (
+                "Run the baseline steps in guides/01-agent-setup.md, then: "
+                "lab_state.py mark baseline_passed"
+            ),
+            "agent_setup_acknowledged": "Run: lab_state.py acknowledge-agent",
         }
         for stage in missing:
             if stage in remedies:
@@ -487,8 +506,12 @@ class LabState:
                         blocked, status, self._unfinished_remedy(blocked, status)
                     )
                 if suffix == "recovered":
-                    return "Run: lab.sh run {0}".format(scenario)
-                return "Run: lab.sh capture {0}".format(scenario)
+                    return "Run the {0} steps in {1}".format(
+                        scenario, scenario_guide(scenario)
+                    )
+                return "Capture the {0} evidence as {1} describes".format(
+                    scenario, scenario_guide(scenario)
+                )
         return ""
 
     @staticmethod
@@ -694,7 +717,7 @@ def acknowledge_agent(state: LabState, stream=None, output=None) -> int:
     """Print the configured Agent wiring and require a typed acknowledgement.
 
     None of these settings has an official, stable API to read back (see
-    `doctor.sh`'s four permanent `MANUAL` rows), so the only honest evidence
+    the four settings no stable API exposes), so the only honest evidence
     that the portal side is done is a human who looked at it. A configured
     environment variable proves intent, never completion -- which is why
     this command reads the answer from stdin and accepts nothing but the
@@ -832,7 +855,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if not directory:
                 raise LabStateError(
                     "No evidence directory recorded for {0}. "
-                    "Run: lab.sh run {0}".format(args.scenario)
+                    "Run the {0} steps in {1}".format(
+                        args.scenario, scenario_guide(args.scenario)
+                    )
                 )
             print(directory)
             return 0

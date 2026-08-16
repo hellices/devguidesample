@@ -59,7 +59,7 @@ AZD_VALUES = {
 def _alert(scenario, alert_uuid):
     """One entry of the Alerts Management list response.
 
-    All three lab rules are listed, because `run-scenario.sh` picks the
+    All three lab rules are listed, because a scenario picks the
     alert whose rule matches the scenario it just ran: a list containing
     only S1's alert would let an S2 run pass on S1's evidence.
     """
@@ -125,7 +125,7 @@ def _az_stub_source(log_path, state_dir):
     call (clearing the failure mode/delay, or restoring the blob role)
     flips it to `Resolved` -- unless `${state}/alert_stays_fired` exists,
     which reproduces an alert that never closes. That is the only way to
-    exercise the recovery gate honestly: `run-scenario.sh` must not record
+    exercise the recovery gate honestly: a scenario must not record
     a recovery Azure Monitor never confirmed.
 
     Recovery itself can fail, which is the other half of that gate. Three
@@ -290,7 +290,7 @@ def _lab_python_stub_source(
     `score.py`, which are the behaviour under test) runs under the real
     interpreter.
 
-    Also answers the `-c "import PIL"` probe `capture-scenario.sh` and
+    Also answers the `-c "import PIL"` probe the capture step and
     doctor's "Python environment" check use to verify Pillow is importable,
     per `pillow_importable` -- explicitly, rather than delegating to
     whichever real interpreter happens to run the test suite, so this fake
