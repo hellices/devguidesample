@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).parents[4]
 LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
@@ -12,6 +14,9 @@ GUIDE_CHART = "assets/official/dynamic-threshold-preview-chart.png"
 BRIEF_CHART = "sre-agent-event-lab/assets/official/dynamic-threshold-preview-chart.png"
 OFFICIAL_SOURCE = (
     "https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds"
+)
+EXIT_COMMAND_RE = re.compile(
+    r"(?m)(?:^\s*exit(?:\s|;|$)|(?:\|\||&&|;)\s*exit(?:\s|;|$))"
 )
 
 
@@ -27,6 +32,10 @@ def rendered_image_targets(text: str) -> list[str]:
 
 def bash_blocks(text: str) -> list[str]:
     return re.findall(r"```bash\n(.*?)```", text, re.DOTALL)
+
+
+def contains_exit_command(text: str) -> bool:
+    return bool(EXIT_COMMAND_RE.search(text))
 
 
 def test_case_is_explicitly_multi_day_and_does_not_promise_day_one_alerts():
@@ -80,7 +89,20 @@ def test_case_phase_two_never_uses_exit_in_pasted_bash_blocks():
     phase_two = section(GUIDE.read_text(), "## Phase 2 — 3일 이후: learned band와 anomaly 검증")
 
     for block in bash_blocks(phase_two):
-        assert not re.search(r"(?m)^\s*exit(?:\s|;|$)", block)
+        assert not contains_exit_command(block)
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "exit 1",
+        "  exit 1",
+        "cmd || exit 1",
+        "cmd ; exit 1",
+    ],
+)
+def test_case_phase_two_exit_detector_catches_inline_exit_forms(snippet):
+    assert contains_exit_command(snippet)
 
 
 def test_case_phase_two_explains_why_it_only_checks_state_before_the_comparison_window():

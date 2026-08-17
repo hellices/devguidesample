@@ -194,9 +194,8 @@ Consequence for the recorded results: the S1/S2/S3 run in
 `monitor/sre-agent-event-lab/validation-results.md` -- an earlier execution
 of this lab, not the deployment recorded below -- was executed at a
 one-minute cadence and stays plausible, because the failure above was the
-legacy schema on the component scope, not the cadence. Both that report
-and `dynamic-thresholds.md` now carry that annotation, and `README.md`'s
-cost callout is back to "1분 주기 정적 로그 검색 경고 규칙 3개".
+legacy schema on the component scope, not the cadence. That report keeps
+that annotation, and `README.md`'s cost callout is back to "1분 주기 정적 로그 검색 경고 규칙 3개".
 
 #### Alert template preflight, before the live deployment (2026-08-14)
 
@@ -284,12 +283,11 @@ templates rebuilt.
 
 Documentation fixed in the same pass: `validation-results.md` now opens by
 dating itself to the pre-azd, hand-built lab (its subscription, resource
-group and Logic App bridge are not what `azd up` creates);
-`dynamic-thresholds.md` labels the Action Group -> Logic App -> HTTP
-Trigger event path as the legacy bridge and names the Azure Monitor
-incident platform path as the default; and both Learn screenshots that
-show `Autonomous` now carry a caption warning that this lab must choose
-`Review` (the pictures themselves are unchanged). The scenario guides
+group and Logic App bridge are not what `azd up` creates) and keeps the
+historical Action Group -> Logic App -> HTTP Trigger event path as the
+legacy record; and both Learn screenshots that show `Autonomous` now carry
+a caption warning that this lab must choose `Review` (the pictures
+themselves are unchanged). The scenario guides
 state that re-running a scenario clears its previous
 `sX_recovered`/`sX_captured` record before the fault is injected.
 
@@ -322,7 +320,7 @@ state that re-running a scenario clears its previous
 - [x] 5. Subscription/Location Check — current authenticated subscription, Korea Central
 - [x] 6. Aspire Pre-Provisioning Checks — not applicable
 - [x] 7. Provision Preview — superseded: no separate `--preview` pass was run; the live `azd provision` below deployed the real plan and is recorded in full
-- [x] 8. Build Verification — 520 tests and six Bicep builds passed
+- [x] 8. Build Verification — 525 tests and six Bicep builds passed
 - [x] 9. Docker Build Context Validation — Dockerfile and requirements present; the image is built by ACR from `app/`, never locally
 - [x] 10. Package Validation — `azd package --all --no-prompt` passed
 - [x] 11. Azure Policy Validation — three assigned Defender policies are unrelated to planned resources
@@ -348,7 +346,7 @@ Re-run after the two-phase ACR gate and workspace-schema alert corrections:
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 520 passed (RED first for the workspace-schema alert fix, the swallowed scenario-recovery failures, the re-run state gate, and the Dynamic Threshold final-review fixes) |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 525 passed (RED first for the workspace-schema alert fix, the swallowed scenario-recovery failures, the re-run state gate, and the Dynamic Threshold final-review fixes) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
 | Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts,dynamic-threshold-case}.bicep --stdout` | Passed (six templates; `alerts.bicep` keeps the PT1M static rules, and `dynamic-threshold-case.bicep` emits `evaluationFrequency: PT5M`, `windowSize: PT20M`, `timeAggregation: Average`, workspace scope, `targetResourceTypes: Microsoft.OperationalInsights/workspaces`, and no Action Group attachment) |
