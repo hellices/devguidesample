@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 from PIL import Image
@@ -17,9 +18,16 @@ def test_brief_uses_the_local_official_chart():
     text = BRIEF.read_text()
 
     assert ASSET.is_file()
+    assert (
+        hashlib.sha256(ASSET.read_bytes()).hexdigest()
+        == "4688901b73dff95c47d6d87c6d73f774dcb613fec38b757d1a76953df098636c"
+    )
     assert "assets/official/dynamic-threshold-preview-chart.png" in text
     assert RAW_MEDIA not in text
-    assert f"]({ARTICLE})" in text
+    assert (
+        f"[![Screenshot that shows a metric alert preview chart with dynamic threshold: a blue line for the measured metric, a blue shaded allowed range, and red dots marking values outside that range.](assets/official/dynamic-threshold-preview-chart.png)]({ARTICLE})"
+        in text
+    )
     assert f"Source: [Create a Log Search alert rule with dynamic threshold]({ARTICLE})" in text
 
 
