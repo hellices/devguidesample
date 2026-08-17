@@ -29,9 +29,9 @@ flowchart LR
 
 ## 공식 Preview Chart
 
-[![Azure Monitor Dynamic Threshold preview chart에서 파란 선은 측정값, 파란 영역은 허용 범위, 빨간 점은 범위를 벗어난 값을 보여 줍니다.](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/alerts-dynamic-thresholds/threshold-picture-8bit.png)](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/alerts-dynamic-thresholds/threshold-picture-8bit.png)
+![Azure Monitor Dynamic Threshold preview chart에서 파란 선은 측정값, 파란 영역은 허용 범위, 빨간 점은 범위를 벗어난 값을 보여 줍니다.](assets/official/dynamic-threshold-preview-chart.png)
 
-*Source: [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds).*
+> 출처: [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
 
 ## 배포되는 설정
 
@@ -39,10 +39,14 @@ flowchart LR
 |---|---|
 | Baseline | Standard availability test가 한 location에서 `/api/orders`를 5분마다 호출 |
 | Signal | `P95DurationMs=percentile(DurationMs, 95)`의 5분 bin |
-| Dynamic rule | 5분 evaluation, 20분 window, Medium sensitivity |
-| Alert 조건 | 최근 4회 중 2회가 learned upper bound 초과 |
+| Dynamic rule | 5분 evaluation, 20분 window, Average aggregation, Medium sensitivity |
+| Alert 조건 | 최근 4회 중 2회가 learned upper bound 초과(단, 겹치는 20분 window 때문에 같은 5분 이상치가 연속 평가에 다시 집계될 수 있음) |
 | Action | 없음(shadow mode) |
 | Static safety net | 기존 S2 `p95 > 2000ms` rule 유지 |
+
+여기서 2-of-4는 서로 독립된 네 번의 측정을 뜻하지 않습니다. 20분 window가
+5분마다 겹치므로, 같은 5분 bin 이상치 하나가 연속된 네 평가에 다시 포함될 수
+있습니다. 또한 Log Search Dynamic Threshold는 1분 evaluation을 지원하지 않습니다.
 
 ## Phase 1 — 당일: 배포와 baseline 확인
 
@@ -51,11 +55,11 @@ README의 `azd up`을 완료한 뒤 환경을 읽습니다.
 ```bash
 cd monitor/sre-agent-event-lab
 source ./scripts/lab-env.sh
-
-CONTAINER_APP_FQDN="${APP_FQDN}"
-BASELINE_WEB_TEST_NAME="$(azd env get-value AZURE_BASELINE_WEB_TEST_NAME)"
-DYNAMIC_ALERT_NAME="$(azd env get-value AZURE_DYNAMIC_THRESHOLD_ALERT_NAME)"
 ```
+
+`lab-env.sh`는 이후 phase에서 다시 그대로 쓸 수 있도록 `APP_FQDN`,
+`WORKSPACE_CUSTOMER_ID`, `BASELINE_WEB_TEST_NAME`,
+`DYNAMIC_THRESHOLD_ALERT_NAME`을 현재 셸에 export합니다.
 
 두 리소스가 활성화되었고 Dynamic rule에 Action Group이 없는지 확인합니다.
 
@@ -71,7 +75,7 @@ az resource show \
 az resource show \
   --resource-group "${RESOURCE_GROUP}" \
   --resource-type Microsoft.Insights/scheduledQueryRules \
-  --name "${DYNAMIC_ALERT_NAME}" \
+  --name "${DYNAMIC_THRESHOLD_ALERT_NAME}" \
   --api-version 2025-01-01-preview \
   --query "{enabled:properties.enabled,frequency:properties.evaluationFrequency,actions:properties.actions.actionGroups}" \
   --output json
@@ -96,6 +100,13 @@ az monitor log-analytics query \
 
 ## Phase 2 — 3일 이후: learned band와 anomaly 검증
 
+3일 뒤 새 셸에서 다시 시작한다는 가정으로, 먼저 같은 preamble을 다시 실행합니다.
+
+```bash
+cd monitor/sre-agent-event-lab
+source ./scripts/lab-env.sh
+```
+
 먼저 72시간 이상의 실제 범위와 30개 이상의 samples가 있는지 확인합니다.
 
 ```bash
@@ -111,30 +122,114 @@ az monitor log-analytics query \
   --output table
 ```
 
+이 쿼리는 telemetry age만 보여 줍니다. 같은 azd 환경을 72시간 유지했다는
+전제에서만 학습 준비 확인에 쓰세요. 그 사이 `azd up`을 다시 실행해 Dynamic
+rule이 재생성되면 telemetry는 남아 있어도 규칙 학습이 다시 시작됩니다.
+
+이 단계는 기존 S2 fault injection을 그대로 재사용하므로, `evidence/state.json`
+에 `running` 또는 `failed` 시나리오가 남아 있지 않아야 합니다. 기존
+`lab_state.py` 인터페이스로 먼저 확인합니다.
+
+```bash
+python3 scripts/lab_state.py show | jq -e '
+  [(.scenarios // {})[]?.run_status // empty]
+  | map(select(. == "running" or . == "failed"))
+  | length == 0
+' >/dev/null || {
+  echo "evidence/state.json에 running 또는 failed 시나리오가 남아 있습니다. 먼저 기존 실행을 정리하세요." >&2
+  exit 1
+}
+```
+
+`alert-sre-lab-s2-latency` 정적 규칙은 그대로 유지되므로, 이번 지연 주입 중에는
+기존 Action Group 경로와 Azure SRE Agent 조사도 함께 열릴 수 있습니다. 이는
+Dynamic Threshold와 static safety net의 차이를 비교하기 위한 의도된 동작이며,
+해당 조사는 해결하거나 무시 대상으로 기록해 두세요.
+
 `AgeHours >= 72`와 `Samples >= 30`을 모두 확인한 뒤 지연을 주입합니다. 아래
 trap은 명령 실패나 Ctrl+C에도 `ORDER_DELAY_MS=0` 복구를 시도합니다.
 
 ```bash
 mkdir -p evidence
+INJECTED=0
+
+wait_for_new_healthy_revision() {
+  local previous_revision="$1"
+  local deadline=$(( SECONDS + 600 ))
+  while (( SECONDS < deadline )); do
+    NEW_REVISION="$(az containerapp show \
+      --subscription "${SUBSCRIPTION_ID}" \
+      --resource-group "${RESOURCE_GROUP}" \
+      --name "${APP_NAME}" \
+      --query properties.latestRevisionName -o tsv)"
+    STATE="$(az containerapp revision list \
+      --subscription "${SUBSCRIPTION_ID}" \
+      --resource-group "${RESOURCE_GROUP}" \
+      --name "${APP_NAME}" \
+      --query "[?name=='${NEW_REVISION}'].{health:properties.healthState, active:properties.active} | [0]" -o json)"
+    echo "${NEW_REVISION} ${STATE}"
+    if [[ -n "${NEW_REVISION}" && "${NEW_REVISION}" != "${previous_revision}" ]] \
+      && [[ "$(jq -r '.health // empty' <<<"${STATE}")" == "Healthy" ]] \
+      && [[ "$(jq -r '.active // empty' <<<"${STATE}")" == "true" ]]; then
+      return 0
+    fi
+    sleep 10
+  done
+  echo "새 revision이 시간 안에 정상이 되지 않았습니다." >&2
+  return 1
+}
 
 restore_delay() {
+  if (( ! INJECTED )); then
+    echo "주입된 지연이 없어 복구를 건너뜁니다." >&2
+    return 0
+  fi
+
+  RECOVERY_OLD_REVISION="$(az containerapp show \
+    --subscription "${SUBSCRIPTION_ID}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --query properties.latestRevisionName -o tsv)"
+
   az containerapp update \
+    --subscription "${SUBSCRIPTION_ID}" \
     --resource-group "${RESOURCE_GROUP}" \
     --name "${APP_NAME}" \
     --set-env-vars ORDER_DELAY_MS=0 \
-    --output none
+    --output none || {
+      echo "복구 실패: ORDER_DELAY_MS=0 업데이트가 거부되었습니다." >&2
+      return 1
+    }
+
+  wait_for_new_healthy_revision "${RECOVERY_OLD_REVISION}" || return 1
+  curl -s --max-time 15 -o /dev/null -w '%{time_total}s %{http_code}\n' "https://${APP_FQDN}/api/orders"
 }
 trap restore_delay EXIT INT TERM
 
+OLD_REVISION="$(az containerapp show \
+  --subscription "${SUBSCRIPTION_ID}" \
+  --resource-group "${RESOURCE_GROUP}" \
+  --name "${APP_NAME}" \
+  --query properties.latestRevisionName -o tsv)"
+
 az containerapp update \
+  --subscription "${SUBSCRIPTION_ID}" \
   --resource-group "${RESOURCE_GROUP}" \
   --name "${APP_NAME}" \
   --set-env-vars ORDER_DELAY_MS=4000 \
-  --output none
+  --output none \
+  && INJECTED=1
+
+if (( INJECTED )); then
+  wait_for_new_healthy_revision "${OLD_REVISION}" || exit 1
+else
+  echo "지연 주입이 실패해 anomaly 검증을 중단합니다." >&2
+  exit 1
+fi
 
 for RUN in 1 2 3 4; do
   python3 scripts/loadgen.py \
-    "https://${CONTAINER_APP_FQDN}/api/orders" \
+    "https://${APP_FQDN}/api/orders" \
     --requests 20 \
     --concurrency 5 \
     --expect-status 200 \
@@ -144,8 +239,10 @@ for RUN in 1 2 3 4; do
   fi
 done
 
-restore_delay
+restore_status=0
+restore_delay || restore_status=$?
 trap - EXIT INT TERM
+(( restore_status == 0 )) || exit "${restore_status}"
 ```
 
 Azure Portal에서 해당 Dynamic rule의 **Preview chart**와 alert history를
@@ -180,6 +277,7 @@ az monitor log-analytics query \
 
 ## 공식 자료
 
+- [Dynamic Thresholds 개념 정리](../azure-monitor-dynamic-thresholds-brief.md)
 - [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
 - [Application Insights availability tests](https://learn.microsoft.com/azure/azure-monitor/app/availability)
 - [ARM templates for log alerts](https://learn.microsoft.com/azure/azure-monitor/alerts/resource-manager-alerts-log)

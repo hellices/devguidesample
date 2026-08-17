@@ -40,6 +40,8 @@ resource baselineWebTest 'Microsoft.Insights/webTests@2022-06-15' = {
     Enabled: true
     Frequency: 300
     Kind: 'standard'
+    // DurationMs is measured server-side, so one stable location is enough to
+    // keep the baseline dense without multiplying probe traffic across regions.
     Locations: [
       {
         Id: 'us-va-ash-azr'
@@ -85,7 +87,7 @@ resource dynamicLatencyAlert 'Microsoft.Insights/scheduledQueryRules@2025-01-01-
           metricMeasureColumn: 'P95DurationMs'
           operator: 'GreaterThan'
           query: latencyQuery
-          timeAggregation: 'Maximum'
+          timeAggregation: 'Average'
         }
       ]
     }

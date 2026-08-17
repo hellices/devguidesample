@@ -20,6 +20,7 @@ def test_standard_web_test_produces_one_bounded_baseline_request():
     assert "ExpectedHttpStatusCode: 200" in template
     assert "'hidden-link:${appInsightsResourceId}': 'Resource'" in template
     assert template.count("Id: 'us-va-ash-azr'") == 1
+    assert "DurationMs is measured server-side" in template
 
 
 def test_dynamic_rule_uses_the_s2_numeric_p95_signal():
@@ -34,6 +35,8 @@ def test_dynamic_rule_uses_the_s2_numeric_p95_signal():
     assert "by bin(TimeGenerated, 5m)" in template
     assert 'AppRoleName == "{0}"' in template
     assert '| where Name has "/api/orders"' in template
+    assert "timeAggregation: 'Average'" in template
+    assert "timeAggregation: 'Maximum'" not in template
     assert "threshold:" not in template
 
 

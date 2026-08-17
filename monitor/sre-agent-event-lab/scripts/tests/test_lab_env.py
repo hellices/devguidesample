@@ -33,6 +33,8 @@ EXPORTED_VALUES = {
     "SUBSCRIPTION_ID": "AZURE_SUBSCRIPTION_ID",
     "APP_NAME": "AZURE_CONTAINER_APP_NAME",
     "APP_FQDN": "AZURE_CONTAINER_APP_FQDN",
+    "BASELINE_WEB_TEST_NAME": "AZURE_BASELINE_WEB_TEST_NAME",
+    "DYNAMIC_THRESHOLD_ALERT_NAME": "AZURE_DYNAMIC_THRESHOLD_ALERT_NAME",
     "WORKLOAD_PRINCIPAL_ID": "AZURE_CONTAINER_APP_PRINCIPAL_ID",
     "STORAGE_CONTAINER_SCOPE": "AZURE_STORAGE_CONTAINER_SCOPE",
     "BLOB_ROLE_ASSIGNMENT_NAME": "AZURE_BLOB_ROLE_ASSIGNMENT_NAME",
@@ -85,6 +87,8 @@ def run_sourced(tmp_path, azd_mode="ok", az_mode="ok", extra=""):
               AZURE_SUBSCRIPTION_ID) echo 11111111-2222-3333-4444-555555555555 ;;
               AZURE_CONTAINER_APP_NAME) echo ca-sre-lab ;;
               AZURE_CONTAINER_APP_FQDN) echo ca-sre-lab.example.io ;;
+              AZURE_BASELINE_WEB_TEST_NAME) echo webtest-sre-lab-orders-deadbeef ;;
+              AZURE_DYNAMIC_THRESHOLD_ALERT_NAME) echo alert-sre-lab-s2-dynamic-latency ;;
               AZURE_CONTAINER_APP_PRINCIPAL_ID) echo 8c8a4f0e-0000-4000-8000-2b1f9a0c1234 ;;
               AZURE_STORAGE_CONTAINER_SCOPE) echo /subscriptions/s/rg/containers/documents ;;
               AZURE_BLOB_ROLE_ASSIGNMENT_NAME) echo 3f2504e0-4f89-11d3-9a0c-0305e82c3301 ;;
@@ -147,6 +151,8 @@ def test_sourcing_exports_the_resolved_values(tmp_path):
     assert values["READY"] == "1", result.stdout + result.stderr
     assert values["RESOURCE_GROUP"] == "rg-sre-lab"
     assert values["APP_FQDN"] == "ca-sre-lab.example.io"
+    assert values["BASELINE_WEB_TEST_NAME"] == "webtest-sre-lab-orders-deadbeef"
+    assert values["DYNAMIC_THRESHOLD_ALERT_NAME"] == "alert-sre-lab-s2-dynamic-latency"
     assert values["BLOB_ROLE_ASSIGNMENT_NAME"] == "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
     assert values["WORKSPACE_CUSTOMER_ID"] == "9d1a0b2c-3d4e-5f60-7182-93a4b5c6d7e8"
 

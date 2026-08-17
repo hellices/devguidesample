@@ -237,9 +237,33 @@ def test_dynamic_thresholds_keeps_visuals_and_shadow_mode_constraints():
     text = DYNAMIC_THRESHOLDS.read_text()
 
     assert "```mermaid" in text
-    assert "threshold-picture-8bit.png" in text
+    assert "assets/official/dynamic-threshold-preview-chart.png" in text
+    assert "threshold-picture-8bit.png" not in text
     assert "Action | 없음(shadow mode) |" in text
     assert "Static safety net | 기존 S2 `p95 > 2000ms` rule 유지 |" in text
+
+
+def test_dynamic_thresholds_official_chart_follows_the_local_image_policy():
+    text = DYNAMIC_THRESHOLDS.read_text()
+    targets = images(text)
+
+    assert targets == [
+        (
+            "Azure Monitor Dynamic Threshold preview chart에서 파란 선은 측정값, "
+            "파란 영역은 허용 범위, 빨간 점은 범위를 벗어난 값을 보여 줍니다.",
+            "assets/official/dynamic-threshold-preview-chart.png",
+        )
+    ]
+    image_path = (DYNAMIC_THRESHOLDS.parent / targets[0][1]).resolve()
+    assert image_path.is_file()
+    assert image_path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    lines = text.splitlines()
+    image_line = f"![{targets[0][0]}]({targets[0][1]})"
+    index = lines.index(image_line)
+    caption = "\n".join(lines[index + 1 : index + 4])
+    assert caption.lstrip().startswith(">")
+    assert "출처" in caption
+    assert "https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds" in caption
 
 
 def test_deployment_plan_status_matches_what_was_actually_deployed():
@@ -311,7 +335,7 @@ def test_deployment_plan_records_one_current_test_and_bicep_count():
         section_seven.group(1),
     )
     assert int(preflight.group(1)) >= 472, "the recorded suite shrank"
-    assert preflight.group(2) == "five", "five Bicep templates are built, not three"
+    assert preflight.group(2) == "six", "six Bicep templates are built now"
     assert "460 tests" not in text
 
 

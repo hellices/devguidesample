@@ -115,6 +115,8 @@ lab_env_bind RESOURCE_GROUP AZURE_RESOURCE_GROUP || true
 lab_env_bind SUBSCRIPTION_ID AZURE_SUBSCRIPTION_ID || true
 lab_env_bind APP_NAME AZURE_CONTAINER_APP_NAME || true
 lab_env_bind APP_FQDN AZURE_CONTAINER_APP_FQDN || true
+lab_env_bind BASELINE_WEB_TEST_NAME AZURE_BASELINE_WEB_TEST_NAME || true
+lab_env_bind DYNAMIC_THRESHOLD_ALERT_NAME AZURE_DYNAMIC_THRESHOLD_ALERT_NAME || true
 lab_env_bind WORKLOAD_PRINCIPAL_ID AZURE_CONTAINER_APP_PRINCIPAL_ID || true
 lab_env_bind STORAGE_CONTAINER_SCOPE AZURE_STORAGE_CONTAINER_SCOPE || true
 lab_env_bind BLOB_ROLE_ASSIGNMENT_NAME AZURE_BLOB_ROLE_ASSIGNMENT_NAME || true
@@ -215,5 +217,7 @@ cat <<SUMMARY
   Subscription   : ${SUBSCRIPTION_ID:-<unset>}
   Container App  : ${APP_NAME:-<unset>}
   Endpoint       : ${APP_FQDN:-<unset>}
+  Web test       : ${BASELINE_WEB_TEST_NAME:-<unset>}
+  Dyn. alert     : ${DYNAMIC_THRESHOLD_ALERT_NAME:-<unset>}
   Repository     : ${SRE_REPOSITORY_URL:-<unset>}
 SUMMARY
