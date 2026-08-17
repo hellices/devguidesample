@@ -84,6 +84,8 @@ output AZURE_STORAGE_CONTAINER_SCOPE string = lab.outputs.storageContainerScope
 output AZURE_BLOB_ROLE_ASSIGNMENT_NAME string = lab.outputs.blobRoleAssignmentName
 output AZURE_TELEMETRY_SERVICE_NAME string = lab.outputs.telemetryServiceName
 output AZURE_WORKSPACE_CUSTOMER_ID string = lab.outputs.workspaceCustomerId
+output AZURE_BASELINE_WEB_TEST_NAME string = lab.outputs.baselineWebTestName
+output AZURE_DYNAMIC_THRESHOLD_ALERT_NAME string = lab.outputs.dynamicThresholdAlertName
 
 // Deployment outputs the lab scripts (common.sh `deployment_output`,
 // run-scenario.sh, query-evidence.sh) still read by their original names.
@@ -99,4 +101,6 @@ output workspaceCustomerId string = lab.outputs.workspaceCustomerId
 output appInsightsName string = lab.outputs.appInsightsName
 output appInsightsResourceId string = lab.outputs.appInsightsResourceId
 output alertRuleNames array = lab.outputs.alertRuleNames
+output baselineWebTestName string = lab.outputs.baselineWebTestName
+output dynamicThresholdAlertName string = lab.outputs.dynamicThresholdAlertName
 output telemetryServiceName string = lab.outputs.telemetryServiceName
