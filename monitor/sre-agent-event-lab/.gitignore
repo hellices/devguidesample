@@ -13,3 +13,4 @@ infra/lab.json
 infra/workload.json
 infra/observability.json
 infra/alerts.json
+infra/dynamic-threshold-case.json
