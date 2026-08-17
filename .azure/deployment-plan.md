@@ -196,7 +196,7 @@ of this lab, not the deployment recorded below -- was executed at a
 one-minute cadence and stays plausible, because the failure above was the
 legacy schema on the component scope, not the cadence. Both that report
 and `dynamic-thresholds.md` now carry that annotation, and `README.md`'s
-cost callout is back to "1분 주기 로그 검색 경고 규칙 3개".
+cost callout is back to "1분 주기 정적 로그 검색 경고 규칙 3개".
 
 #### Alert template preflight, before the live deployment (2026-08-14)
 

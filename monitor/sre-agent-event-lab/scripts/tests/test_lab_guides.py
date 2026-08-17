@@ -293,6 +293,12 @@ def test_deployment_plan_status_matches_what_was_actually_deployed():
     )
 
 
+def test_deployment_plan_quotes_the_current_static_alert_cost_callout():
+    text = DEPLOYMENT_PLAN.read_text()
+
+    assert 'cost callout is back to "1분 주기 정적 로그 검색 경고 규칙 3개".' in text
+
+
 def test_deployment_plan_does_not_claim_the_manual_scenario_sequence_ran():
     """The operator said they would connect the Agent and run S1/S2/S3 one
     by one themselves. Only the pre-acknowledgement refusal (a scenario

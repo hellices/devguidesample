@@ -127,18 +127,24 @@ az monitor log-analytics query \
 rule이 재생성되면 telemetry는 남아 있어도 규칙 학습이 다시 시작됩니다.
 
 이 단계는 기존 S2 fault injection을 그대로 재사용하므로, `evidence/state.json`
-에 `running` 또는 `failed` 시나리오가 남아 있지 않아야 합니다. 기존
-`lab_state.py` 인터페이스로 먼저 확인합니다.
+에 `running` 또는 `failed` 시나리오가 남아 있지 않아야 합니다. 여기서는 기존
+S2 점수와 evidence 상태를 덮어쓸 수 있는
+`python3 scripts/lab_state.py begin-run s2 ...`는 호출하지 않고, 현재
+scenario state만 먼저 확인합니다. injection을 시작하면 약 20분 동안 새
+revision 대기와 5분 간격 4회 부하가 이어지므로 그동안 다른 시나리오를
+시작하지 마세요.
 
 ```bash
+STATE_OK=1
 python3 scripts/lab_state.py show | jq -e '
   [(.scenarios // {})[]?.run_status // empty]
   | map(select(. == "running" or . == "failed"))
   | length == 0
-' >/dev/null || {
+' >/dev/null || STATE_OK=0
+
+if (( ! STATE_OK )); then
   echo "evidence/state.json에 running 또는 failed 시나리오가 남아 있습니다. 먼저 기존 실행을 정리하세요." >&2
-  exit 1
-}
+fi
 ```
 
 `alert-sre-lab-s2-latency` 정적 규칙은 그대로 유지되므로, 이번 지연 주입 중에는
@@ -152,10 +158,13 @@ trap은 명령 실패나 Ctrl+C에도 `ORDER_DELAY_MS=0` 복구를 시도합니�
 ```bash
 mkdir -p evidence
 INJECTED=0
+REVISION_OK=0
 
 wait_for_new_healthy_revision() {
   local previous_revision="$1"
   local deadline=$(( SECONDS + 600 ))
+  local NEW_REVISION=""
+  local STATE=""
   while (( SECONDS < deadline )); do
     NEW_REVISION="$(az containerapp show \
       --subscription "${SUBSCRIPTION_ID}" \
@@ -185,11 +194,20 @@ restore_delay() {
     return 0
   fi
 
+  local RECOVERY_OLD_REVISION
+  local RECOVERY_PROBE
   RECOVERY_OLD_REVISION="$(az containerapp show \
     --subscription "${SUBSCRIPTION_ID}" \
     --resource-group "${RESOURCE_GROUP}" \
     --name "${APP_NAME}" \
-    --query properties.latestRevisionName -o tsv)"
+    --query properties.latestRevisionName -o tsv)" || {
+      echo "복구 준비 실패: 현재 revision 이름을 읽지 못했습니다." >&2
+      return 1
+    }
+  if [[ -z "${RECOVERY_OLD_REVISION}" ]]; then
+    echo "복구 준비 실패: 현재 revision 이름이 비어 있습니다." >&2
+    return 1
+  fi
 
   az containerapp update \
     --subscription "${SUBSCRIPTION_ID}" \
@@ -202,47 +220,75 @@ restore_delay() {
     }
 
   wait_for_new_healthy_revision "${RECOVERY_OLD_REVISION}" || return 1
-  curl -s --max-time 15 -o /dev/null -w '%{time_total}s %{http_code}\n' "https://${APP_FQDN}/api/orders"
+  RECOVERY_PROBE="$(curl -s --max-time 15 -o /dev/null -w '%{time_total}s %{http_code}\n' "https://${APP_FQDN}/api/orders")" || {
+    echo "복구 확인 실패: /api/orders readiness probe 실행이 실패했습니다." >&2
+    return 1
+  }
+  echo "${RECOVERY_PROBE}"
+  [[ "${RECOVERY_PROBE}" == *" 200" ]] || {
+    echo "복구 확인 실패: /api/orders readiness probe가 200을 돌려주지 않았습니다." >&2
+    return 1
+  }
+  INJECTED=0
 }
 trap restore_delay EXIT INT TERM
 
-OLD_REVISION="$(az containerapp show \
-  --subscription "${SUBSCRIPTION_ID}" \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${APP_NAME}" \
-  --query properties.latestRevisionName -o tsv)"
+if (( STATE_OK )); then
+  INJECTION_LOOKUP_OK=0
+  OLD_REVISION="$(az containerapp show \
+    --subscription "${SUBSCRIPTION_ID}" \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --query properties.latestRevisionName -o tsv)" || {
+      echo "주입 준비 실패: 기존 revision 이름을 읽지 못했습니다." >&2
+    }
 
-az containerapp update \
-  --subscription "${SUBSCRIPTION_ID}" \
-  --resource-group "${RESOURCE_GROUP}" \
-  --name "${APP_NAME}" \
-  --set-env-vars ORDER_DELAY_MS=4000 \
-  --output none \
-  && INJECTED=1
+  if [[ -n "${OLD_REVISION}" ]]; then
+    INJECTION_LOOKUP_OK=1
+  else
+    echo "주입 준비 실패: 기존 revision 이름이 비어 있습니다." >&2
+  fi
 
-if (( INJECTED )); then
-  wait_for_new_healthy_revision "${OLD_REVISION}" || exit 1
+  if (( INJECTION_LOOKUP_OK )); then
+    az containerapp update \
+      --subscription "${SUBSCRIPTION_ID}" \
+      --resource-group "${RESOURCE_GROUP}" \
+      --name "${APP_NAME}" \
+      --set-env-vars ORDER_DELAY_MS=4000 \
+      --output none \
+      && INJECTED=1
+  fi
 else
-  echo "지연 주입이 실패해 anomaly 검증을 중단합니다." >&2
-  exit 1
+  echo "상태 게이트가 실패해 지연 주입을 건너뜁니다." >&2
 fi
 
-for RUN in 1 2 3 4; do
-  python3 scripts/loadgen.py \
-    "https://${APP_FQDN}/api/orders" \
-    --requests 20 \
-    --concurrency 5 \
-    --expect-status 200 \
-    --output "evidence/dynamic-threshold-s2-${RUN}.json"
-  if [[ "${RUN}" -lt 4 ]]; then
-    sleep 300
-  fi
-done
+if (( INJECTED )); then
+  wait_for_new_healthy_revision "${OLD_REVISION}" && REVISION_OK=1
+  (( REVISION_OK )) || echo "지연 주입은 되었지만 새 revision 준비를 확인하지 못해 anomaly 검증을 중단합니다." >&2
+else
+  echo "지연 주입이 실패해 anomaly 검증을 중단합니다." >&2
+fi
+
+if (( REVISION_OK )); then
+  for RUN in 1 2 3 4; do
+    python3 scripts/loadgen.py \
+      "https://${APP_FQDN}/api/orders" \
+      --requests 20 \
+      --concurrency 5 \
+      --expect-status 200 \
+      --output "evidence/dynamic-threshold-s2-${RUN}.json"
+    if [[ "${RUN}" -lt 4 ]]; then
+      sleep 300
+    fi
+  done
+fi
 
 restore_status=0
 restore_delay || restore_status=$?
 trap - EXIT INT TERM
-(( restore_status == 0 )) || exit "${restore_status}"
+if (( restore_status != 0 )); then
+  echo "복구 확인이 끝나지 않았습니다. ORDER_DELAY_MS=0 상태를 수동으로 다시 확인하세요." >&2
+fi
 ```
 
 Azure Portal에서 해당 Dynamic rule의 **Preview chart**와 alert history를

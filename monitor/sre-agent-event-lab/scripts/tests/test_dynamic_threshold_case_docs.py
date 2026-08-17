@@ -25,6 +25,10 @@ def rendered_image_targets(text: str) -> list[str]:
     return markdown_targets + html_targets
 
 
+def bash_blocks(text: str) -> list[str]:
+    return re.findall(r"```bash\n(.*?)```", text, re.DOTALL)
+
+
 def test_case_is_explicitly_multi_day_and_does_not_promise_day_one_alerts():
     text = GUIDE.read_text()
 
@@ -70,6 +74,47 @@ def test_case_reuses_s2_readiness_and_recovery_patterns():
         "curl -s --max-time 15 -o /dev/null -w '%{time_total}s %{http_code}\\n' "
         '"https://${APP_FQDN}/api/orders"'
     ) in phase_two
+
+
+def test_case_phase_two_never_uses_exit_in_pasted_bash_blocks():
+    phase_two = section(GUIDE.read_text(), "## Phase 2 — 3일 이후: learned band와 anomaly 검증")
+
+    for block in bash_blocks(phase_two):
+        assert not re.search(r"(?m)^\s*exit(?:\s|;|$)", block)
+
+
+def test_case_phase_two_explains_why_it_only_checks_state_before_the_comparison_window():
+    phase_two = section(GUIDE.read_text(), "## Phase 2 — 3일 이후: learned band와 anomaly 검증")
+
+    assert "begin-run" in phase_two
+    assert "S2 점수와 evidence 상태를 덮어쓸 수 있는" in phase_two
+    assert "scenario state만 먼저 확인합니다" in phase_two
+    assert "약 20분 동안" in phase_two
+    assert "다른 시나리오를" in phase_two
+    assert "시작하지 마세요" in phase_two
+
+
+def test_case_phase_two_keeps_revision_state_local_and_marks_restore_complete():
+    phase_two = section(GUIDE.read_text(), "## Phase 2 — 3일 이후: learned band와 anomaly 검증")
+
+    assert 'local NEW_REVISION=""' in phase_two
+    assert 'local STATE=""' in phase_two
+
+    success_probe = (
+        "curl -s --max-time 15 -o /dev/null -w '%{time_total}s %{http_code}\\n' "
+        '"https://${APP_FQDN}/api/orders"'
+    )
+    restore_tail = phase_two[phase_two.index(success_probe) :]
+    assert "INJECTED=0" in restore_tail
+
+
+def test_case_phase_two_fails_loud_when_baseline_revision_lookups_fail():
+    phase_two = section(GUIDE.read_text(), "## Phase 2 — 3일 이후: learned band와 anomaly 검증")
+
+    assert "주입 준비 실패: 기존 revision 이름을 읽지 못했습니다." in phase_two
+    assert "주입 준비 실패: 기존 revision 이름이 비어 있습니다." in phase_two
+    assert "복구 준비 실패: 현재 revision 이름을 읽지 못했습니다." in phase_two
+    assert "복구 준비 실패: 현재 revision 이름이 비어 있습니다." in phase_two
 
 
 def test_case_uses_exported_lab_env_names_instead_of_raw_azd_lookups():
