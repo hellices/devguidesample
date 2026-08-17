@@ -81,6 +81,13 @@ directly from Microsoft's documented behavior:
   behind the Low/Medium/High sensitivity settings — treat them as tuning levers to
   evaluate empirically, not as a documented formula.
 
+## Hands-on case
+
+The repository's [S2 latency case](sre-agent-event-lab/dynamic-thresholds.md)
+deploys a five-minute baseline producer and a shadow Dynamic Threshold rule,
+then separates day-one setup from validation after the documented minimum
+learning period.
+
 ## Official resources
 
 - [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds)

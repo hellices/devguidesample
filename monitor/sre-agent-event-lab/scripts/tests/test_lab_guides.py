@@ -217,45 +217,29 @@ def test_readme_warns_about_cost_and_teardown_before_the_first_azure_command():
         assert driver in text, driver
 
 
-def test_readme_states_one_minute_alert_evaluation():
-    """The `QueryNotContainKnownTable` failure came from the legacy
-    Application Insights `requests`/`dependencies` schema on the component
-    scope, not from the one-minute cadence: `az deployment group validate`
-    accepts `evaluationFrequency: PT1M` for the workspace-scoped
-    `AppRequests`/`AppDependencies` rules. The cost callout must state the
-    one-minute cadence `infra/alerts.bicep` actually deploys.
-    """
+def test_readme_distinguishes_static_and_dynamic_alert_evaluation_costs():
     text = README.read_text()
 
-    assert "1분 주기 로그 검색 경고 규칙 3개" in text
-    assert "5분 주기 로그 검색 경고 규칙" not in text
+    assert "1분 주기 정적 로그 검색 경고 규칙 3개" in text
+    assert "5분 주기 Dynamic Threshold 로그 검색 경고 규칙 1개" in text
 
 
-def test_dynamic_thresholds_guide_states_one_minute_static_evaluation():
-    """The Static Threshold section of dynamic-thresholds.md describes the
-    deployed infra/alerts.bicep rules, which evaluate every minute over a
-    five-minute window. The separate, still-true statement that Log Search
-    *dynamic* thresholds do not support one-minute evaluation stays.
-    """
+def test_dynamic_thresholds_guide_is_split_into_day_one_and_day_three_phases():
     text = DYNAMIC_THRESHOLDS.read_text()
 
-    assert "- evaluation: 1분" in text
-    assert "- evaluation: 5분" not in text
-    assert "Log Search dynamic threshold는 1분 evaluation을 지원하지 않는다." in text
+    assert "## Phase 1 — 당일: 배포와 baseline 확인" in text
+    assert "## Phase 2 — 3일 이후: learned band와 anomaly 검증" in text
+    assert "당일에는 alert 발화를 기대하지 않습니다" in text
+    assert "3일과 30 samples" in text
 
 
-def test_dynamic_thresholds_sections_are_numbered_without_gaps():
-    """A reader following "8절 참고" would find no section 8: the document
-    jumped from 7 to 9. Numbered top-level sections must be consecutive."""
-    numbers = [
-        int(match)
-        for match in re.findall(
-            r"^## (\d+)\. ", DYNAMIC_THRESHOLDS.read_text(), re.MULTILINE
-        )
-    ]
+def test_dynamic_thresholds_keeps_visuals_and_shadow_mode_constraints():
+    text = DYNAMIC_THRESHOLDS.read_text()
 
-    assert numbers, "dynamic-thresholds.md has no numbered sections"
-    assert numbers == list(range(1, len(numbers) + 1)), numbers
+    assert "```mermaid" in text
+    assert "threshold-picture-8bit.png" in text
+    assert "Action | 없음(shadow mode) |" in text
+    assert "Static safety net | 기존 S2 `p95 > 2000ms` rule 유지 |" in text
 
 
 def test_deployment_plan_status_matches_what_was_actually_deployed():
@@ -366,23 +350,13 @@ def test_validation_results_opens_by_dating_itself_to_the_pre_azd_lab():
     assert re.search(r"(현재|지금).{0,40}(실습|lab)", note), note
 
 
-def test_dynamic_thresholds_labels_the_logic_app_event_path_as_legacy():
-    """The recommended-settings section proposed the Action Group → Logic
-    App → HTTP Trigger chain as *the* event path. That bridge is the
-    historical one this lab no longer deploys; naming it without the label
-    tells an operator to rebuild it for a dynamic rule that should ride the
-    same Azure Monitor incident platform the standard exercise uses.
-    """
+def test_dynamic_thresholds_guides_the_operator_through_recovery_and_evidence():
     text = DYNAMIC_THRESHOLDS.read_text()
 
-    logic_app_lines = [line for line in text.splitlines() if "Logic App" in line]
-    assert logic_app_lines, "the document no longer mentions the bridge at all"
-    for line in logic_app_lines:
-        assert re.search(r"(레거시|legacy)", line), line
-    assert "incident platform" in text
-    assert re.search(r"(기본|표준).{0,60}incident platform", text) or re.search(
-        r"incident platform.{0,60}(기본|표준)", text
-    ), "the standard Azure Monitor path is not named as the default"
+    assert "trap restore_delay EXIT INT TERM" in text
+    assert "ORDER_DELAY_MS=0" in text
+    assert "ORDER_DELAY_MS=4000" in text
+    assert "alert fired 또는 미발화 원인을 evidence로 기록했습니다." in text
 
 
 def test_autonomy_screenshots_warn_that_the_lab_must_choose_review():

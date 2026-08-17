@@ -1,86 +1,185 @@
-# Azure Monitor Dynamic Thresholds와 SRE Agent 연계 설계
+# Azure Monitor Dynamic Thresholds 실습: S2 latency
 
-- 대상: Azure Monitor 정적 임계값을 사용하는 Azure SRE Agent 이벤트 연계 환경
+이 실습은 기존 S2의 `/api/orders` 지연을 재사용해 Dynamic Threshold가 실제
+baseline을 학습한 뒤 p95 latency anomaly를 탐지하는 과정을 확인합니다.
+정적 S2 rule은 당일 재현용으로 그대로 두고, Dynamic rule은 Action Group을 연결하지 않은 shadow mode로 병렬 운영합니다.
 
-## 1. 목적
+> 이 실습은 최소 3일 동안 Azure 리소스를 유지하므로 비용이 발생합니다.
+> 끝나면 반드시 README의 `azd down --purge` 절차로 정리하세요.
 
-현재 실험의 정적 임계값이 빠르고 결정론적인 장애 재현에 적합한 이유를 설명하고, 장기 운영에서는 Azure Monitor Dynamic Thresholds를 같은 SRE Agent event bridge에 연결하는 확장 방향을 소개한다.
+## 전체 흐름
 
-Dynamic Thresholds 자체는 이번 결과에 포함된 실증 대상이 아니다. 새 rule은 최소 3일·30 samples를 수집하기 전에는 발화하지 않으므로 수 시간짜리 disposable lab에서 결과를 주장하면 안 된다.
+```mermaid
+flowchart LR
+    T[Application Insights<br/>Standard availability test]
+    A[Container App<br/>GET /api/orders]
+    I[Application Insights]
+    W[Log Analytics<br/>AppRequests]
+    D[Dynamic Threshold<br/>Log Search alert]
+    P[Azure Monitor<br/>learned band]
+    F[S2 fault<br/>ORDER_DELAY_MS=4000]
 
-## 2. Static과 Dynamic의 역할 분리
+    T -->|5분마다 request| A
+    A -->|OpenTelemetry duration| I
+    I --> W
+    W -->|5분 p95| D
+    D --> P
+    F --> A
+```
 
-### Static Threshold
+## 공식 Preview Chart
 
-- 실험 목표: 정해진 장애가 짧은 시간 안에 반드시 alert를 발생시키는지 검증
-- evaluation: 1분(window 5분)
-- 조건: 5xx count, p95 > 2000ms, Blob 403 count
-- 전제: rule scope는 Log Analytics workspace이고 query는 workspace schema known table(`AppRequests`, `AppDependencies`)을 사용한다. Application Insights component scope의 legacy `requests`/`dependencies`는 다른 table을 호출하는 function이라 1분 주기에서 `QueryNotContainKnownTable`로 거부된다.
-- 장점: 결정론적이고 당일 재현 가능
-- 한계: workload별 정상 범위와 계절성을 수동으로 관리
+[![Azure Monitor Dynamic Threshold preview chart에서 파란 선은 측정값, 파란 영역은 허용 범위, 빨간 점은 범위를 벗어난 값을 보여 줍니다.](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/alerts-dynamic-thresholds/threshold-picture-8bit.png)](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/alerts-dynamic-thresholds/threshold-picture-8bit.png)
 
-### Dynamic Threshold
+*Source: [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds).*
 
-- 운영 목표: 정상 패턴을 학습하고 예상 범위를 벗어난 anomaly를 탐지
-- evaluation: Log Search alert에서 5분 이상
-- 조건: Boolean이 아닌 numeric query result
-- 장점: 시간대·일간·주간 패턴과 다수 series를 자동 학습
-- 한계: cold start, 서서히 변하는 degradation, 최근 behavior change에 즉시 반응하지 못함
+## 배포되는 설정
 
-## 3. 공식 학습·제약
+| 항목 | 설정 |
+|---|---|
+| Baseline | Standard availability test가 한 location에서 `/api/orders`를 5분마다 호출 |
+| Signal | `P95DurationMs=percentile(DurationMs, 95)`의 5분 bin |
+| Dynamic rule | 5분 evaluation, 20분 window, Medium sensitivity |
+| Alert 조건 | 최근 4회 중 2회가 learned upper bound 초과 |
+| Action | 없음(shadow mode) |
+| Static safety net | 기존 S2 `p95 > 2000ms` rule 유지 |
 
-- 초기 threshold 계산에는 최근 10일 data를 사용한다.
-- 3일과 최소 30 samples 전에는 alert가 발화하지 않는다.
-- weekly seasonality는 최소 3주 data가 필요하다.
-- Log Search dynamic threshold는 1분 evaluation을 지원하지 않는다.
-- multiple conditions를 한 dynamic rule에서 사용할 수 없다.
-- 천천히 진화하는 문제보다 유의미한 deviation 탐지에 적합하다.
-- noise를 줄이려면 Medium 또는 Low sensitivity를 우선 검토한다.
+## Phase 1 — 당일: 배포와 baseline 확인
 
-## 4. 이 lab에서의 후보 signal
+README의 `azd up`을 완료한 뒤 환경을 읽습니다.
 
-| Scenario | Numeric KQL signal | Dynamic operator | 운영 의도 |
-|---|---|---|---|
-| S1 HTTP 500 | 5분당 5xx count 또는 error rate | Greater than upper bound | 평상시 오류 패턴을 벗어난 급증 |
-| S2 latency | `/api/orders` p95 duration(ms) | Greater than upper bound | 시간대별 latency baseline 이상 |
-| S3 dependency | Blob 403 count 또는 dependency failure rate | Greater than upper bound | 정상적으로 0에 가까운 인증 실패 anomaly |
+```bash
+cd monitor/sre-agent-event-lab
+source ./scripts/lab-env.sh
 
-query는 `summarize` 결과가 하나 이상의 numeric series를 반환해야 한다. `count() > 10`과 같은 Boolean 결과는 사용하지 않는다.
+CONTAINER_APP_FQDN="${APP_FQDN}"
+BASELINE_WEB_TEST_NAME="$(azd env get-value AZURE_BASELINE_WEB_TEST_NAME)"
+DYNAMIC_ALERT_NAME="$(azd env get-value AZURE_DYNAMIC_THRESHOLD_ALERT_NAME)"
+```
 
-## 5. 권장 운영 설정
+두 리소스가 활성화되었고 Dynamic rule에 Action Group이 없는지 확인합니다.
 
-- Frequency: 5분
-- Lookback/window: 15~20분
-- Sensitivity: Medium으로 시작, noise가 크면 Low
-- Failing periods: 4회 평가 중 2회 위반
-- `ignoreDataBefore`: 정상 telemetry가 안정적으로 쌓이기 시작한 UTC
-- Action Group: 기존 `ag-sre-agent-event-lab`
-- Event path(기본): Dynamic alert → Azure Monitor incident platform 연결 → Review 모드 response plan → investigation. 현재 실습이 배포하는 표준 경로이며 Dynamic rule도 같은 경로를 그대로 쓴다.
-- Event path(레거시 bridge): Dynamic alert → Action Group → Logic App managed identity → SRE HTTP Trigger → Review-mode investigation. 2026-08-12 실측에 쓰인 legacy 구성이고 기본 실습에는 배포하지 않는다([validation-results.md](validation-results.md)).
+```bash
+az resource show \
+  --resource-group "${RESOURCE_GROUP}" \
+  --resource-type Microsoft.Insights/webtests \
+  --name "${BASELINE_WEB_TEST_NAME}" \
+  --api-version 2022-06-15 \
+  --query "{enabled:properties.Enabled,frequency:properties.Frequency,url:properties.Request.RequestUrl}" \
+  --output table
 
-이는 시작점이지 모든 workload의 정답이 아니다. Preview Chart와 incident 결과를 보고 sensitivity와 failing periods를 조정한다.
+az resource show \
+  --resource-group "${RESOURCE_GROUP}" \
+  --resource-type Microsoft.Insights/scheduledQueryRules \
+  --name "${DYNAMIC_ALERT_NAME}" \
+  --api-version 2025-01-01-preview \
+  --query "{enabled:properties.enabled,frequency:properties.evaluationFrequency,actions:properties.actions.actionGroups}" \
+  --output json
+```
 
-## 6. 도입 순서
+몇 차례 호출된 뒤 numeric series가 생성되는지 확인합니다.
 
-1. 현재 static rule을 유지해 known failure와 critical safety boundary를 보호한다.
-2. 같은 numeric signal로 Dynamic rule을 alert action 없이 shadow mode로 생성한다.
-3. 최소 3일·30 samples 이후 preview band와 violation을 관찰한다.
-4. 주간 pattern이 중요한 workload는 3주 이후 재평가한다.
-5. false positive/negative를 static rule과 비교한다.
-6. 품질 기준을 통과하면 기존 Action Group을 연결한다.
-7. Dynamic rule이 놓치는 cold-start·hard-limit 사건은 static rule을 계속 유지한다.
+```bash
+az monitor log-analytics query \
+  --workspace "${WORKSPACE_CUSTOMER_ID}" \
+  --analytics-query "AppRequests
+| where AppRoleName == '${TELEMETRY_SERVICE_NAME}'
+| where Name has '/api/orders'
+| where TimeGenerated > ago(2h)
+| summarize P95DurationMs=percentile(DurationMs, 95) by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc" \
+  --output table
+```
 
-## 7. 검증 기준
+당일에는 alert 발화를 기대하지 않습니다. Microsoft가 명시한 최소 조건은
+3일과 30 samples이며, weekly seasonality 학습에는 최소 3주가 필요합니다.
 
-- Dynamic rule이 충분한 학습 data 전에는 실증 완료로 표시되지 않는다.
-- Preview Chart의 allowed range와 실제 violation을 보존한다.
-- alert fired, Agent pickup, conclusion latency를 static 결과와 같은 방식으로 기록한다.
-- 동일 anomaly를 static/dynamic이 각각 탐지했는지 비교한다.
-- 계절성, 최근 배포, traffic shift 때문에 threshold가 왜 변했는지 설명할 수 있어야 한다.
-- Action Group 연결 후 unauthorized autonomous action은 0건이어야 한다.
+## Phase 2 — 3일 이후: learned band와 anomaly 검증
 
-## 8. 공식 자료
+먼저 72시간 이상의 실제 범위와 30개 이상의 samples가 있는지 확인합니다.
 
-- [Azure Monitor alerts with dynamic thresholds](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
-- [Create a log search alert rule](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule)
+```bash
+az monitor log-analytics query \
+  --workspace "${WORKSPACE_CUSTOMER_ID}" \
+  --analytics-query "AppRequests
+| where AppRoleName == '${TELEMETRY_SERVICE_NAME}'
+| where Name has '/api/orders'
+| where TimeGenerated > ago(4d)
+| summarize P95DurationMs=percentile(DurationMs, 95) by bin(TimeGenerated, 5m)
+| summarize Samples=count(), FirstSample=min(TimeGenerated), LastSample=max(TimeGenerated)
+| extend AgeHours=datetime_diff('hour', LastSample, FirstSample)" \
+  --output table
+```
+
+`AgeHours >= 72`와 `Samples >= 30`을 모두 확인한 뒤 지연을 주입합니다. 아래
+trap은 명령 실패나 Ctrl+C에도 `ORDER_DELAY_MS=0` 복구를 시도합니다.
+
+```bash
+mkdir -p evidence
+
+restore_delay() {
+  az containerapp update \
+    --resource-group "${RESOURCE_GROUP}" \
+    --name "${APP_NAME}" \
+    --set-env-vars ORDER_DELAY_MS=0 \
+    --output none
+}
+trap restore_delay EXIT INT TERM
+
+az containerapp update \
+  --resource-group "${RESOURCE_GROUP}" \
+  --name "${APP_NAME}" \
+  --set-env-vars ORDER_DELAY_MS=4000 \
+  --output none
+
+for RUN in 1 2 3 4; do
+  python3 scripts/loadgen.py \
+    "https://${CONTAINER_APP_FQDN}/api/orders" \
+    --requests 20 \
+    --concurrency 5 \
+    --expect-status 200 \
+    --output "evidence/dynamic-threshold-s2-${RUN}.json"
+  if [[ "${RUN}" -lt 4 ]]; then
+    sleep 300
+  fi
+done
+
+restore_delay
+trap - EXIT INT TERM
+```
+
+Azure Portal에서 해당 Dynamic rule의 **Preview chart**와 alert history를
+확인합니다. 실제 alert가 없으면 성공으로 간주하지 말고 다음을 구분합니다.
+
+- `AgeHours < 72` 또는 `Samples < 30`: 학습 조건 미충족
+- p95 points 없음: availability test 또는 telemetry 수집 실패
+- points는 있으나 band 안쪽: anomaly 크기·지속 시간이 현재 모델에 부족
+- band 밖 points가 2-of-4를 충족했지만 alert 없음: rule state와 query 오류 확인
+
+복구 후 아래 쿼리로 p95가 정상 범위로 돌아오는지 확인합니다.
+
+```bash
+az monitor log-analytics query \
+  --workspace "${WORKSPACE_CUSTOMER_ID}" \
+  --analytics-query "AppRequests
+| where AppRoleName == '${TELEMETRY_SERVICE_NAME}'
+| where Name has '/api/orders'
+| where TimeGenerated > ago(45m)
+| summarize P95DurationMs=percentile(DurationMs, 95) by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc" \
+  --output table
+```
+
+## 완료 기준
+
+- 실제 3일·30 samples 조건을 충족한 telemetry를 확인했습니다.
+- Preview chart에서 learned allowed range와 주입 구간을 확인했습니다.
+- alert fired 또는 미발화 원인을 evidence로 기록했습니다.
+- `ORDER_DELAY_MS=0`인 healthy revision으로 복구했습니다.
+- 운영 연결은 false-positive/negative 검토 후에만 Action Group을 추가합니다.
+
+## 공식 자료
+
+- [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
+- [Application Insights availability tests](https://learn.microsoft.com/azure/azure-monitor/app/availability)
 - [ARM templates for log alerts](https://learn.microsoft.com/azure/azure-monitor/alerts/resource-manager-alerts-log)
