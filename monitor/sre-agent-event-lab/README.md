@@ -14,16 +14,15 @@ Azure Container Apps에 장애를 세 번 주입하고, Azure Monitor 경고를 
 
 ## 비용과 안전 경계
 
-배포가 만드는 과금 대상은 다음과 같습니다. 금액은 구독·지역·사용량에 따라 달라지므로 [Azure 가격 계산기](https://azure.microsoft.com/en-us/pricing/calculator/)로 확인하세요.
+배포가 만드는 과금 대상은 다음과 같습니다. 금액은 구독·지역·사용량에 따라 달라지므로 [Azure 가격 계산기](https://azure.microsoft.com/pricing/calculator/)로 확인하세요.
 
 - Container Apps 환경과 앱 1개(0.5 vCPU / 1Gi, 최소 replica 1이라 유휴 상태에도 과금됩니다)
 - Container Registry Basic
 - Log Analytics 작업 영역(PerGB2018, 30일 보존)과 Application Insights 수집량
 - Storage 계정(Standard_LRS)
-- 1분 주기 정적 로그 검색 경고 규칙 3개와 5분 주기 Dynamic Threshold 로그 검색 경고 규칙 1개
-- `/api/orders` baseline을 5분마다 만드는 Application Insights Standard availability test 1개
+- 1분 주기 로그 검색 경고 규칙 3개(평가 주기가 짧을수록 규칙당 단가가 올라갑니다)
 
-Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Agent를 사용하며 [별도로 과금](https://azure.microsoft.com/en-us/pricing/details/sre-agent/)됩니다. 안전 경계는 스크립트가 강제합니다.
+Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Agent를 사용하며 [별도로 과금](https://azure.microsoft.com/pricing/details/sre-agent/)됩니다. 안전 경계는 스크립트가 강제합니다.
 
 - 현재 azd 환경이 가리키는 구독과 `az account show`의 활성 구독이 다르면 실행을 거부합니다.
 - 리소스 그룹에 `purpose=sre-agent-event-lab`과 `azd-env-name=<현재 environment>` 태그가 모두 없으면 거부합니다.
@@ -187,9 +186,7 @@ az group delete --subscription "${SUBSCRIPTION_ID}" --name "${RESOURCE_GROUP}" -
 | 경고가 발생하지 않음 | 시나리오 문서의 "복구 확인" 절 |
 | 채점이 `INCOMPLETE` | [guides/05-results.md](guides/05-results.md)의 수동 판정 절 |
 
-S2 latency를 재사용해 실제 baseline 학습과 anomaly를 확인하는 multi-day
-Dynamic Threshold 실습은 [dynamic-thresholds.md](dynamic-thresholds.md)에
-있습니다. 당일 배포 단계와 3일 이후 검증 단계가 분리되어 있습니다.
+정적 임계값 대신 Dynamic Threshold로 확장하는 설계는 [dynamic-thresholds.md](dynamic-thresholds.md)에 정리해 두었습니다.
 
 ## 공식 자료
 

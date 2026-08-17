@@ -7,9 +7,9 @@ dynamic ones without losing existing safety guarantees.
 
 ## Preview chart
 
-![Screenshot that shows a metric alert preview chart with dynamic threshold: a blue line for the measured metric, a blue shaded allowed range, and red dots marking values outside that range.](sre-agent-event-lab/assets/official/dynamic-threshold-preview-chart.png)
+[![Screenshot that shows a metric alert preview chart with dynamic threshold: a blue line for the measured metric, a blue shaded allowed range, and red dots marking values outside that range.](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/alerts-dynamic-thresholds/threshold-picture-8bit.png)](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/alerts-dynamic-thresholds/threshold-picture-8bit.png)
 
-> Source: [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
+*Source: [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds).*
 
 ## What changes
 
@@ -48,7 +48,7 @@ directly from Microsoft's documented behavior:
 
 | Alert type | What it evaluates | Notes |
 |---|---|---|
-| Metric alerts | Most Azure Monitor platform and custom metrics | Some metrics are excluded — see the [unsupported metrics list](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds#metrics-not-supported-by-dynamic-thresholds) |
+| Metric alerts | Most Azure Monitor platform and custom metrics | Some metrics are excluded — see the [unsupported metrics list](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds#metrics-not-supported-by-dynamic-thresholds) |
 | Log Search alerts | A numeric KQL query result | Minimum 5-minute evaluation frequency; 1-minute frequency is not supported |
 | PromQL query-based metric alerts | A numeric PromQL expression over Prometheus or OTel metrics | Currently in **Preview**; works best with expressions that resolve to numeric values rather than Boolean comparisons |
 
@@ -56,9 +56,7 @@ directly from Microsoft's documented behavior:
 
 1. Start with **Medium** or **Low** sensitivity to reduce alert noise before tightening.
 2. Use **Preview Chart** to inspect the learned allowed range against real history before
-   enabling the rule when the portal path supports it. For Log Search Dynamic Thresholds
-   deployed through ARM/Bicep, this repository keeps the rule enabled only in **shadow mode**
-   (no Action Group attached) and reviews the chart after deployment instead.
+   enabling the rule.
 3. Create the dynamic condition in **shadow mode** — no Action Group attached — so it can
    be observed without paging anyone.
 4. Observe for **at least 3 days and 30 samples**, and for **3 weeks** when weekly
@@ -78,25 +76,16 @@ directly from Microsoft's documented behavior:
 - **One dynamic condition per rule**: a rule that uses dynamic thresholds cannot monitor
   multiple conditions.
 - **Unsupported metrics**: a fixed set of platform metrics cannot use dynamic thresholds
-  at all — check the [unsupported metrics list](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds#metrics-not-supported-by-dynamic-thresholds) before adopting.
+  at all — check the [unsupported metrics list](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds#metrics-not-supported-by-dynamic-thresholds) before adopting.
 - **Unpublished sensitivity formula**: Microsoft does not publish the exact algorithm
   behind the Low/Medium/High sensitivity settings — treat them as tuning levers to
   evaluate empirically, not as a documented formula.
 
-## Hands-on case
-
-The repository's [S2 latency case](sre-agent-event-lab/dynamic-thresholds.md)
-deploys a five-minute baseline producer and a shadow Dynamic Threshold rule,
-then separates day-one setup from validation after the documented minimum
-learning period. Its 20-minute Log Search condition uses **Average**
-aggregation over four five-minute bins, following Microsoft's guidance not to
-pick **Maximum** for dynamic thresholds.
-
 ## Official resources
 
-- [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
-- [Create a log search alert rule](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-log-alert-rule)
-- [Query-based metric alerts overview](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-query-based-metric-alerts-overview)
-- [Create a query-based metric alert rule](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-create-query-based-metric-alerts)
-- [ARM templates for log alerts](https://learn.microsoft.com/azure/azure-monitor/alerts/resource-manager-alerts-log)
-- [Troubleshoot Azure Monitor metric alerts](https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-troubleshoot-metric)
+- [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
+- [Create a log search alert rule](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-create-log-alert-rule)
+- [Query-based metric alerts overview](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-query-based-metric-alerts-overview)
+- [Create a query-based metric alert rule](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-create-query-based-metric-alerts)
+- [ARM templates for log alerts](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/resource-manager-alerts-log)
+- [Troubleshoot Azure Monitor metric alerts](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-troubleshoot-metric)

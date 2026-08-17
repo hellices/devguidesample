@@ -62,19 +62,6 @@ module alerts 'alerts.bicep' = if (deployContainerApp) {
   }
 }
 
-module dynamicThresholdCase 'dynamic-threshold-case.bicep' = if (deployContainerApp) {
-  name: 'sre-lab-dynamic-threshold-case'
-  params: {
-    location: location
-    suffix: suffix
-    workspaceResourceId: observability.outputs.workspaceId
-    appInsightsResourceId: observability.outputs.appInsightsResourceId
-    containerAppFqdn: workload.outputs.containerAppFqdn
-    serviceName: workload.outputs.telemetryServiceName
-    tags: tags
-  }
-}
-
 output acrName string = workload.outputs.acrName
 output acrLoginServer string = workload.outputs.acrLoginServer
 output containerAppName string = workload.outputs.containerAppName
@@ -88,6 +75,4 @@ output workspaceCustomerId string = observability.outputs.workspaceCustomerId
 output appInsightsName string = observability.outputs.appInsightsName
 output appInsightsResourceId string = observability.outputs.appInsightsResourceId
 output alertRuleNames array = deployContainerApp ? alerts!.outputs.alertRuleNames : []
-output baselineWebTestName string = deployContainerApp ? dynamicThresholdCase!.outputs.baselineWebTestName : ''
-output dynamicThresholdAlertName string = deployContainerApp ? dynamicThresholdCase!.outputs.dynamicThresholdAlertName : ''
 output telemetryServiceName string = workload.outputs.telemetryServiceName

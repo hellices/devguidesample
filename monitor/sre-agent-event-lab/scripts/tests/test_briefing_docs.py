@@ -26,9 +26,6 @@ OFFICIAL_PNGS = {
     "managed-connectors-icon-grid.png",
     "operations-hub-overview-tab.png",
 }
-DYNAMIC_THRESHOLD_PNGS = {
-    "dynamic-threshold-preview-chart.png",
-}
 OFFICIAL_ASSETS = OFFICIAL_SVGS | OFFICIAL_PNGS
 OFFICIAL_ASSET_PREFIX = "sre-agent-event-lab/assets/official/"
 
@@ -685,7 +682,7 @@ def test_briefing_marks_preview_capabilities():
     assert "미리 보기" in managed
 
 
-def test_official_asset_set_includes_the_sre_agent_and_dynamic_threshold_files():
+def test_official_asset_set_has_16_selected_files():
     asset_dir = (
         REPO_ROOT
         / "monitor"
@@ -696,12 +693,10 @@ def test_official_asset_set_includes_the_sre_agent_and_dynamic_threshold_files()
 
     assert len(OFFICIAL_ASSETS) == 16
     # The directory also stores the guide screenshots; nothing else may
-    # accumulate here, and the sets stay disjoint.
+    # accumulate here, and the two sets stay disjoint.
     assert OFFICIAL_ASSETS & GUIDE_SCREENSHOT_PNGS == set()
-    assert OFFICIAL_ASSETS & DYNAMIC_THRESHOLD_PNGS == set()
-    assert GUIDE_SCREENSHOT_PNGS & DYNAMIC_THRESHOLD_PNGS == set()
     assert {path.name for path in asset_dir.glob("*")} == (
-        OFFICIAL_ASSETS | GUIDE_SCREENSHOT_PNGS | DYNAMIC_THRESHOLD_PNGS
+        OFFICIAL_ASSETS | GUIDE_SCREENSHOT_PNGS
     )
 
 
@@ -731,9 +726,9 @@ def test_official_sre_agent_pngs_are_stored_locally():
     )
 
     assert {path.name for path in asset_dir.glob("*.png")} == (
-        OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS | DYNAMIC_THRESHOLD_PNGS
+        OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS
     )
-    for name in OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS | DYNAMIC_THRESHOLD_PNGS:
+    for name in OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS:
         header = (asset_dir / name).read_bytes()[:8]
         assert header == b"\x89PNG\r\n\x1a\n", name
 

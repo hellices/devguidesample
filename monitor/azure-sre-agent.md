@@ -365,7 +365,7 @@ Issue에는 다음 내용을 포함했습니다.
 
 처음에는 기존 고정 임계값을 유지하고, Dynamic Thresholds를 별도의 관찰용 경고로 추가하는 방식을 권장합니다. 충분한 학습 기간을 거친 뒤 오탐과 누락을 비교해 실제 대응 흐름에 연결합니다.
 
-자세한 내용은 [Dynamic Thresholds S2 실습 사례](sre-agent-event-lab/dynamic-thresholds.md)를 참고하세요.
+자세한 내용은 [Dynamic Thresholds 연계 가이드](sre-agent-event-lab/dynamic-thresholds.md)를 참고하세요.
 
 ## 도입 전에 확인해야 할 사전 조건
 

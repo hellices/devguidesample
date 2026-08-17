@@ -2,7 +2,7 @@
 
 > **Status:** Validated — base azd deployment only (provision, deploy, doctor, baseline, pre-acknowledgement safety gate, `azd down --purge`). The manual Agent connection in the portal and the live S1/S2/S3 run/capture/score sequence have not been run: the operator will run them one by one.
 
-Updated: 2026-08-17 (dynamic-threshold final-review fixes; plan reconciled with the live deployment that has run and the scenario sequence that has not)
+Updated: 2026-08-15 (run-attempt state gate; recovery failure propagation; plan reconciled with the live deployment that has run and the scenario sequence that has not)
 
 ## Goal
 
@@ -38,7 +38,7 @@ No subscription ID, resource group, global name suffix, or expiry date is fixed 
 | Dependency failure target | Storage account with Blob private endpoint |
 | Workload identity | User-assigned managed identity |
 | Logs and traces | Log Analytics and workspace-based Application Insights |
-| Incident detection | Three Sev2 scheduled-query alert rules, one shadow Dynamic Threshold rule, one Standard availability web test |
+| Incident detection | Three Sev2 scheduled-query alert rules |
 | Incident analysis | Existing or disposable Azure SRE Agent in Review mode |
 
 ## Deployment Recipe
@@ -194,8 +194,9 @@ Consequence for the recorded results: the S1/S2/S3 run in
 `monitor/sre-agent-event-lab/validation-results.md` -- an earlier execution
 of this lab, not the deployment recorded below -- was executed at a
 one-minute cadence and stays plausible, because the failure above was the
-legacy schema on the component scope, not the cadence. That report keeps
-that annotation, and `README.md`'s cost callout is back to "1분 주기 정적 로그 검색 경고 규칙 3개".
+legacy schema on the component scope, not the cadence. Both that report
+and `dynamic-thresholds.md` now carry that annotation, and `README.md`'s
+cost callout is back to "1분 주기 로그 검색 경고 규칙 3개".
 
 #### Alert template preflight, before the live deployment (2026-08-14)
 
@@ -278,16 +279,17 @@ complete a started attempt unchanged, and still clear a stale
 
 Confirmed RED (17 state/CLI/doc tests plus 3 end-to-end script tests
 failing, including the exact old-success -> broken re-run -> S2 admitted
-sequence) and GREEN afterwards, with the full suite and all six Bicep
+sequence) and GREEN afterwards, with the full suite and all five Bicep
 templates rebuilt.
 
 Documentation fixed in the same pass: `validation-results.md` now opens by
 dating itself to the pre-azd, hand-built lab (its subscription, resource
-group and Logic App bridge are not what `azd up` creates) and keeps the
-historical Action Group -> Logic App -> HTTP Trigger event path as the
-legacy record; and both Learn screenshots that show `Autonomous` now carry
-a caption warning that this lab must choose `Review` (the pictures
-themselves are unchanged). The scenario guides
+group and Logic App bridge are not what `azd up` creates);
+`dynamic-thresholds.md` labels the Action Group -> Logic App -> HTTP
+Trigger event path as the legacy bridge and names the Azure Monitor
+incident platform path as the default; and both Learn screenshots that
+show `Autonomous` now carry a caption warning that this lab must choose
+`Review` (the pictures themselves are unchanged). The scenario guides
 state that re-running a scenario clears its previous
 `sX_recovered`/`sX_captured` record before the fault is injected.
 
@@ -320,7 +322,7 @@ state that re-running a scenario clears its previous
 - [x] 5. Subscription/Location Check — current authenticated subscription, Korea Central
 - [x] 6. Aspire Pre-Provisioning Checks — not applicable
 - [x] 7. Provision Preview — superseded: no separate `--preview` pass was run; the live `azd provision` below deployed the real plan and is recorded in full
-- [x] 8. Build Verification — 529 tests and six Bicep builds passed
+- [x] 8. Build Verification — 505 tests and five Bicep builds passed
 - [x] 9. Docker Build Context Validation — Dockerfile and requirements present; the image is built by ACR from `app/`, never locally
 - [x] 10. Package Validation — `azd package --all --no-prompt` passed
 - [x] 11. Azure Policy Validation — three assigned Defender policies are unrelated to planned resources
@@ -346,10 +348,10 @@ Re-run after the two-phase ACR gate and workspace-schema alert corrections:
 
 | Check | Command | Result |
 |---|---|---|
-| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 529 passed (RED first for the workspace-schema alert fix, the swallowed scenario-recovery failures, the re-run state gate, and the Dynamic Threshold final-review fixes) |
+| Unit/integration tests | `app/.venv/bin/python -m pytest app/tests infra/tests scripts/tests` | 505 passed (RED first for the workspace-schema alert fix, the swallowed scenario-recovery failures, and the re-run state gate) |
 | Shell syntax | `bash -n scripts/*.sh` | Passed (all scripts, including the two new hooks) |
 | Python modules | `python3 -c "import lab_state, score"` | Passed on Python 3.9.6 |
-| Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts,dynamic-threshold-case}.bicep --stdout` | Passed (six templates; `alerts.bicep` keeps the PT1M static rules, and `dynamic-threshold-case.bicep` emits `evaluationFrequency: PT5M`, `windowSize: PT20M`, `timeAggregation: Average`, workspace scope, `targetResourceTypes: Microsoft.OperationalInsights/workspaces`, and no Action Group attachment) |
+| Bicep build | `az bicep build --file infra/{main,lab,workload,observability,alerts}.bicep --stdout` | Passed (five templates; `alerts.bicep` emits `evaluationFrequency: PT1M`, `windowSize: PT5M`, workspace scope and `targetResourceTypes: Microsoft.OperationalInsights/workspaces`) |
 | AZD schema | `azure.yaml` validated against `schemas/v1.0/azure.yaml.json` from Azure/azure-dev | Passed; hooks = preprovision, postprovision, postdeploy, predown, postdown; no `services` |
 | AZD package | `azd package --all --no-prompt` | Passed |
 | Zero-service deploy hook | `azd deploy --no-prompt` against a marker-hook copy of this `azure.yaml` | `postdeploy` ran; hook exit 7 failed the command |

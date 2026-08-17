@@ -217,53 +217,45 @@ def test_readme_warns_about_cost_and_teardown_before_the_first_azure_command():
         assert driver in text, driver
 
 
-def test_readme_distinguishes_static_and_dynamic_alert_evaluation_costs():
+def test_readme_states_one_minute_alert_evaluation():
+    """The `QueryNotContainKnownTable` failure came from the legacy
+    Application Insights `requests`/`dependencies` schema on the component
+    scope, not from the one-minute cadence: `az deployment group validate`
+    accepts `evaluationFrequency: PT1M` for the workspace-scoped
+    `AppRequests`/`AppDependencies` rules. The cost callout must state the
+    one-minute cadence `infra/alerts.bicep` actually deploys.
+    """
     text = README.read_text()
 
-    assert "1분 주기 정적 로그 검색 경고 규칙 3개" in text
-    assert "5분 주기 Dynamic Threshold 로그 검색 경고 규칙 1개" in text
+    assert "1분 주기 로그 검색 경고 규칙 3개" in text
+    assert "5분 주기 로그 검색 경고 규칙" not in text
 
 
-def test_dynamic_thresholds_guide_is_split_into_day_one_and_day_three_phases():
+def test_dynamic_thresholds_guide_states_one_minute_static_evaluation():
+    """The Static Threshold section of dynamic-thresholds.md describes the
+    deployed infra/alerts.bicep rules, which evaluate every minute over a
+    five-minute window. The separate, still-true statement that Log Search
+    *dynamic* thresholds do not support one-minute evaluation stays.
+    """
     text = DYNAMIC_THRESHOLDS.read_text()
 
-    assert "## Phase 1 — 당일: 배포와 baseline 확인" in text
-    assert "## Phase 2 — 3일 이후: learned band와 anomaly 검증" in text
-    assert "당일에는 alert 발화를 기대하지 않습니다" in text
-    assert "3일과 30 samples" in text
+    assert "- evaluation: 1분" in text
+    assert "- evaluation: 5분" not in text
+    assert "Log Search dynamic threshold는 1분 evaluation을 지원하지 않는다." in text
 
 
-def test_dynamic_thresholds_keeps_visuals_and_shadow_mode_constraints():
-    text = DYNAMIC_THRESHOLDS.read_text()
-
-    assert "```mermaid" in text
-    assert "assets/official/dynamic-threshold-preview-chart.png" in text
-    assert "threshold-picture-8bit.png" not in text
-    assert "Action | 없음(shadow mode) |" in text
-    assert "Static safety net | 기존 S2 `p95 > 2000ms` rule 유지 |" in text
-
-
-def test_dynamic_thresholds_official_chart_follows_the_local_image_policy():
-    text = DYNAMIC_THRESHOLDS.read_text()
-    targets = images(text)
-
-    assert targets == [
-        (
-            "Azure Monitor Dynamic Threshold preview chart에서 파란 선은 측정값, "
-            "파란 영역은 허용 범위, 빨간 점은 범위를 벗어난 값을 보여 줍니다.",
-            "assets/official/dynamic-threshold-preview-chart.png",
+def test_dynamic_thresholds_sections_are_numbered_without_gaps():
+    """A reader following "8절 참고" would find no section 8: the document
+    jumped from 7 to 9. Numbered top-level sections must be consecutive."""
+    numbers = [
+        int(match)
+        for match in re.findall(
+            r"^## (\d+)\. ", DYNAMIC_THRESHOLDS.read_text(), re.MULTILINE
         )
     ]
-    image_path = (DYNAMIC_THRESHOLDS.parent / targets[0][1]).resolve()
-    assert image_path.is_file()
-    assert image_path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
-    lines = text.splitlines()
-    image_line = f"![{targets[0][0]}]({targets[0][1]})"
-    index = lines.index(image_line)
-    caption = "\n".join(lines[index + 1 : index + 4])
-    assert caption.lstrip().startswith(">")
-    assert "출처" in caption
-    assert "https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds" in caption
+
+    assert numbers, "dynamic-thresholds.md has no numbered sections"
+    assert numbers == list(range(1, len(numbers) + 1)), numbers
 
 
 def test_deployment_plan_status_matches_what_was_actually_deployed():
@@ -291,12 +283,6 @@ def test_deployment_plan_status_matches_what_was_actually_deployed():
     assert "- [ ]" not in text, (
         "an unchecked preflight item contradicts the recorded live deployment"
     )
-
-
-def test_deployment_plan_quotes_the_current_static_alert_cost_callout():
-    text = DEPLOYMENT_PLAN.read_text()
-
-    assert 'cost callout is back to "1분 주기 정적 로그 검색 경고 규칙 3개".' in text
 
 
 def test_deployment_plan_does_not_claim_the_manual_scenario_sequence_ran():
@@ -341,7 +327,7 @@ def test_deployment_plan_records_one_current_test_and_bicep_count():
         section_seven.group(1),
     )
     assert int(preflight.group(1)) >= 472, "the recorded suite shrank"
-    assert preflight.group(2) == "six", "six Bicep templates are built now"
+    assert preflight.group(2) == "five", "five Bicep templates are built, not three"
     assert "460 tests" not in text
 
 
@@ -380,13 +366,23 @@ def test_validation_results_opens_by_dating_itself_to_the_pre_azd_lab():
     assert re.search(r"(현재|지금).{0,40}(실습|lab)", note), note
 
 
-def test_dynamic_thresholds_guides_the_operator_through_recovery_and_evidence():
+def test_dynamic_thresholds_labels_the_logic_app_event_path_as_legacy():
+    """The recommended-settings section proposed the Action Group → Logic
+    App → HTTP Trigger chain as *the* event path. That bridge is the
+    historical one this lab no longer deploys; naming it without the label
+    tells an operator to rebuild it for a dynamic rule that should ride the
+    same Azure Monitor incident platform the standard exercise uses.
+    """
     text = DYNAMIC_THRESHOLDS.read_text()
 
-    assert "trap restore_delay EXIT INT TERM" in text
-    assert "ORDER_DELAY_MS=0" in text
-    assert "ORDER_DELAY_MS=4000" in text
-    assert "alert fired 또는 미발화 원인을 evidence로 기록했습니다." in text
+    logic_app_lines = [line for line in text.splitlines() if "Logic App" in line]
+    assert logic_app_lines, "the document no longer mentions the bridge at all"
+    for line in logic_app_lines:
+        assert re.search(r"(레거시|legacy)", line), line
+    assert "incident platform" in text
+    assert re.search(r"(기본|표준).{0,60}incident platform", text) or re.search(
+        r"incident platform.{0,60}(기본|표준)", text
+    ), "the standard Azure Monitor path is not named as the default"
 
 
 def test_autonomy_screenshots_warn_that_the_lab_must_choose_review():
