@@ -51,3 +51,10 @@ def test_official_chart_is_a_valid_1000_by_598_png():
     with Image.open(ASSET) as image:
         assert image.format == "PNG"
         assert image.size == (1000, 598)
+
+
+def test_brief_describes_ongoing_learning_without_an_unsupported_time_bound():
+    text = BRIEF.read_text()
+
+    assert "**Ongoing learning** uses all available historical data" in text
+    assert "**Up to 10 days**" not in text

@@ -31,9 +31,9 @@ directly from Microsoft's documented behavior:
   resources or resources missing data simply don't trigger until enough history exists.
 - **At least 3 weeks** of historical data are needed before the model can detect weekly
   seasonality and adjust its bounds accordingly.
-- **Up to 10 days** may pass before a genuine, sustained change in behavior is fully
-  reflected in the upper and lower bounds, because those bounds are continuously
-  recalculated from the last 10 days of data.
+- **Ongoing learning** uses all available historical data to improve accuracy. Recent
+  behavior changes are not reflected immediately; Microsoft notes that the upper and
+  lower bounds consider metric data from the last 10 days.
 
 ## Static versus dynamic: when to use each
 
