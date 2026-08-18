@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" font-family="'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif">
+  <rect width="1200" height="640" fill="#f8fafc"/>
+  <defs>
+    <marker id="p-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="p-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
+    </marker>
+    <marker id="p-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="34" font-size="21" font-weight="700" fill="#0f172a">메모리 파이프라인 — 쓰기 경로와 읽기 경로는 분리한다</text>
+  <text x="30" y="57" font-size="13" fill="#64748b">실시간 응답을 지키는 핵심 원칙: LLM을 쓰는 무거운 작업(추출·통합)은 전부 비동기 쓰기 경로로 밀어낸다.</text>
+
+  <!-- ================= WRITE PATH ================= -->
+  <rect x="20" y="76" width="1160" height="212" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="38" y="100" font-size="14.5" font-weight="700" fill="#065f46">① 쓰기 경로 (비동기 · 응답 경로를 막지 않는다)</text>
+  <text x="392" y="100" font-size="12" fill="#059669">턴 종료 후 / 배치 / 유휴 시간에 실행 — 사용자 대기시간에 포함되지 않음</text>
+
+  <g>
+    <rect x="40" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <text x="110" y="142" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">대화 턴</text>
+    <text x="110" y="161" font-size="11" fill="#475569" text-anchor="middle">user + assistant</text>
+    <text x="110" y="177" font-size="11" fill="#475569" text-anchor="middle">메시지 원문</text>
+
+    <rect x="202" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <text x="272" y="142" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">PII 스캔 · 마스킹</text>
+    <text x="272" y="161" font-size="11" fill="#475569" text-anchor="middle">저장 전에 반드시</text>
+    <text x="272" y="177" font-size="11" fill="#dc2626" text-anchor="middle">정규식만으론 부족</text>
+
+    <rect x="364" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <text x="434" y="142" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">사실 추출 (LLM)</text>
+    <text x="434" y="161" font-size="11" fill="#475569" text-anchor="middle">선호 · 제약 · 의도</text>
+    <text x="434" y="177" font-size="11" fill="#475569" text-anchor="middle">저비용 모델로 1차 게이트</text>
+
+    <rect x="526" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <text x="596" y="142" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">중복 · 모순 판정</text>
+    <text x="596" y="161" font-size="11" fill="#475569" text-anchor="middle">코사인 &gt; 0.85 → 중복</text>
+    <text x="596" y="177" font-size="11" fill="#475569" text-anchor="middle">0.50~0.85 → 모순 검사</text>
+
+    <rect x="688" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+    <text x="758" y="142" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">Memory Router</text>
+    <text x="758" y="161" font-size="11" fill="#475569" text-anchor="middle">유형 분류 후 분배</text>
+    <text x="758" y="177" font-size="11" fill="#dc2626" text-anchor="middle">오분류 시 조용히 유실</text>
+
+    <rect x="850" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="920" y="140" font-size="12.5" font-weight="700" fill="#3730a3" text-anchor="middle">저장소 기록</text>
+    <text x="920" y="158" font-size="11" fill="#475569" text-anchor="middle">Episodic / Semantic</text>
+    <text x="920" y="174" font-size="11" fill="#475569" text-anchor="middle">Procedural / Entity Graph</text>
+
+    <rect x="1012" y="118" width="140" height="72" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="1082" y="140" font-size="12.5" font-weight="700" fill="#92400e" text-anchor="middle">유지보수 잡</text>
+    <text x="1082" y="158" font-size="11" fill="#475569" text-anchor="middle">Consolidation · Compaction · Decay</text>
+    <text x="1082" y="174" font-size="11" fill="#475569" text-anchor="middle">주기/임계값 트리거</text>
+
+    <path d="M180 154 L200 154" stroke="#10b981" stroke-width="2" marker-end="url(#p-green)"/>
+    <path d="M342 154 L362 154" stroke="#10b981" stroke-width="2" marker-end="url(#p-green)"/>
+    <path d="M504 154 L524 154" stroke="#10b981" stroke-width="2" marker-end="url(#p-green)"/>
+    <path d="M666 154 L686 154" stroke="#10b981" stroke-width="2" marker-end="url(#p-green)"/>
+    <path d="M828 154 L848 154" stroke="#10b981" stroke-width="2" marker-end="url(#p-green)"/>
+    <path d="M990 154 L1010 154" stroke="#f59e0b" stroke-width="2" marker-end="url(#p-amber)"/>
+  </g>
+
+  <text x="40" y="215" font-size="11.5" font-weight="700" fill="#065f46">유지보수 잡의 3종 세트</text>
+  <text x="40" y="234" font-size="11.5" fill="#475569">• Consolidation(14) — 유사 기억 클러스터링 → 병합 → 모순 해소(최신 우선) → 중요도 재계산. 클러스터당 LLM 호출이 들어가므로 비용이 저장소 크기에 비례한다.</text>
+  <text x="40" y="253" font-size="11.5" fill="#475569">• Compaction(15) — 다단계 요약으로 토큰/용량 절감. 정확도가 아니라 "크기"가 목적일 때 쓴다.</text>
+  <text x="40" y="272" font-size="11.5" fill="#475569">• Forgetting &amp; Decay(19) — S(t) = S₀·e^(−λt). 접근 시 강화(reinforcement), 임계값 미만은 soft/hard delete. 반드시 pin 예외 목록을 함께 설계한다.</text>
+
+  <!-- ================= READ PATH ================= -->
+  <rect x="20" y="302" width="1160" height="240" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="38" y="326" font-size="14.5" font-weight="700" fill="#1e40af">② 읽기 경로 (동기 · 사용자 지연 예산 안에서 끝나야 한다)</text>
+  <text x="510" y="326" font-size="12" fill="#2563eb">단계를 더할수록 정확도는 오르고 지연도 오른다 — 실시간 채팅에서는 뒷단계를 과감히 생략한다</text>
+
+  <g>
+    <rect x="35" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="97" y="368" font-size="12" font-weight="700" fill="#1e40af" text-anchor="middle">사용자 쿼리</text>
+    <text x="97" y="387" font-size="10.5" fill="#475569" text-anchor="middle">현재 발화 +</text>
+    <text x="97" y="401" font-size="10.5" fill="#475569" text-anchor="middle">세션 컨텍스트</text>
+
+    <rect x="180" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="242" y="368" font-size="12" font-weight="700" fill="#475569" text-anchor="middle">HyDE 확장</text>
+    <text x="242" y="387" font-size="10.5" fill="#475569" text-anchor="middle">가상 답변 생성 후</text>
+    <text x="242" y="401" font-size="10.5" fill="#475569" text-anchor="middle">그걸로 검색 (선택)</text>
+    <text x="242" y="426" font-size="10.5" font-weight="700" fill="#dc2626" text-anchor="middle">+ LLM 호출 1회</text>
+
+    <rect x="325" y="336" width="125" height="38" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="387" y="360" font-size="11.5" font-weight="700" fill="#3730a3" text-anchor="middle">벡터 검색</text>
+    <rect x="325" y="380" width="125" height="38" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="387" y="404" font-size="11.5" font-weight="700" fill="#3730a3" text-anchor="middle">BM25 키워드</text>
+    <text x="387" y="437" font-size="10.5" fill="#475569" text-anchor="middle">병렬 실행 · 20~50ms</text>
+
+    <rect x="470" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="532" y="368" font-size="12" font-weight="700" fill="#1e40af" text-anchor="middle">RRF 융합</text>
+    <text x="532" y="387" font-size="10.5" fill="#475569" text-anchor="middle">두 랭킹을 하나로</text>
+    <text x="532" y="401" font-size="10.5" fill="#475569" text-anchor="middle">Reciprocal Rank Fusion</text>
+    <text x="532" y="426" font-size="10.5" fill="#16a34a" text-anchor="middle">거의 무료</text>
+
+    <rect x="615" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="677" y="368" font-size="12" font-weight="700" fill="#92400e" text-anchor="middle">Cross-Encoder</text>
+    <text x="677" y="387" font-size="10.5" fill="#475569" text-anchor="middle">(쿼리,문서) 쌍 재점수</text>
+    <text x="677" y="401" font-size="10.5" fill="#475569" text-anchor="middle">정밀도 최대 향상</text>
+    <text x="677" y="426" font-size="10.5" font-weight="700" fill="#dc2626" text-anchor="middle">+50~200ms</text>
+
+    <rect x="760" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="822" y="368" font-size="12" font-weight="700" fill="#1e40af" text-anchor="middle">MMR 다양성</text>
+    <text x="822" y="387" font-size="10.5" fill="#475569" text-anchor="middle">유사 결과 5개 반복</text>
+    <text x="822" y="401" font-size="10.5" fill="#475569" text-anchor="middle">방지 (lambda 튜닝)</text>
+    <text x="822" y="426" font-size="10.5" fill="#16a34a" text-anchor="middle">거의 무료</text>
+
+    <rect x="905" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#8b5cf6" stroke-width="1.5"/>
+    <text x="967" y="368" font-size="12" font-weight="700" fill="#6b21a8" text-anchor="middle">시간 가중</text>
+    <text x="967" y="387" font-size="10.5" fill="#475569" text-anchor="middle">recency decay 곱</text>
+    <text x="967" y="401" font-size="10.5" fill="#475569" text-anchor="middle">stable은 decay 면제</text>
+    <text x="967" y="426" font-size="10.5" fill="#16a34a" text-anchor="middle">거의 무료</text>
+
+    <rect x="1050" y="344" width="125" height="66" rx="8" fill="#ffffff" stroke="#ec4899" stroke-width="1.5"/>
+    <text x="1112" y="368" font-size="12" font-weight="700" fill="#9d174d" text-anchor="middle">컨텍스트 조립</text>
+    <text x="1112" y="387" font-size="10.5" fill="#475569" text-anchor="middle">섹션별 토큰 예산</text>
+    <text x="1112" y="401" font-size="10.5" fill="#475569" text-anchor="middle">초과분 evict</text>
+    <text x="1112" y="426" font-size="10.5" fill="#16a34a" text-anchor="middle">거의 무료</text>
+
+    <path d="M160 377 L178 377" stroke="#94a3b8" stroke-width="2" marker-end="url(#p-gray)"/>
+    <path d="M305 377 L323 377" stroke="#3b82f6" stroke-width="2" marker-end="url(#p-gray)"/>
+    <path d="M450 377 L468 377" stroke="#3b82f6" stroke-width="2" marker-end="url(#p-gray)"/>
+    <path d="M595 377 L613 377" stroke="#3b82f6" stroke-width="2" marker-end="url(#p-gray)"/>
+    <path d="M740 377 L758 377" stroke="#3b82f6" stroke-width="2" marker-end="url(#p-gray)"/>
+    <path d="M885 377 L903 377" stroke="#3b82f6" stroke-width="2" marker-end="url(#p-gray)"/>
+    <path d="M1030 377 L1048 377" stroke="#3b82f6" stroke-width="2" marker-end="url(#p-gray)"/>
+  </g>
+
+  <rect x="35" y="452" width="1140" height="76" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2"/>
+  <text x="52" y="474" font-size="12" font-weight="700" fill="#0f172a">지연 예산 판단 기준</text>
+  <text x="52" y="494" font-size="11.5" fill="#475569">• 벡터 단독 20~50ms → 전체 파이프라인 200~500ms. 하이브리드 검색만으로도 리콜이 통상 15~30% 개선된다.</text>
+  <text x="52" y="513" font-size="11.5" fill="#475569">• 항목 50개 미만 저장소에서는 풀 파이프라인 이득이 거의 없다. 파라미터(RRF k, MMR lambda, 후보 수)가 늘수록 오설정 위험이 커진다.</text>
+
+  <text x="30" y="570" font-size="12.5" font-weight="700" fill="#0f172a">핵심 설계 결론</text>
+  <text x="30" y="592" font-size="11.5" fill="#475569">쓰기 경로에서 품질을 만들고(추출 정확도·중복 제거·모순 해소), 읽기 경로에서는 저장된 품질을 싸게 꺼내 쓴다. 읽기 경로에 LLM 호출을 넣는 순간 실시간성이 무너진다.</text>
+  <text x="30" y="613" font-size="11.5" fill="#475569">Mem0가 채택한 2단계(extraction → update) 구조가 정확히 이 원칙이며, "knowledge agent"(대화를 관찰하는 별도 에이전트) 패턴도 같은 분리를 말한다.</text>
+</svg>

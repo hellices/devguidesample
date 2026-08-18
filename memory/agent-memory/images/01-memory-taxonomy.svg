@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1030 540" width="1030" height="540" font-family="'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif">
+  <rect width="1030" height="540" fill="#f8fafc"/>
+
+  <text x="25" y="36" font-size="21" font-weight="700" fill="#0f172a">Agent Memory 분류 체계 — 6개 패밀리 / 30개 기법</text>
+  <text x="25" y="60" font-size="13" fill="#64748b">각 패밀리는 서로 다른 문제를 푸는다. 하나의 기법이 다른 기법을 대체하지 않는다.</text>
+
+  <!-- ROW 1 -->
+  <!-- 1. Short-term -->
+  <rect x="25" y="82" width="310" height="200" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="25" y="82" width="310" height="34" rx="10" fill="#3b82f6"/>
+  <rect x="25" y="99" width="310" height="17" fill="#3b82f6"/>
+  <text x="39" y="105" font-size="14.5" font-weight="700" fill="#ffffff">① 단기 기억 (Short-term)</text>
+  <text x="321" y="105" font-size="12" font-weight="600" fill="#dbeafe" text-anchor="end">01–05</text>
+  <text x="39" y="139" font-size="12.5" fill="#475569">한 대화(세션) 안에서 컨텍스트 윈도우를 넘기지</text>
+  <text x="39" y="156" font-size="12.5" fill="#475569">않으면서 최근 맥락을 유지한다.</text>
+  <text x="39" y="182" font-size="12" fill="#1e293b">01 Conversation Buffer — 전체 원문 보관</text>
+  <text x="39" y="202" font-size="12" fill="#1e293b">02 Sliding Window — 최근 k턴만 유지</text>
+  <text x="39" y="222" font-size="12" fill="#1e293b">03 Summary — 과거를 요약으로 치환</text>
+  <text x="39" y="242" font-size="12" fill="#1e293b">04 Summary Buffer — 요약 + 최근 원문</text>
+  <text x="39" y="262" font-size="12" fill="#1e293b">05 Token Buffer — 토큰 예산 강제 트리밍</text>
+
+  <!-- 2. Long-term -->
+  <rect x="360" y="82" width="310" height="200" rx="10" fill="#ffffff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <rect x="360" y="82" width="310" height="34" rx="10" fill="#8b5cf6"/>
+  <rect x="360" y="99" width="310" height="17" fill="#8b5cf6"/>
+  <text x="374" y="105" font-size="14.5" font-weight="700" fill="#ffffff">② 장기 기억 (Long-term)</text>
+  <text x="656" y="105" font-size="12" font-weight="600" fill="#ede9fe" text-anchor="end">06–11</text>
+  <text x="374" y="139" font-size="12.5" fill="#475569">세션·사용자·시간을 넘어 지식을 보존한다.</text>
+  <text x="374" y="156" font-size="12.5" fill="#475569">개인화의 실질적 토대가 되는 계층.</text>
+  <text x="374" y="182" font-size="12" fill="#1e293b">06 Vector Store — 의미 기반 유사도 검색</text>
+  <text x="374" y="202" font-size="12" fill="#1e293b">07 Entity — 인물·상품·프로젝트 단위 추적</text>
+  <text x="374" y="222" font-size="12" fill="#1e293b">08 Knowledge Graph — 관계 그래프 순회</text>
+  <text x="374" y="242" font-size="12" fill="#1e293b">09 Episodic — "언제 무슨 일이" 사건 기록</text>
+  <text x="374" y="262" font-size="12" fill="#1e293b">10 Semantic · 11 Procedural — 사실 / 절차</text>
+
+  <!-- 3. Cognitive -->
+  <rect x="695" y="82" width="310" height="200" rx="10" fill="#ffffff" stroke="#ec4899" stroke-width="1.5"/>
+  <rect x="695" y="82" width="310" height="34" rx="10" fill="#ec4899"/>
+  <rect x="695" y="99" width="310" height="17" fill="#ec4899"/>
+  <text x="709" y="105" font-size="14.5" font-weight="700" fill="#ffffff">③ 인지 아키텍처 (Cognitive)</text>
+  <text x="991" y="105" font-size="12" font-weight="600" fill="#fce7f3" text-anchor="end">12–19</text>
+  <text x="709" y="139" font-size="12.5" fill="#475569">인간 기억을 모사한 운영 계층. 저장이 아니라</text>
+  <text x="709" y="156" font-size="12.5" fill="#475569">"기억을 관리하는 방법"을 다룬다.</text>
+  <text x="709" y="182" font-size="12" fill="#1e293b">12 Working · 13 Hierarchical — 주의/티어</text>
+  <text x="709" y="202" font-size="12" fill="#1e293b">14 Consolidation — 병합·중복제거·충돌해소</text>
+  <text x="709" y="222" font-size="12" fill="#1e293b">15 Compaction — 압축으로 토큰 절감</text>
+  <text x="709" y="242" font-size="12" fill="#1e293b">16 Self-Reflection · 17 Routing</text>
+  <text x="709" y="262" font-size="12" fill="#1e293b">18 Temporal · 19 Forgetting &amp; Decay</text>
+
+  <!-- ROW 2 -->
+  <!-- 4. Retrieval -->
+  <rect x="25" y="306" width="310" height="200" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="25" y="306" width="310" height="34" rx="10" fill="#f59e0b"/>
+  <rect x="25" y="323" width="310" height="17" fill="#f59e0b"/>
+  <text x="39" y="329" font-size="14.5" font-weight="700" fill="#ffffff">④ 검색 · 멀티에이전트</text>
+  <text x="321" y="329" font-size="12" font-weight="600" fill="#fef3c7" text-anchor="end">20–23</text>
+  <text x="39" y="363" font-size="12.5" fill="#475569">"무엇을 언제 꺼낼 것인가". 저장보다 검색이</text>
+  <text x="39" y="380" font-size="12.5" fill="#475569">체감 품질을 좌우한다.</text>
+  <text x="39" y="406" font-size="12" fill="#1e293b">20 Retrieval Patterns — 하이브리드+리랭크</text>
+  <text x="39" y="426" font-size="12" fill="#1e293b">21 Cross-Session — 유저별 상태 복원</text>
+  <text x="39" y="446" font-size="12" fill="#1e293b">22 Multi-Agent Shared — 공유 저장소·권한</text>
+  <text x="39" y="466" font-size="12" fill="#1e293b">23 Memory as Tools — 저장/검색/삭제를</text>
+  <text x="52" y="486" font-size="12" fill="#1e293b">에이전트 툴로 노출</text>
+
+  <!-- 5. Frameworks -->
+  <rect x="360" y="306" width="310" height="200" rx="10" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+  <rect x="360" y="306" width="310" height="34" rx="10" fill="#10b981"/>
+  <rect x="360" y="323" width="310" height="17" fill="#10b981"/>
+  <text x="374" y="329" font-size="14.5" font-weight="700" fill="#ffffff">⑤ 프레임워크 · 플랫폼</text>
+  <text x="656" y="329" font-size="12" font-weight="600" fill="#d1fae5" text-anchor="end">24–27</text>
+  <text x="374" y="363" font-size="12.5" fill="#475569">직접 구현 대신 도입 가능한 완제품 계층.</text>
+  <text x="374" y="380" font-size="12.5" fill="#475569">속도를 얻고 통제권을 내준다.</text>
+  <text x="374" y="406" font-size="12" fill="#1e293b">24 Graphiti — 시간 인식 지식 그래프</text>
+  <text x="374" y="426" font-size="12" fill="#1e293b">25 Mem0 — 관리형 추출·저장·검색 레이어</text>
+  <text x="374" y="446" font-size="12" fill="#1e293b">26 Letta(MemGPT) — 자기수정 3계층 메모리</text>
+  <text x="374" y="466" font-size="12" fill="#1e293b">27 Zep — 대화 분류 + 시간 그래프</text>
+  <text x="374" y="486" font-size="11.5" fill="#64748b">(MS 자료 추가: Cognee — 듀얼 스토어 시맨틱 메모리)</text>
+
+  <!-- 6. Production -->
+  <rect x="695" y="306" width="310" height="200" rx="10" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <rect x="695" y="306" width="310" height="34" rx="10" fill="#ef4444"/>
+  <rect x="695" y="323" width="310" height="17" fill="#ef4444"/>
+  <text x="709" y="329" font-size="14.5" font-weight="700" fill="#ffffff">⑥ 평가 · 프로덕션</text>
+  <text x="991" y="329" font-size="12" font-weight="600" fill="#fee2e2" text-anchor="end">28–30</text>
+  <text x="709" y="363" font-size="12.5" fill="#475569">"동작한다"를 숫자로 바꾸고 규모에서 버티게</text>
+  <text x="709" y="380" font-size="12.5" fill="#475569">만드는 운영 계층. B2C에서는 필수.</text>
+  <text x="709" y="406" font-size="12" fill="#1e293b">28 Evaluation — Precision/Recall/MRR,</text>
+  <text x="722" y="426" font-size="12" fill="#1e293b">staleness · 모순 탐지 · LLM-as-Judge</text>
+  <text x="709" y="446" font-size="12" fill="#1e293b">29 Benchmarks — LoCoMo / LongMemEval</text>
+  <text x="709" y="466" font-size="12" fill="#1e293b">30 Production — 캐싱·TTL·샤딩·GDPR·</text>
+  <text x="722" y="486" font-size="12" fill="#1e293b">관측성·비용 관리</text>
+
+  <text x="25" y="527" font-size="11.5" fill="#94a3b8">단기 → 장기 → 인지 → 검색 → (프레임워크) → 프로덕션 순으로 쌓아 올린다. 하위 패밀리 없이 상위만 도입하면 대부분 실패한다.</text>
+</svg>
