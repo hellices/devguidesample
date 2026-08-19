@@ -221,14 +221,7 @@ LLM이 **잘못된 가상 답변**을 생성하면, 검색은 정답이 아니�
 
 ## 참고 자료
 
-- [Agent_Memory_Techniques — 14 Memory Consolidation](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/14_memory_consolidation)
-- [Agent_Memory_Techniques — 17 Memory Routing](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/17_memory_routing)
-- [Agent_Memory_Techniques — 18 Temporal Memory](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/18_temporal_memory)
-- [Agent_Memory_Techniques — 19 Forgetting and Decay](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/19_forgetting_and_decay)
-- [Agent_Memory_Techniques — 20 Memory Retrieval Patterns](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/20_memory_retrieval_patterns)
-- [microsoft/ai-agents-for-beginners — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — knowledge agent 패턴, latency/cost 최적화
-- Ebbinghaus, H. (1885). *Memory: A Contribution to Experimental Psychology.*
-- Robertson &amp; Zaragoza (2009). *The Probabilistic Relevance Framework: BM25 and Beyond.*
-- Carbonell &amp; Goldstein (1998). *The Use of MMR, Diversity-Based Reranking.* ACM SIGIR
-- Gao et al. (2022). *Precise Zero-Shot Dense Retrieval without Relevance Labels (HyDE).* [arXiv:2212.10496](https://arxiv.org/abs/2212.10496)
-- Zhong et al. (2024). *MemoryBank: Enhancing Large Language Models with Long-Term Memory.* [arXiv:2305.10250](https://arxiv.org/abs/2305.10250)
+1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — knowledge agent 패턴, latency/cost 최적화
+2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 14(Consolidation) · 17(Routing) · 18(Temporal) · 19(Decay) · 20(Retrieval)
+3. [Mem0](https://github.com/mem0ai/mem0) — extraction → update 2단계 파이프라인 참고 구현
+4. [HyDE (arXiv:2212.10496)](https://arxiv.org/abs/2212.10496) · [MemoryBank (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) · Ebbinghaus(1885) 망각 공선

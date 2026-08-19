@@ -190,7 +190,6 @@
 
 ## 참고 자료
 
-- [NirDiamant/Agent_Memory_Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 30개 기법 / 6패밀리 분류, 기법별 노트북
-- [Agent_Memory_Techniques / docs/comparison.md](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md) — 30기법 비교 매트릭스 (persistence / retrieval / token cost)
-- [microsoft/ai-agents-for-beginners — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형 정의, Structured RAG, self-improving 패턴
-- [13-agent-memory.ipynb](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory.ipynb) — Mem0 + Azure AI Search 구현 예제
+1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형 정의, Structured RAG
+2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 30기법 / 6패밀리 · [비교 매트릭스](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md)
+3. [Memory Mechanism of LLM-Based Agents 서베이 (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501) — 학술적 분류 체계

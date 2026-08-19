@@ -344,10 +344,7 @@ C: Phase 2 메모리 (+ temporal decay + 거절 이력)
 
 ## 참고 자료
 
-- [NirDiamant/Agent_Memory_Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 30기법 전체
-  - [10 Semantic Memory](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/10_semantic_memory) · [09 Episodic Memory](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/09_episodic_memory)
-  - [18 Temporal Memory](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/18_temporal_memory) · [19 Forgetting and Decay](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/19_forgetting_and_decay)
-  - [20 Memory Retrieval Patterns](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/20_memory_retrieval_patterns) · [21 Cross-Session Memory](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/21_cross_session_memory)
-  - [30 Production Memory Patterns](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/30_production_memory_patterns)
-- [microsoft/ai-agents-for-beginners — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형, Structured RAG, self-improving 패턴
-- [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)
+1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형, Structured RAG, self-improving 패턴
+2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 09 · 10 · 18 · 19 · 20 · 21 · 30
+3. [Mem0](https://github.com/mem0ai/mem0) — user_id 스코프 개인화 참고 구현
+4. [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)

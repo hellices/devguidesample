@@ -72,13 +72,15 @@
 
 ---
 
-## 주요 참고 자료
+## 참고 자료
 
-- [NirDiamant/Agent_Memory_Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — Agent Memory 30기법 / 6패밀리, 실행 가능한 Jupyter 노트북
-  - [docs/architecture.md](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/architecture.md) — 5가지 아키텍처 패턴
-  - [docs/comparison.md](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md) — 30기법 비교 매트릭스
-- [microsoft/ai-agents-for-beginners — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형 정의, Structured RAG, self-improving 패턴
-  - [13-agent-memory.ipynb](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory.ipynb) — Mem0 + Azure AI Search
-  - [13-agent-memory-cognee.ipynb](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory-cognee.ipynb) — Cognee 지식 그래프
+| # | 자료 | 내용 |
+|---|------|------|
+| 1 | **[Microsoft — ai-agents-for-beginners / 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory)** | 메모리 유형 정의, Structured RAG, self-improving 패턴 |
+| 2 | [NirDiamant — Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) | 30기법 / 6패밀리, [아키텍처 패턴](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/architecture.md) · [비교 매트릭스](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md) |
+| 3 | [MemGPT 논문 (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) · [Letta docs](https://docs.letta.com) | 자기수정 3계층 메모리의 원형 |
+| 4 | [Mem0](https://github.com/mem0ai/mem0) | 관리형 메모리 레이어 (extraction → update) |
+| 5 | [Zep](https://github.com/getzep/zep) | 시간 인식 지식 그래프 기반 프로덕션 메모리 |
+| 6 | [Memory Mechanism of LLM-Based Agents 서베이 (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501) | 학술적 분류 체계 |
 
-문서별 상세 참고 자료는 각 문서 하단의 **참고 자료** 섹션에 정리되어 있다.
+문서별 상세 참고 자료는 각 문서 하단에 있다.

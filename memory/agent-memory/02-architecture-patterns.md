@@ -235,7 +235,7 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
 
 ## 참고 자료
 
-- [Agent_Memory_Techniques / docs/architecture.md](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/architecture.md) — 5가지 아키텍처 패턴 원문
-- [Agent_Memory_Techniques / docs/comparison.md](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md) — 30기법 persistence / retrieval / token cost 비교
-- Packer et al. (2023). *MemGPT: Towards LLMs as Operating Systems.* [arXiv:2310.08560](https://arxiv.org/abs/2310.08560)
-- Zhang et al. (2024). *A Survey on the Memory Mechanism of Large Language Model Based Agents.* [arXiv:2404.13501](https://arxiv.org/abs/2404.13501)
+1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory)
+2. [Agent Memory Techniques — 아키텍처 패턴](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/architecture.md) — 5패턴 원문
+3. [MemGPT 논문 (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) — Tiered / Full Cognitive 패턴의 원형
+4. [Memory Mechanism of LLM-Based Agents 서베이 (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501)

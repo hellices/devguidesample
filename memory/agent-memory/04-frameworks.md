@@ -208,13 +208,8 @@ TTL / Decay 정책        ┃
 
 ## 참고 자료
 
-- [Agent_Memory_Techniques — 24 Graph Memory with Graphiti](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/24_graph_memory_graphiti)
-- [Agent_Memory_Techniques — 25 Mem0 Patterns](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/25_mem0_patterns)
-- [Agent_Memory_Techniques — 26 Letta (MemGPT) Patterns](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/26_letta_memgpt_patterns)
-- [Agent_Memory_Techniques — 27 Zep Memory](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/27_zep_memory)
-- [microsoft/ai-agents-for-beginners — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — Mem0, Cognee, Azure AI Search, Agent Framework 세션 모델
-- [13-agent-memory-cognee.ipynb](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory-cognee.ipynb) — Cognee 지식그래프 구현 예제
-- [Mem0 docs](https://docs.mem0.ai) · [Mem0 GitHub](https://github.com/mem0ai/mem0)
-- [Letta (MemGPT) docs](https://docs.letta.com)
-- [Zep GitHub](https://github.com/getzep/zep)
-- Packer et al. (2023). *MemGPT: Towards LLMs as Operating Systems.* [arXiv:2310.08560](https://arxiv.org/abs/2310.08560)
+1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — Mem0 / Cognee / Azure AI Search / Agent Framework 세션 모델
+   · [Mem0 + Azure AI Search 노트북](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory.ipynb) · [Cognee 노트북](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory-cognee.ipynb)
+2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 24(Graphiti) · 25(Mem0) · 26(Letta) · 27(Zep)
+3. [Mem0](https://github.com/mem0ai/mem0) · [Letta docs](https://docs.letta.com) · [Zep](https://github.com/getzep/zep)
+4. [MemGPT 논문 (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560)

@@ -206,10 +206,8 @@ demote   → M턴 미접근 | relevance score 하락 | 세션 종료 | decay sco
 
 ## 참고 자료
 
-- [Agent_Memory_Techniques — 30 Production Memory Patterns](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/30_production_memory_patterns)
-- [Agent_Memory_Techniques — 28 Memory Evaluation](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/28_memory_evaluation)
-- [Agent_Memory_Techniques — 29 Memory Benchmarks (LoCoMo)](https://github.com/NirDiamant/Agent_Memory_Techniques/tree/main/all_techniques/29_memory_benchmarks_LoCoMo)
-- Maharana et al. (2024). *Evaluating Very Long-Term Conversational Memory of LLM Agents.* arXiv:2402.17753 · [LoCoMo GitHub](https://github.com/snap-research/LoCoMo)
-- Wu et al. (2024). *LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory.* arXiv:2410.10813 · [LongMemEval GitHub](https://github.com/xiaowu0162/LongMemEval)
-- Zheng et al. (2023). *Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena.* arXiv:2306.05685
-- [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)
+1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory)
+2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 28(Evaluation) · 29(Benchmarks) · 30(Production)
+3. [LoCoMo (arXiv:2402.17753)](https://arxiv.org/abs/2402.17753) · [LongMemEval (arXiv:2410.10813)](https://arxiv.org/abs/2410.10813) — 표준 벤치마크
+4. [Zep](https://github.com/getzep/zep) — 프로덕션 운영 기능을 내장한 관리형 대안
+5. [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)
