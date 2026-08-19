@@ -63,7 +63,7 @@
 | Phase | 내용 | 산출물 |
 |-------|------|--------|
 | **0** | 평가 하네스 + baseline + 이벤트 스키마 + PII·동의 게이트 | 측정 가능한 상태 |
-| **1** | Dual-Store (Redis + pgvector), 비동기 추출, hybrid search, constraint 하드 필터 | 되묻지 않는 에이전트 |
+| **1** | Dual-Store (Redis + pgvector), 비동기 추출, hybrid search, constraint 하드 필터, 기본 로깅 | 되묻지 않는 에이전트 |
 | **2** | Temporal Memory, Episodes, Consolidation, Decay, 개인화 강도 L1~L4 | 의도와 취향을 구분하는 추천 |
 | **3** | HOT/WARM 티어링, Structured RAG, Product Graph, 관측성 | 규모에서의 지연·비용 통제 |
 | **4** | Memory Routing, Procedural, Self-Reflection, COLD 아카이브 | 선택적 고도화 |

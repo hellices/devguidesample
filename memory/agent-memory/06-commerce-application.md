@@ -64,7 +64,7 @@
 | **constraint** | 위반하면 안 되는 하드 조건 | `pinned: true`, decay 면제, **추천 단계에서 하드 필터** | 알레르기, 사이즈, 예산 상한, 배송 불가 지역 |
 | **preference** | 소프트 선호 | long half-life (90~180일), 랭킹 가중치 | 브랜드 선호, 색상 취향, 가격대 |
 | **intent** | 지금의 구매 의도 | short half-life (수십 분~수시간) | "겨울 코트 찾는 중", "선물용" |
-| **context** | 상황 정보 | medium half-life | 자녀 연령, 반려동물 유무, 직업 |
+| **context** | 상황 정보 | very long half-life (180일+) | 자녀 연령, 반려동물 유무, 직업 |
 
 > **constraint를 랭킹 가중치로 다루면 안 된다.** 알레르기·사이즈는 점수가 아니라 **필터**여야 한다. 이 구분이 커머스 메모리 설계에서 가장 중요하다.
 
@@ -141,7 +141,7 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 | 2. Candidate Generation | 벡터 + BM25 병렬 → RRF 융합. 관련 기억 top-K + 상품 top-N | **20~50ms** | 없음 |
 | 3. Ranking & Hard Filter | constraint 위반 상품 제거 → temporal decay 가중 → MMR 다양성 | **< 10ms** | 없음 |
 | 4. Message Generation | 응답·추천 메시지 생성 | 모델 지연 | **1회** |
-| | **메모리 오버헤드 합계** | **35~65ms** | |
+| | **1~3단계 메모리 오버헤드 합계** | **최대 65ms** | |
 
 ### 실시간 경로에서 금지
 
@@ -190,11 +190,11 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 
 | 데이터 | 정책 | 값 |
 |--------|------|-----|
-| Session Intent | TTL | 30분 ~ 1시간 |
+| Session Intent | TTL | 30분 ~ 1시간 (커머스 세션 기준) |
 | constraint (알레르기·사이즈·예산) | **Pinned** — decay 면제 | — |
 | preference (브랜드·색상) | Long half-life | 90~180일 |
 | intent (지금 찾는 것) | Short half-life | 30분 ~ 수시간 |
-| context (자녀 연령 등) | Medium half-life | 180일+ |
+| context (자녀 연령 등) | Very long half-life | 180일+ |
 | Behavior Episodes | Medium half-life + 접근 시 reinforcement | 14~60일 |
 | rejected_recommendations | Session TTL + 유저별 쿨다운 로그는 30일 | — |
 | Product Graph | No decay (edge timestamp로 시간 추론) | — |
@@ -287,6 +287,7 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 - [ ] Cross-Session 복원 (재방문 유저 식별)
 - [ ] 하이브리드 검색 (vector + BM25 + RRF)
 - [ ] 추천 하드 필터 (constraint 위반 제거)
+- [ ] 기본 관측성 — 검색 지연·추출 실패·라우팅 결과 로깅
 - **기대 효과**: 되묻지 않는 에이전트, 기본 개인화 추천
 
 ### Phase 2 — 시간 인식과 유지보수

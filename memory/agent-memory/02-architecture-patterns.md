@@ -66,8 +66,8 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
 | 티어 | 저장소 | Azure 매핑 | 내용 | 지연 | 규모 |
 |------|--------|-----------|------|------|------|
 | **HOT** | 인메모리 dict / Redis | Azure Managed Redis | 현재 세션, pinned 사실, 워킹 컨텍스트 | < 1ms | 보통 20개 미만 |
-| **WARM** | 벡터 DB / KV 스토어 | Azure Database for PostgreSQL (pgvector), Azure AI Search, Cosmos DB | 최근 세션, 활성 엔티티, warm 요약 | ~10ms | 수백~수천 |
-| **COLD** | 오브젝트 스토리지 / 압축 아카이브 | Azure Blob Storage (Cool / Archive tier) | 과거 세션, 아카이브 엔티티, 압축 요약 | ~100ms | 수백만 |
+| **WARM** | 벡터 DB / KV 스토어 | Azure Database for PostgreSQL (pgvector), Azure AI Search, Cosmos DB | 최근 세션, 활성 엔티티, warm 요약 | 5~50ms | 수백~수천 |
+| **COLD** | 오브젝트 스토리지 / 압축 아카이브 | Azure Blob Storage (Cool / Archive tier) | 과거 세션, 아카이브 엔티티, 압축 요약 | 100ms+ | 수백만 |
 
 **Tier Manager (정책 엔진)** — 매 턴 후 또는 스케줄에 따라 실행
 
@@ -78,11 +78,12 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
   - 최근 N턴 내 참조됨        → HOT 유지
 
 강등(demote) 규칙
-  - M턴 동안 미접근           → 더 차가운 티어로
-  - 관련도 점수 낮음          → 강등 또는 아카이브
-  - 세션 종료                 → WARM으로
-  - decay score < 컷오프         → COLD로
+  - M턴 동안 미접근          → 더 차가운 티어로
+  - 관련도 점수 낮음         → 강등 또는 아카이브
+  - 세션 종료                → WARM으로
+  - decay score < 컷오프     → COLD로
 ```
+
 **데이터 흐름**
 1. 새 기억은 항상 HOT으로 진입
 2. 매 턴 종료 시 tier manager가 HOT 항목을 강등 규칙과 대조
@@ -98,7 +99,7 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
 | 티어별 성능 특성이 명확 | 저장소 3개 관리 |
 
 **적합**: 방대한 이력을 가진 장수 에이전트, 엄격한 지연 요구가 있는 프로덕션, 다수 유저를 서빙하는 엔터프라이즈 어시스턴트
-**실사례**: MemGPT의 archival/recall/core 계층, Anthropic의 Claude Code 7계층 메모리 계층 구조
+**실사례**: MemGPT의 archival / recall / core 계층, Anthropic Claude Code의 메모리 계층 구조
 
 ---
 
@@ -129,7 +130,7 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
 **적합**: 엔티티가 풍부한 도메인(CRM, 프로젝트 관리, 리서치), 엔티티 간 관계가 중요한 멀티유저 시스템
 **실사례**: Zep의 시간 지식 그래프, Graphiti(에피소드→시맨틱 그래프 추출), Microsoft GraphRAG, 커스텀 Neo4j + 벡터 파이프라인
 
-> **커머스 적합성 높음.** 상품·브랜드·카테고리·대체재 관계가 본질적으로 그래프다. 다만 Phase 1에서 도입하면 과설계다.
+> **커머스 적합성 높음.** 상품·브랜드·카테고리·대체재 관계가 본질적으로 그래프다. 다만 Phase 1~2에 도입하면 과설계다.
 
 ---
 
@@ -218,9 +219,11 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
 | 단계 | 권장 패턴 | 근거 |
 |------|----------|------|
 | **Phase 1** | Dual-Store | 세션 버퍼 + 유저별 장기 프로필. 최소 구현으로 개인화 시작 |
-| **Phase 2** | Dual-Store + Tiered (HOT/WARM만) | 유저 수 증가 시 지연·비용 방어. COLD는 나중에 |
-| **Phase 3** | + Graph-Augmented | 상품·브랜드 관계 기반 추천이 필요해질 때 |
+| **Phase 2** | Dual-Store 유지 + 시간 인식 강화 | 구조를 늘리기 전에 Temporal Memory·Consolidation·Decay로 품질을 먼저 올린다 |
+| **Phase 3** | + Tiered (HOT/WARM) + Graph-Augmented | 지연·비용이 실제 문제가 되고, 상품·브랜드 관계 추천이 필요해질 때. COLD는 그 다음 |
 | **Phase 4** | 필요 시 Full Cognitive | 라우터 도입은 저장소가 3개 이상, 오라우팅 모니터링 체계가 갖춰진 후 |
+
+이 Phase 구분은 [06. 커머스 적용 설계 §10 로드맵](06-commerce-application.md)과 동일한 기준이다. **티어링을 Phase 2로 당기지 않는 것**이 핵심이다 — 저장소를 나누기 전에 retention 정책과 평가 체계가 먼저 서야 한다.
 
 **Full Cognitive를 처음부터 짓지 말 것.** 이 패턴의 최대 약점으로 지목되는 것이 "오버엔지니어링 위험"이며, 라우터 오분류는 **조용히 실패한다**(데이터가 엉뚱한 저장소에 들어가 영영 검색되지 않음). 자체 프레임워크를 운영 중인 팀이라면 라우팅 계층을 얹기 전에 로깅·평가 체계부터 갖추는 편이 안전하다.
 

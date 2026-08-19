@@ -60,7 +60,9 @@
 | **Entity / Graph Memory** | **Neo4j** | Memgraph, NetworkX(소규모), 인메모리 트리플 | Cosmos DB for Apache Gremlin | 멀티홉 질의 빈도로 판단. 1-hop만 필요하면 RDB 조인이 더 싸다 |
 | **Persona Memory** | 설정 파일 / 프롬프트 템플릿 | core memory 블록 | Azure App Configuration | 반드시 버전 관리 대상. DB에 넣을 이유가 거의 없다 |
 | **Structured RAG** | **검색 엔진** | Elasticsearch, OpenSearch | Azure AI Search | 스키마가 명확 + 정밀 필터 + BM25가 필요할 때 |
-| **Cold Archive** | 오브젝트 스토리지 + 압축 | SQLite, Parquet | Azure Blob Storage (Cool / Archive tier) | 조회 빈도 극히 낮음. 삭제 대신 보존해야 하는 데이터 |
+| *(Cold Archive)* | 오브젝트 스토리지 + 압축 | SQLite, Parquet | Azure Blob Storage (Cool / Archive tier) | 조회 빈도 극히 낮음. 삭제 대신 보존해야 하는 데이터 |
+
+> Cold Archive는 메모리 **유형**이 아니라 **티어**다. 위 8유형 중 어떤 것이든 오래되면 이곳으로 내려간다.
 
 ### 티어별 저장소 매핑
 
@@ -79,10 +81,10 @@
                    + 유저 메타데이터
   → 저장소 2개로 개인화의 80%를 커버한다
 
-[ 확장 구성 — Phase 2~3 ]
+[ 확장 구성 — Phase 3 이후 ]
   + 검색 엔진     → Structured RAG (상품 카탈로그, 주문 정밀 질의)
   + Graph DB      → Entity/Graph Memory (관계 기반 추천)
-  + Object Store  → Cold Archive (감사·규제 보존)
+  + Object Store  → Cold Archive (감사·규제 보존, Phase 4)
 ```
 
 ---
@@ -111,6 +113,7 @@
 | Working Memory | Request-scoped | 없음 |
 | Short-term Memory | **TTL** | 30분 ~ 24시간 (세션 정의에 따름) |
 | Semantic — 제약/식별 정보 | **Pinned** (decay 면제) | 사이즈, 알레르기, 결제수단 |
+| Semantic — 상황 정보 | **Very long half-life** | 180일+ (자녀 연령, 직업) |
 | Semantic — 취향/선호 | **Long half-life** | 90~180일 |
 | Semantic — 세션 의도 | **Short half-life** | 30분 ~ 수시간 |
 | Episodic Memory | **Medium half-life** + 접근 시 reinforcement | 14~60일 |
@@ -132,7 +135,7 @@
 | 07 | **Entity** | 사람·상품·브랜드별 사실 레코드 | "이 유저의 사이즈는?" | RDB 테이블, KV 스토어 | 아주 작음 (엔티티당 1레코드) |
 | 08 | **Knowledge Graph** | 엔티티 간 관계 (edge) | "이 브랜드를 좋아한 사람이 같이 산 것은?" | Neo4j, Cosmos DB Gremlin | 아주 작음 (subgraph) |
 | 09 | **Episodic** | 시점·맥락을 포함한 완결된 상호작용 | "지난주에 무슨 일이 있었지?" | 벡터 인덱스 + filterable 메타데이터 | 아주 작음 (에피소드 요약) |
-| 10 | **Semantic** | 시점을 벗어난 일반화된 사실 | "이 유저에 대해 내가 아는 것은?" | pgvector + 정형 컲럼 | 아주 작음 (top facts) |
+| 10 | **Semantic** | 시점을 벗어난 일반화된 사실 | "이 유저에 대해 내가 아는 것은?" | pgvector + 정형 컬럼 | 아주 작음 (top facts) |
 | 11 | **Procedural** | "어떻게 하는지" — 절차·워크플로 | "이 유형의 요청은 어떻게 처리했더라?" | JSON/YAML 파일, RDB | 아주 작음 (절차 1개) |
 
 **Semantic vs Episodic 구분이 핵심이다.**
@@ -145,7 +148,13 @@
 
 ## 커머스 관점 우선순위
 
-실시간 추천 + 개인 맞춤 구매 유도라는 목표에 비춰 기법의 실효 순위를 매기면 다음과 같다.
+실시간 추천 + 개인 맞춤 구매 유도라는 목표에 비춰 기법의 실효 순위를 매기면 다음과 같다. Phase 번호는 [06. 커머스 적용 설계 §10 로드맵](06-commerce-application.md)과 같은 기준을 쓴다.
+
+### 선행 필수 (Phase 0)
+| 기법 | 이유 |
+|------|------|
+| 28 Evaluation | 개선 여부를 판단할 수단이 먼저다. 이것 없이 올린 개인화는 개선인지 악화인지 알 수 없다 |
+| 30 Production Patterns 중 **PII·동의 게이트** | 규제 리스크는 미룰수록 비싸진다. 나머지(티어링·관측성)는 Phase 3 |
 
 ### 반드시 필요 (Phase 1)
 | 기법 | 이유 |
@@ -163,14 +172,13 @@
 | 09 Episodic Memory | 조회/구매/반품 이벤트를 시점과 함께 보관 |
 | 14 Consolidation | 중복·모순 누적으로 인한 검색 품질 저하 방지 |
 | 19 Forgetting & Decay | 저장소 무한 증식 억제, 비용 통제 |
-| 28 Evaluation | 개선 여부를 숫자로 증명 |
-| 30 Production Patterns | PII·GDPR·티어링·관측성 |
 
 ### 선택적 (Phase 3+)
 | 기법 | 판단 기준 |
 |------|----------|
 | 07 Entity / 08 KG / 24 Graphiti | 상품·브랜드 관계 기반 추천이 필요할 때 |
-| 13 Hierarchical Layers | 유저 수와 지연 요구가 커졌을 때 |
+| 13 Hierarchical Layers | 유저 수와 지연 요구가 커졌을 때. HOT/WARM 티어링이 여기 해당 |
+| 30 Production Patterns 중 **티어링·관측성·샤딩** | 지연·비용이 실제로 문제가 된 뒤에 |
 | 11 Procedural / 16 Self-Reflection | 에이전트가 다단계 작업(반품 처리 등)을 수행할 때 |
 | 17 Memory Routing | 저장소가 3개 이상으로 늘고 나서. **읽기 경로에 넣으면 안 됨** (LLM 분류 200~500ms) |
 | 22 Multi-Agent Shared | 에이전트가 여러 개로 분화됐을 때 |

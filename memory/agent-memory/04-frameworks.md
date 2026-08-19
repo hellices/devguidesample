@@ -104,7 +104,7 @@ memory.get_all(user_id="...")         # 유저 전체 프로필 조회
 
 **Living memory**: 진화·성장하면서도 **하나의 연결된 그래프로 질의 가능한 상태**를 유지. 단기 세션 컨텍스트와 장기 영속 메모리를 모두 지원.
 
-참고 노트북 [13-agent-memory-cognee.ipynb](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory-cognee.ipynb)은 다양한 데이터 소스 수집 · 지식 그래프 시각화 · 니즈별 검색 전략 질의를 다룬다.
+같은 저장소의 [Cognee 노트북](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory-cognee.ipynb)은 다양한 데이터 소스 수집 · 지식 그래프 시각화 · 니즈별 검색 전략 질의를 다룬다.
 
 ---
 
@@ -131,7 +131,7 @@ Mem0 같은 전용 메모리 도구 대신, **검색 서비스를 메모리 백�
 - **Short-term memory = `AgentSession`** (`agent.create_session()`으로 생성). 프레임워크의 내장 단기 메모리로, **동일 세션이 재사용되는 동안만** 대화 컨텍스트를 유지한다.
 - **세션이 끝나거나 애플리케이션이 재시작되면 컨텍스트는 영속되지 않는다.**
 - 세션을 넘어 살아남아야 하는 사실·선호는 **장기 메모리**로 — 보통 데이터베이스, 벡터 인덱스, 또는 다른 영속 저장소를 통해 처리한다.
-- 이 외에 **Whiteboard memory** 도 도구로 언급된다.
+- 여러 에이전트가 공유하는 작업 공간이 필요하면 **Whiteboard memory**를 별도 도구로 제공한다.
 
 > 자체 프레임워크를 쓰는 팀에게 이 구분이 그대로 적용된다. **세션 객체는 단기 메모리일 뿐이며, 장기 메모리는 별도 저장소로 반드시 분리해야 한다.**
 

@@ -67,13 +67,13 @@
 
 ### Forgetting & Decay (기법 19) — 의도적 망각
 
-Ebbinghaus 망각 공선(1885)의 exponential decay를 적용한다.
+Ebbinghaus 망각 곡선(1885)의 exponential decay를 적용한다.
 
 ```
 S(t) = S₀ · e^(−λ · t)
 ```
 
-- λ가 클수록 빨리 잊는다. 실무 half-life는 **도메인에 따라 1~30일**
+- λ가 클수록 빨리 잊는다. **half-life는 도메인과 기억 유형에 따라 수십 분에서 수백 일까지 벌어진다** — 단일 값을 쓰면 안 된다. 유형별 권장치는 [01. 메모리 분류 체계의 Retention 정책 표](01-memory-taxonomy.md)와 [06. 커머스 적용 설계 §6](06-commerce-application.md) 참조
 - **접근 시 강화(reinforcement)**: 검색될 때마다 강도 부스트 → 자주 유용한 기억은 오래 살아남음
 - **프루닝 임계값**: 미만이면 soft delete(아카이브) 또는 hard delete
 - **저장 압력 모니터**가 임계값을 동적으로 조정 → 용량 한계 근접 시 더 공격적으로 망각
@@ -112,7 +112,7 @@ Forgetting & Decay가 **프루닝**이라면, Temporal Memory는 **검색 시 �
 
 **한계**
 - **에버그린 사실이 부당하게 페널티를 받는다** (수식·API 문서·회사 정책). decay 면제 또는 매우 긴 half-life 필요
-- half-life와 recency weight 선택에 실험이 필요. 너무 짧으면 건망증, 너무 길면 무의미
+- half-life와 recency weight 선택에 실험이 필요하다. 너무 짧으면 건망증, 너무 길면 무의미
 - 매 질의마다 전체 후보에 decay score 계산 → **10만 항목 이상에서 순수 벡터 검색 대비 지연 증가**
 - 정확한 타임스탬프를 전제. 순서 뒤바뀐 도착이나 클록 스큐가 잘못된 최신성 점수를 만듦
 
@@ -154,7 +154,7 @@ Forgetting & Decay가 **프루닝**이라면, Temporal Memory는 **검색 시 �
 - 벡터 검색 단독: **20~50ms**
 - 풀 파이프라인(vector + BM25 + rerank + MMR): **200~500ms**
 - 하이브리드 검색만으로 통상 벤치마크에서 **리콜 15~30% 개선**
-- **50개 미만 저장소**에서는 풀 파이프라인 이득이 거의 없다. 기본 코사인 검색으로 충분
+- 저장된 기억이 **50건 미만**이면 풀 파이프라인 이득이 거의 없다. 기본 코사인 검색으로 충분
 - 튜닝 파라미터가 많다(RRF의 k 상수, MMR lambda, 단계별 후보 수) → 오설정 위험
 
 ### HyDE의 위험
@@ -224,4 +224,4 @@ LLM이 **잘못된 가상 답변**을 생성하면, 검색은 정답이 아니�
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — knowledge agent 패턴, latency/cost 최적화
 2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 14(Consolidation) · 17(Routing) · 18(Temporal) · 19(Decay) · 20(Retrieval)
 3. [Mem0](https://github.com/mem0ai/mem0) — extraction → update 2단계 파이프라인 참고 구현
-4. [HyDE (arXiv:2212.10496)](https://arxiv.org/abs/2212.10496) · [MemoryBank (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) · Ebbinghaus(1885) 망각 공선
+4. [HyDE (arXiv:2212.10496)](https://arxiv.org/abs/2212.10496) · [MemoryBank (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) · Ebbinghaus(1885) 망각 곡선
