@@ -13,7 +13,7 @@
 | **Reflective** | 과거 행동과 결과로부터 학습 | 지난번 추천이 거절당한 이유를 반영 |
 | **Interactive** | 진행 중인 대화의 맥락 유지 | "그거 말고 다른 색"이 무엇을 가리키는지 이해 |
 | **Proactive / Reactive** | 이력 기반으로 니즈를 예측하거나 적절히 반응 | 재구매 주기 도래 시 선제 제안 |
-| **Autonomous** | 저장된 지식으로 더 독립적으로 동작 | 매번 사이즈를 되묻지 않음 |
+| **Autonomous** | 저장된 지식으로 더 독립적으로 동작 | 매번 통신사·약정 조건을 되묻지 않음 |
 
 더 직설적으로 말하면, 메모리가 없는 에이전트는 매번 컨텍스트를 처음부터 재유도해야 하고 **개인화도 학습도 장기적 일관성도 성립하지 않는다.**
 
@@ -112,8 +112,8 @@
 |------|---------------|--------------|
 | Working Memory | Request-scoped | 없음 |
 | Short-term Memory | **TTL** | 30분 ~ 24시간 (세션 정의에 따름) |
-| Semantic — 제약/식별 정보 | **Pinned** (decay 면제) | 사이즈, 알레르기, 결제수단 |
-| Semantic — 상황 정보 | **Very long half-life** | 180일+ (자녀 연령, 직업) |
+| Semantic — 제약/식별 정보 | **Pinned** (decay 면제) | 약정·통신사, 호환 규격, 결제수단 |
+| Semantic — 상황 정보 | **Very long half-life** | 180일+ (사용 목적, 주거 형태) |
 | Semantic — 취향/선호 | **Long half-life** | 90~180일 |
 | Semantic — 세션 의도 | **Short half-life** | 30분 ~ 수시간 |
 | Episodic Memory | **Medium half-life** + 접근 시 reinforcement | 14~60일 |
@@ -132,7 +132,7 @@
 | # | 기법 | 저장하는 것 | 답할 수 있는 질문 | 저장소 | Token Cost |
 |---|------|-----------|-----------------|--------|-----------|
 | 06 | **Vector Store** | 과거 메시지를 임베딩 | "의미가 비슷한 게 뭐였지?" | pgvector, Qdrant, Chroma | K개 상수 |
-| 07 | **Entity** | 사람·상품·브랜드별 사실 레코드 | "이 유저의 사이즈는?" | RDB 테이블, KV 스토어 | 아주 작음 (엔티티당 1레코드) |
+| 07 | **Entity** | 사람·상품·브랜드별 사실 레코드 | "이 유저의 통신사는?" | RDB 테이블, KV 스토어 | 아주 작음 (엔티티당 1레코드) |
 | 08 | **Knowledge Graph** | 엔티티 간 관계 (edge) | "이 브랜드를 좋아한 사람이 같이 산 것은?" | Neo4j, Cosmos DB Gremlin | 아주 작음 (subgraph) |
 | 09 | **Episodic** | 시점·맥락을 포함한 완결된 상호작용 | "지난주에 무슨 일이 있었지?" | 벡터 인덱스 + filterable 메타데이터 | 아주 작음 (에피소드 요약) |
 | 10 | **Semantic** | 시점을 벗어난 일반화된 사실 | "이 유저에 대해 내가 아는 것은?" | pgvector + 정형 컬럼 | 아주 작음 (top facts) |
@@ -161,7 +161,7 @@
 |------|------|
 | 04 Summary Buffer / 05 Token Buffer | 세션 내 대화 예산 관리. 없으면 컨텍스트 오버플로 |
 | 06 Vector Store | 모든 장기 기억의 기반 저장소 |
-| 10 Semantic Memory | 선호·제약(사이즈/알레르기/예산)의 저장 형태 |
+| 10 Semantic Memory | 선호·제약(약정·호환 규격·가입 조건)의 저장 형태 |
 | 21 Cross-Session | 재방문 유저 식별과 상태 복원 — 개인화의 전제 |
 | 20 Retrieval Patterns | 검색 품질이 체감 품질을 좌우 |
 

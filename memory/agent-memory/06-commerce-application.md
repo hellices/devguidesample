@@ -17,7 +17,7 @@
 | 원칙 | 내용 |
 |------|------|
 | **읽기와 쓰기를 분리한다** | LLM을 쓰는 무거운 작업(extraction, consolidation, routing)은 전부 비동기 쓰기 경로로. 실시간 경로에는 LLM 호출을 **응답 생성 1회**만 남긴다 |
-| **Retention을 유형별로 분리한다** | "지금 사고 싶은 것"과 "원래 사이즈"를 같은 decay 정책에 넣으면 개인화가 무너진다 |
+| **Retention을 유형별로 분리한다** | "이번에 검토 중인 가격대"와 "약정·호환 조건"을 같은 decay 정책에 넣으면 개인화가 무너진다 |
 | **대화만이 메모리 입력이 아니다** | 조회·장바구니·구매·반품·CS 이벤트가 대화보다 강한 신호다. 처음부터 동일 스키마로 흡수해야 한다 |
 | **틀린 기억은 없는 기억보다 나쁘다** | 커머스에서 오기억 1회는 신뢰를 크게 깎는다. Confidence를 반드시 함께 저장하고, 낮으면 확인 루프를 태운다 |
 
@@ -36,8 +36,8 @@
     {
       "fact_id": "f_001",
       "type": "constraint",        // constraint | preference | intent | context
-      "key": "allergy",
-      "value": "땅콩",
+      "key": "carrier",
+      "value": "SKT (약정 2026-11 만료)",
       "confidence": 1.0,
       "source": "explicit",        // explicit | inferred | behavioral
       "pinned": true,              // decay 면제
@@ -48,10 +48,10 @@
     {
       "fact_id": "f_002",
       "type": "preference",
-      "key": "brand_affinity",
-      "value": "브랜드A",
+      "key": "form_factor",
+      "value": "foldable",
       "confidence": 0.7,
-      "source": "behavioral",      // 구매 3회에서 추론
+      "source": "behavioral",      // 조회·구매 이력에서 추론
       "pinned": false,
       "half_life_days": 120
     }
@@ -61,12 +61,14 @@
 
 | type | 의미 | 정책 | 예시 |
 |------|------|------|------|
-| **constraint** | 위반하면 안 되는 하드 조건 | `pinned: true`, decay 면제, **추천 단계에서 하드 필터** | 알레르기, 사이즈, 예산 상한, 배송 불가 지역 |
-| **preference** | 소프트 선호 | long half-life (90~180일), 랭킹 가중치 | 브랜드 선호, 색상 취향, 가격대 |
-| **intent** | 지금의 구매 의도 | short half-life (수십 분~수시간) | "겨울 코트 찾는 중", "선물용" |
-| **context** | 상황 정보 | very long half-life (180일+) | 자녀 연령, 반려동물 유무, 직업 |
+| **constraint** | 미충족 시 **구매·사용 자체가 불가** | `pinned: true`, decay 면제, **추천 단계에서 하드 필터** | 통신사·약정 조건, eSIM 지원 여부, 보험 가입 대상 모델, 모니터 포트·VESA 규격, 가전 설치 치수 |
+| **preference** | 소프트 선호 | long half-life (90~180일), 랭킹 가중치 | 폴더블 선호, 고용량 스토리지 성향, 노트북 휴대성 우선 |
+| **intent** | 이번 구매 건에 한정 | short half-life (수십 분~수시간) | "노트북 찾는 중", **이번 건의 가격대**, 약정 만료에 따른 기기 변경 검토 |
+| **context** | 상황 정보 | very long half-life (180일+) | 기존 보유 갤럭시 기기, 사용 목적(업무용·학습용), 가구원 수·주거 형태 |
 
-> **constraint를 랭킹 가중치로 다루면 안 된다.** 알레르기·사이즈는 점수가 아니라 **필터**여야 한다. 이 구분이 커머스 메모리 설계에서 가장 중요하다.
+> **constraint를 랭킹 가중치로 다루면 안 된다.** 약정·호환 규격은 점수가 아니라 **필터**여야 한다. 이 구분이 커머스 메모리 설계에서 가장 중요하다.
+
+> **가격대(예산)는 constraint가 아니라 intent다.** 카테고리·프로모션에 따라 변동하므로 유저 단위로 고정 저장하지 않고, 세션 내에서만 하드 필터로 적용한다.
 
 ### B. Session Intent (Working / Short-term Memory)
 
@@ -74,11 +76,11 @@
 {
   "session_id": "s_456",
   "user_id": "u_123",
-  "current_category": "outerwear",
+  "current_category": "laptop",
   "compared_items": ["p_1", "p_2", "p_3"],
   "rejected_recommendations": ["p_9", "p_12"],   // 재노출 방지
-  "stated_budget": 200000,
-  "turn_summary": "겨울 코트, 방수 기능 원함, 20만원대",
+  "stated_price_range": [1500000, 2000000],      // 이번 건에 한정 — 세션 종료 시 소멸
+  "turn_summary": "13~14인치 노트북, 1kg 이하 무게 우선, 150~200만원대",
   "ttl_seconds": 3600
 }
 ```
@@ -94,12 +96,12 @@
   "event_type": "purchase",     // view | cart_add | cart_remove | purchase | return | cs_contact
   "product_id": "p_55",
   "event_time": "2026-07-14T...",
-  "metadata": { "size": "M", "price": 189000, "return_reason": null },
+  "metadata": { "storage": "512GB", "price": 1590000, "return_reason": null },
   "half_life_days": 30
 }
 ```
 
-**반품 사유는 특히 가치가 높다.** "사이즈가 작았다"는 반품 1건이 프로필의 `size` 사실을 갱신해야 한다.
+**반품 사유는 특히 가치가 높다.** "포트가 맞지 않았다"는 반품 1건이 프로필의 호환 조건 constraint를 갱신해야 한다.
 
 ### D. Product Graph (Entity / Graph Memory)
 
@@ -176,11 +178,11 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 
 | 행동 신호 | 추출 사실 | type | confidence |
 |----------|----------|------|-----------|
-| 동일 브랜드 3회 구매 | `brand_affinity: 브랜드A` | preference | 0.7 |
-| "사이즈 작음"으로 반품 | `size: 기존값 → 한 단계 위` | constraint | 0.9 |
+| 동일 제품 라인 3회 구매 | `line_affinity: Galaxy S 시리즈` | preference | 0.7 |
+| "포트 미호환"으로 모니터 반품 | `port_requirement: HDMI 필요` | constraint | 0.9 |
 | 특정 카테고리 10분 이상 체류 | `intent: 해당 카테고리 탐색 중` | intent | 0.6 |
 | 장바구니 담고 3회 이탈 | `price_sensitivity: high` | preference | 0.5 |
-| 명시 발언 "땅콩 알레르기 있어요" | `allergy: 땅콩` | constraint | 1.0 |
+| 명시 발언 "SKT 약정 남아 있어요" | `carrier: SKT (약정 중)` | constraint | 1.0 |
 
 **명시 발언(explicit)과 행동 추론(behavioral)의 confidence를 반드시 구분한다.** 추론된 사실을 구매 유도 메시지에 직접 인용하면 오기억 리스크가 커진다.
 
@@ -191,10 +193,10 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 | 데이터 | 정책 | 값 |
 |--------|------|-----|
 | Session Intent | TTL | 30분 ~ 1시간 (커머스 세션 기준) |
-| constraint (알레르기·사이즈·예산) | **Pinned** — decay 면제 | — |
-| preference (브랜드·색상) | Long half-life | 90~180일 |
-| intent (지금 찾는 것) | Short half-life | 30분 ~ 수시간 |
-| context (자녀 연령 등) | Very long half-life | 180일+ |
+| constraint (약정·호환·가입 조건) | **Pinned** — decay 면제 | — |
+| preference (제품 라인·색상·폼팩터) | Long half-life | 90~180일 |
+| intent (지금 찾는 것·이번 건 가격대) | Short half-life | 30분 ~ 수시간 |
+| context (사용 목적·주거 형태 등) | Very long half-life | 180일+ |
 | Behavior Episodes | Medium half-life + 접근 시 reinforcement | 14~60일 |
 | rejected_recommendations | Session TTL + 유저별 쿨다운 로그는 30일 | — |
 | Product Graph | No decay (edge timestamp로 시간 추론) | — |
@@ -209,7 +211,7 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 ### 추천 파이프라인
 
 ```
-1) HARD FILTER   ← constraint (알레르기·사이즈·예산·배송지)
+1) HARD FILTER   ← constraint (약정·호환 규격·가입 조건·설치 가능 지역) + 세션 가격대
                     위반 상품은 후보에서 제거. 점수화하지 않는다.
 2) CANDIDATE     ← 세션 의도 + 최근 에피소드 + 상품 카탈로그 (하이브리드 검색)
 3) RANKING       ← preference 가중치 × temporal decay × 비즈니스 규칙(재고·마진)
@@ -224,9 +226,9 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 | 단계 | 근거로 쓰는 기억 | 표현 예시 | 안전도 |
 |------|----------------|----------|--------|
 | **L1 — 일반** | 없음 | "이번 주 인기 상품이에요" | 안전 |
-| **L2 — 카테고리** | intent | "겨울 아우터 찾고 계셨죠" | 안전 |
-| **L3 — 선호** | preference (confidence ≥ 0.7) | "평소 즐겨 보시던 브랜드A 신상이에요" | 보통 |
-| **L4 — 이력** | episode (explicit) | "지난번 구매하신 코트와 잘 어울려요" | 주의 |
+| **L2 — 카테고리** | intent | "노트북 보고 계셨죠" | 안전 |
+| **L3 — 선호** | preference (confidence ≥ 0.7) | "평소 보시던 폴더블 신제품이 나왔어요" | 보통 |
+| **L4 — 이력** | episode (explicit) | "지난번 구매하신 갤럭시북과 함께 쓰기 좋아요" | 주의 |
 | **L5 — 정밀** | 세부 행동 로그 | "화요일 밤 11시에 보시던 그 상품이 할인 중이에요" | **금지** |
 
 **L5는 하지 않는다.** 기술적으로 가능하다는 것과 해도 된다는 것은 다르다. 과잉 개인화는 이탈을 부른다.
@@ -236,8 +238,8 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 `confidence < 0.7`인 추론 사실을 구매 유도에 쓰기 전에는 가볍게 확인한다.
 
 ```
-❌ "M 사이즈로 준비해드릴게요"            (추론된 사실을 단정)
-✅ "지난번처럼 M으로 보여드릴까요?"        (확인 + 자연스러움)
+❌ "512GB로 준비해드릴게요"                (추론된 사실을 단정)
+✅ "지난번처럼 512GB로 보여드릴까요?"       (확인 + 자연스러움)
 ```
 
 ---
@@ -247,7 +249,7 @@ Phase 3 이후. 1-hop만 필요하면 RDB 조인이 더 싸다는 점을 잊지 
 | 안티패턴 | 왜 문제인가 | 대응 |
 |---------|-----------|------|
 | 모든 기억에 동일 decay 적용 | 세션 의도가 취향을 밀어내거나, 그 반대가 발생 | 유형별 retention 분리 |
-| constraint를 랭킹 가중치로 처리 | 알레르기 상품이 상위에 노출될 수 있음 | 하드 필터로 처리 |
+| constraint를 랭킹 가중치로 처리 | 약정·호환이 맞지 않는 제품이 상위에 노출될 수 있음 | 하드 필터로 처리 |
 | 거절 이력 미기록 | 같은 추천 반복 → 피로도 | `rejected_recommendations` 필수 |
 | 추론 사실을 단정적으로 인용 | 오기억 1회로 신뢰 붕괴 | confidence 기반 확인 루프 |
 | 실시간 경로에 LLM 추출 | 지연 폭증 | 비동기 쓰기 경로로 이동 |
