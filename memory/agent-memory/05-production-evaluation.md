@@ -210,6 +210,8 @@ demote   → M턴 미접근 | relevance score 하락 | 세션 종료 | decay sco
 
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory)
 2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 28(Evaluation) · 29(Benchmarks) · 30(Production)
-3. [LoCoMo (arXiv:2402.17753)](https://arxiv.org/abs/2402.17753) · [LongMemEval (arXiv:2410.10813)](https://arxiv.org/abs/2410.10813) — 표준 벤치마크
-4. [Zep](https://github.com/getzep/zep) — 프로덕션 운영 기능을 내장한 관리형 대안
-5. [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)
+3. [LoCoMo — Evaluating Very Long-Term Conversational Memory of LLM Agents (arXiv:2402.17753)](https://arxiv.org/abs/2402.17753) — 35세녕·평균 300턴 대화 데이터셋과 평가 벤치마크
+4. [LongMemEval (arXiv:2410.10813, ICLR 2025)](https://arxiv.org/abs/2410.10813) — 5가지 메모리 능력 500문항. **indexing → retrieval → reading 3단계 분해 프레임워크** · [데이터셋](https://github.com/xiaowu0162/LongMemEval)
+5. [Mem0 (arXiv:2504.19413)](https://arxiv.org/abs/2504.19413) — full-context 대비 p95 지연·토큰 비용 감축폭 측정
+6. [Zep (arXiv:2501.13956)](https://arxiv.org/abs/2501.13956) — 프로덕션 운영 기능을 내장한 관리형 대안 · [구현](https://github.com/getzep/zep)
+7. [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)

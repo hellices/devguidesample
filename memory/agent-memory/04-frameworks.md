@@ -211,5 +211,7 @@ TTL / Decay 정책        ┃
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — Mem0 / Cognee / Azure AI Search / Agent Framework 세션 모델
    · [Mem0 + Azure AI Search 노트북](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory.ipynb) · [Cognee 노트북](https://github.com/microsoft/ai-agents-for-beginners/blob/main/13-agent-memory/13-agent-memory-cognee.ipynb)
 2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 24(Graphiti) · 25(Mem0) · 26(Letta) · 27(Zep)
-3. [Mem0](https://github.com/mem0ai/mem0) · [Letta docs](https://docs.letta.com) · [Zep](https://github.com/getzep/zep)
-4. [MemGPT 논문 (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560)
+3. [Mem0 (arXiv:2504.19413)](https://arxiv.org/abs/2504.19413) — 아키텍처와 LoCoMo 벤치마크 결과 · [구현](https://github.com/mem0ai/mem0)
+4. [Zep (arXiv:2501.13956)](https://arxiv.org/abs/2501.13956) — Graphiti 기반 시간 지식 그래프 구조와 DMR · LongMemEval 비교 · [구현](https://github.com/getzep/zep)
+5. [MemGPT (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) — core / recall / archival 3계층 원 논문 · [Letta docs](https://docs.letta.com)
+6. [GraphRAG (arXiv:2404.16130)](https://arxiv.org/abs/2404.16130) — 그래프 기반 검색의 비교 대상

@@ -240,5 +240,7 @@ CPU 캐시 계층(L1/L2/메인메모리)에서 착안했다. 접근 빈도·최�
 
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory)
 2. [Agent Memory Techniques — 아키텍처 패턴](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/architecture.md) — 5패턴 원문
-3. [MemGPT 논문 (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) — Tiered / Full Cognitive 패턴의 원형
-4. [Memory Mechanism of LLM-Based Agents 서베이 (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501)
+3. [MemGPT: Towards LLMs as Operating Systems (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) — **Tiered / Full Cognitive 패턴의 원형**. OS 계층 메모리에서 착안한 virtual context management
+4. [Zep: A Temporal Knowledge Graph Architecture for Agent Memory (arXiv:2501.13956)](https://arxiv.org/abs/2501.13956) — **Graph-Augmented 패턴의 프로덕션 구현**. 코어 엔진이 Graphiti다
+5. [GraphRAG (arXiv:2404.16130)](https://arxiv.org/abs/2404.16130) — 엔티티 그래프 인덱스 + 커뮤니티 요약 방식
+6. [A Survey on the Memory Mechanism of LLM based Agents (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501)

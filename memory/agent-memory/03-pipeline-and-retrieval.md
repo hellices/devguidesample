@@ -223,5 +223,9 @@ LLM이 **잘못된 가상 답변**을 생성하면, 검색은 정답이 아니�
 
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — knowledge agent 패턴, latency/cost 최적화
 2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 14(Consolidation) · 17(Routing) · 18(Temporal) · 19(Decay) · 20(Retrieval)
-3. [Mem0](https://github.com/mem0ai/mem0) — extraction → update 2단계 파이프라인 참고 구현
-4. [HyDE (arXiv:2212.10496)](https://arxiv.org/abs/2212.10496) · [MemoryBank (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) · Ebbinghaus(1885) 망각 곡선
+3. [Mem0 (arXiv:2504.19413)](https://arxiv.org/abs/2504.19413) — **extraction → update 2단계 파이프라인의 원 논문**. 비동기 추출이 p95 지연과 토큰 비용에 미치는 영향을 측정 · [구현](https://github.com/mem0ai/mem0)
+4. [MemoryBank (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) — **Ebbinghaus 망각 곡선을 decay·reinforcement에 적용한 원 논문**
+5. [HyDE — Precise Zero-Shot Dense Retrieval without Relevance Labels (arXiv:2212.10496)](https://arxiv.org/abs/2212.10496) — 가상 답변 생성 후 검색하는 쿼리 변환
+6. 융합·다양성 알고리즘 원 논문 (하이퍼링크 없음 — ACM DL 유료)
+   - RRF: Cormack, Clarke & Büttcher, *Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods*, SIGIR 2009
+   - MMR: Carbonell & Goldstein, *The Use of MMR, Diversity-Based Reranking for Reordering Documents and Producing Summaries*, SIGIR 1998

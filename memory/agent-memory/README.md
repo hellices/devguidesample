@@ -74,13 +74,28 @@
 
 ## 참고 자료
 
+### 1차 자료 — 이 리서치가 직접 기반한 문서
+
 | # | 자료 | 내용 |
 |---|------|------|
 | 1 | **[Microsoft — ai-agents-for-beginners / 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory)** | 메모리 유형 정의, Structured RAG, self-improving 패턴 |
 | 2 | [NirDiamant — Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) | 30기법 / 6패밀리, [아키텍처 패턴](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/architecture.md) · [비교 매트릭스](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md) |
-| 3 | [MemGPT 논문 (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) · [Letta docs](https://docs.letta.com) | 자기수정 3계층 메모리의 원형 |
-| 4 | [Mem0](https://github.com/mem0ai/mem0) | 관리형 메모리 레이어 (extraction → update) |
-| 5 | [Zep](https://github.com/getzep/zep) | 시간 인식 지식 그래프 기반 프로덕션 메모리 |
-| 6 | [Memory Mechanism of LLM-Based Agents 서베이 (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501) | 학술적 분류 체계 |
+
+### 근거 문헌 — 본문 개념·수치의 원 출처
+
+| # | 논문 | 본문에서 근거로 쓰인 부분 |
+|---|------|------------------------|
+| 3 | [MemGPT: Towards LLMs as Operating Systems (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) | Tiered / Full Cognitive 패턴, core·recall·archival 3계층 |
+| 4 | [Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory (arXiv:2504.19413)](https://arxiv.org/abs/2504.19413) | extraction → update 2단계 파이프라인, 비동기 처리의 지연·비용 효과 |
+| 5 | [Zep: A Temporal Knowledge Graph Architecture for Agent Memory (arXiv:2501.13956)](https://arxiv.org/abs/2501.13956) | Graph-Augmented 패턴, Graphiti 시간 인식 그래프 |
+| 6 | [MemoryBank: Enhancing LLMs with Long-Term Memory (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) | Ebbinghaus 망각 곡선 기반 decay와 접근 시 reinforcement |
+| 7 | [Generative Agents: Interactive Simulacra of Human Behavior (arXiv:2304.03442)](https://arxiv.org/abs/2304.03442) | memory stream, reflection, 최신성·중요도·관련도 3축 스코어링 |
+| 8 | [GraphRAG (arXiv:2404.16130)](https://arxiv.org/abs/2404.16130) | 엔티티 그래프 인덱스 + 커뮤니티 요약 |
+| 9 | [HyDE (arXiv:2212.10496)](https://arxiv.org/abs/2212.10496) | 가상 답변 생성 기반 쿼리 변환과 그 위험 |
+| 10 | [LoCoMo (arXiv:2402.17753)](https://arxiv.org/abs/2402.17753) · [LongMemEval (arXiv:2410.10813)](https://arxiv.org/abs/2410.10813) | 표준 벤치마크의 구성과 한계 |
+| 11 | [A Survey on the Memory Mechanism of LLM based Agents (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501) | 학술적 분류 체계 · [정리 저장소](https://github.com/nuster1128/LLM_Agent_Memory_Survey) |
+| 12 | [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/) | 전 계층 삭제 요구사항 |
+
+> **자료 활용 원칙.** 문서 본문의 서술은 1차 자료 2건을 기준으로 구성했고, 그 안에서 언급되거나 개념의 출처가 되는 논문을 확인해 근거 문헌으로 분리했다. 표의 모든 링크는 실제 접속해 제목·저자·연도를 확인했다. 다만 RRF(SIGIR 2009)와 MMR(SIGIR 1998)은 ACM DL 유료 문헌이라 [03. 파이프라인과 검색](03-pipeline-and-retrieval.md)에 서지 정보만 표기했다.
 
 문서별 상세 참고 자료는 각 문서 하단에 있다.

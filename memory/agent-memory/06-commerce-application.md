@@ -349,5 +349,7 @@ C: Phase 2 메모리 (+ temporal decay + 거절 이력)
 
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형, Structured RAG, self-improving 패턴
 2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 기법 09 · 10 · 18 · 19 · 20 · 21 · 30
-3. [Mem0](https://github.com/mem0ai/mem0) — user_id 스코프 개인화 참고 구현
-4. [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)
+3. [Mem0 (arXiv:2504.19413)](https://arxiv.org/abs/2504.19413) — user 스코프 개인화와 비동기 추출의 비용 효과 · [구현](https://github.com/mem0ai/mem0)
+4. [MemoryBank (arXiv:2305.10250)](https://arxiv.org/abs/2305.10250) — 유형별 decay와 접근 시 reinforcement의 근거
+5. [Generative Agents (arXiv:2304.03442)](https://arxiv.org/abs/2304.03442) — 최신성·중요도·관련도 3축 스코어링. 본문 RANKING 단계의 원형
+6. [GDPR Article 17 — Right to erasure](https://gdpr-info.eu/art-17-gdpr/)

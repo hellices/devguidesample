@@ -200,4 +200,6 @@
 
 1. [Microsoft — 13-agent-memory](https://github.com/microsoft/ai-agents-for-beginners/tree/main/13-agent-memory) — 메모리 유형 정의, Structured RAG
 2. [Agent Memory Techniques](https://github.com/NirDiamant/Agent_Memory_Techniques) — 30기법 / 6패밀리 · [비교 매트릭스](https://github.com/NirDiamant/Agent_Memory_Techniques/blob/main/docs/comparison.md)
-3. [Memory Mechanism of LLM-Based Agents 서베이 (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501) — 학술적 분류 체계
+3. [A Survey on the Memory Mechanism of LLM based Agents (arXiv:2404.13501)](https://arxiv.org/abs/2404.13501) — 학술적 분류 체계의 원 출처 · [정리 저장소](https://github.com/nuster1128/LLM_Agent_Memory_Survey)
+4. [Generative Agents (arXiv:2304.03442)](https://arxiv.org/abs/2304.03442) — memory stream과 reflection. **Episodic → Semantic 증류** 구조의 원형
+5. [MemGPT (arXiv:2310.08560)](https://arxiv.org/abs/2310.08560) — 계층형 메모리와 티어 개념
