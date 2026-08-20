@@ -1,5 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 600" width="1180" height="600" font-family="'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif">
   <rect width="1180" height="600" fill="#f8fafc"/>
+  <defs>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="ar-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6"/>
+    </marker>
+  </defs>
 
   <text x="20" y="34" font-size="21" font-weight="700" fill="#0f172a">메모리 시스템 아키텍처 5가지 패턴</text>
   <text x="20" y="58" font-size="13" fill="#64748b">왼쪽에서 오른쪽으로 갈수록 복잡도가 커진다. 패턴은 중첩된다 — Full Cognitive 안에 Graph-Augmented가, 그 안에 Dual-Store가 들어 있다.</text>
@@ -147,14 +155,5 @@
   <text x="970" y="530" font-size="11.5" font-weight="700" fill="#0f172a">적합</text>
   <text x="970" y="548" font-size="11.5" fill="#475569">수개월 축적되는 장수 에이전트</text>
 
-  <text x="20" y="588" font-size="11.5" fill="#94a3b8">실사례 매핑 — Single: LangChain VectorStoreRetrieverMemory · Dual: Mem0 · Tiered: MemGPT 계층, Anthropic 7-layer · Graph: Zep, Graphiti, GraphRAG · Cognitive: Letta/MemGPT, SOAR</text>
-
-  <defs>
-    <marker id="ar-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"/>
-    </marker>
-    <marker id="ar-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6"/>
-    </marker>
-  </defs>
+  <text x="20" y="588" font-size="11.5" fill="#94a3b8">실사례 매핑 — Single: LangChain VectorStoreRetrieverMemory · Dual: Mem0 · Tiered: MemGPT 계층, Anthropic Claude Code 계층 · Graph: Zep, Graphiti, GraphRAG · Cognitive: Letta/MemGPT, SOAR</text>
 </svg>

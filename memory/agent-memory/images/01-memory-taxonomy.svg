@@ -2,7 +2,7 @@
   <rect width="1030" height="540" fill="#f8fafc"/>
 
   <text x="25" y="36" font-size="21" font-weight="700" fill="#0f172a">Agent Memory 분류 체계 — 6개 패밀리 / 30개 기법</text>
-  <text x="25" y="60" font-size="13" fill="#64748b">각 패밀리는 서로 다른 문제를 푸는다. 하나의 기법이 다른 기법을 대체하지 않는다.</text>
+  <text x="25" y="60" font-size="13" fill="#64748b">각 패밀리는 서로 다른 문제를 해결한다. 하나의 기법이 다른 기법을 대체하지 않는다.</text>
 
   <!-- ROW 1 -->
   <!-- 1. Short-term -->
