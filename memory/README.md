@@ -35,9 +35,6 @@
 | [05. 프로덕션과 평가](agent-memory/05-production-evaluation.md) | 계층 저장, PII·GDPR, 관측성·비용, 평가 지표 및 표준 벤치마크 |
 | [06. 커머스 적용 설계](agent-memory/06-commerce-application.md) | **핵심 산출물** — 메모리 스키마, 지연 예산, 안티패턴, Phase 0~4 로드맵 |
 
-- 아키텍처 다이어그램 5종(SVG) 포함
-- 저장소 구성은 전 항목 **Azure 서비스 기준으로 매핑**하여 기술하였다
-
 ---
 
 ### 3. 메모리에는 어떤 종류가 있는가
