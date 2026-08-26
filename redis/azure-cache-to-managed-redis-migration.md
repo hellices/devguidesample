@@ -1,7 +1,8 @@
 # Azure Cache for Redis → Azure Managed Redis 마이그레이션 (GB 규모 실측)
 
 > Korea Central에 실제 리소스를 만들어 **3.77GB / 215만 키** 규모로 측정한 결과입니다.
-> 측정일 2026-08-27. 스크립트와 원본 결과 JSON은 [`migration-lab/`](migration-lab/)에 있습니다.
+> 측정일 2026-08-27 KST (결과 JSON의 타임스탬프는 UTC라 2026-08-26으로 찍혀 있습니다).
+> 스크립트와 원본 결과 JSON은 [`migration-lab/`](migration-lab/)에 있습니다.
 
 ---
 
@@ -312,18 +313,47 @@ Premium P1은 6GB로 표기되지만, `maxmemory-reserved`(642MB)와
 az redis show -n <acr-name> -g <rg> --query "redisConfiguration.{maxmemory:maxmemory, reserved:maxmemoryReserved, fragReserved:maxfragmentationmemoryReserved}"
 ```
 
+여기에 더해, ACR의 기본 축출 정책은 **`volatile-lru`** 입니다 (이 랩의 소스도 기본값 그대로였습니다).
+메모리가 한계에 닿으면 **TTL이 걸린 키를 조용히 지우고 쓰기는 성공한 것처럼 계속 받습니다.**
+하필 마이그레이션 중에 압박이 커집니다 — RDB Export의 fork가 메모리를 더 쓰고, 서비스 쓰기는 계속 들어옵니다.
+
+> 소스가 이미 `maxmemory` 근처에서 돌고 있다면, **마이그레이션을 시작하기 전에** 여유를 확보하세요.
+> (SKU 상향, 불필요한 키 정리, 또는 `maxmemory-policy`를 `noeviction`으로 바꿔 조용한 유실 대신 오류로 드러내기)
+> 이 랩은 축출량을 정량화하지 않았습니다. 메커니즘과 기본값만 확인한 항목입니다.
+
 ### 타깃: HA 복제본이 메모리를 두 배로 씁니다
 
-`highAvailability: Enabled`인 AMR은 복제본을 함께 두고, 이 복제본이 사용량 지표에 포함됩니다.
+`highAvailability: Enabled`인 AMR은 복제본을 함께 두고, **이 복제본이 사용량 지표에 그대로 포함됩니다.**
 
-| | 값 |
-|---|---|
-| 소스 `used_memory` | 3.77G |
-| 타깃 `used_memory` | **7.47G** (약 1.98배) |
-| Azure `usedmemory` 지표 | 약 7.95GB = Balanced_B5 용량의 **77%** |
+| 시점 | `usedmemory` 지표 | `usedmemorypercentage` |
+|---|---|---|
+| 단일 패스 복사 직후 | 8,364,071,328 B (7.79 GiB) | **81%** |
+| 반복 패스 최종 상태 | 8,036,226,283 B (7.48 GiB) | **77%** |
 
-**3.77GB짜리 데이터셋이 Balanced_B5의 77%를 차지합니다.** 소스 데이터 크기만 보고 SKU를 고르면
-전환 직후 메모리 압박을 겪습니다. HA를 켤 거라면 **데이터 크기의 2배 이상**으로 잡으세요.
+소스 데이터는 **3.77 GiB**인데 지표는 **7.48 GiB**로 잡힙니다. 정확히 **1.98배** — 복제본이 함께 세어진 값입니다.
+
+사용률의 분모도 표기 용량이 아닙니다. 위 두 관측치에서 역산하면 유효 용량은 **약 9.6~9.7 GiB**입니다.
+Balanced_B5(6 GiB)에 HA 2사본이면 12 GiB이고, 여기서 시스템 예약 약 20%를 빼면 `12 GiB × 0.8 = 9.60 GiB`.
+관측값과 **0.2% 이내로 일치**합니다.
+
+정리하면 실무에서 쓸 규칙은 하나입니다.
+
+> **AMR에 실제로 담을 수 있는 데이터는 SKU 표기 용량의 약 80%입니다.**
+> 3.77 GiB ÷ (6 GiB × 0.8 = 4.8 GiB) = 78.5% → 실측 77~81%와 맞습니다.
+
+**ACR의 데이터 크기를 같은 숫자의 AMR SKU에 1:1로 매핑하면 안 됩니다.**
+소스가 6GB SKU에서 4.5GB를 쓰고 있었다면, 6GB짜리 AMR은 이미 한계(4.8 GiB)에 붙습니다.
+
+```bash
+# 사이징 검증은 데이터베이스가 아니라 클러스터 리소스에서 합니다.
+# .../databases 네임스페이스에는 지표가 없습니다.
+az monitor metrics list \
+  --resource "$(az redisenterprise show -n <amr> -g <rg> --query id -o tsv)" \
+  --metric usedmemory usedmemorypercentage --aggregation Maximum --interval PT5M
+```
+
+원시 관측치는 [`results/amr-memory-sizing.json`](migration-lab/results/amr-memory-sizing.json)에 있습니다.
+다만 이 랩은 **B5 한 SKU에서만** 관측했습니다. 다른 SKU에도 같은 20% 예약이 적용되는지는 확인하지 않았습니다.
 
 ---
 
@@ -339,12 +369,15 @@ az redis show -n <acr-name> -g <rg> --query "redisConfiguration.{maxmemory:maxme
 | [`results/path-b-scan-copy.json`](migration-lab/results/path-b-scan-copy.json) | 단일 패스 복사와 48.47% 유실 |
 | [`results/path-b-repeat-pass.json`](migration-lab/results/path-b-repeat-pass.json) | 반복 패스 수렴과 111초 다운타임 하한 |
 | [`results/path-c-tooling.json`](migration-lab/results/path-c-tooling.json) | 마이그레이션 도구 제약 (문서 인용) |
+| [`results/amr-memory-sizing.json`](migration-lab/results/amr-memory-sizing.json) | AMR 사용량 지표 원시값과 유효 용량 역산 |
 
 검증할 때 실제로 걸려 넘어졌던 함정 세 가지를 스크립트에 반영해 두었습니다.
 
 - **`EXISTS`로 유실을 세면 안 됩니다.** 키는 있는데 값이 옛것인 경우를 놓칩니다.
 - **`DUMP` 페이로드를 바이트 비교하면 안 됩니다.** RDB 버전 푸터 때문에 Redis 6 → 7.4에서는
-  값이 같아도 전부 불일치로 나옵니다. 실제로 1,994건 전부 "불일치"로 나왔다가, 타입별 값 비교로 바꾸니 98.93%가 일치했습니다.
+  값이 같아도 **표본 전체가 불일치로 나옵니다.** 타입별로 실제 값을 읽어 비교하도록 바꾸자
+  불일치 0건이 됐습니다 ([`path-b-scan-copy.json`](migration-lab/results/path-b-scan-copy.json):
+  표본 2,496 중 일치 2,482 · 불일치 0 · 타깃에 없음 14).
 - **표본을 `SCAN` 앞부분에서 뽑으면 안 됩니다.** 먼저 적재된 키에 표본이 쏠려 뒤쪽 유실을 놓칩니다. `RANDOMKEY`를 쓰세요.
 
 ---
@@ -358,6 +391,9 @@ az redis show -n <acr-name> -g <rg> --query "redisConfiguration.{maxmemory:maxme
 - **Azure 마이그레이션 도구의 실동작** — 프라이빗 엔드포인트 환경이라 대상 밖 ([6절](#6-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다))
 - **비용 비교** — SKU별 단가는 리전·계약·시점에 따라 달라집니다. [Azure 가격 계산기](https://azure.microsoft.com/pricing/calculator/)로 직접 확인하세요.
 - **Entra ID 인증 경로** — 이 랩은 액세스 키만 사용했습니다.
+- **마이그레이션 중 소스 축출량** — `volatile-lru` 기본값과 `OutOfMemoryError` 발생은 확인했지만,
+  축출된 키 수를 재현 가능한 형태로 기록하지 못했습니다 ([8절](#8-용량-산정--두-번-속습니다))
+- **B5 외 SKU의 메모리 예약 비율** — 20% 예약은 Balanced_B5 한 SKU에서만 역산했습니다
 
 ---
 
