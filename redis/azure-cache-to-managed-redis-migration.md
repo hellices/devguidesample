@@ -1,310 +1,371 @@
-# 🔄 Azure Cache for Redis → Azure Managed Redis 마이그레이션 가이드
+# Azure Cache for Redis → Azure Managed Redis 마이그레이션 (GB 규모 실측)
 
-**다운타임 최소화를 위한 마이그레이션 전략 및 실제 테스트 결과**
-
----
-
-## 📌 핵심 요약
-
-Azure Cache for Redis (ACR)에서 Azure Managed Redis (AMR)로 마이그레이션할 때, **클라이언트 코드 수정 없이** 3초 이내의 다운타임으로 데이터를 이전할 수 있습니다. 
-
-마이그레이션 전략은 원본 SKU에 따라 달라집니다:
-- **Premium ACR**: RDB Export/Import (10-30초 다운타임) ✅ **권장**
-- **Basic/Standard ACR**: Python/redis-cli 직접 복제 (3-10초 다운타임)
-- **무중단 전환**: Private DNS + Online Migration (거의 0초)
-
-본 문서는 실제 Azure 리소스로 진행한 테스트 결과를 바탕으로 한 **검증된 마이그레이션 전략**을 제공합니다.
+> Korea Central에 실제 리소스를 만들어 **3.77GB / 215만 키** 규모로 측정한 결과입니다.
+> 측정일 2026-08-27. 스크립트와 원본 결과 JSON은 [`migration-lab/`](migration-lab/)에 있습니다.
 
 ---
 
-## 🔍 문제 상황
+## 1. 결론 먼저
 
-### ACR에서 AMR로 이전해야 하는 이유
+"클라이언트 수정 없이, 다운타임 없이" 옮기고 싶다는 요구는 두 부분으로 나눠서 봐야 합니다.
+**클라이언트 수정 없이는 가능합니다. 다운타임 없이는 Azure가 해 주지 않습니다.**
 
-| 상황 | ACR의 제약 | AMR의 이점 |
-|------|-----------|-----------|
-| **고가용성** | Basic SKU: 단일 노드만 지원 ⚠️ | 모든 SKU: Zone-Redundant ✅ |
-| **백업** | Premium만 자동 백업 | 모든 SKU: 자동 백업 ✅ |
-| **보안** | Access Key만 지원 | Entra ID 통합 ✅ |
-| **관리** | 수동 관리 필요 | Azure Managed Service ✅ |
-| **확장** | 예측 불가능한 성능 변화 | 안정적인 리소스 격리 ✅ |
+| 요구 | 답 | 근거 |
+|---|---|---|
+| 클라이언트 코드 수정 없이 | **가능하다.** 단, AMR 데이터베이스를 `EnterpriseCluster` 정책으로 **생성할 때** 정해야 한다 | [3절](#3-clusteringpolicy-클라이언트-수정-여부를-가르는-유일한-설정) |
+| 다운타임 없이 | **Azure 기능만으로는 불가능하다.** 마이그레이션 도구는 데이터를 옮기지 않는다 | [6절](#6-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다) |
+| 부득이한 다운타임 최소화 | 이 규모에서 **약 111초**가 복사 방식의 하한. 더 줄이려면 애플리케이션 이중 쓰기 | [5.3절](#53-반복-복사로-유실이-얼마나-줄어드나), [7절](#7-권장-절차) |
 
-### 마이그레이션의 주요 과제
-
-1. **다운타임 최소화**: 서비스 중단 시간 제한
-2. **데이터 무결성**: 모든 데이터가 손실 없이 이전되어야 함
-3. **클라이언트 변경**: 코드 수정을 최소화
-4. **네트워크**: 연결 문자열 변경 관리
+그리고 가장 자주 놓치는 것 하나. **데이터 복사가 도는 동안 소스에 들어온 쓰기는 절반 가까이 사라집니다.**
+단일 복사 패스에서 실측 유실률은 **48.47%**였습니다. 키 개수만 비교하는 검증으로는 이게 잡히지 않습니다.
 
 ---
 
-## ✅ 마이그레이션 전략 비교
+## 2. 테스트 환경
 
-### 1️⃣ RDB Export/Import (권장 - Premium ACR)
+| 구성 | 값 |
+|---|---|
+| 리전 | Korea Central |
+| 소스 | Azure Cache for Redis **Premium P1 (6GB)**, Redis 6.0.14, 포트 6380 |
+| 소스 메모리 설정 | `maxmemory` 5.68G, `maxmemory-reserved` 642MB, `maxfragmentationmemory-reserved` 642MB |
+| 타깃 | Azure Managed Redis **Balanced_B5**, Redis 7.4.3, 포트 10000, HA `Enabled` |
+| 타깃 클러스터 정책 | `EnterpriseCluster` |
+| 마이그레이션 실행 호스트 | 같은 리전의 Linux VM (Standard_D4s_v5) |
+| 클라이언트 | Python `redis-py`, **비클러스터** `StrictRedis` (ACR에 붙일 때와 동일한 코드) |
 
-```
-ACR (Premium) → RDB Export → Blob Storage → AMR Import
-```
+데이터는 실제 캐시 워크로드에 가깝게 섞었습니다. 문자열 60%, 해시 15%, 리스트 10%, 정렬셋 10%,
+그리고 필드 10만 개짜리 큰 해시 50개. 값은 압축 가능한 JSON 70% / 난수 바이트 30%로 섞어
+RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에는 TTL을 걸었습니다.
 
-| 항목 | 값 |
-|------|-----|
-| **다운타임** | 10-30초 |
-| **요구사항** | Premium ACR SKU 필수 |
-| **복잡도** | 낮음 ✅ |
-| **자동화** | Portal 또는 CLI (az redis export/import) |
-| **검증** | Azure 공식 도구 |
+**적재 결과**: 2,839,833 키 / `used_memory` 4.50G를 242.5초에 적재 (11,712 keys/s).
+4.50G에서 `OutOfMemoryError`가 났습니다 — P1의 헤드라인 6GB에서 예약 영역 두 개(642MB × 2)를 빼면
+실제로 쓸 수 있는 건 4.4~4.75GB 수준입니다. **SKU 표기 용량을 그대로 믿고 사이징하면 안 됩니다.**
 
-**코드 예제**:
-```bash
-# 1. ACR에서 RDB 내보내기
-az redis export \
-  --name <acr-name> \
-  --resource-group <rg> \
-  --prefix "redis-backup" \
-  --container "https://<storage>.blob.core.windows.net/<container>?<sas-token>"
-
-# 2. AMR으로 RDB 가져오기
-az redisenterprise database import \
-  --cluster-name <amr-name> \
-  --resource-group <rg> \
-  --sas-uris "https://<storage>.blob.core.windows.net/<container>/<file>?<sas-token>"
-```
-
-### 2️⃣ 직접 복제 (Basic/Standard ACR) - 실제 검증됨
-
-```
-ACR (Basic/Standard) → Python redis-py → AMR
-```
-
-| 항목 | 값 |
-|------|-----|
-| **다운타임** | 3-10초 |
-| **요구사항** | Python 3.7+ |
-| **복잡도** | 중간 |
-| **자동화** | 완전 자동화 가능 ✅ |
-| **검증** | 이 테스트에서 실제 검증 |
-
-**코드 예제**:
-```python
-import redis
-import time
-
-# 연결
-acr = redis.StrictRedis(
-    host="<acr-name>.redis.cache.windows.net",
-    port=6380,
-    password="<access-key>",
-    ssl=True,
-    decode_responses=True
-)
-
-amr = redis.StrictRedis(
-    host="<amr-name>.koreacentral.redis.azure.net",
-    port=10000,
-    password="<access-key>",
-    ssl=True,
-    decode_responses=True
-)
-
-# 마이그레이션
-start = time.time()
-for key in acr.keys("*"):
-    key_type = acr.type(key)
-    
-    if key_type == "string":
-        amr.set(key, acr.get(key))
-    elif key_type == "hash":
-        amr.hset(key, mapping=acr.hgetall(key))
-    elif key_type == "list":
-        for item in acr.lrange(key, 0, -1):
-            amr.rpush(key, item)
-    # ... 기타 타입
-
-duration = time.time() - start
-print(f"Migrated in {duration:.2f}s")
-```
-
-### 3️⃣ Online Migration (무중단 - Private DNS 필수)
-
-```
-ACR ←→ Replication → AMR → DNS Cutover
-```
-
-| 항목 | 값 |
-|------|-----|
-| **다운타임** | ~0초 (DNS 레벨) |
-| **요구사항** | Private Endpoint + Private DNS Zone |
-| **복잡도** | 높음 (네트워크 구성) |
-| **자동화** | Portal UI 필수 |
-| **검증** | Azure 내장 기능 |
+이후 측정은 프로브 키 정리 등을 거친 **2,155,260 키 / 3.77G** 상태를 기준으로 합니다.
 
 ---
 
-## 🧪 실제 테스트 결과
+## 3. clusteringPolicy: 클라이언트 수정 여부를 가르는 유일한 설정
 
-### 테스트 환경
+AMR 데이터베이스는 `OSSCluster`와 `EnterpriseCluster` 중 하나의 클러스터링 정책을 갖습니다.
+`az redisenterprise database create`의 **기본값은 `OSSCluster`**입니다.
 
-| 구성 | 상세 |
-|------|------|
-| **소스** | Azure Cache for Redis (Basic C0) |
-| **타겟** | Azure Managed Redis (Balanced_B0) |
-| **리전** | Korea Central |
-| **테스트 방식** | Python redis-py 직접 복제 |
-| **데이터** | 7개 키 (Hash, String 혼합) |
+같은 비클러스터 클라이언트 코드로 두 정책에 각각 붙여 봤습니다.
 
-### 성능 측정
+| 동작 | `OSSCluster` (기본값) | `EnterpriseCluster` |
+|---|---|---|
+| 키 500개 `SET` | 대부분 `redis.exceptions.MovedError`로 실패 | **500/500 성공, MOVED 0건** |
+| 여러 키 `MGET` | `redis.exceptions.ClusterCrossSlotError` | 정상 |
+| 여러 키 `DEL` | `redis.exceptions.ClusterCrossSlotError` | 정상 |
+| `INFO`의 `cluster_enabled` | 1 | **0** |
 
-```
-마이그레이션 타임라인:
-  
-  시작: 2026-08-26 00:40:46.576 UTC
-  완료: 2026-08-26 00:40:49.642 UTC
-  
-  ✅ 총 소요 시간: 3.066초
-  ✅ 성공률: 7/7 키 (100%)
-  ✅ 에러: 0개
-```
+`EnterpriseCluster`는 클라이언트에게 단일 엔드포인트로 보입니다. ACR에서 쓰던 연결 코드가
+호스트·포트·키만 바꿔서 그대로 동작합니다. `OSSCluster`는 클라이언트를 클러스터 모드로 바꿔야 하고,
+크로스 슬롯 명령을 쓰는 애플리케이션 로직도 손봐야 합니다.
 
-### 데이터 무결성 검증
-
-**마이그레이션 전 (ACR)**:
-```
-7 keys:
-  - user:1000 (hash)     {name: Alice, email: alice@example.com, score: 100}
-  - user:1001 (hash)     {name: Bob, email: bob@example.com, score: 200}
-  - user:1002 (hash)     {name: Charlie, email: charlie@example.com, score: 150}
-  - session:s1 (string)  alice_session_token
-  - session:s2 (string)  bob_session_token
-  - config:app_version (string)  1.2.3
-  - config:feature_flag (string) enabled
-```
-
-**마이그레이션 후 (AMR)**:
-```
-✅ 동일한 7개 키 모두 일치
-✅ 모든 값이 정확히 복사됨
-✅ 데이터 무결성 100% 보장
-```
-
-### 규모별 예상 시간
+### 생성 후에는 바꿀 수 없습니다
 
 ```
-키당 평균 처리 시간: ~438ms (3066ms ÷ 7 키)
-
-예상 마이그레이션 시간:
-  - 100 키:    ~44초
-  - 1,000 키:  ~7분
-  - 10,000 키: ~70분
+$ az redisenterprise database update --clustering-policy EnterpriseCluster ...
+BadRequest: 'properties.clusteringPolicy' cannot be changed
 ```
 
----
-
-## 🔧 프로덕션 마이그레이션 단계
-
-### Phase 1: 사전 준비 (1-2주)
-
-#### 1.1 현재 환경 분석
+바꾸려면 데이터베이스를 삭제하고 다시 만들어야 합니다. 재생성한 데이터베이스는 **액세스 키 인증이 기본 비활성**이라
+다시 켜고 키를 새로 받아야 합니다.
 
 ```bash
-# ACR 상태 확인
-az redis show --name <acr-name> --query "{sku:sku, size:size_settings, memory_usage:usedMemory}"
-
-# 데이터 크기 확인
-redis-cli -h <acr-host> -p 6380 -a <password> --tls INFO memory
-```
-
-#### 1.2 AMR 리소스 생성
-
-```bash
-# AMR 클러스터 생성
-az redisenterprise create \
-  --name <amr-name> \
-  --resource-group <rg> \
-  --location <region> \
-  --sku Balanced_B0 \
-  --public-network-access Enabled
-
-# 데이터베이스 생성 및 설정
 az redisenterprise database create \
-  --cluster-name <amr-name> \
-  --resource-group <rg>
-
-# Access Key 활성화
-az redisenterprise database update \
-  --ids "<db-resource-id>" \
+  --cluster-name <amr-name> --resource-group <rg> \
+  --clustering-policy EnterpriseCluster \
   --access-keys-auth Enabled
 ```
 
-### Phase 2: 테스트 마이그레이션
+> 마이그레이션 계획에서 **가장 먼저** 확정해야 할 항목입니다. 데이터를 다 옮긴 뒤에 발견하면 처음부터 다시 해야 합니다.
+> 반대로 애플리케이션이 이미 클러스터 클라이언트를 쓰고 수평 확장이 목표라면 `OSSCluster`가 맞습니다.
 
-```bash
-# 테스트 데이터로 마이그레이션 검증
-python migrate_redis.py \
-  --source-host <acr-host> \
-  --target-host <amr-host> \
-  --dry-run
+---
+
+## 4. 경로 A: RDB Export / Import
+
+```
+ACR (Premium) --export--> Blob Storage --import--> AMR
 ```
 
-### Phase 3: 본 마이그레이션
+### 4.1 Export는 잘 됩니다
 
-```bash
-# 1. 최종 백업
-az redis export --name <acr-name> --prefix "final-backup" --container <sas-url>
+| 항목 | 값 |
+|---|---|
+| 소요 시간 | **186.99초** |
+| 결과 blob | 2,271,735,296 B (**2.12 GiB**) |
+| 인메모리 대비 | 약 47% (압축됨) |
+| 인증 | 시스템 할당 관리 ID |
 
-# 2. 마이그레이션 실행
-python migrate_redis.py \
-  --source-host <acr-host> \
-  --target-host <amr-host> \
-  --verify
+Export는 관리 ID를 지원하므로, 스토리지 계정이 공용 네트워크 접근을 막고 있어도
+신뢰할 수 있는 서비스 예외를 통해 동작합니다.
 
-# 3. 연결 문자열 전환
-export REDIS_HOST=<amr-host>
-export REDIS_PORT=10000
+### 4.2 Import는 이 환경에서 실패했습니다
 
-# 4. 애플리케이션 재시작
-kubectl rollout restart deployment/app
+```
+az redisenterprise database import --sas-uris "https://.../dump.rdb?<sas>"
+→ OperationFailed (128.97초 후)
 ```
 
----
+원인을 추적한 결과는 다음과 같습니다.
 
-## ⚠️ 주의사항
+1. `az redisenterprise database import`는 **`--sas-uris`만 지원**합니다. 관리 ID 인증 옵션이 없습니다.
+2. 테넌트에 걸린 Azure Policy(`MCAPSGovDeployPolicies`의 `StorageAccount_PublicNetwork_Modify`,
+   `StorageAccount_DisableLocalAuth_Modify`)가 **modify 효과**로 스토리지 계정의
+   `publicNetworkAccess=Disabled`와 `allowSharedKeyAccess=false`를 강제합니다.
+   포털·CLI·raw ARM PATCH로 되돌려도 조용히 원복됐습니다.
+3. SAS 트래픽은 관리 ID와 달리 **신뢰할 수 있는 서비스 우회 대상이 아닙니다.**
+   인터넷에서 해당 blob의 공용 URL에 접근하면 `HTTP 403 AuthorizationFailure`가 돌아옵니다.
 
-### ACR 제약사항
+즉 이 실패는 제품 결함이 아니라 **환경 정책과 Import API 인증 방식의 조합** 문제입니다.
 
-| 제약 | 영향 | 해결책 |
-|------|------|--------|
-| **Export 기능** | Basic/Standard에서 불가 | Premium 업그레이드 또는 직접 복제 |
-| **포트 고정** | SSL=6380, 변경 불가 | 클라이언트에서 포트 명시 필수 |
-| **TLS 1.0 지원** | 보안 위험 | 클라이언트 TLS 버전 업그레이드 필수 |
+> **시사점**: 규제가 걸린 구독에서는 경로 A가 막힐 수 있습니다.
+> 마이그레이션 계획을 세우기 전에 `az redisenterprise database import`를 작은 RDB로 **먼저 한 번 성공시켜 보세요.**
+> 스토리지 계정에 공용 네트워크 접근을 허용할 수 있는지, 공유 키 인증이 켜지는지가 관건입니다.
 
-### AMR 제약사항
-
-| 제약 | 영향 | 해결책 |
-|------|------|--------|
-| **TLS 1.2 필수** | TLS 1.0/1.1 클라이언트 연결 불가 | redis-cli/드라이버 업그레이드 |
-| **클러스터 정책** | MGET/SMOVE 등 크로스 슬롯 명령 불가 | 애플리케이션 로직 검증 필수 |
-| **비표준 포트** | 기본 데이터베이스는 10000 | 연결 문자열에서 포트 10000 명시 |
+이 문서는 Import 소요 시간을 측정하지 못했습니다. **모르는 값을 추정치로 쓰지 않았습니다.**
 
 ---
 
-## 📊 SKU 선택 가이드
+## 5. 경로 B: `SCAN` + `DUMP`/`RESTORE` 프로그래매틱 복사
 
-| ACR SKU | AMR 권장 | 비용 변화 |
-|---------|---------|----------|
-| Basic C0 | Balanced_B0 | $16/월 → $65/월 |
-| Standard C1 | Balanced_B1 | $65/월 → $100/월 |
-| Premium P1 | Balanced_B5 | $1,700/월 → $350/월 ✅ |
+Basic/Standard처럼 Export를 못 쓰거나, 경로 A가 정책으로 막힌 경우의 대안입니다.
+[`migration-lab/migrate_scan_copy.py`](migration-lab/migrate_scan_copy.py)가 하는 일은 다음과 같습니다.
+
+- `KEYS *` 대신 **`SCAN` 커서** — `KEYS`는 O(N) 블로킹 명령이라 수백만 키 인스턴스를 멈춥니다.
+- 타입별 `HGETALL`/`LRANGE` 대신 **`DUMP` → `RESTORE ... REPLACE`** — 타입에 무관하고 클라이언트 메모리도 덜 씁니다.
+- **`PTTL`을 함께 읽어 TTL을 보존** — 이걸 빠뜨리면 만료 예정 키가 영구 키가 됩니다.
+- 읽기·쓰기 모두 파이프라인(500개 단위)으로 묶어 왕복 지연을 상쇄합니다.
+
+Redis 6.0.14에서 만든 `DUMP` 페이로드를 Redis 7.4.3에 `RESTORE`하는 것은 정상 동작했습니다 (오류 0건).
+
+### 5.1 복사 자체는 빠르고 정확합니다
+
+| 항목 | 값 |
+|---|---|
+| 복사한 키 | 2,129,472 |
+| 소요 시간 | **130.2초** (약 16,400 keys/s) |
+| `RESTORE` 오류 | **0건** |
+| TTL 옮긴 키 | 470,774 |
+| TTL 보존 (표본 2,000) | **2,000 / 2,000 (유실 0%)** |
+| 값 무결성 (무작위 표본 2,496) | 일치 2,482, **불일치 0**, 타깃에 없음 14 |
+
+### 5.2 그런데 복사 중 들어온 쓰기의 48.47%가 사라집니다
+
+복사가 도는 동안 소스에 초당 약 140건씩 프로브 키를 쓰고, 각 프로브의 키와 쓰기 시각을 로컬에 기록했습니다.
+복사가 끝난 뒤 타깃에서 프로브를 **값까지** 대조했습니다.
+
+| 항목 | 값 |
+|---|---|
+| 기록한 프로브 | 22,644 |
+| 타깃에 정상 존재 | 11,668 |
+| 타깃에 없음 | **10,976** |
+| 타깃에 있으나 값이 옛것 | 0 |
+| **유실률** | **48.47%** |
+| 유실 구간 | 139.9초 (복사 시작 직후부터 끝까지) |
+
+왜 하필 절반일까요. `SCAN`은 키스페이스를 커서로 한 번 훑습니다.
+**커서가 이미 지나간 자리에 새로 쓰인 키는 이번 패스에서 복사되지 않습니다.**
+복사 도중 무작위 시점에 쓰인 키가 "아직 안 지나간 구간"에 떨어질 확률은 평균 50%입니다. 실측 48.47%가 그 값입니다.
+
+RDB Export도 같은 성질을 갖습니다. Export는 시작 시점의 스냅샷이므로 그 이후 쓰기는 담기지 않습니다.
+**복사 방식은 무엇이든 이 문제를 갖습니다.**
+
+> 소규모 테스트에서 이게 안 보이는 이유가 여기 있습니다. 키가 몇 개뿐이면 복사가 몇 초 만에 끝나서
+> 유실 구간이 사실상 없습니다. GB 규모에서는 이 구간이 **2분**입니다.
+
+### 5.3 반복 복사로 유실이 얼마나 줄어드나
+
+같은 복사를 여러 번 돌리면 이전 패스가 놓친 키를 다음 패스가 회수합니다. 실제로 해 봤습니다.
+
+| 패스 | 소스 쓰기 | 소요 시간 | 복사한 키 | 오류 | 그 시점의 누적 유실 |
+|---|---|---|---|---|---|
+| 1 | 진행 중 | 135.6초 | 2,130,079 | 0 | — |
+| 2 | 진행 중 | 109.9초 | 2,146,668 | 0 | **20.21%** (7,311 / 36,175) |
+| 3 | **차단** | 111.1초 | 2,155,260 | 0 | **0%** (0 / 37,456) |
+
+2회 패스 후 남은 유실 7,311건은 **전부 2번째 패스가 도는 동안 쓰인 키**였습니다
+(가장 이른 유실 시각이 2번째 패스 시작 시각과 일치). 1번째 패스가 놓친 것은 2번째 패스가 모두 회수했습니다.
+패스마다 "그 패스가 도는 동안 들어온 쓰기"의 약 절반이 남는 구조입니다.
+
+쓰기를 차단하고 최종 패스를 돌리자 결과는 깨끗했습니다.
+
+```
+소스: 2,155,260 키 (3.77G)
+타깃: 2,155,260 키 (7.47G)
+차이: 0
+
+프로브 유실:      0 / 37,456  (0.00%)
+TTL 보존:     2,000 / 2,000   (유실 0%)
+값 무결성:    2,497 / 2,497   (불일치 0)
+```
+
+**여기서 중요한 것**: 반복 패스는 **유실을 줄이지만 다운타임은 줄이지 못합니다.**
+이 스크립트는 델타만 옮기는 게 아니라 매번 **전수 재스캔**을 하기 때문에,
+쓰기를 차단한 최종 패스도 여전히 전체 키를 훑습니다. 그래서 **111초**가 그대로 다운타임이 됩니다.
+
+이 규모(215만 키 / 3.77GB, 같은 리전 VM에서 실행)에서 **복사 방식의 다운타임 하한은 약 111초**입니다.
+클라이언트가 다른 리전에 있거나 파이프라인 크기가 작으면 더 늘어납니다.
 
 ---
 
-## 🔗 참고 자료
+## 6. 경로 C: Azure 마이그레이션 도구는 데이터를 옮기지 않는다
 
-- [Azure Cache for Redis 마이그레이션](https://learn.microsoft.com/ko-kr/azure/azure-cache-for-redis/cache-migration-guide)
-- [Azure Managed Redis 개요](https://learn.microsoft.com/ko-kr/azure/azure-cache-for-redis/managed-redis/)
-- [redis-py 문서](https://redis-py.readthedocs.io/)
-- [Azure CLI - Redis](https://learn.microsoft.com/ko-kr/cli/azure/redis)
+"복제 기반 무중단 마이그레이션"을 기대하고 확인했지만, 그런 기능은 없습니다.
+
+Microsoft 공식 문서는 마이그레이션 경로를 두 가지로 제시합니다.
+**Option 1은 자체 마이그레이션(권장)**, **Option 2가 마이그레이션 도구(preview)**입니다.
+Option 2에 대한 문서의 제약 목록에는 다음이 그대로 적혀 있습니다.
+
+> **Data sync not supported.** This tooling will orchestrate hostname/endpoint migration but **does not migrate any data**.
+
+이 도구가 하는 일은 **미리 만들어 둔 AMR로 ACR의 호스트 이름을 넘기는 것**입니다.
+클라이언트는 같은 호스트 이름과 액세스 키로 재연결되면서 AMR에 붙습니다. 데이터는 별도로 옮겨야 합니다.
+
+리소스 공급자에 노출된 작업 이름도 이와 일치합니다.
+
+```
+$ az provider operation show --namespace Microsoft.Cache
+Microsoft.Cache/redis/getMigrationInfo/action
+Microsoft.Cache/redis/updateMigrationStatus/action
+Microsoft.Cache/redis/updateDnsForMigration/action
+Microsoft.Cache/redis/rollbackDnsForMigration/action
+```
+
+전부 DNS와 상태 조작입니다. 데이터 복제 관련 작업은 없습니다.
+
+### 문서에 명시된 그 밖의 제약
+
+| 제약 | 내용 |
+|---|---|
+| 전환 시점 통제 불가 | 마이그레이션을 시작할 수는 있지만 실제 트래픽 전환 시점은 고를 수 없다 |
+| 전체 동시 전환 | 하나의 Redis에 붙은 **모든** 애플리케이션이 동시에 넘어간다. 서비스 단위 점진 전환 불가 |
+| 롤백 창 제한 | 성공 후 검증·롤백 가능 시간이 짧다 |
+| 두 호스트명 병존 기간 제한 | 기존 ACR 호스트명은 이후 자동 삭제된다 |
+| 관리 작업 잠금 | 상태가 `Migrating`인 동안 다른 관리 작업이 차단된다 |
+| **프라이빗 엔드포인트 미지원** | 프라이빗 엔드포인트를 쓰는 캐시는 대상이 아니다 |
+| VNet 주입 캐시 미지원 | |
+| 지역 복제 캐시 미지원 | |
+| 설정 미복사 | 관리 ID, 방화벽 규칙, 지속성 설정, 업데이트 일정, 키스페이스 알림은 넘어가지 않는다 |
+
+프라이빗 엔드포인트를 쓰는 프로덕션 환경이라면 애초에 대상이 아닙니다.
 
 ---
 
-**테스트 완료**: 2026-08-26  
-**검증 상태**: ✅ 완료 (데이터 무결성 검증됨, 다운타임 3.066초 측정)
+## 7. 권장 절차
+
+### 7.1 쓰기 차단 창을 확보할 수 있다면 (가장 단순하고 검증됨)
+
+이 랩에서 무손실을 실증한 절차입니다.
+
+1. **AMR을 `EnterpriseCluster`로 생성**하고 액세스 키 인증을 켭니다. ([3절](#3-clusteringpolicy-클라이언트-수정-여부를-가르는-유일한-설정))
+2. 서비스를 그대로 둔 채 **복사를 1~2회 돌립니다.** 대부분의 데이터가 미리 넘어갑니다.
+3. **애플리케이션의 Redis 쓰기를 멈춥니다.** (배포 일시 중지, 쓰기 경로 차단, 또는 읽기 전용 모드)
+4. **최종 복사 패스를 돌립니다.** ← 이 구간이 실제 다운타임. 이 랩 기준 **약 111초 / 215만 키**
+5. 연결 문자열을 AMR로 바꾸고 애플리케이션을 재시작합니다. **포트가 6380 → 10000으로 바뀝니다.**
+6. 검증합니다. 키 개수만 보지 말고 **TTL과 값까지** 확인하세요. ([`verify_migration.py`](migration-lab/verify_migration.py))
+7. 문제가 없으면 ACR을 삭제합니다.
+
+다운타임을 미리 계산하려면 **자기 데이터로 4단계만 먼저 재 보세요.** 키 개수에 거의 선형으로 비례합니다.
+
+### 7.2 쓰기를 멈출 수 없다면: 애플리케이션 이중 쓰기
+
+> **이 항목은 이 랩에서 검증하지 않았습니다.** 설계 지침으로만 읽어 주세요.
+
+복사 방식으로는 다운타임을 111초 아래로 못 내립니다. 더 줄이려면 애플리케이션이 도와야 합니다.
+
+1. 애플리케이션을 **ACR과 AMR 양쪽에 쓰도록** 배포합니다. 읽기는 아직 ACR에서만 합니다.
+   AMR 쓰기 실패는 삼켜서 서비스에 영향이 없게 합니다.
+2. 이중 쓰기가 도는 상태에서 **과거 데이터를 복사**합니다. 이 시점부터의 신규 쓰기는 이미 양쪽에 들어가므로,
+   [5.2절](#52-그런데-복사-중-들어온-쓰기의-4847가-사라집니다)의 유실 구간이 사라집니다.
+3. 복사 후 검증합니다.
+4. **읽기를 AMR로 전환**합니다. 다운타임은 배포 롤아웃 시간뿐입니다.
+5. 안정화되면 ACR 쓰기를 제거하고 ACR을 삭제합니다.
+
+주의할 점:
+
+- `INCR`, `LPUSH`, `SETNX` 같은 **읽기-수정-쓰기 성격의 명령은 이중 쓰기로 정합성이 깨질 수 있습니다.**
+  카운터나 큐로 Redis를 쓰고 있다면 해당 키만 따로 처리해야 합니다. 순수 캐시 용도라면 문제되지 않습니다.
+- TTL도 양쪽에 동일하게 걸어야 합니다.
+- 2단계의 복사는 `RESTORE ... REPLACE`를 쓰므로, 이중 쓰기로 이미 들어간 **최신 값을 과거 값으로 덮어쓸 수 있습니다.**
+  복사를 먼저 끝내고 이중 쓰기를 켜거나, `RESTORE`에서 `REPLACE`를 빼는 쪽을 검토하세요.
+
+### 7.3 Azure 마이그레이션 도구를 쓸 경우
+
+호스트 이름을 유지하고 싶고 [6절](#6-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다)의 제약을 모두 받아들일 수 있을 때만 고려하세요.
+이 경우에도 **데이터는 7.1 또는 7.2로 별도 이관해야 합니다.**
+
+---
+
+## 8. 용량 산정 — 두 번 속습니다
+
+### 소스: SKU 표기 용량 ≠ 쓸 수 있는 용량
+
+Premium P1은 6GB로 표기되지만, `maxmemory-reserved`(642MB)와
+`maxfragmentationmemory-reserved`(642MB)를 빼면 실제 데이터는 4.4~4.75GB 선에서 한계에 부딪힙니다.
+이 랩에서도 4.50G에서 `OutOfMemoryError`가 났습니다.
+
+```bash
+az redis show -n <acr-name> -g <rg> --query "redisConfiguration.{maxmemory:maxmemory, reserved:maxmemoryReserved, fragReserved:maxfragmentationmemoryReserved}"
+```
+
+### 타깃: HA 복제본이 메모리를 두 배로 씁니다
+
+`highAvailability: Enabled`인 AMR은 복제본을 함께 두고, 이 복제본이 사용량 지표에 포함됩니다.
+
+| | 값 |
+|---|---|
+| 소스 `used_memory` | 3.77G |
+| 타깃 `used_memory` | **7.47G** (약 1.98배) |
+| Azure `usedmemory` 지표 | 약 7.95GB = Balanced_B5 용량의 **77%** |
+
+**3.77GB짜리 데이터셋이 Balanced_B5의 77%를 차지합니다.** 소스 데이터 크기만 보고 SKU를 고르면
+전환 직후 메모리 압박을 겪습니다. HA를 켤 거라면 **데이터 크기의 2배 이상**으로 잡으세요.
+
+---
+
+## 9. 재현하기
+
+[`migration-lab/`](migration-lab/)에 스크립트와 결과 JSON이 있습니다. 실행 방법은
+[`migration-lab/README.md`](migration-lab/README.md)를 보세요.
+
+| 파일 | 내용 |
+|---|---|
+| [`results/clustering-policy.json`](migration-lab/results/clustering-policy.json) | OSSCluster vs EnterpriseCluster 실측 |
+| [`results/path-a-rdb.json`](migration-lab/results/path-a-rdb.json) | Export 성공 / Import 실패와 근본 원인 |
+| [`results/path-b-scan-copy.json`](migration-lab/results/path-b-scan-copy.json) | 단일 패스 복사와 48.47% 유실 |
+| [`results/path-b-repeat-pass.json`](migration-lab/results/path-b-repeat-pass.json) | 반복 패스 수렴과 111초 다운타임 하한 |
+| [`results/path-c-tooling.json`](migration-lab/results/path-c-tooling.json) | 마이그레이션 도구 제약 (문서 인용) |
+
+검증할 때 실제로 걸려 넘어졌던 함정 세 가지를 스크립트에 반영해 두었습니다.
+
+- **`EXISTS`로 유실을 세면 안 됩니다.** 키는 있는데 값이 옛것인 경우를 놓칩니다.
+- **`DUMP` 페이로드를 바이트 비교하면 안 됩니다.** RDB 버전 푸터 때문에 Redis 6 → 7.4에서는
+  값이 같아도 전부 불일치로 나옵니다. 실제로 1,994건 전부 "불일치"로 나왔다가, 타입별 값 비교로 바꾸니 98.93%가 일치했습니다.
+- **표본을 `SCAN` 앞부분에서 뽑으면 안 됩니다.** 먼저 적재된 키에 표본이 쏠려 뒤쪽 유실을 놓칩니다. `RANDOMKEY`를 쓰세요.
+
+---
+
+## 10. 이 문서가 측정하지 않은 것
+
+숫자를 추정으로 채우지 않았습니다. 다음은 미측정입니다.
+
+- **RDB Import 소요 시간** — 환경 정책으로 Import 자체가 막혀 측정 불가 ([4.2절](#42-import는-이-환경에서-실패했습니다))
+- **이중 쓰기 방식의 실제 다운타임** — 설계 지침으로만 기술 ([7.2절](#72-쓰기를-멈출-수-없다면-애플리케이션-이중-쓰기))
+- **Azure 마이그레이션 도구의 실동작** — 프라이빗 엔드포인트 환경이라 대상 밖 ([6절](#6-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다))
+- **비용 비교** — SKU별 단가는 리전·계약·시점에 따라 달라집니다. [Azure 가격 계산기](https://azure.microsoft.com/pricing/calculator/)로 직접 확인하세요.
+- **Entra ID 인증 경로** — 이 랩은 액세스 키만 사용했습니다.
+
+---
+
+## 11. 참고 자료
+
+- [Migration options — Basic/Standard/Premium → Azure Managed Redis](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options)
+- [Self-service migration](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-self-service)
+- [Azure Managed Redis 클러스터링 정책](https://learn.microsoft.com/azure/redis/architecture#clustering-policy)
+- [Azure Cache for Redis 메모리 정책](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-configure#memory-policies)
+- [Redis migration agent skill (GitHub)](https://github.com/AzureManagedRedis/amr-migration-skill)
+- [`SCAN`](https://redis.io/docs/latest/commands/scan/) · [`DUMP`](https://redis.io/docs/latest/commands/dump/) · [`RESTORE`](https://redis.io/docs/latest/commands/restore/)

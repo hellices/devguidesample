@@ -1,0 +1,31 @@
+{
+  "path": "B. SCAN + DUMP/RESTORE 프로그래매틱 복사",
+  "source": {"sku": "Premium P1 (6GB)", "redis_version": "6.0.14", "keys": 2140448, "used_memory": "3.77G"},
+  "target": {"sku": "Balanced_B5", "redis_version": "7.4.3", "clustering_policy": "EnterpriseCluster", "high_availability": "Enabled", "used_memory": "7.40G"},
+  "copy": {
+    "keys_scanned": 2129472,
+    "keys_restored": 2129472,
+    "keys_with_ttl": 470774,
+    "restore_errors": 0,
+    "duration_sec": 130.18,
+    "throughput_keys_per_sec": 16357
+  },
+  "concurrent_write_loss": {
+    "note": "복사 중 소스에 200 writes/s로 프로브 키를 넣고, 복사 후 타깃에서 값까지 대조한 결과",
+    "probes_written": 22644,
+    "probes_present_in_target": 11668,
+    "probes_missing_in_target": 10976,
+    "probes_stale_in_target": 0,
+    "loss_pct": 48.47,
+    "loss_window_sec": 139.9,
+    "cause": "SCAN 커서가 이미 지나간 슬롯에 새로 쓰인 키는 이번 패스에서 복사되지 않는다. 복사 중 무작위 시점에 쓰인 키의 기대 유실률은 약 50%."
+  },
+  "ttl": {"keys_with_ttl_sampled": 2000, "ttl_preserved": 2000, "ttl_lost": 0, "ttl_loss_pct": 0.0},
+  "value_integrity": {
+    "note": "RANDOMKEY로 키스페이스 전역에서 표본 추출 후 타입별 실제 값 비교. DUMP 바이트 비교는 Redis 6 -> 7.4에서 RDB 버전 푸터 때문에 쓸 수 없다.",
+    "sampled": 2496,
+    "value_identical": 2482,
+    "value_differs": 0,
+    "absent_in_target": 14
+  }
+}

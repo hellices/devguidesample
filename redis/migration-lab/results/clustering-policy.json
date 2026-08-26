@@ -1,0 +1,23 @@
+{
+  "topic": "AMR clusteringPolicy — 클라이언트 무수정 여부를 가르는 유일한 설정",
+  "target": {"sku": "Balanced_B5", "redis_version": "7.4.3", "port": 10000},
+  "client": "redis-py StrictRedis (비클러스터 클라이언트). ACR에 붙일 때와 동일한 코드.",
+  "ossCluster": {
+    "note": "az redisenterprise database create의 기본값",
+    "set_500_keys": "대부분 redis.exceptions.MovedError로 실패",
+    "mget_multiple_keys": "redis.exceptions.ClusterCrossSlotError",
+    "del_multiple_keys": "redis.exceptions.ClusterCrossSlotError",
+    "verdict": "비클러스터 클라이언트는 코드 수정 없이는 동작하지 않는다"
+  },
+  "enterpriseCluster": {
+    "set_500_keys": "500/500 성공, MOVED 0건",
+    "mget_multiple_keys": "정상",
+    "info_cluster_enabled": 0,
+    "verdict": "ACR과 동일하게 단일 엔드포인트로 보인다. 클라이언트 코드 수정 불필요"
+  },
+  "immutability": {
+    "attempted": "az redisenterprise database update --clustering-policy EnterpriseCluster",
+    "result": "BadRequest: 'properties.clusteringPolicy' cannot be changed",
+    "workaround": "데이터베이스를 삭제하고 --clustering-policy EnterpriseCluster로 재생성. 재생성된 DB는 액세스 키 인증이 기본 비활성이므로 --access-keys-auth Enabled로 다시 켜고 키를 새로 받아야 한다."
+  }
+}
