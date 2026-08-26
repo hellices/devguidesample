@@ -9,11 +9,11 @@
 ## 1. 결론 먼저
 
 "클라이언트 수정 없이, 다운타임 없이" 옮기고 싶다는 요구는 두 부분으로 나눠서 봐야 합니다.
-**클라이언트 수정 없이는 가능합니다. 다운타임 없이는 Azure가 해 주지 않습니다.**
+**클라이언트 수정은 대체로 피할 수 있습니다. 다운타임 없이는 Azure가 해 주지 않습니다.**
 
 | 요구 | 답 | 근거 |
 |---|---|---|
-| 클라이언트 코드 수정 없이 | **가능하다.** 단, AMR 데이터베이스를 `EnterpriseCluster` 정책으로 **생성할 때** 정해야 한다 | [3절](#3-clusteringpolicy-클라이언트-수정-여부를-가르는-유일한-설정) |
+| 클라이언트 코드 수정 없이 | **대체로 가능하다.** AMR 데이터베이스를 `EnterpriseCluster` 정책으로 **생성할 때** 정해야 한다. 단 다중 키 명령을 쓴다면 확인 필요 | [3절](#3-clusteringpolicy-클라이언트-수정-여부를-가르는-유일한-설정) |
 | 다운타임 없이 | **Azure 기능만으로는 불가능하다.** 마이그레이션 도구는 데이터를 옮기지 않는다 | [6절](#6-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다) |
 | 부득이한 다운타임 최소화 | 이 규모에서 **약 111초**가 복사 방식의 하한. 더 줄이려면 애플리케이션 이중 쓰기 | [5.3절](#53-반복-복사로-유실이-얼마나-줄어드나), [7절](#7-권장-절차) |
 
@@ -48,10 +48,40 @@ RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에
 
 ## 3. clusteringPolicy: 클라이언트 수정 여부를 가르는 유일한 설정
 
-AMR 데이터베이스는 `OSSCluster`와 `EnterpriseCluster` 중 하나의 클러스터링 정책을 갖습니다.
-`az redisenterprise database create`의 **기본값은 `OSSCluster`**입니다.
+### 먼저 이름부터
 
-같은 비클러스터 클라이언트 코드로 두 정책에 각각 붙여 봤습니다.
+`EnterpriseCluster`의 "Enterprise"는 **소스가 ACR이라서**도, **ACR의 Enterprise 계층**과도 관계가 없습니다.
+AMR 자체가 Redis Enterprise 스택 위에서 동작하고, 그 소프트웨어가 제공하는 **프록시 기반 클러스터링**을 가리키는 이름입니다.
+
+> The **Enterprise clustering policy** is a simpler configuration that uses a single endpoint for all client
+> connections. (...) it routes all requests to a single Redis node that **acts as a proxy**. (...) The advantage
+> of this approach is that it makes Azure Managed Redis **look nonclustered** to users.
+> — [Azure Managed Redis Architecture](https://learn.microsoft.com/azure/redis/architecture#cluster-policies)
+
+**AMR은 SKU와 무관하게 내부적으로 항상 클러스터링됩니다.** 정책은 "샤딩을 하느냐"가 아니라
+**"클라이언트에게 클러스터를 어떻게 보여 주느냐"** 를 정합니다.
+
+### 세 가지 정책
+
+| 정책 | 클라이언트가 보는 것 | 비고 |
+|---|---|---|
+| `OSSCluster` | Redis Cluster API. 클라이언트가 샤드에 직접 연결 | **CLI 기본값.** 처리량이 가장 높음. 클러스터 지원 클라이언트 필수 |
+| `EnterpriseCluster` | 단일 엔드포인트 (프록시가 라우팅) | 비클러스터 클라이언트 사용 가능. 프록시가 병목이 될 수 있음 |
+| `NoCluster` | 단일 엔드포인트, 샤딩 없음 | **25GB 이하만.** 성능은 가장 낮음 |
+
+```
+$ az redisenterprise database create --help
+--clustering-policy : Allowed values: EnterpriseCluster, NoCluster, OSSCluster.
+```
+
+Microsoft는 **비샤딩 ACR(Basic/Standard/Premium)에서 넘어오는 경우 성능을 위해 `OSSCluster`를 우선 검토**하고,
+애플리케이션이 OSS도 Enterprise도 감당 못 할 때만 `NoCluster`를 쓰라고 권합니다.
+`MULTI`처럼 크로스 슬롯 명령을 광범위하게 쓰는 워크로드가 `NoCluster`의 대표 사례로 문서에 나옵니다.
+
+### 실측: 같은 비클러스터 클라이언트로 붙여 보기
+
+`OSSCluster`와 `EnterpriseCluster`에 **동일한 비클러스터 코드**로 접속해 봤습니다.
+(`NoCluster`는 이 랩에서 테스트하지 않았습니다.)
 
 | 동작 | `OSSCluster` (기본값) | `EnterpriseCluster` |
 |---|---|---|
@@ -60,9 +90,23 @@ AMR 데이터베이스는 `OSSCluster`와 `EnterpriseCluster` 중 하나의 클�
 | 여러 키 `DEL` | `redis.exceptions.ClusterCrossSlotError` | 정상 |
 | `INFO`의 `cluster_enabled` | 1 | **0** |
 
-`EnterpriseCluster`는 클라이언트에게 단일 엔드포인트로 보입니다. ACR에서 쓰던 연결 코드가
-호스트·포트·키만 바꿔서 그대로 동작합니다. `OSSCluster`는 클라이언트를 클러스터 모드로 바꿔야 하고,
-크로스 슬롯 명령을 쓰는 애플리케이션 로직도 손봐야 합니다.
+### EnterpriseCluster도 크로스 슬롯 제약이 남습니다
+
+위 표를 "무조건 무수정"으로 읽으면 안 됩니다. 문서가 명시하는 허용 목록은 6개뿐입니다.
+
+> You might also see `CROSSSLOT` errors with Enterprise clustering policy. **Only the following multikey
+> commands are allowed across slots**: `DEL`, `MSET`, `MGET`, `EXISTS`, `UNLINK`, `TOUCH`.
+
+**위 실측에서 통과한 `MGET`과 `DEL`은 하필 이 허용 목록 안에 있는 명령입니다.**
+즉 이 테스트는 "허용된 명령이 허용된다"를 확인했을 뿐, 목록 밖의 명령은 검증하지 못했습니다.
+`SUNION`, `ZUNIONSTORE`, `RENAME`, `SMOVE`, 서로 다른 슬롯의 키를 묶는 `MULTI`나 Lua 스크립트 등은
+**여전히 `CROSSSLOT`으로 실패할 수 있습니다.**
+
+> **그러므로 실제로 확인해야 할 것**은 "AMR이 단일 엔드포인트로 보이는가"가 아니라
+> **"우리 애플리케이션이 위 6개 밖의 다중 키 명령을 쓰는가"** 입니다.
+> 순수 캐시(GET/SET/EXPIRE 위주)라면 문제가 없습니다.
+> 다중 키 연산이 있다면 해당 키들을 해시 태그(`{user1}:profile`, `{user1}:session`)로 같은 슬롯에 모으거나,
+> 25GB 이하에서는 `NoCluster`를 검토해야 합니다.
 
 ### 생성 후에는 바꿀 수 없습니다
 
@@ -82,7 +126,7 @@ az redisenterprise database create \
 ```
 
 > 마이그레이션 계획에서 **가장 먼저** 확정해야 할 항목입니다. 데이터를 다 옮긴 뒤에 발견하면 처음부터 다시 해야 합니다.
-> 반대로 애플리케이션이 이미 클러스터 클라이언트를 쓰고 수평 확장이 목표라면 `OSSCluster`가 맞습니다.
+> 반대로 애플리케이션이 이미 클러스터 클라이언트를 쓰거나 처리량이 중요하다면 `OSSCluster`가 맞습니다.
 
 ---
 
@@ -336,6 +380,12 @@ az redis show -n <acr-name> -g <rg> --query "redisConfiguration.{maxmemory:maxme
 Balanced_B5(6 GiB)에 HA 2사본이면 12 GiB이고, 여기서 시스템 예약 약 20%를 빼면 `12 GiB × 0.8 = 9.60 GiB`.
 관측값과 **0.2% 이내로 일치**합니다.
 
+이 20%는 추정이 아니라 문서에 명시된 값입니다.
+
+> On each Azure Managed Redis Instance, **approximately 20% of the available memory is reserved** as a buffer
+> for noncache operations, such as replication during failover and active geo-replication buffer.
+> — [Azure Managed Redis Architecture](https://learn.microsoft.com/azure/redis/architecture#reserved-memory)
+
 정리하면 실무에서 쓸 규칙은 하나입니다.
 
 > **AMR에 실제로 담을 수 있는 데이터는 SKU 표기 용량의 약 80%입니다.**
@@ -353,7 +403,7 @@ az monitor metrics list \
 ```
 
 원시 관측치는 [`results/amr-memory-sizing.json`](migration-lab/results/amr-memory-sizing.json)에 있습니다.
-다만 이 랩은 **B5 한 SKU에서만** 관측했습니다. 다른 SKU에도 같은 20% 예약이 적용되는지는 확인하지 않았습니다.
+20% 예약은 문서상 모든 AMR 인스턴스에 적용되지만, **역산으로 확인한 것은 Balanced_B5 하나**입니다.
 
 ---
 
@@ -394,6 +444,9 @@ az monitor metrics list \
 - **마이그레이션 중 소스 축출량** — `volatile-lru` 기본값과 `OutOfMemoryError` 발생은 확인했지만,
   축출된 키 수를 재현 가능한 형태로 기록하지 못했습니다 ([8절](#8-용량-산정--두-번-속습니다))
 - **B5 외 SKU의 메모리 예약 비율** — 20% 예약은 Balanced_B5 한 SKU에서만 역산했습니다
+- **`EnterpriseCluster`의 크로스 슬롯 제약 범위** — 실측한 `MGET`/`DEL`은 문서상 **허용 목록에 있는 명령**입니다.
+  허용 목록 밖(`SUNION`, `RENAME`, 크로스 슬롯 `MULTI`/Lua 등)은 시험하지 않았습니다 ([3절](#enterprisecluster도-크로스-슬롯-제약이-남습니다))
+- **`NoCluster` 정책** — 25GB 이하 비샤딩 옵션으로, 이 랩에서는 생성·테스트하지 않았습니다
 
 ---
 
