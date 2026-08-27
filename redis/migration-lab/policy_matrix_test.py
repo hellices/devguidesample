@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """clusteringPolicy × 클라이언트 조합별 명령 호환성 실측.
 
+  export REDIS_PASSWORD='<key>'
   python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net \
-      --port 10000 --password <key> --policy OSSCluster --repeat 3 \
+      --port 10000 --policy OSSCluster --repeat 3 \
       --report results/policy-matrix-oss.json
 
 같은 명령 집합을 (비클러스터 클라이언트 / 클러스터 클라이언트) 두 가지로 실행해
@@ -14,7 +15,9 @@
 같은 명령이 슬롯 배치에 따라 어떻게 갈리는지 보려는 것입니다.
 """
 import argparse
+import getpass
 import json
+import os
 import ssl
 import sys
 import time
@@ -273,11 +276,16 @@ def run_client(kind, host, port, password, repeat, check_hostname=True):
     return result
 
 
+def resolve_password(value, env):
+    """비밀번호를 명령행 인자로 받으면 셸 히스토리와 ps 출력에 그대로 남습니다."""
+    return value or os.environ.get(env) or getpass.getpass(f"{env}: ")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", required=True)
     ap.add_argument("--port", type=int, default=10000)
-    ap.add_argument("--password", required=True)
+    ap.add_argument("--password", help="생략하면 REDIS_PASSWORD 환경 변수, 그것도 없으면 프롬프트")
     ap.add_argument("--policy", required=True)
     ap.add_argument("--repeat", type=int, default=3)
     ap.add_argument("--no-ssl-check-hostname", action="store_true",
@@ -285,6 +293,8 @@ def main():
                          "OSSCluster는 샤드 IP로 재접속하므로 이 옵션 없이는 연결이 안 됩니다.")
     ap.add_argument("--report")
     args = ap.parse_args()
+
+    args.password = resolve_password(args.password, "REDIS_PASSWORD")
 
     report = {
         "clustering_policy": args.policy,

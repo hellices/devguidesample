@@ -5,6 +5,7 @@
   "ossCluster": {
     "note": "az redisenterprise database create의 기본값",
     "set_500_keys": "대부분 redis.exceptions.MovedError로 실패",
+    "shards": "기록하지 않음. 이 실패는 슬롯을 나눠 가진 샤드가 둘 이상일 때 나타나는 모양이며, 샤드 1개 구성(policy-matrix-oss.json)에서는 같은 명령이 성공했다.",
     "mget_multiple_keys": "redis.exceptions.ClusterCrossSlotError",
     "del_multiple_keys": "redis.exceptions.ClusterCrossSlotError",
     "verdict": "비클러스터 클라이언트는 코드 수정 없이는 동작하지 않는다"

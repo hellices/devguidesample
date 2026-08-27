@@ -49,14 +49,17 @@ echo $?                                        # TIER 1 적중이 있으면 1
 **크로스 슬롯 키와 해시 태그로 모은 키 두 가지로** 실행해 무엇이 통과하는지 기록합니다.
 
 ```bash
+# 액세스 키는 환경 변수로 넘깁니다 — 명령행에 적으면 셸 히스토리와 ps 출력에 남습니다
+read -rs REDIS_PASSWORD && export REDIS_PASSWORD
+
 # EnterpriseCluster
 python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000 \
-  --password "$KEY" --policy EnterpriseCluster --repeat 3 \
+  --policy EnterpriseCluster --repeat 3 \
   --report results/policy-matrix-ent.json
 
 # OSSCluster — 클러스터 클라이언트가 샤드 IP로 재접속하므로 호스트명 대조를 꺼야 붙습니다
 python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000 \
-  --password "$KEY" --policy OSSCluster --repeat 3 --no-ssl-check-hostname \
+  --policy OSSCluster --repeat 3 --no-ssl-check-hostname \
   --report results/policy-matrix-oss.json
 ```
 
@@ -88,20 +91,25 @@ az redisenterprise database create \
 ## 실행 순서
 
 ```bash
-export SRC_HOST=<acr>.redis.cache.windows.net SRC_PORT=6380 SRC_KEY=...
-export DST_HOST=<amr>.<region>.redis.azure.net DST_PORT=10000 DST_KEY=...
+export SRC_HOST=<acr>.redis.cache.windows.net SRC_PORT=6380
+export DST_HOST=<amr>.<region>.redis.azure.net DST_PORT=10000
+
+# 액세스 키는 환경 변수로만 넘깁니다 — 명령행에 적으면 셸 히스토리와 ps 출력에 남습니다
+read -rs SRC_REDIS_PASSWORD && export SRC_REDIS_PASSWORD
+read -rs DST_REDIS_PASSWORD && export DST_REDIS_PASSWORD
+export REDIS_PASSWORD="$SRC_REDIS_PASSWORD"   # 소스 한쪽만 보는 스크립트가 읽는 이름
 
 # 1. 테스트 데이터 적재
-python3 load_data.py --host "$SRC_HOST" --port "$SRC_PORT" --password "$SRC_KEY" --target-gb 4
+python3 load_data.py --host "$SRC_HOST" --port "$SRC_PORT" --target-gb 4
 
 # 2. 마이그레이션 중 쓰기 부하 시작 (실행마다 --prefix를 다르게)
-python3 concurrent_writer.py --host "$SRC_HOST" --port "$SRC_PORT" --password "$SRC_KEY" \
+python3 concurrent_writer.py --host "$SRC_HOST" --port "$SRC_PORT" \
   --rate 200 --prefix run1 --log probes.jsonl &
 
 # 3. 복사 (수렴시키려면 같은 명령을 반복 실행)
 python3 migrate_scan_copy.py \
-  --src-host "$SRC_HOST" --src-port "$SRC_PORT" --src-password "$SRC_KEY" \
-  --dst-host "$DST_HOST" --dst-port "$DST_PORT" --dst-password "$DST_KEY" \
+  --src-host "$SRC_HOST" --src-port "$SRC_PORT" \
+  --dst-host "$DST_HOST" --dst-port "$DST_PORT" \
   --report pass1.json
 
 # 4. 쓰기 차단 후 최종 패스 → 이 패스의 duration_sec이 실제로 필요한 다운타임입니다
@@ -110,8 +118,8 @@ python3 migrate_scan_copy.py ... --report final.json
 
 # 5. 검증
 python3 verify_migration.py \
-  --src-host "$SRC_HOST" --src-port "$SRC_PORT" --src-password "$SRC_KEY" \
-  --dst-host "$DST_HOST" --dst-port "$DST_PORT" --dst-password "$DST_KEY" \
+  --src-host "$SRC_HOST" --src-port "$SRC_PORT" \
+  --dst-host "$DST_HOST" --dst-port "$DST_PORT" \
   --probe-log probes.jsonl --report verify.json
 ```
 

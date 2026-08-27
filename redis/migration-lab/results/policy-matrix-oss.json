@@ -5,6 +5,8 @@
   "repeat": 3,
   "redis_py": "7.0.1",
   "ssl_check_hostname_disabled_for_cluster_client": true,
+  "shards": 1,
+  "shards_note": "CLUSTER SLOTS 응답 노드가 1개다. 슬롯 0-16383을 한 샤드가 전부 갖고 있어 비클러스터 클라이언트의 단일 키 SET/GET이 성공한다. 샤드가 여러 개인 clustering-policy.json(Balanced_B5)에서는 같은 클라이언트로 단일 키 SET이 대부분 MovedError로 실패했다. 두 결과는 이 구성 차이로 갈린다.",
   "clients": [
     {
       "client": "비클러스터",
@@ -728,7 +730,7 @@
         "ping": true,
         "nodes": 1,
         "node_addrs": [
-          "20.249.34.150:8501"
+          "<node-ip>:8501"
         ],
         "cluster_enabled": 1,
         "redis_version": "7.4.3"

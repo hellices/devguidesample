@@ -16,7 +16,9 @@
 """
 
 import argparse
+import getpass
 import json
+import os
 import sys
 
 import redis
@@ -25,13 +27,18 @@ SAMPLE_SIZE = 2_000
 CHECK_BATCH = 500
 
 
+def resolve_password(value, env):
+    """비밀번호를 명령행 인자로 받으면 셸 히스토리와 ps 출력에 그대로 남는다."""
+    return value or os.environ.get(env) or getpass.getpass(f"{env}: ")
+
+
 def connect(host, port, password):
     return redis.StrictRedis(
         host=host,
         port=port,
         password=password,
         ssl=True,
-        ssl_cert_reqs="none",
+        ssl_cert_reqs="required",
         socket_timeout=120,
         socket_connect_timeout=30,
     )
@@ -269,13 +276,16 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--src-host", required=True)
     p.add_argument("--src-port", type=int, default=6380)
-    p.add_argument("--src-password", required=True)
+    p.add_argument("--src-password", help="생략하면 SRC_REDIS_PASSWORD 환경 변수")
     p.add_argument("--dst-host", required=True)
     p.add_argument("--dst-port", type=int, default=10000)
-    p.add_argument("--dst-password", required=True)
+    p.add_argument("--dst-password", help="생략하면 DST_REDIS_PASSWORD 환경 변수")
     p.add_argument("--probe-log", help="concurrent_writer.py가 남긴 로그")
     p.add_argument("--report", help="결과 JSON 경로")
     args = p.parse_args()
+
+    args.src_password = resolve_password(args.src_password, "SRC_REDIS_PASSWORD")
+    args.dst_password = resolve_password(args.dst_password, "DST_REDIS_PASSWORD")
 
     src = connect(args.src_host, args.src_port, args.src_password)
     dst = connect(args.dst_host, args.dst_port, args.dst_password)

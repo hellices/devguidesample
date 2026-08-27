@@ -177,7 +177,7 @@ Microsoft는 **비샤딩 ACR(Basic/Standard/Premium)에서 넘어오는 경우 �
 | | 비클러스터 클라이언트 | 클러스터 클라이언트 |
 |---|---|---|
 | **`EnterpriseCluster`** | 연결됨 · `cluster_enabled=0` · 7.4.3 | **연결 불가** — `Cluster mode is not enabled on this node` |
-| **`OSSCluster`** | 연결됨 · `cluster_enabled=1` · 7.4.3 | 연결됨 · 노드 `20.249.34.150:8501` 1개 |
+| **`OSSCluster`** | 연결됨 · `cluster_enabled=1` · 7.4.3 | 연결됨 · `CLUSTER SLOTS` 응답 노드 1개 |
 
 `EnterpriseCluster`가 **비클러스터 클라이언트에게 `cluster_enabled=0`으로 보인다**는 점이 핵심입니다.
 프록시가 클러스터를 감춰 주기 때문인데, 그래서 **클러스터 클라이언트로는 오히려 붙지 못합니다.**
@@ -187,7 +187,7 @@ Microsoft는 **비샤딩 ACR(Basic/Standard/Premium)에서 넘어오는 경우 �
 
 | 명령 그룹 | `EnterpriseCluster` × 비클러스터 | `OSSCluster` × 비클러스터 | `OSSCluster` × 클러스터 |
 |---|---|---|---|
-| 단일 키 `SET` ×50 | 성공 | 성공 | 성공 |
+| 단일 키 `SET` ×50 | 성공 | 성공 (샤드 1개 기준 — 아래 참고) | 성공 |
 | 허용 목록 `MGET` `MSET` | **성공** | 실패 | 실패 |
 | 허용 목록 `DEL` `EXISTS` `UNLINK` `TOUCH` (다중 키) | **성공** | 실패 | 성공 |
 | 목록 밖 24개 | 전부 실패 | 전부 실패 | 전부 실패 |
@@ -232,6 +232,21 @@ Microsoft는 **비샤딩 ACR(Basic/Standard/Premium)에서 넘어오는 경우 �
 이 클러스터는 **샤드가 하나뿐이고 슬롯 0–16383을 전부 그 샤드가 갖고 있습니다.**
 리다이렉트할 다른 노드가 없는데도 `MOVED`가 돌아옵니다. 샤드를 늘리면 나아지는 문제가 아닙니다.
 
+**그리고 샤드가 하나였기 때문에 단일 키 `SET`/`GET`이 살아남았습니다.**
+같은 랩에서 `Balanced_B5` 데이터베이스에 같은 비클러스터 클라이언트로 붙어 단일 키 `SET`을 500번 돌렸을 때는
+**대부분이 `MovedError`로 실패**했습니다 ([`clustering-policy.json`](../migration-lab/results/clustering-policy.json)).
+두 측정에서 기록이 갈리는 지점은 클러스터 구성 하나뿐입니다.
+
+| | 위 표의 클러스터 | `Balanced_B5` 클러스터 |
+|---|---|---|
+| `CLUSTER SLOTS` 응답 노드 | 1개 | 기록하지 않음 |
+| 단일 키 `SET` | 성공 | 대부분 `MovedError` |
+| 다중 키 (허용 목록) | 커넥션에 따라 갈림 | `ClusterCrossSlotError` |
+
+**따라서 "단일 키는 괜찮다"로 읽으면 안 됩니다.** 슬롯을 나눠 가진 샤드가 둘 이상이면
+비클러스터 클라이언트는 자기 슬롯이 아닌 키에 대해 단일 키 명령에서도 `MOVED`를 받습니다.
+샤드가 하나인 구성은 오히려 문제를 **덜 보이게 만드는** 조건입니다.
+
 > **결론:** `OSSCluster`를 고른다면 **클라이언트도 클러스터 모드로 바꿔야 합니다.**
 > 비클러스터 클라이언트를 그대로 두는 건 선택지가 아닙니다.
 
@@ -244,7 +259,7 @@ IP로는 검증에 실패합니다.
 ```
 SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]
   certificate verify failed: IP address mismatch,
-  certificate is not valid for '20.249.34.150'
+  certificate is not valid for '<노드 IP>'
 ```
 
 이 랩에서는 **체인 검증은 유지한 채 호스트명 대조만 끄고**(`ssl_check_hostname=False`) 측정했습니다.

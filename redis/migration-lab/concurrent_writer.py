@@ -11,11 +11,13 @@
 사라졌는지 세면 유실량이 그대로 나온다.
 
 사용법:
-    python3 concurrent_writer.py --host ... --password ... --rate 200 --log probes.jsonl
+    export REDIS_PASSWORD='<key>'
+    python3 concurrent_writer.py --host ... --rate 200 --log probes.jsonl
     # 중단: --stop-file 경로에 파일 생성
 """
 
 import argparse
+import getpass
 import json
 import os
 import signal
@@ -27,6 +29,11 @@ import redis
 _stop = False
 
 
+def resolve_password(value, env):
+    """비밀번호를 명령행 인자로 받으면 셸 히스토리와 ps 출력에 그대로 남는다."""
+    return value or os.environ.get(env) or getpass.getpass(f"{env}: ")
+
+
 def _handle_stop(signum, frame):
     global _stop
     _stop = True
@@ -36,7 +43,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--host", required=True)
     p.add_argument("--port", type=int, default=6380)
-    p.add_argument("--password", required=True)
+    p.add_argument("--password", help="생략하면 REDIS_PASSWORD 환경 변수, 그것도 없으면 프롬프트")
     p.add_argument("--rate", type=int, default=200, help="초당 쓰기 수")
     p.add_argument("--log", required=True, help="프로브 기록 경로 (jsonl)")
     p.add_argument("--prefix", default="probe",
@@ -46,6 +53,8 @@ def main():
     p.add_argument("--max-seconds", type=int, default=7200)
     args = p.parse_args()
 
+    args.password = resolve_password(args.password, "REDIS_PASSWORD")
+
     signal.signal(signal.SIGTERM, _handle_stop)
     signal.signal(signal.SIGINT, _handle_stop)
 
@@ -54,7 +63,7 @@ def main():
         port=args.port,
         password=args.password,
         ssl=True,
-        ssl_cert_reqs="none",
+        ssl_cert_reqs="required",
         socket_timeout=30,
     )
     r.ping()

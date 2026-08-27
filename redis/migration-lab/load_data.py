@@ -10,10 +10,16 @@ Azure Cache for Redis에 현실적인 캐시 워크로드를 적재한다. 값 �
 2. 큰 컬렉션이 있어야 HGETALL 류의 일괄 읽기가 실제로 터지는지 확인할 수 있다.
 
 사용법:
-    python3 load_data.py --host <host> --port 6380 --password <key> --target-gb 4
+    export REDIS_PASSWORD='<key>'
+    python3 load_data.py --host <host> --port 6380 --target-gb 4
+
+--target-gb는 문자열·해시·리스트·zset의 목표 용량이다. 큰 해시 50개(BIG_HASH_COUNT ×
+BIG_HASH_FIELDS)는 이 계산에 들어가지 않고 그 위에 얹히므로, 실제 적재량은 목표보다
+수백 MB 크다. 문서에 쓰는 숫자는 적재가 끝난 뒤 찍히는 used_memory와 키 개수다.
 """
 
 import argparse
+import getpass
 import json
 import os
 import random
@@ -35,13 +41,18 @@ PIPELINE_BATCH = 1_000
 TTL_FRACTION = 0.30
 
 
+def resolve_password(value, env):
+    """비밀번호를 명령행 인자로 받으면 셸 히스토리와 ps 출력에 그대로 남는다."""
+    return value or os.environ.get(env) or getpass.getpass(f"{env}: ")
+
+
 def connect(args):
     return redis.StrictRedis(
         host=args.host,
         port=args.port,
         password=args.password,
         ssl=True,
-        ssl_cert_reqs="none",
+        ssl_cert_reqs="required",
         socket_timeout=60,
         socket_connect_timeout=30,
     )
@@ -176,10 +187,14 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--host", required=True)
     p.add_argument("--port", type=int, default=6380)
-    p.add_argument("--password", required=True)
+    p.add_argument("--password", help="생략하면 REDIS_PASSWORD 환경 변수, 그것도 없으면 프롬프트")
     p.add_argument("--target-gb", type=float, default=4.0)
     p.add_argument("--workers", type=int, default=8)
     args = p.parse_args()
+
+    if args.workers < 1:
+        p.error("--workers는 1 이상이어야 합니다")
+    args.password = resolve_password(args.password, "REDIS_PASSWORD")
 
     r = connect(args)
     r.ping()
@@ -187,6 +202,7 @@ def main():
 
     # 목표 용량을 타입별 키 개수로 환산한다. 문자열이 대부분의 용량을 차지하고
     # 나머지 타입은 마이그레이션 로직의 타입 처리를 검증하는 용도로 섞는다.
+    # 큰 해시는 이 환산에 넣지 않는다 (모듈 상단 주석 참고).
     target_bytes = args.target_gb * 1024**3
     string_bytes = target_bytes * 0.60
     string_count = int(string_bytes / 1100)   # 평균 값 1KB + 키/오버헤드
@@ -198,21 +214,31 @@ def main():
     print(
         f"계획: strings={string_count:,} hashes={hash_count:,} "
         f"lists={list_count:,} zsets={zset_count:,} bighash={BIG_HASH_COUNT} "
-        f"(총 {total:,} 키, 목표 {args.target_gb}GB)",
+        f"(총 {total:,} 키, 목표 {args.target_gb}GB + 큰 해시)",
         flush=True,
     )
 
+    before = r.dbsize()
     progress = Queue()
     rep = Process(target=reporter, args=(progress, total))
     rep.start()
 
     start = time.time()
     procs = []
+
+    def share(count, worker):
+        """나머지를 앞쪽 워커에 하나씩 얹어 계획한 개수를 정확히 맞춘다.
+
+        몫만 쓰면 워커 수만큼 키가 덜 들어가 진행률이 100%에 닿지 않는다.
+        """
+        base, extra = divmod(count, args.workers)
+        return base + (1 if worker < extra else 0)
+
     for w in range(args.workers):
-        procs.append(Process(target=load_strings, args=(args, w, string_count // args.workers, progress)))
-        procs.append(Process(target=load_hashes, args=(args, w, hash_count // args.workers, progress)))
-        procs.append(Process(target=load_lists, args=(args, w, list_count // args.workers, progress)))
-        procs.append(Process(target=load_zsets, args=(args, w, zset_count // args.workers, progress)))
+        procs.append(Process(target=load_strings, args=(args, w, share(string_count, w), progress)))
+        procs.append(Process(target=load_hashes, args=(args, w, share(hash_count, w), progress)))
+        procs.append(Process(target=load_lists, args=(args, w, share(list_count, w), progress)))
+        procs.append(Process(target=load_zsets, args=(args, w, share(zset_count, w), progress)))
     procs.append(Process(target=load_big_hashes, args=(args, progress)))
 
     for proc in procs:
@@ -223,14 +249,23 @@ def main():
     progress.put(None)
     rep.join()
 
+    # 워커가 조용히 죽으면 데이터가 덜 들어간 채로 "적재 완료"가 찍힌다.
+    # 그 상태로 잰 이관 시간은 다른 측정과 비교할 수 없다.
+    failed = [proc.exitcode for proc in procs if proc.exitcode != 0]
+    if failed:
+        print(f"\n적재 실패: 워커 {len(failed)}개가 비정상 종료 {failed}", file=sys.stderr)
+        return 1
+
     elapsed = time.time() - start
     info = r.info("memory")
     dbsize = r.dbsize()
+    loaded = dbsize - before
     print("\n=== 적재 완료 ===", flush=True)
     print(f"소요 시간   : {elapsed:.1f}s", flush=True)
-    print(f"키 개수     : {dbsize:,}", flush=True)
+    print(f"적재한 키   : {loaded:,} (적재 전 {before:,} → 적재 후 {dbsize:,})", flush=True)
     print(f"used_memory : {info['used_memory_human']}", flush=True)
-    print(f"평균 처리량 : {dbsize / elapsed:,.0f} keys/s", flush=True)
+    print(f"평균 처리량 : {loaded / elapsed:,.0f} keys/s", flush=True)
+    return 0
 
 
 if __name__ == "__main__":
