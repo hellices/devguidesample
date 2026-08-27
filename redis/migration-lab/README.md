@@ -64,7 +64,7 @@ python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000
   인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있어 샤드 IP로는 검증에 실패하기 때문입니다.
 - 픽스처 준비는 파이프라인으로 묶여 있습니다. 왕복 지연이 큰 곳에서 순차로 보내면
   실행 시간이 수십 분으로 늘어납니다 (이 랩의 180ms 환경에서 38분).
-- `clusteringPolicy`는 생성 후 변경할 수 없으므로, 비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
+- `clusteringPolicy`는 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 DB를 지워야만 바꿀 수 있으므로, 비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
 - 이 랩의 결과는 [`results/policy-matrix-ent.json`](results/policy-matrix-ent.json)과
   [`results/policy-matrix-oss.json`](results/policy-matrix-oss.json)에 있고,
   해석은 [가이드 2.4절](../azure-cache-to-managed-redis-migration.md#24-실측-정책--클라이언트-조합별-명령-호환성)에 있습니다.
@@ -75,7 +75,8 @@ python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000
 - Python 3.8+, `pip install redis`
 - **타깃 AMR 데이터베이스는 `--clustering-policy EnterpriseCluster`로 생성**되어 있어야 합니다.
   기본값인 `OSSCluster`에서는 비클러스터 클라이언트가 `MOVED`/`CROSSSLOT`으로 실패하며,
-  이 값은 **생성 후 변경할 수 없습니다**.
+  이 값은 **한 번 `OSSCluster`/`EnterpriseCluster`로 만들면 DB를 지우지 않고는 바꿀 수 없습니다**
+  (`NoCluster`에서 나오는 방향만 `az redisenterprise database update`로 변경됩니다).
 
 ```bash
 az redisenterprise database create \

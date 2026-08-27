@@ -6,6 +6,26 @@
 
 **1~3절은 옮기기 전에 알아야 할 것, 4절부터는 어떻게 옮길 것인가입니다.**
 
+### 기준이 되는 문서는 따로 있습니다
+
+이 문서는 Microsoft 공식 마이그레이션 가이드를 대체하지 않습니다. **먼저 읽어야 할 것은 공식 문서이고**,
+이 문서는 거기에 적히지 않은 것 — 실제로 재 봤을 때의 숫자, 정책·클라이언트 조합별 실패 방식,
+막다른 길로 확인된 접근 — 을 채우는 보조 자료입니다.
+
+공식 가이드는 3단계로 되어 있고, 이 문서의 절 번호가 그대로 대응합니다.
+
+| 공식 가이드 | 이 문서 |
+|---|---|
+| ① [Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) — 기능·SKU·클라이언트 차이 | [1절](#1-주의사항-한눈에-보기) · [2절](#2-acr과-amr은-무엇이-다른가) · [3절](#3-클라이언트sdk-확인사항) (여기에 실측을 붙임) |
+| ② [Migration options](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options) — **두 가지 경로와 트레이드오프** | [4절](#4-마이그레이션-우선순위) (우선순위 관점을 추가) |
+| ③ [Plan execution — self-service](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-self-service) / [with tooling](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-with-tooling) | [5·6절](#5-경로-a-rdb-export--import) (자체 이관 실측) · [7절](#7-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다) (도구) · [8절](#8-실시간-마이그레이션-전략--replicaof는-왜-안-되는가) (막힌 길) |
+
+②가 경로 선택의 기준 문서입니다. 거기서 제시하는 선택지는 **두 가지뿐이고, Option 1(자체 마이그레이션)이 권장**입니다.
+이 문서의 경로 A/B는 Option 1의 데이터 이관 수단이고, 경로 C가 Option 2입니다.
+
+> Microsoft는 마이그레이션 질문에 답하고 환경에 맞는 계획을 세워 주는 **마이그레이션 에이전트 스킬**도 함께 안내합니다.
+> 공식 문서 각 페이지 상단의 "Redis migration agent skill" 링크를 참고하세요.
+
 ---
 
 ## 1. 주의사항 한눈에 보기
@@ -25,7 +45,7 @@ ACR(Basic/Standard/Premium)과 AMR은 **서로 다른 소프트웨어** 위에 �
 | Redis 버전 | 4.0.x / 6.0.x (이 랩은 6.0.14) | 7.4.x (이 랩은 7.4.3) | `DUMP`/`RESTORE` 페이로드 호환은 실측에서 오류 0건 |
 | 샤딩·클러스터링 | Premium에서 **켜고 끄는 옵션** (Basic/Standard는 불가) | **SKU 무관 항상 켜져 있음** | 클러스터를 안 쓰던 워크로드도 크로스 슬롯 제약을 받게 됨 ([2.2절](#22-샤딩과-클러스터--amr은-항상-클러스터입니다)) |
 | 클러스터를 보여 주는 방식 | 해당 없음 (단일 엔드포인트) | `clusteringPolicy`로 결정 — `OSSCluster` / `EnterpriseCluster` / `NoCluster` | 클라이언트에 보이는 모습 자체가 정책마다 다름 ([2.3절](#23-clusteringpolicy-세-가지)) |
-| 그 정책의 변경 | 해당 없음 | **생성 후 변경 불가** | 다시 고르려면 DB 재생성 + 데이터 재이관 ([2.6절](#26-생성-후에는-바꿀-수-없습니다)) |
+| 그 정책의 변경 | 해당 없음 | `NoCluster`에서 나오는 방향만 가능. `OSSCluster`·`EnterpriseCluster`가 되면 **DB를 지우지 않고는 변경 불가** | 처음에 둘 중 하나를 고르면 되돌리려면 재생성 + 데이터 재이관 ([2.6절](#26-정책-변경은-nocluster에서-나오는-방향만-됩니다)) |
 | 데이터베이스 개수 | SKU별 16~64개 | **0번 하나** | `SELECT`/`MOVE`/`SWAPDB`와 커넥션 문자열의 DB 번호를 전부 걷어내야 함 |
 | 명령 처리 | OSS Redis 설계상 **단일 스레드** | Redis Enterprise가 인스턴스당 **다중 vCPU 활용** | 메모리 크기가 같아도 처리량 특성이 다름 |
 
@@ -49,25 +69,42 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
 | 다중 키 명령 | 비클러스터면 제약 없음 | `EnterpriseCluster`에서도 `DEL`·`MSET`·`MGET`·`EXISTS`·`UNLINK`·`TOUCH` **6개만** 허용 | 실측: 허용 목록 밖 24개가 전부 `CROSSSLOT`으로 실패 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
+| 그 허용 목록이 더 줄어드는 경우 | — | **액티브 지역 복제(Active-Active)를 켜면 `MGET`·`EXISTS`·`TOUCH` 3개로** 축소 | 쓰기 계열 `DEL`·`MSET`·`UNLINK`까지 같은 슬롯 전용이 됨 |
 | 같은 슬롯으로 모으면 | — | 정책 2 × 클라이언트 2, **네 조합 모두 통과** (실측 31/31) | 해시 태그가 사실상 유일한 일반 해법. 단 **키 이름이 바뀝니다** |
 | `SELECT` (1번 이상) | 허용 (실측) | 차단 — `DB index is out of range` (실측) | 다중 DB 전제가 깨짐 |
 | `SWAPDB` | 허용 (실측) | 차단 — `unknown command` (실측) | 다중 DB 기반 운영 절차(블루/그린 스왑 등)를 대체해야 함 |
 | `CONFIG GET`/`SET` | 차단 — `unknown command` (실측) | **수락됨** (실측). 단 `SET`은 무효과, 미지원 파라미터는 거부 | 성공 응답을 믿고 설정이 바뀌었다고 가정하면 안 됨 ([3.6절](#36-tier-34--정책-의존-항목과-관리-명령)) |
 | 키스페이스 알림 | Basic 불가 (실측: 기본값에서 0건 수신), Standard/Premium은 관리 평면에서 활성화 | 문서는 "미지원", 실측은 기본값 `AKE`로 **동작** | 문서와 실측이 어긋나는 항목. 지원 대상이 아니므로 의존하면 안 됨 ([3.4절](#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)) |
 | `ROLE` | 허용 (실측) | 허용 (실측) | 비클러스터 클라이언트 기준. 클러스터 클라이언트에서는 실패 |
-| `FAILOVER` | 차단 — `unknown command` (실측) | 차단 — `unknown command` (실측) | 양쪽 다 안 되므로 페일오버 유도는 관리 평면으로 |
+| `FAILOVER` | `unknown command` (실측) — Redis 6.2에 추가된 명령이라 **ACR의 6.0.x에는 존재하지 않습니다** | `unknown command` (실측). 문서도 "명시적 Failover 명령을 지원하지 않는다"고 명시 | 어느 쪽에서도 명령으로 페일오버를 유도할 수 없음. AMR에는 재부팅도 없고 대신 Flush 관리 작업만 있음 |
 | `REPLICAOF` / `PSYNC` / `REPLCONF` | 차단 | 차단 | 물리적 복제를 붙이는 구성 자체가 불가. `REPLICAOF`는 양쪽 실측, 나머지는 문서 근거 ([8.1절](#81-가장-먼저-떠오르는-방법-그리고-왜-막히는가)) |
 
 #### 클라이언트와 연결
 
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
-| 포트 | 6380 (TLS) / 6379 (비TLS) | **10000** | 연결 문자열, 방화벽, NSG |
-| TLS | 선택 — 비TLS 포트가 열려 있음 | **필수** | 비TLS로 붙던 클라이언트는 아예 연결 불가 |
+| 포트 | 6380 (TLS) / 6379 (비TLS) | **TLS든 비TLS든 10000** | 연결 문자열, 방화벽, NSG |
+| TLS | **두 모드가 동시에 열려 있음** — 같은 인스턴스에 TLS로도 비TLS로도 붙을 수 있음 | **생성 시 한 모드만 선택** (`--client-protocol Encrypted\|Plaintext`, 기본 TLS). 고른 뒤에는 모든 클라이언트가 같은 모드여야 함 | "AMR은 TLS 필수"가 아니라 **혼용이 안 되는 것**. 비TLS로 붙던 배치 잡 하나 때문에 전체를 비TLS로 만들면 안 됨 |
+| 샤드(노드) 개별 포트 | 13XXX | **85XX** (실측 8501) | 클러스터 클라이언트가 리다이렉트를 따라갈 때 열려 있어야 하는 포트 |
 | 호스트명 | `<name>.redis.cache.windows.net` | `<name>.<region>.redis.azure.net` | DNS, 허용 목록 |
 | 필요한 클라이언트 | 비클러스터 클라이언트로 충분 | `OSSCluster`면 **클러스터 지원 클라이언트 필수**, `EnterpriseCluster`·`NoCluster`면 기존 그대로 | 정책 선택이 곧 클라이언트 교체 여부 ([1.2절](#12-enterprisecluster냐-osscluster냐--쓰는-명령과-클라이언트가-결정합니다)) |
 | `OSSCluster`에 비클러스터 클라이언트로 붙으면 | — | 연결도 되고 `GET`/`SET`도 되지만, **커넥션 단위로 갈려** 풀의 일부만 계속 실패 (실측) | 스모크 테스트로는 잡히지 않는 실패 방식 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
 | 클러스터 클라이언트의 TLS | — | 클라이언트가 샤드 IP로 재접속해 **호스트명 검증에서 걸림** (실측) | 인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있기 때문 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
+
+#### 네트워크와 운영 — AMR로 가면 없어지는 것
+
+이 랩에서 측정한 항목은 아니고 전부 [Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) 근거입니다.
+**명령이나 클라이언트보다 먼저 걸리는 항목들**이라 1절에 둡니다. 특히 VNet 주입은 마이그레이션 도구에서 아예 오류로 막힙니다.
+
+| 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇을 해야 하나 |
+|---|---|---|---|
+| VNet 주입 | Premium에서 지원 | **미지원** | Private Link로 전환. 네트워크 설계를 다시 그려야 하는 항목 |
+| IP 기반 방화벽 규칙 | 지원 | **미지원** | 접근 제어를 Private Link + 관리 ID 쪽으로 옮겨야 함 |
+| Microsoft Entra ID | 인증 지원 + **RBAC 지원** | 인증은 지원, **RBAC은 미지원** | 액세스 정책으로 권한을 나눠 뒀다면 대안이 필요 |
+| 수동 재부팅 | 노드 수동 재부팅 지원 | **없음** (노드 운영은 자동) | 재부팅으로 캐시를 비우던 절차는 **Flush 관리 작업**으로 대체 |
+| 예약 업데이트 창 | 지원 | **미리 보기** | 업데이트 시간을 통제하던 운영 절차를 재검토 |
+| 영역 중복 | Premium부터 | HA를 켜고 리전이 AZ를 지원하면 **기본값** | 별도 설정 없이 얻는 항목 |
+| RDB 가져오기/내보내기 | **Premium만** | **전 SKU** | 원본이 Basic/Standard면 [경로 A](#5-경로-a-rdb-export--import)를 쓸 수 없습니다 |
 
 #### 용량과 지표
 
@@ -82,7 +119,8 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 
 ### 1.2 `EnterpriseCluster`냐 `OSSCluster`냐 — 쓰는 명령과 클라이언트가 결정합니다
 
-AMR을 만들 때 정해야 하는 값이고 **생성 후에는 바꿀 수 없습니다.** 무엇을 고를지는 취향이 아니라
+AMR을 만들 때 정해야 하는 값이고, **한 번 `OSSCluster`나 `EnterpriseCluster`로 만들면 DB를 지우지 않는 한 되돌릴 수 없습니다**
+([2.6절](#26-정책-변경은-nocluster에서-나오는-방향만-됩니다)). 무엇을 고를지는 취향이 아니라
 **애플리케이션이 어떤 명령을 쓰는지, 어떤 클라이언트를 쓰는지** 두 가지로 결정됩니다.
 
 ```
@@ -151,7 +189,8 @@ AMR을 만들 때 정해야 하는 값이고 **생성 후에는 바꿀 수 없�
 | ACR에서 막혀 있는 명령 | [Redis commands not supported in Azure Cache for Redis](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-configure#redis-commands-not-supported-in-azure-cache-for-redis) |
 | AMR(Redis Enterprise)에서 막혀 있는 명령 | [Redis Enterprise command compatibility](https://redis.io/docs/latest/operate/rs/references/compatibility/commands/) |
 | 해시 태그로 슬롯을 모으는 규칙 | [Redis Cluster specification — Hash tags](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags) |
-| ACR → AMR 마이그레이션 경로 (Microsoft 안내) | [Migration options](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options) |
+| ACR → AMR 마이그레이션 경로 (**기준 문서**) | [Migration options](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options) |
+| 옮기기 전 차이 확인 (1~3절의 근거) | [Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) |
 
 ---
 
@@ -332,15 +371,37 @@ SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]
 > **그러므로 실제로 확인해야 할 것**은 "AMR이 단일 엔드포인트로 보이는가"가 아니라
 > **"우리 애플리케이션이 위 6개 밖의 다중 키 명령을 쓰는가"** 입니다. 그 확인 방법이 [3절](#3-클라이언트sdk-확인사항)입니다.
 
-### 2.6 생성 후에는 바꿀 수 없습니다
+### 2.6 정책 변경은 `NoCluster`에서 나오는 방향만 됩니다
+
+`OSSCluster`로 만든 DB의 정책을 바꾸려 했더니 거부됐습니다.
 
 ```
 $ az redisenterprise database update --clustering-policy EnterpriseCluster ...
 BadRequest: 'properties.clusteringPolicy' cannot be changed
 ```
 
-바꾸려면 데이터베이스를 삭제하고 다시 만들어야 합니다. 재생성한 데이터베이스는 **액세스 키 인증이 기본 비활성**이라
-다시 켜고 키를 새로 받아야 합니다.
+다만 **모든 방향이 막힌 것은 아닙니다.** CLI 정의가 규칙을 그대로 적어 두고 있습니다.
+
+```
+$ az redisenterprise database update --help
+--clustering-policy : Clustering policy - default is OSSCluster.
+    This property can be updated only if the current value is NoCluster.
+    If the value is OSSCluster or EnterpriseCluster, it cannot be updated
+    without deleting the database.
+```
+
+| 현재 정책 | 바꿀 수 있나 |
+|---|---|
+| `NoCluster` | **가능** — `OSSCluster`/`EnterpriseCluster`로 변경. 단 액티브 지역 복제가 켜져 있으면 이것도 막힙니다 |
+| `OSSCluster` | 불가 — DB 삭제 후 재생성 (위 실측) |
+| `EnterpriseCluster` | 불가 — DB 삭제 후 재생성 |
+
+`NoCluster`는 25GB 이하에서만 쓸 수 있고 **성능이 가장 낮으며, 이 상태로는 스케일 업이 막힙니다.**
+크기를 키우려면 먼저 정책을 바꿔야 합니다. 그래서 `NoCluster`는 "일단 안전하게 시작하고 나중에 정한다"는
+선택지가 되기는 하지만, **정한 다음에는 그 방향으로 한 번만 갈 수 있는 일방통행**입니다.
+
+`OSSCluster`/`EnterpriseCluster`에서 바꾸려면 데이터베이스를 삭제하고 다시 만들어야 합니다.
+재생성한 데이터베이스는 **액세스 키 인증이 기본 비활성**이라 다시 켜고 키를 새로 받아야 합니다.
 
 ```bash
 az redisenterprise database create \
@@ -364,9 +425,9 @@ az redisenterprise database create \
 
 | 항목 | ACR | AMR |
 |---|---|---|
-| 포트 | 6380 (TLS) / 6379 (비TLS) | **10000** |
+| 포트 | 6380 (TLS) / 6379 (비TLS) | **10000** (TLS·비TLS 공통) |
 | 호스트명 | `<name>.redis.cache.windows.net` | `<name>.<region>.redis.azure.net` |
-| TLS | 선택 (비TLS 포트 존재) | **필수** |
+| TLS | 두 모드 **동시 지원** | **생성 시 한 모드만 선택**, 이후 전 클라이언트가 동일 모드 |
 | 데이터베이스 | SKU에 따라 16~64개 | **0번 하나** |
 | Redis 버전 | 6.0.x | 7.4.x |
 | `CONFIG` 변경 | 명령 자체가 차단 (실측) | 명령은 통과하나 반영 안 됨 (실측) |
@@ -574,6 +635,30 @@ redis-cli -h <acr>.redis.cache.windows.net -p 6380 --tls -a <key> MONITOR | head
 여기서부터가 "어떻게 옮길 것인가"입니다. 그리고 마이그레이션에서는 **모든 것을 동시에 최적화할 수 없습니다.**
 다운타임을 줄이면 정합성이 흔들리고, 정합성을 지키면 다운타임이 늘어납니다. 그래서 순위가 필요합니다.
 
+### 4.0 먼저: 공식 문서가 제시하는 선택지는 두 개입니다
+
+경로를 고르는 기준 문서는 [Migration options](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options)이고,
+**Option 1(자체 마이그레이션)이 권장**입니다. 문서가 드는 이유는 세 가지입니다.
+
+| 공식 문서의 근거 | 원문 요지 |
+|---|---|
+| Full control | 전환 시점을 직접 정하고, 전환 전에 새 인스턴스를 테스트할 수 있음. **여러 앱이 공유하는 Redis라면 앱 단위로 하나씩** 옮길 수 있음 |
+| Minimal downtime | **이중 쓰기(dual-write)나 내보내기/가져오기** 같은 동기화 전략으로 두 캐시를 병행 운영하다 최소 중단으로 전환 |
+| Independent validation | 기존 캐시를 지우기 전에 새 인스턴스가 제대로 동작하는지 검증 가능 |
+
+이 문서의 **경로 A·B가 Option 1의 데이터 이관 수단**이고, **경로 C가 Option 2(도구, preview)** 입니다.
+아래 우선순위는 그 위에 "무엇부터 지킬 것인가"를 얹은 것입니다.
+
+| 이 문서 | 공식 문서 대응 | 한 줄 |
+|---|---|---|
+| [경로 A](#5-경로-a-rdb-export--import) RDB Export/Import | Option 1의 export/import | 원본이 **Premium일 때만** 가능 |
+| [경로 B](#6-경로-b-scan--dumprestore-프로그래매틱-복사) SCAN + DUMP/RESTORE | Option 1의 데이터 이관 | 전 SKU 가능. 이 랩이 측정한 경로 |
+| [경로 C](#7-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다) 마이그레이션 도구 | Option 2 | **데이터를 옮기지 않습니다.** 엔드포인트 전환만 |
+| [8절](#8-실시간-마이그레이션-전략--replicaof는-왜-안-되는가) 실시간 복제 | (해당 없음) | 공식 경로가 아님. 막힌 이유를 정리한 절 |
+
+> 공식 문서가 "minimal downtime"의 수단으로 **dual-write를 먼저 듭니다.** 애플리케이션에 손을 댈 수 있다면
+> 이 방법이 이 문서의 111초보다 짧습니다. [8.3절](#83-애플리케이션-계층--이중-쓰기와-지연-백필)에서 다룹니다.
+
 ### 4.1 우선순위는 "되돌릴 수 있는가"로 정합니다
 
 | 순위 | 관심사 | 실패하면 | 되돌릴 수 있나 | 어떻게 드러나나 |
@@ -628,7 +713,7 @@ redis-cli -h <acr>.redis.cache.windows.net -p 6380 --tls -a <key> MONITOR | head
 - [ ] 해시 태그가 필요하면 **애플리케이션 배포를 데이터 이관보다 먼저** 한다. 키 이름이 바뀌기 때문입니다.
 - [ ] SDK를 클러스터 클라이언트로 바꿔야 하는지 확인한다 ([3.2절](#32-sdk별-확인-포인트)).
 - [ ] 포트·TLS·호스트명 변경에 맞춰 **방화벽·NSG·프라이빗 엔드포인트를 함께 수정**한다.
-- [ ] `clusteringPolicy`를 확정하고 AMR을 생성한다. **이후에는 바꿀 수 없습니다.**
+- [ ] `clusteringPolicy`를 확정하고 AMR을 생성한다. **`OSSCluster`/`EnterpriseCluster`로 만들면 DB를 지워야만 바꿀 수 있습니다** ([2.6절](#26-정책-변경은-nocluster에서-나오는-방향만-됩니다)).
 
 ### 4.4 P2 — 용량
 
@@ -655,7 +740,7 @@ redis-cli -h <acr>.redis.cache.windows.net -p 6380 --tls -a <key> MONITOR | head
 1. [P1] 명령어 감사        → 코드 수정 필요 여부와 clusteringPolicy가 여기서 정해진다
 2. [P1] 해시 태그가 필요하면 애플리케이션 먼저 배포
 3. [P2] 용량 산정          → AMR SKU 결정
-4. [P1] AMR 생성           → clusteringPolicy 확정. 이후 변경 불가
+4. [P1] AMR 생성           → clusteringPolicy 확정. 이후 되돌리려면 DB 재생성
 5. [P0] 정합성 전략 확정   → 쓰기 차단 창을 잡을 수 있는가?
 6. [P3] 리허설             → 다운타임 실측. 여기서 나온 숫자로 창을 협의
 7.      본 이관
@@ -834,6 +919,20 @@ Microsoft.Cache/redis/rollbackDnsForMigration/action
 | 설정 미복사 | 관리 ID, 방화벽 규칙, 지속성 설정, 업데이트 일정, 키스페이스 알림은 넘어가지 않는다 |
 
 프라이빗 엔드포인트를 쓰는 프로덕션 환경이라면 애초에 대상이 아닙니다.
+
+### 그래도 도구를 쓸 때 알아 둘 것
+
+[Migrate with tooling](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-with-tooling) 기준입니다.
+
+- **AMR을 먼저 만들어 둬야 합니다.** 도구가 대상을 생성해 주지 않습니다.
+- 포털에서 `Migrate` → 대상 선택 → **`Validate`** 순서입니다. 검증 결과는 **경고와 오류로 나뉘고**,
+  지속성 설정 불일치 같은 것은 경고(무시하고 진행 가능), **VNet 주입은 오류**로 진행이 막힙니다.
+- 전환 시 클라이언트는 **유지 관리와 비슷한 "연결 끊김(blip)"** 을 겪고 재연결됩니다.
+- ACR을 삭제한 뒤에도 **기존 ACR 호스트명은 계속 AMR을 가리킵니다.** 다만 이후 자동 삭제 예정이므로
+  애플리케이션은 AMR 호스트명(`<name>.<region>.redis.azure.net`)으로 갱신해야 합니다.
+- 포털 외에 **PowerShell로 사전 검증·시작·상태 확인·취소**를 할 수 있습니다.
+- 데이터가 필요하면 도구 절차 안에서도 결국 [5·6절](#5-경로-a-rdb-export--import)의 이관을 따로 해야 합니다
+  (공식 문서의 Step 2b도 self-service의 데이터 이관 절로 연결됩니다).
 
 ---
 
@@ -1235,11 +1334,16 @@ RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에
 
 ## 13. 참고 자료
 
-**Azure 마이그레이션**
+**Azure 공식 마이그레이션 가이드 — 이 문서의 기준**
 
-- [Migration options — Basic/Standard/Premium → Azure Managed Redis](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options)
-- [Self-service migration](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-self-service)
-- [Redis migration agent skill (GitHub)](https://github.com/AzureManagedRedis/amr-migration-skill)
+경로 선택의 기준 문서는 **② Migration options**입니다. 이 문서는 그 위에 실측을 얹은 보조 자료입니다.
+
+- [① Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) — 기능·SKU·클라이언트 차이. 1~3절의 근거
+- [② **Migration options**](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options) — **기준 문서.** Option 1(자체 마이그레이션, 권장) / Option 2(도구, preview)
+- [③-a Plan execution — self-service](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-self-service) — 경로 A·B의 근거
+- [③-b Plan execution — with tooling (preview)](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-with-tooling) — 경로 C의 근거
+- [가이드 시작점 — Migrate from Basic, Standard, and Premium tiers](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-overview)
+- [Redis migration agent skill (GitHub)](https://github.com/AzureManagedRedis/amr-migration-skill) — 공식 문서가 함께 안내하는 마이그레이션 계획 보조 도구
 
 **제품 기능 비교 (1.1절 근거)**
 
