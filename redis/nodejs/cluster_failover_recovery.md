@@ -106,7 +106,10 @@ const redisClient = createClient({
 - 단일 엔드포인트로 운영 복잡도 감소
 
 **제약**:
-- ⚠️ 클러스터 정책은 생성 시 설정으로 **변경 불가**, Redis **재생성 필요**
+- ⚠️ **이미 OSS Cluster로 운영 중이라면 정책만 바꿀 수 없습니다.** `az redisenterprise database update`는
+  현재 값이 `NoCluster`일 때만 정책 변경을 허용하고, `OSSCluster`/`EnterpriseCluster`에서는
+  **데이터베이스를 삭제하고 재생성**해야 합니다. 즉 이 방안은 데이터 재이관을 동반합니다
+  ([마이그레이션 가이드 2.6절](../azure-cache-to-managed-redis-migration.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다))
 
 ---
 
