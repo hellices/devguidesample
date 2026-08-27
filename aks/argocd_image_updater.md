@@ -462,7 +462,7 @@ level=warning msg="skipping app 'argocd/test-app' of type 'Directory' because it
 
 **원인**: ArgoCD Application의 소스가 plain directory.
 
-**해결**: 소스 디렉토리에 `kustomization.yaml`을 추가하여 Kustomize 소스로 전환.
+**해결**: 소스 디렉터리에 `kustomization.yaml`을 추가하여 Kustomize 소스로 전환.
 
 ```yaml
 # kustomization.yaml
