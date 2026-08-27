@@ -10,36 +10,75 @@
 
 ## 1. 주의사항 한눈에 보기
 
-### 1.1 ACR → AMR에서 바뀌는 것
+### 1.1 기능 차이 — 엔진, 샤딩, 명령어, 클라이언트
 
-우선순위 열은 [4절](#4-마이그레이션-우선순위)의 기준을 따릅니다. P0이 가장 높고, 데이터 정합성이 여기에 속합니다.
-"실측" 표시가 붙은 항목은 이 랩에서 측정한 값이고, 나머지는 문서 근거입니다.
+ACR(Basic/Standard/Premium)과 AMR은 **서로 다른 소프트웨어** 위에 올라가 있습니다.
+같은 Redis API를 쓰지만 클러스터 구조, 쓸 수 있는 명령, 붙일 수 있는 클라이언트가 갈립니다.
+"실측"이 붙은 항목은 이 랩에서 직접 측정한 값이고, 나머지는 문서 근거입니다.
+**어떻게 옮길 것인가는 [4절](#4-마이그레이션-우선순위)부터입니다.**
 
-| 항목 | Azure Cache for Redis | Azure Managed Redis | 영향 | 우선순위 |
-|---|---|---|---|---|
-| 복사 중 유입된 쓰기 | — | — | 단일 복사 패스에서 유실률 48.47% (실측: 3.77GB / 215만 키). 키 개수 검증으로는 드러나지 않음 | P0 |
-| 데이터 이관 수단 | — | Azure 마이그레이션 도구는 데이터를 옮기지 않음 (DNS 전환만) | 데이터는 직접 옮겨야 함 | P0 |
-| 복제 명령 | `REPLICAOF`/`PSYNC`/`REPLCONF` 차단 | 동일하게 차단 | `REPLICAOF`로 따라붙게 하는 전략은 불가 | P0 |
-| 데이터베이스 개수 | SKU별 16~64개 | 0번 하나 | `SELECT`/`MOVE`/`SWAPDB`, 커넥션 문자열의 DB 번호 수정 | P1 |
-| 키스페이스 알림 | Basic 불가, Standard/Premium은 관리 평면에서 활성화 (실측: Basic C0 기본값 0건 수신) | 문서는 "미지원", 실측은 기본값 `AKE`로 **동작** | 문서와 실측이 어긋나는 항목. 지원 대상이 아니므로 **의존하면 안 됨** ([3.4절](#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)) | P1 |
-| 클러스터링 | 선택 (Premium만) | SKU 무관 항상 켜짐 | 크로스 슬롯 제약이 상시 존재 | P1 |
-| 다중 키 명령 | 비클러스터면 제약 없음 | `EnterpriseCluster`에서도 6개만 허용 (실측: 목록 밖 24개 전부 실패) | 그 밖은 `CROSSSLOT` 실패 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) | P1 |
-| `clusteringPolicy` | 해당 없음 | 생성 후 변경 불가 | 다시 고르려면 DB 재생성 + 데이터 재이관 | P1 |
-| `SWAPDB` | 허용 (실측) | 차단 (실측: `unknown command`) | 다중 DB 전제의 운영 절차가 깨짐 | P1 |
-| `ROLE` | 허용 (실측) | **허용** (실측) | 비클러스터 클라이언트 기준. 클러스터 클라이언트에서는 실패 | P3 |
-| `FAILOVER` | **차단** (실측: `unknown command`) | 차단 (실측: `unknown command`) | 양쪽 다 안 되므로 페일오버 유도는 관리 평면으로 | P3 |
-| 포트 | 6380 (TLS) / 6379 | 10000 | 연결 문자열, 방화벽, NSG | P1 |
-| TLS | 선택 (비TLS 포트 존재) | 필수 | 비TLS 클라이언트는 연결 불가 | P1 |
-| 호스트명 | `<name>.redis.cache.windows.net` | `<name>.<region>.redis.azure.net` | DNS, 허용 목록 | P1 |
-| 유효 메모리 | 표기 용량 − 예약 2종 (P1 6GB → 약 4.4~4.75GB) | 표기 용량 × 약 0.8 | 1:1 매핑하면 한계에 근접 | P2 |
-| HA 복제본 | Premium 복제본은 별도 | `usedmemory` 지표에 포함 (실측 1.98배) | 사용률 오독 | P2 |
-| Redis 버전 | 6.0.x | 7.4.x | `DUMP`/`RESTORE` 호환은 확인됨 (실측: 오류 0건) | — |
-| `CONFIG` | 차단 (실측: `unknown command`) | 명령은 **수락됨** (실측). 단 `SET`은 무효과, 미지원 파라미터는 거부 | AMR에서 성공 응답을 믿고 설정이 바뀌었다고 가정하면 안 됨 ([3.6절](#36-tier-34--정책-의존-항목과-관리-명령)) | P2 |
-| 다운타임 | — | — | 복사 방식의 하한 약 111초 (실측: 3.77GB / 215만 키, 같은 리전 VM) | P3 |
+#### 엔진과 클러스터 구조
 
-**실측값은 이 랩의 데이터 크기·키 개수·네트워크 조건에서 나온 숫자입니다.** 48.47%와 111초 모두
-3.77GB / 215만 키를 같은 리전 VM에서 옮겼을 때의 값이고, 데이터가 커지면 둘 다 커집니다.
-자기 환경의 숫자는 리허설로 직접 재야 합니다 ([6.3절](#63-반복-복사로-유실이-얼마나-줄어드나)).
+| 항목 | Azure Cache for Redis (Basic/Standard/Premium) | Azure Managed Redis | 무엇이 달라지나 |
+|---|---|---|---|
+| 기반 소프트웨어 | OSS Redis | **Redis Enterprise 스택** | `EnterpriseCluster`의 "Enterprise"는 이 스택을 가리키는 이름 ([2.1절](#21-제품-계보--이름부터-정리하기)) |
+| Redis 버전 | 4.0.x / 6.0.x (이 랩은 6.0.14) | 7.4.x (이 랩은 7.4.3) | `DUMP`/`RESTORE` 페이로드 호환은 실측에서 오류 0건 |
+| 샤딩·클러스터링 | Premium에서 **켜고 끄는 옵션** (Basic/Standard는 불가) | **SKU 무관 항상 켜져 있음** | 클러스터를 안 쓰던 워크로드도 크로스 슬롯 제약을 받게 됨 ([2.2절](#22-샤딩과-클러스터--amr은-항상-클러스터입니다)) |
+| 클러스터를 보여 주는 방식 | 해당 없음 (단일 엔드포인트) | `clusteringPolicy`로 결정 — `OSSCluster` / `EnterpriseCluster` / `NoCluster` | 클라이언트에 보이는 모습 자체가 정책마다 다름 ([2.3절](#23-clusteringpolicy-세-가지)) |
+| 그 정책의 변경 | 해당 없음 | **생성 후 변경 불가** | 다시 고르려면 DB 재생성 + 데이터 재이관 ([2.6절](#26-생성-후에는-바꿀-수-없습니다)) |
+| 데이터베이스 개수 | SKU별 16~64개 | **0번 하나** | `SELECT`/`MOVE`/`SWAPDB`와 커넥션 문자열의 DB 번호를 전부 걷어내야 함 |
+| 명령 처리 | OSS Redis 설계상 **단일 스레드** | Redis Enterprise가 인스턴스당 **다중 vCPU 활용** | 메모리 크기가 같아도 처리량 특성이 다름 |
+
+#### Redis Enterprise 스택이 새로 주는 것
+
+ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레이션에 필수는 아니지만,
+**모듈은 생성 시점에만 켤 수 있어서** 나중에 필요해지면 다시 만들어야 합니다.
+
+| 기능 | Azure Cache for Redis (Basic/Standard/Premium) | Azure Managed Redis | 무엇을 확인할 것 |
+|---|---|---|---|
+| 모듈 — RediSearch / RedisJSON / RedisBloom / RedisTimeSeries | **없음** (ACR은 Enterprise 계층에서만) | 있음 | **생성할 때만 추가할 수 있습니다.** 수동 로드도, 버전 갱신도 불가 |
+| RediSearch의 전제 조건 | — | `EnterpriseCluster` 정책 + `NoEviction` 축출 정책 **필수** | 벡터 검색을 쓸 계획이면 정책이 사실상 하나로 정해짐 |
+| 지역 복제 | Premium만, **수동(passive)** | **액티브(active)** — Balanced B0·B1과 Flash Optimized는 제외 | 액티브 구성에서는 `FLUSHALL`/`FLUSHDB`가 차단됨 ([3.6절](#36-tier-34--정책-의존-항목과-관리-명령)) |
+| 액티브 지역 복제와 모듈 병행 | — | `RediSearch`와 `RedisJSON`만 가능 | Bloom·TimeSeries는 액티브 구성과 함께 못 씀 |
+| 디스크 계층 | 없음 | Flash Optimized가 콜드 데이터를 NVMe로 내림 | 이 계층에서는 RedisJSON만 되고 검색·Bloom·TimeSeries는 안 됨 |
+| 데이터 지속성 | Premium만 (RDB/AOF) | 전 계층 | Flash Optimized의 디스크 사용과는 별개 기능 |
+| SLA | Basic 없음 / Standard·Premium 있음 | 전 계층 있음 | HA를 끄면 데이터 유실·다운타임을 감수 (dev/test 전용) |
+
+#### 명령어
+
+| 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
+|---|---|---|---|
+| 다중 키 명령 | 비클러스터면 제약 없음 | `EnterpriseCluster`에서도 `DEL`·`MSET`·`MGET`·`EXISTS`·`UNLINK`·`TOUCH` **6개만** 허용 | 실측: 허용 목록 밖 24개가 전부 `CROSSSLOT`으로 실패 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
+| 같은 슬롯으로 모으면 | — | 정책 2 × 클라이언트 2, **네 조합 모두 통과** (실측 31/31) | 해시 태그가 사실상 유일한 일반 해법. 단 **키 이름이 바뀝니다** |
+| `SELECT` (1번 이상) | 허용 (실측) | 차단 — `DB index is out of range` (실측) | 다중 DB 전제가 깨짐 |
+| `SWAPDB` | 허용 (실측) | 차단 — `unknown command` (실측) | 다중 DB 기반 운영 절차(블루/그린 스왑 등)를 대체해야 함 |
+| `CONFIG GET`/`SET` | 차단 — `unknown command` (실측) | **수락됨** (실측). 단 `SET`은 무효과, 미지원 파라미터는 거부 | 성공 응답을 믿고 설정이 바뀌었다고 가정하면 안 됨 ([3.6절](#36-tier-34--정책-의존-항목과-관리-명령)) |
+| 키스페이스 알림 | Basic 불가 (실측: 기본값에서 0건 수신), Standard/Premium은 관리 평면에서 활성화 | 문서는 "미지원", 실측은 기본값 `AKE`로 **동작** | 문서와 실측이 어긋나는 항목. 지원 대상이 아니므로 의존하면 안 됨 ([3.4절](#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)) |
+| `ROLE` | 허용 (실측) | 허용 (실측) | 비클러스터 클라이언트 기준. 클러스터 클라이언트에서는 실패 |
+| `FAILOVER` | 차단 — `unknown command` (실측) | 차단 — `unknown command` (실측) | 양쪽 다 안 되므로 페일오버 유도는 관리 평면으로 |
+| `REPLICAOF` / `PSYNC` / `REPLCONF` | 차단 | 차단 | 물리적 복제를 붙이는 구성 자체가 불가. `REPLICAOF`는 양쪽 실측, 나머지는 문서 근거 ([8.1절](#81-가장-먼저-떠오르는-방법-그리고-왜-막히는가)) |
+
+#### 클라이언트와 연결
+
+| 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
+|---|---|---|---|
+| 포트 | 6380 (TLS) / 6379 (비TLS) | **10000** | 연결 문자열, 방화벽, NSG |
+| TLS | 선택 — 비TLS 포트가 열려 있음 | **필수** | 비TLS로 붙던 클라이언트는 아예 연결 불가 |
+| 호스트명 | `<name>.redis.cache.windows.net` | `<name>.<region>.redis.azure.net` | DNS, 허용 목록 |
+| 필요한 클라이언트 | 비클러스터 클라이언트로 충분 | `OSSCluster`면 **클러스터 지원 클라이언트 필수**, `EnterpriseCluster`·`NoCluster`면 기존 그대로 | 정책 선택이 곧 클라이언트 교체 여부 ([1.2절](#12-enterprisecluster냐-osscluster냐--쓰는-명령과-클라이언트가-결정합니다)) |
+| `OSSCluster`에 비클러스터 클라이언트로 붙으면 | — | 연결도 되고 `GET`/`SET`도 되지만, **커넥션 단위로 갈려** 풀의 일부만 계속 실패 (실측) | 스모크 테스트로는 잡히지 않는 실패 방식 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
+| 클러스터 클라이언트의 TLS | — | 클라이언트가 샤드 IP로 재접속해 **호스트명 검증에서 걸림** (실측) | 인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있기 때문 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
+
+#### 용량과 지표
+
+| 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
+|---|---|---|---|
+| 유효 메모리 | 표기 용량 − 예약 2종 (실측: P1 6GB → 약 4.4~4.75GB) | 표기 용량 × 약 0.8 | ACR 데이터 크기를 같은 숫자의 AMR SKU에 1:1 매핑하면 한계에 근접 ([10절](#10-용량-산정--두-번-속습니다)) |
+| HA 복제본 | Premium 복제본은 지표가 별도 | `usedmemory`에 **함께 집계** (실측 1.98배) | 사용률을 그대로 읽으면 두 배로 오독 |
+
+**"실측" 값은 이 랩의 환경(3.77GB / 215만 키, Korea Central 같은 리전 VM)에서 나온 것입니다.**
+명령 호환성은 데이터 크기를 타지 않지만, 메모리 비율은 SKU마다 다시 확인해야 합니다
+([12절](#12-이-문서가-측정하지-않은-것)).
 
 ### 1.2 `EnterpriseCluster`냐 `OSSCluster`냐 — 쓰는 명령과 클라이언트가 결정합니다
 
@@ -108,6 +147,7 @@ AMR을 만들 때 정해야 하는 값이고 **생성 후에는 바꿀 수 없�
 |---|---|
 | 클러스터 정책 세 가지의 동작과 선택 기준 | [Azure Managed Redis architecture — Cluster policies](https://learn.microsoft.com/azure/redis/architecture#cluster-policies) |
 | 허용 목록 6개와 `CROSSSLOT` 조건 | [AMR architecture — Multi-key commands](https://learn.microsoft.com/azure/redis/architecture#multi-key-commands) |
+| 모듈을 쓸 계획이 있을 때 (RediSearch는 정책을 강제합니다) | [Using Redis modules with Azure Managed Redis](https://learn.microsoft.com/azure/redis/redis-modules) |
 | ACR에서 막혀 있는 명령 | [Redis commands not supported in Azure Cache for Redis](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-configure#redis-commands-not-supported-in-azure-cache-for-redis) |
 | AMR(Redis Enterprise)에서 막혀 있는 명령 | [Redis Enterprise command compatibility](https://redis.io/docs/latest/operate/rs/references/compatibility/commands/) |
 | 해시 태그로 슬롯을 모으는 규칙 | [Redis Cluster specification — Hash tags](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/#hash-tags) |
@@ -1200,6 +1240,12 @@ RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에
 - [Migration options — Basic/Standard/Premium → Azure Managed Redis](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options)
 - [Self-service migration](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-self-service)
 - [Redis migration agent skill (GitHub)](https://github.com/AzureManagedRedis/amr-migration-skill)
+
+**제품 기능 비교 (1.1절 근거)**
+
+- [What is Azure Managed Redis? — 계층별 기능 비교](https://learn.microsoft.com/azure/redis/overview#feature-comparison) — 액티브 지역 복제, 지속성, Flash Optimized, SLA
+- [What is Azure Cache for Redis? — 계층별 기능 비교](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-overview#feature-comparison) — Basic/Standard/Premium이 무엇을 못 하는지
+- [Using Redis modules with Azure Managed Redis](https://learn.microsoft.com/azure/redis/redis-modules) — 모듈은 생성 시점에만 추가, RediSearch는 `EnterpriseCluster` + `NoEviction` 필요
 
 **제약과 아키텍처 (2·3절·8절 근거)**
 
