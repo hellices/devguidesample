@@ -7,6 +7,7 @@
   "ssl_check_hostname_disabled_for_cluster_client": true,
   "shards": 1,
   "shards_note": "CLUSTER SLOTS 응답 노드가 1개다. 슬롯 0-16383을 한 샤드가 전부 갖고 있어 비클러스터 클라이언트의 단일 키 SET/GET이 성공한다. 샤드가 여러 개인 clustering-policy.json(Balanced_B5)에서는 같은 클라이언트로 단일 키 SET이 대부분 MovedError로 실패했다. 두 결과는 이 구성 차이로 갈린다.",
+  "admin_command_note": "관리명령 결과에서 서버의 판단을 보여 주는 것은 비클러스터 클라이언트 행이다. 거기서 나온 ResponseError(DB index is out of range, unknown command)는 서버가 거부한 것이다. 반면 클러스터 클라이언트 행의 실패는 대부분 redis-py 쪽 사정이다 — SELECT는 AttributeError(라이브러리 버그), SWAPDB/FAILOVER/REPLICAOF는 \"doesn't exist in Redis commands\"(클러스터 명령 테이블에 없음), ROLE은 \"No way to dispatch\"(보낼 노드를 정하지 못함)다. 이 행들을 서버의 미지원 근거로 읽으면 안 된다.",
   "clients": [
     {
       "client": "비클러스터",

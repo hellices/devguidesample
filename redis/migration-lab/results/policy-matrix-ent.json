@@ -5,6 +5,7 @@
   "repeat": 3,
   "redis_py": "7.0.1",
   "ssl_check_hostname_disabled_for_cluster_client": true,
+  "admin_command_note": "관리명령 결과에서 서버의 판단을 보여 주는 것은 비클러스터 클라이언트 행이다. 거기서 나온 ResponseError(DB index is out of range, unknown command)는 서버가 거부한 것이다. 반면 클러스터 클라이언트 행의 실패는 대부분 redis-py 쪽 사정이다 — SELECT는 AttributeError(라이브러리 버그), SWAPDB/FAILOVER/REPLICAOF는 \"doesn't exist in Redis commands\"(클러스터 명령 테이블에 없음), ROLE은 \"No way to dispatch\"(보낼 노드를 정하지 못함)다. 이 행들을 서버의 미지원 근거로 읽으면 안 된다.",
   "clients": [
     {
       "client": "비클러스터",
