@@ -30,7 +30,8 @@ Azure Managed Redis는 클러스터링 구성 방식을 크게 세 가지로 구
 - 클라이언트는 단일 연결만 관리하면 됨
 
 > 기존 소스에서 `createCluster` 구성을 사용한 점으로 보아, **Enterprise 정책이 아닌 OSS Cluster 정책으로 생성**되었을 가능성이 높습니다.  
-> ⚠️ 클러스터 정책은 **생성 후 변경이 불가**합니다.
+> ⚠️ 클러스터 정책은 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 **DB를 삭제하지 않고는 바꿀 수 없습니다**
+> (`NoCluster`에서 나오는 방향만 변경 가능 — [2.6절](../amr-differences.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다)).
 
 ---
 
@@ -109,7 +110,7 @@ const redisClient = createClient({
 - ⚠️ **이미 OSS Cluster로 운영 중이라면 정책만 바꿀 수 없습니다.** `az redisenterprise database update`는
   현재 값이 `NoCluster`일 때만 정책 변경을 허용하고, `OSSCluster`/`EnterpriseCluster`에서는
   **데이터베이스를 삭제하고 재생성**해야 합니다. 즉 이 방안은 데이터 재이관을 동반합니다
-  ([마이그레이션 가이드 2.6절](../azure-cache-to-managed-redis-migration.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다))
+  ([마이그레이션 가이드 2.6절](../amr-differences.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다))
 
 ---
 

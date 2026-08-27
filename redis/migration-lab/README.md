@@ -1,7 +1,8 @@
 # migration-lab
 
 Azure Cache for Redis(ACR) → Azure Managed Redis(AMR) 마이그레이션을 **GB 규모에서 실제로 돌려 보기 위한** 스크립트 모음입니다.
-측정 결과와 해석은 [../azure-cache-to-managed-redis-migration.md](../azure-cache-to-managed-redis-migration.md)에 정리했습니다.
+결론 숫자는 [마이그레이션 가이드](../azure-cache-to-managed-redis-migration.md)에, 측정 방법과 해석은
+[이관 경로와 실측](../amr-migration-paths.md)에 정리했습니다.
 
 소규모(수십 개 키) 테스트로는 마이그레이션의 진짜 비용이 보이지 않습니다. 복사가 순식간에 끝나서
 "복사하는 동안 들어온 쓰기를 잃는 구간"이 드러나지 않기 때문입니다. 이 랩은 그 구간을 숫자로 만드는 것이 목적입니다.
@@ -38,8 +39,8 @@ echo $?                                        # TIER 1 적중이 있으면 1
 
 정적 스캔은 **프레임워크가 대신 호출하는 명령을 놓칩니다**(Spring Session, Celery, Sidekiq, Redisson 등).
 소스 ACR에서 `INFO commandstats`나 짧은 `MONITOR` 표본으로 반드시 교차 확인하세요.
-등급별 명령 목록과 근거는 [가이드 3절](../azure-cache-to-managed-redis-migration.md#3-클라이언트sdk-확인사항)에 있습니다.
-무엇을 먼저 할지에 대한 우선순위는 [가이드 4절](../azure-cache-to-managed-redis-migration.md#4-마이그레이션-우선순위)에 있습니다.
+등급별 명령 목록과 근거는 [가이드 3절](../amr-client-audit.md#3-클라이언트sdk-확인사항)에 있습니다.
+무엇을 먼저 할지에 대한 우선순위는 [가이드 4절](../azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)에 있습니다.
 
 ## 0-1. 정책을 고르기 전에 직접 확인하고 싶다면
 
@@ -67,7 +68,7 @@ python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000
 - `clusteringPolicy`는 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 DB를 지워야만 바꿀 수 있으므로, 비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
 - 이 랩의 결과는 [`results/policy-matrix-ent.json`](results/policy-matrix-ent.json)과
   [`results/policy-matrix-oss.json`](results/policy-matrix-oss.json)에 있고,
-  해석은 [가이드 2.4절](../azure-cache-to-managed-redis-migration.md#24-실측-정책--클라이언트-조합별-명령-호환성)에 있습니다.
+  해석은 [가이드 2.4절](../amr-differences.md#24-실측-정책--클라이언트-조합별-명령-호환성)에 있습니다.
 
 ## 사전 조건
 
