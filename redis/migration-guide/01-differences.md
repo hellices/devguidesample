@@ -10,12 +10,27 @@
 
 ## 1. 기능 차이 — 엔진, 샤딩, 명령어, 클라이언트
 
-ACR(Basic/Standard/Premium)과 AMR은 **서로 다른 소프트웨어** 위에 올라가 있습니다.
-같은 Redis API를 쓰지만 클러스터 구조, 쓸 수 있는 명령, 붙일 수 있는 클라이언트가 갈립니다.
-"실측"이 붙은 항목은 이 랩에서 직접 측정한 값이고, 나머지는 문서 근거입니다.
-**어떻게 옮길 것인가는 [마이그레이션 가이드 4절](../azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)부터입니다.**
+차이를 항목별로 외울 필요는 없습니다. 대부분 **하나의 사실에서 갈라져 나오기** 때문입니다 —
+ACR(Basic/Standard/Premium)은 OSS Redis 위에 있고, AMR은 Redis Enterprise 스택 위에 있습니다.
+같은 Redis API를 말하지만 다른 소프트웨어입니다.
 
-#### 엔진과 클러스터 구조
+그 하나가 어디까지 번지는지 따라가 보면 이렇게 이어집니다.
+
+```
+다른 소프트웨어 → AMR은 SKU와 무관하게 항상 클러스터 → 키가 슬롯으로 흩어짐
+                                                  ├→ 다중 키 명령이 제한된다
+                                                  └→ 클라이언트가 클러스터를 알아야 한다
+```
+
+아래 여섯 묶음은 이 사슬을 한 칸씩 짚은 것입니다. "실측"이 붙은 항목은 이 랩에서 직접 측정한 값이고,
+나머지는 문서 근거입니다. 어떻게 옮길 것인가는 [마이그레이션 가이드 4절](../azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)부터입니다.
+
+#### 사슬의 출발점 — 엔진과 클러스터 구조
+
+표의 일곱 줄 중 마이그레이션 계획을 실제로 바꾸는 것은 **샤딩**과 **정책 변경** 두 줄입니다.
+ACR에서 클러스터링은 Premium에서 켜고 끄는 옵션이었고, 대부분은 꺼 놓고 씁니다.
+AMR에는 그 스위치가 아예 없습니다. 그리고 클러스터를 클라이언트에게 어떻게 보여 줄지 정하는
+`clusteringPolicy`는 한 번 정하면 되돌리는 방법이 사실상 재생성뿐입니다.
 
 | 항목 | Azure Cache for Redis (Basic/Standard/Premium) | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
@@ -27,10 +42,15 @@ ACR(Basic/Standard/Premium)과 AMR은 **서로 다른 소프트웨어** 위에 �
 | 데이터베이스 개수 | SKU별 16~64개 | **0번 하나** | `SELECT`/`MOVE`/`SWAPDB`와 커넥션 문자열의 DB 번호를 전부 걷어내야 함 |
 | 명령 처리 | OSS Redis 설계상 **단일 스레드** | Redis Enterprise가 인스턴스당 **다중 vCPU 활용** | 메모리 크기가 같아도 처리량 특성이 다름 |
 
-#### Redis Enterprise 스택이 새로 주는 것
+데이터베이스가 0번 하나뿐이라는 줄도 사슬과 무관해 보이지만 같은 뿌리입니다.
+Redis Cluster 규격 자체가 DB를 하나만 두기 때문입니다.
 
-ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레이션에 필수는 아니지만,
-**모듈은 생성 시점에만 켤 수 있어서** 나중에 필요해지면 다시 만들어야 합니다.
+#### 사슬 밖에서 얻는 것 — Redis Enterprise 스택의 추가 기능
+
+여기까지가 "달라지는 것"이었다면 이 묶음은 "없던 것이 생기는" 쪽입니다.
+ACR Basic/Standard/Premium에는 아예 없던 기능들이라 마이그레이션에 필수는 아닙니다.
+그런데도 이 자리에 적는 이유는 하나입니다 — **모듈은 생성 시점에만 켤 수 있습니다.**
+나중에 필요해지면 그때는 다시 만드는 수밖에 없으니, 쓸 계획이 조금이라도 있으면 지금 정해야 합니다.
 
 | 기능 | Azure Cache for Redis (Basic/Standard/Premium) | Azure Managed Redis | 무엇을 확인할 것 |
 |---|---|---|---|
@@ -42,7 +62,15 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | 데이터 지속성 | Premium만 (RDB/AOF) | 전 계층 | Flash Optimized의 디스크 사용과는 별개 기능 |
 | SLA | Basic 없음 / Standard·Premium 있음 | 전 계층 있음 | HA를 끄면 데이터 유실·다운타임을 감수 (dev/test 전용) |
 
-#### 명령어
+RediSearch 줄은 특히 조심할 자리입니다. 벡터 검색을 쓸 생각이 있으면 `clusteringPolicy`가
+`EnterpriseCluster`로 못 박히므로, 정책 선택이 아래 명령어·클라이언트 논의를 거치기 전에 이미 끝나 버립니다.
+
+#### 사슬이 코드에 닿는 곳 — 명령어
+
+클러스터가 항상 켜져 있다는 말은 실무에서 이렇게 나타납니다.
+**여러 키를 한 명령으로 묶는 순간, 그 키들이 같은 슬롯에 있어야 합니다.**
+그렇지 않으면 서버가 `CROSSSLOT`으로 거부합니다. ACR에서 비클러스터로 쓰던 코드에는
+이 조건을 지킬 이유가 없었으므로, 대개 지켜져 있지 않습니다.
 
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
@@ -57,7 +85,15 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | `FAILOVER` | `unknown command` (실측) — Redis 6.2에 추가된 명령이라 **ACR의 6.0.x에는 없음** | `unknown command` (실측). 문서도 "명시적 Failover 명령을 지원하지 않는다"고 명시 | 어느 쪽에서도 명령으로 페일오버를 유도할 수 없음. AMR에는 재부팅도 없고 대신 Flush 관리 작업만 있음 |
 | `REPLICAOF` / `PSYNC` / `REPLCONF` | 차단 | 차단 | 물리적 복제를 붙이는 구성 자체가 불가. `REPLICAOF`는 양쪽 실측, 나머지는 문서 근거 ([이관 경로와 실측 4.1절](03-migration-paths.md#41-가장-먼저-떠오르는-방법-그리고-왜-막히는가)) |
 
-#### 클라이언트와 연결
+표의 아래쪽 절반은 크로스 슬롯과 무관해 보이지만, 실은 마이그레이션에서 더 자주 발목을 잡습니다.
+`SELECT`와 `SWAPDB`는 **ACR에서는 되던 것이 AMR에서 안 되는** 몇 안 되는 항목이고,
+`REPLICAOF` 줄은 "복제로 무중단 전환한다"는 계획을 통째로 지웁니다.
+
+#### 그보다 먼저 걸리는 것 — 클라이언트와 연결
+
+명령이 거부되는 건 그래도 코드를 고치면 되는 문제입니다.
+그 앞에 **연결 자체가 성립하지 않는 조합**이 있습니다. 그리고 더 곤란한 쪽은 그 반대 —
+**연결도 되고 얼핏 동작까지 하는데 일부만 실패하는 조합**입니다.
 
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
@@ -69,10 +105,16 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | `OSSCluster`에 비클러스터 클라이언트로 붙으면 | — | 연결도 되고 `GET`/`SET`도 되지만, **커넥션 단위로 갈려** 풀의 일부만 계속 실패 (실측) | 스모크 테스트로는 잡히지 않는 실패 방식 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
 | 클러스터 클라이언트의 TLS | — | 클라이언트가 샤드 IP로 재접속해 **호스트명 검증에서 걸림** (실측) | 인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있기 때문 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
 
-#### 네트워크와 운영 — AMR로 가면 없어지는 것
+마지막 두 줄이 이 문서에서 가장 오래 붙잡고 있었던 항목입니다.
+왜 그런 모양으로 실패하는지는 [2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)에서 측정치와 함께 풀어 두었습니다.
 
-이 랩에서 측정한 항목은 아니고 전부 [Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) 근거입니다.
-**명령이나 클라이언트보다 먼저 걸리는 항목들**이라 1절에 둡니다. 특히 VNet 주입은 마이그레이션 도구에서 아예 오류로 막힙니다.
+#### Redis 바깥에서 먼저 걸리는 것 — 네트워크와 운영
+
+지금까지는 Redis를 어떻게 부르느냐의 문제였습니다. 이 묶음은 다릅니다.
+**Redis에 닿기 전에 걸리는 항목들**이라 코드 감사보다 앞에 놓아야 합니다.
+특히 VNet 주입은 마이그레이션 도구에서 경고가 아니라 오류로 진행이 막힙니다.
+여기 있는 항목은 이 랩에서 측정한 것이 아니고 전부
+[Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) 근거입니다.
 
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇을 해야 하나 |
 |---|---|---|---|
@@ -84,24 +126,43 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | 영역 중복 | Premium부터 | HA를 켜고 리전이 AZ를 지원하면 **기본값** | 별도 설정 없이 얻는 항목 |
 | RDB 가져오기/내보내기 | **Premium만** | **전 SKU** | 원본이 Basic/Standard면 [경로 A](03-migration-paths.md#1-경로-a-rdb-export--import) 사용 불가 |
 
-#### 용량과 지표
+마지막 줄은 방향이 반대라 눈여겨볼 만합니다. 다른 항목이 대부분 "AMR에서 없어지는 것"인 데 비해,
+RDB 내보내기는 **AMR 쪽이 넓습니다.** 다만 이관에서 필요한 것은 소스인 ACR의 내보내기라
+Basic/Standard에서 출발한다면 이 확장은 도움이 되지 않습니다.
+
+#### 마지막 칸 — 용량과 지표
+
+사이징은 두 번 속습니다. 소스에서 한 번, 타깃에서 한 번입니다.
+ACR은 표기 용량에서 예약 영역 두 개를 빼야 실제 쓸 수 있는 양이 나오고,
+AMR은 반대로 **지표에 찍히는 숫자가 실제보다 큽니다** — HA 복제본이 함께 세어지기 때문입니다.
 
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
 | 유효 메모리 | 표기 용량 − 예약 2종 (실측: P1 6GB → 약 4.4~4.75GB) | 표기 용량 × 약 0.8 | ACR 데이터 크기를 같은 숫자의 AMR SKU에 1:1 매핑하면 한계에 근접 ([이관 경로와 실측 5절](03-migration-paths.md#5-용량-산정--두-번-속습니다)) |
 | HA 복제본 | Premium 복제본은 지표가 별도 | `usedmemory`에 **함께 집계** (실측 1.98배) | 사용률을 그대로 읽으면 두 배로 오독 |
 
+두 오차가 같은 방향으로 겹치면 "6GB에서 4.5GB 쓰고 있으니 6GB짜리로 가면 되겠다"는 계산이 그대로 한계에 부딪힙니다.
+어떻게 어긋나는지는 [이관 경로와 실측 5절](03-migration-paths.md#5-용량-산정--두-번-속습니다)에서 관측치로 확인했습니다.
+
 **"실측" 값은 이 랩의 환경(3.77GB / 215만 키, Korea Central 같은 리전 VM)에서 나온 것입니다.**
-명령 호환성은 데이터 크기를 타지 않지만, 메모리 비율은 SKU마다 다시 확인해야 합니다
+명령 호환성은 데이터 크기를 타지 않으므로 그대로 가져다 써도 되지만, 메모리 비율은 SKU마다 다시 확인해야 합니다
 ([이관 경로와 실측 7절](03-migration-paths.md#7-이-문서가-측정하지-않은-것)).
 
 ---
 
 ## 2. 왜 다른가 — 제품 계보와 클러스터 정책
 
+1절이 "무엇이 다른가"였다면 여기서는 "왜 그렇게 됐는가"를 봅니다.
+특히 정책 이름 하나가 오해를 자주 사는데, 그 오해를 먼저 풀어 두면 나머지 선택이 한결 쉬워집니다.
+
 ### 2.1 제품 계보 — 이름부터 정리하기
 
-두 서비스는 **서로 다른 소프트웨어** 위에 올라가 있습니다.
+`EnterpriseCluster`라는 이름을 처음 보면 대개 둘 중 하나로 읽습니다.
+**"소스가 ACR Enterprise 계층일 때 고르는 것"** 이거나
+**"Enterprise급 기능을 켜는 옵션"** 이거나. 둘 다 아닙니다.
+이 이름은 소스가 무엇인지와도, ACR의 계층 이름과도 아무 관계가 없습니다.
+
+이름의 출처는 AMR이 딛고 선 소프트웨어입니다.
 
 | | Azure Cache for Redis (Basic/Standard/Premium) | Azure Managed Redis |
 |---|---|---|
@@ -110,8 +171,8 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | 샤딩 | Premium에서 **선택적으로** 켜는 기능 | **항상 켜져 있음** |
 | 엔드포인트 | 단일 | 정책에 따라 단일 또는 클러스터 |
 
-`EnterpriseCluster`의 "Enterprise"는 **소스가 ACR이라서**도, **ACR의 Enterprise 계층**과도 관계가 없습니다.
-AMR이 Redis Enterprise 스택 위에서 동작하고, 그 소프트웨어가 제공하는 **프록시 기반 클러스터링**을 가리키는 이름입니다.
+그러니까 `EnterpriseCluster`가 가리키는 것은 **Redis Enterprise 스택이 제공하는 프록시 기반 클러스터링**입니다.
+프록시가 앞에 서서 요청을 대신 라우팅하고, 그 덕분에 클라이언트에게는 클러스터가 아닌 것처럼 보입니다.
 
 > The **Enterprise clustering policy** is a simpler configuration that uses a single endpoint for all client
 > connections. (...) it routes all requests to a single Redis node that **acts as a proxy**. (...) The advantage
@@ -145,11 +206,18 @@ user2:profile      ─ 다른 슬롯
 
 ### 2.3 clusteringPolicy 세 가지
 
+앞 절의 결론은 샤딩을 켤지 말지는 고를 수 없다는 것이었습니다.
+고를 수 있는 것은 **그 클러스터를 클라이언트에게 어떻게 보여 줄 것인가**이고, 선택지가 셋입니다.
+셋의 실질적인 차이는 결국 두 축으로 수렴합니다 — **클라이언트를 바꿔야 하는가**, 그리고 **얼마나 빠른가**.
+
 | 정책 | 클라이언트가 보는 것 | 비고 |
 |---|---|---|
 | `OSSCluster` | Redis Cluster API. 클라이언트가 샤드에 직접 연결 | **CLI 기본값.** 처리량이 가장 높음. 클러스터 지원 클라이언트 필수 |
 | `EnterpriseCluster` | 단일 엔드포인트 (프록시가 라우팅) | 비클러스터 클라이언트 사용 가능. 프록시가 병목이 될 수 있음 |
 | `NoCluster` | 단일 엔드포인트, 샤딩 없음 | **25GB 이하만.** 성능은 가장 낮음 |
+
+두 축이 서로 반대 방향이라는 점이 이 선택을 어렵게 만듭니다.
+빠른 쪽을 고르면 클라이언트를 갈아야 하고, 코드를 안 건드리는 쪽을 고르면 프록시를 하나 더 통과해야 합니다.
 
 ```
 $ az redisenterprise database create --help
@@ -159,6 +227,9 @@ $ az redisenterprise database create --help
 Microsoft는 **비샤딩 ACR(Basic/Standard/Premium)에서 넘어오는 경우 성능을 위해 `OSSCluster`를 우선 검토**하고,
 애플리케이션이 OSS도 Enterprise도 감당 못 할 때만 `NoCluster`를 쓰라고 권합니다.
 `MULTI`처럼 크로스 슬롯 명령을 광범위하게 쓰는 워크로드가 `NoCluster`의 대표 사례로 문서에 나옵니다.
+
+권고가 `OSSCluster` 쪽을 가리킨다는 점은 분명하지만, 그 권고를 받아들이려면
+"우리 클라이언트가 클러스터 모드로 갈 수 있는가"에 먼저 답해야 합니다. 다음 절이 그 답을 재 본 결과입니다.
 
 ### 2.4 실측: 정책 × 클라이언트 조합별 명령 호환성
 
