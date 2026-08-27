@@ -31,7 +31,7 @@ Azure Managed Redis는 클러스터링 구성 방식을 크게 세 가지로 구
 
 > 기존 소스에서 `createCluster` 구성을 사용한 점으로 보아, **Enterprise 정책이 아닌 OSS Cluster 정책으로 생성**되었을 가능성이 높습니다.  
 > ⚠️ 클러스터 정책은 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 **DB를 삭제하지 않고는 바꿀 수 없습니다**
-> (`NoCluster`에서 나오는 방향만 변경 가능 — [2.6절](../amr-differences.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다)).
+> (`NoCluster`에서 나오는 방향만 변경 가능 — [ACR과 AMR의 차이 2.6절](../migration-guide/01-differences.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다)).
 
 ---
 
@@ -110,7 +110,7 @@ const redisClient = createClient({
 - ⚠️ **이미 OSS Cluster로 운영 중이라면 정책만 바꿀 수 없습니다.** `az redisenterprise database update`는
   현재 값이 `NoCluster`일 때만 정책 변경을 허용하고, `OSSCluster`/`EnterpriseCluster`에서는
   **데이터베이스를 삭제하고 재생성**해야 합니다. 즉 이 방안은 데이터 재이관을 동반합니다
-  ([마이그레이션 가이드 2.6절](../amr-differences.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다))
+  ([ACR과 AMR의 차이 2.6절](../migration-guide/01-differences.md#26-정책-변경은-nocluster에서-나오는-방향만-됩니다))
 
 ---
 
@@ -219,7 +219,7 @@ async function safeRedisGet(key) {
 
 ## 코드 샘플
 
-이 이슈를 검증하기 위한 예제 코드는 [`cluster_example/`](cluster_example/) 디렉토리에 포함되어 있습니다.
+이 이슈를 검증하기 위한 예제 코드는 [`cluster_example/`](cluster_example/) 디렉터리에 포함되어 있습니다.
 
 - OSS Cluster(`createCluster`) vs Enterprise(`createClient`) 연결 방식 비교
 - Cluster topology 조회 및 모니터링

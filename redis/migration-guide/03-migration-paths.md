@@ -1,20 +1,20 @@
-# 이관 경로와 실측 (상세)
+# 03. 이관 경로와 실측 — 경로 A/B/C와 측정 결과
 
-> 이 문서는 [ACR → AMR 마이그레이션 가이드](azure-cache-to-managed-redis-migration.md)의 상세 문서입니다.
-> **절 번호는 가이드와 같습니다.**
-> 측정값은 Korea Central에서 3.77GB / 215만 키 규모로 잰 것입니다 ([테스트 환경](amr-migration-paths.md#111-테스트-환경)).
+> 이 문서는 [ACR → AMR 마이그레이션 가이드](../azure-cache-to-managed-redis-migration.md)의 상세 문서입니다.
+> **절 번호는 문서마다 1부터 매깁니다.** 다른 문서를 가리킬 때는 문서 이름을 함께 씁니다.
+> 측정값은 Korea Central에서 3.77GB / 215만 키 규모로 잰 것입니다 ([테스트 환경](#61-테스트-환경)).
 
-관련 문서: [ACR과 AMR의 차이](amr-differences.md) · [클라이언트·SDK 확인사항](amr-client-audit.md)
+관련 문서: [ACR과 AMR의 차이](01-differences.md) · [클라이언트·SDK 확인사항](02-client-audit.md)
 
 ---
 
-## 5. 경로 A: RDB Export / Import
+## 1. 경로 A: RDB Export / Import
 
 ```
 ACR (Premium) --export--> Blob Storage --import--> AMR
 ```
 
-### 5.1 Export는 잘 됩니다
+### 1.1. Export는 잘 됩니다
 
 | 항목 | 값 |
 |---|---|
@@ -26,7 +26,7 @@ ACR (Premium) --export--> Blob Storage --import--> AMR
 Export는 관리 ID를 지원하므로, 스토리지 계정이 공용 네트워크 접근을 막고 있어도
 신뢰할 수 있는 서비스 예외를 통해 동작합니다.
 
-### 5.2 Import는 이 환경에서 실패했습니다
+### 1.2. Import는 이 환경에서 실패했습니다
 
 ```
 az redisenterprise database import --sas-uris "https://.../dump.rdb?<sas>"
@@ -53,10 +53,10 @@ az redisenterprise database import --sas-uris "https://.../dump.rdb?<sas>"
 
 ---
 
-## 6. 경로 B: `SCAN` + `DUMP`/`RESTORE` 프로그래매틱 복사
+## 2. 경로 B: `SCAN` + `DUMP`/`RESTORE` 프로그래매틱 복사
 
 Basic/Standard처럼 Export를 못 쓰거나, 경로 A가 정책으로 막힌 경우의 대안입니다.
-[`migration-lab/migrate_scan_copy.py`](migration-lab/migrate_scan_copy.py)가 하는 일은 다음과 같습니다.
+[`migration-lab/migrate_scan_copy.py`](../migration-lab/migrate_scan_copy.py)가 하는 일은 다음과 같습니다.
 
 - `KEYS *` 대신 **`SCAN` 커서** — `KEYS`는 O(N) 블로킹 명령이라 수백만 키 인스턴스를 멈춥니다.
 - 타입별 `HGETALL`/`LRANGE` 대신 **`DUMP` → `RESTORE ... REPLACE`** — 타입에 무관하고 클라이언트 메모리도 덜 씁니다.
@@ -65,7 +65,7 @@ Basic/Standard처럼 Export를 못 쓰거나, 경로 A가 정책으로 막힌 �
 
 Redis 6.0.14에서 만든 `DUMP` 페이로드를 Redis 7.4.3에 `RESTORE`하는 것은 정상 동작했습니다 (오류 0건).
 
-### 6.1 복사 자체는 빠르고 정확합니다
+### 2.1. 복사 자체는 빠르고 정확합니다
 
 | 항목 | 값 |
 |---|---|
@@ -76,7 +76,7 @@ Redis 6.0.14에서 만든 `DUMP` 페이로드를 Redis 7.4.3에 `RESTORE`하는 
 | TTL 보존 (표본 2,000) | **2,000 / 2,000 (유실 0%)** |
 | 값 무결성 (무작위 표본 2,496) | 일치 2,482, **불일치 0**, 타깃에 없음 14 |
 
-### 6.2 그런데 복사 중 들어온 쓰기의 48.47%가 사라집니다
+### 2.2. 그런데 복사 중 들어온 쓰기의 48.47%가 사라집니다
 
 복사가 도는 동안 소스에 초당 약 140건씩 프로브 키를 쓰고, 각 프로브의 키와 쓰기 시각을 로컬에 기록했습니다.
 복사가 끝난 뒤 타깃에서 프로브를 **값까지** 대조했습니다.
@@ -100,7 +100,7 @@ RDB Export도 같은 성질을 갖습니다. Export는 시작 시점의 스냅�
 > 소규모 테스트에서 이게 안 보이는 이유가 여기 있습니다. 키가 몇 개뿐이면 복사가 몇 초 만에 끝나서
 > 유실 구간이 사실상 없습니다. GB 규모에서는 이 구간이 **2분**입니다.
 
-### 6.3 반복 복사로 유실이 얼마나 줄어드나
+### 2.3. 반복 복사로 유실이 얼마나 줄어드나
 
 같은 복사를 여러 번 돌리면 이전 패스가 놓친 키를 다음 패스가 회수합니다. 실제로 해 봤습니다.
 
@@ -135,7 +135,7 @@ TTL 보존:     2,000 / 2,000   (유실 0%)
 
 ---
 
-## 7. 경로 C: Azure 마이그레이션 도구는 데이터를 옮기지 않는다
+## 3. 경로 C: Azure 마이그레이션 도구는 데이터를 옮기지 않는다
 
 "복제 기반 무중단 마이그레이션"을 기대하고 확인했지만, 그런 기능은 없습니다.
 
@@ -164,15 +164,15 @@ Microsoft.Cache/redis/rollbackDnsForMigration/action
 
 | 제약 | 내용 |
 |---|---|
-| 전환 시점 통제 불가 | 마이그레이션을 시작할 수는 있지만 실제 트래픽 전환 시점은 고를 수 없다 |
-| 전체 동시 전환 | 하나의 Redis에 붙은 **모든** 애플리케이션이 동시에 넘어간다. 서비스 단위 점진 전환 불가 |
-| 롤백 창 제한 | 성공 후 검증·롤백 가능 시간이 짧다 |
-| 두 호스트명 병존 기간 제한 | 기존 ACR 호스트명은 이후 자동 삭제된다 |
-| 관리 작업 잠금 | 상태가 `Migrating`인 동안 다른 관리 작업이 차단된다 |
-| **프라이빗 엔드포인트 미지원** | 프라이빗 엔드포인트를 쓰는 캐시는 대상이 아니다 |
+| 전환 시점 통제 불가 | 마이그레이션 시작만 고를 수 있고, 실제 트래픽 전환 시점은 선택 불가 |
+| 전체 동시 전환 | 하나의 Redis에 붙은 **모든** 애플리케이션이 동시에 전환. 서비스 단위 점진 전환 불가 |
+| 롤백 창 제한 | 성공 후 검증·롤백 가능 시간이 짧음 |
+| 두 호스트명 병존 기간 제한 | 기존 ACR 호스트명은 이후 자동 삭제 |
+| 관리 작업 잠금 | 상태가 `Migrating`인 동안 다른 관리 작업 차단 |
+| **프라이빗 엔드포인트 미지원** | 프라이빗 엔드포인트를 쓰는 캐시는 대상 제외 |
 | VNet 주입 캐시 미지원 | |
 | 지역 복제 캐시 미지원 | |
-| 설정 미복사 | 관리 ID, 방화벽 규칙, 지속성 설정, 업데이트 일정, 키스페이스 알림은 넘어가지 않는다 |
+| 설정 미복사 | 관리 ID, 방화벽 규칙, 지속성 설정, 업데이트 일정, 키스페이스 알림은 이관 대상 아님 |
 
 프라이빗 엔드포인트를 쓰는 프로덕션 환경이라면 애초에 대상이 아닙니다.
 
@@ -187,17 +187,17 @@ Microsoft.Cache/redis/rollbackDnsForMigration/action
 - ACR을 삭제한 뒤에도 **기존 ACR 호스트명은 계속 AMR을 가리킵니다.** 다만 이후 자동 삭제 예정이므로
   애플리케이션은 AMR 호스트명(`<name>.<region>.redis.azure.net`)으로 갱신해야 합니다.
 - 포털 외에 **PowerShell로 사전 검증·시작·상태 확인·취소**를 할 수 있습니다.
-- 데이터가 필요하면 도구 절차 안에서도 결국 [5·6절](#5-경로-a-rdb-export--import)의 이관을 따로 해야 합니다
+- 데이터가 필요하면 도구 절차 안에서도 결국 [5·6절](#1-경로-a-rdb-export--import)의 이관을 따로 해야 합니다
   (공식 문서의 Step 2b도 self-service의 데이터 이관 절로 연결됩니다).
 
 ---
 
-## 8. 실시간 마이그레이션 전략 — `REPLICAOF`는 왜 안 되는가
+## 4. 실시간 마이그레이션 전략 — `REPLICAOF`는 왜 안 되는가
 
-6절에서 측정한 111초(3.77GB / 215만 키)는 **복사 방식의 하한**입니다. 그 아래로 내려가려면 복사가 아니라
+2절에서 측정한 111초(3.77GB / 215만 키)는 **복사 방식의 하한**입니다. 그 아래로 내려가려면 복사가 아니라
 **"소스가 살아 있는 동안 타깃이 계속 따라오게 하는"** 방식이 필요합니다. 이 절이 그 선택지를 정리합니다.
 
-### 8.1 가장 먼저 떠오르는 방법, 그리고 왜 막히는가
+### 4.1. 가장 먼저 떠오르는 방법, 그리고 왜 막히는가
 
 자체 관리 Redis라면 이게 정석입니다.
 
@@ -240,7 +240,7 @@ ACR을 넣을 수 없습니다. 설령 노출됐더라도 결국 소스를 향�
 > **정리**: 물리적 복제(replication protocol) 기반 전략은 관리형 → 관리형 구간에서 존재하지 않습니다.
 > 남는 것은 **논리적 복제** — 쓰기를 이벤트나 애플리케이션 레벨에서 관찰해 타깃에 다시 적용하는 방식뿐입니다.
 
-### 8.2 RIOT / RIOT-X 라이브 복제 — 의도에 가장 가까운 대안
+### 4.2. RIOT / RIOT-X 라이브 복제 — 의도에 가장 가까운 대안
 
 > **이 랩에서 검증하지 않았습니다.** 문서 근거만 확인했습니다.
 
@@ -262,7 +262,7 @@ riot compare --full ...
 ```
 
 `--mode live`는 초기 `SCAN` 스냅샷과 실시간 스트림을 **동시에** 돌립니다.
-6절에서 본 "커서가 지나간 자리의 쓰기가 사라지는" 문제를 알림 스트림이 메워 주는 구조입니다.
+2절에서 본 "커서가 지나간 자리의 쓰기가 사라지는" 문제를 알림 스트림이 메워 주는 구조입니다.
 
 **받아들여야 하는 제약:**
 
@@ -274,14 +274,14 @@ riot compare --full ...
 - **Basic SKU에서는 쓸 수 없습니다.** 키스페이스 알림은 Standard 이상입니다.
 - `KEA`는 모든 이벤트를 발행합니다. 쓰기가 많은 인스턴스에서 소스 CPU 부담이 얼마나 되는지는
   **이 랩에서 측정하지 않았습니다.** 프로덕션에 켜기 전에 관측하세요.
-- 여기서 알림이 필요한 쪽은 **소스인 ACR**입니다. [3.4절](amr-client-audit.md#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)의
+- 여기서 알림이 필요한 쪽은 **소스인 ACR**입니다. [클라이언트·SDK 확인사항 4절](02-client-audit.md#4-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)의
   AMR 쪽 논의와는 방향이 다릅니다. (반대 방향, 즉 AMR에서 다른 곳으로 나가는 라이브 복제는 이 방법으로 안 됩니다.)
 
-### 8.3 애플리케이션 계층 — 이중 쓰기와 지연 백필
+### 4.3. 애플리케이션 계층 — 이중 쓰기와 지연 백필
 
 > **이 랩에서 검증하지 않았습니다.** 설계 지침입니다.
 
-**(a) 이중 쓰기** — 9.2절에서 다룹니다. 유실 구간을 원천 제거하는 유일한 방법이지만 애플리케이션 변경이 가장 큽니다.
+**(a) 이중 쓰기** — [마이그레이션 가이드 6.2절](../azure-cache-to-managed-redis-migration.md#62-쓰기를-멈출-수-없다면-애플리케이션-이중-쓰기)에서 다룹니다. 유실 구간을 원천 제거하는 유일한 방법이지만 애플리케이션 변경이 가장 큽니다.
 
 **(b) 읽기 폴백 + 지연 백필** — 캐시라면 이쪽이 훨씬 쌉니다.
 
@@ -295,7 +295,7 @@ riot compare --full ...
 대신 전환 기간 동안 **캐시 미스마다 왕복이 두 번**이고, 두 인스턴스를 동시에 유지해야 합니다.
 TTL이 짧은 순수 캐시라면 며칠이면 ACR을 뗄 수 있습니다.
 
-### 8.4 프록시 계층 미러링 — 애플리케이션을 안 고치는 경우
+### 4.4. 프록시 계층 미러링 — 애플리케이션을 안 고치는 경우
 
 > **이 랩에서 검증하지 않았습니다.**
 
@@ -318,7 +318,7 @@ Envoy 문서도 이 필터를 "not hardened"로 표기합니다. 대조 검증�
 
 트래픽 경로에 홉이 하나 늘어난다는 점, 그리고 프록시 자체가 새로운 단일 장애점이 된다는 점도 계산에 넣으세요.
 
-### 8.5 캐시 재수화 — 데이터를 아예 안 옮기는 선택지
+### 4.5. 캐시 재수화 — 데이터를 아예 안 옮기는 선택지
 
 **Redis를 순수 look-aside 캐시로만 쓴다면, 데이터를 옮길 이유가 없습니다.** Microsoft도 문서에서 이 선택지를 명시합니다.
 빈 AMR로 연결을 바꾸고 원본(DB/API)에서 다시 채우면 끝입니다. 다운타임 0, 데이터 유실은 "전량이지만 의도된 것".
@@ -330,21 +330,21 @@ Envoy 문서도 이 필터를 "not hardened"로 표기합니다. 대조 검증�
 - **백엔드가 콜드 스타트 부하를 견뎌야 합니다.** 캐시가 비면 모든 요청이 원본으로 갑니다.
   전환 직후 몇 분간 DB가 감당 못 하면 이 방법이 가장 긴 장애가 됩니다. 미리 워밍업하거나 점진 전환하세요.
 
-### 8.6 비교
+### 4.6. 비교
 
 | 전략 | 다운타임 | 데이터 유실 | 애플리케이션 변경 | 이 랩 검증 |
 |---|---|---|---|---|
 | `REPLICAOF` 복제 | — | — | — | **불가능 (양쪽 차단)** |
-| RDB Export/Import | 스냅샷 이후 쓰기 전부 | 큼 | 없음 | Export만 (5절) |
-| `SCAN` 복사 + 쓰기 차단 | 약 111초 (실측: 3.77GB / 215만 키) | 0 | 없음 | ✅ (6.3절) |
-| `SCAN` 복사 반복 (쓰기 유지) | 0 | 패스당 약 절반씩 수렴 (2패스 후 20.21%) | 없음 | ✅ (6.3절) |
+| RDB Export/Import | 스냅샷 이후 쓰기 전부 | 큼 | 없음 | Export만 (1절) |
+| `SCAN` 복사 + 쓰기 차단 | 약 111초 (실측: 3.77GB / 215만 키) | 0 | 없음 | ✅ (2.3절) |
+| `SCAN` 복사 반복 (쓰기 유지) | 0 | 패스당 약 절반씩 수렴 (2패스 후 20.21%) | 없음 | ✅ (2.3절) |
 | RIOT `--mode live` | 롤아웃 시간 | **보장 없음** — 대조 필수 | 없음 | ✗ |
 | 애플리케이션 이중 쓰기 | 롤아웃 시간 | 0 (읽기-수정-쓰기 제외) | **큼** | ✗ |
 | 읽기 폴백 + 지연 백필 | 롤아웃 시간 | 해당 없음 | 중간 | ✗ |
 | 프록시 미러링 (Envoy) | 롤아웃 시간 | fire-and-forget이라 미검출 | 없음 (인프라 변경) | ✗ |
 | 캐시 재수화 | 0 | 전량 (의도적) | 없음 | ✗ |
 
-### 8.7 선택 기준
+### 4.7. 선택 기준
 
 ```
 Redis에 재계산 불가능한 데이터가 있는가?
@@ -364,7 +364,7 @@ Redis에 재계산 불가능한 데이터가 있는가?
 
 ---
 
-## 10. 용량 산정 — 두 번 속습니다
+## 5. 용량 산정 — 두 번 속습니다
 
 ### 소스: SKU 표기 용량 ≠ 쓸 수 있는 용량
 
@@ -421,14 +421,14 @@ az monitor metrics list \
   --metric usedmemory usedmemorypercentage --aggregation Maximum --interval PT5M
 ```
 
-원시 관측치는 [`results/amr-memory-sizing.json`](migration-lab/results/amr-memory-sizing.json)에 있습니다.
+원시 관측치는 [`results/amr-memory-sizing.json`](../migration-lab/results/amr-memory-sizing.json)에 있습니다.
 20% 예약은 문서상 모든 AMR 인스턴스에 적용되지만, **역산으로 확인한 것은 Balanced_B5 하나**입니다.
 
 ---
 
-## 11. 부록: 테스트 환경과 재현
+## 6. 부록: 테스트 환경과 재현
 
-### 11.1 테스트 환경
+### 6.1. 테스트 환경
 
 | 구성 | 값 |
 |---|---|
@@ -450,7 +450,7 @@ RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에
 
 이후 측정은 프로브 키 정리 등을 거친 **2,155,260 키 / 3.77G** 상태를 기준으로 합니다.
 
-#### 명령 호환성 랩 (2.4절·3.6절)
+#### 명령 호환성 랩 (ACR과 AMR의 차이 2.4절 · 클라이언트·SDK 확인사항 6절)
 
 정책별 명령 호환성과 관리 명령 비교는 **위와 별개의 인스턴스**에서 측정했습니다.
 `clusteringPolicy`는 생성 후 변경할 수 없어 정책마다 클러스터를 따로 만들어야 하고,
@@ -467,44 +467,44 @@ RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에
 - 왕복 지연이 큰 환경이라 픽스처 준비는 파이프라인으로 묶었습니다. 순차 전송 시 38분이 걸립니다.
 - `acr-lab-c0`가 **Basic**이라는 점은 키스페이스 알림 해석에서 중요합니다.
   `notify-keyspace-events`는 Standard/Premium 전용 설정이라 Basic에서는 관리 평면도 거부합니다
-  ([3.4절](amr-client-audit.md#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)).
+  ([클라이언트·SDK 확인사항 4절](02-client-audit.md#4-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)).
 
-### 11.2 재현하기
+### 6.2. 재현하기
 
-[`migration-lab/`](migration-lab/)에 스크립트와 결과 JSON이 있습니다. 실행 방법은
-[`migration-lab/README.md`](migration-lab/README.md)를 보세요.
+[`migration-lab/`](../migration-lab/)에 스크립트와 결과 JSON이 있습니다. 실행 방법은
+[`migration-lab/README.md`](../migration-lab/README.md)를 보세요.
 
 | 파일 | 내용 |
 |---|---|
-| [`audit_commands.sh`](migration-lab/audit_commands.sh) | 3절 명령어 감사 정적 스캐너 (TIER 1 적중 시 종료 코드 1) |
-| [`policy_matrix_test.py`](migration-lab/policy_matrix_test.py) | 2.4절 정책 × 클라이언트 매트릭스 재현 스크립트 (`--repeat`로 반복 검증) |
-| [`results/policy-matrix-ent.json`](migration-lab/results/policy-matrix-ent.json) | `EnterpriseCluster` 원본 결과 (명령별 성공/실패와 예외 타입) |
-| [`results/policy-matrix-oss.json`](migration-lab/results/policy-matrix-oss.json) | `OSSCluster` 원본 결과 |
-| [`results/clustering-policy.json`](migration-lab/results/clustering-policy.json) | OSSCluster vs EnterpriseCluster 실측 |
-| [`results/path-a-rdb.json`](migration-lab/results/path-a-rdb.json) | Export 성공 / Import 실패와 근본 원인 |
-| [`results/path-b-scan-copy.json`](migration-lab/results/path-b-scan-copy.json) | 단일 패스 복사와 48.47% 유실 |
-| [`results/path-b-repeat-pass.json`](migration-lab/results/path-b-repeat-pass.json) | 반복 패스 수렴과 다운타임 하한 111초 (3.77GB / 215만 키) |
-| [`results/path-c-tooling.json`](migration-lab/results/path-c-tooling.json) | 마이그레이션 도구 제약 (문서 인용) |
-| [`results/amr-memory-sizing.json`](migration-lab/results/amr-memory-sizing.json) | AMR 사용량 지표 원시값과 유효 용량 역산 |
+| [`audit_commands.sh`](../migration-lab/audit_commands.sh) | 클라이언트·SDK 확인사항의 명령어 감사 정적 스캐너 (TIER 1 적중 시 종료 코드 1) |
+| [`policy_matrix_test.py`](../migration-lab/policy_matrix_test.py) | ACR과 AMR의 차이 2.4절 정책 × 클라이언트 매트릭스 재현 스크립트 (`--repeat`로 반복 검증) |
+| [`results/policy-matrix-ent.json`](../migration-lab/results/policy-matrix-ent.json) | `EnterpriseCluster` 원본 결과 (명령별 성공/실패와 예외 타입) |
+| [`results/policy-matrix-oss.json`](../migration-lab/results/policy-matrix-oss.json) | `OSSCluster` 원본 결과 |
+| [`results/clustering-policy.json`](../migration-lab/results/clustering-policy.json) | OSSCluster vs EnterpriseCluster 실측 |
+| [`results/path-a-rdb.json`](../migration-lab/results/path-a-rdb.json) | Export 성공 / Import 실패와 근본 원인 |
+| [`results/path-b-scan-copy.json`](../migration-lab/results/path-b-scan-copy.json) | 단일 패스 복사와 48.47% 유실 |
+| [`results/path-b-repeat-pass.json`](../migration-lab/results/path-b-repeat-pass.json) | 반복 패스 수렴과 다운타임 하한 111초 (3.77GB / 215만 키) |
+| [`results/path-c-tooling.json`](../migration-lab/results/path-c-tooling.json) | 마이그레이션 도구 제약 (문서 인용) |
+| [`results/amr-memory-sizing.json`](../migration-lab/results/amr-memory-sizing.json) | AMR 사용량 지표 원시값과 유효 용량 역산 |
 
 검증할 때 실제로 걸려 넘어졌던 함정 세 가지를 스크립트에 반영해 두었습니다.
 
 - **`EXISTS`로 유실을 세면 안 됩니다.** 키는 있는데 값이 옛것인 경우를 놓칩니다.
 - **`DUMP` 페이로드를 바이트 비교하면 안 됩니다.** RDB 버전 푸터 때문에 Redis 6 → 7.4에서는
   값이 같아도 **표본 전체가 불일치로 나옵니다.** 타입별로 실제 값을 읽어 비교하도록 바꾸자
-  불일치 0건이 됐습니다 ([`path-b-scan-copy.json`](migration-lab/results/path-b-scan-copy.json):
+  불일치 0건이 됐습니다 ([`path-b-scan-copy.json`](../migration-lab/results/path-b-scan-copy.json):
   표본 2,496 중 일치 2,482 · 불일치 0 · 타깃에 없음 14).
 - **표본을 `SCAN` 앞부분에서 뽑으면 안 됩니다.** 먼저 적재된 키에 표본이 쏠려 뒤쪽 유실을 놓칩니다. `RANDOMKEY`를 쓰세요.
 
 ---
 
-## 12. 이 문서가 측정하지 않은 것
+## 7. 이 문서가 측정하지 않은 것
 
 숫자를 추정으로 채우지 않았습니다. 다음은 미측정입니다.
 
-- **RDB Import 소요 시간** — 환경 정책으로 Import 자체가 막혀 측정 불가 ([5.2절](#52-import는-이-환경에서-실패했습니다))
-- **이중 쓰기 방식의 실제 다운타임** — 설계 지침으로만 기술 ([9.2절](azure-cache-to-managed-redis-migration.md#62-쓰기를-멈출-수-없다면-애플리케이션-이중-쓰기))
-- **8절의 실시간 전략 전부** — RIOT 라이브 복제, 프록시 미러링, 읽기 폴백, 캐시 재수화는
+- **RDB Import 소요 시간** — 환경 정책으로 Import 자체가 막혀 측정 불가 ([1.2절](#12-import는-이-환경에서-실패했습니다))
+- **이중 쓰기 방식의 실제 다운타임** — 설계 지침으로만 기술 ([마이그레이션 가이드 6.2절](../azure-cache-to-managed-redis-migration.md#62-쓰기를-멈출-수-없다면-애플리케이션-이중-쓰기))
+- **4절의 실시간 전략 전부** — RIOT 라이브 복제, 프록시 미러링, 읽기 폴백, 캐시 재수화는
   **한 건도 실행하지 않았습니다.** 문서 근거와 설계만 정리한 것입니다. 특히:
   - RIOT `--mode live`의 실제 유실률과 `riot compare` 결과
   - `notify-keyspace-events=KEA`를 켰을 때 소스 ACR의 CPU·서버 부하 증가폭
@@ -512,22 +512,22 @@ RDB 압축률이 현실적으로 나오게 했습니다. 문자열 키의 30%에
 - **`audit_commands.sh`의 실제 코드베이스 적중률** — 이 저장소의 샘플과 인위적 위반 파일로만 시험했습니다.
   실전 코드베이스의 오탐·미탐 비율은 모릅니다
 - **`WAIT` 명령의 AMR 지원 여부** — 이중 쓰기 절차에서 타깃 쓰기 확정을 기다리려면 필요하지만 확인하지 않았습니다
-- **Azure 마이그레이션 도구의 실동작** — 프라이빗 엔드포인트 환경이라 대상 밖 ([7절](#7-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다))
+- **Azure 마이그레이션 도구의 실동작** — 프라이빗 엔드포인트 환경이라 대상 밖 ([3절](#3-경로-c-azure-마이그레이션-도구는-데이터를-옮기지-않는다))
 - **비용 비교** — SKU별 단가는 리전·계약·시점에 따라 달라집니다. [Azure 가격 계산기](https://azure.microsoft.com/pricing/calculator/)로 직접 확인하세요.
 - **Entra ID 인증 경로** — 이 랩은 액세스 키만 사용했습니다.
 - **마이그레이션 중 소스 축출량** — `volatile-lru` 기본값과 `OutOfMemoryError` 발생은 확인했지만,
-  축출된 키 수를 재현 가능한 형태로 기록하지 못했습니다 ([10절](#10-용량-산정--두-번-속습니다))
+  축출된 키 수를 재현 가능한 형태로 기록하지 못했습니다 ([5절](#5-용량-산정--두-번-속습니다))
 - **B5 외 SKU의 메모리 예약 비율** — 20% 예약은 Balanced_B5 한 SKU에서만 역산했습니다
 - **`EnterpriseCluster`의 크로스 슬롯 제약** — 허용 목록 6개와 목록 밖 24개를 실측했습니다
-  ([2.5절](amr-differences.md#25-enterprisecluster도-크로스-슬롯-제약이-남습니다)). 다만 Redis 명령 전체를 훑은 것은 아니라
+  ([ACR과 AMR의 차이 2.5절](01-differences.md#25-enterprisecluster도-크로스-슬롯-제약이-남습니다)). 다만 Redis 명령 전체를 훑은 것은 아니라
   **여기 없는 다중 키 명령은 여전히 직접 확인해야 합니다.**
 - **`OSSCluster`에서 `MOVED`가 커넥션 단위로 갈리는 원인** — 현상은 반복 측정으로 확인했지만
-  ([2.4절](amr-differences.md#24-실측-정책--클라이언트-조합별-명령-호환성)), 프록시·엔드포인트 내부 구조는 관측 범위 밖입니다.
+  ([ACR과 AMR의 차이 2.4절](01-differences.md#24-실측-정책--클라이언트-조합별-명령-호환성)), 프록시·엔드포인트 내부 구조는 관측 범위 밖입니다.
   Microsoft 문서에서 설명을 찾지 못했습니다
 - **샤드가 여러 개인 `OSSCluster`** — 이 랩의 B0는 **샤드 1개**로 슬롯 0–16383을 전부 갖습니다.
   샤드를 늘렸을 때 위 현상이 어떻게 달라지는지는 모릅니다
 - **키스페이스 알림의 문서–실측 불일치가 언제까지 유지되는지** — AMR에서 기본값 `AKE`로
-  동작하는 것을 확인했지만 ([3.4절](amr-client-audit.md#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)),
+  동작하는 것을 확인했지만 ([클라이언트·SDK 확인사항 4절](02-client-audit.md#4-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)),
   **문서상 미지원이라 예고 없이 바뀔 수 있습니다.** 지속성은 보장할 수 없습니다
 - **ACR Standard/Premium의 키스페이스 알림 활성화** — 대조군이 Basic C0라 관리 평면에서 거부됐습니다.
   Standard/Premium에서 `az redis update`로 켜지는 것까지는 확인하지 못했습니다

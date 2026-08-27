@@ -1,19 +1,19 @@
-# ACR과 AMR의 차이 — 기능·정책·명령어 (상세)
+# 01. ACR과 AMR의 차이 — 기능·정책·명령어
 
-> 이 문서는 [ACR → AMR 마이그레이션 가이드](azure-cache-to-managed-redis-migration.md)의 상세 문서입니다.
-> **절 번호는 가이드와 같습니다.**
-> 측정값은 Korea Central에서 3.77GB / 215만 키 규모로 잰 것입니다 ([테스트 환경](amr-migration-paths.md#111-테스트-환경)).
+> 이 문서는 [ACR → AMR 마이그레이션 가이드](../azure-cache-to-managed-redis-migration.md)의 상세 문서입니다.
+> **절 번호는 문서마다 1부터 매깁니다.** 다른 문서를 가리킬 때는 문서 이름을 함께 씁니다.
+> 측정값은 Korea Central에서 3.77GB / 215만 키 규모로 잰 것입니다 ([테스트 환경](03-migration-paths.md#61-테스트-환경)).
 
-관련 문서: [클라이언트·SDK 확인사항](amr-client-audit.md) · [이관 경로와 실측](amr-migration-paths.md)
+관련 문서: [클라이언트·SDK 확인사항](02-client-audit.md) · [이관 경로와 실측](03-migration-paths.md)
 
 ---
 
-## 1.1 기능 차이 — 엔진, 샤딩, 명령어, 클라이언트
+## 1. 기능 차이 — 엔진, 샤딩, 명령어, 클라이언트
 
 ACR(Basic/Standard/Premium)과 AMR은 **서로 다른 소프트웨어** 위에 올라가 있습니다.
 같은 Redis API를 쓰지만 클러스터 구조, 쓸 수 있는 명령, 붙일 수 있는 클라이언트가 갈립니다.
 "실측"이 붙은 항목은 이 랩에서 직접 측정한 값이고, 나머지는 문서 근거입니다.
-**어떻게 옮길 것인가는 [4절](azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)부터입니다.**
+**어떻게 옮길 것인가는 [마이그레이션 가이드 4절](../azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)부터입니다.**
 
 #### 엔진과 클러스터 구조
 
@@ -36,7 +36,7 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 |---|---|---|---|
 | 모듈 — RediSearch / RedisJSON / RedisBloom / RedisTimeSeries | **없음** (ACR은 Enterprise 계층에서만) | 있음 | **생성할 때만 추가할 수 있습니다.** 수동 로드도, 버전 갱신도 불가 |
 | RediSearch의 전제 조건 | — | `EnterpriseCluster` 정책 + `NoEviction` 축출 정책 **필수** | 벡터 검색을 쓸 계획이면 정책이 사실상 하나로 정해짐 |
-| 지역 복제 | Premium만, **수동(passive)** | **액티브(active)** — Balanced B0·B1과 Flash Optimized는 제외 | 액티브 구성에서는 `FLUSHALL`/`FLUSHDB`가 차단됨 ([3.6절](amr-client-audit.md#36-tier-34--정책-의존-항목과-관리-명령)) |
+| 지역 복제 | Premium만, **수동(passive)** | **액티브(active)** — Balanced B0·B1과 Flash Optimized는 제외 | 액티브 구성에서는 `FLUSHALL`/`FLUSHDB`가 차단됨 ([클라이언트·SDK 확인사항 6절](02-client-audit.md#6-tier-34--정책-의존-항목과-관리-명령)) |
 | 액티브 지역 복제와 모듈 병행 | — | `RediSearch`와 `RedisJSON`만 가능 | Bloom·TimeSeries는 액티브 구성과 함께 못 씀 |
 | 디스크 계층 | 없음 | Flash Optimized가 콜드 데이터를 NVMe로 내림 | 이 계층에서는 RedisJSON만 되고 검색·Bloom·TimeSeries는 안 됨 |
 | 데이터 지속성 | Premium만 (RDB/AOF) | 전 계층 | Flash Optimized의 디스크 사용과는 별개 기능 |
@@ -48,14 +48,14 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 |---|---|---|---|
 | 다중 키 명령 | 비클러스터면 제약 없음 | `EnterpriseCluster`에서도 `DEL`·`MSET`·`MGET`·`EXISTS`·`UNLINK`·`TOUCH` **6개만** 허용 | 실측: 허용 목록 밖 24개가 전부 `CROSSSLOT`으로 실패 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
 | 그 허용 목록이 더 줄어드는 경우 | — | **액티브 지역 복제(Active-Active)를 켜면 `MGET`·`EXISTS`·`TOUCH` 3개로** 축소 | 쓰기 계열 `DEL`·`MSET`·`UNLINK`까지 같은 슬롯 전용이 됨 |
-| 같은 슬롯으로 모으면 | — | 정책 2 × 클라이언트 2, **네 조합 모두 통과** (실측 31/31) | 해시 태그가 사실상 유일한 일반 해법. 단 **키 이름이 바뀝니다** |
+| 같은 슬롯으로 모으면 | — | 정책 2 × 클라이언트 2, **네 조합 모두 통과** (실측 31/31) | 해시 태그가 사실상 유일한 일반 해법. 단 **키 이름이 바뀜** |
 | `SELECT` (1번 이상) | 허용 (실측) | 차단 — `DB index is out of range` (실측) | 다중 DB 전제가 깨짐 |
 | `SWAPDB` | 허용 (실측) | 차단 — `unknown command` (실측) | 다중 DB 기반 운영 절차(블루/그린 스왑 등)를 대체해야 함 |
-| `CONFIG GET`/`SET` | 차단 — `unknown command` (실측) | **수락됨** (실측). 단 `SET`은 무효과, 미지원 파라미터는 거부 | 성공 응답을 믿고 설정이 바뀌었다고 가정하면 안 됨 ([3.6절](amr-client-audit.md#36-tier-34--정책-의존-항목과-관리-명령)) |
-| 키스페이스 알림 | Basic 불가 (실측: 기본값에서 0건 수신), Standard/Premium은 관리 평면에서 활성화 | 문서는 "미지원", 실측은 기본값 `AKE`로 **동작** | 문서와 실측이 어긋나는 항목. 지원 대상이 아니므로 의존하면 안 됨 ([3.4절](amr-client-audit.md#34-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)) |
+| `CONFIG GET`/`SET` | 차단 — `unknown command` (실측) | **수락됨** (실측). 단 `SET`은 무효과, 미지원 파라미터는 거부 | 성공 응답을 믿고 설정이 바뀌었다고 가정하면 안 됨 ([클라이언트·SDK 확인사항 6절](02-client-audit.md#6-tier-34--정책-의존-항목과-관리-명령)) |
+| 키스페이스 알림 | Basic 불가 (실측: 기본값에서 0건 수신), Standard/Premium은 관리 평면에서 활성화 | 문서는 "미지원", 실측은 기본값 `AKE`로 **동작** | 문서와 실측이 어긋나는 항목. 지원 대상이 아니므로 의존하면 안 됨 ([클라이언트·SDK 확인사항 4절](02-client-audit.md#4-tier-1--정책과-무관하게-반드시-고쳐야-하는-것)) |
 | `ROLE` | 허용 (실측) | 허용 (실측) | 비클러스터 클라이언트 기준. 클러스터 클라이언트에서는 실패 |
-| `FAILOVER` | `unknown command` (실측) — Redis 6.2에 추가된 명령이라 **ACR의 6.0.x에는 존재하지 않습니다** | `unknown command` (실측). 문서도 "명시적 Failover 명령을 지원하지 않는다"고 명시 | 어느 쪽에서도 명령으로 페일오버를 유도할 수 없음. AMR에는 재부팅도 없고 대신 Flush 관리 작업만 있음 |
-| `REPLICAOF` / `PSYNC` / `REPLCONF` | 차단 | 차단 | 물리적 복제를 붙이는 구성 자체가 불가. `REPLICAOF`는 양쪽 실측, 나머지는 문서 근거 ([8.1절](amr-migration-paths.md#81-가장-먼저-떠오르는-방법-그리고-왜-막히는가)) |
+| `FAILOVER` | `unknown command` (실측) — Redis 6.2에 추가된 명령이라 **ACR의 6.0.x에는 없음** | `unknown command` (실측). 문서도 "명시적 Failover 명령을 지원하지 않는다"고 명시 | 어느 쪽에서도 명령으로 페일오버를 유도할 수 없음. AMR에는 재부팅도 없고 대신 Flush 관리 작업만 있음 |
+| `REPLICAOF` / `PSYNC` / `REPLCONF` | 차단 | 차단 | 물리적 복제를 붙이는 구성 자체가 불가. `REPLICAOF`는 양쪽 실측, 나머지는 문서 근거 ([이관 경로와 실측 4.1절](03-migration-paths.md#41-가장-먼저-떠오르는-방법-그리고-왜-막히는가)) |
 
 #### 클라이언트와 연결
 
@@ -65,7 +65,7 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | TLS | **두 모드가 동시에 열려 있음** — 같은 인스턴스에 TLS로도 비TLS로도 붙을 수 있음 | **생성 시 한 모드만 선택** (`--client-protocol Encrypted\|Plaintext`, 기본 TLS). 고른 뒤에는 모든 클라이언트가 같은 모드여야 함 | "AMR은 TLS 필수"가 아니라 **혼용이 안 되는 것**. 비TLS로 붙던 배치 잡 하나 때문에 전체를 비TLS로 만들면 안 됨 |
 | 샤드(노드) 개별 포트 | 13XXX | **85XX** (실측 8501) | 클러스터 클라이언트가 리다이렉트를 따라갈 때 열려 있어야 하는 포트 |
 | 호스트명 | `<name>.redis.cache.windows.net` | `<name>.<region>.redis.azure.net` | DNS, 허용 목록 |
-| 필요한 클라이언트 | 비클러스터 클라이언트로 충분 | `OSSCluster`면 **클러스터 지원 클라이언트 필수**, `EnterpriseCluster`·`NoCluster`면 기존 그대로 | 정책 선택이 곧 클라이언트 교체 여부 ([1.2절](azure-cache-to-managed-redis-migration.md#2-무엇을-고를-것인가--clusteringpolicy)) |
+| 필요한 클라이언트 | 비클러스터 클라이언트로 충분 | `OSSCluster`면 **클러스터 지원 클라이언트 필수**, `EnterpriseCluster`·`NoCluster`면 기존 그대로 | 정책 선택이 곧 클라이언트 교체 여부 ([마이그레이션 가이드 1.2절](../azure-cache-to-managed-redis-migration.md#2-무엇을-고를-것인가--clusteringpolicy)) |
 | `OSSCluster`에 비클러스터 클라이언트로 붙으면 | — | 연결도 되고 `GET`/`SET`도 되지만, **커넥션 단위로 갈려** 풀의 일부만 계속 실패 (실측) | 스모크 테스트로는 잡히지 않는 실패 방식 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
 | 클러스터 클라이언트의 TLS | — | 클라이언트가 샤드 IP로 재접속해 **호스트명 검증에서 걸림** (실측) | 인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있기 때문 ([2.4절](#24-실측-정책--클라이언트-조합별-명령-호환성)) |
 
@@ -82,22 +82,22 @@ ACR Basic/Standard/Premium에는 아예 없던 기능들입니다. 마이그레�
 | 수동 재부팅 | 노드 수동 재부팅 지원 | **없음** (노드 운영은 자동) | 재부팅으로 캐시를 비우던 절차는 **Flush 관리 작업**으로 대체 |
 | 예약 업데이트 창 | 지원 | **미리 보기** | 업데이트 시간을 통제하던 운영 절차를 재검토 |
 | 영역 중복 | Premium부터 | HA를 켜고 리전이 AZ를 지원하면 **기본값** | 별도 설정 없이 얻는 항목 |
-| RDB 가져오기/내보내기 | **Premium만** | **전 SKU** | 원본이 Basic/Standard면 [경로 A](amr-migration-paths.md#5-경로-a-rdb-export--import)를 쓸 수 없습니다 |
+| RDB 가져오기/내보내기 | **Premium만** | **전 SKU** | 원본이 Basic/Standard면 [경로 A](03-migration-paths.md#1-경로-a-rdb-export--import) 사용 불가 |
 
 #### 용량과 지표
 
 | 항목 | Azure Cache for Redis | Azure Managed Redis | 무엇이 달라지나 |
 |---|---|---|---|
-| 유효 메모리 | 표기 용량 − 예약 2종 (실측: P1 6GB → 약 4.4~4.75GB) | 표기 용량 × 약 0.8 | ACR 데이터 크기를 같은 숫자의 AMR SKU에 1:1 매핑하면 한계에 근접 ([10절](amr-migration-paths.md#10-용량-산정--두-번-속습니다)) |
+| 유효 메모리 | 표기 용량 − 예약 2종 (실측: P1 6GB → 약 4.4~4.75GB) | 표기 용량 × 약 0.8 | ACR 데이터 크기를 같은 숫자의 AMR SKU에 1:1 매핑하면 한계에 근접 ([이관 경로와 실측 5절](03-migration-paths.md#5-용량-산정--두-번-속습니다)) |
 | HA 복제본 | Premium 복제본은 지표가 별도 | `usedmemory`에 **함께 집계** (실측 1.98배) | 사용률을 그대로 읽으면 두 배로 오독 |
 
 **"실측" 값은 이 랩의 환경(3.77GB / 215만 키, Korea Central 같은 리전 VM)에서 나온 것입니다.**
 명령 호환성은 데이터 크기를 타지 않지만, 메모리 비율은 SKU마다 다시 확인해야 합니다
-([12절](amr-migration-paths.md#12-이-문서가-측정하지-않은-것)).
+([이관 경로와 실측 7절](03-migration-paths.md#7-이-문서가-측정하지-않은-것)).
 
 ---
 
-## 2. ACR과 AMR은 무엇이 다른가
+## 2. 왜 다른가 — 제품 계보와 클러스터 정책
 
 ### 2.1 제품 계보 — 이름부터 정리하기
 
@@ -170,7 +170,7 @@ Microsoft는 **비샤딩 ACR(Basic/Standard/Premium)에서 넘어오는 경우 �
 - 키 배치 2종 — 서로 다른 슬롯에 흩어진 키 / 해시 태그로 한 슬롯에 모은 키
 - **각 케이스 3회 반복.** 결과가 갈리면 `불안정`으로 기록 — 아래 표의 값은 **전부 3회 일치**했습니다.
 
-재현 스크립트와 원본 결과는 [11.2절](amr-migration-paths.md#112-재현하기)에 있습니다. `NoCluster`는 테스트하지 않았습니다.
+재현 스크립트와 원본 결과는 [이관 경로와 실측 6.2절](03-migration-paths.md#62-재현하기)에 있습니다. `NoCluster`는 테스트하지 않았습니다.
 
 **먼저 붙는지부터:**
 
@@ -272,7 +272,7 @@ SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]
 `EnterpriseCluster`는 크로스 슬롯 제약을 없애 주는 것이 아니라 **6개만 예외로 두는 것**입니다.
 
 > **그러므로 실제로 확인해야 할 것**은 "AMR이 단일 엔드포인트로 보이는가"가 아니라
-> **"우리 애플리케이션이 위 6개 밖의 다중 키 명령을 쓰는가"** 입니다. 그 확인 방법이 [3절](amr-client-audit.md#3-클라이언트sdk-확인사항)입니다.
+> **"우리 애플리케이션이 위 6개 밖의 다중 키 명령을 쓰는가"** 입니다. 그 확인 방법이 [클라이언트·SDK 확인사항 3절](02-client-audit.md)입니다.
 
 ### 2.6 정책 변경은 `NoCluster`에서 나오는 방향만 됩니다
 
@@ -295,7 +295,7 @@ $ az redisenterprise database update --help
 
 | 현재 정책 | 바꿀 수 있나 |
 |---|---|
-| `NoCluster` | **가능** — `OSSCluster`/`EnterpriseCluster`로 변경. 단 액티브 지역 복제가 켜져 있으면 이것도 막힙니다 |
+| `NoCluster` | **가능** — `OSSCluster`/`EnterpriseCluster`로 변경. 단 액티브 지역 복제가 켜져 있으면 이것도 막힘 |
 | `OSSCluster` | 불가 — DB 삭제 후 재생성 (위 실측) |
 | `EnterpriseCluster` | 불가 — DB 삭제 후 재생성 |
 
@@ -314,7 +314,7 @@ az redisenterprise database create \
 ```
 
 > 데이터를 다 옮긴 뒤에 잘못 고른 걸 발견하면 **처음부터 다시 해야 합니다.**
-> 그래서 3절의 명령어 감사가 AMR 생성보다 시간상 앞에 옵니다.
+> 그래서 [클라이언트·SDK 확인사항](02-client-audit.md)의 명령어 감사가 AMR 생성보다 시간상 앞에 옵니다.
 > 반대로 애플리케이션이 이미 클러스터 클라이언트를 쓰거나 처리량이 중요하다면 `OSSCluster`가 맞습니다.
 
 ---
