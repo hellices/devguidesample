@@ -1,0 +1,734 @@
+{
+  "clustering_policy": "EnterpriseCluster",
+  "host": "amr-lab-ent.koreacentral.redis.azure.net",
+  "port": 10000,
+  "repeat": 3,
+  "redis_py": "7.0.1",
+  "ssl_check_hostname_disabled_for_cluster_client": true,
+  "clients": [
+    {
+      "client": "비클러스터",
+      "ssl_check_hostname": true,
+      "connect": {
+        "ping": true,
+        "cluster_enabled": 0,
+        "redis_version": "7.4.3"
+      },
+      "크로스슬롯": {
+        "distinct_slots": 3,
+        "setup": "ok",
+        "cases": [
+          {
+            "command": "단일 키 SET ×50",
+            "tier": "단일키",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "MGET",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "MSET",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "EXISTS(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "TOUCH(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "UNLINK(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "DEL(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SUNION",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='sunion', original-slot='7739', wrong-slot='11864', first-key='pm:sa', violating-key='pm:sb')"
+          },
+          {
+            "command": "SINTER",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='sinter', original-slot='7739', wrong-slot='11864', first-key='pm:sa', violating-key='pm:sb')"
+          },
+          {
+            "command": "SDIFF",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='sdiff', original-slot='7739', wrong-slot='11864', first-key='pm:sa', violating-key='pm:sb')"
+          },
+          {
+            "command": "SUNIONSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='sunionstore', original-slot='3742', wrong-slot='7739', first-key='pm:sd', violating-key='pm:sa"
+          },
+          {
+            "command": "SMOVE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='smove', original-slot='7739', wrong-slot='11864', first-key='pm:sa', violating-key='pm:sb')"
+          },
+          {
+            "command": "ZUNIONSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='zunionstore', original-slot='13318', wrong-slot='9379', first-key='pm:zd', violating-key='pm:z"
+          },
+          {
+            "command": "ZINTERSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='zinterstore', original-slot='13318', wrong-slot='9379', first-key='pm:zd', violating-key='pm:z"
+          },
+          {
+            "command": "ZDIFF",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='zdiff', original-slot='9379', wrong-slot='5312', first-key='pm:za', violating-key='pm:zb')"
+          },
+          {
+            "command": "RENAME",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='rename', original-slot='11530', wrong-slot='7529', first-key='pm:ra', violating-key='pm:rb')"
+          },
+          {
+            "command": "COPY",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='copy', original-slot='3478', wrong-slot='8024', first-key='pm:a', violating-key='pm:cp')"
+          },
+          {
+            "command": "RPOPLPUSH",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='rpoplpush', original-slot='3446', wrong-slot='15637', first-key='pm:la', violating-key='pm:lb'"
+          },
+          {
+            "command": "LMOVE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='lmove', original-slot='3446', wrong-slot='15637', first-key='pm:la', violating-key='pm:lb')"
+          },
+          {
+            "command": "BLPOP(다중키)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='blpop', original-slot='3446', wrong-slot='15637', first-key='pm:la', violating-key='pm:lb')"
+          },
+          {
+            "command": "LMPOP(다중키)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='lmpop', original-slot='3446', wrong-slot='15637', first-key='pm:la', violating-key='pm:lb')"
+          },
+          {
+            "command": "BITOP",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='bitop', original-slot='16092', wrong-slot='11897', first-key='pm:bd', violating-key='pm:ba')"
+          },
+          {
+            "command": "PFMERGE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='pfmerge', original-slot='4375', wrong-slot='434', first-key='pm:hd', violating-key='pm:ha')"
+          },
+          {
+            "command": "PFCOUNT(다중)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='pfcount', original-slot='434', wrong-slot='12753', first-key='pm:ha', violating-key='pm:hb')"
+          },
+          {
+            "command": "MSETNX",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='msetnx', original-slot='12769', wrong-slot='386', first-key='pm:n1', violating-key='pm:n2')"
+          },
+          {
+            "command": "SORT ... STORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='sort', original-slot='3446', wrong-slot='16373', first-key='pm:la', violating-key='pm:so')"
+          },
+          {
+            "command": "GEOSEARCHSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='geosearchstore', original-slot='297', wrong-slot='4492', first-key='pm:gd', violating-key='pm:"
+          },
+          {
+            "command": "LCS",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='lcs', original-slot='11897', wrong-slot='7706', first-key='pm:ba', violating-key='pm:bb')"
+          },
+          {
+            "command": "XREAD(다중키)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='xread', original-slot='705', wrong-slot='12962', first-key='pm:xa', violating-key='pm:xb')"
+          },
+          {
+            "command": "MULTI/EXEC",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Command # 2 (GET pm:b) of pipeline caused error: Keys in request don't hash to the same slot (context='within MULTI', command='get', original-slot='3478', wrong"
+          },
+          {
+            "command": "EVAL(다중 KEYS)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 0,
+            "stable": true,
+            "verdict": "실패",
+            "error_type": "ClusterCrossSlotError",
+            "error": "Keys in request don't hash to the same slot (context='', command='eval', original-slot='3478', wrong-slot='15861', first-key='pm:a', violating-key='pm:b')"
+          }
+        ]
+      },
+      "같은슬롯": {
+        "distinct_slots": 1,
+        "setup": "ok",
+        "cases": [
+          {
+            "command": "단일 키 SET ×50",
+            "tier": "단일키",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "MGET",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "MSET",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "EXISTS(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "TOUCH(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "UNLINK(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "DEL(다중)",
+            "tier": "허용목록",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SUNION",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SINTER",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SDIFF",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SUNIONSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SMOVE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "ZUNIONSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "ZINTERSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "ZDIFF",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "RENAME",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "COPY",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "RPOPLPUSH",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "LMOVE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "BLPOP(다중키)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "LMPOP(다중키)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "BITOP",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "PFMERGE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "PFCOUNT(다중)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "MSETNX",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "SORT ... STORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "GEOSEARCHSTORE",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "LCS",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "XREAD(다중키)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "MULTI/EXEC",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          },
+          {
+            "command": "EVAL(다중 KEYS)",
+            "tier": "목록밖",
+            "runs": 3,
+            "ok_count": 3,
+            "stable": true,
+            "verdict": "성공",
+            "error_type": null,
+            "error": null
+          }
+        ]
+      },
+      "관리명령": [
+        {
+          "command": "SELECT 1",
+          "runs": 3,
+          "ok_count": 0,
+          "verdict": "실패",
+          "error_type": "ResponseError",
+          "error": "DB index is out of range"
+        },
+        {
+          "command": "SWAPDB 0 1",
+          "runs": 3,
+          "ok_count": 0,
+          "verdict": "실패",
+          "error_type": "ResponseError",
+          "error": "unknown command 'SWAPDB'"
+        },
+        {
+          "command": "ROLE",
+          "runs": 3,
+          "ok_count": 3,
+          "verdict": "성공",
+          "error_type": null,
+          "error": null
+        },
+        {
+          "command": "FAILOVER ABORT",
+          "runs": 3,
+          "ok_count": 0,
+          "verdict": "실패",
+          "error_type": "ResponseError",
+          "error": "unknown command 'FAILOVER'"
+        },
+        {
+          "command": "CONFIG GET maxmemory",
+          "runs": 3,
+          "ok_count": 3,
+          "verdict": "성공",
+          "error_type": null,
+          "error": null
+        },
+        {
+          "command": "CONFIG SET notify-keyspace-events",
+          "runs": 3,
+          "ok_count": 3,
+          "verdict": "성공",
+          "error_type": null,
+          "error": null
+        },
+        {
+          "command": "REPLICAOF NO ONE",
+          "runs": 3,
+          "ok_count": 0,
+          "verdict": "실패",
+          "error_type": "ResponseError",
+          "error": "unknown command 'REPLICAOF'"
+        },
+        {
+          "command": "INFO commandstats",
+          "runs": 3,
+          "ok_count": 3,
+          "verdict": "성공",
+          "error_type": null,
+          "error": null
+        },
+        {
+          "command": "DBSIZE",
+          "runs": 3,
+          "ok_count": 3,
+          "verdict": "성공",
+          "error_type": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "client": "클러스터",
+      "ssl_check_hostname": false,
+      "connect": {
+        "ping": false,
+        "error_type": "RedisClusterException",
+        "error": "Redis Cluster cannot be connected. Please provide at least one reachable node: Cluster mode is not enabled on this node"
+      }
+    }
+  ]
+}

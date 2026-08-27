@@ -10,12 +10,64 @@ Azure Cache for Redis(ACR) → Azure Managed Redis(AMR) 마이그레이션을 **
 
 | 파일 | 역할 |
 |---|---|
+| `audit_commands.sh` | **데이터를 옮기기 전에** 애플리케이션 소스에서 AMR 비호환 Redis 명령을 등급별로 스캔 |
+| `policy_matrix_test.py` | `clusteringPolicy` × 클라이언트 조합별로 어떤 명령이 통과하는지 실측 |
 | `load_data.py` | 타입·값 크기를 섞은 GB 규모 테스트 데이터를 소스에 적재 |
 | `concurrent_writer.py` | 마이그레이션 중 소스에 일정 속도로 프로브 키를 쓰고 로컬에 기록 |
 | `migrate_scan_copy.py` | `SCAN` + 파이프라인 `DUMP`/`PTTL` → `RESTORE`로 복사 (경로 B) |
 | `import_rdb.py` | RDB Export/Import 경로(A) 보조 |
 | `verify_migration.py` | 쓰기 유실·TTL 보존·값 무결성 검증 |
 | `results/` | 실측 결과 JSON |
+
+## 0. 먼저 명령어를 감사하세요
+
+데이터 이관보다 앞서야 하는 단계입니다. 여기서 나온 결과가 `clusteringPolicy` 선택을 결정하고,
+TIER 1 항목이 있으면 **코드 수정 없이는 마이그레이션 자체가 불가능**합니다.
+
+```bash
+./audit_commands.sh ../../src ../../config     # 감사할 소스 디렉터리들
+echo $?                                        # TIER 1 적중이 있으면 1
+```
+
+| 등급 | 의미 | 조치 |
+|---|---|---|
+| TIER 1 | 다중 DB 사용, 키스페이스 알림 의존 — **정책으로 해결 안 됨** | 코드 수정 / 별도 판단 |
+| TIER 2 | 허용 목록 6개 밖의 크로스 슬롯 다중 키 명령 | 해시 태그 / 로직 대체 / `NoCluster` |
+| TIER 3 | 허용 목록 6개의 다중 키 호출 | `OSSCluster`를 고를 때만 문제 |
+| TIER 4 | 서버·관리 명령 | 대부분 양쪽에서 차단 |
+
+정적 스캔은 **프레임워크가 대신 호출하는 명령을 놓칩니다**(Spring Session, Celery, Sidekiq, Redisson 등).
+소스 ACR에서 `INFO commandstats`나 짧은 `MONITOR` 표본으로 반드시 교차 확인하세요.
+등급별 명령 목록과 근거는 [가이드 3절](../azure-cache-to-managed-redis-migration.md#3-클라이언트sdk-확인사항)에 있습니다.
+무엇을 먼저 할지에 대한 우선순위는 [가이드 4절](../azure-cache-to-managed-redis-migration.md#4-마이그레이션-우선순위)에 있습니다.
+
+## 0-1. 정책을 고르기 전에 직접 확인하고 싶다면
+
+감사 결과가 애매하면 실제 AMR 데이터베이스를 하나씩 만들어 직접 돌려 보는 편이 빠릅니다.
+`policy_matrix_test.py`가 같은 명령 집합을 **비클러스터 / 클러스터 클라이언트 두 가지로**,
+**크로스 슬롯 키와 해시 태그로 모은 키 두 가지로** 실행해 무엇이 통과하는지 기록합니다.
+
+```bash
+# EnterpriseCluster
+python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000 \
+  --password "$KEY" --policy EnterpriseCluster --repeat 3 \
+  --report results/policy-matrix-ent.json
+
+# OSSCluster — 클러스터 클라이언트가 샤드 IP로 재접속하므로 호스트명 대조를 꺼야 붙습니다
+python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000 \
+  --password "$KEY" --policy OSSCluster --repeat 3 --no-ssl-check-hostname \
+  --report results/policy-matrix-oss.json
+```
+
+- `--repeat`는 같은 케이스를 몇 번 돌릴지입니다. 결과가 갈리면 `불안정`으로 표시됩니다.
+- `--no-ssl-check-hostname`은 **체인 검증은 유지한 채 호스트명 대조만 끕니다.**
+  인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있어 샤드 IP로는 검증에 실패하기 때문입니다.
+- 픽스처 준비는 파이프라인으로 묶여 있습니다. 왕복 지연이 큰 곳에서 순차로 보내면
+  실행 시간이 수십 분으로 늘어납니다 (이 랩의 180ms 환경에서 38분).
+- `clusteringPolicy`는 생성 후 변경할 수 없으므로, 비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
+- 이 랩의 결과는 [`results/policy-matrix-ent.json`](results/policy-matrix-ent.json)과
+  [`results/policy-matrix-oss.json`](results/policy-matrix-oss.json)에 있고,
+  해석은 [가이드 2.4절](../azure-cache-to-managed-redis-migration.md#24-실측-정책--클라이언트-조합별-명령-호환성)에 있습니다.
 
 ## 사전 조건
 
