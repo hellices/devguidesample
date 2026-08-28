@@ -62,7 +62,27 @@ Option 2인 Azure 마이그레이션 도구는 이름에서 기대하게 되는 
 
 ---
 
-## 1. 공식 마이그레이션 방법론과 이 묶음의 대응
+## 문서 구성
+
+근거와 절차는 세 문서로 내려 두었다. 순서대로 읽어도 되지만,
+대개는 지금 하고 있는 일에 맞는 하나만 펼치게 된다.
+
+| 문서 | 담긴 것 | 언제 보나 |
+|---|---|---|
+| [ACR과 AMR의 차이](migration-guide/01-differences.md) | 기능·명령어·클라이언트 차이, `clusteringPolicy` 세 가지, **정책 × 클라이언트 실측 호환성 매트릭스**, 정책 변경 규칙 | 정책을 고를 때 |
+| [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) | TIER 1~4 체크리스트, SDK별 확인 포인트, 명령어 감사 스크립트, 정적 스캔의 한계 | 코드를 감사할 때 |
+| [이관 경로와 실측](migration-guide/03-migration-paths.md) | 경로 A/B/C, 실시간 전략 비교, 용량 산정, 테스트 환경과 재현, 측정하지 않은 것 | 실제로 옮길 때 |
+
+## 읽는 순서
+
+- **아직 고르는 중이다** → 이 문서 [핵심 요약](#핵심-요약) → [2절](#2-무엇을-고를-것인가--clusteringpolicy) → [ACR과 AMR의 차이](migration-guide/01-differences.md)
+- **코드를 감사해야 한다** → [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) 전체
+- **날짜를 잡고 실행한다** → 이 문서 [5절](#5-우선순위와-순서) → [6절](#6-권장-절차) → [이관 경로와 실측](migration-guide/03-migration-paths.md)
+- **왜 무중단이 안 되는지 설명해야 한다** → 이 문서 [3절](#3-클라이언트-무수정-가능-범위와-다운타임-하한) → [이관 경로와 실측 4절 상세](migration-guide/03-migration-paths.md#4-실시간-마이그레이션-전략--replicaof는-왜-안-되는가)
+
+---
+
+## 1. 공식 마이그레이션 가이드 3단계
 
 Microsoft의 공식 방법론은 3단계다 — **차이를 이해하고, 경로를 고르고, 실행 계획을 세운다.**
 이 묶음은 각 단계에 그대로 대응하면서 공식 문서가 숫자로 적지 않은 것을 채운다 —
@@ -73,24 +93,6 @@ Microsoft의 공식 방법론은 3단계다 — **차이를 이해하고, 경로
 | ① [Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) | [ACR과 AMR의 차이](migration-guide/01-differences.md) · [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) |
 | ② [**Migration options**](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options) — **기준 문서** | 이 문서 [4절](#4-경로-선택--option-1이-기본) |
 | ③ [Plan execution — self-service](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-self-service) / [with tooling](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-with-tooling) | 이 문서 [6절](#6-권장-절차) · [이관 경로와 실측](migration-guide/03-migration-paths.md) |
-
-### 상세 문서
-
-판단에 필요한 것만 이 문서에 두고, 근거와 절차는 세 문서로 내려 두었다.
-세 문서는 순서대로 읽어도 되지만, 대개는 지금 하고 있는 일에 맞는 하나만 펼치게 된다.
-
-| 문서 | 담긴 것 | 언제 보나 |
-|---|---|---|
-| [ACR과 AMR의 차이](migration-guide/01-differences.md) | 기능·명령어·클라이언트 차이, `clusteringPolicy` 세 가지, **정책 × 클라이언트 실측 호환성 매트릭스**, 정책 변경 규칙 | 정책을 고를 때 |
-| [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) | TIER 1~4 체크리스트, SDK별 확인 포인트, 명령어 감사 스크립트, 정적 스캔의 한계 | 코드를 감사할 때 |
-| [이관 경로와 실측](migration-guide/03-migration-paths.md) | 경로 A/B/C, 실시간 전략 비교, 용량 산정, 테스트 환경과 재현, 측정하지 않은 것 | 실제로 옮길 때 |
-
-### 목적별 읽기 경로
-
-- **아직 고르는 중이다** → 이 문서 [핵심 요약](#핵심-요약) → [2절](#2-무엇을-고를-것인가--clusteringpolicy) → [ACR과 AMR의 차이](migration-guide/01-differences.md)
-- **코드를 감사해야 한다** → [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) 전체
-- **날짜를 잡고 실행한다** → 이 문서 [5절](#5-우선순위와-순서) → [6절](#6-권장-절차) → [이관 경로와 실측](migration-guide/03-migration-paths.md)
-- **왜 무중단이 안 되는지 설명해야 한다** → 이 문서 [3절](#3-클라이언트-무수정-가능-범위와-다운타임-하한) → [이관 경로와 실측 4절 상세](migration-guide/03-migration-paths.md#4-실시간-마이그레이션-전략--replicaof는-왜-안-되는가)
 
 > Microsoft는 마이그레이션 질문에 답하고 환경에 맞는 계획을 세워 주는 **마이그레이션 에이전트 스킬**도 함께 안내한다.
 > 공식 문서 각 페이지 상단의 "Redis migration agent skill" 링크를 참고하면 된다.
@@ -384,4 +386,4 @@ AMR을 만들 때 정해야 하는 값이고, **한 번 `OSSCluster`나 `Enterpr
 
 ---
 
-**이 문서가 측정하지 않은 것**과 재현 절차는 [이관 경로와 실측](migration-guide/03-migration-paths.md#7-이-문서가-측정하지-않은-것)에 있다.
+**측정하지 않은 것**과 재현 절차는 [이관 경로와 실측](migration-guide/03-migration-paths.md#7-측정하지-않은-것)에 있다.
