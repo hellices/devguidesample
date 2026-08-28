@@ -22,7 +22,7 @@ Azure Cache for Redis(ACR) → Azure Managed Redis(AMR) 마이그레이션을 **
 
 ## 0. 먼저 명령어를 감사하세요
 
-데이터 이관보다 앞서야 하는 단계입니다. 여기서 나온 결과가 `clusteringPolicy` 선택을 결정하고,
+데이터 이관보다 앞서야 하는 단계입니다. 여기서 나온 결과가 `clusteringPolicy` 선택을 결정합니다.
 TIER 1 항목이 있으면 **코드 수정 없이는 마이그레이션 자체가 불가능**합니다.
 
 ```bash
@@ -40,7 +40,7 @@ echo $?                                        # TIER 1 적중이 있으면 1
 정적 스캔은 **프레임워크가 대신 호출하는 명령을 놓칩니다**(Spring Session, Celery, Sidekiq, Redisson 등).
 소스 ACR에서 `INFO commandstats`나 짧은 `MONITOR` 표본으로 반드시 교차 확인하세요.
 등급별 명령 목록과 근거는 [클라이언트·SDK 확인사항](../migration-guide/02-client-audit.md)에 있습니다.
-무엇을 먼저 할지에 대한 우선순위는 [마이그레이션 가이드 5절](../azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)에 있습니다.
+먼저 할 일의 우선순위는 [마이그레이션 가이드 5절](../azure-cache-to-managed-redis-migration.md#5-우선순위와-순서)에 있습니다.
 
 ## 0-1. 정책을 고르기 전에 직접 확인하고 싶다면
 
@@ -70,7 +70,7 @@ python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000
   실행 시간이 수십 분으로 늘어납니다 (이 랩의 180ms 환경에서 38분).
 - `clusteringPolicy`는 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 DB를 지워야만 바꿀 수 있으므로, 비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
 - 이 랩의 결과는 [`results/policy-matrix-ent.json`](results/policy-matrix-ent.json)과
-  [`results/policy-matrix-oss.json`](results/policy-matrix-oss.json)에 있고,
+  [`results/policy-matrix-oss.json`](results/policy-matrix-oss.json)에 있고
   해석은 [ACR과 AMR의 차이 2.4절](../migration-guide/01-differences.md#24-실측-정책--클라이언트-조합별-명령-호환성)에 있습니다.
 
 ## 사전 조건
@@ -78,7 +78,7 @@ python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000
 - 소스 ACR과 타깃 AMR에 TCP로 닿는 리눅스 호스트 (같은 리전 VM 권장 — 클라이언트 왕복 지연이 그대로 복사 시간이 됩니다)
 - Python 3.8+, `pip install redis`
 - **타깃 AMR 데이터베이스는 `--clustering-policy EnterpriseCluster`로 생성**되어 있어야 합니다.
-  기본값인 `OSSCluster`에서는 비클러스터 클라이언트가 `MOVED`/`CROSSSLOT`으로 실패하며,
+  기본값인 `OSSCluster`에서는 비클러스터 클라이언트가 `MOVED`/`CROSSSLOT`으로 실패합니다.
   이 값은 **한 번 `OSSCluster`/`EnterpriseCluster`로 만들면 DB를 지우지 않고는 바꿀 수 없습니다**
   (`NoCluster`에서 나오는 방향만 `az redisenterprise database update`로 변경됩니다).
 
@@ -131,7 +131,7 @@ python3 verify_migration.py \
   `verify_migration.py`는 프로브 값(= 기록된 쓰기 시각)까지 대조합니다.
 - **`DUMP` 페이로드를 바이트 비교하지 마세요.** RDB 버전 푸터가 들어 있어
   ACR(Redis 6.x)과 AMR(Redis 7.x) 사이에서는 값이 같아도 전부 불일치로 나옵니다. 타입별로 실제 값을 비교해야 합니다.
-- **표본은 `RANDOMKEY`로 뽑으세요.** `SCAN` 앞부분만 모으면 먼저 적재된 키에 표본이 쏠려,
+- **표본은 `RANDOMKEY`로 뽑으세요.** `SCAN` 앞부분만 모으면 먼저 적재된 키에 표본이 쏠려
   뒤쪽에서 발생하는 유실을 놓칩니다.
 - `migrate_scan_copy.py`는 **소스를 절대 수정하지 않습니다.** `--flush-target`은 타깃에만 적용됩니다.
 
