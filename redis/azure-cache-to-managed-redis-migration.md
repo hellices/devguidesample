@@ -62,13 +62,11 @@ Option 2인 Azure 마이그레이션 도구는 이름에서 기대하게 되는 
 
 ---
 
-## 1. 이 문서 묶음과 공식 가이드
+## 1. 공식 마이그레이션 방법론과 이 묶음의 대응
 
-이 문서는 Microsoft 공식 마이그레이션 가이드를 대체하지 않는다. **먼저 읽어야 할 것은 공식 문서이고**,
-이 묶음은 거기에 적히지 않은 것 — 실제로 재 봤을 때의 숫자, 정책·클라이언트 조합별 실패 방식,
-막다른 길로 확인된 접근 — 을 채우는 보조 자료다.
-
-공식 가이드는 3단계이고, 이 묶음이 그대로 대응한다.
+Microsoft의 공식 방법론은 3단계다 — **차이를 이해하고, 경로를 고르고, 실행 계획을 세운다.**
+이 묶음은 각 단계에 그대로 대응하면서 공식 문서가 숫자로 적지 않은 것을 채운다 —
+실제로 재 봤을 때의 다운타임과 유실률, 정책·클라이언트 조합별 실패 방식, 막다른 길로 확인된 접근.
 
 | 공식 가이드 | 이 묶음 |
 |---|---|
@@ -348,7 +346,7 @@ AMR을 만들 때 정해야 하는 값이고, **한 번 `OSSCluster`나 `Enterpr
 
 **Azure 공식 마이그레이션 가이드 — 이 문서의 기준**
 
-경로 선택의 기준 문서는 **② Migration options**다. 이 묶음은 그 위에 실측을 얹은 보조 자료다.
+경로 선택의 기준 문서는 **② Migration options**다.
 
 - [① Understand the differences](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand) — 기능·SKU·클라이언트 차이
 - [② **Migration options**](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options) — **기준 문서.** Option 1(자체 마이그레이션, 권장) / Option 2(도구, preview)
