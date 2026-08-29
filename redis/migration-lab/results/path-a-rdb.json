@@ -1,0 +1,19 @@
+{
+  "path": "A. RDB Export/Import",
+  "source": {"sku": "Premium P1 (6GB)", "redis_version": "6.0.14", "keys": 2839833, "used_memory": "4.50G"},
+  "export": {
+    "status": "성공",
+    "auth": "ManagedIdentity (시스템 할당)",
+    "duration_sec": 186.99,
+    "blob_bytes": 2271735296,
+    "blob_gib": 2.12,
+    "compression_ratio_vs_memory": 0.47
+  },
+  "import": {
+    "status": "실패 - 환경 정책으로 차단",
+    "duration_before_failure_sec": 128.97,
+    "error": "OperationFailed",
+    "root_cause": "az redisenterprise database import는 --sas-uris만 지원(관리 ID 미지원). 테넌트 정책 MCAPSGovDeployPolicies/StorageAccount_PublicNetwork_Modify가 publicNetworkAccess=Disabled를 강제하여 AMR의 공용 경로 접근이 403 AuthorizationFailure로 차단됨.",
+    "evidence": "인터넷에서 blob 공용 URL 접근 시 HTTP 403 AuthorizationFailure"
+  }
+}

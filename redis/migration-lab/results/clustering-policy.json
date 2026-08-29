@@ -1,0 +1,31 @@
+{
+  "topic": "AMR clusteringPolicy — 클라이언트 무수정 여부를 가르는 유일한 설정",
+  "target": {"sku": "Balanced_B5", "redis_version": "7.4.3", "port": 10000},
+  "client": "redis-py StrictRedis (비클러스터 클라이언트). ACR에 붙일 때와 동일한 코드.",
+  "ossCluster": {
+    "note": "az redisenterprise database create의 기본값",
+    "set_500_keys": "대부분 redis.exceptions.MovedError로 실패",
+    "shards": "기록하지 않음. 이 실패는 슬롯을 나눠 가진 샤드가 둘 이상일 때 나타나는 모양이며, 샤드 1개 구성(policy-matrix-oss.json)에서는 같은 명령이 성공했다.",
+    "mget_multiple_keys": "redis.exceptions.ClusterCrossSlotError",
+    "del_multiple_keys": "redis.exceptions.ClusterCrossSlotError",
+    "verdict": "비클러스터 클라이언트는 코드 수정 없이는 동작하지 않는다"
+  },
+  "enterpriseCluster": {
+    "set_500_keys": "500/500 성공, MOVED 0건",
+    "mget_multiple_keys": "정상",
+    "info_cluster_enabled": 0,
+    "verdict": "ACR과 동일하게 단일 엔드포인트로 보인다. 연결 코드는 호스트/포트/키만 바꾸면 된다.",
+    "IMPORTANT_caveat": "이 테스트는 '클라이언트 무수정'을 증명하지 못한다. EnterpriseCluster에도 크로스 슬롯 제약이 남아 있고, 문서상 슬롯을 넘어 허용되는 다중 키 명령은 DEL, MSET, MGET, EXISTS, UNLINK, TOUCH 6개뿐이다. 위에서 통과한 MGET과 DEL은 하필 그 허용 목록 안에 있는 명령이라, 목록 밖 명령(SUNION, ZUNIONSTORE, RENAME, SMOVE, 크로스 슬롯 MULTI/Lua 등)은 검증되지 않았다.",
+    "caveat_source": "https://learn.microsoft.com/azure/redis/architecture#multi-key-commands"
+  },
+  "noCluster": {
+    "tested": false,
+    "note": "az redisenterprise database create --clustering-policy의 허용값은 EnterpriseCluster, NoCluster, OSSCluster 세 가지다. NoCluster는 샤딩 없이 단일 엔드포인트로 동작하며 25GB 이하에만 적용된다. 문서는 비샤딩 ACR(Basic/Standard/Premium)에서 넘어오거나 크로스 슬롯 명령을 광범위하게 쓰는 경우의 선택지로 제시한다. 이 랩에서는 생성하지 않았다."
+  },
+  "naming_clarification": "EnterpriseCluster의 'Enterprise'는 소스가 ACR이라는 사실이나 ACR의 Enterprise 계층과 무관하다. AMR 자체가 Redis Enterprise 스택 위에서 동작하며, 그 소프트웨어의 프록시 기반 클러스터링을 가리키는 이름이다. AMR은 SKU와 무관하게 내부적으로 항상 클러스터링되어 있고, 정책은 '샤딩 여부'가 아니라 '클라이언트에게 클러스터를 어떻게 보여 줄지'를 정한다.",
+  "immutability": {
+    "attempted": "az redisenterprise database update --clustering-policy EnterpriseCluster",
+    "result": "BadRequest: 'properties.clusteringPolicy' cannot be changed",
+    "workaround": "데이터베이스를 삭제하고 --clustering-policy EnterpriseCluster로 재생성. 재생성된 DB는 액세스 키 인증이 기본 비활성이므로 --access-keys-auth Enabled로 다시 켜고 키를 새로 받아야 한다."
+  }
+}

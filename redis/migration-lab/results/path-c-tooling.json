@@ -1,0 +1,31 @@
+{
+  "path": "C. Azure 마이그레이션 도구 (preview)",
+  "tested": false,
+  "why_not_tested": "테스트가 아니라 문서 확인으로 결론이 나는 항목이다. 이 도구는 데이터를 옮기지 않는다.",
+  "source_doc": "https://learn.microsoft.com/en-us/azure/redis/migrate/migrate-basic-standard-premium-options",
+  "doc_updated_at": "2026-08-18",
+  "what_it_does": "미리 만들어 둔 AMR 인스턴스로 ACR의 호스트 이름(엔드포인트)을 넘긴다. 클라이언트는 같은 호스트 이름과 액세스 키로 재연결되면서 AMR에 붙는다.",
+  "documented_limitations": [
+    "Data sync not supported. This tooling will orchestrate hostname/endpoint migration but does not migrate any data.",
+    "No control over when cutover happens.",
+    "All client applications impacted simultaneously.",
+    "Limited window for rollback.",
+    "Limited window to keep both hostnames.",
+    "Temporary management lock during migration.",
+    "Private endpoint not supported.",
+    "Virtual network injected caches not supported.",
+    "Geo-replicated caches not supported.",
+    "Not all cache configurations are copied over (managed identities, firewall rules, persistence settings, update schedules, keyspace notifications)."
+  ],
+  "corroborating_evidence": {
+    "command": "az provider operation show --namespace Microsoft.Cache",
+    "operations": [
+      "Microsoft.Cache/redis/getMigrationInfo/action",
+      "Microsoft.Cache/redis/updateMigrationStatus/action",
+      "Microsoft.Cache/redis/updateDnsForMigration/action",
+      "Microsoft.Cache/redis/rollbackDnsForMigration/action"
+    ],
+    "note": "노출된 작업이 전부 DNS/상태 조작이다. 데이터 복제 관련 작업은 없다. 문서 내용과 일치한다."
+  },
+  "conclusion": "'복제 기반 무중단 마이그레이션'은 존재하지 않는다. 이 도구를 쓰더라도 데이터는 경로 A 또는 B로 별도 이관해야 한다."
+}

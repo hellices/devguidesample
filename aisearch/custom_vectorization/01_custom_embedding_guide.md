@@ -133,7 +133,7 @@ AI Search의 [Push API](https://learn.microsoft.com/en-us/azure/search/search-wh
 
 #### 아키텍처 비교
 
-![Indexer vs Push API](indexer_vs_pushapi.png)
+![Indexer vs Push API](images/indexer_vs_pushapi.png)
 
 #### Push API 성능이 높은 이유
 
@@ -268,7 +268,7 @@ TEI / vLLM (추론 서버)
                                               (어댑터 필요: 쿼리 시점)
 ```
 
-> 어댑터 구현 예시: [tei-adapter](tei-adapter/) 디렉토리 참고
+> 어댑터 구현 예시: [tei-adapter](tei-adapter/) 디렉터리 참고
 
 ---
 

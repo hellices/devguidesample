@@ -1,0 +1,42 @@
+{
+  "topic": "B-2. 복사 패스를 반복하면 유실이 얼마나 줄어드나",
+  "setup": {
+    "source_keys": 2155260,
+    "source_used_memory": "3.77G",
+    "writer_rate_requested": "200/s",
+    "writer_rate_actual": 139.4,
+    "writer_note": "TLS 왕복 지연 때문에 요청한 200/s에 못 미친다. 37,456 프로브 / 268.7s.",
+    "probe_prefix": "p3"
+  },
+  "passes": [
+    {"pass": 1, "writes_ongoing": true, "duration_sec": 135.6, "keys_scanned": 2130079, "keys_restored": 2130079, "restore_errors": 0},
+    {"pass": 2, "writes_ongoing": true, "duration_sec": 109.9, "keys_scanned": 2146668, "keys_restored": 2146668, "restore_errors": 0},
+    {"pass": 3, "writes_ongoing": false, "duration_sec": 111.1, "keys_scanned": 2155260, "keys_restored": 2155260, "restore_errors": 0}
+  ],
+  "after_two_passes_writes_ongoing": {
+    "probes_written": 36175,
+    "probes_present_in_target": 28864,
+    "probes_missing_in_target": 7311,
+    "probes_stale_in_target": 0,
+    "loss_pct": 20.21,
+    "first_missing_ms": 1787766232589,
+    "note": "유실된 프로브는 전부 2번째 패스가 도는 동안 쓰인 것들이다. 1번째 패스 도중 유실된 키는 2번째 패스가 회수했다. 즉 패스마다 '그 패스가 도는 동안 들어온 쓰기'의 약 50%만 남는다."
+  },
+  "after_final_pass_writes_frozen": {
+    "probes_written": 37456,
+    "probes_present_in_target": 37456,
+    "probes_missing_in_target": 0,
+    "probes_stale_in_target": 0,
+    "loss_pct": 0.0,
+    "src_dbsize": 2155260,
+    "dst_dbsize": 2155260,
+    "dbsize_diff": 0,
+    "ttl_preserved": "2000/2000",
+    "value_identical": "2497/2497"
+  },
+  "conclusion": {
+    "downtime_floor_sec": 111.1,
+    "explanation": "반복 패스는 누적 유실을 줄이지만 다운타임은 줄이지 못한다. 이 스크립트는 델타만 옮기는 것이 아니라 매번 전수 재스캔을 하므로, 쓰기를 차단한 최종 패스도 여전히 전체 키를 훑는다. 2.15M 키 / 3.77GB 기준 약 111초가 경로 B의 다운타임 하한이다.",
+    "to_go_lower": "다운타임을 더 줄이려면 복사 방식이 아니라 애플리케이션 레벨 이중 쓰기가 필요하다 (이 랩에서는 미검증)."
+  }
+}

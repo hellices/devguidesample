@@ -1,0 +1,35 @@
+{
+  "topic": "AMR 용량 산정 — usedmemory 지표의 분모와 HA 복제본 계상",
+  "why": "소스 데이터 3.77GiB를 Balanced_B5(표기 6GB)에 넣었더니 사용률이 77~81%로 나왔다. 표기 용량만 보고 사이징하면 안 되는 이유를 지표에서 역산해 확인했다.",
+  "target": {"sku": "Balanced_B5", "highAvailability": "Enabled", "clusteringPolicy": "EnterpriseCluster"},
+  "source_dataset": {"used_memory": "3.77G", "keys": 2155260},
+  "metric_source": "az monitor metrics list --resource <redisEnterprise cluster id> --metric usedmemory usedmemorypercentage --aggregation Maximum --interval PT30M",
+  "metric_note": "지표는 클러스터 리소스에 있다. .../databases 네임스페이스는 지원되지 않는다.",
+  "observations": [
+    {
+      "timestamp": "2026-08-26T16:56:00Z",
+      "context": "단일 패스 복사(경로 B) 직후",
+      "usedmemory_bytes": 8364071328,
+      "usedmemory_gib": 7.79,
+      "usedmemorypercentage": 81.0,
+      "derived_capacity_bytes": 10326013985
+    },
+    {
+      "timestamp": "2026-08-26T17:26:00Z",
+      "context": "반복 패스 최종 상태",
+      "usedmemory_bytes": 8036226283,
+      "usedmemory_gib": 7.48,
+      "usedmemorypercentage": 77.0,
+      "derived_capacity_bytes": 10436657510
+    }
+  ],
+  "derivation": {
+    "observed_capacity_bytes": "약 10.33e9 ~ 10.44e9 (9.6~9.7 GiB)",
+    "model": "B5 = 6 GiB(사본 1개) x HA 2사본 = 12 GiB, 여기서 시스템 예약 약 20%를 빼면 12 GiB * 0.8 = 10,307,921,510 B",
+    "model_vs_observed": "모델 10.31e9 vs 관측 10.33e9 — 오차 0.2% 이내로 일치",
+    "conclusion_1": "usedmemory 지표는 HA 복제본까지 세므로 데이터 크기의 약 2배로 표시된다 (3.77 GiB 데이터 -> 7.48 GiB 지표, 1.98배).",
+    "conclusion_2": "사용률의 실질 분모는 '표기 용량 x 0.8'이다. 3.77 GiB / (6 GiB * 0.8 = 4.8 GiB) = 78.5%, 실측 77~81%와 일치."
+  },
+  "practical_rule": "AMR Balanced SKU에서 실제로 담을 수 있는 데이터 상한은 표기 용량의 약 80%다. ACR 데이터 크기를 그대로 같은 숫자의 AMR SKU에 1:1로 매핑하면 전환 직후 메모리 압박을 겪는다.",
+  "caveat": "이 랩은 B5 한 SKU에서만 관측했다. 다른 SKU/티어에서 동일한 20% 예약이 적용되는지는 확인하지 않았다."
+}
