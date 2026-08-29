@@ -75,10 +75,10 @@ Option 2인 Azure 마이그레이션 도구는 이름에서 기대하게 되는 
 
 ## 읽는 순서
 
-- **아직 고르는 중이다** → 이 문서 [핵심 요약](#핵심-요약) → [2절](#2-무엇을-고를-것인가--clusteringpolicy) → [ACR과 AMR의 차이](migration-guide/01-differences.md)
-- **코드를 감사해야 한다** → [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) 전체
-- **날짜를 잡고 실행한다** → 이 문서 [5절](#5-우선순위와-순서) → [6절](#6-권장-절차) → [이관 경로와 실측](migration-guide/03-migration-paths.md)
-- **왜 무중단이 안 되는지 설명해야 한다** → 이 문서 [3절](#3-클라이언트-무수정-가능-범위와-다운타임-하한) → [이관 경로와 실측 4절 상세](migration-guide/03-migration-paths.md#4-실시간-마이그레이션-전략--replicaof는-왜-안-되는가)
+- **아직 고르는 중일 때** → 이 문서 [핵심 요약](#핵심-요약) → [2절](#2-무엇을-고를-것인가--clusteringpolicy) → [ACR과 AMR의 차이](migration-guide/01-differences.md)
+- **코드를 감사해야 할 때** → [클라이언트·SDK 확인사항](migration-guide/02-client-audit.md) 전체
+- **날짜를 잡고 실행할 때** → 이 문서 [5절](#5-우선순위와-순서) → [6절](#6-권장-절차) → [이관 경로와 실측](migration-guide/03-migration-paths.md)
+- **무중단이 안 되는 이유를 설명해야 할 때** → 이 문서 [3절](#3-클라이언트-무수정-가능-범위와-다운타임-하한) → [이관 경로와 실측 4절 상세](migration-guide/03-migration-paths.md#4-실시간-마이그레이션-전략--replicaof는-왜-안-되는가)
 
 ---
 
