@@ -31,7 +31,7 @@ echo $?                                        # TIER 1 적중이 있으면 1
 ```
 
 스캔 결과는 등급별로 다음 단계가 갈립니다. **TIER 2와 TIER 3의 건수**가 곧 `clusteringPolicy` 선택의
-입력값이고, **TIER 4**는 애플리케이션 코드가 아니라 운영 절차 쪽에서 걸립니다.
+입력값이고 **TIER 4**는 애플리케이션 코드가 아니라 운영 절차 쪽에서 걸립니다.
 등급 정의와 등급별 명령 목록은 [클라이언트·SDK 확인사항 3절](../migration-guide/02-client-audit.md#3-명령어-감사--자동-스캔)에 있습니다.
 
 정적 스캔은 **프레임워크가 대신 호출하는 명령을 놓칩니다**(Spring Session, Celery, Sidekiq, Redisson 등).
@@ -64,7 +64,8 @@ python3 policy_matrix_test.py --host <amr>.<region>.redis.azure.net --port 10000
   인증서가 `<region>.redis.azure.net` 이름으로 발급돼 있어 샤드 IP로는 검증에 실패하기 때문입니다.
 - 픽스처 준비는 파이프라인으로 묶여 있습니다. 왕복 지연이 큰 곳에서 순차로 보내면
   실행 시간이 수십 분으로 늘어납니다 (이 랩의 180ms 환경에서 38분).
-- `clusteringPolicy`는 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 DB를 지워야만 바꿀 수 있으므로, 비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
+- `clusteringPolicy`는 `OSSCluster`/`EnterpriseCluster`로 만들고 나면 DB를 지워야만 바꿀 수 있습니다.
+  비교하려면 **정책별로 클러스터를 따로 만들어야 합니다.**
 - 이 랩의 결과는 [`results/policy-matrix-ent.json`](results/policy-matrix-ent.json)과
   [`results/policy-matrix-oss.json`](results/policy-matrix-oss.json)에 있고
   해석은 [ACR과 AMR의 차이 2.4절](../migration-guide/01-differences.md#24-실측-정책--클라이언트-조합별-명령-호환성)에 있습니다.

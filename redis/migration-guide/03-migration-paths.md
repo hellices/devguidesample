@@ -24,7 +24,7 @@ ACR (Premium) --export--> Blob Storage --import--> AMR
 | 인증 | 시스템 할당 관리 ID |
 
 Export는 관리 ID를 지원하므로 스토리지 계정이 공용 네트워크 접근을 막고 있어도
-신뢰할 수 있는 서비스 예외를 통해 동작한다.
+신뢰할 수 있는 서비스 예외로 동작한다.
 
 ### 1.2 Import — 이 환경에서의 실패
 
@@ -33,7 +33,7 @@ az redisenterprise database import --sas-uris "https://.../dump.rdb?<sas>"
 → OperationFailed (128.97초 후)
 ```
 
-원인을 추적한 결과는 다음과 같다.
+원인을 하나씩 짚으면 이렇다.
 
 1. `az redisenterprise database import`는 **`--sas-uris`만 지원한다.** 관리 ID 인증 옵션이 없다.
 2. 테넌트에 걸린 Azure Policy(`MCAPSGovDeployPolicies`의 `StorageAccount_PublicNetwork_Modify`,
@@ -55,8 +55,8 @@ az redisenterprise database import --sas-uris "https://.../dump.rdb?<sas>"
 
 ## 2. 경로 B: `SCAN` + `DUMP`/`RESTORE` 프로그래매틱 복사
 
-Basic/Standard처럼 Export를 못 쓰거나, 경로 A가 정책으로 막힌 경우의 대안이다.
-[`migration-lab/migrate_scan_copy.py`](../migration-lab/migrate_scan_copy.py)가 하는 일은 다음과 같다.
+Basic/Standard처럼 Export를 못 쓰거나 경로 A가 정책으로 막혔을 때 쓰는 대안이다.
+[`migration-lab/migrate_scan_copy.py`](../migration-lab/migrate_scan_copy.py)는 이렇게 짜여 있다.
 
 - `KEYS *` 대신 **`SCAN` 커서**를 쓴다. `KEYS`는 O(N) 블로킹 명령이라 수백만 키 인스턴스를 멈춘다.
 - 타입별 `HGETALL`/`LRANGE` 대신 **`DUMP` → `RESTORE ... REPLACE`** 를 쓴다. 타입에 무관하고 클라이언트 메모리도 덜 쓴다.
@@ -78,7 +78,7 @@ Redis 6.0.14에서 만든 `DUMP` 페이로드를 Redis 7.4.3에 `RESTORE`하는 
 
 ### 2.2 복사 중 들어온 쓰기의 48.47% 유실
 
-복사가 도는 동안 소스에 초당 약 140건씩 프로브 키를 쓰고, 각 프로브의 키와 쓰기 시각을 로컬에 기록했다.
+복사가 도는 동안 소스에 초당 약 140건씩 프로브 키를 쓰면서 각 프로브의 키와 쓰기 시각을 로컬에 기록했다.
 복사가 끝난 뒤 타깃에서 프로브를 **값까지** 대조했다.
 
 | 항목 | 값 |
@@ -94,8 +94,8 @@ Redis 6.0.14에서 만든 `DUMP` 페이로드를 Redis 7.4.3에 `RESTORE`하는 
 **커서가 이미 지나간 자리에 새로 쓰인 키는 이번 패스에서 복사되지 않는다.**
 복사 도중 무작위 시점에 쓰인 키가 "아직 안 지나간 구간"에 떨어질 확률은 평균 50%다. 실측 48.47%가 그 값이다.
 
-RDB Export도 같은 성질을 갖는다. Export는 시작 시점의 스냅샷이므로 그 이후 쓰기는 담기지 않는다.
-복사 방식은 무엇이든 이 문제를 갖는다.
+RDB Export도 성질이 같다. Export는 시작 시점의 스냅샷이라 그 이후 쓰기는 담기지 않는다.
+복사 방식은 무엇이든 이 문제를 피하지 못한다.
 
 > 소규모 테스트에서 이게 안 보이는 이유가 여기 있다. 키가 몇 개뿐이면 복사가 몇 초 만에 끝나서
 > 유실 구간이 사실상 없다. GB 규모에서는 이 구간이 **2분**이다.
@@ -145,7 +145,7 @@ Option 2에 대한 문서의 제약 목록에는 다음이 그대로 적혀 있�
 
 > **Data sync not supported.** This tooling will orchestrate hostname/endpoint migration but **does not migrate any data**.
 
-이 도구가 하는 일은 **미리 만들어 둔 AMR로 ACR의 호스트 이름을 넘기는 것**이다.
+이 도구는 **미리 만들어 둔 AMR로 ACR의 호스트 이름을 넘긴다.**
 클라이언트는 같은 호스트 이름과 액세스 키로 재연결되면서 AMR에 붙는다. 데이터는 별도로 옮겨야 한다.
 
 리소스 공급자에 노출된 작업 이름도 이와 일치한다.
@@ -163,10 +163,10 @@ Microsoft.Cache/redis/rollbackDnsForMigration/action
 ### 3.1 문서에 명시된 그 밖의 제약
 
 데이터를 옮기지 않는다는 사실 하나로 대부분 여기서 물러선다.
-그걸 감수하기로 했다면 그다음 줄들을 봐야 하는데, 전부
+그걸 감수하기로 했다면 아래를 마저 봐야 한다. 전부
 [Migrate with tooling](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-with-tooling)에 적혀 있는 제약이다.
 
-- **전환 시점 통제 불가**: 마이그레이션 시작만 고를 수 있고, 실제 트래픽 전환 시점은 고를 수 없다.
+- **전환 시점 통제 불가**: 마이그레이션 시작만 고를 수 있고 실제 트래픽이 언제 넘어가는지는 고를 수 없다.
 - **전체 동시 전환**: 하나의 Redis에 붙은 **모든** 애플리케이션이 동시에 전환된다. 서비스 단위 점진 전환이 안 된다.
 - **롤백 창 제한**: 마이그레이션이 성공한 뒤 검증하고 되돌릴 수 있는 시간이 짧다.
 - **두 호스트명 병존 기간 제한**: 기존 ACR 호스트명은 일정 기간 뒤 자동 삭제된다.
@@ -210,7 +210,7 @@ Microsoft.Cache/redis/rollbackDnsForMigration/action
 4. 소스 쓰기 차단 → 타깃에서 REPLICAOF NO ONE으로 승격 → 트래픽 전환
 ```
 
-다운타임이 4단계의 수 초로 압축된다. 개념적으로 정확하고, 실제로 온프레미스 Redis 이관의 표준 절차다.
+다운타임이 4단계의 수 초로 압축된다. 개념적으로 정확하고 실제로 온프레미스 Redis 이관의 표준 절차다.
 
 **하지만 ACR → AMR에서는 소스와 타깃 양쪽 모두에서 차단된다.**
 
@@ -223,7 +223,7 @@ Microsoft.Cache/redis/rollbackDnsForMigration/action
 **타깃(AMR)도 복제 명령을 제공하지 않는다.** AMR이 올라가 있는 Redis Enterprise 스택의 호환성 표에서
 `REPLICAOF`, `SLAVEOF`, `SYNC`, `PSYNC`, `REPLCONF`, `ROLE`, `FAILOVER`, `MIGRATE`가 전부 **Not supported**다.
 
-즉 "타깃에서 명령을 못 쓴다"와 "소스가 받아 주지 않는다"가 동시에 성립한다. 한쪽만 문제라면 우회할 여지가 있지만, 양쪽이다.
+즉 "타깃에서 명령을 못 쓴다"와 "소스가 받아 주지 않는다"가 동시에 성립한다. 한쪽만 막혔다면 우회할 여지가 있겠지만 양쪽이다.
 
 **Redis Enterprise의 "Replica Of" 기능은 어떤가.** Redis Enterprise 제품에는 외부 Redis를 소스로 삼는
 액티브-패시브 복제(Replica Of) 기능이 실제로 있다. 그러나 **Azure의 ARM 표면에 노출돼 있지 않다.**
@@ -235,7 +235,7 @@ $ az redisenterprise database create --help
 ```
 
 이건 **AMR ↔ AMR 액티브 지역 복제**다. 링크 대상이 `.../redisEnterprise/.../databases/` 리소스 ID여야 하므로
-ACR을 넣을 수 없다. 설령 노출됐더라도 결국 소스를 향해 복제 프로토콜을 말해야 하고, 그건 위에서 막혀 있다.
+ACR을 넣을 수 없다. 설령 노출됐더라도 결국 소스를 향해 복제 프로토콜을 말해야 하고 그건 위에서 막혀 있다.
 
 같은 이유로 **`redis-shake`의 `sync` 모드도 쓸 수 없다.** `PSYNC`를 쓰기 때문이다.
 
@@ -294,7 +294,7 @@ riot compare --full ...
 
 트래픽이 도는 대로 뜨거운 키가 자연스럽게 AMR로 넘어가면서 벌크 복사 자체가 필요 없어진다.
 쓰기가 AMR에만 가므로 이중 쓰기의 읽기-수정-쓰기 정합성 문제도 없다.
-대신 전환 기간 동안 **캐시 미스마다 왕복이 두 번**이고, 두 인스턴스를 동시에 유지해야 한다.
+대신 전환 기간 동안 **캐시 미스마다 왕복이 두 번**이고 두 인스턴스를 동시에 유지해야 한다.
 TTL이 짧은 순수 캐시라면 며칠이면 ACR을 뗄 수 있다.
 
 ### 4.4 프록시 계층 미러링 — 애플리케이션을 안 고치는 경우
@@ -322,10 +322,10 @@ Envoy 문서도 이 필터를 "not hardened"로 표기한다. 대조 검증을 �
 
 ### 4.5 캐시 재수화 — 데이터를 아예 안 옮기는 선택지
 
-**Redis를 순수 look-aside 캐시로만 쓴다면, 데이터를 옮길 이유가 없다.** Microsoft도 문서에서 이 선택지를 명시한다.
+**Redis를 순수 look-aside 캐시로만 쓴다면 데이터를 옮길 이유가 없다.** Microsoft도 문서에서 이 선택지를 명시한다.
 빈 AMR로 연결을 바꾸고 원본(DB/API)에서 다시 채우면 끝이다. 다운타임 0, 데이터 유실은 "전량이지만 의도된 것".
 
-전제 조건 두 가지를 반드시 확인해야 한다.
+대신 전제 조건을 반드시 확인해야 한다.
 
 - Redis에만 있는 데이터가 없어야 한다. **세션, 분산 락, 레이트 리밋 카운터, 작업 큐, 스트림은 재계산이 불가능하다.**
   하나라도 있으면 이 방법은 못 쓴다.
@@ -376,7 +376,7 @@ Redis에 재계산 불가능한 데이터가 있는가?
 
 ### 5.1 소스 — SKU 표기 용량 ≠ 쓸 수 있는 용량
 
-Premium P1은 6GB로 표기되지만, `maxmemory-reserved`(642MB)와
+Premium P1은 6GB로 표기되지만 `maxmemory-reserved`(642MB)와
 `maxfragmentationmemory-reserved`(642MB)를 빼면 실제 데이터는 4.4~4.75GB 선에서 한계에 부딪힌다.
 이 랩에서도 4.50G에서 `OutOfMemoryError`가 났다.
 
@@ -384,11 +384,11 @@ Premium P1은 6GB로 표기되지만, `maxmemory-reserved`(642MB)와
 az redis show -n <acr-name> -g <rg> --query "redisConfiguration.{maxmemory:maxmemory, reserved:maxmemoryReserved, fragReserved:maxfragmentationmemoryReserved}"
 ```
 
-여기에 더해, ACR의 기본 축출 정책은 **`volatile-lru`** 다 (이 랩의 소스도 기본값 그대로였다).
+여기에 더해 ACR의 기본 축출 정책은 **`volatile-lru`** 다 (이 랩의 소스도 기본값 그대로였다).
 메모리가 한계에 닿으면 **TTL이 걸린 키를 조용히 지우고 쓰기는 성공한 것처럼 계속 받는다.**
 하필 마이그레이션 중에 압박이 커진다 — RDB Export의 fork가 메모리를 더 쓰고 서비스 쓰기는 계속 들어온다.
 
-> 소스가 이미 `maxmemory` 근처에서 돌고 있다면, **마이그레이션을 시작하기 전에** 여유를 확보해야 한다.
+> 소스가 이미 `maxmemory` 근처에서 돌고 있다면 **마이그레이션을 시작하기 전에** 여유를 확보해야 한다.
 > (SKU 상향, 불필요한 키 정리, 또는 `maxmemory-policy`를 `noeviction`으로 바꿔 조용한 유실 대신 오류로 드러내기)
 > 이 랩은 축출량을 정량화하지 않았다. 메커니즘과 기본값만 확인한 항목이다.
 
@@ -419,7 +419,7 @@ Balanced_B5(6 GiB)에 HA 2사본이면 12 GiB이고 여기서 시스템 예약 �
 > 3.77 GiB ÷ (6 GiB × 0.8 = 4.8 GiB) = 78.5% → 실측 77~81%와 맞는다.
 
 ACR의 데이터 크기를 같은 숫자의 AMR SKU에 1:1로 매핑하면 안 된다.
-소스가 6GB SKU에서 4.5GB를 쓰고 있었다면, 6GB짜리 AMR은 이미 한계(4.8 GiB)에 붙는다.
+소스가 6GB SKU에서 4.5GB를 쓰고 있었다면 6GB짜리 AMR은 이미 한계(4.8 GiB)에 붙는다.
 
 ```bash
 # 사이징 검증은 데이터베이스가 아니라 클러스터 리소스에서 한다.
@@ -430,7 +430,7 @@ az monitor metrics list \
 ```
 
 원시 관측치는 [`results/amr-memory-sizing.json`](../migration-lab/results/amr-memory-sizing.json)에 있다.
-20% 예약은 문서상 모든 AMR 인스턴스에 적용되지만, **역산으로 확인한 것은 Balanced_B5 하나**다.
+20% 예약은 문서상 모든 AMR 인스턴스에 적용된다. 다만 **역산으로 확인한 것은 Balanced_B5 하나**다.
 
 ---
 
@@ -497,7 +497,7 @@ RDB 압축률이 현실적으로 나오게 했다. 문자열 키의 30%에는 TT
 | [`results/path-c-tooling.json`](../migration-lab/results/path-c-tooling.json) | 마이그레이션 도구 제약 (문서 인용) |
 | [`results/amr-memory-sizing.json`](../migration-lab/results/amr-memory-sizing.json) | AMR 사용량 지표 원시값과 유효 용량 역산 |
 
-검증할 때 실제로 걸려 넘어졌던 함정 세 가지를 스크립트에 반영해 두었다.
+검증하다가 실제로 걸려 넘어진 함정은 스크립트에 반영해 두었다.
 
 - **`EXISTS`로 유실을 세면 안 된다.** 키는 있는데 값이 옛것인 경우를 놓친다.
 - **`DUMP` 페이로드를 바이트 비교하면 안 된다.** RDB 버전 푸터 때문에 Redis 6 → 7.4에서는
@@ -525,7 +525,7 @@ RDB 압축률이 현실적으로 나오게 했다. 문자열 키의 30%에는 TT
 - **Azure 마이그레이션 도구의 실동작** — 프라이빗 엔드포인트 환경이라 대상 밖 ([3절](#3-경로-c-데이터를-옮기지-않는-azure-마이그레이션-도구))
 - **비용 비교** — SKU별 단가는 리전·계약·시점에 따라 달라진다. [Azure 가격 계산기](https://azure.microsoft.com/pricing/calculator/)로 직접 확인해야 한다.
 - **Entra ID 인증 경로** — 이 랩은 액세스 키만 사용했다.
-- **마이그레이션 중 소스 축출량** — `volatile-lru` 기본값과 `OutOfMemoryError` 발생은 확인했지만,
+- **마이그레이션 중 소스 축출량** — `volatile-lru` 기본값과 `OutOfMemoryError` 발생은 확인했지만
   축출된 키 수를 재현 가능한 형태로 기록하지 못했다 ([5절](#5-용량-산정--두-번의-착시))
 - **B5 외 SKU의 메모리 예약 비율** — 20% 예약은 Balanced_B5 한 SKU에서만 역산했다
 - **`EnterpriseCluster`의 크로스 슬롯 제약** — 허용 목록 6개와 목록 밖 24개를 실측했다
