@@ -68,6 +68,8 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn("secretIdentifier: geminiApiKeySecretIdentifier", source)
         self.assertIn("secretIdentifier: anthropicApiKeySecretIdentifier", source)
         self.assertIn("secretIdentifier: bedrockAccessKeySecretIdentifier", source)
+        self.assertIn("secretIdentifier: bedrockSecretKeySecretIdentifier", source)
+        self.assertIn("secretIdentifier: languageApiKeySecretIdentifier", source)
         self.assertNotIn("aiplatform.googleapis.com", source)
 
     def test_provider_policies_use_fixed_backends(self) -> None:
