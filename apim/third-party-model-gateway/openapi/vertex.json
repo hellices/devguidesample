@@ -1,0 +1,64 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI Hub Vertex",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent": {
+      "post": {
+        "operationId": "generateVertexContent",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "location",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

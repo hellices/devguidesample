@@ -1,0 +1,48 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI Hub Bedrock",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/model/{modelId}/converse": {
+      "post": {
+        "operationId": "converseWithBedrockModel",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

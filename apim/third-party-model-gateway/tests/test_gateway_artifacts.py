@@ -54,6 +54,22 @@ class GatewayArtifactTests(unittest.TestCase):
         for name in POLICY_FILES:
             self.assertIn(f"loadTextContent('../policies/{name}')", source)
 
+    def test_bicep_declares_fixed_backends_and_key_vault_references(self) -> None:
+        source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
+        self.assertIn("resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing", source)
+        for backend_id in (
+            "ai-hub-gemini",
+            "ai-hub-anthropic",
+            "ai-hub-bedrock",
+            "ai-hub-vertex-broker",
+            "ai-hub-mcp",
+        ):
+            self.assertIn(f"name: '{backend_id}'", source)
+        self.assertIn("secretIdentifier: geminiApiKeySecretIdentifier", source)
+        self.assertIn("secretIdentifier: anthropicApiKeySecretIdentifier", source)
+        self.assertIn("secretIdentifier: bedrockAccessKeySecretIdentifier", source)
+        self.assertNotIn("aiplatform.googleapis.com", source)
+
     def test_provider_policies_use_fixed_backends(self) -> None:
         expected = {
             "gemini.xml": "ai-hub-gemini",

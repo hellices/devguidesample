@@ -1,0 +1,38 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI Hub Anthropic",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/messages": {
+      "post": {
+        "operationId": "createAnthropicMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
