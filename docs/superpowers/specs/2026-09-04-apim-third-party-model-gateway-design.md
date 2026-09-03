@@ -191,7 +191,8 @@ SigV4 broker or workload federation that obtains short-lived AWS credentials.
 
 The reference contains an optional generic MCP APIM resource-server policy:
 
-- `/.well-known/oauth-protected-resource` returns Protected Resource Metadata.
+- An APIM metadata API returns Protected Resource Metadata at the RFC 9728
+  well-known URL derived from the MCP resource URL.
 - APIM validates a token issued by a compatible authorization server.
 - APIM maps scope/role to an MCP API operation.
 - The MCP backend must still enforce object-level authorization.
@@ -218,12 +219,14 @@ apim/
       bedrock.xml
       vertex.xml
       mcp-resource-server.xml
+      mcp-metadata.xml
     openapi/
       gemini.json
       anthropic.json
       bedrock.json
       vertex.json
       mcp.json
+      mcp-metadata.json
     scripts/
       configure-gcp-wif.sh
       validate.sh
@@ -244,6 +247,8 @@ The Bicep deployment targets an existing APIM service and accepts:
 - GCP project number, workload identity pool/provider IDs, Vertex region, and
   private Vertex broker URL
 - AWS Bedrock region
+- MCP resource URL, metadata URL, authorization-server issuer, and OpenID
+  configuration URL
 - backend endpoint URLs only where a private/custom endpoint is required
 
 Secrets are never default parameter values, source-controlled JSON values, or
