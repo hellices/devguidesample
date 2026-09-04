@@ -64,6 +64,7 @@ instructions.
 ```bicep
 param apiManagementServiceName string
 param apiPathPrefix string = 'ai'
+param gatewayBaseUrl string
 param entraTenantId string
 param entraAudience string
 param requiredScope string = 'ai.invoke'
@@ -82,9 +83,8 @@ param vertexBrokerUrl string
 param vertexBrokerResourceAudience string
 param mcpAuthorizationServerOpenIdConfigurationUrl string
 param mcpAuthorizationServerIssuer string
-param mcpResourceAudience string
-param mcpResourceMetadataUrl string
 param mcpBackendUrl string
+param mcpBackendResourceAudience string
 ```
 
 Secret identifiers are Key Vault secret URIs, not secret values.
@@ -374,6 +374,7 @@ targetScope = 'resourceGroup'
 
 param apiManagementServiceName string
 param apiPathPrefix string = 'ai'
+param gatewayBaseUrl string
 param entraTenantId string
 param entraAudience string
 param requiredScope string = 'ai.invoke'
@@ -389,11 +390,11 @@ param bedrockSecretKeySecretIdentifier string
 param languageApiKeySecretIdentifier string
 param bedrockRegion string
 param vertexBrokerUrl string
+param vertexBrokerResourceAudience string
 param mcpAuthorizationServerOpenIdConfigurationUrl string
 param mcpAuthorizationServerIssuer string
-param mcpResourceAudience string
-param mcpResourceMetadataUrl string
 param mcpBackendUrl string
+param mcpBackendResourceAudience string
 
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apiManagementServiceName
@@ -413,7 +414,8 @@ Create nonsecret named values named `ai-hub-entra-tenant-id`,
 `ai-hub-language-endpoint`, `ai-hub-bedrock-region`,
 `ai-hub-vertex-broker-resource-audience`,
 `ai-hub-mcp-openid-config`, `ai-hub-mcp-authorization-server-issuer`,
-`ai-hub-mcp-resource-audience`, and `ai-hub-mcp-resource-metadata-url`.
+`ai-hub-mcp-resource-audience`, `ai-hub-mcp-resource-metadata-url`, and
+`ai-hub-mcp-backend-resource-audience`.
 
 Create fixed backend resources using `protocol: 'http'`, TLS validation, and
 these URLs:
@@ -432,7 +434,7 @@ For each OpenAPI file, create an
 ```bicep
 properties: {
   displayName: 'AI Hub Gemini'
-  path: '${apiPathPrefix}/gemini'
+  path: '${validatedApiPathPrefix}/gemini'
   protocols: [
     'https'
   ]
@@ -450,7 +452,7 @@ Use names and paths `ai-hub-gemini`, `ai-hub-anthropic`, `ai-hub-bedrock`,
 value: replace(
   loadTextContent('../openapi/mcp-metadata.json'),
   '__API_PATH_PREFIX__',
-  apiPathPrefix
+  validatedApiPathPrefix
 )
 ```
 
@@ -467,6 +469,7 @@ using './main.bicep'
 
 param apiManagementServiceName = '<existing-apim-name>'
 param apiPathPrefix = 'ai'
+param gatewayBaseUrl = 'https://<gateway-host>'
 param entraTenantId = '<entra-tenant-id>'
 param entraAudience = 'api://<ai-hub-api-app-id>'
 param requiredScope = 'ai.invoke'
@@ -485,9 +488,8 @@ param vertexBrokerUrl = 'https://<private-vertex-broker-host>'
 param vertexBrokerResourceAudience = 'api://<private-vertex-broker-app-id>'
 param mcpAuthorizationServerOpenIdConfigurationUrl = 'https://<mcp-authorization-server>/.well-known/openid-configuration'
 param mcpAuthorizationServerIssuer = 'https://<mcp-authorization-server>'
-param mcpResourceAudience = 'https://<gateway-host>/ai/mcp'
-param mcpResourceMetadataUrl = 'https://<gateway-host>/.well-known/oauth-protected-resource/ai/mcp'
 param mcpBackendUrl = 'https://<private-mcp-server-host>'
+param mcpBackendResourceAudience = 'api://<private-mcp-server-app-id>'
 ```
 
 Do not place a secret **value** in this template. Key Vault secret identifier
@@ -749,10 +751,19 @@ Microsoft-documented SigV4 signing algorithm. The policy must:
 - set `X-Amz-Date` and `X-Amz-Content-Sha256`;
 - canonicalize the HTTP method, URL path, sorted query string, `host`,
   `content-type`, and `x-amz-*` headers;
+- derive a once-escaped Bedrock Runtime wire path and a canonical URI by
+  escaping each wire-path segment one additional time for non-S3 SigV4;
+- accept only slash-free foundation/inference-profile IDs on this path route
+  and require a separately specified header/body operation or signing broker
+  for ARN-style model IDs;
 - derive the signing key using date, `{{ai-hub-bedrock-region}}`, service
   `bedrock`, and `aws4_request`;
 - set an `AWS4-HMAC-SHA256` `Authorization` header;
 - avoid request-body logging and source no literal credential.
+
+Validate the final policy with an authorized colon-bearing model ID in staging
+before production, confirming that Bedrock does not return
+`SignatureDoesNotMatch`.
 
 - [ ] **Step 6: Implement MCP resource-server and metadata policies**
 
@@ -799,6 +810,24 @@ Then validate a token from an external compatible authorization server:
   <on-error><base /></on-error>
 </policies>
 ```
+
+**Hardening update:** The preceding initial policy sketch is superseded by the
+final artifact requirements below. Use it only to understand policy placement,
+not as a copy/paste configuration:
+
+- Validate issuer/audience with `validate-jwt`, then inspect both standard
+  `scope` and Entra `scp` after validation. APIM returns comma-separated
+  multiple claim values, so split on whitespace and commas before checking
+  `mcp.invoke`.
+- Put a `validate-jwt`-only `on-error` branch before `<base />`; return 401
+  with a `WWW-Authenticate` `invalid_token` challenge containing
+  `resource_metadata` and `scope="mcp.invoke"`. Return a matching
+  `insufficient_scope` challenge with explicit 403 responses.
+- Do not transit the client bearer token to the private backend. Overwrite
+  validated issuer/subject headers, delete `Authorization`, and use
+  `authentication-managed-identity` with
+  `{{ai-hub-mcp-backend-resource-audience}}`. The backend must validate the
+  APIM managed-identity token before it trusts these identity assertions.
 
 Create `mcp-metadata.json`:
 
@@ -857,9 +886,11 @@ Create `mcp-metadata.xml`:
 </policies>
 ```
 
-The Bicep metadata API maps the resource
-`https://<gateway>/{apiPathPrefix}/mcp` to the RFC 9728 metadata URL
-`https://<gateway>/.well-known/oauth-protected-resource/{apiPathPrefix}/mcp`.
+The Bicep template derives the MCP resource
+`${gatewayBaseUrl}/{apiPathPrefix}/mcp` and RFC 9728 metadata URL
+`${gatewayBaseUrl}/.well-known/oauth-protected-resource/{apiPathPrefix}/mcp`
+from one canonical HTTPS-origin `gatewayBaseUrl` and the validated
+`apiPathPrefix`; do not add independent URL parameters.
 Do not make an Entra v2 authorization URL appear in either MCP policy.
 
 - [ ] **Step 7: Run static tests and Bicep validation**
@@ -1106,7 +1137,8 @@ Extract and check the official HTTP links in
 `third-party-model-integration.md`:
 
 ```bash
-grep -oE 'https://[^)]+' apim/third-party-model-gateway/third-party-model-integration.md \
+rg -o '\]\(https://[^)]+' apim/third-party-model-gateway/third-party-model-integration.md \
+  | cut -c3- \
   | sort -u \
   | while IFS= read -r url; do
       curl -L -sS -o /dev/null -w '%{http_code} %{url_effective}\n' "$url"

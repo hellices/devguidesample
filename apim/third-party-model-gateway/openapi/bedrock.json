@@ -13,6 +13,7 @@
             "name": "modelId",
             "in": "path",
             "required": true,
+            "description": "Bedrock foundation or inference-profile model ID without '/'. ARN model IDs require a separate gateway operation because APIM path routing cannot reliably preserve escaped slashes.",
             "schema": {
               "type": "string"
             }

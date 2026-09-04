@@ -86,19 +86,37 @@
   데모/샘플로 제시한다.
 - `policies/bedrock.xml`은 이 패턴을 구현한다.
   1. 공통 fragment(인증/rate limit/PII)를 적용한다.
-  2. 매칭된 `modelId` 경로 매개변수로부터 캐노니컬 backend 경로
-     `/model/{modelId}/converse`를 계산하고, 쿼리 매개변수를 SigV4
+  2. 매칭된 `modelId` 경로 매개변수로부터 `/model/{escaped-modelId}/converse`
+     **wire path**를 한 번 URI-escape하여 계산한다. AWS
+     [SigV4 canonical request](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html)의
+     non-S3 signer 동작에 따라 canonical URI는 이 wire path의 각 segment를
+     한 번 더 URI-escape한 **canonical path**로 계산한다. 예를 들어 wire
+     path의 `: -> %3A`는 canonical path에서 `%3A -> %253A`가 된다.
+     `rewrite-uri`는 wire path만 전달하고, `canonicalRequest`는 canonical
+     path만 서명한다.
+  3. 이 API path route는 `^[A-Za-z0-9._:-]{1,256}$`인 `modelId`만 받는다.
+     `/`가 포함된 Bedrock ARN/custom model ARN은 APIM path template이
+     escaped slash를 안정적으로 보존하는 계약을 제공하지 않으므로 400으로
+     거부한다. ARN이 필요하면 model ID를 header/body에서 받는 별도 gateway
+     operation 또는 SigV4 broker를 구현하고 encoding/authorization contract를
+     별도로 검증해야 한다.
+  4. 쿼리 매개변수를 SigV4
      캐노니컬 규칙(개별 값 인코딩 후 encoded key/value로 정렬)에 따라
      재구성한다.
-  3. 원본 요청 바이트에서 SHA-256 payload hash를 한 번만 계산해
+  5. 원본 요청 바이트에서 SHA-256 payload hash를 한 번만 계산해
      `X-Amz-Content-Sha256`과 서명 계산에 동일하게 사용한다.
-  4. `rewrite-uri`가 사용하는 것과 **동일한 변수**로 캐노니컬 요청을
-     구성해 서명이 실제 전달되는 요청과 어긋나지 않도록 한다.
-  5. `AWS4-HMAC-SHA256` 알고리즘으로 `Authorization` 헤더를 직접 생성하고,
+  6. `AWS4-HMAC-SHA256` 알고리즘으로 `Authorization` 헤더를 직접 생성하고,
      `ai-hub-bedrock-region` named value로 지정된 region의
      `bedrock-runtime.{region}.amazonaws.com` backend로 라우팅한다.
-  6. 호출자 `Authorization`(Entra bearer token)은 백엔드 서명 계산 전
-     격리되며, Bedrock 인증에는 재사용되지 않는다.
+  7. 호출자 `Authorization`(Entra bearer token)은 `Authorization` SigV4
+     header override로 격리되며, Bedrock 인증에는 재사용되지 않는다.
+- **Design recommendation**: APIM `MatchedParameters`는 route template으로
+  처리된 값을 사용하므로, 이 정책에서 `Uri.UnescapeDataString`을 추가로
+  호출하지 않는다. 추가 decode는 literal percent character를 바꾸어 signing
+  대상과 forwarded path를 오염시킬 수 있다. 이 reference는 실제 AWS
+  credential을 포함하지 않으므로, production 전 staging에서 허용된 colon
+  포함 model ID로 정상 응답 및 `SignatureDoesNotMatch` 부재를 반드시
+  확인해야 한다.
 - **Design recommendation**: named value로 관리되는 정적 AWS access
   key/secret key는 공식 데모 패턴과 동일하지만 **production 권장 방식이
   아니다**. Production에서는 단기(short-lived) credential, AWS STS
@@ -233,10 +251,43 @@ recognition API(`/language/:analyze-text`)를 `send-request`로 호출한다.
   `{{ai-hub-mcp-resource-audience}}`를 검증한다. 검증된 JWT에서는
   `mcp.invoke`가 표준 OAuth `scope` 또는 Entra `scp` claim 중 하나에 있는지
   확인한다.
+- **Documented fact / 구현 동작**: [MCP Authorization
+  사양](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)은
+  401 응답에 Protected Resource Metadata 위치를 알리는 `WWW-Authenticate`
+  header를 요구하며, invalid/expired token은 401, scope/permission 부족은
+  403으로 구분한다. 따라서 이 policy는 `validate-jwt`가 실패한 401에도
+  `error="invalid_token"`, `resource_metadata`, `scope="mcp.invoke"`를
+  포함한 challenge를 반환한다. 유효 token에 `mcp.invoke`가 없을 때의 403에는
+  `error="insufficient_scope"` challenge를 포함한다. JWT 검증 오류가 아닌
+  backend 오류는 이 branch에서 401으로 변환하지 않고 상위 `on-error` 처리에
+  맡긴다.
+- **Documented fact / 구현 동작**: MCP Authorization 사양은 MCP server가
+  자신에게 발급된 audience-bound token을 검증해야 하며 다른 token을
+  accept/transit하지 않아야 한다고 규정한다. 따라서 gateway audience용 caller
+  bearer token은 사설 MCP backend로 **전달하지 않는다**. APIM은 검증된 JWT의
+  `Subject`/`Issuer`만 `x-ai-hub-mcp-caller-subject`/
+  `x-ai-hub-mcp-caller-issuer` header에 `override`로 설정하고, APIM
+  **system-assigned managed identity**의
+  `{{ai-hub-mcp-backend-resource-audience}}` token으로 backend를 호출한다.
+- **Design recommendation**: 사설 MCP backend는 private network만으로 이
+  header를 신뢰해서는 안 된다. backend가 APIM managed-identity token의
+  issuer/audience 및 해당 APIM service principal의 app-role/ACL을 검증한
+  경우에만 issuer+subject pair를 caller identity assertion으로 사용한다.
+  subject가 없는 service/client token의 object-level authorization 방식은
+  backend contract에서 별도로 정의하고, APIM가 caller bearer token을
+  passthrough하는 방식으로 우회하지 않는다.
 - `policies/mcp-metadata.xml`은 `.well-known/oauth-protected-resource/{apiPathPrefix}/mcp`
   경로에서 `resource`, `authorization_servers`, `scopes_supported`,
   `bearer_methods_supported`를 담은 [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html)
   Protected Resource Metadata JSON을 반환한다.
+- `infra/main.bicep`은 canonical HTTPS origin인 `gatewayBaseUrl`과 leading/
+  trailing slash가 없는 `apiPathPrefix`에서 MCP resource audience
+  `${gatewayBaseUrl}/{apiPathPrefix}/mcp` 및 metadata URL
+  `${gatewayBaseUrl}/.well-known/oauth-protected-resource/{apiPathPrefix}/mcp`를
+  함께 유도한다. URL 두 개를 별도의 deployment parameter로 받지 않으므로
+  API route, token audience, RFC 9728 metadata location 사이의 drift를
+  구성 단계에서 방지한다. `gatewayBaseUrl`은 path/query/fragment/trailing slash
+  없는 HTTPS origin이어야 한다.
 - **Documented fact**: 이 구성은 Entra v2 endpoint 전용
   `validate-azure-ad-token` 정책이 아니라 **일반 OIDC discovery**를
   사용한다. 따라서 표준 MCP client를 지원할 때

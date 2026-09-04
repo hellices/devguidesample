@@ -21,12 +21,27 @@
       </audiences>
     </validate-jwt>
     <choose>
-      <when condition="@(!(((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Claims.GetValueOrDefault(&quot;scope&quot;, &quot;&quot;).Split(' ').Contains(&quot;mcp.invoke&quot;) || ((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Claims.GetValueOrDefault(&quot;scp&quot;, &quot;&quot;).Split(' ').Contains(&quot;mcp.invoke&quot;)))">
+      <when condition="@(!(System.Text.RegularExpressions.Regex.Split(((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Claims.GetValueOrDefault(&quot;scope&quot;, &quot;&quot;), @&quot;[\s,]+&quot;).Contains(&quot;mcp.invoke&quot;) || System.Text.RegularExpressions.Regex.Split(((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Claims.GetValueOrDefault(&quot;scp&quot;, &quot;&quot;), @&quot;[\s,]+&quot;).Contains(&quot;mcp.invoke&quot;)))">
         <return-response>
           <set-status code="403" reason="Forbidden" />
+          <set-header name="WWW-Authenticate" exists-action="override">
+            <value>@("Bearer error=\"insufficient_scope\", resource_metadata=\"{{ai-hub-mcp-resource-metadata-url}}\", scope=\"mcp.invoke\"")</value>
+          </set-header>
         </return-response>
       </when>
     </choose>
+    <set-variable name="ai-hub-mcp-caller-subject"
+                  value="@(((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Subject ?? &quot;&quot;)" />
+    <set-variable name="ai-hub-mcp-caller-issuer"
+                  value="@(((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Issuer ?? &quot;&quot;)" />
+    <set-header name="Authorization" exists-action="delete" />
+    <set-header name="x-ai-hub-mcp-caller-subject" exists-action="override">
+      <value>@((string)context.Variables["ai-hub-mcp-caller-subject"])</value>
+    </set-header>
+    <set-header name="x-ai-hub-mcp-caller-issuer" exists-action="override">
+      <value>@((string)context.Variables["ai-hub-mcp-caller-issuer"])</value>
+    </set-header>
+    <authentication-managed-identity resource="{{ai-hub-mcp-backend-resource-audience}}" />
     <set-backend-service backend-id="ai-hub-mcp" />
   </inbound>
   <backend>
@@ -36,6 +51,16 @@
     <base />
   </outbound>
   <on-error>
+    <choose>
+      <when condition="@(context.LastError.Source == &quot;validate-jwt&quot;)">
+        <return-response>
+          <set-status code="401" reason="Unauthorized" />
+          <set-header name="WWW-Authenticate" exists-action="override">
+            <value>@("Bearer error=\"invalid_token\", resource_metadata=\"{{ai-hub-mcp-resource-metadata-url}}\", scope=\"mcp.invoke\"")</value>
+          </set-header>
+        </return-response>
+      </when>
+    </choose>
     <base />
   </on-error>
 </policies>

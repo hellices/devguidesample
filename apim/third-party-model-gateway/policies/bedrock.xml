@@ -7,24 +7,35 @@
     <set-backend-service backend-id="ai-hub-bedrock" />
     <set-variable name="ai-hub-bedrock-host" value="bedrock-runtime.{{ai-hub-bedrock-region}}.amazonaws.com" />
     <set-variable name="ai-hub-bedrock-now" value="@(DateTime.UtcNow)" />
+    <set-variable name="ai-hub-bedrock-model-id"
+                  value="@((string)context.Request.MatchedParameters[&quot;modelId&quot;])" />
+    <choose>
+      <when condition="@(!System.Text.RegularExpressions.Regex.IsMatch((string)context.Variables[&quot;ai-hub-bedrock-model-id&quot;], &quot;^[A-Za-z0-9._:-]{1,256}$&quot;))">
+        <return-response>
+          <set-status code="400" reason="Unsupported Bedrock model ID" />
+        </return-response>
+      </when>
+    </choose>
     <!--
-      Compute the canonical escaped path, canonical query, and raw-body
-      payload hash exactly once, into named context variables. Both the
-      outbound rewrite-uri (what the backend actually receives) and the
-      SigV4 canonicalRequest (what gets signed) read from these SAME
-      variables, so the signature can never drift from the forwarded
-      request.
+      Compute the one-encoded wire path, the canonical path derived from that
+      wire path, canonical query, and raw-body payload hash once each. Non-S3
+      SigV4 URI-encodes the wire path again for CanonicalURI, so a percent
+      escape in the wire path is percent-escaped in the signed path.
     -->
-    <set-variable name="ai-hub-bedrock-model-path" value="@{
+    <set-variable name="ai-hub-bedrock-wire-path" value="@{
         // The public APIM operation path is not what the Bedrock Runtime
-        // backend receives. SigV4 requires the canonical request path to
-        // match the backend path exactly, so derive
-        // &quot;/model/{escaped-modelId}/converse&quot; from the matched
-        // &quot;modelId&quot; template parameter instead of signing
-        // context.Request.Url.Path.
-        var modelId = (string)context.Request.MatchedParameters[&quot;modelId&quot;];
+        // backend receives. Build the one-encoded wire path from the matched
+        // modelId instead of signing context.Request.Url.Path.
+        var modelId = (string)context.Variables[&quot;ai-hub-bedrock-model-id&quot;];
         var escapedModelId = System.Uri.EscapeDataString(modelId);
         return &quot;/model/&quot; + escapedModelId + &quot;/converse&quot;;
+      }" />
+    <set-variable name="ai-hub-bedrock-canonical-path" value="@{
+        // AWS non-S3 SigV4 signs one URI-encoding pass over the wire path,
+        // preserving only path separators. This deliberately turns %3A in
+        // the forwarded model segment into %253A in CanonicalURI.
+        var wirePath = (string)context.Variables[&quot;ai-hub-bedrock-wire-path&quot;];
+        return string.Join(&quot;/&quot;, wirePath.Split('/').Select(segment =&gt; System.Uri.EscapeDataString(segment)));
       }" />
     <set-variable name="ai-hub-bedrock-canonical-query" value="@{
         // AWS SigV4 canonical query construction requires every individual
@@ -63,7 +74,7 @@
         }
       }" />
     <rewrite-uri template="@{
-        var path = (string)context.Variables[&quot;ai-hub-bedrock-model-path&quot;];
+        var path = (string)context.Variables[&quot;ai-hub-bedrock-wire-path&quot;];
         var query = (string)context.Variables[&quot;ai-hub-bedrock-canonical-query&quot;];
         return string.IsNullOrEmpty(query) ? path : path + &quot;?&quot; + query;
       }" copy-unmatched-params="false" />
@@ -86,11 +97,9 @@
         var method = context.Request.Method;
         var host = (string)context.Variables["ai-hub-bedrock-host"];
 
-        // Reuse the exact same escaped path and canonical query that
-        // rewrite-uri used to build the outbound request, so the signed
-        // canonical request can never diverge from what the backend
-        // actually receives.
-        var path = (string)context.Variables["ai-hub-bedrock-model-path"];
+        // Non-S3 SigV4 signs the canonical path derived from the forwarded
+        // wire path, while the canonical query is sent as constructed.
+        var path = (string)context.Variables["ai-hub-bedrock-canonical-path"];
         var canonicalQueryString = (string)context.Variables["ai-hub-bedrock-canonical-query"];
 
         var amzDate = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMddTHHmmssZ");

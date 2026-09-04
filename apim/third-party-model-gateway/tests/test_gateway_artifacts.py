@@ -9,6 +9,7 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import quote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parent.parent
@@ -89,6 +90,22 @@ CREDENTIAL_ASSIGNMENT_RE = re.compile(
     r"(?:([\"'])((?:(?!\1).)*)\1|(\S+))"
 )
 
+# AWS access-key IDs are not necessarily assigned to a conventional credential
+# variable name, so scan their documented prefixes directly as a second layer.
+AWS_ACCESS_KEY_ID_RE = re.compile(
+    r"(?<![A-Z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![A-Z0-9])"
+)
+
+SECRET_IDENTIFIER_ASSIGNMENT_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])[A-Za-z_][A-Za-z0-9_]*SecretIdentifier\s*=\s*"
+    r"(?:([\"'])((?:(?!\1).)*)\1|(\S+))"
+)
+
+_KEY_VAULT_HOST_RE = re.compile(
+    r"(?i)^(?:[a-z0-9-]+|<[a-z0-9-]+>)\.vault\."
+    r"(?:azure\.net|usgovcloudapi\.net|azure\.cn)$"
+)
+
 _APIM_CONTEXT_VARIABLE_EXPRESSION_RE = re.compile(
     r"""^@\(\s*context\.Variables(?:
         \.GetValueOrDefault(?:<[^>]+>)?\(\s*(?:'|")[A-Za-z_][A-Za-z0-9_.-]*(?:'|")\s*\)
@@ -131,6 +148,23 @@ def _strip_unquoted_trailing_punctuation(value: str) -> str:
     return value.rstrip(",;)")
 
 
+def _is_key_vault_secret_identifier(value: str) -> bool:
+    """Returns True for a Key Vault secret URI, including template segments."""
+    parsed = urlparse(value.strip())
+    path_parts = parsed.path.split("/")
+    return (
+        parsed.scheme == "https"
+        and _KEY_VAULT_HOST_RE.fullmatch(parsed.netloc) is not None
+        and not parsed.params
+        and not parsed.query
+        and not parsed.fragment
+        and len(path_parts) in {3, 4}
+        and path_parts[0] == ""
+        and path_parts[1] == "secrets"
+        and all(path_parts[index] for index in range(2, len(path_parts)))
+    )
+
+
 def _iter_assignment_violations(label: str, text: str) -> list[str]:
     """Finds plaintext credential-shaped assignments, line by line.
 
@@ -148,15 +182,47 @@ def _iter_assignment_violations(label: str, text: str) -> list[str]:
     return violations
 
 
+def _iter_aws_access_key_id_violations(label: str, text: str) -> list[str]:
+    """Finds AWS access-key IDs regardless of the variable that contains them."""
+    violations: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if AWS_ACCESS_KEY_ID_RE.search(line):
+            violations.append(f"{label}:{line_number}: {line.strip()}")
+    return violations
+
+
+def _iter_bicep_secret_identifier_violations(
+    label: str, suffix: str, text: str
+) -> list[str]:
+    """Ensures committed Bicep parameter templates use Key Vault URI values."""
+    if suffix != ".bicepparam":
+        return []
+
+    violations: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        for match in SECRET_IDENTIFIER_ASSIGNMENT_RE.finditer(line):
+            if match.group(2) is not None:
+                value = match.group(2)
+            else:
+                value = _strip_unquoted_trailing_punctuation(match.group(3))
+            if not _is_key_vault_secret_identifier(value):
+                violations.append(
+                    f"{label}:{line_number}: *SecretIdentifier must be a Key Vault "
+                    f"secret URI: {line.strip()}"
+                )
+    return violations
+
+
 def _iter_xml_header_violations(label: str, suffix: str, text: str) -> list[str]:
     """Parses APIM policy XML and flags plaintext content set on a known
     credential-bearing header (`x-goog-api-key`, `x-api-key`,
     `Ocp-Apim-Subscription-Key`) via `<set-header>...<value>...</value>`.
 
-    APIM named values (`{{...}}`) and inline policy expressions (`@(...)`)
-    are permitted; any other literal `<value>` content is a plaintext
-    credential leak. Malformed XML raises (error-loud) rather than being
-    silently skipped. `label` is used only for violation reporting.
+    APIM named values (`{{...}}`) and strict `context.Variables` lookup
+    expressions are permitted; arbitrary inline policy expressions and other
+    literal `<value>` content are plaintext credential leaks. Malformed XML
+    raises (error-loud) rather than being silently skipped. `label` is used
+    only for violation reporting.
     """
     if suffix != ".xml":
         return []
@@ -213,6 +279,10 @@ def _scan_paths_for_credential_violations(
             label = str(path)
         text = path.read_text(encoding="utf-8")
         violations.extend(_iter_assignment_violations(label, text))
+        violations.extend(_iter_aws_access_key_id_violations(label, text))
+        violations.extend(
+            _iter_bicep_secret_identifier_violations(label, path.suffix, text)
+        )
         violations.extend(_iter_xml_header_violations(label, path.suffix, text))
     return violations
 
@@ -292,14 +362,14 @@ class GatewayArtifactTests(unittest.TestCase):
     ) -> None:
         # RFC 9728 requires the protected-resource metadata to be derived
         # deterministically from the actual protected resource URL. The MCP
-        # API is mounted in main.bicep at '${apiPathPrefix}/mcp', so the
+        # API is mounted in main.bicep at '${validatedApiPathPrefix}/mcp', so the
         # OpenAPI document backing it must expose its operation at the API's
         # own root ('/'), not a nested '/mcp' path -- otherwise the public
         # endpoint becomes '<prefix>/mcp/mcp', which no longer matches the
         # configured resource audience or the metadata URL below.
         bicep_source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
         mcp_api_block = self._resource_block(bicep_source, "mcpApi")
-        self.assertIn("path: '${apiPathPrefix}/mcp'", mcp_api_block)
+        self.assertIn("path: '${validatedApiPathPrefix}/mcp'", mcp_api_block)
         self.assertIn("loadTextContent('../openapi/mcp.json')", mcp_api_block)
 
         with (ROOT / "openapi" / "mcp.json").open(encoding="utf-8") as source:
@@ -316,10 +386,10 @@ class GatewayArtifactTests(unittest.TestCase):
         # its OpenAPI contract substitutes the live apiPathPrefix into
         # '/oauth-protected-resource/__API_PATH_PREFIX__/mcp', so the two
         # combine to the RFC 9728 well-known path for the *same* resource
-        # mounted above ('${apiPathPrefix}/mcp'), with no extra '/mcp' segment.
+        # mounted above ('${validatedApiPathPrefix}/mcp'), with no extra '/mcp' segment.
         metadata_api_block = self._resource_block(bicep_source, "mcpMetadataApi")
         self.assertIn("path: '.well-known'", metadata_api_block)
-        self.assertIn("apiPathPrefix", metadata_api_block)
+        self.assertIn("validatedApiPathPrefix", metadata_api_block)
 
         with (ROOT / "openapi" / "mcp-metadata.json").open(encoding="utf-8") as source:
             metadata_document = json.load(source)
@@ -329,6 +399,81 @@ class GatewayArtifactTests(unittest.TestCase):
             metadata_paths[0],
             "/oauth-protected-resource/__API_PATH_PREFIX__/mcp",
         )
+
+    def test_mcp_resource_urls_are_derived_from_gateway_base_url(self) -> None:
+        source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
+        self.assertIn("param gatewayBaseUrl string", source)
+        self.assertNotIn("param mcpResourceAudience string", source)
+        self.assertNotIn("param mcpResourceMetadataUrl string", source)
+        self.assertIn("var validatedGatewayBaseUrl =", source)
+        self.assertIn(
+            "var gatewayBaseUrlParts = split(normalizedGatewayBaseUrl, '/')",
+            source,
+        )
+        self.assertNotIn("var gatewayBaseUrlAuthority = replace(", source)
+        self.assertIn("length(gatewayBaseUrlParts) == 3", source)
+        self.assertIn("var gatewayBaseUrlScheme =", source)
+        self.assertIn("var gatewayBaseUrlSeparator =", source)
+        self.assertIn("var gatewayBaseUrlAuthority =", source)
+        self.assertIn("gatewayBaseUrlScheme == 'https:'", source)
+        self.assertIn("empty(gatewayBaseUrlSeparator)", source)
+        self.assertIn("length(gatewayBaseUrlAuthority) > 0", source)
+        self.assertIn(
+            "fail('gatewayBaseUrl must be a canonical HTTPS origin without a path, query, fragment, or trailing slash.')",
+            source,
+        )
+        self.assertIn("var validatedApiPathPrefix =", source)
+        self.assertIn(
+            "fail('apiPathPrefix must be nonempty and must not start or end with a slash.')",
+            source,
+        )
+        self.assertIn(
+            "var mcpResourceAudience = '${validatedGatewayBaseUrl}/${validatedApiPathPrefix}/mcp'",
+            source,
+        )
+        self.assertIn(
+            "var mcpResourceMetadataUrl = '${validatedGatewayBaseUrl}/.well-known/oauth-protected-resource/${validatedApiPathPrefix}/mcp'",
+            source,
+        )
+
+        audience_named_value = self._resource_block(
+            source,
+            "mcpResourceAudienceNamedValue",
+        )
+        metadata_named_value = self._resource_block(
+            source,
+            "mcpResourceMetadataUrlNamedValue",
+        )
+        self.assertIn("value: mcpResourceAudience", audience_named_value)
+        self.assertIn("value: mcpResourceMetadataUrl", metadata_named_value)
+
+        parameter_template = (
+            ROOT / "infra" / "main.bicepparam"
+        ).read_text(encoding="utf-8")
+        self.assertIn("param gatewayBaseUrl = 'https://<gateway-host>'", parameter_template)
+        self.assertNotIn("param mcpResourceAudience =", parameter_template)
+        self.assertNotIn("param mcpResourceMetadataUrl =", parameter_template)
+
+    def test_mcp_docs_use_one_gateway_base_url_input(self) -> None:
+        documents = (
+            ROOT / "README.md",
+            ROOT / "third-party-model-integration.md",
+            ROOT.parents[1]
+            / "docs"
+            / "superpowers"
+            / "specs"
+            / "2026-09-04-apim-third-party-model-gateway-design.md",
+            ROOT.parents[1]
+            / "docs"
+            / "superpowers"
+            / "plans"
+            / "2026-09-04-apim-third-party-model-gateway.md",
+        )
+        for path in documents:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("gatewayBaseUrl", source, path.name)
+            self.assertNotIn("mcpResourceAudience", source, path.name)
+            self.assertNotIn("mcpResourceMetadataUrl", source, path.name)
 
     def test_bicep_loads_every_policy_and_openapi_asset(self) -> None:
         source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
@@ -427,6 +572,7 @@ class GatewayArtifactTests(unittest.TestCase):
                 "mcpAuthorizationServerIssuerNamedValue",
                 "mcpResourceAudienceNamedValue",
                 "mcpResourceMetadataUrlNamedValue",
+                "mcpBackendResourceAudienceNamedValue",
             ),
             "mcpMetadataApiPolicy": (
                 "mcpOpenIdConfigNamedValue",
@@ -473,21 +619,16 @@ class GatewayArtifactTests(unittest.TestCase):
     def test_bedrock_policy_signs_the_bedrock_runtime_model_path(self) -> None:
         # The public APIM operation path is "/ai/bedrock/model/{modelId}/converse",
         # but the Bedrock Runtime backend only ever sees "/model/{modelId}/converse".
-        # SigV4 requires the canonical request path to match what the backend
-        # receives, so the policy must derive/escape that path from the
-        # "modelId" matched (template) parameter rather than signing
-        # context.Request.Url.Path (the public, prefixed path), which would
-        # produce SignatureDoesNotMatch on every request.
+        # The forwarded path must URI-encode the model ID once, while non-S3
+        # SigV4 applies one additional URI-encoding pass to that forwarded
+        # path for CanonicalURI. Both paths must be derived from the matched
+        # "modelId" rather than the public APIM request path.
         source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
 
-        # The path is now computed in a set-variable, whose value is an XML
-        # *attribute* (set-variable has no <value> child element), so any
-        # embedded C# string-literal quotes must be the &quot; entity rather
-        # than a literal ", or the policy document itself is not well-formed.
+        self.assertIn('name="ai-hub-bedrock-wire-path"', source)
+        self.assertIn('name="ai-hub-bedrock-canonical-path"', source)
         self.assertIn('context.Request.MatchedParameters[&quot;modelId&quot;]', source)
-        self.assertIn(
-            'System.Uri.EscapeDataString(', source,
-        )
+        self.assertNotIn("System.Uri.UnescapeDataString", source)
         self.assertRegex(
             source,
             r'(?i)&quot;/model/&quot;\s*\+\s*[^\n;]*modelid[^\n;]*\+\s*&quot;/converse&quot;',
@@ -523,15 +664,46 @@ class GatewayArtifactTests(unittest.TestCase):
             source,
         )
 
-    def test_bedrock_policy_rewrites_uri_from_the_same_variables_used_to_sign(self) -> None:
-        # The backend actually receives whatever rewrite-uri produces, so the
-        # signed canonicalRequest must be built from that *exact* escaped path
-        # and canonical query representation -- not an independently
-        # recomputed one -- or the signature can silently diverge from the
-        # forwarded request. copy-unmatched-params must be explicitly "false"
-        # so APIM never appends leftover original query parameters that were
-        # not folded into the canonical query used for signing.
+    def test_bedrock_policy_derives_canonical_path_from_forwarded_wire_path(self) -> None:
+        # AWS non-S3 SigV4 signs one URI-encoding pass over the already
+        # encoded wire path. For example, a colon is %3A on the wire and
+        # %253A in CanonicalURI. Deriving canonicalPath from wirePath prevents
+        # the two representations from drifting while preserving that
+        # intentional one-level difference.
         source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        wire_model_id = quote(model_id, safe="-_.~")
+        canonical_model_id = quote(wire_model_id, safe="-_.~")
+        self.assertEqual("anthropic.claude-3-5-sonnet-20241022-v2%3A0", wire_model_id)
+        self.assertEqual(
+            "anthropic.claude-3-5-sonnet-20241022-v2%253A0",
+            canonical_model_id,
+        )
+
+        slash_model_id = "arn:aws:bedrock:us-east-1:123456789012:inference-profile/model:0"
+        self.assertIn("%2F", quote(slash_model_id, safe="-_.~"))
+        self.assertIn("%252F", quote(quote(slash_model_id, safe="-_.~"), safe="-_.~"))
+
+        wire_path_match = re.search(
+            r'<set-variable name="ai-hub-bedrock-wire-path" value="(?P<body>@\{.*?)" />',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(wire_path_match)
+
+        canonical_path_match = re.search(
+            r'<set-variable name="ai-hub-bedrock-canonical-path" value="(?P<body>@\{.*?)" />',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(canonical_path_match)
+        canonical_path_body = canonical_path_match.group("body")
+        self.assertIn(
+            'context.Variables[&quot;ai-hub-bedrock-wire-path&quot;]',
+            canonical_path_body,
+        )
+        self.assertIn("System.Uri.EscapeDataString(segment)", canonical_path_body)
 
         rewrite_match = re.search(
             r'<rewrite-uri\s+template="(?P<body>@[\{\(].*?)"\s+copy-unmatched-params="false"\s*/>',
@@ -544,13 +716,13 @@ class GatewayArtifactTests(unittest.TestCase):
         )
         rewrite_body = rewrite_match.group("body")
 
-        # rewrite-uri's "template" is an XML attribute, so any embedded
-        # context.Variables[...] string-literal key must use the &quot;
-        # entity, not a literal double quote.
         variable_keys = set(re.findall(r'context\.Variables\[&quot;([\w-]+)&quot;\]', rewrite_body))
-        self.assertGreaterEqual(
-            len(variable_keys), 2,
-            "rewrite-uri must read the canonical path and canonical query from named context.Variables entries",
+        self.assertEqual(
+            {
+                "ai-hub-bedrock-wire-path",
+                "ai-hub-bedrock-canonical-query",
+            },
+            variable_keys,
         )
 
         auth_header_match = re.search(
@@ -561,12 +733,41 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIsNotNone(auth_header_match, "bedrock.xml must still set the Authorization header")
         auth_body = auth_header_match.group("body")
 
-        for key in variable_keys:
-            self.assertIn(
-                f'context.Variables["{key}"]',
-                auth_body,
-                f"canonicalRequest must reuse the same '{key}' variable that rewrite-uri forwards, not recompute it",
-            )
+        self.assertIn(
+            'context.Variables["ai-hub-bedrock-canonical-path"]',
+            auth_body,
+        )
+        self.assertIn(
+            'context.Variables["ai-hub-bedrock-canonical-query"]',
+            auth_body,
+        )
+        self.assertNotIn(
+            'context.Variables["ai-hub-bedrock-wire-path"]',
+            auth_body,
+        )
+
+    def test_bedrock_route_rejects_slash_model_ids_and_documents_the_alternative(self) -> None:
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+        self.assertIn("System.Text.RegularExpressions.Regex.IsMatch", source)
+        self.assertIn('&quot;^[A-Za-z0-9._:-]{1,256}$&quot;', source)
+        self.assertIn('set-status code="400" reason="Unsupported Bedrock model ID"', source)
+
+        with (ROOT / "openapi" / "bedrock.json").open(encoding="utf-8") as handle:
+            bedrock_openapi = json.load(handle)
+        model_parameter = bedrock_openapi["paths"]["/model/{modelId}/converse"]["post"][
+            "parameters"
+        ][0]
+        self.assertIn("description", model_parameter)
+        self.assertIn("ARN", model_parameter["description"])
+        self.assertIn("/", model_parameter["description"])
+
+        for path in (
+            ROOT / "README.md",
+            ROOT / "third-party-model-integration.md",
+        ):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("ARN", source, path.name)
+            self.assertIn("modelId", source, path.name)
 
     def test_bedrock_policy_orders_canonical_query_by_encoded_key_then_value(self) -> None:
         # AWS SigV4 canonical query construction sorts by encoded name, then by
@@ -738,6 +939,8 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn('context.Variables["ai-hub-mcp-jwt"]', condition)
         self.assertIn('GetValueOrDefault("scope", "")', condition)
         self.assertIn('GetValueOrDefault("scp", "")', condition)
+        self.assertIn("Regex.Split", condition)
+        self.assertIn('@"[\\s,]+"', condition)
         self.assertIn('"mcp.invoke"', condition)
 
         status = authorization_when.find("return-response/set-status")
@@ -750,6 +953,20 @@ class GatewayArtifactTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(expected_claim_wording, guide)
         self.assertIn(expected_claim_wording, readme)
+        for source in (guide, readme):
+            self.assertIn("WWW-Authenticate", source)
+            self.assertIn("invalid_token", source)
+            self.assertIn("insufficient_scope", source)
+
+    def test_mcp_docs_define_the_managed_identity_backend_trust_boundary(self) -> None:
+        for path in (
+            ROOT / "README.md",
+            ROOT / "third-party-model-integration.md",
+        ):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("system-assigned managed identity", source, path.name)
+            self.assertIn("x-ai-hub-mcp-caller-subject", source, path.name)
+            self.assertIn("전달하지 않는다", source, path.name)
 
     def test_mcp_resource_server_emits_metadata_challenge_before_jwt_validation(self) -> None:
         root = ET.parse(ROOT / "policies" / "mcp-resource-server.xml").getroot()
@@ -781,6 +998,111 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn("ai-hub-mcp-resource-metadata-url", challenge)
         self.assertIn("mcp.invoke", challenge)
         self.assertTrue(challenge.startswith('@("'))
+
+    def test_mcp_policy_challenges_invalid_tokens_and_insufficient_scope(self) -> None:
+        root = ET.parse(ROOT / "policies" / "mcp-resource-server.xml").getroot()
+
+        scope_when = list(root.find("inbound"))[3].find("when")
+        self.assertIsNotNone(scope_when)
+        forbidden_response = scope_when.find("return-response")
+        self.assertIsNotNone(forbidden_response)
+        forbidden_header = forbidden_response.find(
+            'set-header[@name="WWW-Authenticate"]/value'
+        )
+        self.assertIsNotNone(forbidden_header)
+        insufficient_scope_challenge = html.unescape(forbidden_header.text or "")
+        self.assertIn('error=\\"insufficient_scope\\"', insufficient_scope_challenge)
+        self.assertIn("ai-hub-mcp-resource-metadata-url", insufficient_scope_challenge)
+        self.assertIn('scope=\\"mcp.invoke\\"', insufficient_scope_challenge)
+
+        on_error = root.find("on-error")
+        self.assertIsNotNone(on_error)
+        on_error_children = list(on_error)
+        self.assertEqual("choose", on_error_children[0].tag)
+        self.assertEqual("base", on_error_children[1].tag)
+        jwt_error_when = on_error_children[0].find("when")
+        self.assertIsNotNone(jwt_error_when)
+        self.assertEqual(
+            '@(context.LastError.Source == "validate-jwt")',
+            html.unescape(jwt_error_when.attrib.get("condition", "")),
+        )
+        invalid_token_response = jwt_error_when.find("return-response")
+        self.assertIsNotNone(invalid_token_response)
+        invalid_token_status = invalid_token_response.find("set-status")
+        self.assertIsNotNone(invalid_token_status)
+        self.assertEqual("401", invalid_token_status.attrib["code"])
+        invalid_token_header = invalid_token_response.find(
+            'set-header[@name="WWW-Authenticate"]/value'
+        )
+        self.assertIsNotNone(invalid_token_header)
+        invalid_token_challenge = html.unescape(invalid_token_header.text or "")
+        self.assertIn('error=\\"invalid_token\\"', invalid_token_challenge)
+        self.assertIn("ai-hub-mcp-resource-metadata-url", invalid_token_challenge)
+        self.assertIn('scope=\\"mcp.invoke\\"', invalid_token_challenge)
+
+    def test_mcp_policy_replaces_resource_token_with_managed_identity_backend_auth(
+        self,
+    ) -> None:
+        root = ET.parse(ROOT / "policies" / "mcp-resource-server.xml").getroot()
+        inbound = root.find("inbound")
+        self.assertIsNotNone(inbound)
+
+        caller_subject = inbound.find('set-variable[@name="ai-hub-mcp-caller-subject"]')
+        self.assertIsNotNone(caller_subject)
+        self.assertEqual(
+            '@(((Jwt)context.Variables["ai-hub-mcp-jwt"]).Subject ?? "")',
+            caller_subject.attrib["value"],
+        )
+        caller_issuer = inbound.find('set-variable[@name="ai-hub-mcp-caller-issuer"]')
+        self.assertIsNotNone(caller_issuer)
+        self.assertEqual(
+            '@(((Jwt)context.Variables["ai-hub-mcp-jwt"]).Issuer ?? "")',
+            caller_issuer.attrib["value"],
+        )
+
+        delete_authorization = inbound.find(
+            'set-header[@name="Authorization"][@exists-action="delete"]'
+        )
+        self.assertIsNotNone(delete_authorization)
+        subject_header = inbound.find(
+            'set-header[@name="x-ai-hub-mcp-caller-subject"][@exists-action="override"]'
+        )
+        issuer_header = inbound.find(
+            'set-header[@name="x-ai-hub-mcp-caller-issuer"][@exists-action="override"]'
+        )
+        self.assertIsNotNone(subject_header)
+        self.assertIsNotNone(issuer_header)
+        self.assertIn(
+            'ai-hub-mcp-caller-subject',
+            subject_header.findtext("value", default=""),
+        )
+        self.assertIn(
+            'ai-hub-mcp-caller-issuer',
+            issuer_header.findtext("value", default=""),
+        )
+
+        managed_identity = inbound.find("authentication-managed-identity")
+        self.assertIsNotNone(managed_identity)
+        self.assertEqual(
+            "{{ai-hub-mcp-backend-resource-audience}}",
+            managed_identity.attrib["resource"],
+        )
+        children = list(inbound)
+        self.assertLess(children.index(delete_authorization), children.index(managed_identity))
+        self.assertLess(children.index(subject_header), children.index(managed_identity))
+        self.assertLess(children.index(issuer_header), children.index(managed_identity))
+        self.assertLess(
+            children.index(managed_identity),
+            children.index(inbound.find('set-backend-service[@backend-id="ai-hub-mcp"]')),
+        )
+
+        bicep_source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
+        self.assertIn("param mcpBackendResourceAudience string", bicep_source)
+        named_value = self._resource_block(
+            bicep_source,
+            "mcpBackendResourceAudienceNamedValue",
+        )
+        self.assertIn("value: mcpBackendResourceAudience", named_value)
 
     def test_provider_policies_delete_caller_authorization_before_backend_routing(self) -> None:
         # Gemini and Anthropic authenticate to their providers with named-value
@@ -932,22 +1254,40 @@ class GatewayArtifactTests(unittest.TestCase):
 
         validate_script = (ROOT / "scripts" / "validate.sh").read_text(encoding="utf-8")
         self.assertIn(
-            'az bicep build-params --file "$root/infra/main.bicepparam" --stdout >/dev/null',
+            "az bicep build-params --file infra/main.bicepparam --stdout >/dev/null",
             validate_script,
         )
 
-    def test_mcp_and_bedrock_policies_do_not_delete_caller_authorization(self) -> None:
-        # mcp-resource-server.xml IS the protected resource that validates the
-        # caller's own Authorization header, and bedrock.xml overrides
-        # Authorization with a computed SigV4 value rather than deleting it.
-        # Neither should gain the caller-isolation delete-header line.
-        for name in ("mcp-resource-server.xml", "bedrock.xml"):
-            source = (ROOT / "policies" / name).read_text(encoding="utf-8")
-            self.assertNotRegex(
-                source,
-                r'<set-header\s+name="Authorization"\s+exists-action="delete"\s*/>',
-                name,
-            )
+    def test_validation_script_changes_to_its_own_root_before_running_python(self) -> None:
+        source = (ROOT / "scripts" / "validate.sh").read_text(encoding="utf-8")
+        self.assertIn('cd "$root"', source)
+        self.assertIn(
+            "az bicep build --file infra/main.bicep --stdout >/dev/null",
+            source,
+        )
+        self.assertIn(
+            "az bicep build-params --file infra/main.bicepparam --stdout >/dev/null",
+            source,
+        )
+        self.assertIn(
+            "python3 -m unittest tests/test_gateway_artifacts.py -v",
+            source,
+        )
+        self.assertNotIn('"$root/tests/test_gateway_artifacts.py"', source)
+
+    def test_bedrock_policy_overrides_caller_authorization_without_delete(self) -> None:
+        # Bedrock replaces the caller bearer with its computed SigV4 header;
+        # MCP separately validates, deletes, and replaces it with a
+        # managed-identity token (covered by its dedicated policy test).
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+        self.assertNotRegex(
+            source,
+            r'<set-header\s+name="Authorization"\s+exists-action="delete"\s*/>',
+        )
+        self.assertIn(
+            '<set-header name="Authorization" exists-action="override">',
+            source,
+        )
 
     def test_pii_policy_treats_200_response_errors_or_missing_result_as_unavailable(self) -> None:
         # The Azure AI Language PII Analyze Text 200 response contains
@@ -1323,6 +1663,57 @@ class GatewayArtifactTests(unittest.TestCase):
             violations = _scan_paths_for_credential_violations(fixture_paths)
 
         self.assertEqual(len(header_names), len(violations), violations)
+
+    def test_credential_scanner_detects_aws_access_key_id_shapes(self) -> None:
+        # Construct fixture-only values at runtime so a credential-shaped
+        # sample never appears as one contiguous literal in source control.
+        access_key_ids = (
+            "AKIA" + "0123456789ABCDEF",
+            "ASIA" + "0123456789ABCDEF",
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_path = Path(tmp_dir) / "aws-access-key-id.md"
+            fixture_path.write_text(
+                "\n".join(f"example = {access_key_id}" for access_key_id in access_key_ids),
+                encoding="utf-8",
+            )
+            violations = _scan_paths_for_credential_violations([fixture_path])
+
+        self.assertEqual(2, len(violations), violations)
+        for access_key_id in access_key_ids:
+            self.assertTrue(
+                any(access_key_id in violation for violation in violations),
+                access_key_id,
+            )
+
+    def test_credential_scanner_requires_key_vault_uris_for_bicep_secret_identifiers(
+        self,
+    ) -> None:
+        safe_parameter_text = "\n".join(
+            (
+                "using './main.bicep'",
+                "param geminiApiKeySecretIdentifier = 'https://gateway-kv.vault.azure.net/secrets/gemini-api-key'",
+                "param languageApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<language-api-key-secret-name>'",
+            )
+        )
+        unsafe_parameter_text = "\n".join(
+            (
+                "using './main.bicep'",
+                "param bedrockSecretKeySecretIdentifier = 'not-a-key-vault-uri'",
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            safe_path = tmp_root / "safe.bicepparam"
+            unsafe_path = tmp_root / "unsafe.bicepparam"
+            safe_path.write_text(safe_parameter_text, encoding="utf-8")
+            unsafe_path.write_text(unsafe_parameter_text, encoding="utf-8")
+            safe_violations = _scan_paths_for_credential_violations([safe_path])
+            unsafe_violations = _scan_paths_for_credential_violations([unsafe_path])
+
+        self.assertEqual([], safe_violations)
+        self.assertEqual(1, len(unsafe_violations), unsafe_violations)
+        self.assertIn("bedrockSecretKeySecretIdentifier", unsafe_violations[0])
 
     def test_credential_scanner_permits_named_values_expansions_placeholders_and_prose(
         self,

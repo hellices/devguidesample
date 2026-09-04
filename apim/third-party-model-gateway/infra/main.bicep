@@ -2,6 +2,7 @@ targetScope = 'resourceGroup'
 
 param apiManagementServiceName string
 param apiPathPrefix string = 'ai'
+param gatewayBaseUrl string
 param entraTenantId string
 param entraAudience string
 param requiredScope string = 'ai.invoke'
@@ -25,14 +26,26 @@ param vertexBrokerUrl string
 param vertexBrokerResourceAudience string
 param mcpAuthorizationServerOpenIdConfigurationUrl string
 param mcpAuthorizationServerIssuer string
-param mcpResourceAudience string
-param mcpResourceMetadataUrl string
 param mcpBackendUrl string
+param mcpBackendResourceAudience string
 
 var forbiddenVertexPublicHost = 'aiplatform.googleapis.com'
 var validatedVertexBrokerUrl = !contains(toLower(vertexBrokerUrl), forbiddenVertexPublicHost)
   ? vertexBrokerUrl
   : fail('vertexBrokerUrl must target the private broker, not the public Vertex AI host.')
+var normalizedGatewayBaseUrl = toLower(gatewayBaseUrl)
+var gatewayBaseUrlParts = split(normalizedGatewayBaseUrl, '/')
+var gatewayBaseUrlScheme = length(gatewayBaseUrlParts) > 0 ? gatewayBaseUrlParts[0] : ''
+var gatewayBaseUrlSeparator = length(gatewayBaseUrlParts) > 1 ? gatewayBaseUrlParts[1] : ''
+var gatewayBaseUrlAuthority = length(gatewayBaseUrlParts) > 2 ? gatewayBaseUrlParts[2] : ''
+var validatedGatewayBaseUrl = length(gatewayBaseUrlParts) == 3 && gatewayBaseUrlScheme == 'https:' && empty(gatewayBaseUrlSeparator) && length(gatewayBaseUrlAuthority) > 0 && !contains(gatewayBaseUrlAuthority, '?') && !contains(gatewayBaseUrlAuthority, '#') && !contains(gatewayBaseUrlAuthority, '@')
+  ? normalizedGatewayBaseUrl
+  : fail('gatewayBaseUrl must be a canonical HTTPS origin without a path, query, fragment, or trailing slash.')
+var validatedApiPathPrefix = !empty(apiPathPrefix) && !startsWith(apiPathPrefix, '/') && !endsWith(apiPathPrefix, '/')
+  ? apiPathPrefix
+  : fail('apiPathPrefix must be nonempty and must not start or end with a slash.')
+var mcpResourceAudience = '${validatedGatewayBaseUrl}/${validatedApiPathPrefix}/mcp'
+var mcpResourceMetadataUrl = '${validatedGatewayBaseUrl}/.well-known/oauth-protected-resource/${validatedApiPathPrefix}/mcp'
 
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apiManagementServiceName
@@ -224,6 +237,15 @@ resource mcpResourceMetadataUrlNamedValue 'Microsoft.ApiManagement/service/named
   }
 }
 
+resource mcpBackendResourceAudienceNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  parent: apim
+  name: 'ai-hub-mcp-backend-resource-audience'
+  properties: {
+    displayName: 'ai-hub-mcp-backend-resource-audience'
+    value: mcpBackendResourceAudience
+  }
+}
+
 resource geminiBackend 'Microsoft.ApiManagement/service/backends@2024-05-01' = {
   parent: apim
   name: 'ai-hub-gemini'
@@ -294,7 +316,7 @@ resource geminiApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'ai-hub-gemini'
   properties: {
     displayName: 'AI Hub Gemini'
-    path: '${apiPathPrefix}/gemini'
+    path: '${validatedApiPathPrefix}/gemini'
     protocols: [
       'https'
     ]
@@ -309,7 +331,7 @@ resource anthropicApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'ai-hub-anthropic'
   properties: {
     displayName: 'AI Hub Anthropic'
-    path: '${apiPathPrefix}/anthropic'
+    path: '${validatedApiPathPrefix}/anthropic'
     protocols: [
       'https'
     ]
@@ -324,7 +346,7 @@ resource bedrockApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'ai-hub-bedrock'
   properties: {
     displayName: 'AI Hub Bedrock'
-    path: '${apiPathPrefix}/bedrock'
+    path: '${validatedApiPathPrefix}/bedrock'
     protocols: [
       'https'
     ]
@@ -339,7 +361,7 @@ resource vertexApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'ai-hub-vertex'
   properties: {
     displayName: 'AI Hub Vertex'
-    path: '${apiPathPrefix}/vertex'
+    path: '${validatedApiPathPrefix}/vertex'
     protocols: [
       'https'
     ]
@@ -354,7 +376,7 @@ resource mcpApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: 'ai-hub-mcp'
   properties: {
     displayName: 'AI Hub MCP'
-    path: '${apiPathPrefix}/mcp'
+    path: '${validatedApiPathPrefix}/mcp'
     protocols: [
       'https'
     ]
@@ -378,7 +400,7 @@ resource mcpMetadataApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
     value: replace(
       loadTextContent('../openapi/mcp-metadata.json'),
       '__API_PATH_PREFIX__',
-      apiPathPrefix
+      validatedApiPathPrefix
     )
   }
 }
@@ -503,6 +525,7 @@ resource mcpApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01'
     mcpAuthorizationServerIssuerNamedValue
     mcpResourceAudienceNamedValue
     mcpResourceMetadataUrlNamedValue
+    mcpBackendResourceAudienceNamedValue
   ]
   properties: {
     format: 'rawxml'

@@ -173,6 +173,14 @@ inspection by a guardrail service.
   deployment accepts Key Vault references to a constrained IAM user's access
   key and secret. The guide labels this an APIM-compatible deployment pattern,
   not the preferred long-term identity model.
+- The Bedrock `modelId` path route accepts only `/`-free foundation or
+  inference-profile IDs matching `^[A-Za-z0-9._:-]{1,256}$`. It forwards a
+  once-encoded wire path and signs a non-S3 SigV4 canonical URI derived by
+  encoding each wire-path segment once more. Slash-bearing ARN IDs are rejected
+  rather than relying on APIM path-template handling of escaped slashes; an ARN
+  integration requires a separately specified header/body operation or a
+  signing broker. A colon-bearing ID must be exercised in staging before
+  production.
 - Vertex uses APIM's system-assigned managed identity to request an Entra token
   for the private broker's registered Application ID URI. The broker validates
   that token, authorizes only the APIM identity, and may use the APIM-overwritten
@@ -199,6 +207,17 @@ The reference contains an optional generic MCP APIM resource-server policy:
   well-known URL derived from the MCP resource URL.
 - APIM validates a token issued by a compatible authorization server.
 - APIM maps scope/role to an MCP API operation.
+- Missing or invalid JWTs receive `401` with a `WWW-Authenticate`
+  `invalid_token` challenge identifying the resource metadata; valid tokens
+  without `mcp.invoke` receive `403` with an `insufficient_scope` challenge.
+  Only `validate-jwt` errors take this custom `on-error` branch, so unrelated
+  backend failures retain inherited error handling.
+- After validation, APIM does not transit the gateway-audience caller bearer
+  token to the private MCP backend. It overwrites
+  `x-ai-hub-mcp-caller-subject` and `x-ai-hub-mcp-caller-issuer`, then uses the
+  system-assigned managed identity to acquire a backend-audience token. The
+  backend must validate the APIM token issuer, audience, and service-principal
+  authorization before it trusts those caller assertions.
 - The MCP backend must still enforce object-level authorization.
 
 The reference explicitly does **not** use Entra v2 as the MCP authorization
@@ -252,8 +271,12 @@ The Bicep deployment targets an existing APIM service and accepts:
   private Vertex broker URL, and the broker's Entra Application ID URI used as
   the APIM managed-identity token audience
 - AWS Bedrock region
-- MCP resource URL, metadata URL, authorization-server issuer, and OpenID
-  configuration URL
+- MCP `gatewayBaseUrl` as a canonical HTTPS origin without a path, query,
+  fragment, or trailing slash; the Bicep template derives both the resource
+  audience and RFC 9728 metadata URL from that value and the validated
+  `apiPathPrefix`. It also accepts the authorization-server issuer, OpenID
+  configuration URL, private backend URL, and the private backend's Entra
+  Application ID URI for APIM managed-identity authentication.
 - backend endpoint URLs only where a private/custom endpoint is required
 
 Secrets are never default parameter values, source-controlled JSON values, or
