@@ -31,8 +31,16 @@
         var service = "bedrock";
 
         var method = context.Request.Method;
-        var path = context.Request.Url.Path;
         var host = (string)context.Variables["ai-hub-bedrock-host"];
+
+        // The public APIM operation path (e.g. "/ai/bedrock/model/{modelId}/converse")
+        // is not what the Bedrock Runtime backend receives. SigV4 requires the
+        // canonical request path to match the backend path exactly, so derive
+        // "/model/{escaped-modelId}/converse" from the matched "modelId" template
+        // parameter instead of signing context.Request.Url.Path.
+        var modelId = (string)context.Request.MatchedParameters["modelId"];
+        var escapedModelId = System.Uri.EscapeDataString(modelId);
+        var path = "/model/" + escapedModelId + "/converse";
 
         var amzDate = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMddTHHmmssZ");
         var dateStamp = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMdd");

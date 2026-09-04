@@ -170,6 +170,26 @@ class GatewayArtifactTests(unittest.TestCase):
             self.assertIn('fragment-id="ai-hub-rate-limit"', source)
             self.assertIn('fragment-id="ai-hub-pii-inbound"', source)
 
+    def test_bedrock_policy_signs_the_bedrock_runtime_model_path(self) -> None:
+        # The public APIM operation path is "/ai/bedrock/model/{modelId}/converse",
+        # but the Bedrock Runtime backend only ever sees "/model/{modelId}/converse".
+        # SigV4 requires the canonical request path to match what the backend
+        # receives, so the policy must derive/escape that path from the
+        # "modelId" matched (template) parameter rather than signing
+        # context.Request.Url.Path (the public, prefixed path), which would
+        # produce SignatureDoesNotMatch on every request.
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        self.assertIn('context.Request.MatchedParameters["modelId"]', source)
+        self.assertIn(
+            'System.Uri.EscapeDataString(', source,
+        )
+        self.assertRegex(
+            source,
+            r'(?i)"/model/"\s*\+\s*[^\n;]*modelid[^\n;]*\+\s*"/converse"',
+        )
+        self.assertNotIn("var path = context.Request.Url.Path;", source)
+
     def test_common_auth_requires_entra_issuer_audience_and_scope(self) -> None:
         source = (ROOT / "policies" / "common-client-auth.xml").read_text(encoding="utf-8")
         self.assertIn('<validate-jwt header-name="Authorization"', source)
