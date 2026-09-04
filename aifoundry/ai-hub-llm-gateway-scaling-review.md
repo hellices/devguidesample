@@ -188,7 +188,8 @@ advertisement, private DNS를 제시한다.
 권장 경로는 다음과 같다.
 
 ```text
-APIM VNet
+APIM VNet (system-assigned managed identity)
+  → 사설 Vertex 브로커(APIM token 검증, caller oid 전달)
   → Azure VPN Gateway
   → 이중 IPsec tunnel/BGP
   → GCP HA VPN + Cloud Router
@@ -268,6 +269,15 @@ VPN, PSC, PrivateLink는 네트워크 경로를 보호하지만 API 인증을 �
 - 장기 GCP service account key와 AWS access key를 APIM policy에 직접
   저장하지 않는다.
 - 불가피한 secret은 Key Vault-backed Named Value로 관리하고 회전한다.
+
+APIM에서 사설 Vertex 브로커를 경유하는 경우에는 APIM managed identity가
+브로커 API audience의 access token을 발급받아 전달하고, 브로커는
+issuer/audience와 APIM identity 권한을 검증한 뒤에만 요청을 수락해야 한다.
+APIM은 검증된 caller JWT의 `oid`를 내부 header로 overwrite할 수 있으나,
+브로커는 APIM token 검증 없이 이 header를 신뢰해서는 안 된다. 구현
+파라미터와 policy 순서는
+[APIM 타사 모델 Gateway reference](../apim/third-party-model-gateway/README.md)를
+참고한다.
 
 APIM은 Vertex AI API와 Amazon Bedrock 등 외부 AI endpoint를 관리할 수
 있다. 여러 provider를 하나의 OpenAI-compatible endpoint로 노출하는 APIM

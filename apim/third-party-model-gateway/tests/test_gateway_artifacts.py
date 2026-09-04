@@ -353,7 +353,24 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn("secretIdentifier: bedrockAccessKeySecretIdentifier", source)
         self.assertIn("secretIdentifier: bedrockSecretKeySecretIdentifier", source)
         self.assertIn("secretIdentifier: languageApiKeySecretIdentifier", source)
-        self.assertNotIn("aiplatform.googleapis.com", source)
+
+    def test_vertex_broker_backend_uses_the_validated_private_url(self) -> None:
+        source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
+        self.assertIn(
+            "var forbiddenVertexPublicHost = 'aiplatform.googleapis.com'",
+            source,
+        )
+        self.assertIn(
+            "var validatedVertexBrokerUrl = !contains(toLower(vertexBrokerUrl), forbiddenVertexPublicHost)",
+            source,
+        )
+        self.assertIn(
+            "fail('vertexBrokerUrl must target the private broker, not the public Vertex AI host.')",
+            source,
+        )
+        backend = self._resource_block(source, "vertexBrokerBackend")
+        self.assertIn("url: validatedVertexBrokerUrl", backend)
+        self.assertNotIn("url: vertexBrokerUrl", backend)
 
     def test_bicep_explicitly_orders_policy_fragments_and_api_policies(self) -> None:
         source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
@@ -402,6 +419,7 @@ class GatewayArtifactTests(unittest.TestCase):
                 "rateLimitPolicyFragment",
                 "piiInboundPolicyFragment",
                 "vertexBrokerBackend",
+                "vertexBrokerResourceAudienceNamedValue",
             ),
             "mcpApiPolicy": (
                 "mcpBackend",
@@ -691,6 +709,48 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn('{{ai-hub-mcp-resource-metadata-url}}', source)
         self.assertNotIn('login.microsoftonline.com', source)
 
+    def test_mcp_policy_accepts_standard_scope_or_entra_scp_after_jwt_validation(
+        self,
+    ) -> None:
+        root = ET.parse(ROOT / "policies" / "mcp-resource-server.xml").getroot()
+        inbound_children = list(root.find("inbound"))
+        validate_jwt = inbound_children[2]
+        self.assertEqual("validate-jwt", validate_jwt.tag)
+        self.assertEqual(
+            "ai-hub-mcp-jwt",
+            validate_jwt.attrib.get("output-token-variable-name"),
+        )
+        self.assertIsNone(
+            validate_jwt.find("required-claims"),
+            "scope authorization must accept either standard scope or Entra scp after JWT validation",
+        )
+        self.assertGreaterEqual(
+            len(inbound_children),
+            4,
+            "MCP policy must evaluate scope/scp authorization after validate-jwt",
+        )
+
+        authorization_choose = inbound_children[3]
+        self.assertEqual("choose", authorization_choose.tag)
+        authorization_when = authorization_choose.find("when")
+        self.assertIsNotNone(authorization_when)
+        condition = html.unescape(authorization_when.attrib.get("condition", ""))
+        self.assertIn('context.Variables["ai-hub-mcp-jwt"]', condition)
+        self.assertIn('GetValueOrDefault("scope", "")', condition)
+        self.assertIn('GetValueOrDefault("scp", "")', condition)
+        self.assertIn('"mcp.invoke"', condition)
+
+        status = authorization_when.find("return-response/set-status")
+        self.assertIsNotNone(status)
+        self.assertEqual("403", status.attrib["code"])
+
+    def test_mcp_docs_explain_scope_and_entra_scp_compatibility(self) -> None:
+        expected_claim_wording = "`scope` 또는 Entra `scp` claim"
+        guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(expected_claim_wording, guide)
+        self.assertIn(expected_claim_wording, readme)
+
     def test_mcp_resource_server_emits_metadata_challenge_before_jwt_validation(self) -> None:
         root = ET.parse(ROOT / "policies" / "mcp-resource-server.xml").getroot()
         inbound_children = list(root.find("inbound"))
@@ -785,6 +845,96 @@ class GatewayArtifactTests(unittest.TestCase):
                 delete_auth_match.start(), credential_match.start(),
                 f"{name}: Authorization must be deleted before setting {header}",
             )
+
+    def test_vertex_policy_authenticates_the_broker_and_forwards_validated_caller_identity(
+        self,
+    ) -> None:
+        source = (ROOT / "policies" / "vertex.xml").read_text(encoding="utf-8")
+        root = ET.fromstring(source)
+        inbound = root.find("inbound")
+        self.assertIsNotNone(inbound)
+
+        caller_oid = inbound.find('set-variable[@name="ai-hub-vertex-caller-oid"]')
+        self.assertIsNotNone(caller_oid)
+        self.assertEqual(
+            '@(((Jwt)context.Variables["ai-hub-jwt"]).Claims.GetValueOrDefault("oid", ""))',
+            caller_oid.attrib["value"],
+        )
+
+        missing_oid_response = next(
+            (
+                when
+                for when in inbound.findall("choose/when")
+                if when.find('return-response/set-status[@code="403"]') is not None
+            ),
+            None,
+        )
+        self.assertIsNotNone(
+            missing_oid_response,
+            "Vertex must reject a valid caller token that lacks an immutable oid claim",
+        )
+
+        caller_oid_header = inbound.find('set-header[@name="x-ai-hub-caller-oid"]')
+        self.assertIsNotNone(caller_oid_header)
+        self.assertEqual("override", caller_oid_header.attrib["exists-action"])
+        self.assertIn("ai-hub-vertex-caller-oid", caller_oid_header.findtext("value", ""))
+
+        broker_identity = inbound.find("authentication-managed-identity")
+        self.assertIsNotNone(broker_identity)
+        self.assertEqual(
+            "{{ai-hub-vertex-broker-resource-audience}}",
+            broker_identity.attrib["resource"],
+        )
+
+        delete_auth_pos = source.index(
+            '<set-header name="Authorization" exists-action="delete" />'
+        )
+        broker_identity_pos = source.index("<authentication-managed-identity")
+        backend_pos = source.index("<set-backend-service")
+        self.assertLess(delete_auth_pos, broker_identity_pos)
+        self.assertLess(broker_identity_pos, backend_pos)
+
+    def test_vertex_broker_identity_configuration_is_wired_and_documented(self) -> None:
+        bicep = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
+        params = (ROOT / "infra" / "main.bicepparam").read_text(encoding="utf-8")
+        self.assertIn("param vertexBrokerResourceAudience string", bicep)
+        self.assertIn("name: 'ai-hub-vertex-broker-resource-audience'", bicep)
+        self.assertIn("value: vertexBrokerResourceAudience", bicep)
+        self.assertIn(
+            "param vertexBrokerResourceAudience = 'api://<private-vertex-broker-app-id>'",
+            params,
+        )
+
+        for path in (
+            ROOT / "README.md",
+            ROOT / "third-party-model-integration.md",
+        ):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("vertexBrokerResourceAudience", source, path.name)
+            self.assertIn("authentication-managed-identity", source, path.name)
+            self.assertIn("x-ai-hub-caller-oid", source, path.name)
+
+    def test_parameter_template_assigns_all_secure_key_vault_identifiers(self) -> None:
+        params = (ROOT / "infra" / "main.bicepparam").read_text(encoding="utf-8")
+        expected_identifiers = {
+            "geminiApiKeySecretIdentifier": "gemini-api-key-secret-name",
+            "anthropicApiKeySecretIdentifier": "anthropic-api-key-secret-name",
+            "bedrockAccessKeySecretIdentifier": "bedrock-access-key-secret-name",
+            "bedrockSecretKeySecretIdentifier": "bedrock-secret-key-secret-name",
+            "languageApiKeySecretIdentifier": "language-api-key-secret-name",
+        }
+        for parameter, secret_name in expected_identifiers.items():
+            self.assertIn(
+                f"param {parameter} = "
+                f"'https://<key-vault-name>.vault.azure.net/secrets/<{secret_name}>'",
+                params,
+            )
+
+        validate_script = (ROOT / "scripts" / "validate.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            'az bicep build-params --file "$root/infra/main.bicepparam" --stdout >/dev/null',
+            validate_script,
+        )
 
     def test_mcp_and_bedrock_policies_do_not_delete_caller_authorization(self) -> None:
         # mcp-resource-server.xml IS the protected resource that validates the

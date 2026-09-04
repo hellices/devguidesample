@@ -4,7 +4,20 @@
     <include-fragment fragment-id="ai-hub-client-auth" />
     <include-fragment fragment-id="ai-hub-rate-limit" />
     <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-variable name="ai-hub-vertex-caller-oid"
+                  value="@(((Jwt)context.Variables[&quot;ai-hub-jwt&quot;]).Claims.GetValueOrDefault(&quot;oid&quot;, &quot;&quot;))" />
+    <choose>
+      <when condition="@(((string)context.Variables[&quot;ai-hub-vertex-caller-oid&quot;]).Length == 0)">
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+        </return-response>
+      </when>
+    </choose>
     <set-header name="Authorization" exists-action="delete" />
+    <set-header name="x-ai-hub-caller-oid" exists-action="override">
+      <value>@((string)context.Variables[&quot;ai-hub-vertex-caller-oid&quot;])</value>
+    </set-header>
+    <authentication-managed-identity resource="{{ai-hub-vertex-broker-resource-audience}}" />
     <set-backend-service backend-id="ai-hub-vertex-broker" />
   </inbound>
   <backend>

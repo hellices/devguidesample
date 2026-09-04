@@ -13,17 +13,20 @@
     </choose>
     <validate-jwt header-name="Authorization"
                   failed-validation-httpcode="401"
-                  failed-validation-error-message="Unauthorized">
+                  failed-validation-error-message="Unauthorized"
+                  output-token-variable-name="ai-hub-mcp-jwt">
       <openid-config url="{{ai-hub-mcp-openid-config}}" />
       <audiences>
         <audience>{{ai-hub-mcp-resource-audience}}</audience>
       </audiences>
-      <required-claims>
-        <claim name="scope" match="any" separator=" ">
-          <value>mcp.invoke</value>
-        </claim>
-      </required-claims>
     </validate-jwt>
+    <choose>
+      <when condition="@(!(((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Claims.GetValueOrDefault(&quot;scope&quot;, &quot;&quot;).Split(' ').Contains(&quot;mcp.invoke&quot;) || ((Jwt)context.Variables[&quot;ai-hub-mcp-jwt&quot;]).Claims.GetValueOrDefault(&quot;scp&quot;, &quot;&quot;).Split(' ').Contains(&quot;mcp.invoke&quot;)))">
+        <return-response>
+          <set-status code="403" reason="Forbidden" />
+        </return-response>
+      </when>
+    </choose>
     <set-backend-service backend-id="ai-hub-mcp" />
   </inbound>
   <backend>

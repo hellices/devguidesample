@@ -142,7 +142,7 @@ Client ────── JWT ──────►│ Azure API Management     
 | `/ai/gemini` | Gemini Developer API | `x-goog-api-key` from Key Vault named value | Gemini native |
 | `/ai/anthropic` | Anthropic API | `x-api-key` from Key Vault named value | Anthropic Messages |
 | `/ai/bedrock` | Amazon Bedrock Runtime | AWS SigV4; AWS keys from Key Vault named values | Bedrock native |
-| `/ai/vertex` | Private Vertex AI WIF broker | Broker managed identity → Google STS WIF token exchange | Vertex AI native |
+| `/ai/vertex` | Private Vertex AI WIF broker | APIM managed identity → broker; broker managed identity → Google STS WIF | Vertex AI native |
 
 Every provider API uses a configured APIM backend (`set-backend-service`) rather
 than a dynamic URL supplied by the client. This prevents an APIM policy editor
@@ -173,10 +173,14 @@ inspection by a guardrail service.
   deployment accepts Key Vault references to a constrained IAM user's access
   key and secret. The guide labels this an APIM-compatible deployment pattern,
   not the preferred long-term identity model.
-- Vertex uses a private broker's managed identity to request an Entra token for
-  a registered Application ID URI, then exchanges it through Google Security
-  Token Service. A Google Workload Identity Pool must trust that Azure identity
-  and grant least-privilege Vertex AI permissions.
+- Vertex uses APIM's system-assigned managed identity to request an Entra token
+  for the private broker's registered Application ID URI. The broker validates
+  that token, authorizes only the APIM identity, and may use the APIM-overwritten
+  caller `oid` assertion only after validating the APIM token. The broker then
+  uses its own managed identity to request an Entra token for a registered
+  Application ID URI and exchanges it through Google Security Token Service. A
+  Google Workload Identity Pool must trust that broker identity and grant
+  least-privilege Vertex AI permissions.
 
 APIM-only exchange is intentionally excluded from the production path. APIM
 policy primitives can acquire a managed-identity token, send an HTTP request,
@@ -244,8 +248,9 @@ The Bicep deployment targets an existing APIM service and accepts:
 - Entra tenant ID, resource audience, and required scope
 - Key Vault secret URIs for Gemini, Anthropic, Bedrock access key, Bedrock
   secret key, and Azure Language key; plus an Azure Language endpoint URL
-- GCP project number, workload identity pool/provider IDs, Vertex region, and
-  private Vertex broker URL
+- GCP project number, workload identity pool/provider IDs, Vertex region, the
+  private Vertex broker URL, and the broker's Entra Application ID URI used as
+  the APIM managed-identity token audience
 - AWS Bedrock region
 - MCP resource URL, metadata URL, authorization-server issuer, and OpenID
   configuration URL
@@ -258,7 +263,8 @@ workflow environment variables.
 
 The PR must provide evidence independent of live cloud access:
 
-1. Run `az bicep build` against the root Bicep file.
+1. Run `az bicep build` against the root Bicep file and
+   `az bicep build-params` against the committed parameter template.
 2. Run the Python standard-library validator to parse every policy and OpenAPI
    document, verify Bicep references, detect plaintext secret patterns, and
    check the required security controls.
@@ -278,6 +284,8 @@ subscription, Key Vault secrets, Google WIF configuration, and an AWS account.
   committed.
 - The Vertex route only targets a private broker; it does not attempt an
   undocumented APIM-only WIF token-exchange implementation.
+- The Vertex broker validates an APIM managed-identity token before accepting
+  the APIM-overwritten caller identity assertion.
 - The guide clearly identifies private-network prerequisites for Vertex AI and
   Bedrock.
 - The guide distinguishes the preview Unified Model API from the selected

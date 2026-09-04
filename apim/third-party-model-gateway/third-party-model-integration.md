@@ -125,6 +125,16 @@
   자격증명이나 토큰 교환 로직을 갖지 않는다. 즉 "production APIM 단독
   토큰 교환"은 이 참조 구현이 채택한 방식이 **아니며**, 토큰 교환은 항상
   브로커 내부에서 수행된다.
+- **Design recommendation(APIM -> broker 인증)**: `policies/vertex.xml`은
+  호출자의 `Authorization`을 삭제한 뒤
+  [`authentication-managed-identity`](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
+  로 기존 APIM의 system-assigned managed identity access token을
+  `{{ai-hub-vertex-broker-resource-audience}}`에 설정된
+  `vertexBrokerResourceAudience`(브로커 API의 Entra Application ID URI)를
+  대상으로 발급받아 보낸다. 이와 별도로 검증된 caller JWT의 immutable `oid`
+  claim을 `x-ai-hub-caller-oid`로 overwrite한다. 브로커는 issuer/audience와
+  APIM managed identity 권한을 먼저 검증하고, 익명/직접 요청을 거부한
+  경우에만 이 내부 header를 caller authorization에 사용할 수 있다.
 - **Documented fact(WIF)**:
   [Workload identity federation with other clouds](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds)는
   Microsoft Entra ID를 외부 identity provider로 사용하는 WIF 구성에서
@@ -220,37 +230,40 @@ recognition API(`/language/:analyze-text`)를 `send-request`로 호출한다.
   9728 스타일의 `WWW-Authenticate` challenge(메타데이터 URL 참조 포함)와
   함께 401을 먼저 반환한 뒤, `validate-jwt`로 `{{ai-hub-mcp-openid-config}}`
   (일반 OIDC discovery URL)를 이용해 audience
-  `{{ai-hub-mcp-resource-audience}}`와 scope `mcp.invoke`를 검증한다.
+  `{{ai-hub-mcp-resource-audience}}`를 검증한다. 검증된 JWT에서는
+  `mcp.invoke`가 표준 OAuth `scope` 또는 Entra `scp` claim 중 하나에 있는지
+  확인한다.
 - `policies/mcp-metadata.xml`은 `.well-known/oauth-protected-resource/{apiPathPrefix}/mcp`
   경로에서 `resource`, `authorization_servers`, `scopes_supported`,
   `bearer_methods_supported`를 담은 [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html)
   Protected Resource Metadata JSON을 반환한다.
-- **Documented fact**: 이 구성은 Entra v2 endpoint를 직접 검증하는
+- **Documented fact**: 이 구성은 Entra v2 endpoint 전용
   `validate-azure-ad-token` 정책이 아니라 **일반 OIDC discovery**를
-  사용하므로, `{{ai-hub-mcp-openid-config}}`가 가리키는 대상이 실제로는
-  Entra ID를 upstream identity provider로 사용하되 RFC 8707 `resource`
-  파라미터, MCP discovery, client registration을 처리할 수 있는 **MCP 호환
-  Authorization Server**여야 한다. [MCP Authorization
-  사양](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)은
+  사용한다. 따라서 표준 MCP client를 지원할 때
+  `{{ai-hub-mcp-openid-config}}`는 Entra ID를 upstream identity provider로
+  사용하되 RFC 8707 `resource` 파라미터, MCP discovery, client registration을
+  처리할 수 있는 **MCP 호환 Authorization Server**를 가리켜야 한다. [MCP
+  Authorization 사양](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)은
   authorization request에 [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)의
   `resource` 파라미터를 사용하도록 요구하지만, Microsoft Entra v2
   authorization endpoint 자체는 `resource` 파라미터를 지원 파라미터로
   정의하지 않으므로, Entra v2를 직접 이 역할에 사용하면 이 요구사항을
   완전히 준수하지 못한다.
 - **Design recommendation**: 조직이 통제하는 MCP client와 server만
-  사용하는 폐쇄형 환경에서는 이 저장소의 구성처럼 **Entra scope-only
-  호환 프로파일**(사내 Entra App Registration + `scp` claim 검증)을 사용할
-  수 있으나, 이는 **사내 호환 프로파일**일 뿐 현재 MCP 사양이 요구하는
-  RFC 8707 완전 준수는 아니라는 점을 명시해야 한다. 표준 준수가 필요한
-  외부/범용 MCP client를 지원하려면 RFC 8707 `resource`, discovery,
-  client registration을 처리하는 별도의 MCP 호환 Authorization Server 또는
-  broker를 Entra ID 앞단에 두어야 한다.
+  사용하는 폐쇄형 환경에서는 `{{ai-hub-mcp-openid-config}}`를 Entra v2
+  discovery endpoint로 구성하고, 이 저장소의 `scope` 또는 Entra `scp` claim
+  호환 프로파일을 사용할 수 있다. 이는 **사내 호환 프로파일**일 뿐 현재 MCP
+  사양이 요구하는 RFC 8707 완전 준수는 아니라는 점을 명시해야 한다. 표준
+  준수가 필요한 외부/범용 MCP client를 지원하려면 RFC 8707 `resource`,
+  discovery, client registration을 처리하는 별도의 MCP 호환 Authorization
+  Server 또는 broker를 Entra ID 앞단에 두어야 한다.
 
 ## 9. 공식 참고 자료
 
 ### Microsoft / Azure
 
 - [AI gateway capabilities in Azure API Management](https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities)
+- [Authenticate to a backend using a managed identity](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
 - [Azure OpenAI-compatible LLM API in API Management](https://learn.microsoft.com/en-us/azure/api-management/openai-compatible-llm-api)
 - [Amazon Bedrock passthrough LLM API in API Management](https://learn.microsoft.com/en-us/azure/api-management/amazon-bedrock-passthrough-llm-api)
 - [Unified Model API in API Management](https://learn.microsoft.com/en-us/azure/api-management/unified-model-api)

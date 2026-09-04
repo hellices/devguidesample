@@ -107,6 +107,11 @@ Vertex 각각의 **provider-native passthrough**(공식 API 스키마를 그대�
   매개변수는 모두 `@secure()`로 선언되어 있으며, secret **값**이 아니라 Key
   Vault secret **identifier**(URI)를 받는다. 실제 secret 값은 Key Vault에만
   존재하고 이 저장소의 어떤 파일에도 포함되지 않는다.
+- `vertexBrokerResourceAudience`는 사설 Vertex 브로커 API의 Entra
+  Application ID URI(예: `api://<private-vertex-broker-app-id>`)이며 secret이
+  아니다. `policies/vertex.xml`의 `authentication-managed-identity` 정책은
+  이 audience의 access token을 기존 APIM 인스턴스의 system-assigned managed
+  identity로 요청한다.
 - `infra/main.bicepparam`은 커밋된 **템플릿**으로, `<entra-tenant-id>`처럼
   자리표시자만 담고 있다. 실제 배포 시에는 이 저장소의 `.gitignore`가 이미
   제외하는 `*.parameters.json`/`*.secrets.json`/`.env` 패턴을 따르는 별도의
@@ -134,6 +139,15 @@ Vertex 각각의 **provider-native passthrough**(공식 API 스키마를 그대�
   관계다([Workload identity federation with other clouds](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds)).
   최초 설정 스크립트는 [`scripts/configure-gcp-wif.sh`](./scripts/configure-gcp-wif.sh)를
   참고한다(§6).
+- **APIM에서 브로커까지의 인증 경계**: 기존 APIM에 system-assigned managed
+  identity를 활성화하고
+  [`authentication-managed-identity`](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy)
+  로 브로커의 `vertexBrokerResourceAudience` token을 보낸다. 브로커는 이
+  token의 issuer/audience를 검증하고 APIM managed identity만 authorize하며,
+  사설 네트워크에 있더라도 익명/직접 요청은 거부해야 한다. APIM은 검증된
+  caller JWT의 `oid`에서 `x-ai-hub-caller-oid`를 overwrite해 전달한다.
+  브로커는 APIM managed-identity token을 먼저 검증한 경우에만 이 내부
+  header를 호출자 식별자로 신뢰해야 한다.
 
 ### AWS(Amazon Bedrock)
 
@@ -188,9 +202,10 @@ az deployment group create \
 ./scripts/validate.sh
 ```
 
-`scripts/validate.sh`는 `az bicep build`로 `infra/main.bicep` 컴파일을
+`scripts/validate.sh`는 `az bicep build`와 `az bicep build-params`로
+`infra/main.bicep` 및 커밋된 `infra/main.bicepparam` 템플릿의 컴파일을
 확인하고, `python3 -m unittest tests/test_gateway_artifacts.py -v`로 정적
-아티팩트(OpenAPI/정책 XML/Bicep 리소스 배선) 계약을 검증한다. 두 검증 모두
+아티팩트(OpenAPI/정책 XML/Bicep 리소스 배선) 계약을 검증한다. 모든 검증은
 오프라인으로 수행되며 클라우드 리소스를 변경하지 않는다.
 
 ## 9. PII, Bedrock, MCP 경계와 한계
@@ -232,10 +247,12 @@ az deployment group create \
 ### MCP
 
 - `policies/mcp-resource-server.xml`은 `{{ai-hub-mcp-openid-config}}`로 지정된
-  **일반 OIDC discovery**(MCP 호환 Authorization Server)를 사용하며, Entra
-  v2 endpoint를 직접 검증하지 않는다.
-- 이 구성은 **사내 통제 하의 Entra scope-only 호환 프로파일**이며, 현재 MCP
-  Authorization 사양이 요구하는 RFC 8707 `resource` 파라미터를 Entra v2
+  **일반 OIDC discovery**를 사용해 audience를 검증한 뒤, `mcp.invoke`가
+  표준 OAuth `scope` 또는 Entra `scp` claim 중 하나에 있는지 확인한다.
+- 사내 통제 하의 Entra scope-only 호환 프로파일에서는
+  `{{ai-hub-mcp-openid-config}}`가 Entra v2 discovery endpoint를 직접
+  가리킬 수 있으며, 이때 이 정책은 Entra `scp` claim을 검증한다. 다만 현재
+  MCP Authorization 사양이 요구하는 RFC 8707 `resource` 파라미터를 Entra v2
   endpoint가 지원하지 않으므로 **완전한 MCP 표준 준수는 아니다**.
 - 표준 준수가 필요한(조직이 통제하지 않는) MCP client를 지원하려면 RFC 8707
   `resource`, discovery, dynamic/pre-registered client registration을 처리하는

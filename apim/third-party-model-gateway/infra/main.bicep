@@ -22,13 +22,14 @@ param bedrockSecretKeySecretIdentifier string
 param languageApiKeySecretIdentifier string
 param bedrockRegion string
 param vertexBrokerUrl string
+param vertexBrokerResourceAudience string
 param mcpAuthorizationServerOpenIdConfigurationUrl string
 param mcpAuthorizationServerIssuer string
 param mcpResourceAudience string
 param mcpResourceMetadataUrl string
 param mcpBackendUrl string
 
-var forbiddenVertexPublicHost = 'aiplatform.${'googleapis.com'}'
+var forbiddenVertexPublicHost = 'aiplatform.googleapis.com'
 var validatedVertexBrokerUrl = !contains(toLower(vertexBrokerUrl), forbiddenVertexPublicHost)
   ? vertexBrokerUrl
   : fail('vertexBrokerUrl must target the private broker, not the public Vertex AI host.')
@@ -175,6 +176,15 @@ resource bedrockRegionNamedValue 'Microsoft.ApiManagement/service/namedValues@20
   properties: {
     displayName: 'ai-hub-bedrock-region'
     value: bedrockRegion
+  }
+}
+
+resource vertexBrokerResourceAudienceNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  parent: apim
+  name: 'ai-hub-vertex-broker-resource-audience'
+  properties: {
+    displayName: 'ai-hub-vertex-broker-resource-audience'
+    value: vertexBrokerResourceAudience
   }
 }
 
@@ -476,6 +486,7 @@ resource vertexApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-
     rateLimitPolicyFragment
     piiInboundPolicyFragment
     vertexBrokerBackend
+    vertexBrokerResourceAudienceNamedValue
   ]
   properties: {
     format: 'rawxml'

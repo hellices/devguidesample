@@ -79,6 +79,7 @@ param bedrockSecretKeySecretIdentifier string
 param languageApiKeySecretIdentifier string
 param bedrockRegion string
 param vertexBrokerUrl string
+param vertexBrokerResourceAudience string
 param mcpAuthorizationServerOpenIdConfigurationUrl string
 param mcpAuthorizationServerIssuer string
 param mcpResourceAudience string
@@ -410,6 +411,7 @@ Create nonsecret named values named `ai-hub-entra-tenant-id`,
 `ai-hub-rate-limit-calls`, `ai-hub-rate-limit-renewal-period`,
 `ai-hub-max-inline-pii-characters`, `ai-hub-pii-language`,
 `ai-hub-language-endpoint`, `ai-hub-bedrock-region`,
+`ai-hub-vertex-broker-resource-audience`,
 `ai-hub-mcp-openid-config`, `ai-hub-mcp-authorization-server-issuer`,
 `ai-hub-mcp-resource-audience`, and `ai-hub-mcp-resource-metadata-url`.
 
@@ -420,7 +422,7 @@ these URLs:
 url: 'https://generativelanguage.googleapis.com'
 url: 'https://api.anthropic.com'
 url: 'https://bedrock-runtime.${bedrockRegion}.amazonaws.com'
-url: vertexBrokerUrl
+url: validatedVertexBrokerUrl
 url: mcpBackendUrl
 ```
 
@@ -473,8 +475,14 @@ param rateLimitRenewalPeriod = 60
 param maxInlinePiiCharacters = 4096
 param piiLanguage = 'ko'
 param languageEndpoint = 'https://<language-resource>.cognitiveservices.azure.com'
+param geminiApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<gemini-api-key-secret-name>'
+param anthropicApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<anthropic-api-key-secret-name>'
+param bedrockAccessKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<bedrock-access-key-secret-name>'
+param bedrockSecretKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<bedrock-secret-key-secret-name>'
+param languageApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<language-api-key-secret-name>'
 param bedrockRegion = 'us-east-1'
 param vertexBrokerUrl = 'https://<private-vertex-broker-host>'
+param vertexBrokerResourceAudience = 'api://<private-vertex-broker-app-id>'
 param mcpAuthorizationServerOpenIdConfigurationUrl = 'https://<mcp-authorization-server>/.well-known/openid-configuration'
 param mcpAuthorizationServerIssuer = 'https://<mcp-authorization-server>'
 param mcpResourceAudience = 'https://<gateway-host>/ai/mcp'
@@ -482,8 +490,9 @@ param mcpResourceMetadataUrl = 'https://<gateway-host>/.well-known/oauth-protect
 param mcpBackendUrl = 'https://<private-mcp-server-host>'
 ```
 
-Do not place any secret-identifier value in this template. Supply secret
-identifiers through a secure pipeline parameter file or command-line
+Do not place a secret **value** in this template. Key Vault secret identifier
+URI placeholders are required so the committed parameter template compiles;
+replace them only in a secure pipeline parameter file or command-line
 deployment parameters.
 
 - [ ] **Step 6: Run Bicep and static tests**
@@ -492,6 +501,7 @@ Run:
 
 ```bash
 az bicep build --file apim/third-party-model-gateway/infra/main.bicep --stdout >/dev/null
+az bicep build-params --file apim/third-party-model-gateway/infra/main.bicepparam --stdout >/dev/null
 python3 -m unittest apim/third-party-model-gateway/tests/test_gateway_artifacts.py -v
 ```
 
