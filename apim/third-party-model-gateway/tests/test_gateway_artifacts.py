@@ -740,6 +740,8 @@ class GatewayArtifactTests(unittest.TestCase):
 
     def test_gcp_wif_script_enables_resource_manager_before_project_iam_binding(self) -> None:
         source = (ROOT / "scripts" / "configure-gcp-wif.sh").read_text(encoding="utf-8")
+        self.assertIn("cloudresourcemanager.googleapis.com", source)
+        self.assertIn("gcloud projects add-iam-policy-binding", source)
         enable_pos = source.index("cloudresourcemanager.googleapis.com")
         binding_pos = source.index("gcloud projects add-iam-policy-binding")
         self.assertLess(enable_pos, binding_pos)
