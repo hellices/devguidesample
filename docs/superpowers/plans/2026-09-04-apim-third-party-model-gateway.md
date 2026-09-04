@@ -991,6 +991,7 @@ set -euo pipefail
 gcloud services enable \
   iam.googleapis.com \
   iamcredentials.googleapis.com \
+  cloudresourcemanager.googleapis.com \
   sts.googleapis.com \
   aiplatform.googleapis.com \
   --project "$GCP_PROJECT_ID"
