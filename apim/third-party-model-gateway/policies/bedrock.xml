@@ -1,0 +1,143 @@
+<policies>
+  <inbound>
+    <base />
+    <include-fragment fragment-id="ai-hub-client-auth" />
+    <include-fragment fragment-id="ai-hub-rate-limit" />
+    <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-backend-service backend-id="ai-hub-bedrock" />
+    <set-variable name="ai-hub-bedrock-host" value="bedrock-runtime.{{ai-hub-bedrock-region}}.amazonaws.com" />
+    <set-variable name="ai-hub-bedrock-now" value="@(DateTime.UtcNow)" />
+    <set-header name="host" exists-action="override">
+      <value>@((string)context.Variables["ai-hub-bedrock-host"])</value>
+    </set-header>
+    <set-header name="X-Amz-Date" exists-action="override">
+      <value>@(((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMddTHHmmssZ"))</value>
+    </set-header>
+    <set-header name="X-Amz-Content-Sha256" exists-action="override">
+      <value>@{
+        var body = (string)context.Variables["ai-hub-request-body"];
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+          var hash = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(body));
+          return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+      }</value>
+    </set-header>
+    <set-header name="Authorization" exists-action="override">
+      <value>@{
+        var accessKey = "{{ai-hub-bedrock-access-key}}";
+        var secretKey = "{{ai-hub-bedrock-secret-key}}";
+        var region = "{{ai-hub-bedrock-region}}";
+        var service = "bedrock";
+
+        var method = context.Request.Method;
+        var path = context.Request.Url.Path;
+        var host = (string)context.Variables["ai-hub-bedrock-host"];
+
+        var amzDate = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMddTHHmmssZ");
+        var dateStamp = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMdd");
+
+        var body = (string)context.Variables["ai-hub-request-body"];
+        string hashedPayload;
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+          var hash = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(body));
+          hashedPayload = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
+        var queryDict = context.Request.Url.Query;
+        var canonicalQueryString = "";
+        if (queryDict != null &amp;&amp; queryDict.Count > 0)
+        {
+          var encodedParams = new List&lt;string&gt;();
+          foreach (var kvp in queryDict)
+          {
+            var encodedKey = System.Uri.EscapeDataString(kvp.Key);
+            var encodedValue = System.Uri.EscapeDataString(kvp.Value.FirstOrDefault() ?? "");
+            encodedParams.Add(encodedKey + "=" + encodedValue);
+          }
+          canonicalQueryString = string.Join("&amp;", encodedParams.OrderBy(p =&gt; p, StringComparer.Ordinal));
+        }
+
+        var headers = context.Request.Headers;
+        var canonicalHeaderList = new List&lt;string[]&gt;();
+
+        var contentType = headers.GetValueOrDefault("Content-Type", "").ToLowerInvariant();
+        if (!string.IsNullOrEmpty(contentType))
+        {
+          canonicalHeaderList.Add(new[] { "content-type", contentType });
+        }
+
+        canonicalHeaderList.Add(new[] { "host", host });
+
+        foreach (var header in headers)
+        {
+          var name = header.Key.ToLowerInvariant();
+          if (name == "x-amz-content-sha256" || name == "x-amz-date")
+          {
+            continue;
+          }
+          if (name.StartsWith("x-amz-"))
+          {
+            var value = (header.Value.FirstOrDefault() ?? "").Trim();
+            canonicalHeaderList.Add(new[] { name, value });
+          }
+        }
+        canonicalHeaderList.Add(new[] { "x-amz-content-sha256", hashedPayload });
+        canonicalHeaderList.Add(new[] { "x-amz-date", amzDate });
+
+        var canonicalHeadersOrdered = canonicalHeaderList.OrderBy(h =&gt; h[0], StringComparer.Ordinal);
+        var canonicalHeaders = string.Join("\n", canonicalHeadersOrdered.Select(h =&gt; h[0] + ":" + h[1].Trim())) + "\n";
+        var signedHeaders = string.Join(";", canonicalHeadersOrdered.Select(h =&gt; h[0]));
+
+        var canonicalRequest = method + "\n" + path + "\n" + canonicalQueryString + "\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + hashedPayload;
+        string hashedCanonicalRequest;
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+          var hash = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(canonicalRequest));
+          hashedCanonicalRequest = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
+        var credentialScope = dateStamp + "/" + region + "/" + service + "/aws4_request";
+        var stringToSign = "AWS4-HMAC-SHA256\n" + amzDate + "\n" + credentialScope + "\n" + hashedCanonicalRequest;
+
+        byte[] kSecret = System.Text.Encoding.UTF8.GetBytes("AWS4" + secretKey);
+        byte[] kDate, kRegion, kService, kSigning;
+        using (var h1 = new System.Security.Cryptography.HMACSHA256(kSecret))
+        {
+          kDate = h1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(dateStamp));
+        }
+        using (var h2 = new System.Security.Cryptography.HMACSHA256(kDate))
+        {
+          kRegion = h2.ComputeHash(System.Text.Encoding.UTF8.GetBytes(region));
+        }
+        using (var h3 = new System.Security.Cryptography.HMACSHA256(kRegion))
+        {
+          kService = h3.ComputeHash(System.Text.Encoding.UTF8.GetBytes(service));
+        }
+        using (var h4 = new System.Security.Cryptography.HMACSHA256(kService))
+        {
+          kSigning = h4.ComputeHash(System.Text.Encoding.UTF8.GetBytes("aws4_request"));
+        }
+
+        string signature;
+        using (var hmac = new System.Security.Cryptography.HMACSHA256(kSigning))
+        {
+          var sigBytes = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(stringToSign));
+          signature = BitConverter.ToString(sigBytes).Replace("-", "").ToLowerInvariant();
+        }
+
+        return "AWS4-HMAC-SHA256 Credential=" + accessKey + "/" + credentialScope + ", SignedHeaders=" + signedHeaders + ", Signature=" + signature;
+      }</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

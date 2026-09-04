@@ -1,0 +1,38 @@
+<policies>
+  <inbound>
+    <base />
+    <choose>
+      <when condition="@(!context.Request.Headers.ContainsKey(&quot;Authorization&quot;))">
+        <return-response>
+          <set-status code="401" reason="Unauthorized" />
+          <set-header name="WWW-Authenticate" exists-action="override">
+            <value>@("Bearer resource_metadata=\"{{ai-hub-mcp-resource-metadata-url}}\", scope=\"mcp.invoke\"")</value>
+          </set-header>
+        </return-response>
+      </when>
+    </choose>
+    <validate-jwt header-name="Authorization"
+                  failed-validation-httpcode="401"
+                  failed-validation-error-message="Unauthorized">
+      <openid-config url="{{ai-hub-mcp-openid-config}}" />
+      <audiences>
+        <audience>{{ai-hub-mcp-resource-audience}}</audience>
+      </audiences>
+      <required-claims>
+        <claim name="scope" match="any" separator=" ">
+          <value>mcp.invoke</value>
+        </claim>
+      </required-claims>
+    </validate-jwt>
+    <set-backend-service backend-id="ai-hub-mcp" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

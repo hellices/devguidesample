@@ -170,6 +170,37 @@ class GatewayArtifactTests(unittest.TestCase):
             self.assertIn('fragment-id="ai-hub-rate-limit"', source)
             self.assertIn('fragment-id="ai-hub-pii-inbound"', source)
 
+    def test_common_auth_requires_entra_issuer_audience_and_scope(self) -> None:
+        source = (ROOT / "policies" / "common-client-auth.xml").read_text(encoding="utf-8")
+        self.assertIn('<validate-jwt header-name="Authorization"', source)
+        self.assertIn('https://login.microsoftonline.com/{{ai-hub-entra-tenant-id}}/v2.0/.well-known/openid-configuration', source)
+        self.assertIn('<audience>{{ai-hub-entra-audience}}</audience>', source)
+        self.assertIn('<claim name="scp" match="any" separator=" "', source)
+        self.assertIn('<value>{{ai-hub-required-scope}}</value>', source)
+
+    def test_pii_policy_fails_closed_and_does_not_redact_provider_json(self) -> None:
+        source = (ROOT / "policies" / "common-pii-inbound.xml").read_text(encoding="utf-8")
+        self.assertIn('response-variable-name="ai-hub-pii-response"', source)
+        self.assertIn('ignore-error="true"', source)
+        self.assertIn('PII inspection unavailable', source)
+        self.assertIn('Sensitive input detected', source)
+        self.assertNotIn('redactedText', source)
+
+    def test_mcp_policy_uses_generic_oidc_not_entra_direct_auth(self) -> None:
+        source = (ROOT / "policies" / "mcp-resource-server.xml").read_text(encoding="utf-8")
+        self.assertIn('<validate-jwt header-name="Authorization"', source)
+        self.assertIn('{{ai-hub-mcp-openid-config}}', source)
+        self.assertIn('{{ai-hub-mcp-resource-audience}}', source)
+        self.assertIn('{{ai-hub-mcp-resource-metadata-url}}', source)
+        self.assertNotIn('login.microsoftonline.com', source)
+
+    def test_mcp_metadata_policy_advertises_the_compatible_authorization_server(self) -> None:
+        source = (ROOT / "policies" / "mcp-metadata.xml").read_text(encoding="utf-8")
+        self.assertIn('{{ai-hub-mcp-resource-audience}}', source)
+        self.assertIn('{{ai-hub-mcp-authorization-server-issuer}}', source)
+        self.assertIn('authorization_servers', source)
+        self.assertIn('scopes_supported', source)
+
 
 if __name__ == "__main__":
     unittest.main()

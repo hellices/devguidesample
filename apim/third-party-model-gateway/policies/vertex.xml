@@ -1,0 +1,18 @@
+<policies>
+  <inbound>
+    <base />
+    <include-fragment fragment-id="ai-hub-client-auth" />
+    <include-fragment fragment-id="ai-hub-rate-limit" />
+    <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-backend-service backend-id="ai-hub-vertex-broker" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
