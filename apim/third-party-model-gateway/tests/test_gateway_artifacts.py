@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import re
+import subprocess
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -27,6 +28,47 @@ POLICY_FILES = (
     "mcp-resource-server.xml",
     "mcp-metadata.xml",
 )
+
+# Extensions scanned for plaintext credential literals. Only source-controlled
+# (git-tracked) files with these suffixes are scanned; ignored/session
+# artifacts (e.g. `.superpowers/`, `*.secrets.json`) are never considered
+# because the file list comes from `git ls-files`, not filesystem globbing.
+CREDENTIAL_SCAN_EXTENSIONS = (".bicep", ".bicepparam", ".xml", ".json", ".md", ".sh")
+
+# Matches an assignment of a credential-shaped identifier (api_key, access_key,
+# secret_key, private_key - snake_case, kebab-case, or camelCase, optionally
+# JSON-quoted on the left-hand side) to a quoted literal value. Deliberately
+# requires a real `key`/`Key` token so it does not match `secretIdentifier`
+# parameter names (no "key" substring follows "secret") and does not match
+# identifiers like `geminiApiKeySecretIdentifier` (no word boundary after
+# "Key"). Only the right-hand literal is inspected for placeholder shape, so
+# header-name literals such as `name="x-goog-api-key"` are never flagged
+# because the left-hand key there is `name`, not a credential key.
+CREDENTIAL_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(?:api|access|secret|private)[_-]?key\b[\"']?\s*[:=]\s*"
+    r"([\"'])((?:(?!\1).)*)\1"
+)
+
+
+def _is_placeholder_credential_value(value: str) -> bool:
+    """Returns True when a matched literal is an allowed placeholder shape.
+
+    Allowed: empty strings, APIM `{{named-value}}` references, `<...>`
+    documentation placeholders, and shell/`.env`-style environment-variable
+    expansion (`$VAR`, `${VAR}`, `%VAR%`).
+    """
+    stripped = value.strip()
+    if stripped == "":
+        return True
+    if stripped.startswith("{{") and stripped.endswith("}}"):
+        return True
+    if stripped.startswith("<") and stripped.endswith(">"):
+        return True
+    if re.fullmatch(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?", stripped):
+        return True
+    if re.fullmatch(r"%[A-Za-z_][A-Za-z0-9_]*%", stripped):
+        return True
+    return False
 
 
 class GatewayArtifactTests(unittest.TestCase):
@@ -691,7 +733,7 @@ class GatewayArtifactTests(unittest.TestCase):
 
     def test_guide_cites_gemini_generatecontent_rest_reference(self) -> None:
         guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
-        gemini_url = "https://ai.google.dev/api/rest/v1beta/models.generateContent"
+        gemini_url = "https://ai.google.dev/api/generate-content#v1beta.models.generateContent"
         self.assertIn(gemini_url, guide, "guide body must cite the official Gemini REST reference")
         source_list = guide[guide.index("## 9. 공식 참고 자료") :]
         self.assertIn(
@@ -745,6 +787,46 @@ class GatewayArtifactTests(unittest.TestCase):
         enable_pos = source.index("cloudresourcemanager.googleapis.com")
         binding_pos = source.index("gcloud projects add-iam-policy-binding")
         self.assertLess(enable_pos, binding_pos)
+
+    def test_no_plaintext_credential_literals_in_source_controlled_gateway_files(
+        self,
+    ) -> None:
+        # Scope the scan to git-tracked files only, so ignored/session
+        # artifacts (`.superpowers/`, `*.secrets.json`, `.env`, ...) declared
+        # in .gitignore are never scanned, and only real committed reference
+        # material is checked.
+        listing = subprocess.run(
+            ["git", "ls-files"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        tracked_files = [
+            ROOT / relative_path
+            for relative_path in listing.stdout.splitlines()
+            if Path(relative_path).suffix in CREDENTIAL_SCAN_EXTENSIONS
+        ]
+        self.assertTrue(tracked_files, "expected at least one file to scan")
+
+        violations: list[str] = []
+        for path in tracked_files:
+            text = path.read_text(encoding="utf-8")
+            for line_number, line in enumerate(text.splitlines(), start=1):
+                for match in CREDENTIAL_ASSIGNMENT_RE.finditer(line):
+                    literal_value = match.group(2)
+                    if not _is_placeholder_credential_value(literal_value):
+                        violations.append(
+                            f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}"
+                        )
+
+        self.assertEqual(
+            [],
+            violations,
+            "found plaintext credential literal(s); use a Key Vault-backed "
+            "{{named-value}}, environment-variable expansion, or a "
+            "documented <...> placeholder instead:\n" + "\n".join(violations),
+        )
 
 
 if __name__ == "__main__":
