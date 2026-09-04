@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import re
 import unittest
@@ -169,6 +170,15 @@ class GatewayArtifactTests(unittest.TestCase):
             self.assertIn('fragment-id="ai-hub-client-auth"', source)
             self.assertIn('fragment-id="ai-hub-rate-limit"', source)
             self.assertIn('fragment-id="ai-hub-pii-inbound"', source)
+
+    def test_common_rate_limit_uses_validated_oid_claim_with_stable_fallback(self) -> None:
+        root = ET.parse(ROOT / "policies" / "common-rate-limit.xml").getroot()
+        rate_limit = root.find("rate-limit-by-key")
+        self.assertIsNotNone(rate_limit)
+        counter_key = rate_limit.attrib["counter-key"]
+        self.assertIn('((Jwt)context.Variables["ai-hub-jwt"])', counter_key)
+        self.assertIn('.Claims.GetValueOrDefault("oid", "unknown")', counter_key)
+        self.assertNotIn("sub", counter_key)
 
     def test_bedrock_policy_signs_the_bedrock_runtime_model_path(self) -> None:
         # The public APIM operation path is "/ai/bedrock/model/{modelId}/converse",
@@ -373,6 +383,18 @@ class GatewayArtifactTests(unittest.TestCase):
             "the signature must not re-encode a string body instead of hashing the raw bytes",
         )
 
+    def test_bedrock_policy_uses_documented_sigv4_service_and_algorithm(self) -> None:
+        root = ET.parse(ROOT / "policies" / "bedrock.xml").getroot()
+        auth_header = root.find("./inbound/set-header[@name='Authorization']/value")
+        self.assertIsNotNone(auth_header)
+        auth_body = auth_header.text or ""
+        self.assertIn('var service = "bedrock";', auth_body)
+        self.assertIn('var credentialScope = dateStamp + "/" + region + "/" + service + "/aws4_request";', auth_body)
+        self.assertIn('var stringToSign = "AWS4-HMAC-SHA256\\n" + amzDate + "\\n" + credentialScope + "\\n" + hashedCanonicalRequest;', auth_body)
+        self.assertIn('kService = h3.ComputeHash(System.Text.Encoding.UTF8.GetBytes(service));', auth_body)
+        self.assertIn('return "AWS4-HMAC-SHA256 Credential=" + accessKey + "/" + credentialScope', auth_body)
+        self.assertNotIn('bedrock-runtime', auth_body)
+
     def test_common_auth_requires_entra_issuer_audience_and_scope(self) -> None:
         source = (ROOT / "policies" / "common-client-auth.xml").read_text(encoding="utf-8")
         self.assertIn('<validate-jwt header-name="Authorization"', source)
@@ -396,6 +418,37 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn('{{ai-hub-mcp-resource-audience}}', source)
         self.assertIn('{{ai-hub-mcp-resource-metadata-url}}', source)
         self.assertNotIn('login.microsoftonline.com', source)
+
+    def test_mcp_resource_server_emits_metadata_challenge_before_jwt_validation(self) -> None:
+        root = ET.parse(ROOT / "policies" / "mcp-resource-server.xml").getroot()
+        inbound_children = list(root.find("inbound"))
+        child_tags = [child.tag for child in inbound_children]
+        self.assertEqual("base", child_tags[0])
+        self.assertEqual("choose", child_tags[1])
+        self.assertEqual("validate-jwt", child_tags[2])
+
+        choose = inbound_children[1]
+        no_token_when = next(
+            (
+                when
+                for when in choose.findall("when")
+                if html.unescape(when.attrib.get("condition", ""))
+                == '@(!context.Request.Headers.ContainsKey("Authorization"))'
+            ),
+            None,
+        )
+        self.assertIsNotNone(no_token_when)
+        return_response = no_token_when.find("return-response")
+        self.assertIsNotNone(return_response)
+        status = return_response.find("set-status")
+        self.assertEqual("401", status.attrib["code"])
+        self.assertEqual("Unauthorized", status.attrib["reason"])
+        auth_header = return_response.find('set-header[@name="WWW-Authenticate"]/value')
+        self.assertIsNotNone(auth_header)
+        challenge = html.unescape(auth_header.text or "")
+        self.assertIn("ai-hub-mcp-resource-metadata-url", challenge)
+        self.assertIn("mcp.invoke", challenge)
+        self.assertTrue(challenge.startswith('@("'))
 
     def test_provider_policies_delete_caller_authorization_before_backend_routing(self) -> None:
         # Gemini and Anthropic authenticate to their providers with named-value
