@@ -1,7 +1,7 @@
 # Design: APIM Third-Party Model Gateway Reference Implementation
 
-**Date:** 2026-09-04  
-**Status:** Approved for implementation under unattended execution  
+**Date:** 2026-09-04
+**Status:** Approved for implementation under unattended execution
 **Decision:** Build a deployable reference implementation that configures an
 existing Azure API Management instance. Do not provision or modify live Azure,
 Google Cloud, or AWS resources during this work.
