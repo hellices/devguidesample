@@ -52,14 +52,14 @@ CREDENTIAL_HEADER_NAMES = frozenset(
     {"x-goog-api-key", "x-api-key", "ocp-apim-subscription-key"}
 )
 
-# The credential-shaped identifier token (api key, access key, secret key,
-# private key) in snake_case, kebab-case, camelCase, or SCREAMING_SNAKE_CASE,
-# optionally prefixed by a provider name joined with `_`/`-` (e.g.
-# `GEMINI_API_KEY`, `aws-secret-access-key`). Deliberately requires a real
-# `key`/`Key` token immediately after `api`/`access`/`secret`/`private` so it
-# does not match `secretIdentifier` parameter names (no "key" substring
+# The credential-shaped identifier token (api key, access key, access key ID,
+# secret key, private key) in snake_case, kebab-case, camelCase, or
+# SCREAMING_SNAKE_CASE, optionally prefixed by a provider name joined with
+# `_`/`-` (e.g. `GEMINI_API_KEY`, `AWS_ACCESS_KEY_ID`). Deliberately requires
+# a real `key`/`Key` token immediately after `api`/`access`/`secret`/`private`
+# so it does not match `secretIdentifier` parameter names (no "key" substring
 # follows "secret").
-_CREDENTIAL_KEY_TOKEN = r"(?:api|access|secret|private)[_-]?key"
+_CREDENTIAL_KEY_TOKEN = r"(?:api|access|secret|private)[_-]?key(?:[_-]?id)?"
 
 # Matches an assignment of a credential-shaped identifier to a literal value,
 # quoted or unquoted (shell `KEY=value`, YAML `KEY: value`, JSON
@@ -89,14 +89,22 @@ CREDENTIAL_ASSIGNMENT_RE = re.compile(
     r"(?:([\"'])((?:(?!\1).)*)\1|(\S+))"
 )
 
+_APIM_CONTEXT_VARIABLE_EXPRESSION_RE = re.compile(
+    r"""^@\(\s*context\.Variables(?:
+        \.GetValueOrDefault(?:<[^>]+>)?\(\s*(?:'|")[A-Za-z_][A-Za-z0-9_.-]*(?:'|")\s*\)
+        |\[\s*(?:'|")[A-Za-z_][A-Za-z0-9_.-]*(?:'|")\s*\]
+    )\s*\)$""",
+    re.VERBOSE,
+)
+
 
 def _is_placeholder_credential_value(value: str) -> bool:
     """Returns True when a matched literal is an allowed placeholder shape.
 
-    Allowed: empty strings, APIM `{{named-value}}` references, APIM policy
-    expressions (`@(...)`), `<...>` documentation placeholders, and
-    shell/`.env`-style environment-variable expansion (`$VAR`, `${VAR}`,
-    `%VAR%`).
+    Allowed: empty strings, APIM `{{named-value}}` references, a complete
+    APIM `context.Variables` lookup expression, `<...>` documentation
+    placeholders, and shell/`.env`-style environment-variable expansion
+    (`$VAR`, `${VAR}`, `%VAR%`).
     """
     stripped = value.strip()
     if stripped == "":
@@ -105,7 +113,7 @@ def _is_placeholder_credential_value(value: str) -> bool:
         return True
     if stripped.startswith("<") and stripped.endswith(">"):
         return True
-    if stripped.startswith("@(") and stripped.endswith(")"):
+    if _APIM_CONTEXT_VARIABLE_EXPRESSION_RE.fullmatch(stripped):
         return True
     if re.fullmatch(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?", stripped):
         return True
@@ -1068,8 +1076,10 @@ class GatewayArtifactTests(unittest.TestCase):
         cases = {
             "shell-export.sh": 'export GEMINI_API_KEY=not-a-real-secret\n',
             "env-style.sh": 'AWS_SECRET_ACCESS_KEY=not-a-real-secret\n',
+            "access-key-id.sh": 'AWS_ACCESS_KEY_ID=not-a-real-secret\n',
             "yaml-style.md": 'ANTHROPIC_API_KEY: not-a-real-secret\n',
             "json-style.json": '{"GEMINI_API_KEY": "not-a-real-secret"}\n',
+            "access-key-id.json": '{"AWS_ACCESS_KEY_ID": "not-a-real-secret"}\n',
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_root = Path(tmp_dir)
@@ -1114,6 +1124,33 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertEqual(1, len(violations), violations)
         self.assertIn("x-goog-api-key", violations[0])
         self.assertIn("not-a-real-secret", violations[0])
+
+    def test_credential_scanner_detects_literal_wrapped_in_apim_policy_expression(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_paths = []
+            for index, expression in enumerate(
+                (
+                    '@("not-a-real-secret")',
+                    '@(context.Variables.GetValueOrDefault&lt;string&gt;("computed-key") + "not-a-real-secret")',
+                )
+            ):
+                fixture_xml = (
+                    "<policies><inbound>"
+                    '<set-header name="x-goog-api-key" exists-action="override">'
+                    f"<value>{expression}</value>"
+                    "</set-header>"
+                    "</inbound></policies>"
+                )
+                fixture_path = Path(tmp_dir) / f"expression-wrapped-secret-{index}.xml"
+                fixture_path.write_text(fixture_xml, encoding="utf-8")
+                fixture_paths.append(fixture_path)
+            violations = _scan_paths_for_credential_violations(fixture_paths)
+
+        self.assertEqual(2, len(violations), violations)
+        for violation in violations:
+            self.assertIn("not-a-real-secret", violation)
 
     def test_credential_scanner_detects_plaintext_for_all_known_credential_headers(
         self,
