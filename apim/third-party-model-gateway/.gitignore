@@ -1,0 +1,3 @@
+*.parameters.json
+*.secrets.json
+.env

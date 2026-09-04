@@ -1,0 +1,16 @@
+<fragment>
+  <validate-jwt header-name="Authorization"
+                failed-validation-httpcode="401"
+                failed-validation-error-message="Unauthorized"
+                output-token-variable-name="ai-hub-jwt">
+    <openid-config url="https://login.microsoftonline.com/{{ai-hub-entra-tenant-id}}/v2.0/.well-known/openid-configuration" />
+    <audiences>
+      <audience>{{ai-hub-entra-audience}}</audience>
+    </audiences>
+    <required-claims>
+      <claim name="scp" match="any" separator=" ">
+        <value>{{ai-hub-required-scope}}</value>
+      </claim>
+    </required-claims>
+  </validate-jwt>
+</fragment>

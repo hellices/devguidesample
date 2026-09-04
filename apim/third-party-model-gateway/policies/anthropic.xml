@@ -1,0 +1,25 @@
+<policies>
+  <inbound>
+    <base />
+    <include-fragment fragment-id="ai-hub-client-auth" />
+    <include-fragment fragment-id="ai-hub-rate-limit" />
+    <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-header name="Authorization" exists-action="delete" />
+    <set-header name="x-api-key" exists-action="override">
+      <value>{{ai-hub-anthropic-api-key}}</value>
+    </set-header>
+    <set-header name="anthropic-version" exists-action="skip">
+      <value>2023-06-01</value>
+    </set-header>
+    <set-backend-service backend-id="ai-hub-anthropic" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

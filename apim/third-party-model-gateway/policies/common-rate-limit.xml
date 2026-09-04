@@ -1,0 +1,5 @@
+<fragment>
+  <rate-limit-by-key calls="{{ai-hub-rate-limit-calls}}"
+                     renewal-period="{{ai-hub-rate-limit-renewal-period}}"
+                     counter-key="@(((Jwt)context.Variables[&quot;ai-hub-jwt&quot;]).Claims.GetValueOrDefault(&quot;oid&quot;, &quot;unknown&quot;))" />
+</fragment>

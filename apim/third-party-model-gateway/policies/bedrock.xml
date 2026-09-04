@@ -1,0 +1,203 @@
+<policies>
+  <inbound>
+    <base />
+    <include-fragment fragment-id="ai-hub-client-auth" />
+    <include-fragment fragment-id="ai-hub-rate-limit" />
+    <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-backend-service backend-id="ai-hub-bedrock" />
+    <set-variable name="ai-hub-bedrock-host" value="bedrock-runtime.{{ai-hub-bedrock-region}}.amazonaws.com" />
+    <set-variable name="ai-hub-bedrock-now" value="@(DateTime.UtcNow)" />
+    <set-variable name="ai-hub-bedrock-model-id"
+                  value="@((string)context.Request.MatchedParameters[&quot;modelId&quot;])" />
+    <choose>
+      <when condition="@(!System.Text.RegularExpressions.Regex.IsMatch((string)context.Variables[&quot;ai-hub-bedrock-model-id&quot;], &quot;^[A-Za-z0-9._:-]{1,256}$&quot;))">
+        <return-response>
+          <set-status code="400" reason="Unsupported Bedrock model ID" />
+        </return-response>
+      </when>
+    </choose>
+    <!--
+      Compute the one-encoded wire path, the canonical path derived from that
+      wire path, canonical query, and raw-body payload hash once each. Non-S3
+      SigV4 URI-encodes the wire path again for CanonicalURI, so a percent
+      escape in the wire path is percent-escaped in the signed path.
+    -->
+    <set-variable name="ai-hub-bedrock-wire-path" value="@{
+        // The public APIM operation path is not what the Bedrock Runtime
+        // backend receives. Build the one-encoded wire path from the matched
+        // modelId instead of signing context.Request.Url.Path.
+        var modelId = (string)context.Variables[&quot;ai-hub-bedrock-model-id&quot;];
+        var escapedModelId = System.Uri.EscapeDataString(modelId);
+        return &quot;/model/&quot; + escapedModelId + &quot;/converse&quot;;
+      }" />
+    <set-variable name="ai-hub-bedrock-canonical-path" value="@{
+        // AWS non-S3 SigV4 signs one URI-encoding pass over the wire path,
+        // preserving only path separators. This deliberately turns %3A in
+        // the forwarded model segment into %253A in CanonicalURI.
+        var wirePath = (string)context.Variables[&quot;ai-hub-bedrock-wire-path&quot;];
+        return string.Join(&quot;/&quot;, wirePath.Split('/').Select(segment =&gt; System.Uri.EscapeDataString(segment)));
+      }" />
+    <set-variable name="ai-hub-bedrock-canonical-query" value="@{
+        // AWS SigV4 canonical query construction requires every individual
+        // value of a (possibly repeated) query parameter to be separately
+        // URI-encoded, then all encoded pairs sorted by encoded key and,
+        // for equal keys, by encoded value -- not by the pre-joined
+        // &quot;key=value&quot; text, which does not sort equivalently.
+        var queryDict = context.Request.Url.Query;
+        var encodedPairs = new List&lt;KeyValuePair&lt;string, string&gt;&gt;();
+        if (queryDict != null)
+        {
+          foreach (var kvp in queryDict)
+          {
+            var encodedKey = System.Uri.EscapeDataString(kvp.Key);
+            foreach (var rawValue in kvp.Value)
+            {
+              var encodedValue = System.Uri.EscapeDataString(rawValue ?? &quot;&quot;);
+              encodedPairs.Add(new KeyValuePair&lt;string, string&gt;(encodedKey, encodedValue));
+            }
+          }
+        }
+        var orderedPairs = encodedPairs
+          .OrderBy(p =&gt; p.Key, StringComparer.Ordinal)
+          .ThenBy(p =&gt; p.Value, StringComparer.Ordinal);
+        return string.Join(&quot;&amp;&quot;, orderedPairs.Select(p =&gt; p.Key + &quot;=&quot; + p.Value));
+      }" />
+    <set-variable name="ai-hub-bedrock-payload-hash" value="@{
+        // Hash the actual raw request bytes (not a re-encoded string copy)
+        // so X-Amz-Content-Sha256 and the Authorization signature both
+        // reflect exactly what is forwarded to the backend.
+        var bodyBytes = context.Request.Body.As&lt;byte[]&gt;(preserveContent: true);
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+          var hash = sha256.ComputeHash(bodyBytes);
+          return BitConverter.ToString(hash).Replace(&quot;-&quot;, &quot;&quot;).ToLowerInvariant();
+        }
+      }" />
+    <rewrite-uri template="@{
+        var path = (string)context.Variables[&quot;ai-hub-bedrock-wire-path&quot;];
+        var query = (string)context.Variables[&quot;ai-hub-bedrock-canonical-query&quot;];
+        return string.IsNullOrEmpty(query) ? path : path + &quot;?&quot; + query;
+      }" copy-unmatched-params="false" />
+    <set-header name="host" exists-action="override">
+      <value>@((string)context.Variables["ai-hub-bedrock-host"])</value>
+    </set-header>
+    <set-header name="X-Amz-Date" exists-action="override">
+      <value>@(((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMddTHHmmssZ"))</value>
+    </set-header>
+    <set-header name="X-Amz-Content-Sha256" exists-action="override">
+      <value>@((string)context.Variables["ai-hub-bedrock-payload-hash"])</value>
+    </set-header>
+    <set-header name="Authorization" exists-action="override">
+      <value>@{
+        var accessKey = "{{ai-hub-bedrock-access-key}}";
+        var secretKey = "{{ai-hub-bedrock-secret-key}}";
+        var region = "{{ai-hub-bedrock-region}}";
+        var service = "bedrock";
+
+        var method = context.Request.Method;
+        var host = (string)context.Variables["ai-hub-bedrock-host"];
+
+        // Non-S3 SigV4 signs the canonical path derived from the forwarded
+        // wire path, while the canonical query is sent as constructed.
+        var path = (string)context.Variables["ai-hub-bedrock-canonical-path"];
+        var canonicalQueryString = (string)context.Variables["ai-hub-bedrock-canonical-query"];
+
+        var amzDate = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMddTHHmmssZ");
+        var dateStamp = ((DateTime)context.Variables["ai-hub-bedrock-now"]).ToString("yyyyMMdd");
+
+        // Reuse the single raw-byte payload hash computed above for both
+        // X-Amz-Content-Sha256 and the signature.
+        var hashedPayload = (string)context.Variables["ai-hub-bedrock-payload-hash"];
+
+        var headers = context.Request.Headers;
+        var canonicalHeaderList = new List&lt;string[]&gt;();
+
+        // SigV4 canonical headers require lowercase header *names*, but
+        // header *values* must be normalized (internal whitespace runs
+        // collapsed to a single space, outer whitespace trimmed) without
+        // otherwise altering their case or content.
+        var contentType = headers.GetValueOrDefault("Content-Type", "");
+        if (!string.IsNullOrEmpty(contentType))
+        {
+          var normalizedContentType = System.Text.RegularExpressions.Regex.Replace(contentType, @"\s+", " ").Trim();
+          canonicalHeaderList.Add(new[] { "content-type", normalizedContentType });
+        }
+
+        canonicalHeaderList.Add(new[] { "host", host });
+
+        foreach (var header in headers)
+        {
+          var name = header.Key.ToLowerInvariant();
+          if (name == "x-amz-content-sha256" || name == "x-amz-date")
+          {
+            continue;
+          }
+          if (name.StartsWith("x-amz-"))
+          {
+            // Every repeated value of the same header must be retained and
+            // combined into one canonical, comma-joined value -- reading
+            // only the first value would silently drop signed data that
+            // the backend still receives.
+            var normalizedValues = header.Value.Select(v =&gt; System.Text.RegularExpressions.Regex.Replace(v ?? "", @"\s+", " ").Trim());
+            var combinedValue = string.Join(",", normalizedValues);
+            canonicalHeaderList.Add(new[] { name, combinedValue });
+          }
+        }
+        canonicalHeaderList.Add(new[] { "x-amz-content-sha256", hashedPayload });
+        canonicalHeaderList.Add(new[] { "x-amz-date", amzDate });
+
+        var canonicalHeadersOrdered = canonicalHeaderList.OrderBy(h =&gt; h[0], StringComparer.Ordinal);
+        var canonicalHeaders = string.Join("\n", canonicalHeadersOrdered.Select(h =&gt; h[0] + ":" + h[1])) + "\n";
+        var signedHeaders = string.Join(";", canonicalHeadersOrdered.Select(h =&gt; h[0]));
+
+        var canonicalRequest = method + "\n" + path + "\n" + canonicalQueryString + "\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + hashedPayload;
+        string hashedCanonicalRequest;
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+          var hash = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(canonicalRequest));
+          hashedCanonicalRequest = BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
+        var credentialScope = dateStamp + "/" + region + "/" + service + "/aws4_request";
+        var stringToSign = "AWS4-HMAC-SHA256\n" + amzDate + "\n" + credentialScope + "\n" + hashedCanonicalRequest;
+
+        byte[] kSecret = System.Text.Encoding.UTF8.GetBytes("AWS4" + secretKey);
+        byte[] kDate, kRegion, kService, kSigning;
+        using (var h1 = new System.Security.Cryptography.HMACSHA256(kSecret))
+        {
+          kDate = h1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(dateStamp));
+        }
+        using (var h2 = new System.Security.Cryptography.HMACSHA256(kDate))
+        {
+          kRegion = h2.ComputeHash(System.Text.Encoding.UTF8.GetBytes(region));
+        }
+        using (var h3 = new System.Security.Cryptography.HMACSHA256(kRegion))
+        {
+          kService = h3.ComputeHash(System.Text.Encoding.UTF8.GetBytes(service));
+        }
+        using (var h4 = new System.Security.Cryptography.HMACSHA256(kService))
+        {
+          kSigning = h4.ComputeHash(System.Text.Encoding.UTF8.GetBytes("aws4_request"));
+        }
+
+        string signature;
+        using (var hmac = new System.Security.Cryptography.HMACSHA256(kSigning))
+        {
+          var sigBytes = hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(stringToSign));
+          signature = BitConverter.ToString(sigBytes).Replace("-", "").ToLowerInvariant();
+        }
+
+        return "AWS4-HMAC-SHA256 Credential=" + accessKey + "/" + credentialScope + ", SignedHeaders=" + signedHeaders + ", Signature=" + signature;
+      }</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

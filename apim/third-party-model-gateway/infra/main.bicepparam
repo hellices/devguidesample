@@ -1,0 +1,25 @@
+using './main.bicep'
+
+param apiManagementServiceName = '<existing-apim-name>'
+param apiPathPrefix = 'ai'
+param gatewayBaseUrl = 'https://<gateway-host>'
+param entraTenantId = '<entra-tenant-id>'
+param entraAudience = 'api://<ai-hub-api-app-id>'
+param requiredScope = 'ai.invoke'
+param rateLimitCalls = 60
+param rateLimitRenewalPeriod = 60
+param maxInlinePiiCharacters = 4096
+param piiLanguage = 'ko'
+param languageEndpoint = 'https://<language-resource>.cognitiveservices.azure.com'
+param geminiApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<gemini-api-key-secret-name>'
+param anthropicApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<anthropic-api-key-secret-name>'
+param bedrockAccessKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<bedrock-access-key-secret-name>'
+param bedrockSecretKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<bedrock-secret-key-secret-name>'
+param languageApiKeySecretIdentifier = 'https://<key-vault-name>.vault.azure.net/secrets/<language-api-key-secret-name>'
+param bedrockRegion = 'us-east-1'
+param vertexBrokerUrl = 'https://<private-vertex-broker-host>'
+param vertexBrokerResourceAudience = 'api://<private-vertex-broker-app-id>'
+param mcpAuthorizationServerOpenIdConfigurationUrl = 'https://<mcp-authorization-server>/.well-known/openid-configuration'
+param mcpAuthorizationServerIssuer = 'https://<mcp-authorization-server>'
+param mcpBackendUrl = 'https://<private-mcp-server-host>'
+param mcpBackendResourceAudience = 'api://<private-mcp-server-app-id>'

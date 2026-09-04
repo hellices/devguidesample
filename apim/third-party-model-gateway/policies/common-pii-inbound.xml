@@ -1,0 +1,113 @@
+<fragment>
+  <set-variable name="ai-hub-request-body"
+                value="@(context.Request.Body.As&lt;string&gt;(preserveContent: true))" />
+  <choose>
+    <when condition="@(((string)context.Variables[&quot;ai-hub-request-body&quot;]).Length &gt; int.Parse(&quot;{{ai-hub-max-inline-pii-characters}}&quot;))">
+      <return-response>
+        <set-status code="413" reason="Input exceeds inline PII inspection limit" />
+      </return-response>
+    </when>
+  </choose>
+  <send-request mode="new"
+                response-variable-name="ai-hub-pii-response"
+                timeout="10"
+                ignore-error="true">
+    <set-url>{{ai-hub-language-endpoint}}/language/:analyze-text?api-version=2024-11-01</set-url>
+    <set-method>POST</set-method>
+    <set-header name="Content-Type" exists-action="override">
+      <value>application/json</value>
+    </set-header>
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="override">
+      <value>{{ai-hub-language-api-key}}</value>
+    </set-header>
+    <set-body>@{
+      var requestBody = (string)context.Variables["ai-hub-request-body"];
+      return new JObject(
+        new JProperty("kind", "PiiEntityRecognition"),
+        new JProperty("analysisInput", new JObject(
+          new JProperty("documents", new JArray(new JObject(
+            new JProperty("id", "request"),
+            new JProperty("language", "{{ai-hub-pii-language}}"),
+            new JProperty("text", requestBody)
+          )))
+        )),
+        new JProperty("parameters", new JObject(
+          new JProperty("modelVersion", "latest")
+        ))
+      ).ToString();
+    }</set-body>
+  </send-request>
+  <choose>
+    <when condition="@{
+      var response = context.Variables.ContainsKey(&quot;ai-hub-pii-response&quot;)
+        ? (IResponse)context.Variables[&quot;ai-hub-pii-response&quot;]
+        : null;
+      if (response == null || response.StatusCode != 200)
+      {
+        return true;
+      }
+      JObject result;
+      try
+      {
+        result = response.Body.As&lt;JObject&gt;(preserveContent: true);
+      }
+      catch
+      {
+        return true;
+      }
+      if (result == null)
+      {
+        return true;
+      }
+      if ((string)result[&quot;kind&quot;] != &quot;PiiEntityRecognitionResults&quot;)
+      {
+        return true;
+      }
+      var results = result[&quot;results&quot;] as JObject;
+      if (results == null)
+      {
+        return true;
+      }
+      var errors = results[&quot;errors&quot;] as JArray;
+      if (errors == null || errors.Count > 0)
+      {
+        return true;
+      }
+      var documents = results[&quot;documents&quot;] as JArray;
+      if (documents == null)
+      {
+        return true;
+      }
+      var requestDocument = documents.FirstOrDefault(document =>
+        (string)document[&quot;id&quot;] == &quot;request&quot;);
+      if (requestDocument == null)
+      {
+        return true;
+      }
+      if (!(requestDocument[&quot;entities&quot;] is JArray))
+      {
+        return true;
+      }
+      return false;
+    }">
+      <return-response>
+        <set-status code="503" reason="PII inspection unavailable" />
+      </return-response>
+    </when>
+  </choose>
+  <choose>
+    <when condition="@{
+      var response = (IResponse)context.Variables[&quot;ai-hub-pii-response&quot;];
+      var result = response.Body.As&lt;JObject&gt;(preserveContent: true);
+      var documents = result[&quot;results&quot;]?[&quot;documents&quot;] as JArray;
+      var requestDocument = documents?.FirstOrDefault(document =>
+        (string)document[&quot;id&quot;] == &quot;request&quot;);
+      return requestDocument != null &amp;&amp;
+        requestDocument[&quot;entities&quot;] is JArray entities &amp;&amp; entities.Count > 0;
+    }">
+      <return-response>
+        <set-status code="400" reason="Sensitive input detected" />
+      </return-response>
+    </when>
+  </choose>
+</fragment>

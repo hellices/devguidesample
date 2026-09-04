@@ -1,0 +1,27 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI Hub MCP Protected Resource Metadata",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/oauth-protected-resource/__API_PATH_PREFIX__/mcp": {
+      "get": {
+        "operationId": "getProtectedResourceMetadata",
+        "responses": {
+          "200": {
+            "description": "OAuth protected resource metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
