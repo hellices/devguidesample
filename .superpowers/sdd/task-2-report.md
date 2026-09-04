@@ -222,4 +222,72 @@ Output: focused test `ok`; remaining failures were the pre-existing Task 3 polic
 - Confirmed Bicep/OpenAPI behavior was not modified.
 
 ### Commit
-- Pending at time of this report update.
+- SHA: `9d90b64fe22857eaa5a7429c9607234c25b7da53`
+- Subject: `test(apim): cover all gateway key vault values`
+
+## Follow-up: Explicit APIM Policy Dependency Ordering
+
+### Scope
+- Updated only `apim/third-party-model-gateway/infra/main.bicep` and `apim/third-party-model-gateway/tests/test_gateway_artifacts.py` for the Task 2 deployment-ordering finding.
+- Did not edit policy XML, OpenAPI assets, docs, the plan/spec, or the pre-existing untracked architecture review.
+
+### Changed Files
+- `apim/third-party-model-gateway/infra/main.bicep`
+- `apim/third-party-model-gateway/tests/test_gateway_artifacts.py`
+
+### TDD Evidence
+#### RED step
+Command:
+```bash
+python3 apim/third-party-model-gateway/tests/test_gateway_artifacts.py \
+  GatewayArtifactTests.test_bicep_explicitly_orders_policy_fragments_and_api_policies \
+  -v
+```
+Result: `FAIL` because `clientAuthPolicyFragment` did not contain a `dependsOn` block.
+
+#### GREEN step
+Command:
+```bash
+python3 apim/third-party-model-gateway/tests/test_gateway_artifacts.py \
+  GatewayArtifactTests.test_bicep_explicitly_orders_policy_fragments_and_api_policies \
+  -v
+```
+Result: `OK` after adding explicit resource-symbol-based dependencies.
+
+### Exact Validation Commands and Results
+1. Focused dependency test:
+```bash
+python3 apim/third-party-model-gateway/tests/test_gateway_artifacts.py \
+  GatewayArtifactTests.test_bicep_explicitly_orders_policy_fragments_and_api_policies \
+  -v
+```
+Result: `OK`
+
+2. Full Bicep build:
+```bash
+az bicep build --file apim/third-party-model-gateway/infra/main.bicep --stdout >/dev/null
+```
+Result: `BCP091` missing-file errors only for Task 3 policy XML files:
+`common-client-auth.xml`, `common-rate-limit.xml`, `common-pii-inbound.xml`, `gemini.xml`, `anthropic.xml`, `bedrock.xml`, `vertex.xml`, `mcp-resource-server.xml`, and `mcp-metadata.xml`.
+
+3. Full static suite:
+```bash
+python3 -m unittest apim/third-party-model-gateway/tests/test_gateway_artifacts.py -v
+```
+Result: dependency test plus existing OpenAPI/Bicep static tests passed; remaining failures were limited to the expected Task 3 policy-file gaps (`test_expected_artifacts_exist`, `test_policy_documents_parse`, `test_provider_policies_include_common_security_fragments`, `test_provider_policies_use_fixed_backends`).
+
+### Expected vs Resolved Failures
+- Resolved: APIM policy fragments now explicitly depend on the named values they require.
+- Resolved: Provider API policies now explicitly depend on the shared fragments, their fixed backend resources, and provider-specific named values required by policy evaluation.
+- Resolved: Added a focused offline regression test that inspects specific resource blocks and asserts the meaningful `dependsOn` symbols.
+- Expected remaining blocker: Bicep build/static failures caused only by missing Task 3 policy XML files.
+
+### Self-Review
+- Confirmed the `loadTextContent()` policy/OpenAPI mappings were unchanged.
+- Confirmed all Task 2 backend names, routes, and parameters remain unchanged.
+- Confirmed dependencies use Bicep resource symbols instead of ordering-by-position assumptions.
+- Ran `git diff --check` with no whitespace or patch-format issues.
+
+### Implementation Commit
+- SHA: `ebf0e30499b91ef988ec9c53472e8abeb9a691dd`
+- Subject: `fix(apim): order gateway policy dependencies`
