@@ -636,6 +636,29 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn('authorization_servers', source)
         self.assertIn('scopes_supported', source)
 
+    def test_documentation_links_to_all_provider_policies(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        for name in (
+            "gemini.xml",
+            "anthropic.xml",
+            "bedrock.xml",
+            "vertex.xml",
+            "mcp-resource-server.xml",
+            "mcp-metadata.xml",
+        ):
+            self.assertIn(name, readme)
+        self.assertIn("Unified Model API", readme)
+        self.assertIn("preview", readme.lower())
+
+    def test_gcp_wif_script_uses_broker_identity_inputs_without_secrets(self) -> None:
+        source = (ROOT / "scripts" / "configure-gcp-wif.sh").read_text(encoding="utf-8")
+        self.assertIn("gcloud iam workload-identity-pools create", source)
+        self.assertIn("gcloud iam workload-identity-pools providers create-oidc", source)
+        self.assertIn("google.subject=assertion.sub", source)
+        self.assertIn("roles/aiplatform.user", source)
+        self.assertNotIn("private_key", source)
+        self.assertNotIn("service-account-key", source)
+
 
 if __name__ == "__main__":
     unittest.main()
