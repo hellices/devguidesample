@@ -1347,6 +1347,16 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn('"documents"', decoded_unavailable_block)
         self.assertIn('"entities"', decoded_unavailable_block)
         self.assertIn('"request"', decoded_unavailable_block)
+        self.assertEqual(
+            2,
+            source.count("response.Body.As&lt;JObject&gt;(preserveContent: true)"),
+            "both PII response inspections must preserve the bounded response body",
+        )
+        self.assertNotIn(
+            "response.Body.As&lt;JObject&gt;()",
+            source,
+            "no PII response inspection may consume the body stream",
+        )
 
     def test_mcp_metadata_policy_advertises_the_compatible_authorization_server(self) -> None:
         source = (ROOT / "policies" / "mcp-metadata.xml").read_text(encoding="utf-8")

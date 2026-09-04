@@ -98,7 +98,7 @@
   <choose>
     <when condition="@{
       var response = (IResponse)context.Variables[&quot;ai-hub-pii-response&quot;];
-      var result = response.Body.As&lt;JObject&gt;();
+      var result = response.Body.As&lt;JObject&gt;(preserveContent: true);
       var documents = result[&quot;results&quot;]?[&quot;documents&quot;] as JArray;
       var requestDocument = documents?.FirstOrDefault(document =>
         (string)document[&quot;id&quot;] == &quot;request&quot;);
