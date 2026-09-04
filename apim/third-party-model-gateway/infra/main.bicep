@@ -376,6 +376,11 @@ resource mcpMetadataApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
 resource clientAuthPolicyFragment 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = {
   parent: apim
   name: 'ai-hub-client-auth'
+  dependsOn: [
+    entraTenantIdNamedValue
+    entraAudienceNamedValue
+    requiredScopeNamedValue
+  ]
   properties: {
     description: 'AI Hub caller JWT validation fragment.'
     format: 'rawxml'
@@ -386,6 +391,10 @@ resource clientAuthPolicyFragment 'Microsoft.ApiManagement/service/policyFragmen
 resource rateLimitPolicyFragment 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = {
   parent: apim
   name: 'ai-hub-rate-limit'
+  dependsOn: [
+    rateLimitCallsNamedValue
+    rateLimitRenewalPeriodNamedValue
+  ]
   properties: {
     description: 'AI Hub per-caller throttling fragment.'
     format: 'rawxml'
@@ -396,6 +405,12 @@ resource rateLimitPolicyFragment 'Microsoft.ApiManagement/service/policyFragment
 resource piiInboundPolicyFragment 'Microsoft.ApiManagement/service/policyFragments@2024-05-01' = {
   parent: apim
   name: 'ai-hub-pii-inbound'
+  dependsOn: [
+    maxInlinePiiCharactersNamedValue
+    piiLanguageNamedValue
+    languageEndpointNamedValue
+    languageApiKeyNamedValue
+  ]
   properties: {
     description: 'AI Hub fail-closed inbound PII inspection fragment.'
     format: 'rawxml'
@@ -406,6 +421,13 @@ resource piiInboundPolicyFragment 'Microsoft.ApiManagement/service/policyFragmen
 resource geminiApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: geminiApi
   name: 'policy'
+  dependsOn: [
+    clientAuthPolicyFragment
+    rateLimitPolicyFragment
+    piiInboundPolicyFragment
+    geminiBackend
+    geminiApiKeyNamedValue
+  ]
   properties: {
     format: 'rawxml'
     value: loadTextContent('../policies/gemini.xml')
@@ -415,6 +437,13 @@ resource geminiApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-
 resource anthropicApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: anthropicApi
   name: 'policy'
+  dependsOn: [
+    clientAuthPolicyFragment
+    rateLimitPolicyFragment
+    piiInboundPolicyFragment
+    anthropicBackend
+    anthropicApiKeyNamedValue
+  ]
   properties: {
     format: 'rawxml'
     value: loadTextContent('../policies/anthropic.xml')
@@ -424,6 +453,15 @@ resource anthropicApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-
 resource bedrockApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: bedrockApi
   name: 'policy'
+  dependsOn: [
+    clientAuthPolicyFragment
+    rateLimitPolicyFragment
+    piiInboundPolicyFragment
+    bedrockBackend
+    bedrockAccessKeyNamedValue
+    bedrockSecretKeyNamedValue
+    bedrockRegionNamedValue
+  ]
   properties: {
     format: 'rawxml'
     value: loadTextContent('../policies/bedrock.xml')
@@ -433,6 +471,12 @@ resource bedrockApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05
 resource vertexApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: vertexApi
   name: 'policy'
+  dependsOn: [
+    clientAuthPolicyFragment
+    rateLimitPolicyFragment
+    piiInboundPolicyFragment
+    vertexBrokerBackend
+  ]
   properties: {
     format: 'rawxml'
     value: loadTextContent('../policies/vertex.xml')
@@ -442,6 +486,13 @@ resource vertexApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-
 resource mcpApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: mcpApi
   name: 'policy'
+  dependsOn: [
+    mcpBackend
+    mcpOpenIdConfigNamedValue
+    mcpAuthorizationServerIssuerNamedValue
+    mcpResourceAudienceNamedValue
+    mcpResourceMetadataUrlNamedValue
+  ]
   properties: {
     format: 'rawxml'
     value: loadTextContent('../policies/mcp-resource-server.xml')
@@ -451,6 +502,12 @@ resource mcpApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01'
 resource mcpMetadataApiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
   parent: mcpMetadataApi
   name: 'policy'
+  dependsOn: [
+    mcpOpenIdConfigNamedValue
+    mcpAuthorizationServerIssuerNamedValue
+    mcpResourceAudienceNamedValue
+    mcpResourceMetadataUrlNamedValue
+  ]
   properties: {
     format: 'rawxml'
     value: loadTextContent('../policies/mcp-metadata.xml')
