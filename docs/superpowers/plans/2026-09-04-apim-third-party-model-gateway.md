@@ -96,7 +96,7 @@ Secret identifiers are Key Vault secret URIs, not secret values.
 | `/{apiPathPrefix}/anthropic/v1/messages` | Anthropic Messages API | `ai-hub-anthropic` |
 | `/{apiPathPrefix}/bedrock/model/{modelId}/converse` | Amazon Bedrock Runtime | `ai-hub-bedrock` |
 | `/{apiPathPrefix}/vertex/v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent` | Vertex AI through a private broker | `ai-hub-vertex-broker` |
-| `/{apiPathPrefix}/mcp/mcp` | Streamable HTTP MCP backend | `ai-hub-mcp` |
+| `/{apiPathPrefix}/mcp` | Streamable HTTP MCP backend | `ai-hub-mcp` |
 | `/.well-known/oauth-protected-resource/{apiPathPrefix}/mcp` | MCP Protected Resource Metadata | none |
 
 ### Policy Fragments
@@ -332,7 +332,8 @@ gemini.json:    /v1beta/models/{model}:generateContent
 anthropic.json: /v1/messages
 bedrock.json:   /model/{modelId}/converse
 vertex.json:    /v1/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent
-mcp.json:       /mcp
+mcp.json:       / (mounted by the API at ${apiPathPrefix}/mcp, so the public
+                  endpoint is {apiPathPrefix}/mcp, not {apiPathPrefix}/mcp/mcp)
 ```
 
 For each LLM API, define:

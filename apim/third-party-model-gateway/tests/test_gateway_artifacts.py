@@ -58,6 +58,49 @@ class GatewayArtifactTests(unittest.TestCase):
             root = ET.parse(ROOT / "policies" / name).getroot()
             self.assertIn(root.tag, {"policies", "fragment"}, name)
 
+    def test_mcp_public_endpoint_matches_the_resource_audience_and_metadata_contract(
+        self,
+    ) -> None:
+        # RFC 9728 requires the protected-resource metadata to be derived
+        # deterministically from the actual protected resource URL. The MCP
+        # API is mounted in main.bicep at '${apiPathPrefix}/mcp', so the
+        # OpenAPI document backing it must expose its operation at the API's
+        # own root ('/'), not a nested '/mcp' path -- otherwise the public
+        # endpoint becomes '<prefix>/mcp/mcp', which no longer matches the
+        # configured resource audience or the metadata URL below.
+        bicep_source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
+        mcp_api_block = self._resource_block(bicep_source, "mcpApi")
+        self.assertIn("path: '${apiPathPrefix}/mcp'", mcp_api_block)
+        self.assertIn("loadTextContent('../openapi/mcp.json')", mcp_api_block)
+
+        with (ROOT / "openapi" / "mcp.json").open(encoding="utf-8") as source:
+            mcp_document = json.load(source)
+        self.assertIn("/", mcp_document["paths"], "mcp.json must expose its operation at the API root")
+        self.assertIn("post", mcp_document["paths"]["/"])
+        self.assertNotIn(
+            "/mcp",
+            mcp_document["paths"],
+            "mcp.json must not nest a '/mcp' operation under an API already mounted at '.../mcp'",
+        )
+
+        # The protected-resource metadata API is mounted at '.well-known' and
+        # its OpenAPI contract substitutes the live apiPathPrefix into
+        # '/oauth-protected-resource/__API_PATH_PREFIX__/mcp', so the two
+        # combine to the RFC 9728 well-known path for the *same* resource
+        # mounted above ('${apiPathPrefix}/mcp'), with no extra '/mcp' segment.
+        metadata_api_block = self._resource_block(bicep_source, "mcpMetadataApi")
+        self.assertIn("path: '.well-known'", metadata_api_block)
+        self.assertIn("apiPathPrefix", metadata_api_block)
+
+        with (ROOT / "openapi" / "mcp-metadata.json").open(encoding="utf-8") as source:
+            metadata_document = json.load(source)
+        metadata_paths = list(metadata_document["paths"])
+        self.assertEqual(len(metadata_paths), 1)
+        self.assertEqual(
+            metadata_paths[0],
+            "/oauth-protected-resource/__API_PATH_PREFIX__/mcp",
+        )
+
     def test_bicep_loads_every_policy_and_openapi_asset(self) -> None:
         source = (ROOT / "infra" / "main.bicep").read_text(encoding="utf-8")
         for name in OPENAPI_FILES:
