@@ -243,6 +243,142 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn('{{ai-hub-mcp-resource-metadata-url}}', source)
         self.assertNotIn('login.microsoftonline.com', source)
 
+    def test_provider_policies_delete_caller_authorization_before_backend_routing(self) -> None:
+        # Gemini and Anthropic authenticate to their providers with named-value
+        # API keys, and the private Vertex broker uses its own workload
+        # identity. None of them may forward the caller's Entra bearer token
+        # to the upstream provider, so each policy must explicitly delete the
+        # inbound Authorization header after the common client-auth/rate-limit/
+        # PII fragments run (they still need to see it) but before the
+        # provider-specific credential is applied and the backend is selected.
+        for name in ("gemini.xml", "anthropic.xml", "vertex.xml"):
+            source = (ROOT / "policies" / name).read_text(encoding="utf-8")
+
+            pii_fragment_pos = source.find('fragment-id="ai-hub-pii-inbound"')
+            self.assertNotEqual(-1, pii_fragment_pos, name)
+
+            delete_auth_match = re.search(
+                r'<set-header\s+name="Authorization"\s+exists-action="delete"\s*/>',
+                source,
+            )
+            self.assertIsNotNone(
+                delete_auth_match,
+                f"{name} must delete the inbound Authorization header",
+            )
+            delete_auth_pos = delete_auth_match.start()
+
+            backend_select_match = re.search(r"<set-backend-service\b", source)
+            self.assertIsNotNone(backend_select_match, name)
+            backend_select_pos = backend_select_match.start()
+
+            self.assertLess(
+                pii_fragment_pos, delete_auth_pos,
+                f"{name}: Authorization must be deleted after common fragments",
+            )
+            self.assertLess(
+                delete_auth_pos, backend_select_pos,
+                f"{name}: Authorization must be deleted before backend selection",
+            )
+
+    def test_provider_policies_delete_authorization_before_backend_credentials(self) -> None:
+        # Gemini/Anthropic set their own outbound provider credential headers
+        # (x-goog-api-key / x-api-key) from named values; deleting the caller's
+        # Authorization header must happen before those are applied so that a
+        # stray Authorization header never reaches the backend even if a
+        # provider credential header is skipped/overridden differently later.
+        credential_headers = {
+            "gemini.xml": "x-goog-api-key",
+            "anthropic.xml": "x-api-key",
+        }
+        for name, header in credential_headers.items():
+            source = (ROOT / "policies" / name).read_text(encoding="utf-8")
+            delete_auth_match = re.search(
+                r'<set-header\s+name="Authorization"\s+exists-action="delete"\s*/>',
+                source,
+            )
+            self.assertIsNotNone(delete_auth_match, name)
+            credential_match = re.search(
+                rf'<set-header\s+name="{re.escape(header)}"',
+                source,
+            )
+            self.assertIsNotNone(credential_match, name)
+            self.assertLess(
+                delete_auth_match.start(), credential_match.start(),
+                f"{name}: Authorization must be deleted before setting {header}",
+            )
+
+    def test_mcp_and_bedrock_policies_do_not_delete_caller_authorization(self) -> None:
+        # mcp-resource-server.xml IS the protected resource that validates the
+        # caller's own Authorization header, and bedrock.xml overrides
+        # Authorization with a computed SigV4 value rather than deleting it.
+        # Neither should gain the caller-isolation delete-header line.
+        for name in ("mcp-resource-server.xml", "bedrock.xml"):
+            source = (ROOT / "policies" / name).read_text(encoding="utf-8")
+            self.assertNotRegex(
+                source,
+                r'<set-header\s+name="Authorization"\s+exists-action="delete"\s*/>',
+                name,
+            )
+
+    def test_pii_policy_treats_200_response_errors_or_missing_result_as_unavailable(self) -> None:
+        # The Azure AI Language PII Analyze Text 200 response contains
+        # "kind", "results.documents" and "results.errors". A 200 response
+        # whose "errors" array is missing/non-empty, whose "kind" isn't the
+        # expected PII recognition result kind, or that has no matching
+        # "request" document with an "entities" array is NOT a clean/available
+        # result -- it must fail closed (503), not fall through as if PII
+        # inspection succeeded and found nothing.
+        source = (ROOT / "policies" / "common-pii-inbound.xml").read_text(encoding="utf-8")
+
+        unavailable_match = re.search(
+            r'set-status code="503" reason="PII inspection unavailable"',
+            source,
+        )
+        self.assertIsNotNone(unavailable_match, "must retain the 503 unavailable response")
+
+        entities_match = re.search(
+            r'set-status code="400" reason="Sensitive input detected"',
+            source,
+        )
+        self.assertIsNotNone(entities_match, "must retain a distinct 400 PII-detected response")
+
+        # There must be two *distinct* <choose> conditions guarding these two
+        # responses (not one condition reused for both), and the 503 guard
+        # must inspect results/errors/kind/document-id, not only StatusCode.
+        choose_blocks = re.findall(r"<choose>.*?</choose>", source, re.DOTALL)
+        self.assertGreaterEqual(len(choose_blocks), 2, "expected separate 503 and 400 choose blocks")
+
+        unavailable_block = next(
+            (block for block in choose_blocks if "PII inspection unavailable" in block),
+            None,
+        )
+        self.assertIsNotNone(unavailable_block)
+
+        entities_block = next(
+            (block for block in choose_blocks if "Sensitive input detected" in block),
+            None,
+        )
+        self.assertIsNotNone(entities_block)
+        self.assertNotEqual(
+            unavailable_block, entities_block,
+            "503-unavailable and 400-detected must be separate choose conditions",
+        )
+
+        # The 503 guard must fail closed on: non-200/missing response (already
+        # covered), unexpected/missing "kind", missing/non-empty
+        # "results"/"errors", a missing "request" document, or that document
+        # lacking an "entities" array -- i.e. it must reference all of these,
+        # not just StatusCode.
+        import html
+
+        decoded_unavailable_block = html.unescape(unavailable_block)
+        self.assertIn("StatusCode", decoded_unavailable_block)
+        self.assertIn('"kind"', decoded_unavailable_block)
+        self.assertIn('"errors"', decoded_unavailable_block)
+        self.assertIn('"documents"', decoded_unavailable_block)
+        self.assertIn('"entities"', decoded_unavailable_block)
+        self.assertIn('"request"', decoded_unavailable_block)
+
     def test_mcp_metadata_policy_advertises_the_compatible_authorization_server(self) -> None:
         source = (ROOT / "policies" / "mcp-metadata.xml").read_text(encoding="utf-8")
         self.assertIn('{{ai-hub-mcp-resource-audience}}', source)

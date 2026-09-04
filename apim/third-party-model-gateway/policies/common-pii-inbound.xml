@@ -42,7 +42,53 @@
       var response = context.Variables.ContainsKey(&quot;ai-hub-pii-response&quot;)
         ? (IResponse)context.Variables[&quot;ai-hub-pii-response&quot;]
         : null;
-      return response == null || response.StatusCode != 200;
+      if (response == null || response.StatusCode != 200)
+      {
+        return true;
+      }
+      JObject result;
+      try
+      {
+        result = response.Body.As&lt;JObject&gt;(preserveContent: true);
+      }
+      catch
+      {
+        return true;
+      }
+      if (result == null)
+      {
+        return true;
+      }
+      if ((string)result[&quot;kind&quot;] != &quot;PiiEntityRecognitionResults&quot;)
+      {
+        return true;
+      }
+      var results = result[&quot;results&quot;] as JObject;
+      if (results == null)
+      {
+        return true;
+      }
+      var errors = results[&quot;errors&quot;] as JArray;
+      if (errors == null || errors.Count > 0)
+      {
+        return true;
+      }
+      var documents = results[&quot;documents&quot;] as JArray;
+      if (documents == null)
+      {
+        return true;
+      }
+      var requestDocument = documents.FirstOrDefault(document =>
+        (string)document[&quot;id&quot;] == &quot;request&quot;);
+      if (requestDocument == null)
+      {
+        return true;
+      }
+      if (!(requestDocument[&quot;entities&quot;] is JArray))
+      {
+        return true;
+      }
+      return false;
     }">
       <return-response>
         <set-status code="503" reason="PII inspection unavailable" />
@@ -54,8 +100,10 @@
       var response = (IResponse)context.Variables[&quot;ai-hub-pii-response&quot;];
       var result = response.Body.As&lt;JObject&gt;();
       var documents = result[&quot;results&quot;]?[&quot;documents&quot;] as JArray;
-      return documents != null &amp;&amp; documents.Any(document =>
-        document[&quot;entities&quot;] is JArray entities &amp;&amp; entities.Count > 0);
+      var requestDocument = documents?.FirstOrDefault(document =>
+        (string)document[&quot;id&quot;] == &quot;request&quot;);
+      return requestDocument != null &amp;&amp;
+        requestDocument[&quot;entities&quot;] is JArray entities &amp;&amp; entities.Count > 0;
     }">
       <return-response>
         <set-status code="400" reason="Sensitive input detected" />

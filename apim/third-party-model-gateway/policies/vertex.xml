@@ -4,6 +4,7 @@
     <include-fragment fragment-id="ai-hub-client-auth" />
     <include-fragment fragment-id="ai-hub-rate-limit" />
     <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-header name="Authorization" exists-action="delete" />
     <set-backend-service backend-id="ai-hub-vertex-broker" />
   </inbound>
   <backend>

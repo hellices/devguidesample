@@ -4,6 +4,7 @@
     <include-fragment fragment-id="ai-hub-client-auth" />
     <include-fragment fragment-id="ai-hub-rate-limit" />
     <include-fragment fragment-id="ai-hub-pii-inbound" />
+    <set-header name="Authorization" exists-action="delete" />
     <set-header name="x-goog-api-key" exists-action="override">
       <value>{{ai-hub-gemini-api-key}}</value>
     </set-header>
