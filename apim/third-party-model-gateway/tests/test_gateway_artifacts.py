@@ -180,13 +180,17 @@ class GatewayArtifactTests(unittest.TestCase):
         # produce SignatureDoesNotMatch on every request.
         source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
 
-        self.assertIn('context.Request.MatchedParameters["modelId"]', source)
+        # The path is now computed in a set-variable, whose value is an XML
+        # *attribute* (set-variable has no <value> child element), so any
+        # embedded C# string-literal quotes must be the &quot; entity rather
+        # than a literal ", or the policy document itself is not well-formed.
+        self.assertIn('context.Request.MatchedParameters[&quot;modelId&quot;]', source)
         self.assertIn(
             'System.Uri.EscapeDataString(', source,
         )
         self.assertRegex(
             source,
-            r'(?i)"/model/"\s*\+\s*[^\n;]*modelid[^\n;]*\+\s*"/converse"',
+            r'(?i)&quot;/model/&quot;\s*\+\s*[^\n;]*modelid[^\n;]*\+\s*&quot;/converse&quot;',
         )
         self.assertNotIn("var path = context.Request.Url.Path;", source)
 
@@ -217,6 +221,156 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertNotIn(
             'headers.GetValueOrDefault("Content-Type", "").ToLowerInvariant()',
             source,
+        )
+
+    def test_bedrock_policy_rewrites_uri_from_the_same_variables_used_to_sign(self) -> None:
+        # The backend actually receives whatever rewrite-uri produces, so the
+        # signed canonicalRequest must be built from that *exact* escaped path
+        # and canonical query representation -- not an independently
+        # recomputed one -- or the signature can silently diverge from the
+        # forwarded request. copy-unmatched-params must be explicitly "false"
+        # so APIM never appends leftover original query parameters that were
+        # not folded into the canonical query used for signing.
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        rewrite_match = re.search(
+            r'<rewrite-uri\s+template="(?P<body>@[\{\(].*?)"\s+copy-unmatched-params="false"\s*/>',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(
+            rewrite_match,
+            'bedrock.xml must declare a whole-expression <rewrite-uri> with copy-unmatched-params="false"',
+        )
+        rewrite_body = rewrite_match.group("body")
+
+        # rewrite-uri's "template" is an XML attribute, so any embedded
+        # context.Variables[...] string-literal key must use the &quot;
+        # entity, not a literal double quote.
+        variable_keys = set(re.findall(r'context\.Variables\[&quot;([\w-]+)&quot;\]', rewrite_body))
+        self.assertGreaterEqual(
+            len(variable_keys), 2,
+            "rewrite-uri must read the canonical path and canonical query from named context.Variables entries",
+        )
+
+        auth_header_match = re.search(
+            r'<set-header name="Authorization" exists-action="override">\s*<value>(?P<body>.*?)</value>\s*</set-header>',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(auth_header_match, "bedrock.xml must still set the Authorization header")
+        auth_body = auth_header_match.group("body")
+
+        for key in variable_keys:
+            self.assertIn(
+                f'context.Variables["{key}"]',
+                auth_body,
+                f"canonicalRequest must reuse the same '{key}' variable that rewrite-uri forwards, not recompute it",
+            )
+
+    def test_bedrock_policy_orders_canonical_query_by_encoded_key_then_value(self) -> None:
+        # AWS SigV4 canonical query construction sorts by encoded name, then by
+        # encoded value (for repeated names) -- both compared independently.
+        # Pre-joining "key=value" and then sorting that combined string is not
+        # equivalent (e.g. it collapses the delimiter into the comparison and
+        # cannot correctly place multiple encoded values for the same key), so
+        # the ordering must be expressed as ThenBy(...) over discrete
+        # key/value selectors.
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        self.assertNotRegex(
+            source,
+            r'encodedParams\.Add\(encodedKey \+ "=" \+ encodedValue\)',
+            "query pairs must not be pre-joined into a single string before sorting",
+        )
+        # "=>" appears inside an XML *attribute* value here (set-variable has
+        # no <value> child element), so the lambda arrow must be written as
+        # the "&gt;" entity, not a literal ">".
+        self.assertRegex(
+            source,
+            r'\.OrderBy\(\s*\w+\s*=&gt;\s*\w+\.Key\b[\s\S]*?\)\s*\n?\s*\.ThenBy\(\s*\w+\s*=&gt;\s*\w+\.Value\b',
+        )
+
+    def test_bedrock_policy_normalizes_and_combines_repeated_amz_header_values(self) -> None:
+        # SigV4 canonical header values must have internal whitespace runs
+        # collapsed to a single space (leading/trailing trimmed), and every
+        # value of a repeated header must be combined into one comma-joined
+        # canonical value -- reading only the first value silently drops
+        # signed data that the backend still receives.
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        self.assertRegex(
+            source,
+            r'Regex\.Replace\([^,]+,\s*@"\\s\+"\s*,\s*" "\)',
+            "signed header values must collapse internal whitespace via Regex.Replace(..., @\"\\s+\", \" \")",
+        )
+        self.assertNotIn(
+            'header.Value.FirstOrDefault()',
+            source,
+            "every repeated x-amz-* header value must be combined, not just the first",
+        )
+        self.assertRegex(
+            source,
+            r'string\.Join\(\s*","\s*,\s*\w+\s*\)',
+            "repeated x-amz-* header values must be comma-joined into one canonical value",
+        )
+
+    def test_bedrock_policy_derives_the_payload_hash_once_from_raw_body_bytes(self) -> None:
+        # X-Amz-Content-Sha256 and the Authorization signature must hash the
+        # exact same raw request bytes, computed once from
+        # context.Request.Body.As<byte[]>(preserveContent: true) -- not by
+        # re-encoding a string variable, which can diverge from the raw bytes
+        # actually forwarded to the backend (e.g. via encoding normalization).
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        body_as_bytes_matches = re.findall(
+            r'context\.Request\.Body\.As&lt;byte\[\]&gt;\(preserveContent:\s*true\)',
+            source,
+        )
+        self.assertEqual(
+            1, len(body_as_bytes_matches),
+            "the raw request body bytes must be read exactly once and reused for both the header and the signature",
+        )
+
+        hash_variable_match = re.search(
+            r'<set-variable name="([\w-]+)" value="@\{[^"]*?context\.Request\.Body\.As&lt;byte\[\]&gt;',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(
+            hash_variable_match,
+            "the payload hash must be computed into its own context variable before signing",
+        )
+        hash_variable_name = hash_variable_match.group(1)
+
+        content_sha_header_match = re.search(
+            r'<set-header name="X-Amz-Content-Sha256" exists-action="override">\s*<value>(?P<body>.*?)</value>\s*</set-header>',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(content_sha_header_match)
+        self.assertIn(
+            f'context.Variables["{hash_variable_name}"]',
+            content_sha_header_match.group("body"),
+            "X-Amz-Content-Sha256 must reuse the shared payload-hash variable",
+        )
+
+        auth_header_match = re.search(
+            r'<set-header name="Authorization" exists-action="override">\s*<value>(?P<body>.*?)</value>\s*</set-header>',
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(auth_header_match)
+        auth_body = auth_header_match.group("body")
+        self.assertIn(
+            f'context.Variables["{hash_variable_name}"]',
+            auth_body,
+            "the Authorization signature must reuse the shared payload-hash variable",
+        )
+        self.assertNotIn(
+            'System.Text.Encoding.UTF8.GetBytes(body)',
+            auth_body,
+            "the signature must not re-encode a string body instead of hashing the raw bytes",
         )
 
     def test_common_auth_requires_entra_issuer_audience_and_scope(self) -> None:
