@@ -38,7 +38,8 @@
 
 - **Documented fact**: Gemini Developer API의 콘텐츠 생성 endpoint는
   `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`
-  형태이며, API key는 `x-goog-api-key` 헤더로 전달한다.
+  형태이며, API key는 `x-goog-api-key` 헤더로 전달한다
+  ([Gemini API reference: models.generateContent](https://ai.google.dev/api/rest/v1beta/models.generateContent)).
 - 이 구현의 `policies/gemini.xml`은 다음을 수행한다.
   1. 공통 fragment(`ai-hub-client-auth`, `ai-hub-rate-limit`,
      `ai-hub-pii-inbound`)를 순서대로 적용해 호출자 Entra JWT를 검증하고,
@@ -104,7 +105,7 @@
 - **네트워크(Documented fact)**: AWS는 Amazon Bedrock에 대해
   [Interface VPC endpoint(AWS PrivateLink)](https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html)를
   공식 지원한다. VPC 외부(Azure)에서 이 사설 endpoint의 DNS 결과를
-  사용하려면 [Route 53 Resolver inbound endpoint](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-forwarding-outbound-queries.html)를
+  사용하려면 [Route 53 Resolver inbound endpoint](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-forwarding-inbound-queries.html)를
   AWS 측에 배치하고, Azure DNS Private Resolver 또는 사내 DNS에서 Bedrock
   도메인을 이 inbound endpoint로 조건부 전달(conditional forwarding)해야
   하며, VPN/전용 연결 구간과 security group에서 TCP/UDP 53 트래픽이
@@ -112,12 +113,13 @@
 
 ## 5. Vertex AI 사설 브로커, WIF 근거, HA VPN/BGP/PSC/private DNS
 
-- **Design recommendation(구현 선택)**: `infra/main.bicep`의 `vertex.xml`
-  정책은 공용 Vertex AI(`aiplatform.googleapis.com`)를 직접 호출하지 않고,
-  **사설 Vertex 브로커**(`ai-hub-vertex-broker` backend, `vertexBrokerUrl`)만
-  호출한다. Bicep은 `vertexBrokerUrl`이 공용 Vertex 호스트를 가리키면
-  `fail()`로 배포 자체를 중단시켜 이 경계를 강제한다. **이 브로커가
-  Azure managed identity와 Google WIF를 모두 소유**하며, APIM 자체는 GCP
+- **Design recommendation(구현 선택)**: `infra/main.bicep`이 참조하는 policy
+  파일 `policies/vertex.xml`은 공용 Vertex AI(`aiplatform.googleapis.com`)를
+  직접 호출하지 않고, **사설 Vertex 브로커**(`ai-hub-vertex-broker` backend,
+  `vertexBrokerUrl`)만 호출한다. Bicep은 `vertexBrokerUrl`이 공용 Vertex
+  호스트를 가리키면 `fail()`로 배포 자체를 중단시켜 이 경계를 강제한다.
+  **이 브로커가 Azure managed identity와 Google WIF를 모두 소유**하며, APIM
+  자체는 GCP
   자격증명이나 토큰 교환 로직을 갖지 않는다. 즉 "production APIM 단독
   토큰 교환"은 이 참조 구현이 채택한 방식이 **아니며**, 토큰 교환은 항상
   브로커 내부에서 수행된다.
@@ -219,17 +221,20 @@ recognition API(`/language/:analyze-text`)를 `send-request`로 호출한다.
   `{{ai-hub-mcp-resource-audience}}`와 scope `mcp.invoke`를 검증한다.
 - `policies/mcp-metadata.xml`은 `.well-known/oauth-protected-resource/{apiPathPrefix}/mcp`
   경로에서 `resource`, `authorization_servers`, `scopes_supported`,
-  `bearer_methods_supported`를 담은 RFC 9728 Protected Resource Metadata
-  JSON을 반환한다.
+  `bearer_methods_supported`를 담은 [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html)
+  Protected Resource Metadata JSON을 반환한다.
 - **Documented fact**: 이 구성은 Entra v2 endpoint를 직접 검증하는
   `validate-azure-ad-token` 정책이 아니라 **일반 OIDC discovery**를
   사용하므로, `{{ai-hub-mcp-openid-config}}`가 가리키는 대상이 실제로는
   Entra ID를 upstream identity provider로 사용하되 RFC 8707 `resource`
   파라미터, MCP discovery, client registration을 처리할 수 있는 **MCP 호환
-  Authorization Server**여야 한다. Microsoft Entra v2 authorization
-  endpoint 자체는 `resource` 파라미터를 지원 파라미터로 정의하지 않으므로,
-  Entra v2를 직접 이 역할에 사용하면 [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html) 기반의
-  최신 MCP Authorization 사양을 완전히 준수하지 못한다.
+  Authorization Server**여야 한다. [MCP Authorization
+  사양](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)은
+  authorization request에 [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)의
+  `resource` 파라미터를 사용하도록 요구하지만, Microsoft Entra v2
+  authorization endpoint 자체는 `resource` 파라미터를 지원 파라미터로
+  정의하지 않으므로, Entra v2를 직접 이 역할에 사용하면 이 요구사항을
+  완전히 준수하지 못한다.
 - **Design recommendation**: 조직이 통제하는 MCP client와 server만
   사용하는 폐쇄형 환경에서는 이 저장소의 구성처럼 **Entra scope-only
   호환 프로파일**(사내 Entra App Registration + `scp` claim 검증)을 사용할
@@ -259,14 +264,27 @@ recognition API(`/language/:analyze-text`)를 `send-request`로 호출한다.
 - [Access Google APIs through Private Service Connect endpoints](https://cloud.google.com/vpc/docs/configure-private-service-connect-apis)
 - [HA VPN overview](https://cloud.google.com/network-connectivity/docs/vpn/concepts/overview)
 
+### Google AI / Gemini
+
+- [Gemini API reference: models.generateContent](https://ai.google.dev/api/rest/v1beta/models.generateContent)
+
 ### AWS
 
 - [Amazon Bedrock interface VPC endpoints (AWS PrivateLink)](https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html)
-- [Route 53 Resolver: forwarding outbound DNS queries to your network](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-forwarding-outbound-queries.html)
+- [Route 53 Resolver: forwarding inbound DNS queries to your VPC](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-forwarding-inbound-queries.html)
 
 ### Anthropic
 
 - [Messages API](https://docs.anthropic.com/en/api/messages)
+
+### Model Context Protocol
+
+- [MCP Specification: Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)
+
+### IETF
+
+- [RFC 8707: Resource Indicators for OAuth 2.0](https://www.rfc-editor.org/rfc/rfc8707.html)
+- [RFC 9728: OAuth 2.0 Protected Resource Metadata](https://www.rfc-editor.org/rfc/rfc9728.html)
 
 ### IETF
 

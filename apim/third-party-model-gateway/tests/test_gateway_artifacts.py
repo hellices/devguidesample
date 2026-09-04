@@ -650,6 +650,85 @@ class GatewayArtifactTests(unittest.TestCase):
         self.assertIn("Unified Model API", readme)
         self.assertIn("preview", readme.lower())
 
+    def test_readme_correctly_scopes_common_fragment_bypass_to_mcp_only(self) -> None:
+        # policies/bedrock.xml DOES include the three common fragments (see
+        # test_provider_policies_include_common_security_fragments); only the
+        # MCP policies skip them in favor of their own generic OIDC handling.
+        # The README must not claim Bedrock bypasses the common fragment.
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        common_fragment_section = readme[readme.index("공통 policy fragment") :]
+        common_fragment_section = common_fragment_section[
+            : common_fragment_section.index("## 3")
+            if "## 3" in common_fragment_section
+            else len(common_fragment_section)
+        ]
+        self.assertNotRegex(
+            common_fragment_section,
+            r"MCP\s*(?:와|과|,)\s*Bedrock\s*(?:정책은|는)?\s*이\s*\n?\s*fragment\s*대신",
+            "README must not say Bedrock bypasses the common fragment",
+        )
+        self.assertIn("MCP", common_fragment_section)
+        self.assertIn("일반 OIDC", common_fragment_section)
+
+    def test_route53_inbound_endpoint_url_used_not_outbound(self) -> None:
+        inbound_url = (
+            "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/"
+            "resolver-forwarding-inbound-queries.html"
+        )
+        outbound_url = (
+            "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/"
+            "resolver-forwarding-outbound-queries.html"
+        )
+        for path in (
+            ROOT / "README.md",
+            ROOT / "third-party-model-integration.md",
+        ):
+            source = path.read_text(encoding="utf-8")
+            self.assertIn(inbound_url, source, f"{path.name} must cite the inbound endpoint doc")
+            self.assertNotIn(
+                outbound_url, source, f"{path.name} must not cite the outbound endpoint doc"
+            )
+
+    def test_guide_cites_gemini_generatecontent_rest_reference(self) -> None:
+        guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
+        gemini_url = "https://ai.google.dev/api/rest/v1beta/models.generateContent"
+        self.assertIn(gemini_url, guide, "guide body must cite the official Gemini REST reference")
+        source_list = guide[guide.index("## 9. 공식 참고 자료") :]
+        self.assertIn(
+            gemini_url,
+            source_list,
+            "formal source list must include the Gemini generateContent reference",
+        )
+        self.assertRegex(source_list, r"###\s*Google AI\b|###\s*Gemini\b")
+
+    def test_guide_cites_mcp_authorization_and_rfc8707_alongside_rfc9728(self) -> None:
+        guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
+        mcp_auth_url = "https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization"
+        rfc8707_url = "https://www.rfc-editor.org/rfc/rfc8707.html"
+        rfc9728_url = "https://www.rfc-editor.org/rfc/rfc9728.html"
+
+        section8 = guide[
+            guide.index("## 8. MCP 호환성과 authorization-server 경계") : guide.index(
+                "## 9. 공식 참고 자료"
+            )
+        ]
+        self.assertIn(mcp_auth_url, section8, "§8 must cite the MCP authorization specification")
+        self.assertIn(rfc8707_url, section8, "§8 must cite RFC 8707 for the resource parameter")
+        self.assertIn(rfc9728_url, section8, "§8 must retain RFC 9728 for protected-resource metadata")
+
+        source_list = guide[guide.index("## 9. 공식 참고 자료") :]
+        for url in (mcp_auth_url, rfc8707_url, rfc9728_url):
+            self.assertIn(url, source_list, f"formal source list must include {url}")
+
+    def test_guide_identifies_vertex_policy_as_bicep_referenced_policy_file(self) -> None:
+        guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
+        self.assertNotIn("`infra/main.bicep`의 `vertex.xml`", guide)
+        self.assertRegex(
+            guide,
+            r"`policies/vertex\.xml`.{0,40}(?:정책은|은|는)",
+        )
+        self.assertIn("`infra/main.bicep`", guide)
+
     def test_gcp_wif_script_uses_broker_identity_inputs_without_secrets(self) -> None:
         source = (ROOT / "scripts" / "configure-gcp-wif.sh").read_text(encoding="utf-8")
         self.assertIn("gcloud iam workload-identity-pools create", source)

@@ -58,8 +58,10 @@ Bicep/policy 예제다. 상위 아키텍처 검토는
 - [`policies/common-rate-limit.xml`](./policies/common-rate-limit.xml) —
   검증된 JWT `oid` claim 기준 per-caller rate limit.
 - [`policies/common-pii-inbound.xml`](./policies/common-pii-inbound.xml) —
-  inbound-only Azure Language PII 검사(§7 참고). MCP와 Bedrock 정책은 이
-  fragment 대신 각자의 caller-authorization 처리를 별도로 수행한다(§8, §9).
+  inbound-only Azure Language PII 검사(§9의 "PII" 항목 참고). Bedrock 정책
+  (`policies/bedrock.xml`)은 이 세 fragment를 다른 provider와 동일하게 모두
+  포함하며, **MCP 정책만** 이 fragment 대신 별도의 일반 OIDC
+  caller-authorization 처리를 수행한다(§9의 "MCP" 항목 참고).
 
 **Unified Model API 미채택 이유**: APIM
 [Unified Model API](https://learn.microsoft.com/en-us/azure/api-management/unified-model-api)는
@@ -140,7 +142,7 @@ Vertex 각각의 **provider-native passthrough**(공식 API 스키마를 그대�
   호출한다([Amazon Bedrock interface VPC endpoints](https://docs.aws.amazon.com/bedrock/latest/userguide/vpc-interface-endpoints.html)).
 - **Route 53 Resolver inbound endpoint**: AWS VPC 밖(Azure)에서 오는 DNS
   질의를 받아 VPC 내부 private DNS로 응답하도록 inbound endpoint를 배치한다
-  ([Forwarding outbound DNS queries to your network](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-forwarding-outbound-queries.html)).
+  ([Route 53 Resolver: forwarding inbound DNS queries to your VPC](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resolver-forwarding-inbound-queries.html)).
 - **Azure/사내 DNS 조건부 전달(conditional forwarding)**: Azure DNS Private
   Resolver 또는 사내 DNS에서 Bedrock 도메인을 Route 53 Resolver inbound
   endpoint로 조건부 전달하도록 구성한다.
