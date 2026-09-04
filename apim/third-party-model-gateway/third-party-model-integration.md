@@ -38,8 +38,10 @@
 
 - **Documented fact**: Gemini Developer API의 콘텐츠 생성 endpoint는
   `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`
-  형태이며, API key는 `x-goog-api-key` 헤더로 전달한다
+  형태이다
   ([Gemini API reference: models.generateContent](https://ai.google.dev/api/generate-content#v1beta.models.generateContent)).
+  API key는 `x-goog-api-key` 헤더로 전달한다
+  ([Using Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key)).
 - 이 구현의 `policies/gemini.xml`은 다음을 수행한다.
   1. 공통 fragment(`ai-hub-client-auth`, `ai-hub-rate-limit`,
      `ai-hub-pii-inbound`)를 순서대로 적용해 호출자 Entra JWT를 검증하고,
@@ -267,6 +269,7 @@ recognition API(`/language/:analyze-text`)를 `send-request`로 호출한다.
 ### Google AI / Gemini
 
 - [Gemini API reference: models.generateContent](https://ai.google.dev/api/generate-content#v1beta.models.generateContent)
+- [Using Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key)
 
 ### AWS
 

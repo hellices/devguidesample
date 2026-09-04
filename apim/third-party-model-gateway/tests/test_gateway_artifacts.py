@@ -4,11 +4,21 @@ import html
 import json
 import re
 import subprocess
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parent.parent
+
+# A deliverable outside this project's own tree that documents/links this
+# gateway and must therefore be held to the same no-plaintext-credential
+# standard. Referenced by relative path from REPO_ROOT so the scan stays
+# scoped to a single, explicitly named file rather than growing to cover
+# unrelated repository content.
+LINKED_DELIVERABLE_RELATIVE_PATH = "aifoundry/ai-hub-llm-gateway-scaling-review.md"
 OPENAPI_FILES = (
     "gemini.json",
     "anthropic.json",
@@ -35,27 +45,58 @@ POLICY_FILES = (
 # because the file list comes from `git ls-files`, not filesystem globbing.
 CREDENTIAL_SCAN_EXTENSIONS = (".bicep", ".bicepparam", ".xml", ".json", ".md", ".sh")
 
-# Matches an assignment of a credential-shaped identifier (api_key, access_key,
-# secret_key, private_key - snake_case, kebab-case, or camelCase, optionally
-# JSON-quoted on the left-hand side) to a quoted literal value. Deliberately
-# requires a real `key`/`Key` token so it does not match `secretIdentifier`
-# parameter names (no "key" substring follows "secret") and does not match
-# identifiers like `geminiApiKeySecretIdentifier` (no word boundary after
-# "Key"). Only the right-hand literal is inspected for placeholder shape, so
-# header-name literals such as `name="x-goog-api-key"` are never flagged
-# because the left-hand key there is `name`, not a credential key.
+# APIM header names (case-insensitive) that carry a third-party provider
+# credential when set from a policy `<value>`. Any literal (non-named-value,
+# non-policy-expression) content found there is a plaintext credential leak.
+CREDENTIAL_HEADER_NAMES = frozenset(
+    {"x-goog-api-key", "x-api-key", "ocp-apim-subscription-key"}
+)
+
+# The credential-shaped identifier token (api key, access key, secret key,
+# private key) in snake_case, kebab-case, camelCase, or SCREAMING_SNAKE_CASE,
+# optionally prefixed by a provider name joined with `_`/`-` (e.g.
+# `GEMINI_API_KEY`, `aws-secret-access-key`). Deliberately requires a real
+# `key`/`Key` token immediately after `api`/`access`/`secret`/`private` so it
+# does not match `secretIdentifier` parameter names (no "key" substring
+# follows "secret").
+_CREDENTIAL_KEY_TOKEN = r"(?:api|access|secret|private)[_-]?key"
+
+# Matches an assignment of a credential-shaped identifier to a literal value,
+# quoted or unquoted (shell `KEY=value`, YAML `KEY: value`, JSON
+# `"KEY": "value"`, Bicep `key: 'value'`, ...).
+#
+# The leading `(?<![A-Za-z0-9])` allows the key token to be preceded by `_`
+# or `-` (so prefixed variants like `GEMINI_API_KEY` or `x-goog-api-key`
+# still match) while refusing to start mid-identifier when immediately
+# preceded by another letter/digit (so `geminiApiKeySecretIdentifier` is not
+# treated as starting a fresh match at `ApiKey`).
+#
+# No trailing word-boundary assertion is needed after the key token: the
+# very next thing required is an (optional) closing quote followed by `:` or
+# `=`. That structural requirement alone is what excludes header-name labels
+# such as `name="x-goog-api-key"` (the next attribute is `exists-action=...`,
+# not immediately `:`/`=` after the closing quote) and `secretIdentifier`
+# parameter declarations/references such as `geminiApiKeySecretIdentifier`
+# (more identifier letters follow "Key" directly, not `:`/`=`), without
+# needing a separate lookahead.
+#
+# The value itself is either a quoted string (group 1 = quote char, group 2 =
+# contents) or an unquoted run of non-whitespace characters (group 3), which
+# covers shell/YAML/JSON-style plaintext assignments the quote-only pattern
+# used to miss.
 CREDENTIAL_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(?:api|access|secret|private)[_-]?key\b[\"']?\s*[:=]\s*"
-    r"([\"'])((?:(?!\1).)*)\1"
+    rf"(?i)(?<![A-Za-z0-9]){_CREDENTIAL_KEY_TOKEN}[\"']?\s*[:=]\s*"
+    r"(?:([\"'])((?:(?!\1).)*)\1|(\S+))"
 )
 
 
 def _is_placeholder_credential_value(value: str) -> bool:
     """Returns True when a matched literal is an allowed placeholder shape.
 
-    Allowed: empty strings, APIM `{{named-value}}` references, `<...>`
-    documentation placeholders, and shell/`.env`-style environment-variable
-    expansion (`$VAR`, `${VAR}`, `%VAR%`).
+    Allowed: empty strings, APIM `{{named-value}}` references, APIM policy
+    expressions (`@(...)`), `<...>` documentation placeholders, and
+    shell/`.env`-style environment-variable expansion (`$VAR`, `${VAR}`,
+    `%VAR%`).
     """
     stripped = value.strip()
     if stripped == "":
@@ -64,11 +105,149 @@ def _is_placeholder_credential_value(value: str) -> bool:
         return True
     if stripped.startswith("<") and stripped.endswith(">"):
         return True
+    if stripped.startswith("@(") and stripped.endswith(")"):
+        return True
     if re.fullmatch(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?", stripped):
         return True
     if re.fullmatch(r"%[A-Za-z_][A-Za-z0-9_]*%", stripped):
         return True
     return False
+
+
+def _strip_unquoted_trailing_punctuation(value: str) -> str:
+    """Strips trailing statement punctuation from an unquoted match (e.g.
+    the `,`/`;`/`)` that ends a shell/YAML statement) so it isn't mistaken
+    for part of the credential literal itself. Deliberately excludes `}`/`]`
+    so an APIM named-value placeholder (`{{...}}`) is left intact.
+    """
+    return value.rstrip(",;)")
+
+
+def _iter_assignment_violations(label: str, text: str) -> list[str]:
+    """Finds plaintext credential-shaped assignments, line by line.
+
+    `label` is used only for violation reporting (typically a path).
+    """
+    violations: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        for match in CREDENTIAL_ASSIGNMENT_RE.finditer(line):
+            if match.group(2) is not None:
+                literal_value = match.group(2)
+            else:
+                literal_value = _strip_unquoted_trailing_punctuation(match.group(3))
+            if not _is_placeholder_credential_value(literal_value):
+                violations.append(f"{label}:{line_number}: {line.strip()}")
+    return violations
+
+
+def _iter_xml_header_violations(label: str, suffix: str, text: str) -> list[str]:
+    """Parses APIM policy XML and flags plaintext content set on a known
+    credential-bearing header (`x-goog-api-key`, `x-api-key`,
+    `Ocp-Apim-Subscription-Key`) via `<set-header>...<value>...</value>`.
+
+    APIM named values (`{{...}}`) and inline policy expressions (`@(...)`)
+    are permitted; any other literal `<value>` content is a plaintext
+    credential leak. Malformed XML raises (error-loud) rather than being
+    silently skipped. `label` is used only for violation reporting.
+    """
+    if suffix != ".xml":
+        return []
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as exc:
+        raise ValueError(
+            f"{label}: could not parse XML while scanning for credential "
+            f"headers: {exc}"
+        ) from exc
+
+    violations: list[str] = []
+    for header in root.iter("set-header"):
+        name = header.get("name", "")
+        if name.lower() not in CREDENTIAL_HEADER_NAMES:
+            continue
+        value_element = header.find("value")
+        if value_element is None or value_element.text is None:
+            continue
+        value = value_element.text
+        if _is_placeholder_credential_value(value):
+            continue
+        needle = f"<value>{value}</value>"
+        offset = text.find(needle)
+        line_number = text.count("\n", 0, offset) + 1 if offset != -1 else 0
+        violations.append(
+            f'{label}:{line_number}: <set-header name="{name}">'
+            f"<value>{value}</value></set-header>"
+        )
+    return violations
+
+
+def _scan_paths_for_credential_violations(
+    paths: Iterable[Path], *, display_root: Path | None = None
+) -> list[str]:
+    """Scans the given files for plaintext credential literals.
+
+    Deliberately does not catch/skip per-file errors: an unreadable file or
+    (for `.xml` files) invalid XML in scope is a scan failure, not a silent
+    pass, so `path.read_text` / `ET.fromstring` errors propagate.
+
+    When `display_root` is given, violation messages report paths relative
+    to it (falling back to the path as-is when it is not a descendant, e.g.
+    a fixture living outside the repository).
+    """
+    violations: list[str] = []
+    for path in paths:
+        if display_root is not None:
+            try:
+                label = str(path.relative_to(display_root))
+            except ValueError:
+                label = str(path)
+        else:
+            label = str(path)
+        text = path.read_text(encoding="utf-8")
+        violations.extend(_iter_assignment_violations(label, text))
+        violations.extend(_iter_xml_header_violations(label, path.suffix, text))
+    return violations
+
+
+def _git_tracked_scan_targets(root: Path, extensions: tuple[str, ...]) -> list[Path]:
+    """Lists git-tracked files under `root` with one of `extensions`.
+
+    Running `git ls-files` with `cwd=root` (no pathspec) scopes the listing
+    to files reachable from `root`, so unrelated repository paths are never
+    included, and files declared in `.gitignore` (untracked) are never
+    considered since the listing only ever contains tracked paths.
+    """
+    listing = subprocess.run(
+        ["git", "ls-files"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [
+        root / relative_path
+        for relative_path in listing.stdout.splitlines()
+        if Path(relative_path).suffix in extensions
+    ]
+
+
+def _require_tracked_file(repo_root: Path, relative_path: str) -> Path:
+    """Resolves `relative_path` from `repo_root`, raising loudly if it is not
+    a git-tracked file, instead of silently omitting it from the scan.
+    """
+    listing = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", relative_path],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if listing.returncode != 0 or not listing.stdout.strip():
+        raise AssertionError(
+            f"expected {relative_path!r} to be a git-tracked file under "
+            f"{repo_root}, but `git ls-files --error-unmatch` failed "
+            f"(rc={listing.returncode}): {listing.stderr.strip()}"
+        )
+    return repo_root / relative_path
 
 
 class GatewayArtifactTests(unittest.TestCase):
@@ -743,6 +922,51 @@ class GatewayArtifactTests(unittest.TestCase):
         )
         self.assertRegex(source_list, r"###\s*Google AI\b|###\s*Gemini\b")
 
+    def test_guide_cites_distinct_gemini_api_key_header_reference(self) -> None:
+        # The generateContent reference documents endpoint behavior but does
+        # not document the x-goog-api-key header itself; a distinct, official
+        # Google citation must support that specific claim, both inline
+        # (next to where the header is introduced) and in the formal source
+        # list.
+        guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
+        generatecontent_url = (
+            "https://ai.google.dev/api/generate-content#v1beta.models.generateContent"
+        )
+        api_key_url = "https://ai.google.dev/gemini-api/docs/api-key"
+
+        self.assertNotEqual(generatecontent_url, api_key_url)
+        self.assertIn(
+            generatecontent_url, guide, "guide must retain the generateContent reference"
+        )
+        self.assertIn(
+            api_key_url, guide, "guide must cite the distinct Gemini API-key documentation"
+        )
+
+        # The API-key citation must sit near the first x-goog-api-key mention
+        # in the body, so it visibly supports that specific header claim
+        # rather than only appearing disconnected in the reference list.
+        header_claim_index = guide.index("x-goog-api-key")
+        nearby_window = guide[
+            max(0, header_claim_index - 500) : header_claim_index + 500
+        ]
+        self.assertIn(
+            api_key_url,
+            nearby_window,
+            "API-key citation must appear near the x-goog-api-key header claim",
+        )
+
+        source_list = guide[guide.index("## 9. 공식 참고 자료") :]
+        self.assertIn(
+            generatecontent_url,
+            source_list,
+            "formal source list must retain the generateContent reference",
+        )
+        self.assertIn(
+            api_key_url,
+            source_list,
+            "formal source list must include the distinct API-key reference",
+        )
+
     def test_guide_cites_mcp_authorization_and_rfc8707_alongside_rfc9728(self) -> None:
         guide = (ROOT / "third-party-model-integration.md").read_text(encoding="utf-8")
         mcp_auth_url = "https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization"
@@ -794,31 +1018,21 @@ class GatewayArtifactTests(unittest.TestCase):
         # Scope the scan to git-tracked files only, so ignored/session
         # artifacts (`.superpowers/`, `*.secrets.json`, `.env`, ...) declared
         # in .gitignore are never scanned, and only real committed reference
-        # material is checked.
-        listing = subprocess.run(
-            ["git", "ls-files"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
+        # material is checked. `git ls-files` run with cwd=ROOT is already
+        # scoped to this project's own tree (unrelated repository paths are
+        # never listed), plus the linked deliverable that documents this
+        # gateway from outside the project tree is added explicitly by its
+        # exact path (not a broad glob), and must itself be git-tracked or
+        # the scan fails loudly rather than silently omitting it.
+        tracked_files = _git_tracked_scan_targets(ROOT, CREDENTIAL_SCAN_EXTENSIONS)
+        tracked_files.append(
+            _require_tracked_file(REPO_ROOT, LINKED_DELIVERABLE_RELATIVE_PATH)
         )
-        tracked_files = [
-            ROOT / relative_path
-            for relative_path in listing.stdout.splitlines()
-            if Path(relative_path).suffix in CREDENTIAL_SCAN_EXTENSIONS
-        ]
         self.assertTrue(tracked_files, "expected at least one file to scan")
 
-        violations: list[str] = []
-        for path in tracked_files:
-            text = path.read_text(encoding="utf-8")
-            for line_number, line in enumerate(text.splitlines(), start=1):
-                for match in CREDENTIAL_ASSIGNMENT_RE.finditer(line):
-                    literal_value = match.group(2)
-                    if not _is_placeholder_credential_value(literal_value):
-                        violations.append(
-                            f"{path.relative_to(ROOT)}:{line_number}: {line.strip()}"
-                        )
+        violations = _scan_paths_for_credential_violations(
+            tracked_files, display_root=REPO_ROOT
+        )
 
         self.assertEqual(
             [],
@@ -827,6 +1041,156 @@ class GatewayArtifactTests(unittest.TestCase):
             "{{named-value}}, environment-variable expansion, or a "
             "documented <...> placeholder instead:\n" + "\n".join(violations),
         )
+
+    def test_credential_scan_targets_stay_within_gateway_project_and_linked_deliverable(
+        self,
+    ) -> None:
+        # Guards the scan's scope itself: every scanned path must live
+        # either inside the gateway project directory or be exactly the one
+        # linked deliverable -- never some other, unrelated repository path.
+        tracked_files = _git_tracked_scan_targets(ROOT, CREDENTIAL_SCAN_EXTENSIONS)
+        for path in tracked_files:
+            self.assertTrue(path.is_relative_to(ROOT), path)
+
+        linked = _require_tracked_file(REPO_ROOT, LINKED_DELIVERABLE_RELATIVE_PATH)
+        self.assertEqual(
+            REPO_ROOT / LINKED_DELIVERABLE_RELATIVE_PATH,
+            linked,
+        )
+        self.assertTrue(linked.is_file())
+
+    def test_credential_scanner_detects_unquoted_and_prefixed_key_assignments(
+        self,
+    ) -> None:
+        # RED before the scanner fix: the old regex required a quoted value
+        # and a strict `\b` before the key token, so it missed these
+        # practical, unquoted, provider-prefixed forms entirely.
+        cases = {
+            "shell-export.sh": 'export GEMINI_API_KEY=not-a-real-secret\n',
+            "env-style.sh": 'AWS_SECRET_ACCESS_KEY=not-a-real-secret\n',
+            "yaml-style.md": 'ANTHROPIC_API_KEY: not-a-real-secret\n',
+            "json-style.json": '{"GEMINI_API_KEY": "not-a-real-secret"}\n',
+        }
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            fixture_paths = []
+            for name, content in cases.items():
+                fixture_path = tmp_root / name
+                fixture_path.write_text(content, encoding="utf-8")
+                fixture_paths.append(fixture_path)
+
+            violations = _scan_paths_for_credential_violations(fixture_paths)
+
+        self.assertEqual(
+            len(cases),
+            len(violations),
+            "expected one violation per fixture:\n" + "\n".join(violations),
+        )
+        for name in cases:
+            self.assertTrue(
+                any(name in violation for violation in violations),
+                f"expected a violation for {name}:\n" + "\n".join(violations),
+            )
+
+    def test_credential_scanner_detects_plaintext_apim_credential_header_value(
+        self,
+    ) -> None:
+        # RED before the scanner fix: the old scanner was purely line-based
+        # text matching and never inspected APIM XML `<value>` content, so a
+        # real credential typed straight into a `set-header`'s `<value>`
+        # (bypassing the Key Vault-backed named value) went undetected.
+        fixture_xml = (
+            "<policies><inbound>"
+            '<set-header name="x-goog-api-key" exists-action="override">'
+            "<value>not-a-real-secret</value>"
+            "</set-header>"
+            "</inbound></policies>"
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_path = Path(tmp_dir) / "leaky-policy.xml"
+            fixture_path.write_text(fixture_xml, encoding="utf-8")
+            violations = _scan_paths_for_credential_violations([fixture_path])
+
+        self.assertEqual(1, len(violations), violations)
+        self.assertIn("x-goog-api-key", violations[0])
+        self.assertIn("not-a-real-secret", violations[0])
+
+    def test_credential_scanner_detects_plaintext_for_all_known_credential_headers(
+        self,
+    ) -> None:
+        header_names = ("x-goog-api-key", "x-api-key", "Ocp-Apim-Subscription-Key")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_paths = []
+            for index, header_name in enumerate(header_names):
+                fixture_xml = (
+                    "<policies><inbound>"
+                    f'<set-header name="{header_name}" exists-action="override">'
+                    "<value>not-a-real-secret</value>"
+                    "</set-header>"
+                    "</inbound></policies>"
+                )
+                fixture_path = Path(tmp_dir) / f"leaky-policy-{index}.xml"
+                fixture_path.write_text(fixture_xml, encoding="utf-8")
+                fixture_paths.append(fixture_path)
+
+            violations = _scan_paths_for_credential_violations(fixture_paths)
+
+        self.assertEqual(len(header_names), len(violations), violations)
+
+    def test_credential_scanner_permits_named_values_expansions_placeholders_and_prose(
+        self,
+    ) -> None:
+        # All of the below must NOT be flagged: a Key Vault-backed named
+        # value, shell/`.env` environment-variable expansion in both `$VAR`
+        # and `${VAR}` forms, a documented `<...>` placeholder, an empty
+        # value, an APIM policy expression in a credential header, the
+        # `secretIdentifier` declaration/reference pattern used throughout
+        # `main.bicep`, a header-name label with no assignment following it,
+        # and ordinary prose that merely mentions "API key".
+        allowed_lines = "\n".join(
+            [
+                "GEMINI_API_KEY={{ai-hub-gemini-api-key}}",
+                "AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY",
+                "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY_ENV}",
+                "GEMINI_API_KEY=<YOUR_API_KEY_HERE>",
+                'GEMINI_API_KEY=""',
+                "GEMINI_API_KEY:",
+                "param geminiApiKeySecretIdentifier string",
+                "secretIdentifier: geminiApiKeySecretIdentifier",
+                "Store the API key in Key Vault and reference it via secretIdentifier.",
+            ]
+        )
+        allowed_xml = (
+            "<policies><inbound>"
+            '<set-header name="x-goog-api-key" exists-action="override">'
+            "<value>{{ai-hub-gemini-api-key}}</value>"
+            "</set-header>"
+            '<set-header name="x-api-key" exists-action="override">'
+            "<value>@(context.Variables.GetValueOrDefault"
+            "&lt;string&gt;(&quot;computed-key&quot;))</value>"
+            "</set-header>"
+            '<set-header name="Authorization" exists-action="delete" />'
+            "</inbound></policies>"
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            allowed_md = tmp_root / "allowed.md"
+            allowed_md.write_text(allowed_lines, encoding="utf-8")
+            allowed_policy = tmp_root / "allowed-policy.xml"
+            allowed_policy.write_text(allowed_xml, encoding="utf-8")
+
+            violations = _scan_paths_for_credential_violations(
+                [allowed_md, allowed_policy]
+            )
+
+        self.assertEqual([], violations)
+
+    def test_credential_scanner_is_error_loud_on_malformed_xml_in_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_path = Path(tmp_dir) / "malformed.xml"
+            fixture_path.write_text("<policies><inbound>", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                _scan_paths_for_credential_violations([fixture_path])
 
 
 if __name__ == "__main__":
