@@ -190,6 +190,35 @@ class GatewayArtifactTests(unittest.TestCase):
         )
         self.assertNotIn("var path = context.Request.Url.Path;", source)
 
+    def test_bedrock_policy_canonicalizes_every_query_parameter_value(self) -> None:
+        # AWS SigV4 canonical query string construction requires every value of a
+        # repeated query parameter to be individually URI-encoded and included as
+        # its own "key=value" pair, with all encoded pairs then ordinal-sorted.
+        # Reading only kvp.Value.FirstOrDefault() silently drops repeated values
+        # from the signed request, producing a canonical request that no longer
+        # matches what the backend actually receives.
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        self.assertNotIn("kvp.Value.FirstOrDefault()", source)
+        self.assertRegex(
+            source,
+            r"foreach\s*\(\s*var\s+\w+\s+in\s+kvp\.Value\s*\)",
+        )
+
+    def test_bedrock_policy_preserves_content_type_header_case(self) -> None:
+        # SigV4 canonical headers require lowercase header *names* but the
+        # header *values* must be preserved as sent (only trimmed), not
+        # case-folded. Lower-casing the Content-Type value before signing
+        # produces a canonical request that does not match the actual
+        # forwarded header, causing SignatureDoesNotMatch whenever the
+        # backend sends a mixed-case Content-Type (e.g. "application/JSON").
+        source = (ROOT / "policies" / "bedrock.xml").read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            'headers.GetValueOrDefault("Content-Type", "").ToLowerInvariant()',
+            source,
+        )
+
     def test_common_auth_requires_entra_issuer_audience_and_scope(self) -> None:
         source = (ROOT / "policies" / "common-client-auth.xml").read_text(encoding="utf-8")
         self.assertIn('<validate-jwt header-name="Authorization"', source)

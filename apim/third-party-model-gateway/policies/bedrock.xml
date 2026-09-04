@@ -61,8 +61,11 @@
           foreach (var kvp in queryDict)
           {
             var encodedKey = System.Uri.EscapeDataString(kvp.Key);
-            var encodedValue = System.Uri.EscapeDataString(kvp.Value.FirstOrDefault() ?? "");
-            encodedParams.Add(encodedKey + "=" + encodedValue);
+            foreach (var rawValue in kvp.Value)
+            {
+              var encodedValue = System.Uri.EscapeDataString(rawValue ?? "");
+              encodedParams.Add(encodedKey + "=" + encodedValue);
+            }
           }
           canonicalQueryString = string.Join("&amp;", encodedParams.OrderBy(p =&gt; p, StringComparer.Ordinal));
         }
@@ -70,7 +73,7 @@
         var headers = context.Request.Headers;
         var canonicalHeaderList = new List&lt;string[]&gt;();
 
-        var contentType = headers.GetValueOrDefault("Content-Type", "").ToLowerInvariant();
+        var contentType = headers.GetValueOrDefault("Content-Type", "");
         if (!string.IsNullOrEmpty(contentType))
         {
           canonicalHeaderList.Add(new[] { "content-type", contentType });
