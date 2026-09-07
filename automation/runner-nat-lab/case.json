@@ -1,4 +1,4 @@
 {
-  "case": "baseline",
+  "case": "restart-control",
   "expected_private_ip": "10.77.2.10"
 }
