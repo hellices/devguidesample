@@ -44,6 +44,18 @@ Linux에서 관측한 패킷 증적은 **3번의 사설 주소 SNAT 전후**다.
 
 Azure DNS/플랫폼 에이전트 등 Azure 특수 통신과 애플리케이션의 인터넷 경유 경로는 구분한다. 본 테스트는 빌드 HTTPS 트래픽의 NAT 경유를 패킷으로 확인했다.
 
+### 인프라 구성도와 통신 흐름
+
+실제 배포한 Linux NAT 실험 환경이다. Secure Hub나 GHES가 배포된 것처럼 표시하지 않았으며, 공인 IP 리소스와 VNet의 범위도 구분했다.
+
+![실제 인프라 구성도](diagrams/infrastructure.svg)
+
+[인프라 구성도 SVG 열기](diagrams/infrastructure.svg)
+
+![빌드 통신 및 IP 변경 흐름도](diagrams/build-and-ip-change-flow.svg)
+
+[빌드·IP 변경 흐름도 SVG 열기](diagrams/build-and-ip-change-flow.svg)
+
 ### 구성 파일
 
 - [Bicep 인프라](../../infra/runner-nat-lab/main.bicep)
