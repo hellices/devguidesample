@@ -1,0 +1,102 @@
+name: Runner NAT private IP experiment
+run-name: NAT IP experiment - ${{ github.event.head_commit.message }}
+
+on:
+  push:
+    branches:
+      - test/runner-nat-ip-20260907
+    paths:
+      - .github/workflows/runner-nat-ip-test.yml
+      - automation/runner-nat-lab/case.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-nat-ip-lab
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'hellices/devguidesample' && github.ref == 'refs/heads/test/runner-nat-ip-20260907'
+    runs-on: [self-hosted, Linux, X64, nat-ip-lab-20260907]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify test case and record runner identity
+        env:
+          RUNNER_LABEL: ${{ runner.name }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          case_name=$(jq -er '.case' automation/runner-nat-lab/case.json)
+          expected=$(jq -er '.expected_private_ip' automation/runner-nat-lab/case.json)
+          actual=$(ip -4 route get 1.1.1.1 | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+          test "$actual" = "$expected"
+          jq -n --arg case "$case_name" --arg ip "$actual" \
+            --arg name "$RUNNER_LABEL" --arg time "$(date -u +%FT%TZ)" \
+            --arg bootId "$(cat /proc/sys/kernel/random/boot_id)" \
+            --arg commit "$GITHUB_SHA" \
+            --argjson runnerId "$(jq -er '.agentId' /opt/actions-runner/.runner)" \
+            '{case:$case,privateIp:$ip,runnerName:$name,runnerId:$runnerId,bootId:$bootId,time:$time,commit:$commit}' \
+            | tee evidence/runner.json
+          ip -4 route | tee evidence/routes.txt
+
+      - name: Build and smoke-test repository application with Oryx
+        run: |
+          set -euo pipefail
+          image=mcr.microsoft.com/oryx/build:github-actions-debian-bullseye
+          docker pull "$image"
+          docker image inspect "$image" --format '{{json .RepoDigests}}' | tee evidence/oryx-image.json
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/oryx-test:/app" -w /app \
+            "$image" bash -c '
+              set -euo pipefail
+              oryx build /app --platform python --platform-version 3.11 -p virtualenv_name=antenv
+              source antenv/bin/activate
+              python -c "from app import app; response = app.test_client().get(\"/\"); assert response.status_code == 200; assert response.get_data(as_text=True) == \"Hello from Oryx Python 3.11 build test\"; print(\"Built Flask application smoke test passed\")"
+            ' \
+            | tee evidence/oryx-build.log
+          test -s oryx-test/oryx-manifest.toml
+          cp oryx-test/oryx-manifest.toml evidence/
+
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nat-ip-evidence-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Download and verify artifact round trip
+        uses: actions/download-artifact@v4
+        with:
+          name: nat-ip-evidence-${{ github.run_id }}
+          path: downloaded-evidence/
+
+      - name: Verify evidence and summarize
+        run: |
+          set -euo pipefail
+          cmp evidence/runner.json downloaded-evidence/runner.json
+          {
+            echo '### NAT/private-IP experiment'
+            echo '```json'
+            cat evidence/runner.json
+            echo '```'
+            echo 'Oryx build, Flask smoke test, artifact upload/download: passed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore workspace ownership after container build
+        if: always()
+        run: |
+          set -euo pipefail
+          image=mcr.microsoft.com/oryx/build:github-actions-debian-bullseye
+          if docker image inspect "$image" >/dev/null 2>&1; then
+            docker run --rm -v "$GITHUB_WORKSPACE/oryx-test:/app" \
+              "$image" chown -R "$(id -u):$(id -g)" /app
+          fi
