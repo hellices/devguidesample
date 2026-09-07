@@ -13,6 +13,9 @@ on:
 permissions:
   contents: read
 
+env:
+  ORYX_IMAGE: mcr.microsoft.com/oryx/build:github-actions-debian-bullseye@sha256:0c99dd3b778ca5a7b137ce5342bd8f4ca149b3741483a651422047aefdf79b35
+
 concurrency:
   group: runner-nat-ip-lab
   cancel-in-progress: false
@@ -49,7 +52,7 @@ jobs:
       - name: Build and smoke-test repository application with Oryx
         run: |
           set -euo pipefail
-          image=mcr.microsoft.com/oryx/build:github-actions-debian-bullseye
+          image="$ORYX_IMAGE"
           docker pull "$image"
           docker image inspect "$image" --format '{{json .RepoDigests}}' | tee evidence/oryx-image.json
           docker run --rm \
@@ -57,6 +60,9 @@ jobs:
             "$image" bash -c '
               set -euo pipefail
               oryx build /app --platform python --platform-version 3.11 -p virtualenv_name=antenv
+              # Oryx sets its downloaded SDK library path only inside its build subprocess.
+              python_root=$(dirname "$(dirname "$(readlink -f antenv/bin/python)")")
+              export LD_LIBRARY_PATH="$python_root/lib:${LD_LIBRARY_PATH:-}"
               source antenv/bin/activate
               python -c "from app import app; response = app.test_client().get(\"/\"); assert response.status_code == 200; assert response.get_data(as_text=True) == \"Hello from Oryx Python 3.11 build test\"; print(\"Built Flask application smoke test passed\")"
             ' \
@@ -95,7 +101,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          image=mcr.microsoft.com/oryx/build:github-actions-debian-bullseye
+          image="$ORYX_IMAGE"
           if docker image inspect "$image" >/dev/null 2>&1; then
             docker run --rm -v "$GITHUB_WORKSPACE/oryx-test:/app" \
               "$image" chown -R "$(id -u):$(id -g)" /app
