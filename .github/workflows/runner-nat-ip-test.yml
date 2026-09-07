@@ -60,9 +60,11 @@ jobs:
             "$image" bash -c '
               set -euo pipefail
               oryx build /app --platform python --platform-version 3.11 -p virtualenv_name=antenv
-              # Oryx sets its downloaded SDK library path only inside its build subprocess.
-              python_root=$(dirname "$(dirname "$(readlink -f antenv/bin/python)")")
-              export LD_LIBRARY_PATH="$python_root/lib:${LD_LIBRARY_PATH:-}"
+              # Oryx uses venv --copies, so the SDK location comes from pyvenv.cfg.
+              python_home=$(sed -n "s/^home = //p" antenv/pyvenv.cfg)
+              test -n "$python_home"
+              test -d "$python_home/../lib"
+              export LD_LIBRARY_PATH="$python_home/../lib:${LD_LIBRARY_PATH:-}"
               source antenv/bin/activate
               python -c "from app import app; response = app.test_client().get(\"/\"); assert response.status_code == 200; assert response.get_data(as_text=True) == \"Hello from Oryx Python 3.11 build test\"; print(\"Built Flask application smoke test passed\")"
             ' \
