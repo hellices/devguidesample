@@ -1,17 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1120" viewBox="0 0 1680 1120" role="img" aria-labelledby="title desc">
-  <title id="title">Runner 사설 IP 변경 실험 — 실제 인프라 구성</title>
-  <desc id="desc">Azure Korea Central의 전용 리소스 그룹에 공인 IP 없는 Runner VM과 Linux NAT 방화벽 VM을 분리했다. Runner 서브넷의 기본 경로는 NAT VM으로 향한다. 출발지 10.77.2.0/24를 10.77.1.4로 SNAT하고 Azure 고정 공인 IP 매핑을 통해 GitHub.com과 외부 빌드 서비스에 접속한다. 응답은 기존 연결의 역변환으로 반환된다. Runner IP만 10.77.2.10에서 10.77.2.20으로 변경했다. 실제 GHES나 Secure Hub를 배포한 구성은 아니다.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="760" viewBox="0 0 1680 760" role="img" aria-labelledby="title desc">
+  <title id="title">NAT 환경의 Runner 통신 구조</title>
+  <desc id="desc">실험의 통신 구조를 역할 중심으로 표시했다. 실제 리소스명, 주소, ID, VM 사양은 생략했다. 공인 IP가 없는 Runner가 기본 경로를 통해 Linux NAT 방화벽으로 HTTPS 요청을 보낸다. NAT는 사설 출발지 주소를 변환하고, Azure 플랫폼의 고정 공인 IP 매핑을 통해 GitHub와 빌드 저장소에 접근한다. 응답은 기존 연결의 역변환으로 돌아온다. Runner의 사설 IP만 기존 허용 범위 안에서 변경하고 등록 정보와 네트워크 정책은 유지했다. GHES나 Secure Hub를 배포한 구성은 아니다.</desc>
   <defs>
     <marker id="blue" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L9 4.5L0 9Z" fill="#2563eb"/></marker>
     <marker id="teal" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L9 4.5L0 9Z" fill="#0d9488"/></marker>
     <style>
       text { font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; fill: #17233b; }
       .title { font-size: 34px; font-weight: 700; }
-      .heading { font-size: 23px; font-weight: 700; }
-      .body { font-size: 19px; }
-      .small { font-size: 17px; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .body { font-size: 21px; }
+      .small { font-size: 18px; }
       .muted { fill: #52627a; }
-      .mono { font-family: Consolas, "Courier New", monospace; font-size: 19px; }
       .blue { fill: #1d4ed8; }
       .teal { fill: #0f766e; }
       .orange { fill: #b45309; }
@@ -19,101 +18,68 @@
       .back { fill: none; stroke: #0d9488; stroke-width: 3; stroke-dasharray: 8 6; marker-end: url(#teal); }
     </style>
   </defs>
-  <rect width="1680" height="1120" fill="#f5f7fb"/>
-  <text x="48" y="62" class="title">실제 인프라 구성</text>
-  <text x="48" y="98" class="body muted">Runner의 사설 IP만 변경하고, NAT·방화벽·라우팅은 유지한 실험</text>
-  <rect x="1170" y="36" width="462" height="45" rx="22" fill="#fff3dc"/>
-  <text x="1401" y="65" text-anchor="middle" class="small orange">GitHub.com + Linux NAT 실험 · Secure Hub 아님</text>
+  <rect width="1680" height="760" fill="#f5f7fb"/>
+  <text x="48" y="62" class="title">NAT 환경의 Runner 통신</text>
+  <text x="48" y="103" class="body muted">리소스명·주소값 대신 역할과 연결 방향으로 표시</text>
+  <path d="M52 143H112" class="out"/>
+  <text x="127" y="149" class="small">Runner가 시작하는 요청</text>
+  <path d="M520 143H460" class="back"/>
+  <text x="540" y="149" class="small">기존 연결의 응답</text>
+  <text x="1630" y="149" text-anchor="end" class="small muted">GitHub.com + Linux NAT 실험 기준</text>
 
-  <path d="M52 135H112" class="out"/>
-  <text x="125" y="141" class="small">Runner가 시작하는 HTTPS 연결</text>
-  <path d="M487 135H427" class="back"/>
-  <text x="505" y="141" class="small">기존 연결의 응답 / NAT 역변환</text>
+  <rect x="40" y="180" width="850" height="400" rx="18" fill="#edf4ff" stroke="#93b4ec"/>
+  <text x="64" y="216" class="body blue">사설 네트워크 · 별도 Runner / NAT 서브넷</text>
 
-  <rect x="40" y="165" width="1250" height="710" rx="20" fill="#edf4ff" stroke="#93b4ec" stroke-width="2"/>
-  <text x="65" y="201" class="heading blue">Azure 구독 · Korea Central</text>
-  <rect x="60" y="225" width="1210" height="625" rx="14" fill="#ffffff" stroke="#b8c8e0" stroke-width="1.5"/>
-  <text x="80" y="258" class="body">Resource Group: rg-runner-nat-ip-20260907</text>
+  <rect x="70" y="248" width="330" height="255" rx="14" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+  <text x="235" y="292" text-anchor="middle" class="heading blue">Self-hosted Runner</text>
+  <text x="235" y="334" text-anchor="middle" class="body">공인 IP 없음</text>
+  <rect x="92" y="355" width="286" height="43" rx="8" fill="#fff3dc"/>
+  <text x="235" y="383" text-anchor="middle" class="body orange">변경 전 IP → 변경 후 IP</text>
+  <text x="235" y="438" text-anchor="middle" class="body">등록 정보·디스크 유지</text>
+  <text x="235" y="475" text-anchor="middle" class="small muted">코드·빌드 실행 위치</text>
 
-  <rect x="80" y="280" width="950" height="540" rx="12" fill="#f8faff" stroke="#7ea5e2" stroke-width="1.5" stroke-dasharray="7 5"/>
-  <text x="102" y="312" class="body blue">VNet: vnet-runner-nat · 10.77.0.0/16</text>
-  <rect x="100" y="335" width="340" height="447" rx="12" fill="#eff6ff" stroke="#b3d0f5"/>
-  <text x="120" y="369" class="heading blue">Runner 서브넷</text>
-  <text x="120" y="399" class="mono muted">10.77.2.0/24</text>
-  <rect x="120" y="425" width="300" height="188" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
-  <text x="140" y="460" class="heading">vm-runner</text>
-  <text x="140" y="491" class="small muted">Ubuntu 24.04 · D2s_v5</text>
-  <rect x="138" y="510" width="264" height="42" rx="8" fill="#fff3dc"/>
-  <text x="270" y="537" text-anchor="middle" class="mono orange">10.77.2.10 → 10.77.2.20</text>
-  <text x="140" y="579" class="body">Runner ID 21 · 공인 IP 없음</text>
-  <text x="140" y="600" class="small muted">Docker / Oryx 빌드 실행 위치</text>
-  <rect x="120" y="639" width="300" height="85" rx="10" fill="#dfeaff"/>
-  <text x="138" y="667" class="body blue">UDR: rt-runner</text>
-  <text x="138" y="696" class="small">0.0.0.0/0 → 10.77.1.4</text>
-  <text x="120" y="754" class="small muted">NSG: 신규 인바운드 차단</text>
+  <rect x="530" y="248" width="330" height="255" rx="14" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
+  <text x="695" y="292" text-anchor="middle" class="heading teal">NAT · 방화벽</text>
+  <text x="695" y="334" text-anchor="middle" class="body">Runner 서브넷 범위 허용</text>
+  <text x="695" y="382" text-anchor="middle" class="heading teal">사설 출발지 SNAT</text>
+  <text x="695" y="438" text-anchor="middle" class="body">응답은 conntrack 역변환</text>
+  <text x="695" y="475" text-anchor="middle" class="small muted">NIC·OS IP 전달 활성</text>
 
-  <rect x="630" y="335" width="370" height="447" rx="12" fill="#ecfdf5" stroke="#a3d9c7"/>
-  <text x="650" y="369" class="heading teal">NAT 서브넷</text>
-  <text x="650" y="399" class="mono muted">10.77.1.0/24</text>
-  <rect x="650" y="425" width="330" height="210" rx="12" fill="#ffffff" stroke="#0d9488" stroke-width="2"/>
-  <text x="672" y="460" class="heading">vm-nat · 10.77.1.4</text>
-  <text x="672" y="491" class="small muted">Ubuntu 24.04 · B2s · nftables</text>
-  <text x="672" y="526" class="body">출발지: 10.77.2.0/24</text>
-  <text x="672" y="557" class="heading teal">SNAT → 10.77.1.4</text>
-  <text x="672" y="590" class="small">NIC + OS IP forwarding 활성</text>
-  <text x="672" y="615" class="small muted">응답: conntrack 상태로 역변환</text>
-  <rect x="650" y="657" width="330" height="67" rx="10" fill="#d6f5e9"/>
-  <text x="669" y="684" class="small teal">Runner 서브넷의 TCP 80 / 443 허용</text>
-  <text x="669" y="708" class="small teal">그 외 새 전달 연결 차단</text>
-  <text x="650" y="754" class="small muted">NSG + Linux 방화벽 · 정책 유지</text>
+  <rect x="950" y="248" width="250" height="255" rx="14" fill="#f1edff" stroke="#a78bfa" stroke-width="2"/>
+  <text x="1075" y="292" text-anchor="middle" class="heading">고정 공인 IP</text>
+  <text x="1075" y="345" text-anchor="middle" class="body">Azure 플랫폼 매핑</text>
+  <text x="1075" y="389" text-anchor="middle" class="small muted">NAT NIC에 연결</text>
+  <text x="1075" y="438" text-anchor="middle" class="body">외부 출발지 유지</text>
+  <text x="1075" y="475" text-anchor="middle" class="small muted">VNet 외부 리소스</text>
 
-  <path d="M420 480H650" class="out"/>
-  <text x="535" y="452" text-anchor="middle" class="small blue">① 연결 시작</text>
-  <text x="535" y="510" text-anchor="middle" class="small muted">기본 경로로 NAT 경유</text>
-  <path d="M650 580H420" class="back"/>
-  <text x="535" y="614" text-anchor="middle" class="small teal">응답 → 현재 Runner</text>
+  <rect x="1320" y="210" width="310" height="350" rx="16" fill="#ffffff" stroke="#c6cfde" stroke-width="2"/>
+  <text x="1475" y="252" text-anchor="middle" class="heading">외부 서비스</text>
+  <rect x="1340" y="275" width="270" height="106" rx="10" fill="#edf2f8"/>
+  <text x="1475" y="315" text-anchor="middle" class="heading">GitHub.com</text>
+  <text x="1475" y="353" text-anchor="middle" class="small">작업 응답 · 소스 · 로그</text>
+  <rect x="1340" y="400" width="270" height="132" rx="10" fill="#edf2f8"/>
+  <text x="1475" y="440" text-anchor="middle" class="body">빌드 저장소</text>
+  <text x="1475" y="478" text-anchor="middle" class="small muted">이미지 · 패키지</text>
+  <text x="1475" y="510" text-anchor="middle" class="small muted">아티팩트 엔드포인트</text>
 
-  <rect x="1070" y="425" width="190" height="205" rx="12" fill="#f1edff" stroke="#a78bfa" stroke-width="2"/>
-  <text x="1165" y="462" text-anchor="middle" class="heading">pip-nat</text>
-  <text x="1165" y="497" text-anchor="middle" class="body">Static Public IP</text>
-  <text x="1165" y="529" text-anchor="middle" class="small muted">Azure 플랫폼 매핑</text>
-  <text x="1165" y="559" text-anchor="middle" class="small muted">VNet 외부의</text>
-  <text x="1165" y="584" text-anchor="middle" class="small muted">Public IP 리소스</text>
-  <text x="1165" y="612" text-anchor="middle" class="small blue">변경 없음</text>
-  <path d="M980 480H1070" class="out"/>
-  <text x="1025" y="456" text-anchor="middle" class="body blue">②</text>
-  <path d="M1070 600H980" class="back"/>
-  <text x="1165" y="689" text-anchor="middle" class="small muted">NAT NIC에 연결</text>
-  <text x="1165" y="715" text-anchor="middle" class="small muted">인터넷 출발지 고정</text>
+  <path d="M400 310H530" class="out"/>
+  <text x="465" y="290" text-anchor="middle" class="small blue">기본 경로</text>
+  <path d="M530 455H400" class="back"/>
+  <path d="M860 310H950" class="out"/>
+  <path d="M950 455H860" class="back"/>
+  <path d="M1200 310H1320" class="out"/>
+  <text x="1260" y="290" text-anchor="middle" class="small blue">HTTPS</text>
+  <path d="M1320 455H1200" class="back"/>
+  <text x="465" y="550" text-anchor="middle" class="small muted">작업 수신용 신규 인바운드 / Runner 대상 DNAT 없음</text>
 
-  <rect x="1350" y="345" width="290" height="370" rx="16" fill="#ffffff" stroke="#c6cfde" stroke-width="2"/>
-  <text x="1370" y="383" class="heading">인터넷 / 외부 서비스</text>
-  <rect x="1370" y="414" width="250" height="120" rx="10" fill="#edf2f8"/>
-  <text x="1390" y="449" class="heading">GitHub.com</text>
-  <text x="1390" y="480" class="small">작업 수신 · checkout · 로그</text>
-  <text x="1390" y="508" class="small muted">hellices/devguidesample</text>
-  <rect x="1370" y="554" width="250" height="138" rx="10" fill="#edf2f8"/>
-  <text x="1390" y="588" class="body">빌드 의존성 / 저장소</text>
-  <text x="1390" y="621" class="small muted">MCR: Oryx 이미지</text>
-  <text x="1390" y="646" class="small muted">PyPI / Python SDK</text>
-  <text x="1390" y="671" class="small muted">GitHub artifact endpoints</text>
-  <path d="M1260 480H1350" class="out"/>
-  <text x="1305" y="450" text-anchor="middle" class="small blue">③ HTTPS</text>
-  <path d="M1350 600H1260" class="back"/>
-
-  <text x="80" y="905" class="small muted">관리 경로: Azure VM Run Command 사용 · 위 애플리케이션 데이터 경로와 구분 · SSH 인바운드 미개방</text>
-
-  <rect x="40" y="936" width="510" height="120" rx="12" fill="#fff3dc"/>
-  <text x="62" y="970" class="heading orange">변경한 것</text>
-  <text x="62" y="1003" class="body">Runner NIC 사설 IP: .10 → .20</text>
-  <text x="62" y="1031" class="small muted">유휴 상태에서 할당 해제 → IP 변경 → 시작</text>
-  <rect x="570" y="936" width="510" height="120" rx="12" fill="#e5efff"/>
-  <text x="592" y="970" class="heading blue">유지한 것</text>
-  <text x="592" y="1003" class="body">NAT / NSG / UDR / 공인 IP / 디스크</text>
-  <text x="592" y="1031" class="small muted">Runner ID 21 · 재등록 없이 연결 복구</text>
-  <rect x="1100" y="936" width="540" height="120" rx="12" fill="#dcfce7"/>
-  <text x="1122" y="970" class="heading teal">실측 결과</text>
-  <text x="1122" y="1003" class="body">IP 변경 후 빌드 + artifact 왕복 성공</text>
-  <text x="1122" y="1031" class="small muted">조건: 새 IP가 기존 /24 허용 범위에 포함됨</text>
-  <text x="48" y="1094" class="small muted">2026-09-07 실제 테스트 기준 · 현재 VM 두 대는 할당 해제 · GHES / Secure Hub / TLS 검사 동등성을 보장하지 않음</text>
+  <rect x="40" y="610" width="510" height="100" rx="12" fill="#fff3dc"/>
+  <text x="64" y="649" class="heading orange">변경</text>
+  <text x="64" y="683" class="body">유휴 상태에서 Runner 사설 IP만 변경</text>
+  <rect x="570" y="610" width="510" height="100" rx="12" fill="#e5efff"/>
+  <text x="594" y="649" class="heading blue">유지</text>
+  <text x="594" y="683" class="body">NAT · NSG · UDR · 공인 IP · 등록 정보</text>
+  <rect x="1100" y="610" width="530" height="100" rx="12" fill="#dcfce7"/>
+  <text x="1124" y="649" class="heading teal">조건</text>
+  <text x="1124" y="683" class="body">새 IP도 기존 허용 범위에 포함</text>
+  <text x="48" y="744" class="small muted">역할별 구성도 · 실제 주소/정책 증거는 원본 증적 참고 · GHES / Secure Hub 구성과는 구분</text>
 </svg>

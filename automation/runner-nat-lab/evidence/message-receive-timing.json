@@ -1,0 +1,76 @@
+{
+  "purpose": "Observe real runner message GET duration before and after controlled workflow dispatch",
+  "runner_id": 21,
+  "runner_version": "2.337.0",
+  "listener": "BrokerMessageListener",
+  "captured_at_utc": "2026-09-07T12:49:13.501884Z",
+  "log_file": "Runner_20260907-124241-utc.log",
+  "timestamp_resolution_seconds": 1,
+  "diagnostics": {
+    "GITHUB_ACTIONS_RUNNER_TRACE": "1",
+    "GITHUB_ACTIONS_RUNNER_HTTPTRACE": "false",
+    "raw_http_headers_or_bodies_exported": false,
+    "request_urls_query_strings_and_session_ids_exported": false,
+    "pairing": "Match start and finish by full request URL in VM memory; discard cancelled requests; export normalized endpoint only",
+    "failed_request_events": 0,
+    "cancelled_request_events": 2,
+    "overlapping_starts": 0,
+    "unmatched_finishes": 0,
+    "pending_requests_at_capture": 1
+  },
+  "requests": [
+    {"start": "2026-09-07T12:42:44Z", "finish": "2026-09-07T12:43:40Z", "duration_seconds": 56, "status": 202, "endpoint": "broker/message"},
+    {"start": "2026-09-07T12:43:40Z", "finish": "2026-09-07T12:44:35Z", "duration_seconds": 55, "status": 202, "endpoint": "broker/message"},
+    {"start": "2026-09-07T12:44:35Z", "finish": "2026-09-07T12:45:30Z", "duration_seconds": 55, "status": 202, "endpoint": "broker/message"},
+    {"start": "2026-09-07T12:45:30Z", "finish": "2026-09-07T12:46:26Z", "duration_seconds": 56, "status": 202, "endpoint": "broker/message"},
+    {"start": "2026-09-07T12:46:26Z", "finish": "2026-09-07T12:46:27Z", "duration_seconds": 1, "status": 200, "endpoint": "broker/message"},
+    {"start": "2026-09-07T12:47:09Z", "finish": "2026-09-07T12:47:39Z", "duration_seconds": 30, "status": 200, "endpoint": "broker/message"}
+  ],
+  "listener_events": [
+    {"at": "2026-09-07T12:42:44Z", "event": "session_created"},
+    {"at": "2026-09-07T12:42:44Z", "event": "listening"},
+    {"at": "2026-09-07T12:46:29Z", "event": "job_started"},
+    {"at": "2026-09-07T12:47:41Z", "event": "job_started"}
+  ],
+  "workflow_runs": [
+    {
+      "id": 34123696361,
+      "event": "workflow_dispatch",
+      "head_sha": "32b857248ec471d668ff9478089e26a9304c3d25",
+      "created_at": "2026-09-07T12:46:24Z",
+      "run_started_at": "2026-09-07T12:46:24Z",
+      "updated_at": "2026-09-07T12:47:10Z",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/hellices/devguidesample/actions/runs/34123696361"
+    },
+    {
+      "id": 34123808131,
+      "event": "workflow_dispatch",
+      "head_sha": "32b857248ec471d668ff9478089e26a9304c3d25",
+      "created_at": "2026-09-07T12:47:36Z",
+      "run_started_at": "2026-09-07T12:47:36Z",
+      "updated_at": "2026-09-07T12:48:21Z",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/hellices/devguidesample/actions/runs/34123808131"
+    }
+  ],
+  "restored_state": {
+    "verified_at_utc": "2026-09-07T12:52:07Z",
+    "temporary_service_stopped": true,
+    "original_service_restored_before_shutdown": true,
+    "vm-nat": "VM deallocated",
+    "vm-runner": "VM deallocated",
+    "runner_status": "offline",
+    "runner_busy": false
+  },
+  "limitations": [
+    "Elapsed times come from client diagnostic timestamps, not decrypted network packets or server execution traces.",
+    "This small sample is not a guaranteed server timeout or latency SLA.",
+    "TCP connection reuse, negotiated HTTP version and server-side handler implementation were not inspected.",
+    "GitHub workflow timestamps and runner timestamps come from different systems; no sub-second clock alignment was measured.",
+    "Two cancelled requests and the outstanding request at capture are excluded from completed-request durations.",
+    "Original morning NAT experiment did not collect these message-level timings; this is a separate follow-up observation."
+  ]
+}
