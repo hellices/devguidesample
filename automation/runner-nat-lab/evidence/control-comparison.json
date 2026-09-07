@@ -1,0 +1,15 @@
+{
+  "nsg-nat": {
+    "unchanged": true,
+    "sha256": "751A2E6EF21B36ED09F6C52B259CED781F50BD5A6C8957513EC76C73F14A7B00"
+  },
+  "natPublicIpUnchanged": true,
+  "nsg-runner": {
+    "unchanged": true,
+    "sha256": "86E0795BBAB571C7EB68595DDF0E44988E5718E4E1A54953A119F72F5ADC5820"
+  },
+  "udr": {
+    "unchanged": true,
+    "sha256": "564982DE873764FB89CA473BA6362586CF000099AE8F007CE7A3C3DF035EB8EA"
+  }
+}

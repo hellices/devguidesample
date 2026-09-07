@@ -1,0 +1,14 @@
+Enable succeeded: 
+[stdout]
+2026-09-07T02:28:43Z
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    inet 10.77.2.20/24 metric 100 brd 10.77.2.255 scope global eth0
+       valid_lft forever preferred_lft forever
+active
+enabled
+2.337.0
+Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2
+0dc6364b64ea80d392d33b17694ab9bf60c655b335e899f31b2ff2e1e71e9b7e  /opt/actions-runner/.runner
+
+[stderr]
+

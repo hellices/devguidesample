@@ -1,0 +1,7 @@
+PythonVersion="3.11.15"
+pythonBuildCommandsFile="/app/oryx-build-commands.txt"
+virtualEnvName="antenv"
+OperationId="0ae70cd8bf3f798d"
+SourceDirectoryInBuildContainer="/app"
+PlatformName="python"
+CompressDestinationDir="false"

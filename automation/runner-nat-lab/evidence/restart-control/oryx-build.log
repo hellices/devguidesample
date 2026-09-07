@@ -1,0 +1,75 @@
+Operation performed by Microsoft Oryx, https://github.com/Microsoft/Oryx
+You can report issues at https://github.com/Microsoft/Oryx/issues
+
+Oryx Version: 0.2.20240520.1, Commit: c261287ed35c6c62b5ecf3174cda270495abb127, ReleaseTagName: 20240520.1
+
+Build Operation ID: 7be6ba6e6ba98f8c
+OS Type           : bullseye
+Image Type        : githubactions
+
+Detecting platforms...
+Detected following platforms:
+  python: 3.11.15
+Version '3.11.15' of platform 'python' is not installed. Generating script to install it...
+
+
+Source directory     : /app
+Destination directory: /app
+
+
+Downloading and extracting 'python' version '3.11.15' to '/tmp/oryx/platforms/python/3.11.15'...
+Detected image debian flavor: bullseye.
+Downloaded in 1 sec(s).
+Verifying checksum...
+Extracting contents...
+performing sha512 checksum for: python...
+Done in 4 sec(s).
+
+image detector file exists, platform is python..
+OS detector file exists, OS is bullseye..
+Python Version: /tmp/oryx/platforms/python/3.11.15/bin/python3.11
+Creating directory for command manifest file if it does not exist
+Removing existing manifest file
+Python Virtual Environment: antenv
+Creating virtual environment...
+Activating virtual environment...
+Running pip install...
+[02:23:19+0000] Collecting flask==3.0.0 (from -r requirements.txt (line 1))
+[02:23:19+0000]   Downloading flask-3.0.0-py3-none-any.whl.metadata (3.6 kB)
+[02:23:19+0000] Collecting Werkzeug>=3.0.0 (from flask==3.0.0->-r requirements.txt (line 1))
+[02:23:19+0000]   Downloading werkzeug-3.1.8-py3-none-any.whl.metadata (4.0 kB)
+[02:23:19+0000] Collecting Jinja2>=3.1.2 (from flask==3.0.0->-r requirements.txt (line 1))
+[02:23:19+0000]   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+[02:23:19+0000] Collecting itsdangerous>=2.1.2 (from flask==3.0.0->-r requirements.txt (line 1))
+[02:23:19+0000]   Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+[02:23:19+0000] Collecting click>=8.1.3 (from flask==3.0.0->-r requirements.txt (line 1))
+[02:23:19+0000]   Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+[02:23:19+0000] Collecting blinker>=1.6.2 (from flask==3.0.0->-r requirements.txt (line 1))
+[02:23:19+0000]   Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+[02:23:19+0000] Collecting MarkupSafe>=2.0 (from Jinja2>=3.1.2->flask==3.0.0->-r requirements.txt (line 1))
+[02:23:19+0000]   Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+[02:23:19+0000] Downloading flask-3.0.0-py3-none-any.whl (99 kB)
+[02:23:19+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 99.7/99.7 kB 6.6 MB/s eta 0:00:00
+[02:23:19+0000] Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+[02:23:19+0000] Downloading click-8.5.0-py3-none-any.whl (125 kB)
+[02:23:19+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 125.3/125.3 kB 6.9 MB/s eta 0:00:00
+[02:23:19+0000] Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+[02:23:19+0000] Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+[02:23:19+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.9/134.9 kB 12.6 MB/s eta 0:00:00
+[02:23:19+0000] Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+[02:23:19+0000]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 226.5/226.5 kB 18.0 MB/s eta 0:00:00
+[02:23:19+0000] Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+[02:23:19+0000] Installing collected packages: MarkupSafe, itsdangerous, click, blinker, Werkzeug, Jinja2, flask
+[02:23:20+0000] Successfully installed Jinja2-3.1.6 MarkupSafe-3.0.3 Werkzeug-3.1.8 blinker-1.9.0 click-8.5.0 flask-3.0.0 itsdangerous-2.2.0
+
+[notice] A new release of pip is available: 24.0 -> 26.2.1
+[notice] To update, run: pip install --upgrade pip
+Not a vso image, so not writing build commands
+
+Removing existing manifest file
+Creating a manifest file...
+Manifest file created.
+Copying .ostype to manifest output directory.
+
+Done in 9 sec(s).
+Built Flask application smoke test passed

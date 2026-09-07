@@ -1,0 +1,9 @@
+{
+  "case": "restart-control",
+  "privateIp": "10.77.2.10",
+  "runnerName": "nat-ip-lab-20260907",
+  "runnerId": 21,
+  "bootId": "ad9fd67f-6662-4729-a7e6-aeff71dbf199",
+  "time": "2026-09-07T02:23:07Z",
+  "commit": "6968b10949bf936c8caf23cfab1188c7e6c72526"
+}

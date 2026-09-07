@@ -1,0 +1,11 @@
+{
+  "newPrivateIp": "10.77.2.20",
+  "runnerId": 21,
+  "ipChanged": "2026-09-07T02:24:51.2398053Z",
+  "oldPrivateIp": "10.77.2.10",
+  "deallocateRequested": "2026-09-07T02:24:12.0071824Z",
+  "deallocated": "2026-09-07T02:24:46.2447696Z",
+  "case": "private-ip-changed",
+  "onlineObserved": "2026-09-07T02:25:36.0655490Z",
+  "runnerStatus": "online"
+}

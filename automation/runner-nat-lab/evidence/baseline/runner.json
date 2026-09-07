@@ -1,0 +1,9 @@
+{
+  "case": "baseline",
+  "privateIp": "10.77.2.10",
+  "runnerName": "nat-ip-lab-20260907",
+  "runnerId": 21,
+  "bootId": "9f267f93-f2d2-49fa-b2e5-1c0ba254bad9",
+  "time": "2026-09-07T02:19:50Z",
+  "commit": "7ea801715f84305d4b5664255884fd883b6ee677"
+}

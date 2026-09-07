@@ -1,0 +1,40 @@
+Enable succeeded: 
+[stdout]
+2026-09-07T02:23:19Z
+472ff740b6d0877a08536f25162484d3cebd8c436fa57d74428b37b46bffa933  /etc/nftables.conf
+FILTER_POLICY
+ff8fd503fdd803756fab3c5b66108f0747fb2c14d1b072950d3ccd93995eaa00  -
+NAT_POLICY
+e009eff1f6064df82e015869bf0f750057b3ce3c1de85ae87bc2cd1689fc389c  -
+HTTPS_CONNECTION_TRACKING
+ipv4     2 tcp      6 39 TIME_WAIT src=10.77.2.10 dst=20.150.5.4 sport=49400 dport=443 src=20.150.5.4 dst=10.77.1.4 sport=443 dport=49400 [ASSURED] mark=0 use=1
+ipv4     2 tcp      6 114 TIME_WAIT src=10.77.2.10 dst=150.171.110.135 sport=53586 dport=443 src=150.171.110.135 dst=10.77.1.4 sport=443 dport=53586 [ASSURED] mark=0 use=1
+ipv4     2 tcp      6 431990 ESTABLISHED src=10.77.2.10 dst=140.82.113.22 sport=42084 dport=443 src=140.82.113.22 dst=10.77.1.4 sport=443 dport=42084 [ASSURED] mark=0 use=1
+ipv4     2 tcp      6 431982 ESTABLISHED src=10.77.2.10 dst=20.85.130.105 sport=46310 dport=443 src=20.85.130.105 dst=10.77.1.4 sport=443 dport=46310 [ASSURED] mark=0 use=1
+SNAT_COUNTER
+table ip lab_nat {
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		ip saddr 10.77.2.0/24 counter packets 178 bytes 10680 snat to 10.77.1.4
+	}
+}
+PACKET_HEADERS_ONLY
+02:23:19.462868 eth0  In  IP 10.77.2.10.58662 > 151.101.128.223.443: Flags [S], seq 30947337, win 64240, options [mss 1418,sackOK,TS val 3442018092 ecr 0,nop,wscale 10], length 0
+02:23:19.462907 eth0  Out IP 10.77.1.4.58662 > 151.101.128.223.443: Flags [S], seq 30947337, win 64240, options [mss 1418,sackOK,TS val 3442018092 ecr 0,nop,wscale 10], length 0
+02:23:19.465126 eth0  In  IP 10.77.2.10.58662 > 151.101.128.223.443: Flags [.], ack 825049256, win 63, options [nop,nop,TS val 3442018095 ecr 1882280784], length 0
+02:23:19.465143 eth0  Out IP 10.77.1.4.58662 > 151.101.128.223.443: Flags [.], ack 825049256, win 63, options [nop,nop,TS val 3442018095 ecr 1882280784], length 0
+02:23:19.470929 eth0  In  IP 10.77.2.10.58662 > 151.101.128.223.443: Flags [P.], seq 0:517, ack 1, win 63, options [nop,nop,TS val 3442018100 ecr 1882280784], length 517
+02:23:19.470959 eth0  Out IP 10.77.1.4.58662 > 151.101.128.223.443: Flags [P.], seq 0:517, ack 1, win 63, options [nop,nop,TS val 3442018100 ecr 1882280784], length 517
+02:23:19.474824 eth0  In  IP 10.77.2.10.58662 > 151.101.128.223.443: Flags [.], ack 3618, win 71, options [nop,nop,TS val 3442018104 ecr 1882280794], length 0
+02:23:19.474839 eth0  Out IP 10.77.1.4.58662 > 151.101.128.223.443: Flags [.], ack 3618, win 71, options [nop,nop,TS val 3442018104 ecr 1882280794], length 0
+CAPTURE_COMPLETED
+
+[stderr]
+conntrack v1.4.8 (conntrack-tools): 20 flow entries have been shown.
+tcpdump: data link type LINUX_SLL2
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
+8 packets captured
+196 packets received by filter
+0 packets dropped by kernel
+

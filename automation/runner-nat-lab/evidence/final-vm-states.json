@@ -1,0 +1,12 @@
+[
+  {
+    "name": "vm-nat",
+    "powerState": "VM deallocated",
+    "privateIps": "10.77.1.4"
+  },
+  {
+    "name": "vm-runner",
+    "powerState": "VM deallocated",
+    "privateIps": "10.77.2.20"
+  }
+]

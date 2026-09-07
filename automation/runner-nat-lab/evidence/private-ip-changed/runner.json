@@ -1,0 +1,9 @@
+{
+  "case": "private-ip-changed",
+  "privateIp": "10.77.2.20",
+  "runnerName": "nat-ip-lab-20260907",
+  "runnerId": 21,
+  "bootId": "70417dbd-63c1-4b93-8848-6125af8bb6ab",
+  "time": "2026-09-07T02:26:13Z",
+  "commit": "782b96a1b4908020c8656018d46872efd014874d"
+}
