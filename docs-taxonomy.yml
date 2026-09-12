@@ -48,6 +48,7 @@ technologies:
   docker: Docker
   dotnet: .NET
   gitops: GitOps
+  go: Go
   grafana: Grafana
   java: Java
   kafka: Apache Kafka

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import subprocess
-import sys
 
 from scripts.docs import validate_public_safety
 
@@ -14,7 +11,9 @@ def make_repository(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_public_safety_accepts_documented_placeholders_and_public_ids(tmp_path: Path) -> None:
+def test_public_safety_accepts_placeholders_and_example_hosts(
+    tmp_path: Path,
+) -> None:
     root = make_repository(tmp_path)
     (root / "docs" / "guides" / "aks" / "example" / "index.md").write_text(
         """\
@@ -23,13 +22,9 @@ def test_public_safety_accepts_documented_placeholders_and_public_ids(tmp_path: 
 - Subscription: `<subscription-id>`
 - Resource group: `rg-example-koreacentral`
 - Agent thread: `<agent-thread-id>`
-- Azure Databricks application ID: `2ff814a6-3304-4ab8-85cb-cd0e6f879c1d`
-- GitHub asset: https://github.com/user-attachments/assets/7e916a87-7199-4082-be02-19158c255bf6
-- Search example: https://search-example-koreacentral-01.search.windows.net
-- Registry example: acrexamplekrc01.azurecr.io/image:latest
-- Container Apps example: https://ca-api.example.koreacentral.azurecontainerapps.io
-- Generic registry example: myregistry.azurecr.io/image:latest
-- Placeholder registry: <ACR_NAME>.azurecr.io/image:latest
+- Search: https://search-example-koreacentral-01.search.windows.net
+- Registry: myregistry.azurecr.io/image:latest
+- Container Apps: https://ca-api.example.koreacentral.azurecontainerapps.io
 """,
         encoding="utf-8",
     )
@@ -39,190 +34,67 @@ def test_public_safety_accepts_documented_placeholders_and_public_ids(tmp_path: 
     assert result.errors == []
 
 
-def test_public_safety_accepts_public_names_that_share_marker_words(
+def test_public_safety_scans_supported_text_and_detects_sensitive_values(
     tmp_path: Path,
 ) -> None:
     root = make_repository(tmp_path)
-    (root / "docs" / "guides" / "aks" / "example" / "index.md").write_text(
-        """\
-# Public references
-
-- Algorithm: `Rubicon`
-- Example project: `AIPlayground`
-- Upstream source: https://github.com/KRAFTON-Inc/example
-""",
-        encoding="utf-8",
-    )
-
-    result = validate_public_safety.validate_repository(root)
-
-    assert result.errors == []
-
-
-def test_public_safety_reports_environment_specific_identifiers(tmp_path: Path) -> None:
-    root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "example" / "index.md"
-    page.write_text(
+    docs = root / "docs" / "guides" / "aks" / "example"
+    samples = root / "samples" / "aks" / "example"
+    (docs / "index.md").write_text(
         """\
 # Unsafe example
 
-- `/subscriptions/f752aff6-b20c-4973-b32b-0a60ba2c6764/resourceGroups/rg-rubicon-prod`
-- Agent thread: `6dd0e640-d969-46cb-a976-7c81b66fcadc`
-- Endpoint: `https://embed.20.249.162.81.nip.io`
-- Customer resource group: `rg-krafton-kafka-dev-jpe`
-- Internal search endpoint: `https://ais-aiplay-krc-01.search.windows.net`
-- Internal storage account: `saidxtest44159`
-- User-derived resource group: `rg-hellices-krc-01`
-- Internal registry: `acrcustomvec01`
-- Generated Container Apps domain: `icycliff-31a3d588`
-- Production-like Cosmos host: `db-neu-prd-cosmos-northeurope`
-- Search service: `onnuri-search-59018`
-- Resource group: `aisearchtest`
-- Registry name: `acrmemrayb219eb`
+- Subscription: /subscriptions/11111111-1111-4111-8111-111111111111/resourceGroups/rg-private
+- Agent thread ID: 22222222-2222-4222-8222-222222222222
+- Endpoint: https://service.203.0.113.10.nip.io
 """,
         encoding="utf-8",
     )
+    (samples / ".env.example").write_text(
+        "SEARCH_ENDPOINT=https://private-search-123.search.windows.net\n",
+        encoding="utf-8",
+    )
+    (samples / "Dockerfile").write_text(
+        "ENV REGISTRY=private-registry.azurecr.io\n",
+        encoding="utf-8",
+    )
+    (samples / "diagram.svg").write_text(
+        "<svg><text>law-sre-event-lab-deadbeef</text></svg>\n",
+        encoding="utf-8",
+    )
+    (samples / "incident.eml").write_text(
+        "Agent thread ID: 33333333-3333-4333-8333-333333333333\n",
+        encoding="utf-8",
+    )
+    (samples / "capture.png").write_bytes(b"\x89PNG\r\n")
+    (samples / "settings.xml").write_bytes(b"<settings>\xff</settings>\n")
 
     result = validate_public_safety.validate_repository(root)
 
+    assert result.file_count == 6
     assert any("Azure subscription ID" in error for error in result.errors)
-    assert any("environment-specific name" in error for error in result.errors)
     assert any("agent thread ID" in error for error in result.errors)
     assert any("IP-based nip.io endpoint" in error for error in result.errors)
-    environment_errors = [
-        error for error in result.errors if "environment-specific name" in error
-    ]
-    assert len(environment_errors) == 11
+    assert any("non-example Azure service hostname" in error for error in result.errors)
+    assert any("deployment-specific lab suffix" in error for error in result.errors)
+    assert any("file is not valid UTF-8" in error for error in result.errors)
 
 
-def test_public_safety_reports_non_example_azure_service_hostnames(
+def test_public_safety_fails_closed_for_missing_or_empty_scan_roots(
     tmp_path: Path,
 ) -> None:
-    root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "example" / "index.md"
-    page.write_text(
-        """\
-# Unsafe Azure endpoints
+    missing_samples = tmp_path / "missing-samples"
+    (missing_samples / "docs").mkdir(parents=True)
+    empty = tmp_path / "empty"
+    (empty / "docs").mkdir(parents=True)
+    (empty / "samples").mkdir()
 
-- Search: https://onnuri-search-59018.search.windows.net
-- Registry: acrmemrayb219eb.azurecr.io/leaky-agent:v2
-- Container Apps: https://ca-embedding.icycliff-31a3d588.koreacentral.azurecontainerapps.io
-""",
-        encoding="utf-8",
+    missing_result = validate_public_safety.validate_repository(missing_samples)
+    empty_result = validate_public_safety.validate_repository(empty)
+
+    assert any(
+        "samples" in error and "missing" in error
+        for error in missing_result.errors
     )
-
-    result = validate_public_safety.validate_repository(root)
-
-    hostname_errors = [
-        error for error in result.errors if "non-example Azure service hostname" in error
-    ]
-    assert len(hostname_errors) == 3
-
-
-def test_public_safety_scans_samples_and_skips_binary_files(tmp_path: Path) -> None:
-    root = make_repository(tmp_path)
-    (root / "samples" / "aks" / "example" / "config.yaml").write_text(
-        'resourceId: "/subscriptions/b219ebf4-b544-46b1-b7ce-9c9b25ea826c/resourceGroups/rg-example"\n',
-        encoding="utf-8",
-    )
-    (root / "samples" / "aks" / "example" / "capture.png").write_bytes(b"\x89PNG\r\n")
-
-    result = validate_public_safety.validate_repository(root)
-
-    assert result.file_count == 1
-    assert any("Azure subscription ID" in error for error in result.errors)
-
-
-def test_public_safety_scans_compound_and_extensionless_text_files(
-    tmp_path: Path,
-) -> None:
-    root = make_repository(tmp_path)
-    sample = root / "samples" / "aks" / "example"
-    (sample / ".env.example").write_text(
-        "SEARCH_ENDPOINT=https://ais-aiplay-krc-01.search.windows.net\n",
-        encoding="utf-8",
-    )
-    (sample / "Dockerfile").write_text(
-        "ENV REGISTRY=acrcustomvec01.azurecr.io\n",
-        encoding="utf-8",
-    )
-    (sample / "main.bicepparam").write_text(
-        "param resourceGroupName = 'rg-rubicon-prod'\n",
-        encoding="utf-8",
-    )
-
-    result = validate_public_safety.validate_repository(root)
-
-    assert result.file_count == 3
-    environment_errors = [
-        error for error in result.errors if "environment-specific name" in error
-    ]
-    assert len(environment_errors) == 3
-
-
-def test_public_safety_scans_svg_and_xml_text_files(tmp_path: Path) -> None:
-    root = make_repository(tmp_path)
-    sample = root / "samples" / "aks" / "example"
-    (sample / "diagram.svg").write_text(
-        '<svg><text>rg-rubicon-prod</text></svg>\n',
-        encoding="utf-8",
-    )
-    (sample / "settings.xml").write_text(
-        '<endpoint>https://ais-aiplay-krc-01.search.windows.net</endpoint>\n',
-        encoding="utf-8",
-    )
-
-    result = validate_public_safety.validate_repository(root)
-
-    assert result.file_count == 2
-    assert {
-        error.split(": possible ", maxsplit=1)[1] for error in result.errors
-    } == {"environment-specific name", "non-example Azure service hostname"}
-
-
-def test_public_safety_rejects_selected_files_that_are_not_utf8(tmp_path: Path) -> None:
-    root = make_repository(tmp_path)
-    invalid = root / "samples" / "aks" / "example" / "diagram.svg"
-    invalid.write_bytes(b"<svg>\xff</svg>\n")
-
-    result = validate_public_safety.validate_repository(root)
-
-    assert result.file_count == 1
-    assert result.errors == [
-        "samples/aks/example/diagram.svg: file is not valid UTF-8"
-    ]
-
-
-def test_public_safety_scans_saved_email_artifacts(tmp_path: Path) -> None:
-    root = make_repository(tmp_path)
-    (root / "samples" / "aks" / "example" / "incident.eml").write_text(
-        "Agent thread ID: 6dd0e640-d969-46cb-a976-7c81b66fcadc\n",
-        encoding="utf-8",
-    )
-
-    result = validate_public_safety.validate_repository(root)
-
-    assert result.file_count == 1
-    assert any("agent thread ID" in error for error in result.errors)
-
-
-def test_public_safety_script_runs_outside_repository_cwd(tmp_path: Path) -> None:
-    root = make_repository(tmp_path / "repository")
-    (root / "docs" / "guides" / "aks" / "example" / "index.md").write_text(
-        "# Safe\n\nSubscription: `<subscription-id>`\n",
-        encoding="utf-8",
-    )
-    script = Path(__file__).parents[2] / "scripts" / "docs" / "validate_public_safety.py"
-    environment = os.environ.copy()
-    environment.pop("PYTHONPATH", None)
-
-    completed = subprocess.run(
-        [sys.executable, str(script), "--repo-root", str(root)],
-        cwd=tmp_path,
-        env=environment,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert completed.returncode == 0, completed.stderr + completed.stdout
+    assert any("no public text files" in error for error in missing_result.errors)
+    assert any("no public text files" in error for error in empty_result.errors)

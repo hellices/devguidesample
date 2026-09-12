@@ -285,8 +285,8 @@ az hdinsight delete -g rg-example-japaneast-01 -n hdi-example-japaneast-01 --yes
 
 ## 관련 문서
 
-- [`../monitor/hdinsight-kafka-monitoring.md`](../../azure-monitor/hdinsight-kafka-monitoring-options/index.md) — HDInsight Kafka 모니터링 개요(Azure Monitor·Log Analytics·Ambari·진단설정).
-- [`../monitor/hdinsight-kafka-prometheus-grafana.md`](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md) — Prometheus + Grafana broker JMX·kafka-exporter(partition별 lag) 대시보드 구성.
+- [HDInsight Kafka 모니터링 방식 비교](../../azure-monitor/hdinsight-kafka-monitoring-options/index.md) — Azure Monitor·Log Analytics·Ambari·진단 설정 개요.
+- [Prometheus + Grafana 대시보드 구성](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md) — broker JMX·kafka-exporter(partition별 lag) 대시보드 구성.
 
 ---
 

@@ -12,6 +12,7 @@ title: 'Microsoft Agent Framework 2026: Python과 Go 구현 분석'
 description: Microsoft Agent Framework의 Python 주요 기능과 Go 구현 선택지를 비교합니다.
 technologies:
 - python
+- go
 tags:
 - ai-agents
 - architecture

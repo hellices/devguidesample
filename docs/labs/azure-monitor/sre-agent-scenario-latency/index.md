@@ -29,7 +29,7 @@ tags:
 
 ## 시작 조건
 
-- [02-scenario-s1.md](../sre-agent-scenario-http-500/index.md)의 S1이 복구되고 캡처가 `conclusion`으로 끝났습니다.
+- [S1 — HTTP 500 장애](../sre-agent-scenario-http-500/index.md)의 S1이 복구되고 캡처가 `conclusion`으로 끝났습니다.
 - `evidence/state.json`에 `s1_recovered`와 `s1_captured`가 있습니다.
 - 다른 시나리오의 실행이 `running`이나 `failed`로 남아 있지 않습니다. 하나라도 남아 있으면 S2도 거부되고, 거부 메시지가 막고 있는 시나리오와 해결 명령을 알려 줍니다.
 - 워크로드가 정상이고 S1 경고가 해제되어 있습니다.
@@ -325,4 +325,4 @@ fi
 
 ## 다음 단계
 
-권한 장애로 넘어갑니다: [04-scenario-s3.md](../sre-agent-scenario-blob-permission/index.md)
+권한 장애로 넘어갑니다: [S3 — Blob 권한 장애](../sre-agent-scenario-blob-permission/index.md)

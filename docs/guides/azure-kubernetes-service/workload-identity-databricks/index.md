@@ -4,6 +4,8 @@ services:
 official_sources:
 - title: Azure Kubernetes Service documentation
   url: https://learn.microsoft.com/azure/aks/
+- title: Authenticate with managed identity
+  url: https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy
 document_type: guide
 status: needs-review
 verification_status: needs-review
@@ -26,7 +28,7 @@ tags:
 
 > 시나리오: AKS Pod → Databricks Foundation Model API (`databricks-meta-llama-3-1-8b-instruct`)
 > 어떤 PAT/시크릿/Databricks OAuth secret도 사용하지 않고, **AKS Workload Identity**가 발급한 Entra ID(AAD) 액세스 토큰을 그대로 Databricks Bearer 토큰으로 사용합니다.
-> APIM 가이드(`apim/databricks_keyless_managed_identity.md`)와 같은 인증 모델을 Pod-측에서 구현한 패턴.
+> [APIM `authentication-managed-identity` 정책](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy)과 같은 인증 모델을 Pod 측에서 구현한 패턴입니다.
 
 ---
 
@@ -219,7 +221,7 @@ POST {DBX_HOST}/serving-endpoints/{ENDPOINT}/invocations  → 200 + predictions
 - HTTP keep-alive / HTTP/2 풀 (`undici Pool`)
 - 타임아웃 / AbortSignal / 재시도
 
-> 인증 모델은 [apim/databricks_keyless_managed_identity.md](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy) 의 APIM 정책(`authentication-managed-identity`)과 동일. APIM에서는 게이트웨이가 토큰을 받아 붙여주지만, 여기서는 앱 코드가 같은 일을 두 줄로 합니다.
+> 인증 모델은 [APIM `authentication-managed-identity` 정책](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy)과 동일합니다. APIM에서는 게이트웨이가 토큰을 받아 붙여주지만, 여기서는 앱 코드가 같은 일을 두 줄로 합니다.
 
 ---
 
@@ -381,7 +383,7 @@ Client → Application Gateway (WAF, TLS) → Internal Service / Ingress → Pod
 
 - Pod 자체 노출 금지: Service를 `ClusterIP`로 바꾸고 AGIC/NGINX Ingress를 Application Gateway 백엔드로.
 - AppGW WAF_v2로 외부 인입 보호, 클라이언트는 자체 도메인(`api.contoso.com`)으로 호출.
-- 필요하면 Pod 앞에 APIM(Internal VNet)을 추가해 `apim/databricks_keyless_managed_identity.md` 의 4계층 패턴(Client → AppGW → APIM → 백엔드) 적용 가능. 단, 이 경우 인증 부착 책임을 APIM 정책으로 옮길지(Pod에서 제거), 양쪽 다 둘지(이중 keyless) 결정 필요.
+- 필요하면 Pod 앞에 APIM(Internal VNet)을 추가해 Client → AppGW → APIM → 백엔드의 4계층 패턴을 적용할 수 있습니다. 이 경우 인증 부착 책임을 [APIM `authentication-managed-identity` 정책](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy)으로 옮길지(Pod에서 제거), 양쪽에 둘지 결정해야 합니다.
 
 ---
 
@@ -405,4 +407,4 @@ Client → Application Gateway (WAF, TLS) → Internal Service / Ingress → Pod
 - AKS Workload Identity: https://learn.microsoft.com/azure/aks/workload-identity-overview
 - Databricks AAD audience: https://learn.microsoft.com/azure/databricks/dev-tools/api/latest/aad/service-prin-aad-token
 - Databricks Serving Endpoints REST: https://docs.databricks.com/api/workspace/servingendpoints
-- 자매 가이드 (게이트웨이 측 keyless): `apim/databricks_keyless_managed_identity.md`
+- 게이트웨이 측 keyless 참고: [APIM `authentication-managed-identity` 정책](https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy)

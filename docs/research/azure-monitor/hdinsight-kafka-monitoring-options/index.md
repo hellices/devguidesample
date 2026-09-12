@@ -28,7 +28,7 @@ published_at: 2026-07-10
 > - **노드 리소스 · 클러스터 상태 · 장기 로그** → Ambari + Monitor Integration (HDInsight 기본, 추가 설치 없음)
 > - **브로커/토픽 처리량 · JVM internals · Consumer Group Lag** → HDInsight 기본 도구 **관측 불가**
 > - → **JMX Exporter + Kafka Exporter (+Prometheus/Grafana)** 도입 권장
-> - 설치·대시보드 구성: **[hdinsight-kafka-prometheus-grafana.md](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md)**
+> - 설치·대시보드 구성: **[Prometheus + Grafana 구성 가이드](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md)**
 
 ## 1. 관측 항목 → 조회 도구 매핑
 
@@ -98,7 +98,7 @@ O = 기본 제공 / △ = 조건부·간접 제공 / X = 제공 안 함
 ### JMX Exporter / Kafka Exporter (오픈소스, 직접 구성) — 권장
 
 HDInsight 기본 미제공 → 수동 설치. 둘 다 **Prometheus 스크래핑 + Grafana 시각화** 조합.
-설치·대시보드: **[hdinsight-kafka-prometheus-grafana.md](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md)**
+설치·대시보드: **[Prometheus + Grafana 구성 가이드](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md)**
 
 - **JMX Exporter** — 브로커 JVM MBean을 Prometheus 형식으로 노출.
   **JVM internals**(Heap/GC/스레드) + **브로커/토픽/파티션 지표**(BytesIn/Out, Under-Replicated Partitions 등).
@@ -238,7 +238,7 @@ HDInsightKafkaMetrics
 
 > **권장 목표 상태**: Monitor Integration으로 노드/클러스터 baseline 확보 +
 > **브로커/토픽 상세·JVM internals·Consumer Lag은 JMX/Kafka Exporter로 관측**.
-> → 설치·대시보드: **[hdinsight-kafka-prometheus-grafana.md](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md)**
+> → 설치·대시보드: **[Prometheus + Grafana 구성 가이드](../../../guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md)**
 
 ---
 

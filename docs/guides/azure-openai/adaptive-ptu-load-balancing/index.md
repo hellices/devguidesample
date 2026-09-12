@@ -290,7 +290,6 @@ $$
 
 ## 파일 구성
 
-- 메인 문서: [ptu-lb-test.md](index.md)
 - 아키텍처 다이어그램(원본): [ptu_architecture.excalidraw](https://github.com/hellices/devguidesample/blob/main/samples/azure-openai/ptu-load-balancing/ptu_architecture.excalidraw)
 - 아키텍처 다이어그램(이미지): [ptu_architecture.png](https://github.com/hellices/devguidesample/blob/main/samples/azure-openai/ptu-load-balancing/ptu_architecture.png)
 - 다이어그램 렌더러(유틸): [render_excalidraw.py](https://github.com/hellices/devguidesample/blob/main/samples/azure-openai/ptu-load-balancing/render_excalidraw.py)

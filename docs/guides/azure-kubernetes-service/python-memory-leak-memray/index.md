@@ -170,7 +170,7 @@ kubectl cp memray-demo/$POD:/tmp/leak-leaks.html      reports/leak-leaks.html   
 
 ![memray --leaks 플레임그래프: chat → _remember_turn_context (app.py:50) 와 _archive_tool_trace (app.py:65) 가 미해제 메모리의 대부분을 차지](images/leak-leaks.png)
 
-- 원본 HTML(인터랙티브): [`reports/leak-leaks.html`](https://github.com/hellices/devguidesample/blob/main/samples/azure-kubernetes-service/source-material/memray-leak-profiling/reports/leak-leaks.html) · [`reports/leak-flamegraph.html`](https://github.com/hellices/devguidesample/blob/main/samples/azure-kubernetes-service/source-material/memray-leak-profiling/reports/leak-flamegraph.html)
+- 원본 HTML 파일(내려받아 브라우저에서 열기): [`reports/leak-leaks.html`](https://github.com/hellices/devguidesample/blob/main/samples/azure-kubernetes-service/source-material/memray-leak-profiling/reports/leak-leaks.html) · [`reports/leak-flamegraph.html`](https://github.com/hellices/devguidesample/blob/main/samples/azure-kubernetes-service/source-material/memray-leak-profiling/reports/leak-flamegraph.html)
 - 절대 수치는 캡처 시점/부하에 따라 상이 (tree와 스크린샷은 별도 60s 캡처) — 핵심은 **비율 + 콜스택**
 - 대조군 `_synthesize_answer`(요청 종료 시 해제)는 leaks 리포트 **미등장** → 오탐 없음
 - 상단 노란 배너 = pymalloc 안내: 소형 객체는 풀 잔류 노이즈 가능 →

@@ -22,7 +22,7 @@ published_at: 2026-05-22
 
 **Azure AI Search Custom Web API 파이프라인에서 활용 가능한 최신 Chunking 전략, 프레임워크, 논문 정리**
 
-> 작성일: 2026-05-22 | 관련 문서: [02_custom_vectorization.md](../../../guides/azure-ai-search/custom-web-api-vectorization/index.md)
+> 작성일: 2026-05-22 | 관련 문서: [Custom Web API 벡터화 가이드](../../../guides/azure-ai-search/custom-web-api-vectorization/index.md)
 
 ---
 

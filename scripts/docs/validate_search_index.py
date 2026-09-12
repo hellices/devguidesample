@@ -31,7 +31,8 @@ class SearchIndexResult:
 
 
 def _page_location(relative_path) -> str:
-    return relative_path.parent.as_posix().rstrip("/") + "/"
+    parent = relative_path.parent.as_posix()
+    return "" if parent in {"", "."} else parent.rstrip("/") + "/"
 
 
 def _normalized(value: str) -> str:

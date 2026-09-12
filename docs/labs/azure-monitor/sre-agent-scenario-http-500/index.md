@@ -29,7 +29,7 @@ tags:
 
 ## 시작 조건
 
-- [01-agent-setup.md](../sre-agent-event-lab-setup/index.md)를 마쳤고 `evidence/state.json`에 `baseline_passed`와 `agent_setup_acknowledged`가 기록되어 있습니다.
+- [에이전트 설정](../sre-agent-event-lab-setup/index.md)을 마쳤고 `evidence/state.json`에 `baseline_passed`와 `agent_setup_acknowledged`가 기록되어 있습니다.
 - 현재 활성 구독이 azd 환경의 구독과 같습니다.
 
 이 두 가지는 `evidence/state.json`을 통해 강제됩니다. 아래 "수동 실행"의 첫 단계인 `lab_state.py begin-run`이 순서와 중복 실행을 함께 확인합니다.
@@ -349,9 +349,9 @@ fi
 | `conclusion-missing` | 조사는 했지만 결론에 도달하지 못했습니다 | 막힙니다 |
 | `thread-not-created` | 경고가 Agent에 도달하지 못했습니다 | 막힙니다 |
 
-성공은 `conclusion` 하나뿐입니다. 부분 성공은 결론이 나왔지만 내용이 얕은 경우이며, 이때도 상태는 `conclusion`이고 점수는 [05-results.md](../sre-agent-results/index.md)의 채점에서 갈립니다. 빈 성공 화면을 만들지 않고 누락 상태와 마지막 확인 시각을 그대로 그림에 남깁니다.
+성공은 `conclusion` 하나뿐입니다. 부분 성공은 결론이 나왔지만 내용이 얕은 경우이며, 이때도 상태는 `conclusion`이고 점수는 [결과 채점](../sre-agent-results/index.md)에서 갈립니다. 빈 성공 화면을 만들지 않고 누락 상태와 마지막 확인 시각을 그대로 그림에 남깁니다.
 
-`thread-not-created`가 나오면 [01-agent-setup.md](../sre-agent-event-lab-setup/index.md)의 incident platform과 응답 계획부터 다시 확인합니다.
+`thread-not-created`가 나오면 [에이전트 설정](../sre-agent-event-lab-setup/index.md)의 incident platform과 응답 계획부터 다시 확인합니다.
 
 ## 복구 확인
 
@@ -372,4 +372,4 @@ azd env get-value AZURE_CONTAINER_APP_FQDN
 
 ## 다음 단계
 
-지연 장애로 넘어갑니다: [03-scenario-s2.md](../sre-agent-scenario-latency/index.md)
+지연 장애로 넘어갑니다: [S2 — 응답 지연](../sre-agent-scenario-latency/index.md)

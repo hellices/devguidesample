@@ -20,15 +20,13 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: |
-            requirements-docs.txt
-            samples/azure-monitor/source-material/sre-agent-event-lab/app/requirements-dev.txt
+          cache-dependency-path: requirements-docs.txt
 
-      - name: Install documentation and sample dependencies
-        run: python -m pip install -r requirements-docs.txt -r samples/azure-monitor/source-material/sre-agent-event-lab/app/requirements-dev.txt
+      - name: Install documentation dependencies
+        run: python -m pip install -r requirements-docs.txt
 
-      - name: Run documentation and sample tests
-        run: python -m pytest tests/docs samples/azure-monitor/source-material/sre-agent-event-lab -q
+      - name: Run documentation contract tests
+        run: python -m pytest tests/docs -q
 
       - name: Validate public documentation
         run: |

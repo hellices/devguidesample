@@ -1,5 +1,9 @@
 # Public GitHub Pages Implementation Plan
 
+> 이 파일은 구현 이력이다. 현재 문서 작성 계약은 `AGENTS.md`와
+> `docs/contributing/index.md`를 따른다. 아래 초기 작업의 파일 목록보다
+> 마지막 정리 작업에서 확정한 최소 테스트 구성이 우선한다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Publish the repository as a searchable public Material for MkDocs site whose navigation and indexes are generated from folders and front matter, with Microsoft Learn MCP-based technical verification guidance.
@@ -157,13 +161,9 @@
 
 - [ ] **Step 4: Validate the skill and MCP configuration**
 
-  Run: `python C:/Users/inhwanhwang/.codex/skills/.system/skill-creator/scripts/quick_validate.py .github/skills/verify-with-microsoft-learn`
-
-  Expected: `Skill is valid!`
-
   Run: `python -m pytest tests/docs/test_microsoft_learn_skill.py -q`
 
-  Expected: all harness contract tests pass.
+  Expected: the repository-owned skill and MCP configuration harness tests pass.
 
 ### Task 5: Publish author and agent guidance
 
@@ -373,8 +373,16 @@
 
 - [ ] **Step 3: Run focused tests and all repository-required validation**
 
-  Run `python -m pytest tests/docs -q`, the Dynamic Threshold tests, every command required by `AGENTS.md`, migration dry-run, dependency check, and whitespace check.
+  Run `python -m pytest tests/docs -q`, the Dynamic Threshold tests, every command required by `AGENTS.md`, dependency check, and whitespace check.
 
-- [ ] **Step 4: Update PR #59 and resolve the seven review threads**
+- [ ] **Step 4: Update PR #59 and resolve the review threads**
 
   Push a new commit, wait for required GitHub checks, reply inline with the verified change for each comment, and resolve each thread only after CI succeeds.
+
+### Task 10: Remove one-time tooling and keep only contract tests
+
+- [x] Delete the completed content migration script, manifest, and migration tests.
+- [x] Delete tests that pin README wording, workflow step layout, and relocated sample paths.
+- [x] Keep focused coverage for the content contract, validators, generated site and search,
+  public-safety failures, and Microsoft Learn MCP registration.
+- [x] Run the remaining tests and every validation command required by `AGENTS.md`.

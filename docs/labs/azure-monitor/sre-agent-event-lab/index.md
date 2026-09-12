@@ -134,13 +134,13 @@ postprovision 단계가 실패하면 로컬 환경만 실패한 것입니다. `.
 
 ## Azure SRE Agent 설정
 
-포털에서만 할 수 있는 설정이 남아 있습니다. 저장소 연결, 지식 문서 업로드, **Azure Monitor incident platform** 연결, `Review` 모드 응답 계획, 역할 할당을 [guides/01-agent-setup.md](../sre-agent-event-lab-setup/index.md)가 순서대로 안내합니다.
+포털에서만 할 수 있는 설정이 남아 있습니다. 저장소 연결, 지식 문서 업로드, **Azure Monitor incident platform** 연결, `Review` 모드 응답 계획, 역할 할당을 [에이전트 설정](../sre-agent-event-lab-setup/index.md)이 순서대로 안내합니다.
 
-기본 실습에는 Logic App bridge를 배포하지 않습니다. 제품 표준 경로는 Azure Monitor를 incident platform으로 연결하는 것이고, 예전 실측에서 쓰던 Action Group + Logic App 인증 경로는 레거시 기록으로만 남아 있습니다([validation-results.md](../../../research/azure-monitor/sre-agent-validation-results/index.md)).
+기본 실습에는 Logic App bridge를 배포하지 않습니다. 제품 표준 경로는 Azure Monitor를 incident platform으로 연결하는 것이고, 예전 실측에서 쓰던 Action Group + Logic App 인증 경로는 레거시 기록으로만 남아 있습니다([실측 검증 결과](../../../research/azure-monitor/sre-agent-validation-results/index.md)).
 
 ## 정상 상태 확인과 승인
 
-장애를 주입하기 전에 정상 부하가 Application Insights까지 도달하는지 확인하고, 그 사실을 기록해야 S1이 열립니다. 텔레메트리가 없는 워크로드에 장애를 넣으면 주입한 장애와 원래부터 안 보이던 상태를 구별할 수 없습니다. 명령은 [guides/01-agent-setup.md](../sre-agent-event-lab-setup/index.md)에 있습니다.
+장애를 주입하기 전에 정상 부하가 Application Insights까지 도달하는지 확인하고, 그 사실을 기록해야 S1이 열립니다. 텔레메트리가 없는 워크로드에 장애를 넣으면 주입한 장애와 원래부터 안 보이던 상태를 구별할 수 없습니다. 명령은 [에이전트 설정](../sre-agent-event-lab-setup/index.md)에 있습니다.
 
 ```bash
 python3 scripts/lab_state.py mark baseline_passed --evidence-dir "${EVIDENCE_DIR}"
@@ -159,9 +159,9 @@ python3 scripts/lab_state.py acknowledge-agent
 
 | 시나리오 | 주입하는 장애 | 안내 문서 |
 |---|---|---|
-| S1 | HTTP 500 응답 | [guides/02-scenario-s1.md](../sre-agent-scenario-http-500/index.md) |
-| S2 | 주문 API 지연 | [guides/03-scenario-s2.md](../sre-agent-scenario-latency/index.md) |
-| S3 | Blob 읽기 권한 제거 | [guides/04-scenario-s3.md](../sre-agent-scenario-blob-permission/index.md) |
+| S1 | HTTP 500 응답 | [S1 — HTTP 500 장애](../sre-agent-scenario-http-500/index.md) |
+| S2 | 주문 API 지연 | [S2 — 응답 지연](../sre-agent-scenario-latency/index.md) |
+| S3 | Blob 읽기 권한 제거 | [S3 — Blob 권한 장애](../sre-agent-scenario-blob-permission/index.md) |
 
 ## 결과 확인
 
@@ -169,7 +169,7 @@ python3 scripts/lab_state.py acknowledge-agent
 app/.venv/bin/python scripts/score.py --evidence-root evidence
 ```
 
-채점 기준, 사람이 채워야 하는 판정, 종합 판정 해석은 [guides/05-results.md](../sre-agent-results/index.md)에 있습니다.
+채점 기준, 사람이 채워야 하는 판정, 종합 판정 해석은 [결과 채점](../sre-agent-results/index.md)에 있습니다.
 
 ## 정리
 
@@ -208,11 +208,11 @@ az group delete --subscription "${SUBSCRIPTION_ID}" --name "${RESOURCE_GROUP}" -
 | 증상 | 확인할 곳 |
 |---|---|
 | 배포 후 앱이 응답하지 않음 | `azd env get-value AZURE_CONTAINER_APP_FQDN`으로 FQDN을 확인한 뒤 `/healthz` 호출 |
-| Agent가 스레드를 만들지 않음 | [guides/01-agent-setup.md](../sre-agent-event-lab-setup/index.md)의 incident platform·응답 계획 확인 |
+| Agent가 스레드를 만들지 않음 | [에이전트 설정](../sre-agent-event-lab-setup/index.md)의 incident platform·응답 계획 확인 |
 | 경고가 발생하지 않음 | 시나리오 문서의 "복구 확인" 절 |
-| 채점이 `INCOMPLETE` | [guides/05-results.md](../sre-agent-results/index.md)의 수동 판정 절 |
+| 채점이 `INCOMPLETE` | [결과 채점](../sre-agent-results/index.md)의 수동 판정 절 |
 
-정적 임계값 대신 Dynamic Threshold로 확장하는 설계는 [dynamic-thresholds.md](../../../guides/azure-monitor/sre-agent-dynamic-thresholds/index.md)에 정리해 두었습니다.
+정적 임계값 대신 Dynamic Threshold로 확장하는 설계는 [Dynamic Thresholds 확장 설계](../../../guides/azure-monitor/sre-agent-dynamic-thresholds/index.md)에 정리해 두었습니다.
 
 ## 공식 자료
 

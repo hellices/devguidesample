@@ -174,7 +174,7 @@ Ingress LoadBalancer IP를 확인하여 nip.io 도메인을 구성한다. nip.io
 INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 echo "Domain: embed.${INGRESS_IP}.nip.io"
-# embed.example.com
+# Domain: embed.<INGRESS_IP>.nip.io
 ```
 
 `k8s/ingress.yaml`의 host를 위 도메인으로 설정한 뒤 적용한다.
@@ -201,7 +201,7 @@ kubectl get certificate
 curl -s https://ca-embedding-example-01.example.koreacentral.azurecontainerapps.io/health
 
 # Option B (AKS + Let's Encrypt)
-curl -s https://embed.example.com/health
+curl -s "https://embed.${INGRESS_IP}.nip.io/health"
 # {"status":"ok","model":"BAAI/bge-m3"}
 ```
 
@@ -266,7 +266,8 @@ curl -X POST "$SEARCH_URL/datasources?api-version=2024-07-01" \
 # Option A: Container Apps FQDN
 # EMBED_URL="https://ca-embedding-example-01.example.koreacentral.azurecontainerapps.io"
 # Option B: AKS Ingress
-EMBED_URL="https://embed.example.com"
+: "${INGRESS_IP:?Set INGRESS_IP to the Ingress LoadBalancer IP}"
+EMBED_URL="https://embed.${INGRESS_IP}.nip.io"
 
 curl -X PUT "$SEARCH_URL/indexes/sample-vector-idx?api-version=2024-07-01" \
   -H "Content-Type: application/json" -H "api-key: $KEY" \

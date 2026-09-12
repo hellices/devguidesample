@@ -29,8 +29,7 @@ OFFICIAL_ASSET_PREFIX = "images/"
 
 # Screenshots the ordered walkthrough under `guides/` renders. They share the
 # `assets/official/` directory because they come from the same Learn articles,
-# but they are not part of the briefing's selected set: `guides/` owns them and
-# `scripts/tests/test_lab_guides.py` checks their captions and alt text.
+# but they are not part of the briefing's selected set.
 GUIDE_SCREENSHOT_PNGS = {
     "portal-setup-status-bar.png",
     "portal-complete-setup-page.png",

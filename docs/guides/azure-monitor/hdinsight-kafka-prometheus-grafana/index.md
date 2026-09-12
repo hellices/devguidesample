@@ -27,7 +27,7 @@ tags:
 # HDInsight Kafka JMX Exporter / Kafka Exporter 설치 및 Grafana 대시보드 구성
 
 **전제: HDInsight Kafka 클러스터 + Prometheus + Grafana 기구성.**
-도구별 커버 범위·선택 근거("Why") → [hdinsight-kafka-monitoring.md](../../../research/azure-monitor/hdinsight-kafka-monitoring-options/index.md).
+도구별 커버 범위·선택 근거("Why") → [HDInsight Kafka 모니터링 방식 비교](../../../research/azure-monitor/hdinsight-kafka-monitoring-options/index.md).
 
 > **문서 성격**: JMX Exporter·Kafka Exporter의 정식 사용법은 각 오픈소스 공식 문서([9절 출처](#9-출처)) 기준.
 > 이 문서는 그 위에서 **HDInsight 환경(원격 JMX 9999, Private Link 등)에 맞춰 실전 구성한 요약본**.
@@ -204,7 +204,7 @@ Prometheus(`:9090`) 쿼리로 확인.
 
 ## 6. 대시보드 화면
 
-> 이미지는 [`assets/images/`](https://github.com/hellices/devguidesample/tree/main/samples/azure-monitor/source-material/assets/images) 에 아래 파일명으로 저장 시 자동 표시.
+> 렌더링 이미지는 이 문서 번들의 `images/` 디렉터리에 아래 파일명으로 두면 자동 표시됩니다. 원본 자료는 [`samples/azure-monitor/source-material/assets/images/`](https://github.com/hellices/devguidesample/tree/main/samples/azure-monitor/source-material/assets/images)에서 확인할 수 있습니다.
 
 ### 6.1 Kafka Exporter Overview (7589)
 

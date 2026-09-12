@@ -32,6 +32,7 @@ TEXT_SUFFIXES = {
 }
 TEXT_FILENAMES = {"dockerfile"}
 TEXT_COMPOUND_SUFFIXES = (".env.example",)
+SCAN_ROOTS = ("docs", "samples")
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 KNOWN_ENVIRONMENT_MARKERS = (
     "rg-rubicon",
@@ -73,6 +74,12 @@ CHECKS = (
         "IP-based nip.io endpoint",
         re.compile(r"(?i)(?:[0-9]{1,3}\.){3}[0-9]{1,3}\.nip\.io"),
     ),
+    (
+        "deployment-specific lab suffix",
+        re.compile(
+            r"(?i)\b(?:[a-z0-9-]*sre(?:-event)?-lab-|stsrelab)[0-9a-f]{8}\b"
+        ),
+    ),
 )
 
 
@@ -91,7 +98,7 @@ def _is_example_azure_service_hostname(hostname: str) -> bool:
 
 
 def _text_files(root: Path):
-    for top_level in ("docs", "samples"):
+    for top_level in SCAN_ROOTS:
         directory = root / top_level
         if not directory.is_dir():
             continue
@@ -107,7 +114,11 @@ def _text_files(root: Path):
 
 def validate_repository(repo_root: Path | str) -> PublicSafetyResult:
     root = Path(repo_root)
-    errors: list[str] = []
+    errors = [
+        f"{name}: expected public content directory is missing under {root}"
+        for name in SCAN_ROOTS
+        if not (root / name).is_dir()
+    ]
     count = 0
     for path in _text_files(root):
         count += 1
@@ -127,6 +138,8 @@ def validate_repository(repo_root: Path | str) -> PublicSafetyResult:
                         f"{relative}:{line_number}: possible "
                         "non-example Azure service hostname"
                     )
+    if count == 0:
+        errors.append(f"{root}: no public text files were scanned")
     return PublicSafetyResult(count, errors)
 
 

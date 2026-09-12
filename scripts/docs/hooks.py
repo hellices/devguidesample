@@ -26,8 +26,8 @@ def on_page_markdown(markdown: str, page: Any, config: Mapping[str, Any], files:
         return markdown
 
     status = metadata.get("verification_status")
-    checked_at = _format_date(metadata.get("sources_checked_at", "unknown"))
-    sources = metadata.get("official_sources", [])
+    checked_at = _format_date(metadata.get("sources_checked_at") or "unknown")
+    sources = metadata.get("official_sources") or []
     source_links = ", ".join(
         f"[{source['title']}]({source['url']})"
         for source in sources

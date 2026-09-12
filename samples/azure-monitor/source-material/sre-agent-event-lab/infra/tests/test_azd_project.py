@@ -305,7 +305,7 @@ def test_main_parameters_map_action_group_and_deployed_image():
 
 
 def test_hardcoded_lab_bicepparam_is_deleted():
-    """lab.bicepparam pinned a dead suffix (95933ae5) and an expiry date;
+    """lab.bicepparam pinned a deployment-specific suffix and an expiry date;
     azd owns those values now, so the file must not linger.
     """
     assert not (LAB_ROOT / "infra" / "lab.bicepparam").exists()
@@ -369,6 +369,7 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
     subscription too, and so this test does not have to restate a real
     subscription ID in order to prove it is absent.
     """
+    assert LAB_PAGE.is_file(), f"lab page missing: {LAB_PAGE}"
     onboarding_paths = [
         LAB_PAGE,
         LAB_ROOT / "azure.yaml",

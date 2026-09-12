@@ -62,7 +62,7 @@ Agent를 열면 위쪽 상태 표시줄이 아직 연결하지 않은 데이터 
 |---|---|---|
 | Code | **본인이 fork한 저장소**와 브랜치 (`source ./scripts/lab-env.sh`가 출력한 `Repository` 값) | 조사 결론이 코드와 최근 변경을 짚게 합니다 |
 | Azure resources | `lab-env.sh`가 출력한 `Resource group` 값 | 메트릭·리소스 상태·Activity Log를 읽습니다 |
-| Knowledge files | [runbooks/incident-response.md](../../../guides/azure-monitor/sre-agent-incident-runbook/index.md) | 조사 순서와 금지 사항을 팀 규칙으로 강제합니다 |
+| Knowledge files | [인시던트 대응 런북](../../../guides/azure-monitor/sre-agent-incident-runbook/index.md) | 조사 순서와 금지 사항을 팀 규칙으로 강제합니다 |
 | Incidents | Azure Monitor | 경고를 자동으로 받아 조사 스레드를 엽니다 |
 
 저장소는 [Connect source code](https://learn.microsoft.com/azure/sre-agent/connect-source-code)로 연결합니다. 이슈·PR 조작까지 맡기려면 [GitHub connector](https://learn.microsoft.com/azure/sre-agent/setup-github-connector)를 추가로 설정하되, 토큰 값은 포털 입력창에만 넣고 이 저장소의 어떤 파일에도 남기지 않습니다.
@@ -261,4 +261,4 @@ python3 scripts/lab_state.py acknowledge-agent
 
 ## 다음 단계
 
-첫 장애를 주입합니다: [02-scenario-s1.md](../sre-agent-scenario-http-500/index.md)
+첫 장애를 주입합니다: [S1 — HTTP 500 장애](../sre-agent-scenario-http-500/index.md)

@@ -29,7 +29,7 @@ tags:
 
 ## 시작 조건
 
-- [03-scenario-s2.md](../sre-agent-scenario-latency/index.md)의 S2가 복구되고 캡처가 `conclusion`으로 끝났습니다.
+- [S2 — 응답 지연](../sre-agent-scenario-latency/index.md)의 S2가 복구되고 캡처가 `conclusion`으로 끝났습니다.
 - `evidence/state.json`에 `s2_recovered`와 `s2_captured`가 있습니다.
 - 다른 시나리오의 실행이 `running`이나 `failed`로 남아 있지 않습니다. S1을 다시 돌리다 실패한 채로 두면 S2 기록이 멀쩡해도 S3는 거부됩니다.
 - 역할 할당을 만들고 지울 권한이 그대로 있습니다.
@@ -315,4 +315,4 @@ az role assignment create \
 
 ## 다음 단계
 
-수집한 근거를 채점합니다: [05-results.md](../sre-agent-results/index.md)
+수집한 근거를 채점합니다: [결과 채점](../sre-agent-results/index.md)

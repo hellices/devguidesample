@@ -1,6 +1,6 @@
 {
   "servers": {
-    "microsoft.docs.mcp": {
+    "microsoft-learn": {
       "type": "http",
       "url": "https://learn.microsoft.com/api/mcp"
     }

@@ -8,6 +8,8 @@ import posixpath
 import sys
 from typing import Any, Iterable, Mapping
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -28,12 +30,13 @@ def _document_line(index_path: PurePosixPath, document: Document) -> str:
 
 
 def _front_matter(title: str, description: str) -> str:
-    return (
-        "---\n"
-        f"title: {title}\n"
-        f"description: {description}\n"
-        "---\n\n"
-    )
+    rendered = yaml.safe_dump(
+        {"title": title, "description": description},
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=False,
+    ).rstrip()
+    return f"---\n{rendered}\n---\n\n"
 
 
 def build_index_pages(

@@ -77,7 +77,7 @@ ize: 13px; }
       <p>120 <code>GET /api/orders</code> requests returned HTTP 500.</p>
       <h2>Root cause and evidence</h2>
       <p>Affected workload: ca-sre-event-lab-vnet<br>Telemetry source: appi-s=
-re-event-lab-95933ae5<br>Root cause: revision 0000010 had FAILURE_MODE=3Dhttp=
+re-event-lab-example<br>Root cause: revision 0000010 had FAILURE_MODE=3Dhttp=
 500<br>Impact: 120 GET /api/orders requests returned HTTP 500<br>Mitigation: =
 a healthy revision with FAILURE_MODE=3Dnone restored service</p>
       <h2>Mitigation and current status</h2>
@@ -97,8 +97,7 @@ ps://github.com/hellices/devguidesample/issues/43</a></p>
       <p><code>monitor/sre-agent-event-lab/validation-results.md</code></p>
     </section>
     <footer class=3D"footer">
-      Draft artifact =E2=80=94 not sent. Agent thread 6dd0e640-d969-46cb-a976=
--7c81b66fcadc
+      Draft artifact =E2=80=94 not sent. Agent thread &lt;agent-thread-id-s1&gt;
     </footer>
   </main>
 </body>

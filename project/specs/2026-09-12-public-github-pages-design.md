@@ -194,8 +194,8 @@ title: AKS Pod 데이터베이스 지연 분석
 description: AKS에서 발생하는 데이터베이스 호출 지연의 진단과 해결 방법
 document_type: guide
 services:
-  - aks
-  - azure-mysql
+  - azure-kubernetes-service
+  - azure-database-for-mysql
 technologies:
   - nodejs
 tags:
@@ -338,10 +338,10 @@ official_sources:
 실제 장애 이력과 재사용 가능한 해결 절차가 섞인 기존 문서는 두 문서로 분리한다.
 
 ```text
-cases/aks/netapp-file-io-wait/
+cases/azure-kubernetes-service/netapp-file-io-wait/
 └── 당시 환경, 관측값, 조사, 근본 원인과 해결 결과
 
-guides/aks/file-io-diagnosis/
+guides/azure-kubernetes-service/file-io-diagnosis/
 └── 현재 유효한 진단 절차, 권장 설정, 검증과 롤백
 ```
 
@@ -383,7 +383,7 @@ Microsoft 공식 문서가 안내하는 원격 Streamable HTTP 엔드포인트�
 ```json
 {
   "servers": {
-    "microsoft.docs.mcp": {
+    "microsoft-learn": {
       "type": "http",
       "url": "https://learn.microsoft.com/api/mcp"
     }
@@ -467,6 +467,15 @@ permissions:
 - `requirements-docs.txt`에 문서 도구 버전을 고정한다.
 - GitHub Actions는 검토된 버전 또는 변경 불가능한 커밋 참조를 사용한다.
 - 로컬과 CI 모두 같은 `mkdocs build --strict` 명령을 사용한다.
+
+### 10.4 최소 테스트 원칙
+
+실제 저장소를 대상으로 실행하는 메타데이터, 출처, 링크, 공개 안전성,
+strict build와 검색 색인 검증을 기본 품질 게이트로 사용한다. 단위 테스트는
+현재 문서만 검사해서는 확인할 수 없는 실패 경로와 사용자 데이터 노출 방지처럼
+회귀 비용이 큰 계약에만 둔다. README 문구, 워크플로 단계의 배열 순서와 같은
+구현 세부를 고정하는 테스트는 두지 않으며, 완료된 일회성 마이그레이션 도구와
+그 테스트는 저장소에서 제거한다.
 
 ## 11. 문서 신선도
 

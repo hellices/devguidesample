@@ -23,7 +23,7 @@ occurred_at: 2025-11-07
 
 ## 개요
 
-AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트래픽 증가 시 CPU 급증과 File I/O 대기 현상을 분석한 사례입니다. 이전 용량 증설로 NFS write 지연 문제를 해결했으나([file_io_throttling.md](../file-io-throttling/index.md) 참조), 추가적인 병목 현상이 발견되었습니다.
+AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트래픽 증가 시 CPU 급증과 File I/O 대기 현상을 분석한 사례입니다. 이전 용량 증설로 NFS write 지연 문제를 해결했으나([파일 I/O 스로틀링 사례](../file-io-throttling/index.md) 참조), 추가적인 병목 현상이 발견되었습니다.
 
 ## 환경 구성
 

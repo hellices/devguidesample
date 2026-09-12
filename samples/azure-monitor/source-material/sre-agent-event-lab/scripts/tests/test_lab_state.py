@@ -56,6 +56,7 @@ def test_every_scenario_has_a_guide_to_send_an_operator_to():
         "s3": "docs/labs/azure-monitor/sre-agent-scenario-blob-permission/index.md",
     }
     assert lab_state.SCENARIO_GUIDES == expected
+    assert set(lab_state.SCENARIO_GUIDES) == set(lab_state.SCENARIOS)
     for scenario, guide in expected.items():
         assert (REPO_ROOT / guide).is_file(), (scenario, guide)
 

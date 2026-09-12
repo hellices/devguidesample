@@ -25,7 +25,7 @@ published_at: 2026-08-15
 >
 > 이 문서는 S1/S2/S3 시나리오에서 측정한 수치, timeline, evidence, 한계를 정리한다.
 >
-> **기록 시점 주의.** 아래 결과는 azd 재구성 이전에 손으로 구축한 실습(2026-08-12)의 측정치다. 여기 적힌 `rg-sre-agent-event-lab-krc` 같은 리소스 그룹과 리소스 이름, Action Group + Logic App bridge는 모두 그때의 환경이고, 현재 실습의 `azd up`은 이 이름들을 만들지 않는다. 지금 실행하는 절차와 실제로 배포되는 구성은 [README](../../../labs/azure-monitor/sre-agent-event-lab/index.md)와 [guides/](../../../labs/azure-monitor/sre-agent-event-lab/index.md)를 따르고, 이 문서는 그 절차로 무엇을 관찰할 수 있었는지 보여 주는 과거 기록으로 읽는다.
+> **기록 시점 주의.** 아래 결과는 azd 재구성 이전에 손으로 구축한 실습(2026-08-12)의 측정치다. 여기 적힌 `rg-sre-agent-event-lab-krc` 같은 리소스 그룹과 리소스 이름, Action Group + Logic App bridge는 모두 그때의 환경이고, 현재 실습의 `azd up`은 이 이름들을 만들지 않는다. 지금 실행하는 절차와 실제로 배포되는 구성은 [현재 실습 문서](../../../labs/azure-monitor/sre-agent-event-lab/index.md)를 따르고, 이 문서는 그 절차로 무엇을 관찰할 수 있었는지 보여 주는 과거 기록으로 읽는다.
 
 - 실행일: 2026-08-12 | 리전: Korea Central | 구독: 비식별화
 - 목표: Azure Monitor 경고를 Azure SRE Agent가 자동 수신해 원인과 안전한 완화책을 올바르게 도출하는지 실증
@@ -57,7 +57,7 @@ published_at: 2026-08-15
 |---|---|---|
 | Resource group | `rg-sre-agent-event-lab-krc` | ✅ |
 | Container App | `ca-sre-event-lab-vnet` / image `20260812.4` | ✅ Healthy |
-| Log Analytics | `law-sre-event-lab-95933ae5` | ✅ |
+| Log Analytics | `law-sre-event-lab-example` | ✅ |
 | Application Insights | `appi-sre-event-lab-example` | ✅ |
 | Storage | `stexample00000000`, Blob private endpoint | ✅ |
 | Alert rules | S1/S2/S3 scheduled query, Sev2 | ✅ Enabled |
@@ -67,7 +67,7 @@ published_at: 2026-08-15
 
 | 항목 | 값 | 상태 |
 |---|---|---|
-| Agent | `sre-devguidesample-95933ae5` | ✅ Running |
+| Agent | `sre-devguidesample-example` | ✅ Running |
 | Region | Korea Central | ✅ |
 | Model provider | Microsoft Foundry / Automatic | ✅ |
 | Azure resource access | 테스트 RG Reader | ✅ |
@@ -235,7 +235,7 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 - 제안 완화책: original least-privilege role 복원 후 propagation 대기; 실제 복구와 일치
 - 잘못된 주장/누락: old app FQDN을 확인해 recovery가 미완료라고 판단. 실제 vnet app endpoint는 HTTP 200
 
-후속 보정: vnet workload의 `OTEL_SERVICE_NAME`을 `sre-event-lab-95933ae5`로 변경하고 alert/evidence query도 이 deployment-unique 값으로 제한했다. 변경 후 새 role name으로 `/api/orders` 5건, `/api/documents` 2건과 health telemetry가 분리 수집됨을 확인했다.
+후속 보정: vnet workload의 `OTEL_SERVICE_NAME`을 `sre-event-lab-example`로 변경하고 alert/evidence query도 이 deployment-unique 값으로 제한했다. 변경 후 새 role name으로 `/api/orders` 5건, `/api/documents` 2건과 health telemetry가 분리 수집됨을 확인했다.
 
 ### 점수
 

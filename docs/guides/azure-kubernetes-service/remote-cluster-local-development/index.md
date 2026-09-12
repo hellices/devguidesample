@@ -61,7 +61,7 @@ local_dev_loop/
 
 ```bash
 az aks get-credentials -g rg-example-koreacentral-01 -n aks-example-koreacentral-01
-kubectl apply -f local_dev_loop/k8s/echo-service.yaml
+kubectl apply -f samples/azure-kubernetes-service/source-material/local_dev_loop/k8s/echo-service.yaml
 kubectl -n tp-demo rollout status deploy/echo-server
 ```
 
@@ -258,7 +258,7 @@ telepresence helm uninstall              # Traffic Manager 제거
 # mirrord — agent pod는 세션 종료 시 자동 삭제됨
 
 # 샘플 서비스 제거
-kubectl delete -f local_dev_loop/k8s/echo-service.yaml
+kubectl delete -f samples/azure-kubernetes-service/source-material/local_dev_loop/k8s/echo-service.yaml
 
 # 비용 절약: 클러스터 중지
 az aks stop -g rg-example-koreacentral-01 -n aks-example-koreacentral-01

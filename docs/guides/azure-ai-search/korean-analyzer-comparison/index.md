@@ -380,7 +380,8 @@ curl -s -X POST "https://{service}.search.windows.net/indexes/{index}-v2/docs/se
 ## ▶️ 재현 실행 방법
 
 ```powershell
-# 리소스는 이미 생성됨 (RG rg-search-example-koreacentral / search-example-koreacentral-02)
+# 아래 리소스 이름은 예시입니다. 사용할 리소스 그룹과 Azure AI Search 서비스를
+# 먼저 준비한 뒤 실제 이름으로 바꾸십시오.
 # .env.example 을 .env 로 복사하고 SEARCH_ADMIN_KEY 채우기
 #   az search admin-key show --service-name search-example-koreacentral-02 -g rg-search-example-koreacentral --query primaryKey -o tsv
 
