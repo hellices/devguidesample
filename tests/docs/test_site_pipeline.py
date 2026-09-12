@@ -5,6 +5,7 @@ from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
+from urllib.parse import urljoin
 
 from markdown import Markdown
 from material.plugins.search.plugin import SearchIndex
@@ -83,6 +84,7 @@ def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
     assert set(pages) == {
         PurePosixPath("cases/index.md"),
         PurePosixPath("guides/index.md"),
+        PurePosixPath("guides/aks/index.md"),
         PurePosixPath("services/index.md"),
         PurePosixPath("services/aks.md"),
         PurePosixPath("services/azure-monitor.md"),
@@ -347,12 +349,25 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     unchanged_paths = (config_path, nav_path, root / "docs-taxonomy.yml")
     original_settings = [path.read_bytes() for path in unchanged_paths]
     build(load_config(str(config_path), strict=True))
+    single_document_navigation = PrimaryNavigation()
+    single_document_navigation.feed(
+        (root / "site" / "index.html").read_text(encoding="utf-8")
+    )
+
+    assert single_document_navigation.links["guides/aks/network-diagnosis/"] == "AKS 네트워크 진단"
+    assert single_document_navigation.links["guides/aks/"] == "Azure Kubernetes Service"
 
     page = docs / "guides" / "aks" / "new-topic" / "index.md"
     page.parent.mkdir(parents=True)
     page.write_text(
         SEARCH_DOCUMENT.replace("AKS 네트워크 진단", "자동 게시 확인")
         + "\n추가된 문서의 검색 본문입니다.\n",
+        encoding="utf-8",
+    )
+    third_page = docs / "guides" / "aks" / "z-last-topic" / "index.md"
+    third_page.parent.mkdir(parents=True)
+    third_page.write_text(
+        SEARCH_DOCUMENT.replace("AKS 네트워크 진단", "세 번째 문서"),
         encoding="utf-8",
     )
     build(load_config(str(config_path), strict=True))
@@ -363,13 +378,32 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     )
 
     assert [path.read_bytes() for path in unchanged_paths] == original_settings
+    assert navigation.links["guides/aks/network-diagnosis/"] == "AKS 네트워크 진단"
     assert navigation.links["guides/aks/new-topic/"] == "자동 게시 확인"
+    assert navigation.links["guides/aks/z-last-topic/"] == "세 번째 문서"
+    assert navigation.links["guides/aks/"] == "Azure Kubernetes Service"
+    assert navigation.links["guides/"] == "Guides"
     assert "자동 게시 확인" in (root / "site" / "guides" / "index.html").read_text(encoding="utf-8")
     assert any(
         entry["location"] == "guides/aks/new-topic/"
         and "추가된 문서" in entry["text"]
         for entry in search["docs"]
     )
+    article_navigation = PrimaryNavigation()
+    article_navigation.feed(
+        (root / "site" / "guides" / "aks" / "network-diagnosis" / "index.html").read_text(
+            encoding="utf-8"
+        )
+    )
+    article_url = "https://example.test/guides/aks/network-diagnosis/"
+    resolved_links = {
+        urljoin(article_url, target): title
+        for target, title in article_navigation.links.items()
+    }
+    assert resolved_links[article_url] == "AKS 네트워크 진단"
+    assert resolved_links["https://example.test/guides/aks/"] == "Azure Kubernetes Service"
+    assert resolved_links["https://example.test/guides/aks/new-topic/"] == "자동 게시 확인"
+    assert resolved_links["https://example.test/guides/aks/z-last-topic/"] == "세 번째 문서"
 
 
 def write_search_index(root: Path, documents: list[dict[str, str]]) -> None:

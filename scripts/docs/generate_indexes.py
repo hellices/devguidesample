@@ -282,8 +282,11 @@ def _build_service_page(
     slug: str,
     matching: list[Document],
     taxonomy: Mapping[str, Any],
+    *,
+    page_path: PurePosixPath | None = None,
 ) -> tuple[PurePosixPath, str]:
-    page_path = PurePosixPath(f"services/{slug}.md")
+    if page_path is None:
+        page_path = PurePosixPath(f"services/{slug}.md")
     services = taxonomy.get("services", {})
     collections = taxonomy.get("collections", {})
     label = _label_for(services, slug)
@@ -384,6 +387,18 @@ def build_index_pages(
         matching = [doc for doc in docs if doc.metadata.get("document_type") == document_type]
         index_path, body = _build_collection_page(document_type, config, matching, taxonomy)
         pages[index_path] = body
+        by_primary_service: dict[str, list[Document]] = defaultdict(list)
+        for document in matching:
+            by_primary_service[document.relative_path.parts[1]].append(document)
+        for slug, service_docs in by_primary_service.items():
+            # A real section index prevents Material from promoting the first bundle.
+            service_path, service_body = _build_service_page(
+                slug,
+                service_docs,
+                taxonomy,
+                page_path=PurePosixPath(config["path"]) / slug / "index.md",
+            )
+            pages[service_path] = service_body
 
     by_service: dict[str, list[Document]] = defaultdict(list)
     for document in docs:
