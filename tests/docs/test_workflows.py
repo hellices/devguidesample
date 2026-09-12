@@ -113,6 +113,16 @@ def test_pages_builds_on_main_and_deploys_an_artifact() -> None:
     )
 
 
+def test_oryx_workflow_tracks_the_migrated_sample_path() -> None:
+    workflow = load_workflow("oryx-python-build-test.yml")
+
+    sample_path = "samples/app-service/oryx-test"
+    assert f"{sample_path}/**" in workflow["on"]["push"]["paths"]
+    script = "\n".join(commands(workflow))
+    assert f"${{{{ github.workspace }}}}/{sample_path}:/app" in script
+    assert f"./{sample_path}/" in script
+
+
 def test_workflows_never_write_a_gh_pages_branch() -> None:
     text = "\n".join(
         path.read_text(encoding="utf-8")
