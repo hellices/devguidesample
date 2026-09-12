@@ -72,6 +72,23 @@ def test_metadata_validator_accepts_valid_repository(tmp_path: Path) -> None:
     assert result.errors == []
 
 
+def test_metadata_validator_rejects_markdown_outside_a_page_bundle(
+    tmp_path: Path,
+) -> None:
+    root = make_repository(tmp_path)
+    stray = root / "docs" / "guides" / "aks" / "network-diagnosis" / "topic.md"
+    stray.write_text(VALID_GUIDE, encoding="utf-8")
+
+    result = validate_metadata.validate_repository(root, today=date(2026, 9, 12))
+
+    assert result.document_count == 2
+    assert any(
+        "public documents must use <collection>/<service>/<topic>/index.md" in error
+        and "topic.md" in error
+        for error in result.errors
+    )
+
+
 def test_metadata_validator_reports_front_matter_and_schema_errors(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
     page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"

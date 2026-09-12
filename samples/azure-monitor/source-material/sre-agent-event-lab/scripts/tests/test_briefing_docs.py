@@ -1,11 +1,9 @@
 import re
 import unicodedata
 from collections import Counter
-from pathlib import Path
 
+from published_layout import BRIEFING, OFFICIAL_ASSETS as SOURCE_OFFICIAL_ASSETS
 
-REPO_ROOT = Path(__file__).parents[4]
-BRIEFING = REPO_ROOT / "monitor" / "azure-sre-agent.md"
 OFFICIAL_SVGS = {
     "incident-response-flow.svg",
     "root-cause-analysis.svg",
@@ -27,7 +25,7 @@ OFFICIAL_PNGS = {
     "operations-hub-overview-tab.png",
 }
 OFFICIAL_ASSETS = OFFICIAL_SVGS | OFFICIAL_PNGS
-OFFICIAL_ASSET_PREFIX = "sre-agent-event-lab/assets/official/"
+OFFICIAL_ASSET_PREFIX = "images/"
 
 # Screenshots the ordered walkthrough under `guides/` renders. They share the
 # `assets/official/` directory because they come from the same Learn articles,
@@ -403,7 +401,7 @@ def test_every_official_asset_is_rendered_as_a_markdown_image():
     rendered_official = {
         target.rsplit("/", 1)[-1]
         for target in markdown_targets
-        if "assets/official/" in target
+        if target.rsplit("/", 1)[-1] in OFFICIAL_ASSETS
     }
 
     assert rendered_official == OFFICIAL_ASSETS, sorted(
@@ -545,10 +543,11 @@ FORBIDDEN_ALT_CLAIMS = {
 
 
 def official_image_alt_texts() -> dict:
-    pattern = re.compile(r"!\[([^\]]*)\]\(([^)]*assets/official/([^)]+))\)")
+    pattern = re.compile(r"!\[([^\]]*)\]\(images/([^)]+)\)")
     return {
-        match.group(3): match.group(1)
+        match.group(2): match.group(1)
         for match in pattern.finditer(BRIEFING.read_text())
+        if match.group(2) in OFFICIAL_ASSETS
     }
 
 
@@ -683,13 +682,7 @@ def test_briefing_marks_preview_capabilities():
 
 
 def test_official_asset_set_has_16_selected_files():
-    asset_dir = (
-        REPO_ROOT
-        / "monitor"
-        / "sre-agent-event-lab"
-        / "assets"
-        / "official"
-    )
+    asset_dir = SOURCE_OFFICIAL_ASSETS
 
     assert len(OFFICIAL_ASSETS) == 16
     # The directory also stores the guide screenshots; nothing else may
@@ -701,13 +694,7 @@ def test_official_asset_set_has_16_selected_files():
 
 
 def test_official_sre_agent_svgs_are_stored_locally():
-    asset_dir = (
-        REPO_ROOT
-        / "monitor"
-        / "sre-agent-event-lab"
-        / "assets"
-        / "official"
-    )
+    asset_dir = SOURCE_OFFICIAL_ASSETS
 
     assert {path.name for path in asset_dir.glob("*.svg")} == OFFICIAL_SVGS
     for name in OFFICIAL_SVGS:
@@ -717,13 +704,7 @@ def test_official_sre_agent_svgs_are_stored_locally():
 
 
 def test_official_sre_agent_pngs_are_stored_locally():
-    asset_dir = (
-        REPO_ROOT
-        / "monitor"
-        / "sre-agent-event-lab"
-        / "assets"
-        / "official"
-    )
+    asset_dir = SOURCE_OFFICIAL_ASSETS
 
     assert {path.name for path in asset_dir.glob("*.png")} == (
         OFFICIAL_PNGS | GUIDE_SCREENSHOT_PNGS
@@ -737,14 +718,14 @@ def test_all_conceptual_svgs_are_referenced_in_briefing():
     text = BRIEFING.read_text()
 
     for name in OFFICIAL_SVGS:
-        assert f"assets/official/{name}" in text, name
+        assert f"images/{name}" in text, name
 
 
 def test_all_selected_official_pngs_are_referenced_in_briefing():
     text = BRIEFING.read_text()
 
     for name in OFFICIAL_PNGS:
-        assert f"assets/official/{name}" in text, name
+        assert f"images/{name}" in text, name
 
 
 def test_briefing_covers_private_network_connectivity():

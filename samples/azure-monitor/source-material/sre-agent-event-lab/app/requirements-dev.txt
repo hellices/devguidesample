@@ -1,4 +1,4 @@
 -r requirements.txt
-pytest~=8.4.0
+pytest>=8.4,<10
 httpx~=0.28.0
 Pillow~=11.3.0

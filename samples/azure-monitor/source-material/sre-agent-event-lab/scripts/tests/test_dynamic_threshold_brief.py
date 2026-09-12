@@ -5,9 +5,9 @@ from pathlib import Path
 from PIL import Image
 
 
-REPO_ROOT = Path(__file__).parents[4]
-BRIEF = REPO_ROOT / "monitor" / "azure-monitor-dynamic-thresholds-brief.md"
-ASSET = REPO_ROOT / "monitor" / "assets" / "official" / "dynamic-threshold-preview-chart.png"
+REPO_ROOT = Path(__file__).parents[6]
+BRIEF = REPO_ROOT / "docs" / "research" / "azure-monitor" / "dynamic-thresholds-brief" / "index.md"
+ASSET = BRIEF.parent / "images" / "dynamic-threshold-preview-chart.png"
 ARTICLE = "https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds"
 RAW_MEDIA = (
     "https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/media/"
@@ -15,12 +15,12 @@ RAW_MEDIA = (
 )
 OFFICIAL_ASSETS = {"dynamic-threshold-preview-chart.png"}
 # To update this digest, download RAW_MEDIA and run:
-# shasum -a 256 monitor/assets/official/dynamic-threshold-preview-chart.png
+# shasum -a 256 docs/research/azure-monitor/dynamic-thresholds-brief/images/dynamic-threshold-preview-chart.png
 EXPECTED_ASSET_SHA256 = "4688901b73dff95c47d6d87c6d73f774dcb613fec38b757d1a76953df098636c"
 
 
 def test_brief_uses_the_local_official_chart():
-    text = BRIEF.read_text()
+    text = BRIEF.read_text(encoding="utf-8")
 
     assert ASSET.is_file()
     assert {path.name for path in ASSET.parent.iterdir()} == OFFICIAL_ASSETS
@@ -31,11 +31,11 @@ def test_brief_uses_the_local_official_chart():
         f"got {actual_sha256}; download {RAW_MEDIA} and verify the replacement "
         "before updating EXPECTED_ASSET_SHA256"
     )
-    assert "assets/official/dynamic-threshold-preview-chart.png" in text
+    assert "images/dynamic-threshold-preview-chart.png" in text
     assert RAW_MEDIA not in text
     linked_chart = re.search(
         rf"\[!\[(?P<alt>[^\]]+)\]"
-        rf"\(assets/official/dynamic-threshold-preview-chart\.png\)\]"
+        rf"\(images/dynamic-threshold-preview-chart\.png\)\]"
         rf"\({re.escape(ARTICLE)}\)",
         text,
     )
@@ -54,7 +54,7 @@ def test_official_chart_is_a_valid_1000_by_598_png():
 
 
 def test_brief_describes_ongoing_learning_without_an_unsupported_time_bound():
-    text = BRIEF.read_text()
+    text = BRIEF.read_text(encoding="utf-8")
 
     assert "**Ongoing learning** uses all available historical data" in text
     assert "**Up to 10 days**" not in text

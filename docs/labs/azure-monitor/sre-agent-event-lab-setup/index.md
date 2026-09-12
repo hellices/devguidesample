@@ -36,7 +36,7 @@ tags:
 - 아래 값을 손에 들고 시작합니다.
 
 ```bash
-cd monitor/sre-agent-event-lab
+cd samples/azure-monitor/source-material/sre-agent-event-lab
 source ./scripts/lab-env.sh
 ```
 

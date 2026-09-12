@@ -11,13 +11,13 @@ driven through stdin), never by reading the module's source.
 import importlib.util
 import json
 import os
-import pathlib
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from published_layout import REPO_ROOT
 
 MODULE_PATH = Path(__file__).parents[1] / "lab_state.py"
 
@@ -50,10 +50,14 @@ def test_every_scenario_has_a_guide_to_send_an_operator_to():
     """
     import lab_state
 
-    assert set(lab_state.SCENARIO_GUIDES) == set(lab_state.SCENARIOS)
-    lab_root = pathlib.Path(__file__).parents[2]
-    for scenario, guide in lab_state.SCENARIO_GUIDES.items():
-        assert (lab_root / guide).is_file(), (scenario, guide)
+    expected = {
+        "s1": "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md",
+        "s2": "docs/labs/azure-monitor/sre-agent-scenario-latency/index.md",
+        "s3": "docs/labs/azure-monitor/sre-agent-scenario-blob-permission/index.md",
+    }
+    assert lab_state.SCENARIO_GUIDES == expected
+    for scenario, guide in expected.items():
+        assert (REPO_ROOT / guide).is_file(), (scenario, guide)
 
 
 def run_cli(state_path, args, stdin="", env=None):
@@ -577,7 +581,7 @@ def test_the_refusal_lists_every_blocker_earliest_first(tmp_path):
     assert message.index("s2") < message.index("s3"), message
     assert "running" in message and "failed" in message
     assert "mark-failed s2" in message
-    assert "guides/04-scenario-s3.md" in message
+    assert "docs/labs/azure-monitor/sre-agent-scenario-blob-permission/index.md" in message
 
 
 def test_a_repair_is_refused_while_an_earlier_run_is_still_running(tmp_path):
@@ -609,7 +613,7 @@ def test_the_refusal_names_the_blocking_scenario_its_status_and_a_remedy(tmp_pat
     message = str(refusal.value)
     assert "s2" in message
     assert "failed" in message
-    assert "guides/03-scenario-s2.md" in message, message
+    assert "docs/labs/azure-monitor/sre-agent-scenario-latency/index.md" in message, message
 
 
 def test_the_refusal_for_a_running_scenario_names_how_to_end_it(tmp_path):
@@ -641,7 +645,7 @@ def test_the_ordered_remedy_never_tells_an_operator_to_restart_a_running_run(tmp
 
     message = str(refusal.value)
     assert "s1_recovered" in message
-    assert "guides/02-scenario-s1.md" not in message, message
+    assert "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md" not in message, message
     assert "mark-failed s1" in message, message
 
 
@@ -782,9 +786,21 @@ def test_a_conclusion_cannot_be_recorded_against_a_run_that_never_recovered(
 @pytest.mark.parametrize(
     "run_status, expected, forbidden",
     (
-        ("running", "mark-failed s1", "guides/02-scenario-s1.md"),
-        ("failed", "guides/02-scenario-s1.md", "mark-failed s1"),
-        (None, "guides/02-scenario-s1.md", "mark-failed s1"),
+        (
+            "running",
+            "mark-failed s1",
+            "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md",
+        ),
+        (
+            "failed",
+            "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md",
+            "mark-failed s1",
+        ),
+        (
+            None,
+            "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md",
+            "mark-failed s1",
+        ),
     ),
     ids=("running", "failed", "none"),
 )
@@ -1216,7 +1232,7 @@ def test_cli_evidence_dir_without_a_run_names_the_command_to_run(tmp_path):
     result = run_cli(tmp_path / "state.json", ["evidence-dir", "s1"])
 
     assert result.returncode == 1
-    assert "guides/02-scenario-s1.md" in result.stderr
+    assert "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -1290,7 +1306,7 @@ def test_cli_require_run_refuses_every_scenario_while_one_run_is_unfinished(tmp_
         assert refused.returncode == 1, refused.stdout
         assert "s3" in refused.stderr
         assert "failed" in refused.stderr
-        assert "guides/04-scenario-s3.md" in refused.stderr
+        assert "docs/labs/azure-monitor/sre-agent-scenario-blob-permission/index.md" in refused.stderr
         assert "Traceback" not in refused.stderr
 
     assert run_cli(path, ["require-run", "s3"]).returncode == 0

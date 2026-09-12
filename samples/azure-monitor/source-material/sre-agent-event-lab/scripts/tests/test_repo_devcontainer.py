@@ -15,8 +15,8 @@ import json
 import re
 from pathlib import Path
 
+from published_layout import README as LAB_README, REPO_ROOT
 
-REPO_ROOT = Path(__file__).parents[4]
 DEVCONTAINER_DIR = REPO_ROOT / ".devcontainer"
 DEVCONTAINER = DEVCONTAINER_DIR / "devcontainer.json"
 TOOLCHAIN_DOC = DEVCONTAINER_DIR / "README.md"
@@ -111,7 +111,6 @@ def test_one_document_owns_the_install_instructions():
 
 
 def test_the_lab_points_at_that_document_instead_of_repeating_it():
-    lab_readme = REPO_ROOT / "monitor" / "sre-agent-event-lab" / "README.md"
-    assert ".devcontainer/README.md" in lab_readme.read_text(), (
+    assert ".devcontainer/README.md" in LAB_README.read_text(), (
         "the lab must link the shared toolchain document, not restate it"
     )

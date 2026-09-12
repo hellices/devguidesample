@@ -160,6 +160,39 @@ def test_public_safety_scans_compound_and_extensionless_text_files(
     assert len(environment_errors) == 3
 
 
+def test_public_safety_scans_svg_and_xml_text_files(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    sample = root / "samples" / "aks" / "example"
+    (sample / "diagram.svg").write_text(
+        '<svg><text>rg-rubicon-prod</text></svg>\n',
+        encoding="utf-8",
+    )
+    (sample / "settings.xml").write_text(
+        '<endpoint>https://ais-aiplay-krc-01.search.windows.net</endpoint>\n',
+        encoding="utf-8",
+    )
+
+    result = validate_public_safety.validate_repository(root)
+
+    assert result.file_count == 2
+    assert {
+        error.split(": possible ", maxsplit=1)[1] for error in result.errors
+    } == {"environment-specific name", "non-example Azure service hostname"}
+
+
+def test_public_safety_rejects_selected_files_that_are_not_utf8(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    invalid = root / "samples" / "aks" / "example" / "diagram.svg"
+    invalid.write_bytes(b"<svg>\xff</svg>\n")
+
+    result = validate_public_safety.validate_repository(root)
+
+    assert result.file_count == 1
+    assert result.errors == [
+        "samples/aks/example/diagram.svg: file is not valid UTF-8"
+    ]
+
+
 def test_public_safety_scans_saved_email_artifacts(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
     (root / "samples" / "aks" / "example" / "incident.eml").write_text(

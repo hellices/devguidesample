@@ -11,14 +11,10 @@ import os
 import re
 import subprocess
 import textwrap
-from pathlib import Path
 
+from published_layout import GUIDES, LAB_ROOT, README
 
-REPO_ROOT = Path(__file__).parents[4]
-LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
 LAB_ENV_SH = LAB_ROOT / "scripts" / "lab-env.sh"
-GUIDES = LAB_ROOT / "guides"
-README = LAB_ROOT / "README.md"
 
 SCENARIO_GUIDES = {
     "02-scenario-s1.md": "s1",

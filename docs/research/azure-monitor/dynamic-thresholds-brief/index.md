@@ -27,7 +27,7 @@ dynamic ones without losing existing safety guarantees.
 
 ## Preview chart
 
-[![Screenshot that shows a metric alert preview chart with dynamic threshold: a blue line for the measured metric, a blue shaded allowed range, and red dots marking values outside that range.](https://github.com/hellices/devguidesample/blob/main/samples/azure-monitor/source-material/assets/official/dynamic-threshold-preview-chart.png)](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
+[![Screenshot that shows a metric alert preview chart with dynamic threshold: a blue line for the measured metric, a blue shaded allowed range, and red dots marking values outside that range.](images/dynamic-threshold-preview-chart.png)](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds)
 
 *Source: [Create a Log Search alert rule with dynamic threshold](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds).*
 

@@ -6,17 +6,24 @@ that pre-existing, unrelated history (e.g. the HDInsight Kafka lag test
 docs) is left untouched.
 """
 import re
-from pathlib import Path
 
+from published_layout import (
+    BRIEFING,
+    DEPLOYMENT_PLAN,
+    DYNAMIC_THRESHOLDS,
+    LAB_ROOT,
+    README,
+    REPO_ROOT,
+    VALIDATION_RESULTS,
+)
 
-REPO_ROOT = Path(__file__).parents[4]
 
 SRE_LAB_TRACKED_FILES = (
-    REPO_ROOT / ".azure" / "deployment-plan.md",
-    REPO_ROOT / "monitor" / "sre-agent-event-lab" / "README.md",
-    REPO_ROOT / "monitor" / "sre-agent-event-lab" / "scripts" / "common.sh",
-    REPO_ROOT / "monitor" / "sre-agent-event-lab" / "validation-results.md",
-    REPO_ROOT / "monitor" / "sre-agent-event-lab" / "dynamic-thresholds.md",
+    DEPLOYMENT_PLAN,
+    README,
+    LAB_ROOT / "scripts" / "common.sh",
+    VALIDATION_RESULTS,
+    DYNAMIC_THRESHOLDS,
 )
 
 FORBIDDEN_STRINGS = (
@@ -35,7 +42,7 @@ def test_sre_lab_docs_do_not_contain_personal_identifier():
 
 def test_sre_lab_captures_do_not_expose_container_app_fqdn():
     captures_dir = (
-        REPO_ROOT / "monitor" / "sre-agent-event-lab" / "assets" / "captures"
+        LAB_ROOT / "assets" / "captures"
     )
     text_files = [
         *captures_dir.glob("**/*.md"),
@@ -53,11 +60,11 @@ def test_repository_does_not_ship_agent_workflow_docs():
 
 def test_sre_lab_docs_do_not_link_removed_workflow_paths():
     checked = [
-        REPO_ROOT / "monitor" / "azure-sre-agent.md",
-        REPO_ROOT / "monitor" / "sre-agent-event-lab" / "README.md",
-        REPO_ROOT / ".azure" / "deployment-plan.md",
-        *(REPO_ROOT / "monitor" / "sre-agent-event-lab" / "assets" / "notifications").glob("*.md"),
-        *(REPO_ROOT / "monitor" / "sre-agent-event-lab" / "assets" / "notifications").glob("*.html"),
+        BRIEFING,
+        README,
+        DEPLOYMENT_PLAN,
+        *(LAB_ROOT / "assets" / "notifications").glob("*.md"),
+        *(LAB_ROOT / "assets" / "notifications").glob("*.html"),
     ]
 
     for path in checked:
@@ -66,25 +73,23 @@ def test_sre_lab_docs_do_not_link_removed_workflow_paths():
 
 
 def test_briefing_relative_links_resolve():
-    briefing = REPO_ROOT / "monitor" / "azure-sre-agent.md"
-    targets = re.findall(r"\]\((?!https?://)([^)#]+)", briefing.read_text())
+    targets = re.findall(r"\]\((?!https?://)([^)#]+)", BRIEFING.read_text())
 
     assert targets
     for target in targets:
-        assert (briefing.parent / target).resolve().exists(), target
+        assert (BRIEFING.parent / target).resolve().exists(), target
 
 
 def test_relocated_lab_docs_drop_internal_workflow_directives():
-    for name in ("validation-results.md", "dynamic-thresholds.md"):
-        content = (
-            REPO_ROOT / "monitor" / "sre-agent-event-lab" / name
-        ).read_text()
+    for name, path in (
+        ("validation-results.md", VALIDATION_RESULTS),
+        ("dynamic-thresholds.md", DYNAMIC_THRESHOLDS),
+    ):
+        content = path.read_text()
         for marker in ("승인된 설계", "보고서 반영", "검증 부록"):
             assert marker not in content, (name, marker)
 
 
-LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
-VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
 UUID_PATTERN = re.compile(
     r"\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b"
 )

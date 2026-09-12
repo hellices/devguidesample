@@ -30,7 +30,7 @@ def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Pa
     for collection in sorted(paths):
         root = docs_dir / collection
         if root.is_dir():
-            yield from sorted(root.rglob("index.md"))
+            yield from sorted(root.rglob("*.md"))
 
 
 def validate_repository(repo_root: Path | str, today: date | None = None) -> ValidationResult:

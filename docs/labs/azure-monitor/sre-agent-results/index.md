@@ -36,7 +36,7 @@ tags:
 ## 실행 명령
 
 ```bash
-cd monitor/sre-agent-event-lab
+cd samples/azure-monitor/source-material/sre-agent-event-lab
 app/.venv/bin/python scripts/score.py --evidence-root evidence
 ```
 

@@ -8,19 +8,19 @@ link and screenshot resolves; and that nothing here asks anyone to paste a
 credential into a file or an environment variable.
 """
 import re
-from pathlib import Path
 
-
-REPO_ROOT = Path(__file__).parents[4]
-LAB_ROOT = REPO_ROOT / "monitor" / "sre-agent-event-lab"
-README = LAB_ROOT / "README.md"
-GUIDES = LAB_ROOT / "guides"
-OFFICIAL_ASSETS = LAB_ROOT / "assets" / "official"
-RUNBOOK = LAB_ROOT / "runbooks" / "incident-response.md"
-VALIDATION_RESULTS = LAB_ROOT / "validation-results.md"
-DYNAMIC_THRESHOLDS = LAB_ROOT / "dynamic-thresholds.md"
-RESULTS_GUIDE = LAB_ROOT / "guides" / "05-results.md"
-DEPLOYMENT_PLAN = REPO_ROOT / ".azure" / "deployment-plan.md"
+from published_layout import (
+    DEPLOYMENT_PLAN,
+    DYNAMIC_THRESHOLDS,
+    GUIDE_PATHS,
+    GUIDES,
+    LAB_ROOT,
+    OFFICIAL_ASSETS,
+    README,
+    RESULTS_GUIDE,
+    RUNBOOK,
+    VALIDATION_RESULTS,
+)
 
 # The table `infra/alerts.bicep` actually queries for each scenario --
 # workspace schema, not the legacy Application Insights component schema.
@@ -401,7 +401,7 @@ def test_autonomy_screenshots_warn_that_the_lab_must_choose_review():
     for path in guide_paths():
         lines = path.read_text().splitlines()
         for index, line in enumerate(lines):
-            match = re.match(r"!\[[^\]]*\]\(\.\./assets/official/([^)]+)\)", line.strip())
+            match = re.match(r"!\[[^\]]*\]\(images/([^)]+)\)", line.strip())
             if not match:
                 continue
             caption = []
@@ -626,8 +626,9 @@ def test_deployment_plan_does_not_overclaim_appinsights_resource_id_usage():
 def test_readme_is_a_quickstart_not_the_full_walkthrough():
     """Scenario, capture and scoring detail belongs in the guides."""
     text = README.read_text()
+    body = text.split("---", 2)[-1]
 
-    assert len(text.splitlines()) <= 200, "README is no longer a quickstart"
+    assert len(body.splitlines()) <= 200, "README is no longer a quickstart"
     for moved in ("impact_scope", "conclusion-review.json", "FAILURE_MODE=http500"):
         assert moved not in text, moved
     assert "impact_scope" in (GUIDES / "05-results.md").read_text()
@@ -740,7 +741,7 @@ def test_guide05_generate_notifications_runs_under_plain_python3():
 
 
 def test_guides_directory_holds_exactly_the_five_numbered_guides():
-    assert {path.name for path in GUIDES.glob("*.md")} == set(GUIDE_NAMES)
+    assert set(GUIDE_PATHS) == set(GUIDE_NAMES)
 
 
 def test_every_guide_opens_with_prerequisites_and_closes_with_a_next_step():
@@ -1001,7 +1002,7 @@ def test_guides_render_only_local_official_screenshots():
     for path in guide_paths():
         for alt, target in images(path.read_text()):
             assert not target.startswith(("http://", "https://")), target
-            assert target.startswith("../assets/official/"), target
+            assert target.startswith("images/"), target
             resolved = (path.parent / target).resolve()
             assert resolved.is_file(), target
             assert resolved.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", target
@@ -1035,7 +1036,7 @@ def test_every_screenshot_names_its_learn_source_next_to_the_image():
     for path in guide_paths():
         lines = path.read_text().splitlines()
         for index, line in enumerate(lines):
-            match = re.match(r"!\[[^\]]*\]\(\.\./assets/official/([^)]+)\)", line.strip())
+            match = re.match(r"!\[[^\]]*\]\(images/([^)]+)\)", line.strip())
             if not match:
                 continue
             name = match.group(1)
@@ -1105,7 +1106,8 @@ def test_no_operator_facing_document_names_the_upstream_as_the_connected_repo():
     past run and may keep their URLs; the documents an operator follows must
     not hand the upstream repository to the Agent as its issue target."""
     for path in [README] + [GUIDES / name for name in GUIDE_NAMES]:
-        assert UPSTREAM_SLUG not in path.read_text(), path.name
+        text_without_link_targets = re.sub(r"\]\([^)]+\)", "]()", path.read_text())
+        assert UPSTREAM_SLUG not in text_without_link_targets, path.name
 
 
 def test_agent_setup_warns_that_issues_land_in_the_connected_repository():

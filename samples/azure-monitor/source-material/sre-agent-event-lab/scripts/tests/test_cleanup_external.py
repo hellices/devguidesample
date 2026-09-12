@@ -38,6 +38,7 @@ from cleanup_harness import (
     run_cleanup,
     staged_assignments,
 )
+from published_layout import README
 
 
 RECORDED_ASSIGNMENT_ID = assignment_id(AGENT_ASSIGNMENT_NAME)
@@ -418,7 +419,7 @@ def test_cleanup_refuses_malformed_evidence(tmp_path):
     run = run_cleanup(tmp_path, ["--yes"], raw_evidence="{not json at all")
 
     assert run.returncode != 0
-    assert "guides/01-agent-setup.md" in run.stderr
+    assert "docs/labs/azure-monitor/sre-agent-event-lab-setup/index.md" in run.stderr
     assert "agent-setup.json" in run.stderr
     assert "role assignment delete" not in run.az_calls
 
@@ -578,7 +579,7 @@ def test_azure_yaml_removes_roles_predown_and_resets_image_values_postdown():
 
 
 def test_readme_documents_the_teardown_hooks_and_manual_recovery():
-    readme = (LAB_ROOT / "README.md").read_text()
+    readme = README.read_text()
     section = readme.split("## 정리", 1)[1].split("\n## ", 1)[0]
 
     assert "predown" in section

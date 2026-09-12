@@ -178,16 +178,18 @@ def terminal_state(events: Iterable[Dict[str, Any]]) -> str:
 # messages name it instead of a command, because the lab is run by hand:
 # there is no script that performs a scenario.
 SCENARIO_GUIDES = {
-    "s1": "guides/02-scenario-s1.md",
-    "s2": "guides/03-scenario-s2.md",
-    "s3": "guides/04-scenario-s3.md",
+    "s1": "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md",
+    "s2": "docs/labs/azure-monitor/sre-agent-scenario-latency/index.md",
+    "s3": "docs/labs/azure-monitor/sre-agent-scenario-blob-permission/index.md",
 }
 
 
 def scenario_guide(scenario: str) -> str:
     # A remedy that cannot be acted on is not a remedy: an unmapped
     # scenario still has to say where to look.
-    return SCENARIO_GUIDES.get(scenario, "the matching guide under guides/")
+    return SCENARIO_GUIDES.get(
+        scenario, "the matching page under docs/labs/azure-monitor/"
+    )
 
 
 def _scenario_stage(stage: str) -> Optional[Sequence[str]]:
@@ -488,7 +490,8 @@ class LabState:
         """
         remedies = {
             "baseline_passed": (
-                "Run the baseline steps in guides/01-agent-setup.md, then: "
+                "Run the baseline steps in "
+                "docs/labs/azure-monitor/sre-agent-event-lab-setup/index.md, then: "
                 "lab_state.py mark baseline_passed"
             ),
             "agent_setup_acknowledged": "Run: lab_state.py acknowledge-agent",

@@ -24,7 +24,9 @@ TEXT_SUFFIXES = {
     ".ps1",
     ".py",
     ".sh",
+    ".svg",
     ".txt",
+    ".xml",
     ".yaml",
     ".yml",
 }
@@ -109,11 +111,12 @@ def validate_repository(repo_root: Path | str) -> PublicSafetyResult:
     count = 0
     for path in _text_files(root):
         count += 1
+        relative = path.relative_to(root).as_posix()
         try:
             text = path.read_text(encoding="utf-8-sig")
         except UnicodeDecodeError:
+            errors.append(f"{relative}: file is not valid UTF-8")
             continue
-        relative = path.relative_to(root).as_posix()
         for line_number, line in enumerate(text.splitlines(), start=1):
             for label, pattern in CHECKS:
                 if pattern.search(line):

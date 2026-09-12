@@ -61,8 +61,8 @@ def test_docs_ci_is_read_only_and_runs_every_document_check() -> None:
 
     script = "\n".join(commands(workflow))
     for required in (
-        "pip install -r requirements-docs.txt",
-        "python -m pytest tests/docs -q",
+        "pip install -r requirements-docs.txt -r samples/azure-monitor/source-material/sre-agent-event-lab/app/requirements-dev.txt",
+        "python -m pytest tests/docs samples/azure-monitor/source-material/sre-agent-event-lab -q",
         "python scripts/docs/validate_metadata.py",
         "python scripts/docs/validate_sources.py",
         "python scripts/docs/validate_links.py",
@@ -150,3 +150,17 @@ def test_document_dependencies_pin_mkdocs_core() -> None:
     requirements = (ROOT / "requirements-docs.txt").read_text(encoding="utf-8").splitlines()
 
     assert "mkdocs==1.6.1" in requirements
+
+
+def test_sre_sample_dev_dependencies_accept_the_documentation_pytest_version() -> None:
+    requirements = (
+        ROOT
+        / "samples"
+        / "azure-monitor"
+        / "source-material"
+        / "sre-agent-event-lab"
+        / "app"
+        / "requirements-dev.txt"
+    ).read_text(encoding="utf-8").splitlines()
+
+    assert "pytest>=8.4,<10" in requirements

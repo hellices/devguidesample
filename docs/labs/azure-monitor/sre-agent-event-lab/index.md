@@ -68,7 +68,7 @@ Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Ag
 az login --use-device-code
 azd auth login
 
-source ./monitor/sre-agent-event-lab/scripts/lab-env.sh
+source ./samples/azure-monitor/source-material/sre-agent-event-lab/scripts/lab-env.sh
 ```
 
 `lab-env.sh`는 `azd`가 게시한 배포 출력만 읽어 리소스 그룹·구독·Container App·Storage 범위 등을 현재 셸에 export하고, 값이 하나라도 없으면 `LAB_READY=0`으로 알려 줍니다. 이후 가이드의 명령은 이 값들을 그대로 사용하므로 단계마다 다시 조회하지 않습니다. 비밀 값은 읽지도 출력하지도 않습니다.
@@ -88,7 +88,7 @@ source ./monitor/sre-agent-event-lab/scripts/lab-env.sh
 이 실습의 모든 명령은 아래에서 한 번만 진입하는 이 디렉터리를 기준으로 합니다.
 
 ```bash
-cd monitor/sre-agent-event-lab
+cd samples/azure-monitor/source-material/sre-agent-event-lab
 ```
 
 로컬 검증만 먼저 해 보려면 다음을 실행합니다. `setup-venv.sh`는 `azd up`의 postprovision 단계에서도 실행되므로, 배포를 먼저 한 경우에는 이미 준비된 상태입니다.

@@ -350,3 +350,31 @@
 - [ ] **Step 7: Commit and update PR #59**
 
   Commit the reviewed changes without amending existing commits, push `docs/public-github-pages`, update the PR description, and wait for Documentation CI and Oryx checks to pass.
+
+### Task 9: Close review gaps in public validation and sample CI
+
+**Files:**
+- Modify: `scripts/docs/validate_public_safety.py`
+- Modify: `scripts/docs/validate_metadata.py`
+- Modify: `.github/workflows/docs-ci.yml`
+- Modify: `samples/azure-monitor/source-material/sre-agent-event-lab/app/requirements-dev.txt`
+- Modify: `samples/azure-monitor/source-material/sre-agent-event-lab/scripts/tests/test_dynamic_threshold_brief.py`
+- Move: Dynamic Threshold chart into its page bundle
+- Modify: Azure AI Search benchmark defaults and ConfigMap placeholders
+- Add or modify: regression tests under `tests/docs/`
+
+- [ ] **Step 1: Prove each reported gap with a failing regression test**
+
+  Cover SVG/XML scanning, invalid UTF-8 failure, stray collection Markdown, explicit Azure resource configuration, bundle-local images, sample dependency compatibility, and sample-suite execution in CI.
+
+- [ ] **Step 2: Apply the minimal validator, sample, bundle, and workflow fixes**
+
+  Keep the published document schema unchanged and avoid adding manually maintained navigation entries.
+
+- [ ] **Step 3: Run focused tests and all repository-required validation**
+
+  Run `python -m pytest tests/docs -q`, the Dynamic Threshold tests, every command required by `AGENTS.md`, migration dry-run, dependency check, and whitespace check.
+
+- [ ] **Step 4: Update PR #59 and resolve the seven review threads**
+
+  Push a new commit, wait for required GitHub checks, reply inline with the verified change for each comment, and resolve each thread only after CI succeeds.

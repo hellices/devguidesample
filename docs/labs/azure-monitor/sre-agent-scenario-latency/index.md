@@ -41,7 +41,7 @@ S1과 같은 구조이며, 바뀌는 것은 주입 값과 부하 조건뿐입니
 Codespaces에서 이 저장소를 열었다면 `az login`을 마친 뒤 아래 한 줄로 이번 실습에 필요한 값이 모두 셸에 준비됩니다. 여기서부터 마지막 `record-capture`까지는 같은 셸에서 실행합니다.
 
 ```bash
-cd monitor/sre-agent-event-lab
+cd samples/azure-monitor/source-material/sre-agent-event-lab
 source ./scripts/lab-env.sh
 ```
 

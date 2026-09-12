@@ -333,7 +333,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if not any(state.capture_status(scenario) for scenario in SCENARIOS):
             print(
                 "No captured scenario evidence in {0}. Run the s1 steps in "
-                "guides/02-scenario-s1.md, capture included.".format(evidence_root),
+                "docs/labs/azure-monitor/sre-agent-scenario-http-500/index.md, "
+                "capture included.".format(evidence_root),
                 file=sys.stderr,
             )
             return 1

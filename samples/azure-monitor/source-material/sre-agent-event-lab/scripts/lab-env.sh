@@ -2,7 +2,7 @@
 # Resolves the lab's configuration once and exports it into the current
 # shell. Source it; do not execute it:
 #
-#   cd monitor/sre-agent-event-lab
+#   cd samples/azure-monitor/source-material/sre-agent-event-lab
 #   source ./scripts/lab-env.sh
 #
 # Every value here is a name, an ID or a URL that `azd provision` already

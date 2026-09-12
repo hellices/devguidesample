@@ -6,6 +6,15 @@ from pathlib import Path
 
 
 LAB_ROOT = Path(__file__).parents[2]
+REPO_ROOT = Path(__file__).parents[6]
+LAB_PAGE = (
+    REPO_ROOT
+    / "docs"
+    / "labs"
+    / "azure-monitor"
+    / "sre-agent-event-lab"
+    / "index.md"
+)
 PLACEHOLDER_IMAGE = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
 # Everything that changes the deployed application. `azd provision` must do
@@ -361,7 +370,7 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
     subscription ID in order to prove it is absent.
     """
     onboarding_paths = [
-        LAB_ROOT / "README.md",
+        LAB_PAGE,
         LAB_ROOT / "azure.yaml",
         LAB_ROOT / "infra" / "main.bicep",
         LAB_ROOT / "infra" / "lab.bicep",
@@ -375,9 +384,11 @@ def test_azd_onboarding_docs_and_config_do_not_hardcode_a_subscription_id():
     ]
 
     offenders = {
-        str(path.relative_to(LAB_ROOT)): leaked_guids(path.read_text())
+        str(path.relative_to(REPO_ROOT)): leaked_guids(
+            path.read_text(encoding="utf-8")
+        )
         for path in onboarding_paths
-        if path.is_file() and leaked_guids(path.read_text())
+        if path.is_file() and leaked_guids(path.read_text(encoding="utf-8"))
     }
 
     assert offenders == {}, (

@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from azd_common_harness import run_common
+from published_layout import GUIDES, README
 
 
 COMMON_SH = Path(__file__).parents[1] / "common.sh"
@@ -143,7 +144,7 @@ def test_no_tracked_lab_file_references_the_deleted_subscription_templates():
 
 
 def test_readme_documents_a_working_deployment_command():
-    readme = (Path(__file__).parents[2] / "README.md").read_text()
+    readme = README.read_text()
 
     assert "azd up" in readme
     assert "az deployment sub show" not in readme
@@ -158,7 +159,7 @@ def test_readme_documents_that_evidence_collection_reads_the_current_azd_environ
     scenario-execution section must describe that mechanism instead of the
     old "legacy, not yet rewritten" caveat.
     """
-    readme = (Path(__file__).parents[2] / "README.md").read_text()
+    readme = README.read_text()
 
     scenario_heading = "## 시나리오 실행"
     assert scenario_heading in readme
@@ -278,8 +279,8 @@ def test_nothing_points_an_operator_at_a_script_that_is_gone():
     sources = (
         list(scripts_dir.glob("*.sh"))
         + list(scripts_dir.glob("*.py"))
-        + [lab_root / "README.md"]
-        + sorted((lab_root / "guides").glob("*.md"))
+        + [README]
+        + sorted(GUIDES.glob("*.md"))
     )
 
     for path in sources:
