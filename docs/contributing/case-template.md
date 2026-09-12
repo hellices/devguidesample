@@ -12,7 +12,7 @@ description: 시점 고정 문제 해결 이력을 작성하는 형식입니다.
 title: 사례 제목
 description: 증상, 영향과 해결을 요약한 한 문장
 document_type: case
-services: [aks]
+services: [azure-kubernetes-service]
 technologies: [kubernetes]
 tags: [troubleshooting]
 status: resolved

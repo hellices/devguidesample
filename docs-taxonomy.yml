@@ -25,21 +25,21 @@ collections:
     required_fields: [published_at]
 
 services:
-  aks: Azure Kubernetes Service
-  application-gateway: Azure Application Gateway
-  azure-ai-foundry: Microsoft Foundry
+  application-development: Application Development
+  azure-application-gateway: Azure Application Gateway
   azure-ai-search: Azure AI Search
   azure-architecture: Azure Architecture
   azure-automation: Azure Automation
+  azure-cosmos-db: Azure Cosmos DB
+  azure-database-for-mysql: Azure Database for MySQL
+  azure-hdinsight: Azure HDInsight
+  azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
   azure-managed-redis: Azure Managed Redis
   azure-monitor: Azure Monitor
-  azure-mysql: Azure Database for MySQL
   azure-openai: Azure OpenAI
   azure-storage: Azure Storage
-  cosmos-db: Azure Cosmos DB
-  development: Application Development
-  hdinsight: Azure HDInsight
+  microsoft-foundry: Microsoft Foundry
 
 technologies:
   azure-cli: Azure CLI

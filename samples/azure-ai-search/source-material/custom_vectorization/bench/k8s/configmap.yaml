@@ -4,15 +4,15 @@ kind: ConfigMap
 metadata:
   name: bench-env
 data:
-  SEARCH_URL: "https://ais-aiplay-krc-01.search.windows.net"
+  SEARCH_URL: "https://search-example-koreacentral-01.search.windows.net"
   VLLM_EMBED_URL: "http://vllm-embedding-svc:8081"
   EMBED_SKILL_URI: "https://embed.example.com/api/embed"
-  STORAGE_ACCOUNT: "saidxtest44159"
-  STORAGE_RG: "rg-aiplay-krc-01"
+  STORAGE_ACCOUNT: "stexamplekrc02"
+  STORAGE_RG: "rg-example-koreacentral-01"
   BLOB_CONTAINER: "bench-docs"
   EMBED_MODEL: "Qwen/Qwen3-Embedding-4B"
   VECTOR_DIM: "2560"
-  STORAGE_RESOURCE_ID: "/subscriptions/<subscription-id>/resourceGroups/rg-aiplay-krc-01/providers/Microsoft.Storage/storageAccounts/saidxtest44159"
+  STORAGE_RESOURCE_ID: "/subscriptions/<subscription-id>/resourceGroups/rg-example-koreacentral-01/providers/Microsoft.Storage/storageAccounts/stexamplekrc02"
 ---
 # Secret — API key (create manually: kubectl create secret generic bench-secrets --from-literal=SEARCH_API_KEY=xxx)
 # apiVersion: v1

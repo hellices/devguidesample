@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: embedding-api
-          image: acrcustomvec01.azurecr.io/bge-m3-embedding:latest
+          image: acrexamplekrc01.azurecr.io/bge-m3-embedding:latest
           ports:
             - containerPort: 8000
           resources:

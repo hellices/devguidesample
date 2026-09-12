@@ -300,5 +300,5 @@ HDInsightKafkaMetrics
 - JMX Exporter — [prometheus/jmx_exporter (GitHub)](https://github.com/prometheus/jmx_exporter)
 - Kafka Exporter — [danielqsj/kafka_exporter (GitHub)](https://github.com/danielqsj/kafka_exporter)
 
-> 이 문서는 `rg-krafton-kafka-dev-jpe` 배포(`krafton-kafka-hdi-68944`) 기준 실측 기록.
+> 이 문서는 `rg-example-japaneast-01` 배포(`hdi-example-japaneast-01`) 기준 실측 기록.
 > 리소스명·IP는 환경에 맞게 치환.

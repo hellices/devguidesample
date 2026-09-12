@@ -109,7 +109,7 @@ Qwen3-Embedding-4B의 출력 차원은 **2560**이다 (BGE-M3는 1024). Custom V
 <summary>인덱스 생성 curl</summary>
 
 ```bash
-SEARCH_URL="https://ais-aiplay-krc-01.search.windows.net"
+SEARCH_URL="https://search-example-koreacentral-01.search.windows.net"
 KEY="<search-admin-api-key>"
 
 curl -X PUT "$SEARCH_URL/indexes/prod-chunk-idx?api-version=2024-07-01" \
@@ -166,7 +166,7 @@ curl -X PUT "$SEARCH_URL/indexes/prod-chunk-idx?api-version=2024-07-01" \
 
 ## 3. AKS GPU 노드풀
 
-실제 구성: `aks-customvec-krc` 클러스터, `rg-aiplay-krc-01` 리소스 그룹.
+실제 구성: `aks-example-koreacentral-01` 클러스터, `rg-example-koreacentral-01` 리소스 그룹.
 
 <details>
 <summary>노드풀 생성 CLI</summary>
@@ -174,8 +174,8 @@ curl -X PUT "$SEARCH_URL/indexes/prod-chunk-idx?api-version=2024-07-01" \
 ```bash
 # GPU Spot 노드풀 (T4 × 1)
 az aks nodepool add \
-  --resource-group rg-aiplay-krc-01 \
-  --cluster-name aks-customvec-krc \
+  --resource-group rg-example-koreacentral-01 \
+  --cluster-name aks-example-koreacentral-01 \
   --name gpuspot \
   --node-count 1 \
   --node-vm-size Standard_NC16as_T4_v3 \
@@ -355,7 +355,7 @@ spec:
 
         # Adapter — 쿼리 시점 Custom Vectorizer용 (AI Search 계약 변환)
         - name: adapter
-          image: acrcustomvec01.azurecr.io/vllm-adapter:latest
+          image: acrexamplekrc01.azurecr.io/vllm-adapter:latest
           env:
             - name: VLLM_URL
               value: "http://localhost:8081"
@@ -628,7 +628,7 @@ vLLM은 PyTorch 기반이라 **Qwen3 아키텍처를 HuggingFace 가중치에서
 
 ## Appendix B. 성능 벤치마크
 
-> **테스트 환경**: AKS (`aks-customvec-krc`, koreacentral), GPU 노드풀 Standard_NC16as_T4_v3 Spot × 3, AI Search Standard tier. 500개 Azure Docs .md 파일 (평균 ~8KB). Push API는 bench_runner의 section-based chunking, Indexer는 AI Search SplitSkill(pages, 2000자)을 사용하여 **chunk 수가 다를 수 있다**.
+> **테스트 환경**: AKS (`aks-example-koreacentral-01`, koreacentral), GPU 노드풀 Standard_NC16as_T4_v3 Spot × 3, AI Search Standard tier. 500개 Azure Docs .md 파일 (평균 ~8KB). Push API는 bench_runner의 section-based chunking, Indexer는 AI Search SplitSkill(pages, 2000자)을 사용하여 **chunk 수가 다를 수 있다**.
 >
 > **벤치마크 조건**: vLLM `--gpu-memory-utilization=0.95 --max-num-seqs=256 --max-model-len=2048`, GPU당 단독 실행. TEI `turing-latest` (Candle backend).
 

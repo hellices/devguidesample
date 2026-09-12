@@ -79,12 +79,12 @@ Azure Blob Storage    →    Indexer    →    Custom Web API Skill    →    BG
 
 | 구성 요소 | 리소스 | 세부 사항 |
 |-----------|--------|-----------|
-| AI Search | `ais-aiplay-krc-01` (Standard) | 인덱스, 스킬셋, 인덱서, 벡터라이저 |
+| AI Search | `search-example-koreacentral-01` (Standard) | 인덱스, 스킬셋, 인덱서, 벡터라이저 |
 | 임베딩 API | FastAPI (`embedding-api/app.py`) | Custom Web API Skill 계약 준수 |
-| HTTPS 엔드포인트 (A) | Container Apps `ca-bge-m3-embed` | TLS 자동 적용, 설정 최소 |
+| HTTPS 엔드포인트 (A) | Container Apps `ca-embedding-example-01` | TLS 자동 적용, 설정 최소 |
 | HTTPS 엔드포인트 (B) | AKS Ingress `embed.{IP}.nip.io` | ingress-nginx + cert-manager + Let's Encrypt |
-| 컨테이너 레지스트리 | `acrcustomvec01` (Basic) | Docker 이미지 저장소 |
-| 스토리지 | `sacustomvecsrc01` | Blob 컨테이너 `sample-docs` (샘플 문서) |
+| 컨테이너 레지스트리 | `acrexamplekrc01` (Basic) | Docker 이미지 저장소 |
+| 스토리지 | `stexamplekrc01` | Blob 컨테이너 `sample-docs` (샘플 문서) |
 | Region | koreacentral | 모든 리소스 동일 리전 |
 
 ---
@@ -96,7 +96,7 @@ Azure Blob Storage    →    Indexer    →    Custom Web API Skill    →    BG
 ACR Tasks를 사용하여 로컬 Docker 없이 클라우드에서 빌드한다. BGE-M3 모델 가중치(~2.3GB)를 빌드 타임에 다운로드하여 Cold start를 방지한다.
 
 ```bash
-az acr build --registry acrcustomvec01 \
+az acr build --registry acrexamplekrc01 \
   --image bge-m3-embedding:latest \
   --file embedding-api/Dockerfile \
   embedding-api/
@@ -117,24 +117,24 @@ Container Apps는 이미지를 배포하면 HTTPS가 자동 적용된다.
 
 ```bash
 # Container Apps 환경 생성
-az containerapp env create --name cae-customvec \
-  --resource-group rg-aiplay-krc-01 --location koreacentral
+az containerapp env create --name cae-example-koreacentral-01 \
+  --resource-group rg-example-koreacentral-01 --location koreacentral
 
 # 임베딩 API 배포 (외부 HTTPS ingress)
-az containerapp create --name ca-bge-m3-embed \
-  --resource-group rg-aiplay-krc-01 --environment cae-customvec \
-  --image acrcustomvec01.azurecr.io/bge-m3-embedding:latest \
-  --registry-server acrcustomvec01.azurecr.io \
+az containerapp create --name ca-embedding-example-01 \
+  --resource-group rg-example-koreacentral-01 --environment cae-example-koreacentral-01 \
+  --image acrexamplekrc01.azurecr.io/bge-m3-embedding:latest \
+  --registry-server acrexamplekrc01.azurecr.io \
   --target-port 8000 --ingress external \
   --cpu 2 --memory 4Gi --min-replicas 1 --max-replicas 1
 ```
 
 ```bash
 # FQDN 확인
-az containerapp show --name ca-bge-m3-embed \
-  --resource-group rg-aiplay-krc-01 \
+az containerapp show --name ca-embedding-example-01 \
+  --resource-group rg-example-koreacentral-01 \
   --query properties.configuration.ingress.fqdn -o tsv
-# ca-bge-m3-embed.icycliff-31a3d588.koreacentral.azurecontainerapps.io
+# ca-embedding-example-01.example.koreacentral.azurecontainerapps.io
 ```
 
 #### Option B. AKS + ingress-nginx + cert-manager (Let's Encrypt)
@@ -198,7 +198,7 @@ kubectl get certificate
 
 ```bash
 # Option A (Container Apps)
-curl -s https://ca-bge-m3-embed.icycliff-31a3d588.koreacentral.azurecontainerapps.io/health
+curl -s https://ca-embedding-example-01.example.koreacentral.azurecontainerapps.io/health
 
 # Option B (AKS + Let's Encrypt)
 curl -s https://embed.example.com/health
@@ -232,11 +232,11 @@ KEY="<search-admin-api-key>"
 # AI Search MI에 Storage Blob Data Reader 역할 부여
 az role assignment create \
   --role "Storage Blob Data Reader" \
-  --assignee-object-id $(az search service show --name ais-aiplay-krc-01 \
-    --resource-group rg-aiplay-krc-01 --query identity.principalId -o tsv) \
+  --assignee-object-id $(az search service show --name search-example-koreacentral-01 \
+    --resource-group rg-example-koreacentral-01 --query identity.principalId -o tsv) \
   --assignee-principal-type ServicePrincipal \
-  --scope $(az storage account show --name sacustomvecsrc01 \
-    --resource-group rg-aiplay-krc-01 --query id -o tsv)
+  --scope $(az storage account show --name stexamplekrc01 \
+    --resource-group rg-example-koreacentral-01 --query id -o tsv)
 ```
 
 ```bash
@@ -247,7 +247,7 @@ curl -X POST "$SEARCH_URL/datasources?api-version=2024-07-01" \
     "name": "sample-docs-ds",
     "type": "azureblob",
     "credentials": {
-      "connectionString": "ResourceId=/subscriptions/{sub}/resourceGroups/rg-aiplay-krc-01/providers/Microsoft.Storage/storageAccounts/sacustomvecsrc01/;"
+      "connectionString": "ResourceId=/subscriptions/{sub}/resourceGroups/rg-example-koreacentral-01/providers/Microsoft.Storage/storageAccounts/stexamplekrc01/;"
     },
     "container": {"name": "sample-docs"}
   }'
@@ -264,7 +264,7 @@ curl -X POST "$SEARCH_URL/datasources?api-version=2024-07-01" \
 
 ```bash
 # Option A: Container Apps FQDN
-# EMBED_URL="https://ca-bge-m3-embed.icycliff-31a3d588.koreacentral.azurecontainerapps.io"
+# EMBED_URL="https://ca-embedding-example-01.example.koreacentral.azurecontainerapps.io"
 # Option B: AKS Ingress
 EMBED_URL="https://embed.example.com"
 
@@ -517,7 +517,7 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 다른 모델로 빌드하려면 `--build-arg`를 사용한다:
 
 ```bash
-az acr build --registry acrcustomvec01 \
+az acr build --registry acrexamplekrc01 \
   --image qwen3-embedding:latest \
   --build-arg EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B \
   --file embedding-api/Dockerfile embedding-api/
@@ -844,7 +844,7 @@ Adapter와 TEI를 **같은 Pod의 sidecar**로 구성하면 네트워크 홉 없
 어댑터는 모델을 포함하지 않으므로 빌드가 빠르다 (~30초).
 
 ```bash
-az acr build --registry acrcustomvec01 \
+az acr build --registry acrexamplekrc01 \
   --image tei-adapter:latest \
   --file tei-adapter/Dockerfile \
   tei-adapter/

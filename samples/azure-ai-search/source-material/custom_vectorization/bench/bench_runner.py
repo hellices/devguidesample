@@ -22,12 +22,12 @@ from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from azure.storage.blob import BlobServiceClient
 
 # ── Config (from env) ─────────────────────────────────────────────────────────
-SEARCH_URL = os.environ.get("SEARCH_URL", "https://ais-aiplay-krc-01.search.windows.net")
+SEARCH_URL = os.environ.get("SEARCH_URL", "https://search-example-koreacentral-01.search.windows.net")
 SEARCH_API_KEY = os.environ.get("SEARCH_API_KEY", "")
 VLLM_EMBED_URL = os.environ.get("VLLM_EMBED_URL", "http://vllm-embedding-svc:8081")
 EMBED_SKILL_URI = os.environ.get("EMBED_SKILL_URI", "https://embed.example.com/api/embed")
-STORAGE_ACCOUNT = os.environ.get("STORAGE_ACCOUNT", "saidxtest44159")
-STORAGE_RG = os.environ.get("STORAGE_RG", "rg-aiplay-krc-01")
+STORAGE_ACCOUNT = os.environ.get("STORAGE_ACCOUNT", "stexamplekrc02")
+STORAGE_RG = os.environ.get("STORAGE_RG", "rg-example-koreacentral-01")
 BLOB_CONTAINER = os.environ.get("BLOB_CONTAINER", "bench-docs")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
 

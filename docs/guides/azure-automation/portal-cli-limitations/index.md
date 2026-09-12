@@ -25,7 +25,7 @@ tags:
 # Azure Automation - 포탈/CLI 제한사항 및 우회 방법
 
 > 작성일: 2026-03-08  
-> 대상: Automation Account `autorecovery` (RG: `rg-hellices-krc-01`)
+> 대상: Automation Account `<automation-account-name>` (RG: `rg-example-koreacentral-01`)
 
 ---
 

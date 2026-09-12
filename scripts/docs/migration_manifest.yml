@@ -31,8 +31,8 @@ templates:
     verification_status: needs-review
     sources_checked_at: 2026-09-12
 
-  azure-ai-foundry: &azure-ai-foundry
-    services: [azure-ai-foundry]
+  microsoft-foundry: &microsoft-foundry
+    services: [microsoft-foundry]
     official_sources:
       - title: Microsoft Foundry documentation
         url: https://learn.microsoft.com/azure/ai-foundry/
@@ -41,13 +41,13 @@ templates:
     official_sources:
       - title: Azure AI Search documentation
         url: https://learn.microsoft.com/azure/search/
-  aks: &aks
-    services: [aks]
+  azure-kubernetes-service: &azure-kubernetes-service
+    services: [azure-kubernetes-service]
     official_sources:
       - title: Azure Kubernetes Service documentation
         url: https://learn.microsoft.com/azure/aks/
-  application-gateway: &application-gateway
-    services: [application-gateway]
+  azure-application-gateway: &azure-application-gateway
+    services: [azure-application-gateway]
     official_sources:
       - title: Azure Application Gateway documentation
         url: https://learn.microsoft.com/azure/application-gateway/
@@ -66,18 +66,18 @@ templates:
     official_sources:
       - title: Azure Storage documentation
         url: https://learn.microsoft.com/azure/storage/
-  cosmos-db: &cosmos-db
-    services: [cosmos-db]
+  azure-cosmos-db: &azure-cosmos-db
+    services: [azure-cosmos-db]
     official_sources:
       - title: Azure Cosmos DB documentation
         url: https://learn.microsoft.com/azure/cosmos-db/
-  development: &development
-    services: [development]
+  application-development: &application-development
+    services: [application-development]
     official_sources:
       - title: JavaScript on Azure documentation
         url: https://learn.microsoft.com/azure/developer/javascript/
-  hdinsight: &hdinsight
-    services: [hdinsight]
+  azure-hdinsight: &azure-hdinsight
+    services: [azure-hdinsight]
     official_sources:
       - title: Azure HDInsight documentation
         url: https://learn.microsoft.com/azure/hdinsight/
@@ -91,8 +91,8 @@ templates:
     official_sources:
       - title: Azure Monitor documentation
         url: https://learn.microsoft.com/azure/azure-monitor/
-  azure-mysql: &azure-mysql
-    services: [azure-mysql]
+  azure-database-for-mysql: &azure-database-for-mysql
+    services: [azure-database-for-mysql]
     official_sources:
       - title: Azure Database for MySQL documentation
         url: https://learn.microsoft.com/azure/mysql/
@@ -109,26 +109,26 @@ templates:
 
 documents:
   - source: aifoundry/agent_framework_2026_customer_brief.md
-    destination: research/azure-ai-foundry/agent-framework-2026/index.md
+    destination: research/microsoft-foundry/agent-framework-2026/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: 'Microsoft Agent Framework 2026: Python과 Go 구현 분석'
       description: Microsoft Agent Framework의 Python 주요 기능과 Go 구현 선택지를 비교합니다.
       technologies: [python]
       tags: [ai-agents, architecture]
       published_at: 2026-08-17
   - source: aifoundry/codex_closednetwork.md
-    destination: guides/azure-ai-foundry/codex-closed-network/index.md
+    destination: guides/microsoft-foundry/codex-closed-network/index.md
     metadata:
-      <<: [*guide, *azure-ai-foundry]
+      <<: [*guide, *microsoft-foundry]
       title: Codex와 Microsoft Foundry 폐쇄망 연동
       description: 폐쇄망에서 Codex와 Microsoft Foundry를 연동할 때 필요한 네트워크 구성을 설명합니다.
       technologies: [rest-api]
       tags: [networking, security, ai-agents]
   - source: aifoundry/foundry_local.md
-    destination: guides/azure-ai-foundry/foundry-local-air-gapped/index.md
+    destination: guides/microsoft-foundry/foundry-local-air-gapped/index.md
     metadata:
-      <<: [*guide, *azure-ai-foundry]
+      <<: [*guide, *microsoft-foundry]
       title: Foundry Local 에어갭 구성과 제약
       description: Foundry Local SDK와 CLI의 제약 및 에어갭 환경 구성을 정리합니다.
       technologies: [azure-cli]
@@ -206,137 +206,137 @@ documents:
       occurred_at: 2026-04-17
 
   - source: aks/affinity.md
-    destination: guides/aks/pod-affinity-distribution/index.md
+    destination: guides/azure-kubernetes-service/pod-affinity-distribution/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: Pod Affinity를 이용한 AKS 워크로드 분산
       description: AKS에서 Pod affinity와 anti-affinity로 워크로드를 분산하는 예제를 설명합니다.
       technologies: [kubernetes]
       tags: [kubernetes, reliability]
   - source: aks/agent-pool.md
-    destination: guides/aks/pod-scheduling-agent-pools/index.md
+    destination: guides/azure-kubernetes-service/pod-scheduling-agent-pools/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS Agent Pool 기반 Pod 스케줄링
       description: AKS agent pool, label, taint와 affinity를 이용한 스케줄링 패턴을 설명합니다.
       technologies: [kubernetes]
       tags: [kubernetes, deployment]
   - source: aks/argocd_image_updater.md
-    destination: guides/aks/argocd-image-updater-acr/index.md
+    destination: guides/azure-kubernetes-service/argocd-image-updater-acr/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: Argo CD Image Updater와 ACR 연동
       description: AKS에서 Argo CD Image Updater가 Azure Container Registry 이미지를 갱신하도록 구성합니다.
       technologies: [kubernetes, gitops]
       tags: [deployment, authentication]
   - source: aks/authorization-troubleshooting.md
-    destination: guides/aks/authorization-troubleshooting/index.md
+    destination: guides/azure-kubernetes-service/authorization-troubleshooting/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS 배포 Authorization 오류 진단
       description: AKS 배포 과정의 Azure 권한 오류를 분류하고 진단하는 절차를 설명합니다.
       technologies: [kubernetes, azure-cli]
       tags: [authorization, troubleshooting]
   - source: aks/cni-overlay-nsg.md
-    destination: guides/aks/cni-overlay-nsg/index.md
+    destination: guides/azure-kubernetes-service/cni-overlay-nsg/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS CNI Overlay와 NSG 구성
       description: AKS CNI Overlay를 사용할 때 NSG 규칙과 트래픽 경로의 주의점을 설명합니다.
       technologies: [kubernetes]
       tags: [networking, security]
   - source: aks/file_io_throttling.md
-    destination: cases/aks/file-io-throttling/index.md
+    destination: cases/azure-kubernetes-service/file-io-throttling/index.md
     metadata:
-      <<: [*case, *aks]
+      <<: [*case, *azure-kubernetes-service]
       title: AKS Pod File I/O Throttling 분석
       description: AKS Pod에서 관측한 파일 I/O throttling의 증상과 분석 결과를 기록합니다.
       technologies: [kubernetes]
       tags: [storage, performance, troubleshooting]
       occurred_at: 2025-11-05
   - source: aks/file_io_throttling2.md
-    destination: cases/aks/netapp-files-cpu-io-wait/index.md
+    destination: cases/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md
     metadata:
-      <<: [*case, *aks]
+      <<: [*case, *azure-kubernetes-service]
       title: Azure NetApp Files 환경 CPU 급증과 I/O 대기
       description: AKS와 Azure NetApp Files 환경의 CPU 급증 및 파일 I/O 대기 이력을 기록합니다.
       technologies: [kubernetes]
       tags: [storage, performance, troubleshooting]
       occurred_at: 2025-11-07
   - source: aks/kaito_opensource_model.md
-    destination: guides/aks/kaito-open-source-model/index.md
+    destination: guides/azure-kubernetes-service/kaito-open-source-model/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS와 KAITO로 오픈소스 LLM 서빙
       description: AKS에서 KAITO를 이용해 오픈소스 언어 모델을 배포하고 서빙합니다.
       technologies: [kubernetes]
       tags: [ai-agents, deployment]
   - source: aks/local_dev_loop.md
-    destination: guides/aks/remote-cluster-local-development/index.md
+    destination: guides/azure-kubernetes-service/remote-cluster-local-development/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS 원격 클러스터와 로컬 개발 루프
       description: Telepresence와 mirrord를 이용해 AKS 트래픽을 로컬 개발 환경으로 연결합니다.
       technologies: [kubernetes, python]
       tags: [development, networking]
   - source: aks/memray_leak_profiling.md
-    destination: guides/aks/python-memory-leak-memray/index.md
+    destination: guides/azure-kubernetes-service/python-memory-leak-memray/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS Python Pod 메모리 누수 분석
       description: kubectl debug와 Memray attach를 이용해 Python Pod 메모리 누수를 분석합니다.
       technologies: [kubernetes, python]
       tags: [diagnostics, performance, troubleshooting]
   - source: aks/pod_db_query_latency.md
-    destination: cases/aks/pod-database-query-latency/index.md
+    destination: cases/azure-kubernetes-service/pod-database-query-latency/index.md
     metadata:
-      <<: [*case, *aks]
+      <<: [*case, *azure-kubernetes-service]
       title: AKS Pod에서 데이터베이스 쿼리 지연 분석
       description: AKS Pod와 데이터베이스 사이에서 발생한 쿼리 지연의 조사 과정을 기록합니다.
       technologies: [kubernetes, nodejs]
       tags: [latency, networking, troubleshooting]
       occurred_at: 2026-06-08
   - source: aks/pyroscope_anf_s3_deployment.md
-    destination: guides/aks/pyroscope-anf-s3/index.md
+    destination: guides/azure-kubernetes-service/pyroscope-anf-s3/index.md
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS Pyroscope와 Azure NetApp Files S3 배포
       description: Pyroscope을 AKS에 배포하고 Azure NetApp Files S3를 백엔드로 구성합니다.
       technologies: [kubernetes, python]
       tags: [observability, deployment, storage]
   - source: aks/spot_gpu_kaito_llm.md
-    destination: guides/aks/spot-h100-kaito/index.md
+    destination: guides/azure-kubernetes-service/spot-h100-kaito/index.md
     link_overrides:
       workspace-phi4-mini.yaml: '#4-kaito-workspace-배포'
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS Spot H100 GPU와 KAITO LLM 서빙
       description: AKS Spot H100 GPU 노드에서 KAITO 기반 모델을 배포하는 절차를 설명합니다.
       technologies: [kubernetes, azure-cli]
       tags: [ai-agents, deployment, performance]
   - source: aks/workload_identity_databricks_keyless.md
-    destination: guides/aks/workload-identity-databricks/index.md
+    destination: guides/azure-kubernetes-service/workload-identity-databricks/index.md
     link_overrides:
       ../apim/databricks_keyless_managed_identity.md: https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy
     metadata:
-      <<: [*guide, *aks]
+      <<: [*guide, *azure-kubernetes-service]
       title: AKS Workload Identity로 Databricks 키리스 호출
       description: AKS Workload Identity 토큰으로 Databricks Model Serving을 비밀 없이 호출합니다.
       technologies: [kubernetes, nodejs]
       tags: [authentication, security]
 
   - source: appgw/sse_response_buffer_disable.md
-    destination: guides/application-gateway/sse-response-buffering/index.md
+    destination: guides/azure-application-gateway/sse-response-buffering/index.md
     metadata:
-      <<: [*guide, *application-gateway]
+      <<: [*guide, *azure-application-gateway]
       title: Application Gateway SSE 응답 버퍼링 비활성화
       description: Server-Sent Events 통신을 위해 Application Gateway 응답 버퍼링을 조정합니다.
       technologies: [rest-api]
       tags: [networking, performance]
   - source: appgw/waf_custom_rule_ip_whitelist.md
-    destination: guides/application-gateway/waf-path-ip-allowlist/index.md
+    destination: guides/azure-application-gateway/waf-path-ip-allowlist/index.md
     metadata:
-      <<: [*guide, *application-gateway]
+      <<: [*guide, *azure-application-gateway]
       title: Application Gateway WAF 경로 기반 IP 허용
       description: Application Gateway WAF custom rule로 특정 경로의 IP 허용 목록을 구성합니다.
       technologies: [rest-api]
@@ -367,41 +367,41 @@ documents:
       tags: [storage, reliability, development]
 
   - source: cosmosdb/nodejs/client.md
-    destination: guides/cosmos-db/nodejs-client-optimization/index.md
+    destination: guides/azure-cosmos-db/nodejs-client-optimization/index.md
     metadata:
-      <<: [*guide, *cosmos-db]
+      <<: [*guide, *azure-cosmos-db]
       title: Azure Cosmos DB Node.js Client 최적화
       description: Node.js 애플리케이션에서 Cosmos DB Client 연결과 사용을 최적화합니다.
       technologies: [nodejs, cosmos-db]
       tags: [performance, development]
   - source: cosmosdb/nodejs/point_read.md
-    destination: guides/cosmos-db/point-read-optimization/index.md
+    destination: guides/azure-cosmos-db/point-read-optimization/index.md
     metadata:
-      <<: [*guide, *cosmos-db]
+      <<: [*guide, *azure-cosmos-db]
       title: Cosmos DB Point Read 최적화
       description: Point Read를 활용해 Azure Cosmos DB 요청량과 지연 시간을 줄입니다.
       technologies: [nodejs, cosmos-db]
       tags: [performance, latency]
   - source: cosmosdb/nodejs/query_thread_with_low_core.md
-    destination: guides/cosmos-db/nodejs-dns-lookup-bottleneck/index.md
+    destination: guides/azure-cosmos-db/nodejs-dns-lookup-bottleneck/index.md
     metadata:
-      <<: [*guide, *cosmos-db]
+      <<: [*guide, *azure-cosmos-db]
       title: Cosmos DB 연속 쿼리 DNS Lookup 병목 진단
       description: 낮은 CPU 환경의 연속 쿼리에서 발생하는 DNS lookup 병목을 진단하고 완화합니다.
       technologies: [nodejs, cosmos-db]
       tags: [networking, performance, troubleshooting]
   - source: develop/nodejs/fileio_issue_cpu_overhead.md
-    destination: guides/development/nodejs-file-io-cpu/index.md
+    destination: guides/application-development/nodejs-file-io-cpu/index.md
     metadata:
-      <<: [*guide, *development]
+      <<: [*guide, *application-development]
       title: Node.js 파일 I/O CPU 오버헤드 분석
       description: Node.js 서버의 파일 I/O로 인한 CPU 오버헤드를 분석하고 개선합니다.
       technologies: [nodejs]
       tags: [performance, diagnostics, development]
   - source: hdinsight/kafka-catchup-sku-fetch-benchmark.md
-    destination: research/hdinsight/kafka-catchup-sku-fetch-benchmark/index.md
+    destination: research/azure-hdinsight/kafka-catchup-sku-fetch-benchmark/index.md
     metadata:
-      <<: [*research, *hdinsight]
+      <<: [*research, *azure-hdinsight]
       title: HDInsight Kafka Catch-up 성능 벤치마크
       description: HDInsight Kafka broker SKU와 consumer fetch size에 따른 catch-up 성능을 비교합니다.
       technologies: [kafka]
@@ -417,72 +417,72 @@ documents:
       tags: [benchmarking, networking, performance]
 
   - source: memory/agent-memory/README.md
-    destination: research/azure-ai-foundry/agent-memory-overview/index.md
+    destination: research/microsoft-foundry/agent-memory-overview/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: Agent Memory 종합 리서치
       description: AI agent memory의 분류, 아키텍처, 검색, 프레임워크와 운영 평가를 종합합니다.
       technologies: [rag]
       tags: [ai-agents, architecture]
       published_at: 2026-08-24
   - source: memory/agent-memory/01-memory-taxonomy.md
-    destination: research/azure-ai-foundry/agent-memory-taxonomy/index.md
+    destination: research/microsoft-foundry/agent-memory-taxonomy/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: Agent Memory 분류 체계
       description: AI agent가 기억할 정보의 유형과 수명주기를 분류합니다.
       technologies: [rag]
       tags: [ai-agents, architecture]
       published_at: 2026-08-24
   - source: memory/agent-memory/02-architecture-patterns.md
-    destination: research/azure-ai-foundry/agent-memory-architecture-patterns/index.md
+    destination: research/microsoft-foundry/agent-memory-architecture-patterns/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: Agent Memory 아키텍처 패턴
       description: Agent memory를 저장하고 연결하는 주요 아키텍처 패턴을 비교합니다.
       technologies: [rag]
       tags: [ai-agents, architecture]
       published_at: 2026-08-24
   - source: memory/agent-memory/03-pipeline-and-retrieval.md
-    destination: research/azure-ai-foundry/agent-memory-pipeline-retrieval/index.md
+    destination: research/microsoft-foundry/agent-memory-pipeline-retrieval/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: Agent Memory 파이프라인과 검색
       description: Agent memory의 쓰기 경로와 검색 기반 읽기 경로를 분석합니다.
       technologies: [rag]
       tags: [ai-agents, architecture]
       published_at: 2026-08-24
   - source: memory/agent-memory/04-frameworks.md
-    destination: research/azure-ai-foundry/agent-memory-frameworks/index.md
+    destination: research/microsoft-foundry/agent-memory-frameworks/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: Agent Memory 프레임워크와 플랫폼 비교
       description: Agent memory 구현을 위한 프레임워크와 관리형 플랫폼을 비교합니다.
       technologies: [rag]
       tags: [ai-agents, architecture]
       published_at: 2026-08-24
   - source: memory/agent-memory/05-production-evaluation.md
-    destination: research/azure-ai-foundry/agent-memory-production-evaluation/index.md
+    destination: research/microsoft-foundry/agent-memory-production-evaluation/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: Agent Memory 프로덕션 운영과 평가
       description: Agent memory를 프로덕션에서 운영하고 품질을 평가하는 기준을 정리합니다.
       technologies: [rag]
       tags: [ai-agents, reliability]
       published_at: 2026-08-24
   - source: memory/agent-memory/06-commerce-application.md
-    destination: research/azure-ai-foundry/agent-memory-commerce/index.md
+    destination: research/microsoft-foundry/agent-memory-commerce/index.md
     metadata:
-      <<: [*research, *azure-ai-foundry]
+      <<: [*research, *microsoft-foundry]
       title: 커머스 Agent Memory 적용 설계
       description: 실시간 추천과 개인화 구매 경험에 agent memory를 적용하는 설계를 제안합니다.
       technologies: [rag]
       tags: [ai-agents, architecture]
       published_at: 2026-08-24
   - source: memory/foundry-gpt-memory-v1.md
-    destination: guides/azure-ai-foundry/gpt-memory-layer/index.md
+    destination: guides/microsoft-foundry/gpt-memory-layer/index.md
     metadata:
-      <<: [*guide, *azure-ai-foundry]
+      <<: [*guide, *microsoft-foundry]
       title: Microsoft Foundry GPT 메모리 레이어 설계
       description: Microsoft Foundry 기반 GPT 애플리케이션의 메모리 레이어 아키텍처를 설명합니다.
       technologies: [rag]
@@ -608,17 +608,17 @@ documents:
       published_at: 2026-08-15
 
   - source: mysql/nodejs/db_upgrade_zero_downtime.md
-    destination: guides/azure-mysql/blue-green-upgrade/index.md
+    destination: guides/azure-database-for-mysql/blue-green-upgrade/index.md
     metadata:
-      <<: [*guide, *azure-mysql]
+      <<: [*guide, *azure-database-for-mysql]
       title: Azure MySQL Blue/Green 무중단 업그레이드
       description: AKS와 Node.js mysql2 PoolCluster를 이용한 Azure MySQL Blue/Green 전환을 설명합니다.
       technologies: [nodejs, mysql, kubernetes]
       tags: [migration, high-availability, reliability]
   - source: mysql/nodejs/read_write_routing.md
-    destination: guides/azure-mysql/nodejs-read-write-routing/index.md
+    destination: guides/azure-database-for-mysql/nodejs-read-write-routing/index.md
     metadata:
-      <<: [*guide, *azure-mysql]
+      <<: [*guide, *azure-database-for-mysql]
       title: Azure MySQL Node.js 읽기/쓰기 라우팅
       description: MySQL Flexible Server와 Node.js mysql2의 읽기/쓰기 연결 라우팅을 설명합니다.
       technologies: [nodejs, mysql]
@@ -647,7 +647,7 @@ sample_roots:
   - source: aisearch-v2
     destination: samples/azure-ai-search/analyzer-comparison
   - source: aks
-    destination: samples/aks/source-material
+    destination: samples/azure-kubernetes-service/source-material
   - source: azureblob
     destination: samples/azure-storage/source-material
   - source: infra
@@ -655,13 +655,13 @@ sample_roots:
   - source: loadtest
     destination: samples/azure-load-testing/source-material
   - source: memory
-    destination: samples/azure-ai-foundry/memory-artifacts
+    destination: samples/microsoft-foundry/memory-artifacts
   - source: monitor
     destination: samples/azure-monitor/source-material
   - source: mysql
-    destination: samples/azure-mysql/source-material
+    destination: samples/azure-database-for-mysql/source-material
   - source: oryx-test
-    destination: samples/app-service/oryx-test
+    destination: samples/azure-app-service/oryx-test
   - source: ptu_lb
     destination: samples/azure-openai/ptu-load-balancing
   - source: redis

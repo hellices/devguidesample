@@ -12,7 +12,7 @@ description: 계속 검증하고 갱신하는 기술 가이드 형식입니다.
 title: 가이드 제목
 description: 목표와 적용 범위를 요약한 한 문장
 document_type: guide
-services: [aks]
+services: [azure-kubernetes-service]
 technologies: [kubernetes]
 tags: [diagnostics]
 status: current

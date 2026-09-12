@@ -8,6 +8,18 @@ from scripts.docs.content import load_document
 from scripts.docs.migrate_content import migrate_repository
 
 
+ROOT = Path(__file__).parents[2]
+CANONICAL_SERVICE_MAPPINGS = {
+    "aks": "azure-kubernetes-service",
+    "application-gateway": "azure-application-gateway",
+    "azure-ai-foundry": "microsoft-foundry",
+    "azure-mysql": "azure-database-for-mysql",
+    "cosmos-db": "azure-cosmos-db",
+    "development": "application-development",
+    "hdinsight": "azure-hdinsight",
+}
+
+
 def metadata(document_type: str, service: str, **extra) -> dict:
     base = {
         "title": f"{document_type} title",
@@ -150,3 +162,26 @@ def test_dry_run_does_not_change_files(tmp_path: Path) -> None:
     assert result.changed_count > 0
     assert (tmp_path / "legacy" / "guide.md").exists()
     assert not (tmp_path / "docs").exists()
+
+
+def test_repository_manifest_uses_canonical_service_destinations() -> None:
+    manifest = yaml.safe_load(
+        (ROOT / "scripts" / "docs" / "migration_manifest.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    document_destinations = [entry["destination"] for entry in manifest["documents"]]
+    sample_destinations = [entry["destination"] for entry in manifest["sample_roots"]]
+
+    for legacy, canonical in CANONICAL_SERVICE_MAPPINGS.items():
+        assert not any(
+            destination.split("/")[1] == legacy
+            for destination in document_destinations
+        )
+        assert any(
+            destination.split("/")[1] == canonical
+            for destination in document_destinations
+        )
+
+    assert "samples/azure-app-service/oryx-test" in sample_destinations
+    assert "samples/app-service/oryx-test" not in sample_destinations

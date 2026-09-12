@@ -59,6 +59,25 @@ def test_detailed_guide_explains_automatic_inclusion_and_verification() -> None:
     assert "사례" in text and "가이드" in text
 
 
+def test_authoring_rules_define_provider_consistent_service_slugs() -> None:
+    detailed = read("docs/contributing/index.md")
+    agents = read("AGENTS.md")
+
+    for text in (detailed, agents):
+        assert "Azure 제품" in text
+        assert "`azure-`" in text
+        assert "Microsoft 제품" in text
+        assert "`microsoft-`" in text
+        assert "오픈소스" in text
+
+
+def test_project_records_are_outside_the_public_docs_tree() -> None:
+    assert not (ROOT / "docs" / "superpowers").exists()
+    assert (ROOT / "project" / "specs" / "2026-09-12-public-github-pages-design.md").is_file()
+    assert (ROOT / "project" / "plans" / "2026-09-12-public-github-pages.md").is_file()
+    assert "superpowers/" not in read("mkdocs.yml")
+
+
 def test_document_templates_cover_type_specific_contracts() -> None:
     templates = {
         "case-template.md": ("document_type: case", "occurred_at", "근본 원인"),

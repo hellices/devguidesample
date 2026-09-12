@@ -50,9 +50,6 @@ plugins:
 hooks:
   - scripts/docs/hooks.py
 
-exclude_docs: |
-  superpowers/
-
 markdown_extensions:
   - admonition
   - attr_list

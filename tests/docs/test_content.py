@@ -10,11 +10,13 @@ from scripts.docs.content import (
     DocumentFormatError,
     iter_public_documents,
     load_document,
+    load_taxonomy,
     validate_document,
 )
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
+ROOT = Path(__file__).parents[2]
 
 
 @pytest.fixture
@@ -214,3 +216,22 @@ def test_iter_public_documents_ignores_indexes_and_non_collection_files(
     assert [doc.relative_path.as_posix() for doc in documents] == [
         "guides/aks/network-diagnosis/index.md"
     ]
+
+
+def test_repository_service_slugs_match_provider_policy() -> None:
+    taxonomy = load_taxonomy(ROOT / "docs-taxonomy.yml")
+
+    for slug, label in taxonomy["services"].items():
+        if label.startswith("Azure "):
+            assert slug.startswith("azure-"), f"{label} must use an azure-* slug"
+        if label.startswith("Microsoft "):
+            assert slug.startswith("microsoft-"), f"{label} must use a microsoft-* slug"
+
+
+def test_repository_documents_use_declared_service_folders() -> None:
+    taxonomy = load_taxonomy(ROOT / "docs-taxonomy.yml")
+
+    for document in iter_public_documents(ROOT / "docs", taxonomy):
+        service = document.relative_path.parts[1]
+        assert service in taxonomy["services"]
+        assert service in document.metadata["services"]

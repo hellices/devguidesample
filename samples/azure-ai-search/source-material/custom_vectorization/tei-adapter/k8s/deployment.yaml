@@ -52,7 +52,7 @@ spec:
 
         # Adapter — AI Search contract translation (sidecar)
         - name: adapter
-          image: acrcustomvec01.azurecr.io/tei-adapter:latest
+          image: acrexamplekrc01.azurecr.io/tei-adapter:latest
           env:
             - name: TEI_URL
               value: "http://localhost:8080"

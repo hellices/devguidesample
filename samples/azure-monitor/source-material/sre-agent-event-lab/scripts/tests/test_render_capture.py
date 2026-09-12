@@ -86,7 +86,7 @@ def test_render_capture_rejects_unredacted_container_app_fqdn(tmp_path):
     timeline = sample_timeline()
     timeline[2]["summary"] = (
         "Terminal: curl https://ca-sre-event-lab.example-env"
-        ".koreacentral.azurecontainerapps.io/api/orders (exit 0)"
+        ".example.koreacentral.azurecontainerapps.io/api/orders (exit 0)"
     )
 
     with pytest.raises(ValueError, match="sensitive"):

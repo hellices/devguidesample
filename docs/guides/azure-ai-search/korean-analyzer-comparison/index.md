@@ -37,7 +37,7 @@ tags:
 | 결론 | **`ko.microsoft`만** 모든 쿼리 변형에서 기대정답을 완벽 회수(recall 5/5) |
 | 근본 원인 | 기본값 `standard.lucene`은 복합명사 미분해 + 조사(은/는/도/과) 미제거 |
 | 해결 | 한국어 필드에 `ko.microsoft` 분석기 지정 후 **재색인** |
-| 검증 리소스 | RG `aisearchtest` / AI Search `onnuri-search-59018` (Free, koreacentral) |
+| 검증 리소스 | RG `rg-search-example-koreacentral` / AI Search `search-example-koreacentral-02` (Free, koreacentral) |
 | 검증 방법 | 정답 6건 + distractor 4건 데이터로 분석기별 recall/precision 비교 |
 
 > `온누리상품권`은 분석기 동작을 보여주기 위한 **샘플 검색 키워드**일 뿐이며, 이 가이드는 AI Search 분석기 기능 자체에 초점을 둔다.
@@ -70,8 +70,8 @@ tags:
 
 | 구성 요소 | 리소스 | 세부 사항 |
 |-----------|--------|-----------|
-| Resource Group | `aisearchtest` | koreacentral |
-| AI Search | `onnuri-search-59018` | **Free** tier (비용 0) |
+| Resource Group | `rg-search-example-koreacentral` | koreacentral |
+| AI Search | `search-example-koreacentral-02` | **Free** tier (비용 0) |
 | Index | `analyzer-compare-idx` | 동일 텍스트를 4개 분석기 필드로 색인 (모두 retrievable) |
 | 샘플 데이터 | `sample_data.json` | 정답 6건 + distractor 4건 = 10건 |
 | 테스트 스크립트 | `analyzer_test.py` | 인덱스 생성 → 업로드 → Analyze 비교 → 검색/ recall 비교 |
@@ -166,7 +166,7 @@ distractor(7~10)는 **어떤 분석기에서도 오탐되지 않았다**(precisi
 
 ## 🖥️ 포탈에서 확인하기
 
-Azure Portal → `onnuri-search-59018` → **Indexes → `analyzer-compare-idx` → Search explorer** → 우측 상단 **View → `JSON`** 으로 전환하면 JSON query editor가 열린다.
+Azure Portal → `search-example-koreacentral-02` → **Indexes → `analyzer-compare-idx` → Search explorer** → 우측 상단 **View → `JSON`** 으로 전환하면 JSON query editor가 열린다.
 
 Search explorer는 기본적으로 모든 searchable 필드를 검색하므로, **`searchFields`로 분석기 필드를 지정**해 비교한다. 결과 본문(`content`)까지 보려면 `select`에 해당 필드를 넣는데, **`select`에는 retrievable(=검색결과 반환 허용) 필드만** 넣을 수 있다.
 
@@ -380,9 +380,9 @@ curl -s -X POST "https://{service}.search.windows.net/indexes/{index}-v2/docs/se
 ## ▶️ 재현 실행 방법
 
 ```powershell
-# 리소스는 이미 생성됨 (RG aisearchtest / onnuri-search-59018)
+# 리소스는 이미 생성됨 (RG rg-search-example-koreacentral / search-example-koreacentral-02)
 # .env.example 을 .env 로 복사하고 SEARCH_ADMIN_KEY 채우기
-#   az search admin-key show --service-name onnuri-search-59018 -g aisearchtest --query primaryKey -o tsv
+#   az search admin-key show --service-name search-example-koreacentral-02 -g rg-search-example-koreacentral --query primaryKey -o tsv
 
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -395,7 +395,7 @@ python -m venv .venv
 ## 🧹 리소스 정리
 
 ```powershell
-az group delete -n aisearchtest --yes --no-wait
+az group delete -n rg-search-example-koreacentral --yes --no-wait
 ```
 
 ---

@@ -63,7 +63,7 @@ RESOURCE_GROUP_SCOPE = (
     f"/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
 )
 CONTAINER_APP_NAME = "ca-sre-event-lab-vnet"
-CONTAINER_APP_FQDN = "ca-sre-event-lab-vnet.koreacentral.azurecontainerapps.io"
+CONTAINER_APP_FQDN = "ca-sre-event-lab-vnet.example.koreacentral.azurecontainerapps.io"
 WORKLOAD_PRINCIPAL_ID = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa"
 WORKLOAD_IDENTITY_RESOURCE_ID = (
     f"/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"

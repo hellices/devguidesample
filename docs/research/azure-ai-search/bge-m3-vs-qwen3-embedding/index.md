@@ -83,14 +83,14 @@ Alibaba Qwen 팀에서 개발한 경량 임베딩 모델. Instruction-tuned 방�
 
 | 항목 | 값 |
 |------|-----|
-| AI Search | `ais-aiplay-krc-01` (Standard, koreacentral) |
+| AI Search | `search-example-koreacentral-01` (Standard, koreacentral) |
 | BGE-M3 인덱스 | `sample-vector-idx` (영어) / `samsung-bge-idx` (한글) |
 | Qwen3 인덱스 | `qwen3-vector-idx` (영어) / `samsung-qwen-idx` (한글) |
 | 데이터 소스 (영어) | `sample-docs-ds` (5건 Azure 서비스 설명 문서) |
 | 데이터 소스 (한글) | `samsung-docs` (7건 삼성 갤럭시 제품 소개) |
 | 벡터 차원 | 1024 (동일) |
 | 알고리즘 | HNSW cosine (동일 파라미터) |
-| HTTPS 엔드포인트 | `ca-bge-m3-embed` / `ca-qwen3-embed` (Container Apps) |
+| HTTPS 엔드포인트 | `ca-embedding-example-01` / `ca-qwen3-example-01` (Container Apps) |
 | Instruction 사용 | 두 모델 모두 미사용 (동일 조건) |
 
 ### 테스트 문서 목록

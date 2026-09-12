@@ -116,7 +116,7 @@ def test_pages_builds_on_main_and_deploys_an_artifact() -> None:
 def test_oryx_workflow_tracks_the_migrated_sample_path() -> None:
     workflow = load_workflow("oryx-python-build-test.yml")
 
-    sample_path = "samples/app-service/oryx-test"
+    sample_path = "samples/azure-app-service/oryx-test"
     assert f"{sample_path}/**" in workflow["on"]["push"]["paths"]
     script = "\n".join(commands(workflow))
     assert f"${{{{ github.workspace }}}}/{sample_path}:/app" in script

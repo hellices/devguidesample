@@ -5,6 +5,8 @@
 - 상세 기준은 `docs/contributing/index.md`를 단일 설명 문서로 사용한다.
 - 공개 기술 문서는 `docs/<collection>/<service>/<topic>/index.md` page bundle로 작성한다.
 - `<collection>`은 `cases`, `guides`, `labs`, `research` 중 하나이며 front matter의 `document_type`과 일치해야 한다.
+- Azure 제품의 `<service>`는 `azure-`와 공식 전체 제품명을 kebab-case로 조합한다(예: `azure-kubernetes-service`).
+- Microsoft 제품은 공식 명칭을 보존하여 이름이 `Microsoft`로 시작하면 `microsoft-` slug를 사용하고, 오픈소스와 그 밖의 제품은 공식 프로젝트·제품명을 kebab-case로 사용한다.
 - 새 서비스, 기술 또는 태그가 필요할 때만 `docs-taxonomy.yml`을 함께 수정한다.
 - 개별 문서를 추가하기 위해 `mkdocs.yml`, `docs/.nav.yml`, README 또는 수동 문서 목록을 수정하지 않는다. 빌드가 폴더와 메타데이터에서 메뉴·색인을 생성한다.
 

@@ -26,7 +26,9 @@ docs/<collection>/<service>/<topic>/
 └── images/
 ```
 
-URL에 쓰이는 폴더 이름은 소문자 kebab-case 영문으로 작성합니다. 문서를 위 경로에 넣고 유효한 front matter를 작성하면 다음 빌드에서 자동으로 Pages에 포함됩니다.
+URL에 쓰이는 폴더 이름은 소문자 kebab-case 영문으로 작성합니다. Azure 제품의 `<service>`는 `azure-`와 공식 전체 제품명을 조합합니다(예: `azure-kubernetes-service`, `azure-database-for-mysql`). Microsoft 제품은 공식 명칭을 보존하므로 이름이 `Microsoft`로 시작하면 `microsoft-` slug를 사용합니다(예: `microsoft-foundry`). 오픈소스와 그 밖의 제품은 임의의 공급자 접두사를 붙이지 않고 공식 프로젝트·제품명을 사용합니다.
+
+문서를 위 경로에 넣고 유효한 front matter를 작성하면 다음 빌드에서 자동으로 Pages에 포함됩니다.
 
 - Awesome Nav가 폴더에서 메뉴를 발견합니다.
 - 생성기가 문서 유형별·서비스별 색인에 추가합니다.
@@ -42,7 +44,7 @@ URL에 쓰이는 폴더 이름은 소문자 kebab-case 영문으로 작성합니
 title: AKS 네트워크 진단
 description: AKS 네트워크 문제를 진단하는 현재 절차
 document_type: guide
-services: [aks]
+services: [azure-kubernetes-service]
 technologies: [kubernetes]
 tags: [networking, troubleshooting]
 status: current
