@@ -296,6 +296,8 @@ def _run_hook_script(script_path, tmp_path, az_stub_factory, environment=None):
     bin_dir.mkdir(exist_ok=True)
     log_path = tmp_path / "az-calls.log"
     az_stub_factory(bin_dir, log_path)
+    # The login-path test must not depend on the runner having azd installed.
+    write_azd_stub(bin_dir, {}, "azd_1_29", tmp_path / "azd-calls.log")
 
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
