@@ -1,40 +1,75 @@
 ---
 title: DevGuideSample
-description: 실제 Azure 문제 해결 사례와 지속 갱신형 기술 가이드를 검색합니다.
+description: P99 지연부터 검색 품질, GPU 비용까지. 코드와 관측 결과로 살펴보는 Azure·Kubernetes·AI 엔지니어링 노트
+hide:
+  - toc
 ---
 
-# DevGuideSample
+<div class="dg-landing dg-home" markdown="1">
 
-실제 환경에서 겪은 Azure 문제 해결 이력과 계속 갱신하는 기술 가이드를 공개적으로 공유합니다.
+<div class="dg-hero" markdown="1">
+<div class="dg-hero-copy" markdown="1">
 
-<div class="grid cards" markdown>
+<p class="dg-eyebrow">ENGINEERING NOTES / AZURE · KUBERNETES · AI</p>
 
--   :material-alert-circle-check-outline: **문제 해결 사례**
+# 증상 너머,<br>동작 원리까지.
 
-    특정 시점의 증상, 조사 과정, 원인과 해결 결과를 확인합니다.
+<p class="dg-lead">P99 지연, CPU throttling, 검색 품질, GPU 비용.<br>운영에서 마주친 질문을 코드·로그·측정 결과로 좁혀갑니다.</p>
 
-    [사례 보기](cases/index.md)
+<div class="dg-actions" markdown="1">
 
--   :material-book-open-page-variant-outline: **일반 가이드**
+[트러블슈팅 읽기](cases/index.md){ .dg-button .dg-button--primary }
+[서비스별로 찾아보기](services/index.md){ .dg-button .dg-button--secondary }
 
-    제품 변화에 맞춰 검증하고 갱신하는 재사용 가능한 절차를 찾습니다.
+</div>
+</div>
 
-    [가이드 보기](guides/index.md)
+<div class="dg-hero-topics" markdown="1">
 
--   :material-flask-outline: **실습**
+<p class="dg-eyebrow">어디서부터 파고들까요?</p>
 
-    배포, 검증과 정리 과정이 포함된 실행형 시나리오를 따라 합니다.
+[**지연과 병목**<br>P95는 괜찮은데, 왜 P99에서 문제가 드러날까?](cases/index.md){ .dg-topic-link }
 
-    [실습 보기](labs/index.md)
+[**성능과 비용**<br>단건 지연과 최대 처리량, GPU 선택의 기준은?](research/index.md){ .dg-topic-link }
 
--   :material-chart-box-outline: **리서치**
+[**구성과 동작**<br>설정한 대로 동작하는지, 어디서 확인해야 할까?](guides/index.md){ .dg-topic-link }
 
-    비교, 벤치마크와 아키텍처 조사의 기준과 결과를 살펴봅니다.
+</div>
+</div>
 
-    [리서치 보기](research/index.md)
+<!-- home:stats -->
+
+<div class="dg-section-heading" markdown="1">
+
+<p class="dg-eyebrow">SELECTED NOTES</p>
+
+## 먼저 파고들 만한 기록
+
+기술 이름보다, 그 기술을 쓰며 부딪힌 질문에서 시작합니다.
 
 </div>
 
-상단 검색에서 한국어 증상, 영문 제품명, 오류 메시지 또는 태그를 입력하거나 [서비스별](services/index.md)·[태그별](tags.md) 색인을 사용하세요.
+<!-- home:featured -->
 
-새 문서를 추가하려면 [기여 지침](contributing/index.md)을 확인하세요.
+<div class="dg-section-heading" markdown="1">
+
+<p class="dg-eyebrow">EXPLORE THE COLLECTION</p>
+
+## 지금 필요한 방식으로 읽기
+
+원인을 찾을 때와 구성을 만들 때, 선택지를 비교할 때 필요한 글은 다릅니다.
+
+</div>
+
+<!-- home:collections -->
+
+<div class="dg-contribute" markdown="1">
+
+**같은 문제를 겪었다면, 기록을 보태주세요.**
+
+어떤 환경에서 무엇을 관측했고, 왜 그 방법을 선택했는지. 다음 사람이 같은 시행착오를 줄일 수 있도록요.
+
+[글 기여하기](contributing/index.md){ .dg-text-link }
+
+</div>
+</div>

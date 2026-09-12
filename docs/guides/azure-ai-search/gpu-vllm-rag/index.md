@@ -47,7 +47,7 @@ tags:
 | 청킹 전략 | PIC (Pseudo-Instruction Chunking) |
 | 전환 방식 | Ingress backend 교체 — AI Search URI 변경 불필요 |
 
-> 모델·엔진·청킹 전략의 선택 근거는 [Appendix A](#appendix-a-모델엔진청킹-선택-근거), 벤치마크 결과는 [Appendix B](#appendix-b-성능-벤치마크) 참고.
+> 모델·엔진·청킹 전략의 선택 근거는 [Appendix A](#appendix-a), 벤치마크 결과는 [Appendix B](#appendix-b) 참고.
 
 ---
 
@@ -160,7 +160,7 @@ curl -X PUT "$SEARCH_URL/indexes/prod-chunk-idx?api-version=2024-07-01" \
 - 적재: Push API 배치 제한 (요청당 최대 1000건 또는 16MB)
 - Fallback: PIC 실패 시 원본 텍스트를 단일 청크로 적재
 
-> Indexer vs Push API의 개념적 비교와 하이브리드 운영 패턴은 [Custom 임베딩 적재 가이드 — 적재 방식](../custom-embedding-ingestion/index.md#2-적재-방식-indexer-vs-push-api) 참고. 실측치(T4 Spot 3대, vLLM 3 replica): 500 docs 적재 147.9s (embed 37.71 c/s). 상세 결과는 [Appendix B](#appendix-b-성능-벤치마크) 참고.
+> Indexer vs Push API의 개념적 비교와 하이브리드 운영 패턴은 [Custom 임베딩 적재 가이드 — 적재 방식](../custom-embedding-ingestion/index.md#2-indexer-vs-push-api) 참고. 실측치(T4 Spot 3대, vLLM 3 replica): 500 docs 적재 147.9s (embed 37.71 c/s). 상세 결과는 [Appendix B](#appendix-b) 참고.
 
 ---
 
@@ -604,7 +604,7 @@ curl localhost:8081/metrics | grep -E "vllm:(num_requests|gpu_cache)"
 | vLLM + Qwen3-Embedding-8B | 8B(16GB)이면 T4 VRAM 전체를 소비, 청킹 LLM 공간 없음 |
 | sentence-transformers | 서버 레벨 dynamic batching 미지원, Python 단일 프로세스 동시성 제한 ([상세](../custom-embedding-ingestion/index.md)) |
 
-vLLM은 PyTorch 기반이라 **Qwen3 아키텍처를 HuggingFace 가중치에서 직접 로딩** 가능하다. TEI(Rust/candle)는 모델별 커널을 별도 구현해야 하므로 신규 아키텍처 지원이 늦다. 단, BERT 계열(BGE-M3)에서는 TEI가 2.1배 빠르다 ([Appendix B](#appendix-b-성능-벤치마크) 참고).
+vLLM은 PyTorch 기반이라 **Qwen3 아키텍처를 HuggingFace 가중치에서 직접 로딩** 가능하다. TEI(Rust/candle)는 모델별 커널을 별도 구현해야 하므로 신규 아키텍처 지원이 늦다. 단, BERT 계열(BGE-M3)에서는 TEI가 2.1배 빠르다 ([Appendix B](#appendix-b) 참고).
 
 ### 청킹: PIC (Pseudo-Instruction Chunking)
 

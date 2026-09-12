@@ -28,7 +28,7 @@ tags:
 
 Azure Container Apps에 장애를 세 번 주입하고, Azure Monitor 경고를 받은 Azure SRE Agent가 실제로 조사·결론까지 도달하는지 확인합니다. 제품 개요는 [Azure SRE Agent 소개](../../../guides/azure-monitor/azure-sre-agent-overview/index.md)를 먼저 읽어 주세요.
 
-> ⚠️ 이 실습은 실제 Azure 리소스를 만들고 **과금**합니다. 끝나면 반드시 [정리](#정리) 절차로 지우세요.
+> ⚠️ 이 실습은 실제 Azure 리소스를 만들고 **과금**합니다. 끝나면 반드시 [정리](#_8) 절차로 지우세요.
 
 ## 결과물
 

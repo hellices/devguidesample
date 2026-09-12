@@ -35,16 +35,16 @@ tags:
 > S3 호환 API**로 구현하는 것입니다. (프로파일링 대상 예시로 Python pod를 사용)
 
 ## 목차
-0. [목표 & 시나리오](#목표--시나리오)
-1. [아키텍처 개요](#아키텍처-개요)
-2. [필수 사전 조건](#필수-사전-조건)
-3. [1단계: ANF 구성 (S3 백엔드)](#1단계-anf-구성-s3-백엔드)
-4. [2단계: ANF S3 Bucket 설정](#2단계-anf-s3-bucket-설정)
-5. [3단계: Pyroscope 배포](#3단계-pyroscope-배포)
-6. [4단계: 검증](#4단계-검증)
-7. [5단계: 애플리케이션 프로파일링 (예제)](#5단계-애플리케이션-프로파일링-예제)
-8. [프로파일 수집 방식 & 언어별 지원](#프로파일-수집-방식--언어별-지원)
-9. [설정값 정리](#설정값-정리)
+0. [목표 & 시나리오](#_2)
+1. [아키텍처 개요](#_3)
+2. [필수 사전 조건](#_4)
+3. [1단계: ANF 구성 (S3 백엔드)](#1-anf-s3)
+4. [2단계: ANF S3 Bucket 설정](#2-anf-s3-bucket)
+5. [3단계: Pyroscope 배포](#3-pyroscope)
+6. [4단계: 검증](#4)
+7. [5단계: 애플리케이션 프로파일링 (예제)](#5)
+8. [프로파일 수집 방식 & 언어별 지원](#_5)
+9. [설정값 정리](#_7)
 
 ---
 
@@ -65,7 +65,7 @@ Python Pod (앱 + SDK)  ──push──▶  Pyroscope Server  ──S3 API─�
 ```
 
 > **왜 ANF인가**: MinIO 운영 불필요, ANF 용량으로 자동 스케일, 엔터프라이즈 SLA·스냅샷·3-way replica.
-> **이미 떠있는 앱 프로파일링**은 이미지 재빌드 없이 SDK 초기화 몇 줄만 추가 → [5단계](#5단계-애플리케이션-프로파일링-예제).
+> **이미 떠있는 앱 프로파일링**은 이미지 재빌드 없이 SDK 초기화 몇 줄만 추가 → [5단계](#5).
 
 ---
 
@@ -78,7 +78,7 @@ Python Pod (앱 + SDK)  ──push──▶  Pyroscope Server  ──S3 API─�
 - S3 저장소: Azure NetApp Files S3-compatible API
 - 네트워킹: Private HTTPS (self-signed cert)
 - 자격증명: AWS SigV4 (AccessKey + SecretKey)
-- 애플리케이션 프로파일: SDK가 Pyroscope로 직접 push (Python 예제는 [5단계](#5단계-애플리케이션-프로파일링-예제) 참고)
+- 애플리케이션 프로파일: SDK가 Pyroscope로 직접 push (Python 예제는 [5단계](#5) 참고)
 
 Pyroscope UI 플레임그래프 예시:
 
@@ -205,7 +205,7 @@ ANF는 버킷을 NFS/SMB 볼륨 위에 얹고 S3 접근에 self-signed 인증서
 > (최종 갱신 2026-05-20)에서 인용했습니다. 최신 UI는 원문을 참고하세요.
 
 > 포털 가이드: [Configure object REST API in Azure NetApp Files](https://learn.microsoft.com/en-us/azure/azure-netapp-files/object-rest-api-access-configure)
-> 여기서 얻은 `endpoint`(`https://<ANF_MOUNT_IP 또는 FQDN>`), `accessKey`, `secretKey`를 [3단계](#3단계-pyroscope-배포)에 사용합니다.
+> 여기서 얻은 `endpoint`(`https://<ANF_MOUNT_IP 또는 FQDN>`), `accessKey`, `secretKey`를 [3단계](#3-pyroscope)에 사용합니다.
 
 ### 2.B ARM REST API로 생성 (자동화용 대안)
 

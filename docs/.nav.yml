@@ -1,9 +1,9 @@
 nav:
   - 홈: index.md
-  - 문제 해결 사례: cases
-  - 일반 가이드: guides
+  - 트러블슈팅: cases
+  - 구현 가이드: guides
   - 실습: labs
-  - 리서치: research
+  - 비교·분석: research
   - 서비스별 찾기: services
   - 태그: tags.md
   - 기여하기: contributing

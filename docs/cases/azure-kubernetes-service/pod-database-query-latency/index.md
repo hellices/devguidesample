@@ -8,8 +8,9 @@ document_type: case
 status: resolved
 verification_status: needs-review
 sources_checked_at: 2026-09-12
-title: AKS Pod에서 데이터베이스 쿼리 지연 분석
-description: AKS Pod와 데이터베이스 사이에서 발생한 쿼리 지연의 조사 과정을 기록합니다.
+title: 'AKS 쿼리 지연: DB 밖에서 병목 찾기'
+description: P95는 안정적인데 P99가 튀는 상황에서 시작합니다. CPU throttling, 커넥션 풀, 네트워크를 차례로 확인하며 원인을 좁혀 간 기록입니다.
+featured: true
 technologies:
 - kubernetes
 - nodejs
@@ -79,7 +80,7 @@ resources:
 - P99가 내려감 → throttling이 기여하고 있었음. limit 조정 또는 제거로 대응.
 - P99가 안 내려감 → throttling은 원인이 아님. **Step 2로.**
 
-> CFS throttling이 평균 CPU가 낮은데도 왜 발생하는지, requests/limits 중 무엇을 조정해야 하는지에 대한 심층 분석은 [Appendix C](#appendix-c-cfs-throttling-심층-분석-nodejs-burst-모델)를 참고.
+> CFS throttling이 평균 CPU가 낮은데도 왜 발생하는지, requests/limits 중 무엇을 조정해야 하는지에 대한 심층 분석은 [Appendix C](#appendix-c-cfs-throttling-nodejs-burst)를 참고.
 
 ### Step 2: 커넥션 풀 대기 배제
 
@@ -168,7 +169,7 @@ nohup kubectl logs -f <POD> -n <NS> -c debugger-XXXXX \
 ## 적용 결과: CPU limit 2 core 상향
 
 Step 1 가설 검증 — `limits.cpu`를 `1` → `2`로 상향하고 `requests.cpu`는 `1` 유지.
-QoS는 Guaranteed → **Burstable** 로 강등. Appendix [C.5](#c5-권장-조치) 옵션 A(`req=lim=2`)와 옵션 B(`req=500m / lim=2`)의 중간 형태로, 노드 capacity 부담을 늘리지 않으면서 burst 천장만 2배 확보하는 선택.
+QoS는 Guaranteed → **Burstable** 로 강등. Appendix [C.5](#c5) 옵션 A(`req=lim=2`)와 옵션 B(`req=500m / lim=2`)의 중간 형태로, 노드 capacity 부담을 늘리지 않으면서 burst 천장만 2배 확보하는 선택.
 
 ```yaml
 resources:
@@ -198,7 +199,7 @@ resources:
 | GC pause P95 | 1~2 ms | 5~8 ms | **소폭 증가** (아래 참고) |
 | heap used | ~128 MB | ~110 MB | 변화 없음 |
 
-P99가 SLA(30 ms) 내로 안정화되고 max도 ~28 ms로 떨어져 **fail 처리 구간이 사라짐**. throttle이 거의 사라졌으므로 Appendix [C.3.2 / C.3.4](#c32-수정된-가설)의 가설 — "burst가 1 core quota를 자주 초과해 큐가 누적되며 tail이 비선형으로 증폭된다" — 가 본 케이스의 지배적 원인이었음이 확인됨.
+P99가 SLA(30 ms) 내로 안정화되고 max도 ~28 ms로 떨어져 **fail 처리 구간이 사라짐**. throttle이 거의 사라졌으므로 Appendix [C.3.2 / C.3.4](#c32)의 가설 — "burst가 1 core quota를 자주 초과해 큐가 누적되며 tail이 비선형으로 증폭된다" — 가 본 케이스의 지배적 원인이었음이 확인됨.
 
 ### 관전 포인트
 

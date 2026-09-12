@@ -161,7 +161,11 @@ def _append_source_errors(
         if not isinstance(url, str) or not url.strip():
             errors.append(f"official_sources[{index}].url must be a non-empty string")
             continue
-        parsed = urlparse(url)
+        try:
+            parsed = urlparse(url)
+        except ValueError as error:
+            errors.append(f"official_sources[{index}].url is invalid: {error}")
+            continue
         host = (parsed.hostname or "").lower()
         if parsed.scheme != "https":
             errors.append(f"official source URL must use HTTPS: {url}")
@@ -222,7 +226,11 @@ def validate_document(
 
     collections = taxonomy.get("collections", {})
     document_type = metadata.get("document_type")
-    collection = collections.get(document_type) if isinstance(collections, Mapping) else None
+    collection = (
+        collections.get(document_type)
+        if isinstance(collections, Mapping) and isinstance(document_type, str)
+        else None
+    )
     parts = document.relative_path.parts
     if len(parts) != 4 or parts[-1] != "index.md" or not KEBAB_CASE.fullmatch(parts[2]):
         errors.append("public documents must use <collection>/<service>/<topic>/index.md")
@@ -242,6 +250,16 @@ def validate_document(
         for field in collection.get("required_fields", []):
             if field not in metadata:
                 errors.append(f"missing required field for {document_type}: {field}")
+            elif field != "last_verified":
+                value = metadata[field]
+                if (
+                    value is None
+                    or value == []
+                    or (isinstance(value, str) and not value.strip())
+                ):
+                    errors.append(
+                        f"required field for {document_type} must not be empty: {field}"
+                    )
 
     services = taxonomy.get("services", {})
     technologies = taxonomy.get("technologies", {})
@@ -268,14 +286,18 @@ def validate_document(
     last_verified = metadata.get("last_verified")
     if last_verified is not None and not _is_date(last_verified):
         errors.append("last_verified must be a date or null")
-    if verification_status == "verified" and document_type in {"guide", "lab"}:
+    if verification_status == "verified" and document_type in ("guide", "lab"):
         if not _is_date(last_verified):
             errors.append("last_verified must be a date when verification_status is verified")
     if _is_date(last_verified) and last_verified > current_date:
         errors.append("last_verified cannot be in the future")
 
     review_cycle = metadata.get("review_cycle_days")
-    if review_cycle is not None and (not isinstance(review_cycle, int) or review_cycle <= 0):
+    if review_cycle is not None and (
+        isinstance(review_cycle, bool)
+        or not isinstance(review_cycle, int)
+        or review_cycle <= 0
+    ):
         errors.append("review_cycle_days must be a positive integer")
 
     for date_field in ("occurred_at", "resolved_at", "published_at"):
@@ -293,5 +315,8 @@ def validate_document(
     cleanup_required = metadata.get("cleanup_required")
     if cleanup_required is not None and not isinstance(cleanup_required, bool):
         errors.append("cleanup_required must be a boolean")
+
+    if "featured" in metadata and not isinstance(metadata["featured"], bool):
+        errors.append("featured must be a boolean")
 
     return errors

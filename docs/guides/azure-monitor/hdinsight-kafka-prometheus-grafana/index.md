@@ -29,7 +29,7 @@ tags:
 **전제: HDInsight Kafka 클러스터 + Prometheus + Grafana 기구성.**
 도구별 커버 범위·선택 근거("Why") → [HDInsight Kafka 모니터링 방식 비교](../../../research/azure-monitor/hdinsight-kafka-monitoring-options/index.md).
 
-> **문서 성격**: JMX Exporter·Kafka Exporter의 정식 사용법은 각 오픈소스 공식 문서([9절 출처](#9-출처)) 기준.
+> **문서 성격**: JMX Exporter·Kafka Exporter의 정식 사용법은 각 오픈소스 공식 문서([9절 출처](#9)) 기준.
 > 이 문서는 그 위에서 **HDInsight 환경(원격 JMX 9999, Private Link 등)에 맞춰 실전 구성한 요약본**.
 > 아래 Grafana 대시보드도 커뮤니티 대시보드(7589) 외에는 **본 환경 지표에 맞춰 개별 구성**한 것 → 참고용, 환경별 조정 필요.
 
@@ -64,7 +64,7 @@ assets/prometheus-grafana/
 > **원격 JMX 채택 이유**
 > jmx_exporter 정석 = 브로커 JVM에 javaagent 부착 → 브로커 롤링 재시작 필요.
 > HDInsight 브로커는 9999 포트 원격 JMX 개방 → 외부 호스트 `jmx_prometheus_httpserver` 접속으로
-> 브로커 무변경·동일 `kafka_server_*`/JVM 지표 수집. (javaagent 방식은 [7절](#7-참고-공식-javaagent-방식) 참고)
+> 브로커 무변경·동일 `kafka_server_*`/JVM 지표 수집. (javaagent 방식은 [7절](#7-javaagent) 참고)
 
 ---
 

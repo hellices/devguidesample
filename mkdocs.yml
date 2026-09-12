@@ -1,5 +1,5 @@
 site_name: DevGuideSample
-site_description: 실제 Azure 문제 해결 사례와 지속 갱신형 기술 가이드
+site_description: Azure, Kubernetes, AI 시스템의 장애 분석과 구현, 벤치마크를 담은 엔지니어링 노트
 site_url: https://hellices.github.io/devguidesample/
 repo_url: https://github.com/hellices/devguidesample
 repo_name: hellices/devguidesample
@@ -8,12 +8,17 @@ docs_dir: docs
 site_dir: site
 use_directory_urls: true
 
+validation:
+  links:
+    anchors: warn
+
 theme:
   name: material
   language: ko
+  font:
+    text: Noto Sans KR
+    code: JetBrains Mono
   features:
-    - navigation.tabs
-    - navigation.sections
     - navigation.indexes
     - navigation.top
     - search.suggest
@@ -23,15 +28,15 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: blue
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: 어두운 테마로 전환
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: blue
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: 밝은 테마로 전환

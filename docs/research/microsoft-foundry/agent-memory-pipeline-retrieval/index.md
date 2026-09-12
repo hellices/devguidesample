@@ -8,8 +8,9 @@ document_type: research
 status: current
 verification_status: needs-review
 sources_checked_at: 2026-09-12
-title: Agent Memory 파이프라인과 검색
-description: Agent memory의 쓰기 경로와 검색 기반 읽기 경로를 분석합니다.
+title: 'Agent Memory: 무엇을 남기고, 언제 다시 찾을까?'
+description: 대화에서 기억을 추출하는 쓰기 경로와 필요한 순간에 검색하는 읽기 경로를 나눕니다. 중복·모순 처리와 지연·비용의 설계 쟁점을 살펴봅니다.
+featured: true
 technologies:
 - rag
 tags:

@@ -257,7 +257,7 @@ AKS에서 Azure Spot H100 GPU 노드를 사용하고, KAITO(AI Toolchain Operato
 | GPU 노드풀 (Spot) | `gpuspot`, `Standard_NC40ads_H100_v5` × 1 (H100 94GB, Spot, max-price -1), autoscaler 0-1 |
 | GPU 노드 Taint | `sku=gpu:NoSchedule` + AKS 자동 `kubernetes.azure.com/scalesetpriority=spot:NoSchedule` |
 | 모델 | `phi-4-mini-instruct` (KAITO preset, vLLM runtime) |
-| Workspace CR | [workspace-phi4-mini.yaml](#4-kaito-workspace-배포) |
+| Workspace CR | [workspace-phi4-mini.yaml](#4-kaito-workspace) |
 | Service | `workspace-phi-4-mini` ClusterIP:80 (OpenAI 호환 API) |
 
 > Spot VM은 Spot Core 쿼터가 설정되어 있지 않아도 배포 가능 (정규 H100 쿼터와 무관).

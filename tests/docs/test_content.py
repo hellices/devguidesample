@@ -142,6 +142,74 @@ def test_unverified_guide_can_leave_last_verified_empty(
     assert errors == []
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("document_type", ["guide"]),
+        ("document_type", {"name": "guide"}),
+        ("review_cycle_days", True),
+        ("review_cycle_days", None),
+        ("applies_to", None),
+        ("applies_to", []),
+        ("featured", "true"),
+        ("featured", 1),
+    ],
+)
+def test_invalid_metadata_values_return_validation_errors(
+    tmp_path: Path, taxonomy: dict, field: str, value: object
+) -> None:
+    path = copy_fixture(
+        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
+    )
+    loaded = load_document(path, docs_dir=tmp_path / "docs")
+
+    errors = validate_document(
+        loaded.with_metadata({**loaded.metadata, field: value}),
+        taxonomy,
+        today=date(2026, 9, 12),
+    )
+
+    assert any(field in error for error in errors), errors
+
+
+@pytest.mark.parametrize("featured", [True, False])
+def test_featured_is_optional_boolean(
+    tmp_path: Path, taxonomy: dict, featured: bool
+) -> None:
+    path = copy_fixture(
+        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
+    )
+    loaded = load_document(path, docs_dir=tmp_path / "docs")
+
+    assert validate_document(
+        loaded.with_metadata({**loaded.metadata, "featured": featured}),
+        taxonomy,
+        today=date(2026, 9, 12),
+    ) == []
+
+
+def test_malformed_source_url_returns_a_validation_error(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    path = copy_fixture(
+        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
+    )
+    loaded = load_document(path, docs_dir=tmp_path / "docs")
+
+    errors = validate_document(
+        loaded.with_metadata(
+            {
+                **loaded.metadata,
+                "official_sources": [{"title": "Source", "url": "https://[invalid"}],
+            }
+        ),
+        taxonomy,
+        today=date(2026, 9, 12),
+    )
+
+    assert any("official_sources[0].url" in error for error in errors), errors
+
+
 def test_repository_uses_provider_consistent_service_slugs() -> None:
     taxonomy = load_taxonomy(ROOT / "docs-taxonomy.yml")
 

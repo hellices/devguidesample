@@ -820,7 +820,7 @@ curl -X POST "$SEARCH_URL/indexes/sample-chunk-idx/docs/search?api-version=2024-
 
 ### sentence-transformers → TEI 전환 시 차이
 
-TEI가 sentence-transformers보다 유리한 구조적 이유(dynamic batching, Rust 네이티브 동시성, GPU 최적화)는 [Custom 임베딩 적재 가이드 — 서빙 엔진 비교](../custom-embedding-ingestion/index.md#3-gpu-임베딩-서빙-엔진-tei-vs-vllm) 참고. 아래는 이 가이드(CPU 기본 구성) 기준의 실용적 차이:
+TEI가 sentence-transformers보다 유리한 구조적 이유(dynamic batching, Rust 네이티브 동시성, GPU 최적화)는 [Custom 임베딩 적재 가이드 — 서빙 엔진 비교](../custom-embedding-ingestion/index.md#3-gpu-tei-vs-vllm) 참고. 아래는 이 가이드(CPU 기본 구성) 기준의 실용적 차이:
 
 | | sentence-transformers (현재) | TEI |
 |---|---|---|

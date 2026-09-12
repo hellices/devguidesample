@@ -1,10 +1,32 @@
 ---
 title: 태그별 찾기
-description: 증상, 작업 유형과 기술 주제별로 문서를 탐색합니다.
+description: 지연, 네트워크, 성능, AI 에이전트 등 지금 다루는 문제에서 관련 문서를 찾습니다.
+hide:
+  - toc
 ---
 
-# 태그별 찾기
+<div class="dg-landing dg-tags" markdown="1">
 
-태그를 선택하면 관련 문제 해결 사례, 가이드, 실습과 리서치를 함께 볼 수 있습니다. 태그 이름은 상단 전체 텍스트 검색에서도 검색됩니다.
+<div class="dg-page-heading" markdown="1">
+
+<p class="dg-eyebrow">TOPIC INDEX</p>
+
+# 지금 다루는 문제에서 시작하기
+
+<p class="dg-lead">같은 증상도 여러 서비스에서 나타납니다. 제품 이름 대신 관심 있는 주제로 관련 기록을 모아보세요.</p>
+
+</div>
+
+<div class="dg-jump-links" markdown="1">
+
+[지연 검색](index.md?q=latency){ .dg-chip }
+[성능 검색](index.md?q=performance){ .dg-chip }
+[네트워크 검색](index.md?q=networking){ .dg-chip }
+[AI 에이전트 검색](index.md?q=ai-agents){ .dg-chip }
+[벤치마크 검색](index.md?q=benchmarking){ .dg-chip }
+
+</div>
 
 <!-- material/tags -->
+
+</div>

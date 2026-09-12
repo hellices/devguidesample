@@ -32,7 +32,7 @@ Azure Load Testing(현 Azure App Testing)은 Korea Central을 지원하지 않�
 
 > ⚠️ **Azure Load Testing은 2026년 기준 Korea Central / Korea South에서 사용 불가**하며, 가장 가까운 지원 리전은 **Japan East**이다.
 
-> 📌 이 가이드는 **AKS + AGIC + Private AppGW가 이미 구성**되어 있다고 가정한다. 테스트 타깃이 없는 경우 [부록 A](#-부록-a-테스트-타깃-구성-aks--agic--backend)를 먼저 수행한다.
+> 📌 이 가이드는 **AKS + AGIC + Private AppGW가 이미 구성**되어 있다고 가정한다. 테스트 타깃이 없는 경우 [부록 A](#a-aks-agic-backend)를 먼저 수행한다.
 
 ## 🔍 구성 개요
 
@@ -527,7 +527,7 @@ backend-app-ingress   <none>   *       10.0.1.10   80      16s
 | AppGW 404 Not Found | AGIC가 ARM으로 AppGW를 비동기 생성 | 권한 부여 → pod 재시작 → 5~10분 대기 |
 | Ingress ADDRESS 비어 있음 | Private frontend IP 추가 전 상태 | Private IP 추가 후 Ingress 재생성 |
 
-부록 A 완료 후 본문 [Step 1](#step-1-부하테스트용-vnet-생성-japan-east)부터 진행한다.
+부록 A 완료 후 본문 [Step 1](#step-1-vnet-japan-east)부터 진행한다.
 
 ---
 

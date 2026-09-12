@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
 import sys
+
+from markdown import Markdown
+from mkdocs.config import load_config
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -19,8 +23,44 @@ from scripts.docs.content import iter_public_documents, load_taxonomy
 
 KOREAN_WORD = re.compile(r"[가-힣]{2,}")
 ENGLISH_PRODUCT_PHRASE = re.compile(
-    r"\b[A-Z][A-Za-z0-9.+/-]*(?:\s+[A-Z][A-Za-z0-9.+/-]*)+\b"
+    r"\b[A-Z][A-Za-z0-9.+/-]*(?:[ \t]+[A-Z][A-Za-z0-9.+/-]*)+\b"
 )
+
+
+class _VisibleTextParser(HTMLParser):
+    BLOCK_TAGS = {
+        "blockquote", "br", "div", "h1", "h2", "h3", "h4", "h5", "h6",
+        "hr", "li", "p", "pre", "td", "th",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+        self.hidden_tag: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style"}:
+            self.hidden_tag = tag
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == self.hidden_tag:
+            self.hidden_tag = None
+        if tag in self.BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self.hidden_tag is None:
+            self.parts.append(data.replace("\n", " "))
+
+
+def _visible_text(html: str) -> str:
+    """Keep block boundaries so product phrases cannot span unrelated paragraphs."""
+    parser = _VisibleTextParser()
+    parser.feed(html)
+    parser.close()
+    return "".join(parser.parts)
 
 
 @dataclass(frozen=True)
@@ -69,6 +109,10 @@ def validate_repository(repo_root: Path | str) -> SearchIndexResult:
 
     errors: list[str] = []
     used_tags: set[str] = set()
+    config = load_config(config_file=str(root / "mkdocs.yml"))
+    renderer = Markdown(
+        extensions=config.markdown_extensions, extension_configs=config.mdx_configs
+    )
     for document in documents:
         title = str(document.metadata.get("title", ""))
         location = _page_location(document.relative_path)
@@ -88,14 +132,16 @@ def validate_repository(repo_root: Path | str) -> SearchIndexResult:
         else:
             page_text = _normalized(
                 " ".join(
-                    f"{entry.get('title', '')} {entry.get('text', '')}" for entry in page_entries
+                    f"{entry.get('title', '')} {_visible_text(str(entry.get('text', '')))}"
+                    for entry in page_entries
                 )
             )
 
-        korean = _representative_match(KOREAN_WORD, document.body, title)
+        body_text = _visible_text(renderer.reset().convert(document.body))
+        korean = _representative_match(KOREAN_WORD, body_text, title)
         if korean and korean not in page_text:
             errors.append(f"{relative}: Korean body text is missing from the search index")
-        english = _representative_match(ENGLISH_PRODUCT_PHRASE, document.body, title)
+        english = _representative_match(ENGLISH_PRODUCT_PHRASE, body_text, title)
         if english and english not in page_text:
             errors.append(
                 f"{relative}: English product phrase is missing from the search index: {english}"

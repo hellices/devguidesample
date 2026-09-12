@@ -1,26 +1,26 @@
 collections:
   case:
     path: cases
-    title: 문제 해결 사례
-    description: 특정 시점의 증상, 조사, 원인과 해결 결과를 보존합니다.
+    title: 트러블슈팅
+    description: 느린 응답, 막힌 I/O, 예상과 다른 동작. 관측한 증상에서 시작해 원인 후보를 하나씩 좁혀 간 기록입니다.
     statuses: [unresolved, resolved, historical]
     required_fields: [occurred_at]
   guide:
     path: guides
-    title: 일반 가이드
-    description: 현재 재사용할 수 있고 제품 변화에 따라 계속 갱신하는 절차입니다.
+    title: 구현 가이드
+    description: 구성을 연결하고 동작을 확인하는 데 필요한 절차를 정리했습니다. 내 환경에 맞는 전제와 적용 범위부터 살펴보세요.
     statuses: [current, needs-review, deprecated]
     required_fields: [last_verified, review_cycle_days, applies_to]
   lab:
     path: labs
     title: 실습
-    description: 직접 배포하고 검증한 뒤 정리할 수 있는 실행형 문서입니다.
+    description: 읽는 데서 끝내지 않고 직접 재현합니다. 배포할 구성, 확인할 결과, 비용과 정리 절차를 함께 살펴보세요.
     statuses: [verified, needs-review, broken, archived]
     required_fields: [last_verified, review_cycle_days, estimated_time, cost, cleanup_required]
   research:
     path: research
-    title: 리서치
-    description: 기준 시점, 조사 방법, 결과와 한계를 명시한 비교·분석 자료입니다.
+    title: 비교·분석
+    description: 어떤 선택이 더 나은지는 조건에 따라 달라집니다. 처리량과 비용, 품질과 복잡도를 비교하고 판단의 근거를 남깁니다.
     statuses: [current, superseded, archived]
     required_fields: [published_at]
 

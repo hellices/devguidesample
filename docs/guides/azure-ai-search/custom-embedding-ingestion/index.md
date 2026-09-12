@@ -180,7 +180,7 @@ Indexer:                               Push Pipeline:
 4. **네트워크 오버헤드 감소**: 동일 클러스터 내부 통신 시 네트워크 hop이 줄어 지연 감소 (TLS 적용 여부는 보안/서비스 메시 구성에 따라 달라진다)
 5. **실행 시간 제한 없음**: 인덱서의 실행 시간 제한(공용 2h / 전용 24h)이 없어 대량 적재 가능
 
-> Push API 파이프라인 코드 예시는 [Appendix A](#appendix-a-push-api-파이프라인-코드-예시) 참고.
+> Push API 파이프라인 코드 예시는 [Appendix A](#appendix-a-push-api) 참고.
 
 #### 쿼리 시점: Custom Vectorizer (변경 없음)
 
