@@ -273,7 +273,8 @@ evidence_dir_path() {
 
 # create_evidence_dir SCENARIO -- name it and create it in one step, for
 # callers that write into it immediately and have nothing left to refuse
-# them (the baseline step in `guides/01-agent-setup.md`).
+# them (the baseline step in
+# `docs/labs/azure-monitor/sre-agent-event-lab-setup/index.md`).
 create_evidence_dir() {
   local directory
   directory="$(evidence_dir_path "$1")"

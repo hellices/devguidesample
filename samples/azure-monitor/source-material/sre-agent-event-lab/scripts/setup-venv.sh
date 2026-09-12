@@ -5,7 +5,8 @@ set -euo pipefail
 # needs: the app's own runtime dependencies (`requirements.txt`, pulled in
 # by `-r requirements.txt` at the top of `requirements-dev.txt`), Pillow for
 # `render_capture.py`'s PNG/GIF rendering, and pytest/httpx for `app/tests`.
-# The capture step in each scenario guide and `guides/05-results.md`'s
+# The capture step in each scenario guide and
+# `docs/labs/azure-monitor/sre-agent-results/index.md`'s
 # notification step both
 # run under this interpreter.
 #
