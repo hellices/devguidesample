@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify with Microsoft Learn"
+  short_description: "Verify technical docs against Microsoft Learn"
+  default_prompt: "Use $verify-with-microsoft-learn to verify this technical documentation against current official sources."

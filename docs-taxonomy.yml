@@ -1,0 +1,95 @@
+collections:
+  case:
+    path: cases
+    title: 트러블슈팅
+    description: 느린 응답, 막힌 I/O, 예상과 다른 동작. 관측한 증상에서 시작해 원인 후보를 하나씩 좁혀 간 기록입니다.
+    statuses: [unresolved, resolved, historical]
+    required_fields: [occurred_at]
+  guide:
+    path: guides
+    title: 구현 가이드
+    description: 구성을 연결하고 동작을 확인하는 데 필요한 절차를 정리했습니다. 내 환경에 맞는 전제와 적용 범위부터 살펴보세요.
+    statuses: [current, needs-review, deprecated]
+    required_fields: [last_verified, review_cycle_days, applies_to]
+  lab:
+    path: labs
+    title: 실습
+    description: 읽는 데서 끝내지 않고 직접 재현합니다. 배포할 구성, 확인할 결과, 비용과 정리 절차를 함께 살펴보세요.
+    statuses: [verified, needs-review, broken, archived]
+    required_fields: [last_verified, review_cycle_days, estimated_time, cost, cleanup_required]
+  research:
+    path: research
+    title: 비교·분석
+    description: 어떤 선택이 더 나은지는 조건에 따라 달라집니다. 처리량과 비용, 품질과 복잡도를 비교하고 판단의 근거를 남깁니다.
+    statuses: [current, superseded, archived]
+    required_fields: [published_at]
+
+services:
+  application-development: Application Development
+  azure-application-gateway: Azure Application Gateway
+  azure-ai-search: Azure AI Search
+  azure-architecture: Azure Architecture
+  azure-automation: Azure Automation
+  azure-cosmos-db: Azure Cosmos DB
+  azure-database-for-mysql: Azure Database for MySQL
+  azure-hdinsight: Azure HDInsight
+  azure-kubernetes-service: Azure Kubernetes Service
+  azure-load-testing: Azure Load Testing
+  azure-managed-redis: Azure Managed Redis
+  azure-monitor: Azure Monitor
+  azure-openai: Azure OpenAI
+  azure-storage: Azure Storage
+  microsoft-foundry: Microsoft Foundry
+
+technologies:
+  azure-cli: Azure CLI
+  bicep: Bicep
+  cosmos-db: Azure Cosmos DB
+  docker: Docker
+  dotnet: .NET
+  gitops: GitOps
+  go: Go
+  grafana: Grafana
+  java: Java
+  kafka: Apache Kafka
+  kubernetes: Kubernetes
+  mysql: MySQL
+  nodejs: Node.js
+  open-telemetry: OpenTelemetry
+  powershell: PowerShell
+  prometheus: Prometheus
+  python: Python
+  rag: Retrieval-augmented generation
+  redis: Redis
+  rest-api: REST API
+
+tags:
+  ai-agents: AI agents
+  architecture: Architecture
+  authentication: Authentication
+  authorization: Authorization
+  benchmarking: Benchmarking
+  deployment: Deployment
+  development: Development
+  diagnostics: Diagnostics
+  disaster-recovery: Disaster recovery
+  high-availability: High availability
+  kubernetes: Kubernetes
+  latency: Latency
+  migration: Migration
+  monitoring: Monitoring
+  networking: Networking
+  observability: Observability
+  performance: Performance
+  reliability: Reliability
+  security: Security
+  storage: Storage
+  troubleshooting: Troubleshooting
+
+verification_statuses: [verified, needs-review]
+required_source_host: learn.microsoft.com
+official_source_hosts:
+  - learn.microsoft.com
+  - kubernetes.io
+  - www.cncf.io
+  - cncf.io

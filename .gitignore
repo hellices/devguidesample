@@ -1,11 +1,15 @@
 node_modules/
 .env
-.github/skills/
+.github/skills/*
+!.github/skills/verify-with-microsoft-learn/
+!.github/skills/verify-with-microsoft-learn/**
 .venv
 sim-env.json.vscode/
 .mirrord/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+site/
 .worktrees/
 .superpowers/
 monitor/sre-agent-event-lab/evidence/

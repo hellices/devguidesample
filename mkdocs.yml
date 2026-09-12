@@ -1,0 +1,79 @@
+site_name: DevGuideSample
+site_description: Azure, Kubernetes, AI 시스템의 장애 분석과 구현, 벤치마크를 담은 엔지니어링 노트
+site_url: https://hellices.github.io/devguidesample/
+repo_url: https://github.com/hellices/devguidesample
+repo_name: hellices/devguidesample
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+
+validation:
+  links:
+    anchors: warn
+
+theme:
+  name: material
+  language: ko
+  font:
+    text: Noto Sans KR
+    code: JetBrains Mono
+  features:
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: 어두운 테마로 전환
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: 밝은 테마로 전환
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
+  - tags
+  - gen-files:
+      scripts:
+        - scripts/docs/generate_indexes.py
+  - awesome-nav
+
+hooks:
+  - scripts/docs/hooks.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+copyright: Copyright &copy; DevGuideSample contributors
