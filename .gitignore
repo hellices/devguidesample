@@ -1,10 +1,13 @@
 node_modules/
 .env
+.azure/
+.claude/
+.DS_Store
 .github/skills/*
 !.github/skills/verify-with-microsoft-learn/
 !.github/skills/verify-with-microsoft-learn/**
 .venv
-sim-env.json.vscode/
+sim-env.json
 .mirrord/
 __pycache__/
 *.py[cod]
@@ -12,4 +15,6 @@ __pycache__/
 site/
 .worktrees/
 .superpowers/
-monitor/sre-agent-event-lab/evidence/
+samples/azure-monitor/source-material/sre-agent-event-lab/evidence/
+/project/plans/2026-09-12-public-github-pages.md
+/project/specs/2026-09-12-public-github-pages-design.md

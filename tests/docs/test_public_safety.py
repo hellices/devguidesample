@@ -1,10 +1,68 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
 from scripts.docs import validate_public_safety
+
+
+COMPLETED_PLAN_PATHS = (
+    "project/plans/2026-09-12-public-github-pages.md",
+    "project/specs/2026-09-12-public-github-pages-design.md",
+)
+
+
+def test_git_ignores_local_state_without_hiding_shared_inputs(tmp_path: Path) -> None:
+    root = Path(__file__).parents[2]
+    (tmp_path / ".gitignore").write_bytes((root / ".gitignore").read_bytes())
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    local_paths = {
+        ".azure/deployment-plan.md",
+        ".azure/validate-status.json",
+        "samples/example/.azure/environment.json",
+        ".claude/settings.local.json",
+        ".DS_Store",
+        "docs/guides/example/.DS_Store",
+        "sim-env.json",
+        "samples/example/sim-env.json",
+        "samples/azure-monitor/source-material/sre-agent-event-lab/evidence/run.json",
+        *COMPLETED_PLAN_PATHS,
+    }
+    shared_paths = {
+        ".vscode/mcp.json",
+        ".devcontainer/devcontainer.json",
+        "samples/example/.env.example",
+        "samples/example/infra/main.parameters.json",
+        "samples/example/assets/captures/report.md",
+        "project/specs/maintained-design.md",
+    }
+    result = subprocess.run(
+        ["git", "-c", f"core.excludesFile={os.devnull}", "check-ignore", "--no-index", "--stdin", "-z"],
+        cwd=tmp_path,
+        input="\0".join(sorted(local_paths | shared_paths)) + "\0",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode in (0, 1), result.stderr
+    assert set(filter(None, result.stdout.split("\0"))) == local_paths
+
+
+def test_repository_does_not_track_local_artifacts() -> None:
+    root = Path(__file__).parents[2]
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", ".azure", "**/.azure/**", *COMPLETED_PLAN_PATHS],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout == "", result.stdout.split("\0")
 
 
 def make_repository(tmp_path: Path) -> Path:
