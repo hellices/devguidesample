@@ -1,22 +1,48 @@
-"""Validate local Markdown links, image targets, and image alt text."""
+"""Validate rendered local links, image targets, and image alt text."""
 
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
-import re
 import sys
 from typing import Any, Iterable, Mapping
 from urllib.parse import unquote, urlparse
+
+from markdown import Markdown
+from mkdocs.config import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.docs.content import ValidationResult, load_taxonomy
+from scripts.docs.content import DocumentFormatError, ValidationResult, load_document, load_taxonomy
 
 
-LINK = re.compile(r"(!?)\[([^\]]*)\]\((<[^>]+>|[^)\s]+)(?:\s+['\"][^'\"]*['\"])?\)")
+@dataclass(frozen=True)
+class _RenderedLink:
+    target: str
+    alt_text: str | None = None
+
+
+class _LinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[_RenderedLink] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if tag == "img":
+            target = attributes.get("src")
+            alt_text = (attributes.get("alt") or "").strip()
+        elif tag == "a":
+            target = attributes.get("href")
+            alt_text = None
+        else:
+            return
+        if target is not None:
+            self.links.append(_RenderedLink(target, alt_text))
 
 
 def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Path]:
@@ -24,22 +50,6 @@ def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Pa
         collection = docs_dir / config["path"]
         if collection.is_dir():
             yield from sorted(collection.rglob("index.md"))
-
-
-def _without_fenced_code(text: str) -> str:
-    output: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines(keepends=True):
-        stripped = line.lstrip()
-        marker = "```" if stripped.startswith("```") else "~~~" if stripped.startswith("~~~") else None
-        if marker:
-            fence = None if fence == marker else marker if fence is None else fence
-            output.append("\n")
-        elif fence is None:
-            output.append(line)
-        else:
-            output.append("\n")
-    return "".join(output)
 
 
 def _resolve_target(page: Path, docs_dir: Path, raw_target: str) -> Path | None:
@@ -67,22 +77,30 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
     root = Path(repo_root)
     docs_dir = root / "docs"
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
+    config = load_config(config_file=str(root / "mkdocs.yml"))
+    renderer = Markdown(
+        extensions=config.markdown_extensions, extension_configs=config.mdx_configs
+    )
     errors: list[str] = []
     count = 0
     for page in _candidate_paths(docs_dir, taxonomy):
         count += 1
         relative = page.relative_to(root).as_posix()
-        text = _without_fenced_code(page.read_text(encoding="utf-8-sig"))
-        for match in LINK.finditer(text):
-            is_image = bool(match.group(1))
-            label = match.group(2).strip()
-            raw_target = match.group(3)
-            line = text.count("\n", 0, match.start()) + 1
-            if is_image and not label:
-                errors.append(f"{relative}:{line}: image alt text is required")
-            target = _resolve_target(page, docs_dir, raw_target)
+        try:
+            document = load_document(page, docs_dir=docs_dir)
+        except DocumentFormatError as error:
+            errors.append(str(error))
+            continue
+        parser = _LinkParser()
+        parser.feed(renderer.reset().convert(document.body))
+        parser.close()
+        # Rendered HTML positions do not correspond to Markdown source lines.
+        for link in parser.links:
+            if link.alt_text is not None and not link.alt_text:
+                errors.append(f"{relative}: image alt text is required")
+            target = _resolve_target(page, docs_dir, link.target)
             if target is not None and not target.exists():
-                errors.append(f"{relative}:{line}: target does not exist: {raw_target}")
+                errors.append(f"{relative}: target does not exist: {link.target}")
     return ValidationResult(count, errors)
 
 

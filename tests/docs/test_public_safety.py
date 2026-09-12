@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.docs import validate_public_safety
 
 
@@ -98,3 +100,32 @@ def test_public_safety_fails_closed_for_missing_or_empty_scan_roots(
     )
     assert any("no public text files" in error for error in missing_result.errors)
     assert any("no public text files" in error for error in empty_result.errors)
+
+
+@pytest.mark.parametrize("name", [".env", ".ENV"])
+def test_public_safety_scans_bare_dotenv_files(tmp_path: Path, name: str) -> None:
+    root = make_repository(tmp_path)
+    (root / "docs" / "guides" / "aks" / "example" / "index.md").write_text(
+        "# Safe example\n", encoding="utf-8"
+    )
+    environment = root / "samples" / name
+    environment.write_text(
+        "SEARCH_ENDPOINT=https://private-search-123.search.windows.net\n",
+        encoding="utf-8",
+    )
+
+    result = validate_public_safety.validate_repository(root)
+
+    assert result.file_count == 2
+    assert any(
+        f"samples/{name}:1:" in error and "non-example Azure service hostname" in error
+        for error in result.errors
+    )
+
+    environment.write_text(
+        "SEARCH_ENDPOINT=https://search-example-koreacentral-01.search.windows.net\n",
+        encoding="utf-8",
+    )
+    safe_result = validate_public_safety.validate_repository(root)
+    assert safe_result.file_count == 2
+    assert safe_result.errors == []

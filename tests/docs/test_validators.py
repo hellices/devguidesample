@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+import pytest
 import yaml
 
 from scripts.docs import validate_links, validate_metadata, validate_sources
@@ -55,6 +56,18 @@ def make_repository(tmp_path: Path) -> Path:
     }
     (tmp_path / "docs-taxonomy.yml").write_text(
         yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    site_config = yaml.safe_load(
+        (Path(__file__).parents[2] / "mkdocs.yml").read_text(encoding="utf-8")
+    )
+    (tmp_path / "mkdocs.yml").write_text(
+        yaml.safe_dump(
+            {
+                "site_name": "Validator test",
+                "markdown_extensions": site_config["markdown_extensions"],
+            }
+        ),
         encoding="utf-8",
     )
     page = tmp_path / "docs" / "guides" / "aks" / "network-diagnosis"
@@ -119,3 +132,78 @@ def test_source_and_link_gates_reject_an_unpublishable_page(
     assert any("learn.microsoft.com" in error for error in source_result.errors)
     assert any("image alt text is required" in error for error in link_result.errors)
     assert any("target does not exist" in error for error in link_result.errors)
+
+
+@pytest.mark.parametrize(
+    ("snippet", "expected"),
+    [
+        ("![][asset]\n\n[asset]: images/network.png", "image alt text is required"),
+        ("![diagram][asset]\n\n[asset]: missing.png", "target does not exist: missing.png"),
+        ("[guide][page]\n\n[page]: missing.md", "target does not exist: missing.md"),
+        ("![missing][]\n\n[missing]: missing.png", "target does not exist: missing.png"),
+        ("![missing]\n\n[missing]: missing.png", "target does not exist: missing.png"),
+    ],
+)
+def test_reference_links_and_images_are_validated(
+    tmp_path: Path, snippet: str, expected: str
+) -> None:
+    root = make_repository(tmp_path)
+    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page.write_text(VALID_GUIDE + "\n" + snippet + "\n", encoding="utf-8")
+
+    result = validate_links.validate_repository(root)
+
+    assert len(result.errors) == 1
+    assert expected in result.errors[0]
+
+
+def test_reference_links_accept_existing_targets(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page.write_text(
+        VALID_GUIDE
+        + '\n![diagram][ASSET]\n\n[asset]: <images/network.png> "Diagram"\n'
+        + "\n[guide][page]\n\n[page]: index.md\n",
+        encoding="utf-8",
+    )
+
+    assert validate_links.validate_repository(root).errors == []
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "````markdown\n```text\n[example](missing.md)\n```\n````",
+        "~~~~markdown\n~~~text\n[example](missing.md)\n~~~\n~~~~",
+        "````markdown\n~~~text\n[example](missing.md)\n~~~\n````",
+        "`[example](missing.md)`",
+        "    [example](missing.md)",
+        "<!-- [example](missing.md) -->",
+    ],
+)
+def test_link_examples_are_ignored_without_hiding_following_links(
+    tmp_path: Path, snippet: str
+) -> None:
+    root = make_repository(tmp_path)
+    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    body = VALID_GUIDE + "\n" + snippet + "\n"
+    page.write_text(body, encoding="utf-8")
+
+    assert validate_links.validate_repository(root).errors == []
+
+    page.write_text(body + "\n[real link](outside.md)\n", encoding="utf-8")
+    errors = validate_links.validate_repository(root).errors
+
+    assert len(errors) == 1
+    assert "target does not exist: outside.md" in errors[0]
+
+
+def test_link_gate_reports_invalid_front_matter(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page.write_text("# Missing front matter\n", encoding="utf-8")
+
+    result = validate_links.validate_repository(root)
+
+    assert result.document_count == 1
+    assert any("YAML front matter" in error for error in result.errors)
