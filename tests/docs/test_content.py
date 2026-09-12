@@ -122,6 +122,10 @@ def test_valid_guide_has_no_validation_errors(tmp_path: Path, taxonomy: dict) ->
             "sources_checked_at cannot be in the future",
         ),
         (
+            lambda meta: meta.update(sources_checked_at=None),
+            "sources_checked_at must be a date",
+        ),
+        (
             lambda meta: meta.update(
                 official_sources=[
                     {"title": "Kubernetes", "url": "https://kubernetes.io/docs/"}
@@ -185,6 +189,38 @@ def test_needs_review_allows_null_last_verified(tmp_path: Path, taxonomy: dict) 
     assert errors == []
 
 
+@pytest.mark.parametrize(
+    ("document_type", "collection", "status", "date_field"),
+    [
+        ("case", "cases", "resolved", "occurred_at"),
+        ("research", "research", "current", "published_at"),
+    ],
+)
+def test_required_collection_dates_reject_null(
+    tmp_path: Path,
+    taxonomy: dict,
+    document_type: str,
+    collection: str,
+    status: str,
+    date_field: str,
+) -> None:
+    path = copy_fixture(
+        tmp_path,
+        "valid-guide.md",
+        f"{collection}/aks/null-date/index.md",
+    )
+    loaded = load_document(path, docs_dir=tmp_path / "docs")
+    metadata = deepcopy(loaded.metadata)
+    metadata.update(document_type=document_type, status=status)
+    metadata[date_field] = None
+
+    errors = validate_document(
+        loaded.with_metadata(metadata), taxonomy, today=date(2026, 9, 12)
+    )
+
+    assert f"{date_field} must be a date" in errors
+
+
 def test_verified_guide_requires_last_verified_date(tmp_path: Path, taxonomy: dict) -> None:
     path = copy_fixture(tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md")
     loaded = load_document(path, docs_dir=tmp_path / "docs")
@@ -235,3 +271,19 @@ def test_repository_documents_use_declared_service_folders() -> None:
         service = document.relative_path.parts[1]
         assert service in taxonomy["services"]
         assert service in document.metadata["services"]
+
+
+def test_needs_review_pages_do_not_claim_official_verification_is_complete() -> None:
+    taxonomy = load_taxonomy(ROOT / "docs-taxonomy.yml")
+    forbidden = (
+        "공식 Microsoft Learn 문서 기반 검증 완료",
+        "공식 문서 검증 완료",
+    )
+
+    for document in iter_public_documents(ROOT / "docs", taxonomy):
+        if document.metadata.get("verification_status") != "needs-review":
+            continue
+        for phrase in forbidden:
+            assert phrase not in document.body, (
+                f"{document.relative_path}: needs-review page contains {phrase!r}"
+            )

@@ -23,7 +23,7 @@ tags:
 
 # Azure Foundry GPT-5.x 메모리 레이어 아키텍처 가이드
 
-> 공식 Microsoft Learn 문서 기반 검증 완료. 2026년 7월 22일 기준.
+> 이관된 원문입니다. 공식 Microsoft Learn 문서와의 의미 검증이 필요합니다.
 
 ---
 
@@ -549,4 +549,4 @@ Australia East, Brazil South, Canada East, East US 2, France Central, Italy Nort
 
 ---
 
-*마지막 업데이트: 2026년 7월 22일 — 공식 문서 검증 완료*
+*마지막 업데이트: 2026년 7월 22일 — 공식 원문 의미 검증 대기*

@@ -190,10 +190,11 @@ def validate_source_metadata(
         errors.append("missing required field: official_sources")
 
     checked_at = metadata.get("sources_checked_at")
-    if checked_at is not None and not _is_date(checked_at):
-        errors.append("sources_checked_at must be a date")
-    elif _is_date(checked_at) and checked_at > current_date:
-        errors.append("sources_checked_at cannot be in the future")
+    if "sources_checked_at" in metadata:
+        if not _is_date(checked_at):
+            errors.append("sources_checked_at must be a date")
+        elif checked_at > current_date:
+            errors.append("sources_checked_at cannot be in the future")
 
     _append_source_errors(metadata, taxonomy, errors)
     return errors
@@ -279,7 +280,7 @@ def validate_document(
 
     for date_field in ("occurred_at", "resolved_at", "published_at"):
         value = metadata.get(date_field)
-        if value is not None and not _is_date(value):
+        if date_field in metadata and not _is_date(value):
             errors.append(f"{date_field} must be a date")
 
     for list_field in ("applies_to", "related_cases", "related_guides"):

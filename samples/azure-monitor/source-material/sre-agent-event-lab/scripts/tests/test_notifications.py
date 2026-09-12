@@ -3,10 +3,23 @@ import json
 import sys
 from email import policy
 from email.parser import BytesParser
+from html.parser import HTMLParser
 from pathlib import Path
 
 
 MODULE_PATH = Path(__file__).parents[1] / "generate_notifications.py"
+CHECKED_IN_SUMMARY = (
+    Path(__file__).parents[2] / "assets" / "notifications" / "s1-incident-summary.html"
+)
+
+
+class TextCollector(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
 
 
 def load_module():
@@ -99,6 +112,13 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     ).get_content()
     assert "**" not in (tmp_path / "s1-incident-summary.html").read_text()
     assert outputs["issue"].endswith("s1-github-issue.md")
+
+
+def test_checked_in_summary_renders_the_redacted_thread_placeholder():
+    parser = TextCollector()
+    parser.feed(CHECKED_IN_SUMMARY.read_text(encoding="utf-8"))
+
+    assert "Agent thread <agent-thread-id-s1>" in "".join(parser.parts)
 
 
 def test_generate_notifications_redacts_sensitive_values(tmp_path):
