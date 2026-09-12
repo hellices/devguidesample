@@ -1,0 +1,668 @@
+repository_url: https://github.com/hellices/devguidesample
+branch: main
+
+templates:
+  guide: &guide
+    document_type: guide
+    status: needs-review
+    verification_status: needs-review
+    sources_checked_at: 2026-09-12
+    last_verified: null
+    review_cycle_days: 180
+    applies_to: [공식 원문 재검토 필요]
+  case: &case
+    document_type: case
+    status: resolved
+    verification_status: needs-review
+    sources_checked_at: 2026-09-12
+  lab: &lab
+    document_type: lab
+    status: needs-review
+    verification_status: needs-review
+    sources_checked_at: 2026-09-12
+    last_verified: null
+    review_cycle_days: 90
+    estimated_time: 60m
+    cost: paid
+    cleanup_required: true
+  research: &research
+    document_type: research
+    status: current
+    verification_status: needs-review
+    sources_checked_at: 2026-09-12
+
+  azure-ai-foundry: &azure-ai-foundry
+    services: [azure-ai-foundry]
+    official_sources:
+      - title: Microsoft Foundry documentation
+        url: https://learn.microsoft.com/azure/ai-foundry/
+  azure-ai-search: &azure-ai-search
+    services: [azure-ai-search]
+    official_sources:
+      - title: Azure AI Search documentation
+        url: https://learn.microsoft.com/azure/search/
+  aks: &aks
+    services: [aks]
+    official_sources:
+      - title: Azure Kubernetes Service documentation
+        url: https://learn.microsoft.com/azure/aks/
+  application-gateway: &application-gateway
+    services: [application-gateway]
+    official_sources:
+      - title: Azure Application Gateway documentation
+        url: https://learn.microsoft.com/azure/application-gateway/
+  azure-architecture: &azure-architecture
+    services: [azure-architecture]
+    official_sources:
+      - title: Azure Architecture Center
+        url: https://learn.microsoft.com/azure/architecture/
+  azure-automation: &azure-automation
+    services: [azure-automation]
+    official_sources:
+      - title: Azure Automation documentation
+        url: https://learn.microsoft.com/azure/automation/
+  azure-storage: &azure-storage
+    services: [azure-storage]
+    official_sources:
+      - title: Azure Storage documentation
+        url: https://learn.microsoft.com/azure/storage/
+  cosmos-db: &cosmos-db
+    services: [cosmos-db]
+    official_sources:
+      - title: Azure Cosmos DB documentation
+        url: https://learn.microsoft.com/azure/cosmos-db/
+  development: &development
+    services: [development]
+    official_sources:
+      - title: JavaScript on Azure documentation
+        url: https://learn.microsoft.com/azure/developer/javascript/
+  hdinsight: &hdinsight
+    services: [hdinsight]
+    official_sources:
+      - title: Azure HDInsight documentation
+        url: https://learn.microsoft.com/azure/hdinsight/
+  azure-load-testing: &azure-load-testing
+    services: [azure-load-testing]
+    official_sources:
+      - title: Azure Load Testing documentation
+        url: https://learn.microsoft.com/azure/load-testing/
+  azure-monitor: &azure-monitor
+    services: [azure-monitor]
+    official_sources:
+      - title: Azure Monitor documentation
+        url: https://learn.microsoft.com/azure/azure-monitor/
+  azure-mysql: &azure-mysql
+    services: [azure-mysql]
+    official_sources:
+      - title: Azure Database for MySQL documentation
+        url: https://learn.microsoft.com/azure/mysql/
+  azure-openai: &azure-openai
+    services: [azure-openai]
+    official_sources:
+      - title: Azure OpenAI documentation
+        url: https://learn.microsoft.com/azure/ai-services/openai/
+  azure-managed-redis: &azure-managed-redis
+    services: [azure-managed-redis]
+    official_sources:
+      - title: Azure Managed Redis documentation
+        url: https://learn.microsoft.com/azure/redis/
+
+documents:
+  - source: aifoundry/agent_framework_2026_customer_brief.md
+    destination: research/azure-ai-foundry/agent-framework-2026/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: 'Microsoft Agent Framework 2026: Python과 Go 구현 분석'
+      description: Microsoft Agent Framework의 Python 주요 기능과 Go 구현 선택지를 비교합니다.
+      technologies: [python]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-17
+  - source: aifoundry/codex_closednetwork.md
+    destination: guides/azure-ai-foundry/codex-closed-network/index.md
+    metadata:
+      <<: [*guide, *azure-ai-foundry]
+      title: Codex와 Microsoft Foundry 폐쇄망 연동
+      description: 폐쇄망에서 Codex와 Microsoft Foundry를 연동할 때 필요한 네트워크 구성을 설명합니다.
+      technologies: [rest-api]
+      tags: [networking, security, ai-agents]
+  - source: aifoundry/foundry_local.md
+    destination: guides/azure-ai-foundry/foundry-local-air-gapped/index.md
+    metadata:
+      <<: [*guide, *azure-ai-foundry]
+      title: Foundry Local 에어갭 구성과 제약
+      description: Foundry Local SDK와 CLI의 제약 및 에어갭 환경 구성을 정리합니다.
+      technologies: [azure-cli]
+      tags: [deployment, security, ai-agents]
+
+  - source: aisearch-v2/README.md
+    destination: guides/azure-ai-search/korean-analyzer-comparison/index.md
+    metadata:
+      <<: [*guide, *azure-ai-search]
+      title: Azure AI Search 한국어 분석기 비교
+      description: Microsoft 한국어 분석기와 표준 Lucene 분석기의 동작을 비교합니다.
+      technologies: [python]
+      tags: [diagnostics, performance]
+  - source: aisearch/custom_vectorization/01_custom_embedding_guide.md
+    destination: guides/azure-ai-search/custom-embedding-ingestion/index.md
+    link_overrides:
+      indexer_vs_pushapi.png: images/indexer_vs_pushapi.png
+    metadata:
+      <<: [*guide, *azure-ai-search]
+      title: Custom 임베딩 적재 설계
+      description: Azure AI Search의 SKU, 적재 방식과 GPU 임베딩 서빙 엔진 선택 기준을 설명합니다.
+      technologies: [python, rag]
+      tags: [architecture, performance, deployment]
+  - source: aisearch/custom_vectorization/02_custom_vectorization.md
+    destination: guides/azure-ai-search/custom-web-api-vectorization/index.md
+    metadata:
+      <<: [*guide, *azure-ai-search]
+      title: Custom Web API 기반 외부 임베딩 통합
+      description: Azure AI Search Custom Web API skill로 외부 임베딩 모델을 연결하는 방법을 설명합니다.
+      technologies: [python, rest-api, rag]
+      tags: [deployment, architecture]
+  - source: aisearch/custom_vectorization/03_gpu_vllm_rag_guide.md
+    destination: guides/azure-ai-search/gpu-vllm-rag/index.md
+    metadata:
+      <<: [*guide, *azure-ai-search]
+      title: GPU vLLM 기반 RAG 적재와 검색
+      description: GPU vLLM 임베딩, Push API 대량 적재와 실시간 하이브리드 검색 구성을 설명합니다.
+      technologies: [python, kubernetes, rag]
+      tags: [performance, deployment, architecture]
+  - source: aisearch/custom_vectorization/ref_a10_vs_t4_embedding_benchmark.md
+    destination: research/azure-ai-search/a10-vs-t4-embedding-benchmark/index.md
+    metadata:
+      <<: [*research, *azure-ai-search]
+      title: A10과 T4 임베딩 추론 벤치마크
+      description: Azure Spot VM에서 A10과 T4 GPU의 BGE 임베딩 처리 성능을 비교합니다.
+      technologies: [python]
+      tags: [benchmarking, performance]
+      published_at: 2026-07-23
+  - source: aisearch/custom_vectorization/ref_bge_m3_vs_qwen3_comparison.md
+    destination: research/azure-ai-search/bge-m3-vs-qwen3-embedding/index.md
+    metadata:
+      <<: [*research, *azure-ai-search]
+      title: BGE-M3와 Qwen3 임베딩 품질 비교
+      description: BGE-M3와 Qwen3-Embedding 모델의 벡터 검색 품질을 비교합니다.
+      technologies: [python, rag]
+      tags: [benchmarking, performance]
+      published_at: 2026-05-22
+  - source: aisearch/custom_vectorization/ref_chunking_strategies_research.md
+    destination: research/azure-ai-search/rag-chunking-strategies/index.md
+    metadata:
+      <<: [*research, *azure-ai-search]
+      title: RAG Chunking 전략 비교
+      description: RAG 검색을 위한 청킹 전략과 선택 기준을 비교합니다.
+      technologies: [rag]
+      tags: [architecture, performance]
+      published_at: 2026-05-22
+  - source: aisearch/eventual_consistency_reindex.md
+    destination: cases/azure-ai-search/eventual-consistency-reindex/index.md
+    metadata:
+      <<: [*case, *azure-ai-search]
+      title: 버전 기반 재색인의 Eventual Consistency 이슈
+      description: Azure AI Search 버전 기반 재색인에서 관측한 eventual consistency 문제와 대응을 기록합니다.
+      technologies: [python]
+      tags: [reliability, troubleshooting]
+      occurred_at: 2026-04-17
+
+  - source: aks/affinity.md
+    destination: guides/aks/pod-affinity-distribution/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: Pod Affinity를 이용한 AKS 워크로드 분산
+      description: AKS에서 Pod affinity와 anti-affinity로 워크로드를 분산하는 예제를 설명합니다.
+      technologies: [kubernetes]
+      tags: [kubernetes, reliability]
+  - source: aks/agent-pool.md
+    destination: guides/aks/pod-scheduling-agent-pools/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS Agent Pool 기반 Pod 스케줄링
+      description: AKS agent pool, label, taint와 affinity를 이용한 스케줄링 패턴을 설명합니다.
+      technologies: [kubernetes]
+      tags: [kubernetes, deployment]
+  - source: aks/argocd_image_updater.md
+    destination: guides/aks/argocd-image-updater-acr/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: Argo CD Image Updater와 ACR 연동
+      description: AKS에서 Argo CD Image Updater가 Azure Container Registry 이미지를 갱신하도록 구성합니다.
+      technologies: [kubernetes, gitops]
+      tags: [deployment, authentication]
+  - source: aks/authorization-troubleshooting.md
+    destination: guides/aks/authorization-troubleshooting/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS 배포 Authorization 오류 진단
+      description: AKS 배포 과정의 Azure 권한 오류를 분류하고 진단하는 절차를 설명합니다.
+      technologies: [kubernetes, azure-cli]
+      tags: [authorization, troubleshooting]
+  - source: aks/cni-overlay-nsg.md
+    destination: guides/aks/cni-overlay-nsg/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS CNI Overlay와 NSG 구성
+      description: AKS CNI Overlay를 사용할 때 NSG 규칙과 트래픽 경로의 주의점을 설명합니다.
+      technologies: [kubernetes]
+      tags: [networking, security]
+  - source: aks/file_io_throttling.md
+    destination: cases/aks/file-io-throttling/index.md
+    metadata:
+      <<: [*case, *aks]
+      title: AKS Pod File I/O Throttling 분석
+      description: AKS Pod에서 관측한 파일 I/O throttling의 증상과 분석 결과를 기록합니다.
+      technologies: [kubernetes]
+      tags: [storage, performance, troubleshooting]
+      occurred_at: 2025-11-05
+  - source: aks/file_io_throttling2.md
+    destination: cases/aks/netapp-files-cpu-io-wait/index.md
+    metadata:
+      <<: [*case, *aks]
+      title: Azure NetApp Files 환경 CPU 급증과 I/O 대기
+      description: AKS와 Azure NetApp Files 환경의 CPU 급증 및 파일 I/O 대기 이력을 기록합니다.
+      technologies: [kubernetes]
+      tags: [storage, performance, troubleshooting]
+      occurred_at: 2025-11-07
+  - source: aks/kaito_opensource_model.md
+    destination: guides/aks/kaito-open-source-model/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS와 KAITO로 오픈소스 LLM 서빙
+      description: AKS에서 KAITO를 이용해 오픈소스 언어 모델을 배포하고 서빙합니다.
+      technologies: [kubernetes]
+      tags: [ai-agents, deployment]
+  - source: aks/local_dev_loop.md
+    destination: guides/aks/remote-cluster-local-development/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS 원격 클러스터와 로컬 개발 루프
+      description: Telepresence와 mirrord를 이용해 AKS 트래픽을 로컬 개발 환경으로 연결합니다.
+      technologies: [kubernetes, python]
+      tags: [development, networking]
+  - source: aks/memray_leak_profiling.md
+    destination: guides/aks/python-memory-leak-memray/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS Python Pod 메모리 누수 분석
+      description: kubectl debug와 Memray attach를 이용해 Python Pod 메모리 누수를 분석합니다.
+      technologies: [kubernetes, python]
+      tags: [diagnostics, performance, troubleshooting]
+  - source: aks/pod_db_query_latency.md
+    destination: cases/aks/pod-database-query-latency/index.md
+    metadata:
+      <<: [*case, *aks]
+      title: AKS Pod에서 데이터베이스 쿼리 지연 분석
+      description: AKS Pod와 데이터베이스 사이에서 발생한 쿼리 지연의 조사 과정을 기록합니다.
+      technologies: [kubernetes, nodejs]
+      tags: [latency, networking, troubleshooting]
+      occurred_at: 2026-06-08
+  - source: aks/pyroscope_anf_s3_deployment.md
+    destination: guides/aks/pyroscope-anf-s3/index.md
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS Pyroscope와 Azure NetApp Files S3 배포
+      description: Pyroscope을 AKS에 배포하고 Azure NetApp Files S3를 백엔드로 구성합니다.
+      technologies: [kubernetes, python]
+      tags: [observability, deployment, storage]
+  - source: aks/spot_gpu_kaito_llm.md
+    destination: guides/aks/spot-h100-kaito/index.md
+    link_overrides:
+      workspace-phi4-mini.yaml: '#4-kaito-workspace-배포'
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS Spot H100 GPU와 KAITO LLM 서빙
+      description: AKS Spot H100 GPU 노드에서 KAITO 기반 모델을 배포하는 절차를 설명합니다.
+      technologies: [kubernetes, azure-cli]
+      tags: [ai-agents, deployment, performance]
+  - source: aks/workload_identity_databricks_keyless.md
+    destination: guides/aks/workload-identity-databricks/index.md
+    link_overrides:
+      ../apim/databricks_keyless_managed_identity.md: https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy
+    metadata:
+      <<: [*guide, *aks]
+      title: AKS Workload Identity로 Databricks 키리스 호출
+      description: AKS Workload Identity 토큰으로 Databricks Model Serving을 비밀 없이 호출합니다.
+      technologies: [kubernetes, nodejs]
+      tags: [authentication, security]
+
+  - source: appgw/sse_response_buffer_disable.md
+    destination: guides/application-gateway/sse-response-buffering/index.md
+    metadata:
+      <<: [*guide, *application-gateway]
+      title: Application Gateway SSE 응답 버퍼링 비활성화
+      description: Server-Sent Events 통신을 위해 Application Gateway 응답 버퍼링을 조정합니다.
+      technologies: [rest-api]
+      tags: [networking, performance]
+  - source: appgw/waf_custom_rule_ip_whitelist.md
+    destination: guides/application-gateway/waf-path-ip-allowlist/index.md
+    metadata:
+      <<: [*guide, *application-gateway]
+      title: Application Gateway WAF 경로 기반 IP 허용
+      description: Application Gateway WAF custom rule로 특정 경로의 IP 허용 목록을 구성합니다.
+      technologies: [rest-api]
+      tags: [security, networking]
+  - source: architect/request_in_second.md
+    destination: guides/azure-architecture/response-time-optimization/index.md
+    metadata:
+      <<: [*guide, *azure-architecture]
+      title: Azure 응답 시간 최적화 설계 고려사항
+      description: 초 단위 응답 시간을 줄이기 위한 Azure 아키텍처 고려사항을 정리합니다.
+      technologies: [rest-api]
+      tags: [architecture, latency, performance]
+  - source: automation/portal-cli-limitations.md
+    destination: guides/azure-automation/portal-cli-limitations/index.md
+    metadata:
+      <<: [*guide, *azure-automation]
+      title: Azure Automation 포털과 CLI 제한사항
+      description: Azure Automation의 포털 및 CLI 제약과 우회 방법을 정리합니다.
+      technologies: [azure-cli, powershell]
+      tags: [troubleshooting, development]
+  - source: azureblob/mobile_resumable_upload_tus.md
+    destination: guides/azure-storage/mobile-resumable-upload-tus/index.md
+    metadata:
+      <<: [*guide, *azure-storage]
+      title: Spring Boot tus와 Azure Block Blob 재개 업로드
+      description: 모바일 대용량 파일을 tus 프로토콜과 Azure Block Blob으로 재개 업로드하는 구성을 설명합니다.
+      technologies: [java, rest-api]
+      tags: [storage, reliability, development]
+
+  - source: cosmosdb/nodejs/client.md
+    destination: guides/cosmos-db/nodejs-client-optimization/index.md
+    metadata:
+      <<: [*guide, *cosmos-db]
+      title: Azure Cosmos DB Node.js Client 최적화
+      description: Node.js 애플리케이션에서 Cosmos DB Client 연결과 사용을 최적화합니다.
+      technologies: [nodejs, cosmos-db]
+      tags: [performance, development]
+  - source: cosmosdb/nodejs/point_read.md
+    destination: guides/cosmos-db/point-read-optimization/index.md
+    metadata:
+      <<: [*guide, *cosmos-db]
+      title: Cosmos DB Point Read 최적화
+      description: Point Read를 활용해 Azure Cosmos DB 요청량과 지연 시간을 줄입니다.
+      technologies: [nodejs, cosmos-db]
+      tags: [performance, latency]
+  - source: cosmosdb/nodejs/query_thread_with_low_core.md
+    destination: guides/cosmos-db/nodejs-dns-lookup-bottleneck/index.md
+    metadata:
+      <<: [*guide, *cosmos-db]
+      title: Cosmos DB 연속 쿼리 DNS Lookup 병목 진단
+      description: 낮은 CPU 환경의 연속 쿼리에서 발생하는 DNS lookup 병목을 진단하고 완화합니다.
+      technologies: [nodejs, cosmos-db]
+      tags: [networking, performance, troubleshooting]
+  - source: develop/nodejs/fileio_issue_cpu_overhead.md
+    destination: guides/development/nodejs-file-io-cpu/index.md
+    metadata:
+      <<: [*guide, *development]
+      title: Node.js 파일 I/O CPU 오버헤드 분석
+      description: Node.js 서버의 파일 I/O로 인한 CPU 오버헤드를 분석하고 개선합니다.
+      technologies: [nodejs]
+      tags: [performance, diagnostics, development]
+  - source: hdinsight/kafka-catchup-sku-fetch-benchmark.md
+    destination: research/hdinsight/kafka-catchup-sku-fetch-benchmark/index.md
+    metadata:
+      <<: [*research, *hdinsight]
+      title: HDInsight Kafka Catch-up 성능 벤치마크
+      description: HDInsight Kafka broker SKU와 consumer fetch size에 따른 catch-up 성능을 비교합니다.
+      technologies: [kafka]
+      tags: [benchmarking, performance]
+      published_at: 2026-07-31
+  - source: loadtest/loadtest_locust_appgw_aks.md
+    destination: guides/azure-load-testing/locust-appgw-aks-private/index.md
+    metadata:
+      <<: [*guide, *azure-load-testing]
+      title: Private 환경 Locust 부하 테스트 구성
+      description: Application Gateway와 AKS를 대상으로 Private 환경에서 Locust 부하 테스트를 구성합니다.
+      technologies: [python, kubernetes]
+      tags: [benchmarking, networking, performance]
+
+  - source: memory/agent-memory/README.md
+    destination: research/azure-ai-foundry/agent-memory-overview/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: Agent Memory 종합 리서치
+      description: AI agent memory의 분류, 아키텍처, 검색, 프레임워크와 운영 평가를 종합합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-24
+  - source: memory/agent-memory/01-memory-taxonomy.md
+    destination: research/azure-ai-foundry/agent-memory-taxonomy/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: Agent Memory 분류 체계
+      description: AI agent가 기억할 정보의 유형과 수명주기를 분류합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-24
+  - source: memory/agent-memory/02-architecture-patterns.md
+    destination: research/azure-ai-foundry/agent-memory-architecture-patterns/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: Agent Memory 아키텍처 패턴
+      description: Agent memory를 저장하고 연결하는 주요 아키텍처 패턴을 비교합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-24
+  - source: memory/agent-memory/03-pipeline-and-retrieval.md
+    destination: research/azure-ai-foundry/agent-memory-pipeline-retrieval/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: Agent Memory 파이프라인과 검색
+      description: Agent memory의 쓰기 경로와 검색 기반 읽기 경로를 분석합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-24
+  - source: memory/agent-memory/04-frameworks.md
+    destination: research/azure-ai-foundry/agent-memory-frameworks/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: Agent Memory 프레임워크와 플랫폼 비교
+      description: Agent memory 구현을 위한 프레임워크와 관리형 플랫폼을 비교합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-24
+  - source: memory/agent-memory/05-production-evaluation.md
+    destination: research/azure-ai-foundry/agent-memory-production-evaluation/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: Agent Memory 프로덕션 운영과 평가
+      description: Agent memory를 프로덕션에서 운영하고 품질을 평가하는 기준을 정리합니다.
+      technologies: [rag]
+      tags: [ai-agents, reliability]
+      published_at: 2026-08-24
+  - source: memory/agent-memory/06-commerce-application.md
+    destination: research/azure-ai-foundry/agent-memory-commerce/index.md
+    metadata:
+      <<: [*research, *azure-ai-foundry]
+      title: 커머스 Agent Memory 적용 설계
+      description: 실시간 추천과 개인화 구매 경험에 agent memory를 적용하는 설계를 제안합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+      published_at: 2026-08-24
+  - source: memory/foundry-gpt-memory-v1.md
+    destination: guides/azure-ai-foundry/gpt-memory-layer/index.md
+    metadata:
+      <<: [*guide, *azure-ai-foundry]
+      title: Microsoft Foundry GPT 메모리 레이어 설계
+      description: Microsoft Foundry 기반 GPT 애플리케이션의 메모리 레이어 아키텍처를 설명합니다.
+      technologies: [rag]
+      tags: [ai-agents, architecture]
+
+  - source: monitor/azure-monitor-dynamic-thresholds-brief.md
+    destination: research/azure-monitor/dynamic-thresholds-brief/index.md
+    metadata:
+      <<: [*research, *azure-monitor]
+      title: Azure Monitor Dynamic Thresholds 도입 분석
+      description: Dynamic Thresholds 기능 변화와 도입 시점을 분석합니다.
+      technologies: [rest-api]
+      tags: [monitoring, reliability]
+      published_at: 2026-08-17
+  - source: monitor/azure-sre-agent.md
+    destination: guides/azure-monitor/azure-sre-agent-overview/index.md
+    metadata:
+      <<: [*guide, *azure-monitor]
+      title: Azure SRE Agent 개요
+      description: Azure SRE Agent의 기능, 구성 요소와 운영 흐름을 설명합니다.
+      technologies: [rest-api]
+      tags: [ai-agents, monitoring, troubleshooting]
+  - source: monitor/hdinsight-kafka-monitoring.md
+    destination: research/azure-monitor/hdinsight-kafka-monitoring-options/index.md
+    metadata:
+      <<: [*research, *azure-monitor]
+      title: HDInsight Kafka 모니터링 방식 비교
+      description: Ambari, Azure Monitor, JMX Exporter와 Kafka Exporter 기반 모니터링을 비교합니다.
+      technologies: [kafka, prometheus]
+      tags: [monitoring, observability]
+      published_at: 2026-07-10
+  - source: monitor/hdinsight-kafka-prometheus-grafana.md
+    destination: guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md
+    metadata:
+      <<: [*guide, *azure-monitor]
+      title: HDInsight Kafka Prometheus와 Grafana 구성
+      description: JMX Exporter, Kafka Exporter, Prometheus와 Grafana 대시보드를 구성합니다.
+      technologies: [kafka, prometheus, grafana]
+      tags: [monitoring, observability, deployment]
+  - source: monitor/otel-monitor-setup.md
+    destination: guides/azure-monitor/aks-private-opentelemetry/index.md
+    metadata:
+      <<: [*guide, *azure-monitor]
+      title: AKS 폐쇄망 OpenTelemetry와 Azure Monitor 구성
+      description: 폐쇄망 AKS에서 OpenTelemetry와 Azure Monitor 메트릭 파이프라인을 구축합니다.
+      technologies: [kubernetes, open-telemetry]
+      tags: [observability, monitoring, networking]
+  - source: monitor/sre-agent-event-lab/README.md
+    destination: labs/azure-monitor/sre-agent-event-lab/index.md
+    metadata:
+      <<: [*lab, *azure-monitor]
+      title: Azure SRE Agent 이벤트 기반 장애 분석 실습
+      description: 장애를 주입하고 Azure SRE Agent의 조사 결과를 검증하는 전체 실습입니다.
+      technologies: [bicep, python]
+      tags: [ai-agents, monitoring, troubleshooting]
+      estimated_time: 150m
+  - source: monitor/sre-agent-event-lab/guides/01-agent-setup.md
+    destination: labs/azure-monitor/sre-agent-event-lab-setup/index.md
+    metadata:
+      <<: [*lab, *azure-monitor]
+      title: Azure SRE Agent 실습 설정
+      description: 이벤트 기반 장애 분석 실습에 필요한 Azure SRE Agent를 설정합니다.
+      technologies: [bicep]
+      tags: [ai-agents, deployment, monitoring]
+  - source: monitor/sre-agent-event-lab/guides/02-scenario-s1.md
+    destination: labs/azure-monitor/sre-agent-scenario-http-500/index.md
+    metadata:
+      <<: [*lab, *azure-monitor]
+      title: SRE Agent HTTP 500 장애 시나리오
+      description: HTTP 500 장애를 주입하고 SRE Agent의 탐지와 조사를 확인합니다.
+      technologies: [python]
+      tags: [ai-agents, troubleshooting, monitoring]
+  - source: monitor/sre-agent-event-lab/guides/03-scenario-s2.md
+    destination: labs/azure-monitor/sre-agent-scenario-latency/index.md
+    metadata:
+      <<: [*lab, *azure-monitor]
+      title: SRE Agent 응답 지연 장애 시나리오
+      description: 응답 지연을 주입하고 SRE Agent의 원인 분석을 확인합니다.
+      technologies: [python]
+      tags: [ai-agents, latency, monitoring]
+  - source: monitor/sre-agent-event-lab/guides/04-scenario-s3.md
+    destination: labs/azure-monitor/sre-agent-scenario-blob-permission/index.md
+    metadata:
+      <<: [*lab, *azure-monitor]
+      title: SRE Agent Blob 권한 장애 시나리오
+      description: Blob 권한을 제거하고 SRE Agent의 권한 문제 진단을 확인합니다.
+      technologies: [python]
+      tags: [ai-agents, authorization, monitoring]
+  - source: monitor/sre-agent-event-lab/guides/05-results.md
+    destination: labs/azure-monitor/sre-agent-results/index.md
+    metadata:
+      <<: [*lab, *azure-monitor]
+      title: SRE Agent 실습 결과와 채점
+      description: 이벤트 기반 장애 분석 실습의 결과를 읽고 채점합니다.
+      technologies: [python]
+      tags: [ai-agents, monitoring, diagnostics]
+  - source: monitor/sre-agent-event-lab/dynamic-thresholds.md
+    destination: guides/azure-monitor/sre-agent-dynamic-thresholds/index.md
+    metadata:
+      <<: [*guide, *azure-monitor]
+      title: Dynamic Thresholds와 SRE Agent 연계
+      description: Azure Monitor Dynamic Thresholds 경고를 SRE Agent 조사 흐름과 연계합니다.
+      technologies: [rest-api]
+      tags: [monitoring, ai-agents, architecture]
+  - source: monitor/sre-agent-event-lab/runbooks/incident-response.md
+    destination: guides/azure-monitor/sre-agent-incident-runbook/index.md
+    metadata:
+      <<: [*guide, *azure-monitor]
+      title: Azure SRE Agent Incident Runbook
+      description: Azure SRE Agent 이벤트 실습의 장애 대응 runbook을 제공합니다.
+      technologies: [rest-api]
+      tags: [troubleshooting, monitoring, reliability]
+  - source: monitor/sre-agent-event-lab/validation-results.md
+    destination: research/azure-monitor/sre-agent-validation-results/index.md
+    link_overrides:
+      guides/: README.md
+    metadata:
+      <<: [*research, *azure-monitor]
+      title: Azure SRE Agent 실제 동작 검증 결과
+      description: 세 가지 장애 시나리오에서 관측한 Azure SRE Agent 동작과 결과를 분석합니다.
+      technologies: [python]
+      tags: [ai-agents, monitoring, diagnostics]
+      published_at: 2026-08-15
+
+  - source: mysql/nodejs/db_upgrade_zero_downtime.md
+    destination: guides/azure-mysql/blue-green-upgrade/index.md
+    metadata:
+      <<: [*guide, *azure-mysql]
+      title: Azure MySQL Blue/Green 무중단 업그레이드
+      description: AKS와 Node.js mysql2 PoolCluster를 이용한 Azure MySQL Blue/Green 전환을 설명합니다.
+      technologies: [nodejs, mysql, kubernetes]
+      tags: [migration, high-availability, reliability]
+  - source: mysql/nodejs/read_write_routing.md
+    destination: guides/azure-mysql/nodejs-read-write-routing/index.md
+    metadata:
+      <<: [*guide, *azure-mysql]
+      title: Azure MySQL Node.js 읽기/쓰기 라우팅
+      description: MySQL Flexible Server와 Node.js mysql2의 읽기/쓰기 연결 라우팅을 설명합니다.
+      technologies: [nodejs, mysql]
+      tags: [high-availability, performance, development]
+  - source: ptu_lb/ptu-lb-test.md
+    destination: guides/azure-openai/adaptive-ptu-load-balancing/index.md
+    metadata:
+      <<: [*guide, *azure-openai]
+      title: Adaptive PTU TPM Quota 조정
+      description: Azure OpenAI PTU 배포 사이에서 TPM quota를 적응형으로 조정하는 방법을 설명합니다.
+      technologies: [python, powershell]
+      tags: [performance, reliability, ai-agents]
+  - source: redis/nodejs/cluster_failover_recovery.md
+    destination: cases/azure-managed-redis/cluster-failover-recovery/index.md
+    metadata:
+      <<: [*case, *azure-managed-redis]
+      title: Azure Managed Redis Cluster Failover 분석
+      description: Azure Managed Redis cluster failover 장애의 분석과 복구 전략을 기록합니다.
+      technologies: [nodejs, redis]
+      tags: [disaster-recovery, high-availability, troubleshooting]
+      occurred_at: 2026-02-22
+
+sample_roots:
+  - source: aisearch
+    destination: samples/azure-ai-search/source-material
+  - source: aisearch-v2
+    destination: samples/azure-ai-search/analyzer-comparison
+  - source: aks
+    destination: samples/aks/source-material
+  - source: azureblob
+    destination: samples/azure-storage/source-material
+  - source: infra
+    destination: samples/infrastructure/bicep
+  - source: loadtest
+    destination: samples/azure-load-testing/source-material
+  - source: memory
+    destination: samples/azure-ai-foundry/memory-artifacts
+  - source: monitor
+    destination: samples/azure-monitor/source-material
+  - source: mysql
+    destination: samples/azure-mysql/source-material
+  - source: oryx-test
+    destination: samples/app-service/oryx-test
+  - source: ptu_lb
+    destination: samples/azure-openai/ptu-load-balancing
+  - source: redis
+    destination: samples/azure-managed-redis/source-material

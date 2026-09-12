@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1150 660" width="1150" height="660" font-family="'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif">
+  <rect width="1150" height="660" fill="#f8fafc"/>
+  <defs>
+    <marker id="t-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="t-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+    <marker id="t-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="34" font-size="21" font-weight="700" fill="#0f172a">프로덕션 메모리 아키텍처 — 계층 저장 + 가드레일</text>
+  <text x="30" y="57" font-size="13" fill="#64748b">메모리 기법이 아니라 "그 위에 얹는 운영 계층"이다. B2C 규모에서는 선택이 아니라 전제 조건.</text>
+
+  <!-- INGESTION -->
+  <rect x="30" y="74" width="1090" height="118" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="48" y="97" font-size="13.5" font-weight="700" fill="#065f46">Ingestion — 저장 전 처리</text>
+
+  <rect x="50" y="108" width="190" height="66" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+  <text x="145" y="134" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">신규 메시지</text>
+  <text x="145" y="155" font-size="11" fill="#475569" text-anchor="middle">대화 턴 / 행동 이벤트</text>
+
+  <rect x="265" y="108" width="190" height="66" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.5"/>
+  <text x="360" y="130" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">PII 스캐너 · 레닥터</text>
+  <text x="360" y="149" font-size="11" fill="#475569" text-anchor="middle">이메일·전화·주민번호 등</text>
+  <text x="360" y="164" font-size="10.5" fill="#dc2626" text-anchor="middle">정규식은 이름·주소를 놓친다 → 전용 서비스 필요</text>
+
+  <rect x="480" y="108" width="190" height="66" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+  <text x="575" y="130" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">Fact Extractor (LLM)</text>
+  <text x="575" y="149" font-size="11" fill="#475569" text-anchor="middle">구조화 사실 + 엔티티 관계</text>
+  <text x="575" y="164" font-size="10.5" fill="#475569" text-anchor="middle">저비용 모델로 가치 판단 후 승격</text>
+
+  <rect x="695" y="108" width="190" height="66" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.5"/>
+  <text x="790" y="130" font-size="12.5" font-weight="700" fill="#065f46" text-anchor="middle">Embedding Generator</text>
+  <text x="790" y="149" font-size="11" fill="#475569" text-anchor="middle">배치 처리 · 임베딩 캐시로</text>
+  <text x="790" y="164" font-size="11" fill="#475569" text-anchor="middle">중복 생성 비용 제거</text>
+
+  <rect x="910" y="108" width="190" height="66" rx="8" fill="#ffffff" stroke="#d97706" stroke-width="1.5"/>
+  <text x="1005" y="130" font-size="12.5" font-weight="700" fill="#92400e" text-anchor="middle">Cost Tracker (게이트)</text>
+  <text x="1005" y="149" font-size="11" fill="#475569" text-anchor="middle">일/월 상한 대비 실지출 추적</text>
+  <text x="1005" y="164" font-size="11" fill="#475569" text-anchor="middle">초과 시 추출 강도 하향</text>
+
+  <path d="M240 141 L263 141" stroke="#64748b" stroke-width="2" marker-end="url(#t-slate)"/>
+  <path d="M455 141 L478 141" stroke="#64748b" stroke-width="2" marker-end="url(#t-slate)"/>
+  <path d="M670 141 L693 141" stroke="#64748b" stroke-width="2" marker-end="url(#t-slate)"/>
+  <path d="M885 141 L908 141" stroke="#64748b" stroke-width="2" marker-end="url(#t-slate)"/>
+
+  <!-- TIERS -->
+  <rect x="30" y="206" width="760" height="196" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="48" y="229" font-size="13.5" font-weight="700" fill="#92400e">Tiered Storage — 접근 빈도로 승격/강등</text>
+
+  <rect x="50" y="242" width="220" height="100" rx="9" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+  <text x="160" y="266" font-size="13" font-weight="700" fill="#991b1b" text-anchor="middle">HOT</text>
+  <text x="160" y="286" font-size="11.5" fill="#7f1d1d" text-anchor="middle">Azure Managed Redis</text>
+  <text x="160" y="304" font-size="11.5" fill="#7f1d1d" text-anchor="middle">TTL: 수분~수시간</text>
+  <text x="160" y="322" font-size="12" font-weight="700" fill="#dc2626" text-anchor="middle">지연 &lt; 1ms</text>
+
+  <rect x="290" y="242" width="220" height="100" rx="9" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="400" y="266" font-size="13" font-weight="700" fill="#92400e" text-anchor="middle">WARM</text>
+  <text x="400" y="286" font-size="11.5" fill="#78350f" text-anchor="middle">Azure DB for PostgreSQL (pgvector) / AI Search</text>
+  <text x="400" y="304" font-size="11.5" fill="#78350f" text-anchor="middle">TTL: 수일~수개월</text>
+  <text x="400" y="322" font-size="12" font-weight="700" fill="#d97706" text-anchor="middle">지연 5~50ms</text>
+
+  <rect x="530" y="242" width="220" height="100" rx="9" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="640" y="266" font-size="13" font-weight="700" fill="#1e40af" text-anchor="middle">COLD</text>
+  <text x="640" y="286" font-size="11.5" fill="#1e3a8a" text-anchor="middle">Azure Blob Storage (Cool/Archive)</text>
+  <text x="640" y="304" font-size="11.5" fill="#1e3a8a" text-anchor="middle">TTL: 무기한</text>
+  <text x="640" y="322" font-size="12" font-weight="700" fill="#2563eb" text-anchor="middle">지연 100ms+</text>
+
+  <path d="M272 268 L288 268" stroke="#ef4444" stroke-width="2" marker-end="url(#t-red)"/>
+  <text x="280" y="260" font-size="10" font-weight="600" fill="#dc2626" text-anchor="middle">강등</text>
+  <path d="M288 318 L272 318" stroke="#3b82f6" stroke-width="2" marker-end="url(#t-blue)"/>
+  <text x="280" y="338" font-size="10" font-weight="600" fill="#2563eb" text-anchor="middle">승격</text>
+  <path d="M512 268 L528 268" stroke="#ef4444" stroke-width="2" marker-end="url(#t-red)"/>
+  <text x="520" y="260" font-size="10" font-weight="600" fill="#dc2626" text-anchor="middle">강등</text>
+  <path d="M528 318 L512 318" stroke="#3b82f6" stroke-width="2" marker-end="url(#t-blue)"/>
+  <text x="520" y="338" font-size="10" font-weight="600" fill="#2563eb" text-anchor="middle">승격</text>
+
+  <text x="50" y="366" font-size="11.5" fill="#78350f">승격(promote): 접근 횟수 임계 초과 · 에이전트가 명시적으로 pin · 최근 N턴 내 참조</text>
+  <text x="50" y="385" font-size="11.5" fill="#78350f">강등(demote): M턴 동안 미접근 · relevance score 하락 · 세션 종료 · decay score &lt; 컷오프</text>
+
+  <!-- GRAPH -->
+  <rect x="806" y="206" width="314" height="196" rx="12" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="824" y="229" font-size="13.5" font-weight="700" fill="#6b21a8">Relationship Layer</text>
+  <rect x="826" y="242" width="274" height="100" rx="9" fill="#ffffff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="963" y="268" font-size="13" font-weight="700" fill="#6b21a8" text-anchor="middle">Entity Graph</text>
+  <text x="963" y="290" font-size="11.5" fill="#475569" text-anchor="middle">노드 = 유저 · 상품 · 카테고리 · 브랜드</text>
+  <text x="963" y="308" font-size="11.5" fill="#475569" text-anchor="middle">엣지 = 조회 · 구매 · 반품 · 선호 · 대체</text>
+  <text x="963" y="328" font-size="11.5" fill="#7c3aed" text-anchor="middle">멀티홉 질의: "이 사람이 좋아한 브랜드의 신상"</text>
+  <text x="826" y="366" font-size="11.5" fill="#6b21a8">엣지에 타임스탬프를 실으면 시간 추론이 자연스러워진다</text>
+  <text x="826" y="385" font-size="11.5" fill="#6b21a8">(Graphiti / Zep이 채택한 방식)</text>
+
+  <!-- GUARDRAILS -->
+  <rect x="30" y="416" width="1090" height="140" rx="12" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="48" y="439" font-size="13.5" font-weight="700" fill="#991b1b">Guardrails — 모든 티어를 가로지른다</text>
+
+  <rect x="50" y="452" width="345" height="90" rx="9" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="68" y="475" font-size="12.5" font-weight="700" fill="#991b1b">Budget Enforcer</text>
+  <text x="68" y="495" font-size="11.5" fill="#475569">유저당 최대 토큰 / 최대 기억 개수 상한</text>
+  <text x="68" y="513" font-size="11.5" fill="#475569">초과 시 중요도 가중 eviction</text>
+  <text x="68" y="531" font-size="11.5" fill="#dc2626">중요도 점수가 틀리면 가치 있는 기억이 날아간다</text>
+
+  <rect x="410" y="452" width="345" height="90" rx="9" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="428" y="475" font-size="12.5" font-weight="700" fill="#991b1b">Privacy Manager</text>
+  <text x="428" y="495" font-size="11.5" fill="#475569">GDPR 삭제권 — 원문·추출사실·임베딩·</text>
+  <text x="428" y="513" font-size="11.5" fill="#475569">그래프 노드/엣지·캐시까지 전부 삭제</text>
+  <text x="428" y="531" font-size="11.5" fill="#dc2626">저장소가 여러 개일수록 누락 위험 ↑ · 감사 로그 필수</text>
+
+  <rect x="770" y="452" width="330" height="90" rx="9" fill="#ffffff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="788" y="475" font-size="12.5" font-weight="700" fill="#991b1b">Observability</text>
+  <text x="788" y="495" font-size="11.5" fill="#475569">검색 지연 · 캐시 적중률 · 저장소 크기 ·</text>
+  <text x="788" y="513" font-size="11.5" fill="#475569">에러율 · 추출 품질을 상시 계측</text>
+  <text x="788" y="531" font-size="11.5" fill="#475569">OpenTelemetry / 구조화 로깅 / 분산 추적</text>
+
+  <text x="30" y="588" font-size="12.5" font-weight="700" fill="#0f172a">이 계층을 언제 넣나</text>
+  <text x="30" y="610" font-size="11.5" fill="#475569">활성 유저 100명 초과 · 민감정보 취급 · 가용성 보장 필요 — 이 중 하나라도 해당하면 필요하다. 반대로 그 전에 넣으면 오버엔지니어링이다.</text>
+  <text x="30" y="631" font-size="11.5" fill="#475569">주의: 기법 30은 단일 노드 패턴까지만 다룬다. 수평 샤딩·분산 캐시·리전 간 복제는 별도 인프라 설계가 필요하다.</text>
+</svg>

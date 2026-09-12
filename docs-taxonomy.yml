@@ -1,0 +1,94 @@
+collections:
+  case:
+    path: cases
+    title: 문제 해결 사례
+    description: 특정 시점의 증상, 조사, 원인과 해결 결과를 보존합니다.
+    statuses: [unresolved, resolved, historical]
+    required_fields: [occurred_at]
+  guide:
+    path: guides
+    title: 일반 가이드
+    description: 현재 재사용할 수 있고 제품 변화에 따라 계속 갱신하는 절차입니다.
+    statuses: [current, needs-review, deprecated]
+    required_fields: [last_verified, review_cycle_days, applies_to]
+  lab:
+    path: labs
+    title: 실습
+    description: 직접 배포하고 검증한 뒤 정리할 수 있는 실행형 문서입니다.
+    statuses: [verified, needs-review, broken, archived]
+    required_fields: [last_verified, review_cycle_days, estimated_time, cost, cleanup_required]
+  research:
+    path: research
+    title: 리서치
+    description: 기준 시점, 조사 방법, 결과와 한계를 명시한 비교·분석 자료입니다.
+    statuses: [current, superseded, archived]
+    required_fields: [published_at]
+
+services:
+  aks: Azure Kubernetes Service
+  application-gateway: Azure Application Gateway
+  azure-ai-foundry: Microsoft Foundry
+  azure-ai-search: Azure AI Search
+  azure-architecture: Azure Architecture
+  azure-automation: Azure Automation
+  azure-load-testing: Azure Load Testing
+  azure-managed-redis: Azure Managed Redis
+  azure-monitor: Azure Monitor
+  azure-mysql: Azure Database for MySQL
+  azure-openai: Azure OpenAI
+  azure-storage: Azure Storage
+  cosmos-db: Azure Cosmos DB
+  development: Application Development
+  hdinsight: Azure HDInsight
+
+technologies:
+  azure-cli: Azure CLI
+  bicep: Bicep
+  cosmos-db: Azure Cosmos DB
+  docker: Docker
+  dotnet: .NET
+  gitops: GitOps
+  grafana: Grafana
+  java: Java
+  kafka: Apache Kafka
+  kubernetes: Kubernetes
+  mysql: MySQL
+  nodejs: Node.js
+  open-telemetry: OpenTelemetry
+  powershell: PowerShell
+  prometheus: Prometheus
+  python: Python
+  rag: Retrieval-augmented generation
+  redis: Redis
+  rest-api: REST API
+
+tags:
+  ai-agents: AI agents
+  architecture: Architecture
+  authentication: Authentication
+  authorization: Authorization
+  benchmarking: Benchmarking
+  deployment: Deployment
+  development: Development
+  diagnostics: Diagnostics
+  disaster-recovery: Disaster recovery
+  high-availability: High availability
+  kubernetes: Kubernetes
+  latency: Latency
+  migration: Migration
+  monitoring: Monitoring
+  networking: Networking
+  observability: Observability
+  performance: Performance
+  reliability: Reliability
+  security: Security
+  storage: Storage
+  troubleshooting: Troubleshooting
+
+verification_statuses: [verified, needs-review]
+required_source_host: learn.microsoft.com
+official_source_hosts:
+  - learn.microsoft.com
+  - kubernetes.io
+  - www.cncf.io
+  - cncf.io

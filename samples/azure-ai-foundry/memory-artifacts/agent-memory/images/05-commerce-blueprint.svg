@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1250 790" width="1250" height="790" font-family="'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif">
+  <rect width="1250" height="790" fill="#f8fafc"/>
+  <defs>
+    <marker id="c-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="c-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981"/>
+    </marker>
+    <marker id="c-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="34" font-size="22" font-weight="700" fill="#0f172a">B2C 커머스 에이전트 — 실시간 추천 · 개인 맞춤 구매 유도를 위한 메모리 설계</text>
+  <text x="30" y="58" font-size="13" fill="#64748b">자체 에이전트 프레임워크 위에 얹는 구조. 핵심은 <tspan font-weight="700" fill="#0f172a">읽기(실시간)와 쓰기(비동기)의 완전한 분리</tspan>, 그리고 <tspan font-weight="700" fill="#0f172a">decay 속도가 다른 기억을 섞지 않는 것</tspan>.</text>
+
+  <!-- ===== BAND 1: SIGNALS ===== -->
+  <text x="30" y="94" font-size="13.5" font-weight="700" fill="#0f172a">신호 소스 — 대화만이 메모리 입력이 아니다</text>
+  <rect x="30" y="104" width="220" height="58" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="140" y="127" font-size="12.5" font-weight="600" fill="#0f172a" text-anchor="middle">대화 턴</text>
+  <text x="140" y="147" font-size="11" fill="#64748b" text-anchor="middle">발화 · 질문 · 불만</text>
+
+  <rect x="270" y="104" width="220" height="58" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="380" y="127" font-size="12.5" font-weight="600" fill="#0f172a" text-anchor="middle">탐색 행동</text>
+  <text x="380" y="147" font-size="11" fill="#64748b" text-anchor="middle">조회 · 검색어 · 체류시간</text>
+
+  <rect x="510" y="104" width="220" height="58" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="620" y="127" font-size="12.5" font-weight="600" fill="#0f172a" text-anchor="middle">장바구니 · 위시리스트</text>
+  <text x="620" y="147" font-size="11" fill="#64748b" text-anchor="middle">담기 · 빼기 · 이탈</text>
+
+  <rect x="750" y="104" width="220" height="58" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="860" y="127" font-size="12.5" font-weight="600" fill="#0f172a" text-anchor="middle">거래 이력</text>
+  <text x="860" y="147" font-size="11" fill="#64748b" text-anchor="middle">구매 · 반품 · 교환 사유</text>
+
+  <rect x="990" y="104" width="220" height="58" rx="8" fill="#ffffff" stroke="#94a3b8" stroke-width="1.3"/>
+  <text x="1100" y="127" font-size="12.5" font-weight="600" fill="#0f172a" text-anchor="middle">CS · 리뷰</text>
+  <text x="1100" y="147" font-size="11" fill="#64748b" text-anchor="middle">불만 · 만족 · 사이즈 후기</text>
+
+  <!-- ===== BAND 2 LEFT: REALTIME ===== -->
+  <rect x="30" y="182" width="760" height="278" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="48" y="206" font-size="14.5" font-weight="700" fill="#1e40af">① 실시간 경로 — 사용자를 기다리게 하는 유일한 구간</text>
+  <text x="48" y="226" font-size="12" fill="#2563eb">LLM 호출은 마지막 1회만. 앞단은 전부 조회/스코어링으로 끝낸다.</text>
+
+  <rect x="50" y="238" width="170" height="130" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="135" y="260" font-size="12" font-weight="700" fill="#1e40af" text-anchor="middle">1. 컨텍스트 조립</text>
+  <text x="135" y="281" font-size="10.5" fill="#475569" text-anchor="middle">HOT 캐시에서 유저</text>
+  <text x="135" y="296" font-size="10.5" fill="#475569" text-anchor="middle">고정 프로필 pin 로드</text>
+  <text x="135" y="311" font-size="10.5" fill="#475569" text-anchor="middle">+ 현재 세션 의도</text>
+  <rect x="70" y="326" width="130" height="24" rx="12" fill="#dbeafe"/>
+  <text x="135" y="343" font-size="11.5" font-weight="700" fill="#1e40af" text-anchor="middle">목표 &lt; 5ms</text>
+
+  <rect x="235" y="238" width="170" height="130" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="320" y="260" font-size="12" font-weight="700" fill="#1e40af" text-anchor="middle">2. 후보 생성</text>
+  <text x="320" y="281" font-size="10.5" fill="#475569" text-anchor="middle">벡터 + BM25 병렬</text>
+  <text x="320" y="296" font-size="10.5" fill="#475569" text-anchor="middle">→ RRF 융합</text>
+  <text x="320" y="311" font-size="10.5" fill="#475569" text-anchor="middle">관련 기억 + 상품 top-K</text>
+  <rect x="255" y="326" width="130" height="24" rx="12" fill="#dbeafe"/>
+  <text x="320" y="343" font-size="11.5" font-weight="700" fill="#1e40af" text-anchor="middle">20~50ms</text>
+
+  <rect x="420" y="238" width="170" height="130" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="505" y="260" font-size="12" font-weight="700" fill="#1e40af" text-anchor="middle">3. 랭킹 · 하드 필터</text>
+  <text x="505" y="281" font-size="10.5" fill="#475569" text-anchor="middle">temporal decay 가중 곱</text>
+  <text x="505" y="296" font-size="10.5" fill="#dc2626" text-anchor="middle">제약 위반 상품 제거</text>
+  <text x="505" y="311" font-size="10.5" fill="#475569" text-anchor="middle">+ MMR 다양성</text>
+  <rect x="440" y="326" width="130" height="24" rx="12" fill="#dbeafe"/>
+  <text x="505" y="343" font-size="11.5" font-weight="700" fill="#1e40af" text-anchor="middle">&lt; 10ms</text>
+
+  <rect x="605" y="238" width="170" height="130" rx="8" fill="#ffffff" stroke="#ec4899" stroke-width="1.8"/>
+  <text x="690" y="260" font-size="12" font-weight="700" fill="#9d174d" text-anchor="middle">4. 메시지 생성</text>
+  <text x="690" y="281" font-size="10.5" fill="#475569" text-anchor="middle">LLM 호출 1회</text>
+  <text x="690" y="296" font-size="10.5" fill="#475569" text-anchor="middle">근거 기억 ID를 함께</text>
+  <text x="690" y="311" font-size="10.5" fill="#475569" text-anchor="middle">반환 (설명가능성)</text>
+  <rect x="625" y="326" width="130" height="24" rx="12" fill="#fce7f3"/>
+  <text x="690" y="343" font-size="11.5" font-weight="700" fill="#9d174d" text-anchor="middle">지연 대부분 차지</text>
+
+  <path d="M220 303 L233 303" stroke="#2563eb" stroke-width="2" marker-end="url(#c-blue)"/>
+  <path d="M405 303 L418 303" stroke="#2563eb" stroke-width="2" marker-end="url(#c-blue)"/>
+  <path d="M590 303 L603 303" stroke="#2563eb" stroke-width="2" marker-end="url(#c-blue)"/>
+
+  <path d="M806 300 L794 300" stroke="#64748b" stroke-width="2" marker-end="url(#c-slate)"/>
+  <text x="800" y="345" font-size="9.5" fill="#64748b" text-anchor="middle" transform="rotate(-90 800 345)">조회</text>
+
+  <rect x="50" y="382" width="725" height="62" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.2"/>
+  <text x="66" y="403" font-size="11.5" font-weight="700" fill="#1e40af">실시간 경로에서 금지할 것</text>
+  <text x="66" y="422" font-size="11.5" fill="#475569">Cross-Encoder 리랭크(+50~200ms) · HyDE(LLM 1회 추가) · Memory Router LLM 분류(200~500ms) · 사실 추출 · Consolidation</text>
+  <text x="66" y="438" font-size="11.5" fill="#475569">→ 정확도가 정말 필요하면 "추천 카드 프리페치"처럼 사용자 대기 밖에서 미리 계산해 둔다.</text>
+
+  <!-- ===== BAND 2 RIGHT: STORES ===== -->
+  <rect x="810" y="182" width="410" height="278" rx="12" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="828" y="206" font-size="14.5" font-weight="700" fill="#6b21a8">메모리 저장소 — decay 속도로 분리한다</text>
+
+  <rect x="828" y="216" width="374" height="56" rx="8" fill="#ffffff" stroke="#8b5cf6" stroke-width="1.4"/>
+  <text x="844" y="237" font-size="12.5" font-weight="700" fill="#6b21a8">A. 고정 프로필 (Semantic) — No decay · Pinned</text>
+  <text x="844" y="256" font-size="11" fill="#475569">사이즈 · 알레르기/성분 회피 · 브랜드 선호 · 예산대 · 배송지 유형</text>
+  <text x="1186" y="237" font-size="11" font-weight="700" fill="#16a34a" text-anchor="end">HOT</text>
+
+  <rect x="828" y="278" width="374" height="56" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="1.4"/>
+  <text x="844" y="299" font-size="12.5" font-weight="700" fill="#92400e">B. 세션 의도 (Working) — half-life 수십 분</text>
+  <text x="844" y="318" font-size="11" fill="#475569">지금 찾는 카테고리 · 비교 중인 상품 · 방금 거절한 추천 · 예산 발언</text>
+  <text x="1186" y="299" font-size="11" font-weight="700" fill="#16a34a" text-anchor="end">HOT</text>
+
+  <rect x="828" y="340" width="374" height="56" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="1.4"/>
+  <text x="844" y="361" font-size="12.5" font-weight="700" fill="#3730a3">C. 행동 에피소드 (Episodic) — half-life 수주</text>
+  <text x="844" y="380" font-size="11" fill="#475569">조회/담기/구매/반품 + 타임스탬프 · "지난달에 뭘 샀지" 질의 대응</text>
+  <text x="1186" y="361" font-size="11" font-weight="700" fill="#d97706" text-anchor="end">WARM</text>
+
+  <rect x="828" y="402" width="374" height="46" rx="8" fill="#ffffff" stroke="#8b5cf6" stroke-width="1.4"/>
+  <text x="844" y="423" font-size="12.5" font-weight="700" fill="#6b21a8">D. 상품 · 관계 그래프 (Entity Graph)</text>
+  <text x="844" y="440" font-size="11" fill="#475569">유저 ↔ 상품 ↔ 브랜드 ↔ 카테고리 ↔ 대체재 · 멀티홉 추천 근거</text>
+
+  <!-- ===== BAND 3: ASYNC ===== -->
+  <rect x="30" y="480" width="1190" height="170" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="48" y="504" font-size="14.5" font-weight="700" fill="#065f46">② 비동기 학습 경로 — 여기서 메모리 품질이 결정된다</text>
+  <text x="48" y="524" font-size="12" fill="#059669">응답 반환 직후 큐에 적재. 사용자 지연에 전혀 포함되지 않으므로 비싼 LLM 작업을 여기 몰아넣는다.</text>
+
+  <rect x="45" y="536" width="215" height="96" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.4"/>
+  <text x="152" y="558" font-size="12" font-weight="700" fill="#065f46" text-anchor="middle">1. 이벤트 큐</text>
+  <text x="152" y="578" font-size="10.5" fill="#475569" text-anchor="middle">대화 턴 + 행동 로그를</text>
+  <text x="152" y="593" font-size="10.5" fill="#475569" text-anchor="middle">동일 스키마로 정규화</text>
+  <text x="152" y="614" font-size="10.5" fill="#059669" text-anchor="middle">유실 허용 X · 재처리 가능하게</text>
+
+  <rect x="280" y="536" width="215" height="96" rx="8" fill="#ffffff" stroke="#059669" stroke-width="1.4"/>
+  <text x="387" y="558" font-size="12" font-weight="700" fill="#065f46" text-anchor="middle">2. 동의 · PII 게이트</text>
+  <text x="387" y="578" font-size="10.5" fill="#475569" text-anchor="middle">마케팅 활용 동의 여부 확인</text>
+  <text x="387" y="593" font-size="10.5" fill="#475569" text-anchor="middle">민감정보 마스킹</text>
+  <text x="387" y="614" font-size="10.5" fill="#dc2626" text-anchor="middle">동의 없으면 여기서 폐기</text>
+
+  <rect x="515" y="536" width="215" height="96" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.4"/>
+  <text x="622" y="558" font-size="12" font-weight="700" fill="#065f46" text-anchor="middle">3. 사실 추출</text>
+  <text x="622" y="578" font-size="10.5" fill="#475569" text-anchor="middle">저비용 모델로 "저장 가치"</text>
+  <text x="622" y="593" font-size="10.5" fill="#475569" text-anchor="middle">1차 판정 → 통과분만 정밀 추출</text>
+  <text x="622" y="614" font-size="10.5" fill="#059669" text-anchor="middle">지연·비용 최적화의 정석</text>
+
+  <rect x="750" y="536" width="215" height="96" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.4"/>
+  <text x="857" y="558" font-size="12" font-weight="700" fill="#065f46" text-anchor="middle">4. 중복 · 모순 해소 + 라우팅</text>
+  <text x="857" y="578" font-size="10.5" fill="#475569" text-anchor="middle">"235 신는다" vs "240으로 바꿨다"</text>
+  <text x="857" y="593" font-size="10.5" fill="#475569" text-anchor="middle">최신 우선 + 구버전 아카이브</text>
+  <text x="857" y="614" font-size="10.5" fill="#475569" text-anchor="middle">A/B/C/D 저장소로 분배</text>
+
+  <rect x="985" y="536" width="215" height="96" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="1.4"/>
+  <text x="1092" y="558" font-size="12" font-weight="700" fill="#92400e" text-anchor="middle">5. 유지보수 배치</text>
+  <text x="1092" y="578" font-size="10.5" fill="#475569" text-anchor="middle">Consolidation · Decay · 승격/강등</text>
+  <text x="1092" y="593" font-size="10.5" fill="#475569" text-anchor="middle">유저당 예산 초과분 eviction</text>
+  <text x="1092" y="614" font-size="10.5" fill="#475569" text-anchor="middle">야간/유휴 시간대 실행</text>
+
+  <path d="M260 584 L278 584" stroke="#10b981" stroke-width="2" marker-end="url(#c-green)"/>
+  <path d="M495 584 L513 584" stroke="#10b981" stroke-width="2" marker-end="url(#c-green)"/>
+  <path d="M730 584 L748 584" stroke="#10b981" stroke-width="2" marker-end="url(#c-green)"/>
+  <path d="M965 584 L983 584" stroke="#10b981" stroke-width="2" marker-end="url(#c-green)"/>
+
+  <path d="M1015 476 L1015 464" stroke="#64748b" stroke-width="2" marker-end="url(#c-slate)"/>
+  <text x="1027" y="475" font-size="9.5" fill="#64748b">저장 (비동기 쓰기)</text>
+
+  <!-- ===== BAND 4: GUARDRAILS ===== -->
+  <text x="30" y="682" font-size="13.5" font-weight="700" fill="#0f172a">B2C 전용 가드레일 — 기술 문제가 아니라 신뢰 문제다</text>
+
+  <rect x="30" y="692" width="288" height="72" rx="8" fill="#fff7ed" stroke="#f97316" stroke-width="1.3"/>
+  <text x="46" y="713" font-size="12" font-weight="700" fill="#9a3412">과잉 개인화 방지</text>
+  <text x="46" y="731" font-size="10.8" fill="#475569">기억을 드러내는 강도를 단계화한다.</text>
+  <text x="46" y="747" font-size="10.8" fill="#475569">"지난번 그 브랜드" O / "화요일 밤 11시에</text>
+  <text x="46" y="760" font-size="10.8" fill="#475569">보시던 상품" X</text>
+
+  <rect x="331" y="692" width="288" height="72" rx="8" fill="#fff7ed" stroke="#f97316" stroke-width="1.3"/>
+  <text x="347" y="713" font-size="12" font-weight="700" fill="#9a3412">오기억 방지 · 확인 루프</text>
+  <text x="347" y="731" font-size="10.8" fill="#475569">추론된 사실은 confidence를 낮게 두고,</text>
+  <text x="347" y="747" font-size="10.8" fill="#475569">구매 유도에 쓰기 전 가볍게 확인한다.</text>
+  <text x="347" y="760" font-size="10.8" fill="#475569">틀린 기억 1회가 신뢰를 크게 깎는다.</text>
+
+  <rect x="632" y="692" width="288" height="72" rx="8" fill="#fff7ed" stroke="#f97316" stroke-width="1.3"/>
+  <text x="648" y="713" font-size="12" font-weight="700" fill="#9a3412">사용자 통제권</text>
+  <text x="648" y="731" font-size="10.8" fill="#475569">"이거 기억해 / 잊어" 명령 지원,</text>
+  <text x="648" y="747" font-size="10.8" fill="#475569">기억 목록 조회·삭제 UI, 삭제 시</text>
+  <text x="648" y="760" font-size="10.8" fill="#475569">임베딩·그래프·캐시까지 전파.</text>
+
+  <rect x="933" y="692" width="287" height="72" rx="8" fill="#fff7ed" stroke="#f97316" stroke-width="1.3"/>
+  <text x="949" y="713" font-size="12" font-weight="700" fill="#9a3412">메시지 빈도 · 피로도</text>
+  <text x="949" y="731" font-size="10.8" fill="#475569">"거절한 추천"도 기억해 재노출을 막는다.</text>
+  <text x="949" y="747" font-size="10.8" fill="#475569">푸시/유도 메시지는 유저별 쿨다운을</text>
+  <text x="949" y="760" font-size="10.8" fill="#475569">메모리에 기록해 강제한다.</text>
+</svg>

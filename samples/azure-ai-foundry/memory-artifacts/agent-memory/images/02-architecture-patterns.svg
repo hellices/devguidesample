@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 600" width="1180" height="600" font-family="'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif">
+  <rect width="1180" height="600" fill="#f8fafc"/>
+  <defs>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="ar-violet" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="34" font-size="21" font-weight="700" fill="#0f172a">메모리 시스템 아키텍처 5가지 패턴</text>
+  <text x="20" y="58" font-size="13" fill="#64748b">왼쪽에서 오른쪽으로 갈수록 복잡도가 커진다. 패턴은 중첩된다 — Full Cognitive 안에 Graph-Augmented가, 그 안에 Dual-Store가 들어 있다.</text>
+  <text x="20" y="78" font-size="12.5" font-weight="600" fill="#0f172a">권장: Dual-Store에서 시작해 필요할 때 확장한다.</text>
+
+  <!-- ============ CARD 1 : Single-Store ============ -->
+  <rect x="20" y="92" width="204" height="470" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="92" width="204" height="36" rx="10" fill="#64748b"/>
+  <rect x="20" y="110" width="204" height="18" fill="#64748b"/>
+  <text x="34" y="116" font-size="14" font-weight="700" fill="#ffffff">1. Single-Store</text>
+  <text x="34" y="150" font-size="11.5" font-weight="700" fill="#64748b">복잡도 낮음 · 저장소 1개</text>
+
+  <rect x="47" y="200" width="150" height="60" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="122" y="226" font-size="12.5" font-weight="600" fill="#3730a3" text-anchor="middle">Vector Store</text>
+  <text x="122" y="245" font-size="11" fill="#4f46e5" text-anchor="middle">단일 컬렉션</text>
+  <text x="122" y="290" font-size="11" fill="#94a3b8" text-anchor="middle">모든 기억을 한 곳에 임베딩</text>
+
+  <text x="34" y="380" font-size="11.5" font-weight="700" fill="#0f172a">검색</text>
+  <text x="34" y="398" font-size="11.5" fill="#475569">시맨틱 top-k 만</text>
+  <text x="34" y="424" font-size="11.5" font-weight="700" fill="#16a34a">강점</text>
+  <text x="34" y="442" font-size="11.5" fill="#475569">50줄이면 구현. 라우팅 불필요</text>
+  <text x="34" y="468" font-size="11.5" font-weight="700" fill="#dc2626">약점</text>
+  <text x="34" y="486" font-size="11.5" fill="#475569">커질수록 검색 품질 급락</text>
+  <text x="34" y="503" font-size="11.5" fill="#475569">시간 개념·압축 없음</text>
+  <text x="34" y="530" font-size="11.5" font-weight="700" fill="#0f172a">적합</text>
+  <text x="34" y="548" font-size="11.5" fill="#475569">프로토타입 · 데모</text>
+
+  <!-- ============ CARD 2 : Dual-Store ============ -->
+  <rect x="254" y="92" width="204" height="470" rx="10" fill="#ffffff" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="254" y="92" width="204" height="36" rx="10" fill="#3b82f6"/>
+  <rect x="254" y="110" width="204" height="18" fill="#3b82f6"/>
+  <text x="268" y="116" font-size="14" font-weight="700" fill="#ffffff">2. Dual-Store ★</text>
+  <text x="268" y="150" font-size="11.5" font-weight="700" fill="#3b82f6">복잡도 중간 · 버퍼 + 영구저장</text>
+
+  <rect x="281" y="172" width="150" height="52" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="356" y="194" font-size="12.5" font-weight="600" fill="#1e40af" text-anchor="middle">Short-Term Buffer</text>
+  <text x="356" y="212" font-size="11" fill="#2563eb" text-anchor="middle">최근 k턴 / 러닝 요약</text>
+  <path d="M356 224 L356 258" stroke="#3b82f6" stroke-width="2" marker-end="url(#ar-blue)"/>
+  <text x="366" y="246" font-size="11" font-weight="600" fill="#2563eb">flush</text>
+  <rect x="281" y="262" width="150" height="52" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="356" y="284" font-size="12.5" font-weight="600" fill="#3730a3" text-anchor="middle">Long-Term Store</text>
+  <text x="356" y="302" font-size="11" fill="#4f46e5" text-anchor="middle">추출 사실 / 엔티티 / 요약</text>
+  <text x="356" y="340" font-size="11" fill="#94a3b8" text-anchor="middle">주기적으로 버퍼를 증류해 이관</text>
+
+  <text x="268" y="380" font-size="11.5" font-weight="700" fill="#0f172a">검색</text>
+  <text x="268" y="398" font-size="11.5" fill="#475569">버퍼 스캔 + 시맨틱 검색</text>
+  <text x="268" y="424" font-size="11.5" font-weight="700" fill="#16a34a">강점</text>
+  <text x="268" y="442" font-size="11.5" fill="#475569">최근맥락·누적지식 명확히 분리</text>
+  <text x="268" y="468" font-size="11.5" font-weight="700" fill="#dc2626">약점</text>
+  <text x="268" y="486" font-size="11.5" fill="#475569">flush 설계(시점·추출·중복)가</text>
+  <text x="268" y="503" font-size="11.5" fill="#475569">전적으로 개발자 책임</text>
+  <text x="268" y="530" font-size="11.5" font-weight="700" fill="#0f172a">적합</text>
+  <text x="268" y="548" font-size="11.5" fill="#475569">개인비서 · 고객지원 · B2C 시작점</text>
+
+  <!-- ============ CARD 3 : Tiered ============ -->
+  <rect x="488" y="92" width="204" height="470" rx="10" fill="#ffffff" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="488" y="92" width="204" height="36" rx="10" fill="#f59e0b"/>
+  <rect x="488" y="110" width="204" height="18" fill="#f59e0b"/>
+  <text x="502" y="116" font-size="14" font-weight="700" fill="#ffffff">3. Tiered</text>
+  <text x="502" y="150" font-size="11.5" font-weight="700" fill="#d97706">복잡도 높음 · 3계층 캐시 모델</text>
+
+  <rect x="515" y="170" width="150" height="44" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="590" y="188" font-size="12" font-weight="600" fill="#991b1b" text-anchor="middle">HOT · Azure Managed Redis</text>
+  <text x="590" y="205" font-size="10.5" fill="#dc2626" text-anchor="middle">&lt;1ms · 현재 세션 · 고정 사실</text>
+  <rect x="515" y="222" width="150" height="44" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="590" y="240" font-size="12" font-weight="600" fill="#92400e" text-anchor="middle">WARM · pgvector / AI Search</text>
+  <text x="590" y="257" font-size="10.5" fill="#d97706" text-anchor="middle">5~50ms · 최근 세션 · 활성 엔티티</text>
+  <rect x="515" y="274" width="150" height="44" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="590" y="292" font-size="12" font-weight="600" fill="#1e40af" text-anchor="middle">COLD · Azure Blob (Cool/Archive)</text>
+  <text x="590" y="309" font-size="10.5" fill="#2563eb" text-anchor="middle">100ms+ · 전체 이력</text>
+  <text x="590" y="340" font-size="11" fill="#94a3b8" text-anchor="middle">접근 빈도로 승격(promote) / 강등(demote)</text>
+
+  <text x="502" y="380" font-size="11.5" font-weight="700" fill="#0f172a">검색</text>
+  <text x="502" y="398" font-size="11.5" fill="#475569">HOT → WARM → COLD 폴스루</text>
+  <text x="502" y="424" font-size="11.5" font-weight="700" fill="#16a34a">강점</text>
+  <text x="502" y="442" font-size="11.5" fill="#475569">토큰·지연·비용을 동시에 통제</text>
+  <text x="502" y="468" font-size="11.5" font-weight="700" fill="#dc2626">약점</text>
+  <text x="502" y="486" font-size="11.5" fill="#475569">승격/강등 정책 튜닝 난이도 최상</text>
+  <text x="502" y="503" font-size="11.5" fill="#475569">중요 기억이 COLD에 갇힐 위험</text>
+  <text x="502" y="530" font-size="11.5" font-weight="700" fill="#0f172a">적합</text>
+  <text x="502" y="548" font-size="11.5" fill="#475569">대규모 · 엄격한 지연 요구</text>
+
+  <!-- ============ CARD 4 : Graph-Augmented ============ -->
+  <rect x="722" y="92" width="204" height="470" rx="10" fill="#ffffff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <rect x="722" y="92" width="204" height="36" rx="10" fill="#8b5cf6"/>
+  <rect x="722" y="110" width="204" height="18" fill="#8b5cf6"/>
+  <text x="736" y="116" font-size="14" font-weight="700" fill="#ffffff">4. Graph-Augmented</text>
+  <text x="736" y="150" font-size="11.5" font-weight="700" fill="#7c3aed">복잡도 중상 · 벡터 + 지식그래프</text>
+
+  <rect x="740" y="180" width="82" height="60" rx="8" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="781" y="204" font-size="11.5" font-weight="600" fill="#3730a3" text-anchor="middle">Vector</text>
+  <text x="781" y="221" font-size="10.5" fill="#4f46e5" text-anchor="middle">의미 유사도</text>
+  <rect x="828" y="180" width="82" height="60" rx="8" fill="#f3e8ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="869" y="204" font-size="11.5" font-weight="600" fill="#6b21a8" text-anchor="middle">Graph</text>
+  <text x="869" y="221" font-size="10.5" fill="#7c3aed" text-anchor="middle">관계 순회</text>
+  <path d="M781 240 L781 262 L869 262 L869 240" fill="none" stroke="#8b5cf6" stroke-width="1.5"/>
+  <path d="M825 262 L825 278" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ar-violet)"/>
+  <rect x="750" y="282" width="150" height="42" rx="8" fill="#faf5ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="825" y="300" font-size="12" font-weight="600" fill="#6b21a8" text-anchor="middle">Result Merger</text>
+  <text x="825" y="317" font-size="10.5" fill="#7c3aed" text-anchor="middle">중복제거 · 재랭킹</text>
+  <text x="825" y="345" font-size="11" fill="#94a3b8" text-anchor="middle">턴마다 엔티티 추출기가 양쪽을 갱신</text>
+
+  <text x="736" y="380" font-size="11.5" font-weight="700" fill="#0f172a">검색</text>
+  <text x="736" y="398" font-size="11.5" fill="#475569">시맨틱 + 그래프 순회 병렬</text>
+  <text x="736" y="424" font-size="11.5" font-weight="700" fill="#16a34a">강점</text>
+  <text x="736" y="442" font-size="11.5" fill="#475569">멀티홉 추론. 시간 정보를 엣지에</text>
+  <text x="736" y="468" font-size="11.5" font-weight="700" fill="#dc2626">약점</text>
+  <text x="736" y="486" font-size="11.5" fill="#475569">엔티티 추출 오류·환각. 스키마</text>
+  <text x="736" y="503" font-size="11.5" fill="#475569">설계 필요. 병합 지연 추가</text>
+  <text x="736" y="530" font-size="11.5" font-weight="700" fill="#0f172a">적합</text>
+  <text x="736" y="548" font-size="11.5" fill="#475569">엔티티 풍부한 도메인 (커머스 카탈로그)</text>
+
+  <!-- ============ CARD 5 : Full Cognitive ============ -->
+  <rect x="956" y="92" width="204" height="470" rx="10" fill="#ffffff" stroke="#ec4899" stroke-width="1.5"/>
+  <rect x="956" y="92" width="204" height="36" rx="10" fill="#ec4899"/>
+  <rect x="956" y="110" width="204" height="18" fill="#ec4899"/>
+  <text x="970" y="116" font-size="14" font-weight="700" fill="#ffffff">5. Full Cognitive</text>
+  <text x="970" y="150" font-size="11.5" font-weight="700" fill="#db2777">복잡도 최상 · 전문화된 다중 저장소</text>
+
+  <rect x="974" y="166" width="168" height="34" rx="7" fill="#fce7f3" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="1058" y="188" font-size="11.5" font-weight="600" fill="#9d174d" text-anchor="middle">Working Memory (토큰 예산)</text>
+  <rect x="974" y="208" width="168" height="30" rx="7" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="1058" y="228" font-size="11.5" font-weight="600" fill="#9d174d" text-anchor="middle">Memory Router</text>
+  <rect x="974" y="248" width="52" height="44" rx="7" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="1000" y="268" font-size="10.5" font-weight="600" fill="#334155" text-anchor="middle">Episodic</text>
+  <text x="1000" y="283" font-size="9.5" fill="#64748b" text-anchor="middle">무슨 일이</text>
+  <rect x="1032" y="248" width="52" height="44" rx="7" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="1058" y="268" font-size="10.5" font-weight="600" fill="#334155" text-anchor="middle">Semantic</text>
+  <text x="1058" y="283" font-size="9.5" fill="#64748b" text-anchor="middle">무엇이 참</text>
+  <rect x="1090" y="248" width="52" height="44" rx="7" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="1116" y="268" font-size="10.5" font-weight="600" fill="#334155" text-anchor="middle">Procedural</text>
+  <text x="1116" y="283" font-size="9.5" fill="#64748b" text-anchor="middle">어떻게</text>
+  <rect x="974" y="300" width="168" height="34" rx="7" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="1058" y="315" font-size="10.5" font-weight="600" fill="#065f46" text-anchor="middle">Background Jobs</text>
+  <text x="1058" y="329" font-size="9.5" fill="#059669" text-anchor="middle">Consolidation · Compaction · Decay · Reflection</text>
+  <text x="1058" y="352" font-size="11" fill="#94a3b8" text-anchor="middle">라우터 정확도가 시스템 전체 품질을 결정</text>
+
+  <text x="970" y="380" font-size="11.5" font-weight="700" fill="#0f172a">검색</text>
+  <text x="970" y="398" font-size="11.5" fill="#475569">라우터가 지목한 저장소만 조회</text>
+  <text x="970" y="424" font-size="11.5" font-weight="700" fill="#16a34a">강점</text>
+  <text x="970" y="442" font-size="11.5" fill="#475569">저장소별 독립 확장. 최고 표현력</text>
+  <text x="970" y="468" font-size="11.5" font-weight="700" fill="#dc2626">약점</text>
+  <text x="970" y="486" font-size="11.5" fill="#475569">구현·운영 부담 최대. 오버엔지니어링</text>
+  <text x="970" y="503" font-size="11.5" fill="#475569">위험이 가장 큰 패턴</text>
+  <text x="970" y="530" font-size="11.5" font-weight="700" fill="#0f172a">적합</text>
+  <text x="970" y="548" font-size="11.5" fill="#475569">수개월 축적되는 장수 에이전트</text>
+
+  <text x="20" y="588" font-size="11.5" fill="#94a3b8">실사례 매핑 — Single: LangChain VectorStoreRetrieverMemory · Dual: Mem0 · Tiered: MemGPT 계층, Anthropic Claude Code 계층 · Graph: Zep, Graphiti, GraphRAG · Cognitive: Letta/MemGPT, SOAR</text>
+</svg>

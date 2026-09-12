@@ -1,0 +1,77 @@
+site_name: DevGuideSample
+site_description: 실제 Azure 문제 해결 사례와 지속 갱신형 기술 가이드
+site_url: https://hellices.github.io/devguidesample/
+repo_url: https://github.com/hellices/devguidesample
+repo_name: hellices/devguidesample
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+
+theme:
+  name: material
+  language: ko
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: 어두운 테마로 전환
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: 밝은 테마로 전환
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
+  - tags
+  - gen-files:
+      scripts:
+        - scripts/docs/generate_indexes.py
+  - awesome-nav
+
+hooks:
+  - scripts/docs/hooks.py
+
+exclude_docs: |
+  superpowers/
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+copyright: Copyright &copy; DevGuideSample contributors

@@ -1,85 +1,30 @@
 # DevGuideSample
 
-> Microsoft CSA(Customer Success Architect) 팀을 위한 Azure 기술 가이드 및 이슈 해결 사례 저장소
+실제 Azure 문제 해결 이력과 지속적으로 갱신하는 기술 가이드를 외부에 공개하는 문서 저장소입니다.
 
-## 📌 저장소 소개
+## 문서 사이트
 
-이 저장소는 한국 지역에서 발생하는 다양한 Azure 관련 기술 이슈와 솔루션을 체계적으로 정리하고 공유하기 위한 목적으로 만들어졌습니다. Microsoft CSA 팀이 고객 지원 과정에서 경험한 실제 사례와 베스트 프랙티스를 문서화하여, 팀원들 간의 지식 공유와 빠른 문제 해결을 돕습니다.
+**[DevGuideSample GitHub Pages에서 검색하기](https://hellices.github.io/devguidesample/)**
 
-## 🎯 활용 플랜
+사이트에서는 한국어·영어 전체 텍스트, 제품명, 오류 메시지와 태그로 모든 공개 문서를 검색할 수 있습니다.
 
-### 1. 지식 베이스로 활용
-- 과거에 해결했던 이슈를 빠르게 검색하고 참고
-- 유사한 문제 발생 시 검증된 솔루션 적용
-- 신규 팀원 온보딩 시 학습 자료로 활용
+| 모음 | 용도 |
+|---|---|
+| 문제 해결 사례 | 특정 시점의 증상, 조사, 근본 원인과 해결 결과를 보존합니다. |
+| 일반 가이드 | 현재 재사용할 수 있는 절차를 제품 변화에 따라 계속 검증하고 갱신합니다. |
+| 실습 | 배포, 실행, 검증과 정리를 재현할 수 있는 시나리오입니다. |
+| 리서치 | 비교, 벤치마크와 아키텍처 조사를 기준 시점과 함께 기록합니다. |
 
-### 2. 베스트 프랙티스 공유
-- 실제 프로덕션 환경에서 검증된 구성 및 설정 공유
-- Azure 서비스별 최적화 전략 문서화
-- 성능 튜닝 사례 및 트러블슈팅 가이드 제공
+전체 문서 목록은 파일로 중복 관리하지 않습니다. 올바른 폴더와 front matter를 사용하면 Pages 메뉴, 서비스 색인과 태그 색인에 자동으로 포함됩니다.
 
-### 3. 협업 및 확장
-- 팀원들이 새로운 이슈 해결 사례를 지속적으로 추가
-- 코드 예제와 함께 상세한 설명 제공
-- 한국 고객 환경에 특화된 가이드 작성
+## 로컬 미리보기
 
-## 🧪 실습 랩
-
-문서만 읽는 가이드와 달리, 실제 Azure 리소스를 배포해 직접 돌려 보는 실습입니다. 각 랩은 자체 `azure.yaml`을 가지고 있어 `azd up` 한 번으로 환경이 만들어집니다.
-
-| 랩 | 무엇을 확인하나 | 소요 시간 | 과금 |
-|---|---|---|---|
-| [Azure SRE Agent 이벤트 기반 장애 분석](monitor/sre-agent-event-lab/README.md) | 장애를 세 번 주입하고 Azure Monitor 경고를 받은 SRE Agent가 원인을 짚어내는지 | 배포 5분 + 시나리오당 30~40분 | 있음 (Container Apps, Log Analytics, Storage 등) |
-
-각 랩의 README가 사전 조건, 배포, 정리 절차를 안내합니다. **실습을 마치면 반드시 각 랩의 정리 절차를 따라 리소스를 삭제하세요.**
-
-새 랩을 추가할 때는 `azure.yaml`과 README를 갖춘 디렉터리를 만들고 위 표에 행을 추가합니다.
-
-## 📝 기여 방법
-
-### 새로운 가이드 추가하기
-
-1. 적절한 카테고리 폴더 선택 (aks, automation, cosmosdb, mysql, develop, architect)
-2. 필요시 하위 폴더 생성 (예: `nodejs/`, `python/` 등)
-3. Markdown 파일 작성 시 다음 항목 포함 권장:
-   - 문제 상황 설명
-   - 원인 분석
-   - 해결 방법 (코드 예제 포함)
-   - 참고 링크
-
-### 가이드 작성 예시 구조
-
-```markdown
-# [제목]: 문제 및 해결 방법 간략 설명
-
-## 문제 상황
-실제 발생한 이슈에 대한 설명
-
-## 원인 분석
-문제의 근본 원인 파악
-
-## 해결 방법
-상세한 해결 단계 및 코드 예제
-
-## 참고 링크
-- 관련 Microsoft Learn 문서
-- Kubernetes/Azure 공식 문서
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements-docs.txt
+.\.venv\Scripts\mkdocs serve
 ```
 
-## 🎓 대상 독자
+자세한 작성·검증 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 확인하세요.
 
-- Microsoft Customer Success Architect (CSA)
-- Azure 기술 지원 엔지니어
-- Azure 클라우드 아키텍트
-- Azure 서비스를 사용하는 개발자
-
-## 🔗 관련 리소스
-
-- [Microsoft Learn](https://learn.microsoft.com/ko-kr/)
-- [Azure Documentation](https://docs.microsoft.com/ko-kr/azure/)
-- [Azure Architecture Center](https://learn.microsoft.com/ko-kr/azure/architecture/)
-이 저장소의 내용은 Microsoft CSA 팀 내부 지식 공유를 목적으로 합니다.
-
----
-
-**Last Updated**: 2025-11-17
+> 이 저장소와 Pages는 공개되어 있습니다. 고객·사용자 식별자, 구독·테넌트 ID, 비밀, 내부 URL 또는 승인되지 않은 화면 캡처를 커밋하지 마세요.
