@@ -28,10 +28,14 @@ services:
   application-development: Application Development
   azure-application-gateway: Azure Application Gateway
   azure-ai-search: Azure AI Search
+  azure-api-management: Azure API Management
+  azure-app-service: Azure App Service
   azure-architecture: Azure Architecture
   azure-automation: Azure Automation
+  azure-container-apps: Azure Container Apps
   azure-cosmos-db: Azure Cosmos DB
   azure-database-for-mysql: Azure Database for MySQL
+  azure-functions: Azure Functions
   azure-hdinsight: Azure HDInsight
   azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
@@ -39,6 +43,7 @@ services:
   azure-monitor: Azure Monitor
   azure-openai: Azure OpenAI
   azure-storage: Azure Storage
+  microsoft-entra-id: Microsoft Entra ID
   microsoft-foundry: Microsoft Foundry
 
 technologies:
@@ -53,6 +58,7 @@ technologies:
   java: Java
   kafka: Apache Kafka
   kubernetes: Kubernetes
+  mcp: Model Context Protocol
   mysql: MySQL
   nodejs: Node.js
   open-telemetry: OpenTelemetry
@@ -93,3 +99,7 @@ official_source_hosts:
   - kubernetes.io
   - www.cncf.io
   - cncf.io
+  - github.com
+  - modelcontextprotocol.io
+  - py.sdk.modelcontextprotocol.io
+  - prices.azure.com

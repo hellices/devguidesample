@@ -1,0 +1,15 @@
+{
+  "name": "mcp-entra-lab-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned local Azure MCP runtime for the isolated Entra lab",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@azure/mcp": "2.0.5"
+  },
+  "scripts": {
+    "azure-mcp": "azmcp server start --mode all --read-only --namespace group"
+  }
+}

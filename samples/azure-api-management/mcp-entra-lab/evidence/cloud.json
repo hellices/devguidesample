@@ -1,0 +1,402 @@
+{
+  "recorded_at": "2026-09-12T20:53:19+00:00",
+  "checks": [
+    {
+      "id": "apim-native-rest-mapping",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "result_count": 1
+      }
+    },
+    {
+      "id": "apim-native-proxy-binding",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "result_count": 1
+      }
+    },
+    {
+      "id": "apim-learn-header-removal-policy",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "header_removed": true
+      }
+    },
+    {
+      "id": "apim-rest-header-removal-policy",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "header_removed": true
+      }
+    },
+    {
+      "id": "vnet-private-dns",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "private_dns": true
+      }
+    },
+    {
+      "id": "python-anonymous-initialize",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "python-anonymous-tools-list",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "python-anonymous-tools-call",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "python-wrong-audience",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401
+      }
+    },
+    {
+      "id": "python-protected-resource-metadata",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 200,
+        "metadata_matched": true
+      }
+    },
+    {
+      "id": "python-advertised-scope-token",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "audience_matched": true,
+        "scope_matched": true
+      }
+    },
+    {
+      "id": "azure-anonymous-initialize",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "azure-anonymous-tools-list",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "azure-anonymous-tools-call",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "azure-wrong-audience",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401
+      }
+    },
+    {
+      "id": "azure-protected-resource-metadata",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 200,
+        "metadata_matched": true
+      }
+    },
+    {
+      "id": "azure-advertised-scope-token",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "audience_matched": true,
+        "scope_matched": true
+      }
+    },
+    {
+      "id": "apim-rest-anonymous-initialize",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "apim-rest-anonymous-tools-list",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "apim-rest-anonymous-tools-call",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "apim-rest-wrong-audience",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401
+      }
+    },
+    {
+      "id": "apim-rest-protected-resource-metadata",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 200,
+        "metadata_matched": true
+      }
+    },
+    {
+      "id": "apim-rest-advertised-scope-token",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "audience_matched": true,
+        "scope_matched": true
+      }
+    },
+    {
+      "id": "apim-learn-anonymous-initialize",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "apim-learn-anonymous-tools-list",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "apim-learn-anonymous-tools-call",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401,
+        "tls_verified": true
+      }
+    },
+    {
+      "id": "apim-learn-wrong-audience",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401
+      }
+    },
+    {
+      "id": "apim-learn-protected-resource-metadata",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 200,
+        "metadata_matched": true
+      }
+    },
+    {
+      "id": "apim-learn-advertised-scope-token",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "audience_matched": true,
+        "scope_matched": true
+      }
+    },
+    {
+      "id": "apim-rest-direct-anonymous",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401
+      }
+    },
+    {
+      "id": "python-delegated-rest-anonymous",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 401
+      }
+    },
+    {
+      "id": "rest-fixture-rejects-bearer",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 400
+      }
+    },
+    {
+      "id": "apim-real-rest-baseline",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "http_status": 200,
+        "backend_invoked": true,
+        "correlation_matched": true,
+        "header_removed": true
+      }
+    },
+    {
+      "id": "python-authenticated-discovery",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "tool_count": 3,
+        "protocol_version": "2026-07-28"
+      }
+    },
+    {
+      "id": "python-bounded-tool-surface",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "tool_count": 3
+      }
+    },
+    {
+      "id": "python-hosted-obo",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "obo": true,
+        "downstream_authorized": true,
+        "tool_error": false
+      }
+    },
+    {
+      "id": "python-hosted-learn",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "result_count": 5,
+        "tool_error": false
+      }
+    },
+    {
+      "id": "azure-authenticated-discovery",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "tool_count": 2,
+        "protocol_version": "2025-11-25"
+      }
+    },
+    {
+      "id": "native-azure-hosted-obo",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "resource_count": 17,
+        "obo": true,
+        "downstream_authorized": true,
+        "tool_error": false
+      }
+    },
+    {
+      "id": "apim-rest-authenticated-discovery",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "tool_count": 1,
+        "protocol_version": "2025-06-18"
+      }
+    },
+    {
+      "id": "apim-selected-rest-tool",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "tool_count": 1
+      }
+    },
+    {
+      "id": "apim-native-rest-tool-invocation",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "backend_invoked": true,
+        "correlation_matched": true,
+        "header_removed": true,
+        "tool_error": false
+      }
+    },
+    {
+      "id": "apim-learn-authenticated-discovery",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "tool_count": 3,
+        "protocol_version": "2025-06-18"
+      }
+    },
+    {
+      "id": "apim-learn-proxy-invocation",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "result_count": 10,
+        "tool_error": false
+      }
+    },
+    {
+      "id": "cloud-suite-complete",
+      "scope": "live",
+      "status": "passed",
+      "observed": {
+        "result_count": 44
+      }
+    }
+  ]
+}

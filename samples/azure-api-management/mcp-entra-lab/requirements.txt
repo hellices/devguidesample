@@ -1,0 +1,5 @@
+mcp==2.2.0
+msal==1.38.0
+PyJWT[crypto]==2.14.0
+httpx==0.28.1
+uvicorn[standard]==0.35.0

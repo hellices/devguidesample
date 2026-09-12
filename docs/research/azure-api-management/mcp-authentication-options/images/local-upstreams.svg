@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 850" role="img" aria-labelledby="title desc">
+  <title id="title">Local MCP clients and four independent identity boundaries</title>
+  <desc id="desc">Azure MCP and AKS MCP run as local stdio processes. They use developer Azure and Kubernetes credentials. GitHub MCP uses GitHub authorization. Microsoft Learn MCP is anonymous.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;fill:#162b40;font-size:20px}.title{font-size:28px;font-weight:700}.small{font-size:18px}.box{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.external{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}.boundary{fill:#f8fafc;stroke:#8397aa;stroke-width:2;stroke-dasharray:8 6}</style>
+  <rect width="1160" height="850" fill="white"/>
+  <text x="30" y="45" class="title">Local MCP connections: one host, different credentials</text>
+  <rect x="25" y="100" width="730" height="410" rx="18" class="boundary"/>
+  <text x="45" y="135">Trusted local workstation</text>
+  <rect x="55" y="215" width="235" height="200" rx="12" class="box"/>
+  <text x="172" y="265" text-anchor="middle"><tspan x="172">Developer</tspan><tspan x="172" dy="34">VS Code / MCP SDK</tspan><tspan x="172" dy="42" class="small">Per-server configuration</tspan><tspan x="172" dy="28" class="small">Read-only tool selection</tspan></text>
+  <rect x="430" y="160" width="295" height="115" rx="12" class="box"/>
+  <text x="577" y="198" text-anchor="middle"><tspan x="577">Azure MCP 2.0.5</tspan><tspan x="577" dy="31">Local stdio</tspan><tspan x="577" dy="28" class="small">Azure CLI user credential</tspan></text>
+  <rect x="430" y="335" width="295" height="135" rx="12" class="box"/>
+  <text x="577" y="371" text-anchor="middle"><tspan x="577">AKS MCP 0.0.20</tspan><tspan x="577" dy="31">Local stdio only</tspan><tspan x="577" dy="29" class="small">Lab-only kubeconfig</tspan><tspan x="577" dy="25" class="small">No remote HTTP / OBO</tspan></text>
+  <rect x="855" y="160" width="280" height="115" rx="12" class="external"/>
+  <text x="995" y="205" text-anchor="middle"><tspan x="995">Azure Resource Manager</tspan><tspan x="995" dy="33" class="small">User's Azure RBAC</tspan></text>
+  <rect x="855" y="345" width="280" height="115" rx="12" class="external"/>
+  <text x="995" y="388" text-anchor="middle"><tspan x="995">AKS / Kubernetes API</tspan><tspan x="995" dy="33" class="small">Entra + Kubernetes RBAC</tspan></text>
+  <path d="M290 255H365V218H430" class="flow"/><text x="315" y="205" class="small">stdio</text>
+  <path d="M290 345H365V402H430" class="flow"/><text x="370" y="433" class="small">stdio</text>
+  <path d="M725 218H855" class="flow"/><text x="790" y="188" text-anchor="middle" class="small">Azure token</text>
+  <path d="M725 402H855" class="flow"/><text x="790" y="371" text-anchor="middle" class="small">API token</text>
+  <rect x="430" y="555" width="295" height="95" rx="12" class="external"/>
+  <text x="577" y="594" text-anchor="middle"><tspan x="577">GitHub hosted MCP</tspan><tspan x="577" dy="30" class="small">GitHub OAuth / PAT</tspan></text>
+  <rect x="855" y="555" width="280" height="95" rx="12" class="external"/>
+  <text x="995" y="594" text-anchor="middle"><tspan x="995">GitHub API</tspan><tspan x="995" dy="30" class="small">GitHub permissions</tspan></text>
+  <path d="M290 375H335V602H430" class="flow"/><text x="48" y="570" class="small">HTTPS + GitHub credential</text>
+  <path d="M725 602H855" class="flow"/>
+  <rect x="430" y="690" width="295" height="95" rx="12" class="external"/>
+  <text x="577" y="729" text-anchor="middle"><tspan x="577">Microsoft Learn MCP</tspan><tspan x="577" dy="30" class="small">Anonymous HTTPS</tspan></text>
+  <rect x="855" y="690" width="280" height="95" rx="12" class="external"/>
+  <text x="995" y="729" text-anchor="middle"><tspan x="995">Public documentation</tspan><tspan x="995" dy="30" class="small">Search / full fetch</tspan></text>
+  <path d="M290 400H310V737H430" class="flow"/><text x="48" y="705" class="small">HTTPS; no Entra bearer</text>
+  <path d="M725 737H855" class="flow"/>
+  <text x="30" y="827" class="small">Tool filters are not RBAC. GitHub and Learn credentials are not interchangeable with Entra tokens.</text>
+</svg>

@@ -1,0 +1,124 @@
+{
+  "inputs": [
+    {
+      "id": "aksMcpExecutable",
+      "type": "promptString",
+      "description": "Absolute path to the verified AKS MCP 0.0.20 executable"
+    },
+    {
+      "id": "labKubeconfig",
+      "type": "promptString",
+      "description": "Absolute path to this lab's private kubeconfig"
+    },
+    {
+      "id": "nativeAzureMcpUrl",
+      "type": "promptString",
+      "description": "Private native Azure MCP HTTPS endpoint (host root)"
+    },
+    {
+      "id": "nativeAzureToken",
+      "type": "promptString",
+      "description": "Short-lived user token for the native Azure MCP API, not ARM",
+      "password": true
+    },
+    {
+      "id": "apimRestMcpUrl",
+      "type": "promptString",
+      "description": "Private APIM REST-to-MCP endpoint ending in /rest-tools/mcp"
+    },
+    {
+      "id": "apimLearnMcpUrl",
+      "type": "promptString",
+      "description": "Private APIM Learn proxy endpoint ending in /learn/mcp"
+    },
+    {
+      "id": "pythonMcpUrl",
+      "type": "promptString",
+      "description": "Private Python MCP endpoint ending in /mcp"
+    },
+    {
+      "id": "customApiToken",
+      "type": "promptString",
+      "description": "Short-lived user token for the custom lab API with Mcp.Access",
+      "password": true
+    }
+  ],
+  "servers": {
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "github-readonly": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "X-MCP-Readonly": "true",
+        "X-MCP-Tools": "search_repositories"
+      }
+    },
+    "azure-local-readonly": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--yes",
+        "@azure/mcp@2.0.5",
+        "server",
+        "start",
+        "--mode",
+        "all",
+        "--read-only",
+        "--namespace",
+        "group",
+        "--outgoing-auth-strategy",
+        "UseHostingEnvironmentIdentity"
+      ],
+      "env": {
+        "AZURE_MCP_COLLECT_TELEMETRY": "false",
+        "AZURE_TOKEN_CREDENTIALS": "AzureCliCredential"
+      }
+    },
+    "aks-local-readonly": {
+      "type": "stdio",
+      "command": "${input:aksMcpExecutable}",
+      "args": [
+        "--access-level",
+        "readonly",
+        "--enabled-components",
+        "az_cli,kubectl",
+        "--allow-namespaces",
+        "mcp-lab"
+      ],
+      "env": {
+        "KUBECONFIG": "${input:labKubeconfig}"
+      }
+    },
+    "azure-private-obo-manual-token": {
+      "type": "http",
+      "url": "${input:nativeAzureMcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${input:nativeAzureToken}"
+      }
+    },
+    "apim-native-rest-tools-manual-token": {
+      "type": "http",
+      "url": "${input:apimRestMcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${input:customApiToken}"
+      }
+    },
+    "apim-learn-proxy-manual-token": {
+      "type": "http",
+      "url": "${input:apimLearnMcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${input:customApiToken}"
+      }
+    },
+    "python-private-mcp-manual-token": {
+      "type": "http",
+      "url": "${input:pythonMcpUrl}",
+      "headers": {
+        "Authorization": "Bearer ${input:customApiToken}"
+      }
+    }
+  }
+}
