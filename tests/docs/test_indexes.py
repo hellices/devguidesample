@@ -130,6 +130,51 @@ def test_collection_page_groups_by_primary_service_without_duplicates(taxonomy: 
     assert '## Azure Kubernetes Service { #service-azure-kubernetes-service }' in guide_index
 
 
+def test_collection_service_landing_contains_only_its_own_documents(taxonomy: dict) -> None:
+    documents = [
+        doc(
+            "cases/azure-kubernetes-service/first/index.md",
+            title="First case",
+            description="Case details",
+            document_type="case",
+            services=["azure-kubernetes-service", "azure-monitor"],
+        ),
+        doc(
+            "cases/azure-kubernetes-service/second/index.md",
+            title="Second case",
+            description="Case details",
+            document_type="case",
+            services=["azure-kubernetes-service"],
+        ),
+        doc(
+            "guides/azure-kubernetes-service/guide/index.md",
+            title="A guide",
+            description="Guide details",
+            document_type="guide",
+            services=["azure-kubernetes-service"],
+        ),
+        doc(
+            "cases/azure-monitor/other/index.md",
+            title="Other service case",
+            description="Case details",
+            document_type="case",
+            services=["azure-monitor"],
+        ),
+    ]
+
+    pages = build_index_pages(documents, taxonomy)
+    service_landing = pages[PurePosixPath("cases/azure-kubernetes-service/index.md")]
+
+    assert yaml.safe_load(service_landing.split("---", 2)[1])["title"] == "Azure Kubernetes Service"
+    assert service_landing.count('class="dg-doc-card ') == 2
+    assert "[First case](first/index.md)" in service_landing
+    assert "[Second case](second/index.md)" in service_landing
+    assert "Other service case" not in service_landing
+    assert "A guide" not in service_landing
+    assert "First case" not in pages[PurePosixPath("cases/azure-monitor/index.md")]
+    assert "First case" in pages[PurePosixPath("services/azure-monitor.md")]
+
+
 def test_collection_page_reflects_real_counts_and_wrapper_classes(taxonomy: dict) -> None:
     documents = [
         doc(
