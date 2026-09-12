@@ -9,7 +9,6 @@ import re
 
 from published_layout import (
     BRIEFING,
-    DEPLOYMENT_PLAN,
     DYNAMIC_THRESHOLDS,
     LAB_ROOT,
     README,
@@ -19,7 +18,6 @@ from published_layout import (
 
 
 SRE_LAB_TRACKED_FILES = (
-    DEPLOYMENT_PLAN,
     README,
     LAB_ROOT / "scripts" / "common.sh",
     VALIDATION_RESULTS,
@@ -62,7 +60,6 @@ def test_sre_lab_docs_do_not_link_removed_workflow_paths():
     checked = [
         BRIEFING,
         README,
-        DEPLOYMENT_PLAN,
         *(LAB_ROOT / "assets" / "notifications").glob("*.md"),
         *(LAB_ROOT / "assets" / "notifications").glob("*.html"),
     ]
