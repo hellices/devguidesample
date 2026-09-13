@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError, replace
 from collections import Counter
 from hashlib import sha256
+from html import escape
 from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
@@ -30,6 +31,7 @@ from scripts.docs.pre_pages_content import (
 
 
 ROOT = Path(__file__).parents[2]
+CHROMIUM_VISIBILITY = json.loads((ROOT / "tests/docs/fixtures/pre_pages_chromium_visibility.json").read_text())
 BASELINE_PATH = PurePosixPath("old/guide.md")
 CURRENT_PATH = PurePosixPath("docs/services/service/topic/index.md")
 REASON_TEMPLATE = (
@@ -1823,3 +1825,81 @@ def test_open_inert_details_keep_visually_visible_source_content(container) -> N
     source = f"<div inert>{source}</div>" if container == "ancestor" else source.replace(f"<{container}", f"<{container} inert")
     structure = extract_markdown_structure(source)
     assert structure.title == "Title"
+
+
+@pytest.mark.parametrize("case", CHROMIUM_VISIBILITY["css"], ids=lambda case: case["id"])
+def test_chromium_css_source_visibility_or_explicit_rejection(case) -> None:
+    source = f'<section style="{escape(case["style"], quote=True)}" markdown="1">\n\n# Title\n\nAuthored prose.\n\n</section>'
+    if case["audit"] == "visible":
+        assert extract_markdown_structure(source).title == "Title"
+    else:
+        message = "inline CSS" if case["audit"] == "unsupported" else "hidden.*authored"
+        with pytest.raises(AuditFormatError, match=message):
+            extract_markdown_structure(source)
+
+
+@pytest.mark.parametrize("case", CHROMIUM_VISIBILITY["disclosures"], ids=lambda case: case["id"])
+def test_chromium_summary_descendants_determine_source_openability(case) -> None:
+    source = (
+        f'<div {case["ancestor"]} markdown="1"><details markdown="1">'
+        f'<summary {case["summary"]}><{case["tag"]} {case["child"]}>Open</{case["tag"]}></summary>\n\n'
+        '# Title\n\nAuthored prose.\n\n</details></div>'
+    )
+    if case["audit_open"]:
+        assert extract_markdown_structure(source).title == "Title"
+    else:
+        with pytest.raises(AuditFormatError, match="hidden.*authored"):
+            extract_markdown_structure(source)
+
+
+@pytest.mark.parametrize("style", [
+    "display:none;display:blo/**/ck", 'display:none;--note:";display:block;"',
+    r"d\69 splay:n\6f ne", "--display:none;display:var(--display)",
+])
+def test_real_foundry_local_css_rejection_has_source_path(tmp_path, monkeypatch, style) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "aifoundry/foundry_local.md",
+        "docs/services/microsoft-foundry/foundry-local-air-gapped/index.md",
+    )
+    metadata, body = path.read_text().split("\n---\n", 1)
+    path.write_text(metadata + f'\n---\n\n<div style="{escape(style, quote=True)}" markdown="1">\n{body}\n</div>')
+    with pytest.raises(AuditFormatError, match="foundry-local-air-gapped"):
+        audit_document_content(tmp_path, inventory)
+
+
+@pytest.mark.parametrize("svg", [
+    '<svg aria-hidden="true"><text>Decorative label</text><path d="M0 0h10v10z"/></svg>',
+    '<svg class="md-icon" aria-hidden="true"><title>Icon</title><path d="M0 0h10v10z"/></svg>',
+    '<svg><defs><text>Definition, not a painted label</text></defs><path d="M0 0h10v10z"/></svg>',
+    '<svg><g aria-hidden="true"><text>Decorative group label</text></g></svg>',
+    '<svg><text aria-hidden="true">Decorative text label</text></svg>',
+])
+def test_decorative_svg_does_not_supply_or_hide_authored_source_content(svg) -> None:
+    assert extract_markdown_structure("# Title\n\nAuthored prose.\n\n" + svg).title == "Title"
+
+
+def test_late_inert_summary_cannot_expose_earlier_source_body() -> None:
+    with pytest.raises(AuditFormatError, match="hidden.*authored"):
+        extract_markdown_structure(
+            '<details markdown="1">\n\n# Title\n\nAuthored prose.\n\n'
+            '<summary inert>Cannot open</summary></details>'
+        )
+
+
+@pytest.mark.parametrize("style", CHROMIUM_VISIBILITY["unresolved_css"])
+def test_unresolved_inline_css_fails_closed_in_source(style) -> None:
+    with pytest.raises(AuditFormatError, match="inline CSS"):
+        extract_markdown_structure(
+            f'<div style="{escape(style, quote=True)}" markdown="1">\n\n# Title\n\nAuthored prose.\n\n</div>'
+        )
+
+
+@pytest.mark.parametrize("attribute", ['visibility="hidden"', 'display="none"'])
+def test_authored_svg_presentation_hiding_is_not_visible_source(attribute) -> None:
+    with pytest.raises(AuditFormatError, match="hidden.*authored"):
+        extract_markdown_structure(f'<svg><text {attribute}>Authored diagram label</text></svg>')
+
+
+def test_inline_svg_visibility_overrides_the_presentation_attribute() -> None:
+    source = '<svg><text visibility="hidden" style="visibility:visible">Authored diagram label</text></svg>'
+    assert extract_markdown_structure(source).prose

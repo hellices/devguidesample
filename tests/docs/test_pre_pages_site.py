@@ -21,6 +21,7 @@ from scripts.docs.topics import build_topic_catalog
 
 
 ROOT = Path(__file__).parents[2]
+CHROMIUM_VISIBILITY = json.loads((ROOT / "tests/docs/fixtures/pre_pages_chromium_visibility.json").read_text())
 CLI = ROOT / "scripts/docs/audit_pre_pages.py"
 ENTRY = "services/service/topic/index.md"
 CHILD = "services/service/topic/child/index.md"
@@ -1420,3 +1421,138 @@ def test_inert_details_body_is_visible_only_when_already_open(site_repo, opened,
         assert errors == ()
     else:
         assert any("authored" in error for error in errors)
+
+
+@pytest.mark.parametrize("case", CHROMIUM_VISIBILITY["css"], ids=lambda case: case["id"])
+def test_chromium_css_built_visibility_or_path_specific_rejection(site_repo, case):
+    root, _ = site_repo
+    content = html().replace(ARTICLE, f'<section style="{escape(case["style"], quote=True)}">{ARTICLE}</section>')
+    write(root, "site/" + ENTRY.replace(".md", ".html"), content)
+    errors = inspect(site_repo).errors
+    if case["audit"] == "visible":
+        assert errors == ()
+    else:
+        assert any(ENTRY.replace(".md", ".html") in error for error in errors)
+        if case["audit"] == "unsupported":
+            assert any("inline CSS" in error for error in errors)
+
+
+def disclosure(body, case):
+    return (
+        f'<div {case["ancestor"]}><details><summary {case["summary"]}>'
+        f'<{case["tag"]} {case["child"]}>Open</{case["tag"]}></summary>{body}</details></div>'
+    )
+
+
+@pytest.mark.parametrize("case", CHROMIUM_VISIBILITY["disclosures"], ids=lambda case: case["id"])
+@pytest.mark.parametrize("channel", ["service", "explore", "redirect"])
+def test_chromium_disclosure_state_is_shared_by_reachability_channels(site_repo, case, channel):
+    root, _ = site_repo
+    if channel == "service":
+        path, raw = "services/service/index.html", "topic/"
+        content = html(disclosure(f'<a href="{raw}">Topic</a>', case))
+    elif channel == "explore":
+        path, raw = "explore/index.html", "../services/service/topic/"
+        content = html(
+            disclosure(f'<a href="{raw}">Topic</a>', case)
+            + '<a href="../services/service/topic/child/">Child</a>'
+        )
+    else:
+        path, raw = OLD.replace(".md", ".html"), "../../../services/service/topic/"
+        anchor = f'<a href="{raw}">Moved document</a>'
+        content = redirect(raw).replace(anchor, disclosure(anchor, case))
+    write(root, "site/" + path, content)
+    errors = inspect(site_repo).errors
+    if case["audit_open"]:
+        assert errors == ()
+    else:
+        assert any("not linked" in error or "redirect fallback" in error for error in errors)
+
+
+@pytest.mark.parametrize("case", CHROMIUM_VISIBILITY["disclosures"], ids=lambda case: case["id"])
+def test_chromium_summary_descendants_determine_built_authored_visibility(site_repo, case):
+    root, _ = site_repo
+    body = "<h1>Document</h1><p>Preserved prose.</p>"
+    article = ARTICLE.replace(body, disclosure(body, case))
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    if case["audit_open"]:
+        assert errors == ()
+    else:
+        assert any("authored" in error for error in errors)
+
+
+def test_inaccessible_disclosure_still_checks_all_asset_targets(site_repo):
+    root, _ = site_repo
+    content = html(
+        '<details><summary inert>Closed</summary><a href="topic/">Topic</a>'
+        '<img src="missing-hidden.png"><script src="missing-hidden.js"></script>'
+        '<link rel="stylesheet" href="missing-hidden.css"></details>'
+    )
+    write(root, "site/services/service/index.html", content)
+    errors = inspect(site_repo).errors
+    assert any("not linked" in error for error in errors)
+    for raw in ("missing-hidden.png", "missing-hidden.js", "missing-hidden.css"):
+        assert any("services/service/index.html" in error and repr(raw) in error for error in errors)
+
+
+@pytest.mark.parametrize("mutation", ["none", "removed", "hidden"])
+def test_visible_authored_svg_text_matches_source_and_built_article(site_repo, mutation):
+    from scripts.docs.pre_pages_content import create_semantic_renderer
+
+    root, _ = site_repo
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><text x="0" y="20">Authored <tspan>diagram label</tspan></text></svg>'
+    document = root / "docs" / ENTRY
+    document.write_text(document.read_text() + "\n\n" + svg + "\n")
+    body = create_semantic_renderer().convert("# Document\n\nPreserved prose.\n\n" + svg)
+    if mutation == "removed":
+        body = re.sub(r"<text\b.*?</text>", '<path d="M0 0h10v10z"/>', body)
+    elif mutation == "hidden":
+        body = body.replace("<text ", '<text style="display:none" ')
+    article = '<article class="md-content__inner md-typeset">' + body + "</article>"
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    if mutation == "none":
+        assert errors == ()
+    else:
+        assert any("authored" in error for error in errors)
+
+
+@pytest.mark.parametrize("svg", [
+    '<svg aria-hidden="true"><text>Decorative label</text><path d="M0 0h10v10z"/></svg>',
+    '<svg class="md-icon" aria-hidden="true"><title>Icon</title><path d="M0 0h10v10z"/></svg>',
+    '<svg><defs><text>Definition, not a painted label</text></defs><path d="M0 0h10v10z"/></svg>',
+    '<svg><g aria-hidden="true"><text>Decorative group label</text></g></svg>',
+    '<svg><text aria-hidden="true">Decorative text label</text></svg>',
+])
+def test_generated_svg_icons_do_not_supply_built_authored_content(site_repo, svg):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace("</h1>", svg + "</h1>"))
+    assert inspect(site_repo).errors == ()
+
+
+def test_late_inert_summary_cannot_expose_earlier_reachability_links(site_repo):
+    root, _ = site_repo
+    write(root, "site/services/service/index.html", html(
+        '<details><a href="topic/">Topic</a><summary inert>Cannot open</summary></details>'
+    ))
+    assert "not linked" in findings(site_repo)
+
+
+@pytest.mark.parametrize("style", CHROMIUM_VISIBILITY["unresolved_css"])
+def test_unresolved_inline_css_reports_the_built_source_path(site_repo, style):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(
+        ARTICLE, f'<div style="{escape(style, quote=True)}">{ARTICLE}</div>',
+    ))
+    assert any(
+        ENTRY.replace(".md", ".html") in error and "inline CSS" in error
+        for error in inspect(site_repo).errors
+    )
+
+
+def test_unresolved_source_css_becomes_a_canonical_path_finding(site_repo):
+    root, _ = site_repo
+    document = root / "docs" / ENTRY
+    document.write_text(document.read_text() + '\n<div style="display:var(--visibility)">Authored text.</div>\n')
+    assert any(ENTRY in error and "inline CSS" in error for error in inspect(site_repo).errors)

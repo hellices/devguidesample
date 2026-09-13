@@ -18,7 +18,7 @@ import yaml
 
 from scripts.docs.pre_pages import AuditFormatError, PrePagesInventory
 from scripts.docs.pre_pages_content import create_semantic_renderer
-from scripts.docs.pre_pages_visibility import AuthoredContent, Visibility
+from scripts.docs.pre_pages_visibility import AuthoredContent
 from scripts.docs.topics import TopicCatalog
 
 
@@ -33,7 +33,6 @@ _VOID = frozenset((
     "meta", "param", "source", "track", "wbr",
 ))
 _INERT = frozenset(("script", "style", "template", "noscript"))
-_CHROME = frozenset(("nav", "header", "footer", "aside"))
 _HTML_WHITESPACE = " \t\n\f\r"
 
 
@@ -88,14 +87,13 @@ def _refresh_url(value: str) -> str | None:
 class _Page(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.stack: list[tuple[str, Visibility]] = []
+        self.stack: list[str] = []
         self.seen: Counter[str] = Counter()
         self.links: list[str] = []
         self.targets: list[tuple[str, str]] = []
         self.canonicals: list[str] = []
         self.refreshes: list[str] = []
         self.errors: list[str] = []
-        self.anchor: tuple[str, bool] | None = None
         self.source_lines: list[str] = []
         self.authored = AuthoredContent(material_article=True)
 
@@ -103,15 +101,14 @@ class _Page(HTMLParser):
         attributes = dict(attrs)
         if len(attributes) != len(attrs):
             self.errors.append(f"duplicate attributes on <{tag}>")
-        parents = {name for name, _ in self.stack}
+        parents = set(self.stack)
         inert = bool(parents & _INERT)
         if "aria-hidden" in attributes and attributes["aria-hidden"] not in {"true", "false"}:
             self.errors.append(f"invalid aria-hidden attribute on <{tag}>")
-        visibility = (self.stack[-1][1] if self.stack else Visibility()).descend(attributes)
         if tag in {"html", "head", "body"}:
             if (
                 tag == "html" and self.stack
-                or tag in {"head", "body"} and [name for name, _ in self.stack] != ["html"]
+                or tag in {"head", "body"} and self.stack != ["html"]
                 or tag == "body" and self.seen["head"] != 1
             ):
                 self.errors.append(f"misplaced <{tag}> element")
@@ -156,10 +153,6 @@ class _Page(HTMLParser):
                     self.errors.append("nested anchor elements")
                 target = attributes["href"] or ""
                 self.targets.append(("a href", target))
-                if not parents & _CHROME and "body" in parents:
-                    self.anchor = (target, False)
-            if tag in {"img", "svg"} and self.anchor is not None and visibility.interactive:
-                self.anchor = (self.anchor[0], True)
             if tag == "link" and "canonical" in (attributes.get("rel") or "").casefold().split():
                 if "head" not in parents:
                     self.errors.append("canonical link is outside <head>")
@@ -169,33 +162,20 @@ class _Page(HTMLParser):
                     self.errors.append("refresh metadata is outside <head>")
                 self.refreshes.append(attributes.get("content") or "")
         if tag not in _VOID:
-            self.stack.append((tag, visibility))
+            self.stack.append(tag)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag not in _VOID | {"svg", "math"} and not {name for name, _ in self.stack} & {"svg", "math"}:
+        if tag not in _VOID | {"svg", "math"} and not set(self.stack) & {"svg", "math"}:
             self.errors.append(f"self-closing non-void HTML element <{tag}/>")
         self.handle_starttag(tag, attrs)
         if tag not in _VOID:
             self.handle_endtag(tag)
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "a" and self.anchor is not None:
-            target, visible = self.anchor
-            if visible:
-                self.links.append(target)
-            self.anchor = None
-        if not self.stack or self.stack[-1][0] != tag:
+        if not self.stack or self.stack[-1] != tag:
             self.errors.append(f"unmatched closing </{tag}>")
         else:
             self.stack.pop()
-
-    def handle_data(self, data: str) -> None:
-        if (
-            self.anchor is not None and data.strip()
-            and self.stack and self.stack[-1][1].interactive
-            and not any(tag in _INERT for tag, _ in self.stack)
-        ):
-            self.anchor = (self.anchor[0], True)
 
     def unknown_decl(self, data: str) -> None:
         self.errors.append(f"unknown HTML declaration: {data}")
@@ -212,11 +192,12 @@ class _Page(HTMLParser):
             self.errors.append("truncated HTML token")
         self.close()
         if self.stack:
-            self.errors.append("unclosed HTML elements: " + ", ".join(tag for tag, _ in self.stack))
+            self.errors.append("unclosed HTML elements: " + ", ".join(self.stack))
         if any(self.seen[tag] != 1 for tag in ("html", "head", "body")):
             self.errors.append("expected exactly one html, head, and body element")
         self.authored.feed(text)
         self.authored.close()
+        self.links = self.authored.links
 
 
 def _contained(root: Path, path: Path, label: str) -> Path:
@@ -468,22 +449,26 @@ def inspect_built_site(
         canonical_html = site.root / canonical.with_suffix(".html")
         page = read_page(canonical_html, f"{canonical}: canonical")
         if page is not None and not page.errors:
-            authored = AuthoredContent()
-            authored.feed(create_semantic_renderer().convert(document.body))
-            authored.close()
-            expected_h1 = Counter({key: count for key, count in authored.blocks.items() if key[0] == "h1"})
-            label = canonical_html.relative_to(site.root)
-            if page.authored.articles != 1:
-                errors.append(f"{label}: expected exactly one Material authored content article")
-            elif not expected_h1 or expected_h1 - page.authored.blocks:
-                errors.append(f"{label}: canonical article lacks a visible authored H1")
-            elif page.authored.hidden:
-                errors.append(f"{label}: persistently hidden authored content: {page.authored.hidden}")
-            elif missing := authored.blocks - page.authored.blocks:
-                tag, text = next(iter(missing))
-                errors.append(f"{label}: canonical article lacks visible authored <{tag}> structure: {text[:160]}")
+            try:
+                authored = AuthoredContent()
+                authored.feed(create_semantic_renderer().convert(document.body))
+                authored.close()
+            except (ValueError, RuntimeError, AssertionError) as error:
+                errors.append(f"{canonical}: cannot inspect authored source visibility: {error}")
             else:
-                counts["canonical_html"] += 1
+                expected_h1 = Counter({key: count for key, count in authored.blocks.items() if key[0] == "h1"})
+                label = canonical_html.relative_to(site.root)
+                if page.authored.articles != 1:
+                    errors.append(f"{label}: expected exactly one Material authored content article")
+                elif not expected_h1 or expected_h1 - page.authored.blocks:
+                    errors.append(f"{label}: canonical article lacks a visible authored H1")
+                elif page.authored.hidden:
+                    errors.append(f"{label}: persistently hidden authored content: {page.authored.hidden}")
+                elif missing := authored.blocks - page.authored.blocks:
+                    tag, text = next(iter(missing))
+                    errors.append(f"{label}: canonical article lacks visible authored <{tag}> structure: {text[:160]}")
+                else:
+                    counts["canonical_html"] += 1
         if bases[canonical_html] != 1:
             errors.append(f"{canonical}: canonical base location must appear once in search")
         else:
