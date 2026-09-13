@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from urllib.parse import urljoin
 
 from markdown import Markdown
+from mkdocs.structure.files import InclusionLevel
 from material.plugins.search.plugin import SearchIndex
 from mkdocs.commands.build import build
 from mkdocs.config import load_config
@@ -16,9 +17,10 @@ import pytest
 import yaml
 
 from scripts.docs import validate_search_index
-from scripts.docs.content import load_document
+from scripts.docs.content import iter_public_documents, load_document
 from scripts.docs.generate_indexes import build_index_pages
-from scripts.docs.hooks import on_page_markdown
+from scripts.docs.hooks import on_files, on_page_markdown, on_post_page
+from scripts.docs.topics import build_topic_catalog
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "valid-guide.md"
@@ -46,6 +48,212 @@ applies_to: [AKS 1.34+]
 
 네트워크 연결 문제를 확인합니다. Azure Kubernetes Service diagnostic workflow를 설명합니다.
 """
+
+
+def write_topic_document(
+    docs_dir: Path,
+    relative_path: str,
+    title: str,
+    *,
+    tags: list[str],
+    topic_order: int | None = None,
+    featured: bool = False,
+    redirect_from: list[str] | None = None,
+) -> None:
+    metadata: dict[str, object] = {
+        "title": title,
+        "description": f"{title} 설명",
+        "document_type": "guide",
+        "services": ["aks"],
+        "technologies": ["kubernetes"],
+        "tags": tags,
+        "status": "current",
+        "verification_status": "verified",
+        "sources_checked_at": "2026-09-12",
+        "official_sources": [
+            {
+                "title": "Azure Kubernetes Service documentation",
+                "url": "https://learn.microsoft.com/azure/aks/",
+            }
+        ],
+        "last_verified": "2026-09-12",
+        "review_cycle_days": 180,
+        "applies_to": ["AKS 1.34+"],
+    }
+    if topic_order is not None:
+        metadata["topic_order"] = topic_order
+    if featured:
+        metadata["featured"] = True
+    if redirect_from is not None:
+        metadata["redirect_from"] = redirect_from
+
+    path = docs_dir / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False).strip()
+        + "\n---\n\n"
+        + f"# {title}\n\n{title} 본문입니다.\n",
+        encoding="utf-8",
+    )
+
+
+class TopicReaderPage(HTMLParser):
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self.navigation_depth = 0
+        self.navigation_parents: list[str | None] = []
+        self.last_navigation_target: str | None = None
+        self.navigation_entries: list[tuple[str, str, tuple[str, ...]]] = []
+        self.expanded_groups = 0
+        self.topic_nav_depth = 0
+        self.topic_nav_links: list[tuple[str, str]] = []
+        self.current_link: tuple[str, str] | None = None
+        self.link_text: list[str] = []
+        self.feed(path.read_text(encoding="utf-8"))
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        classes = (attributes.get("class") or "").split()
+        if tag == "nav" and (self.navigation_depth or "md-nav--primary" in classes):
+            self.navigation_depth += 1
+            self.navigation_parents.append(self.last_navigation_target)
+        if tag == "nav" and "dg-topic-nav" in classes:
+            self.topic_nav_depth += 1
+        if self.navigation_depth and tag == "input" and "md-nav__toggle" in classes:
+            self.expanded_groups += "checked" in attributes
+        target = attributes.get("href")
+        if tag != "a" or not isinstance(target, str):
+            return
+        self.current_link = (
+            target,
+            "navigation" if self.navigation_depth else "topic" if self.topic_nav_depth else "other",
+        )
+        self.link_text = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self.current_link is not None:
+            target, kind = self.current_link
+            title = " ".join("".join(self.link_text).split())
+            if kind == "navigation":
+                parents = tuple(parent for parent in self.navigation_parents if parent is not None)
+                self.navigation_entries.append((target, title, parents))
+                self.last_navigation_target = target
+            elif kind == "topic":
+                self.topic_nav_links.append((target, title))
+            self.current_link = None
+        if tag == "nav" and self.topic_nav_depth:
+            self.topic_nav_depth -= 1
+        if tag == "nav" and self.navigation_depth:
+            self.navigation_depth -= 1
+            self.navigation_parents.pop()
+
+    def handle_data(self, data: str) -> None:
+        if self.current_link is not None:
+            self.link_text.append(data)
+
+
+def make_topic_repository(tmp_path: Path) -> Path:
+    root = tmp_path
+    docs = root / "docs"
+    docs.mkdir()
+    (docs / "index.md").write_text(
+        "# Home\n\n<!-- home:stats -->\n\n<!-- home:featured -->\n\n<!-- home:browse -->\n",
+        encoding="utf-8",
+    )
+    (docs / ".nav.yml").write_text(
+        "nav:\n  - Home: index.md\n  - Services: services\n  - Tags: tags\n"
+        "  - Articles: articles\n  - glob: '*'\n    ignore_no_matches: true\n",
+        encoding="utf-8",
+    )
+    taxonomy = {
+        "collections": {"guide": {"path": "guides", "title": "구현 가이드"}},
+        "services": {"aks": "Azure Kubernetes Service"},
+        "technologies": {"kubernetes": "Kubernetes"},
+        "tags": {"networking": "Networking", "monitoring": "Monitoring"},
+        "verification_statuses": ["verified", "needs-review"],
+        "official_source_hosts": ["learn.microsoft.com"],
+        "required_source_host": "learn.microsoft.com",
+    }
+    (root / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    site_config = yaml.safe_load(
+        (Path(__file__).parents[2] / "mkdocs.yml").read_text(encoding="utf-8")
+    )
+    config_path = root / "mkdocs.yml"
+    site_config.update(
+        {
+            "site_name": "Topic test",
+            "site_url": "https://example.test/devguidesample/",
+            "repo_url": "https://github.com/example/devguidesample",
+            "docs_dir": str(docs),
+            "site_dir": str(root / "site"),
+        }
+    )
+    generator = root / "generate.py"
+    generator.write_text(
+        "from pathlib import Path\n"
+        "from scripts.docs.generate_indexes import write_generated_pages\n"
+        f"write_generated_pages(Path({str(root)!r}))\n",
+        encoding="utf-8",
+    )
+    site_config["hooks"] = [str(Path(__file__).parents[2] / "scripts" / "docs" / "hooks.py")]
+    site_config["plugins"] = [
+        {"search": {"lang": ["ko", "en"]}},
+        {"tags": {"tags": False, "listings": False}},
+        {"gen-files": {"scripts": [str(generator)]}},
+        "awesome-nav",
+    ]
+    config_path.write_text(yaml.safe_dump(site_config), encoding="utf-8")
+
+    write_topic_document(
+        docs,
+        "services/aks/network-diagnosis/index.md",
+        "Topic title",
+        tags=["networking"],
+        redirect_from=["guides/aks/old-topic/index.md"],
+    )
+    write_topic_document(
+        docs,
+        "services/aks/network-diagnosis/setup/index.md",
+        "Setup child",
+        tags=["networking"],
+        topic_order=1,
+        featured=True,
+    )
+    write_topic_document(
+        docs,
+        "services/aks/network-diagnosis/results/index.md",
+        "Results child",
+        tags=["monitoring"],
+        topic_order=2,
+    )
+    write_topic_document(
+        docs,
+        "services/aks/standalone-topic/index.md",
+        "Standalone topic",
+        tags=["networking"],
+        featured=True,
+    )
+    sample_dir = docs / "services" / "aks" / "network-diagnosis" / "samples" / "event-lab"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.yml").write_text(
+        yaml.safe_dump(
+            {
+                "title": "Event lab",
+                "description": "Reproduces the monitored incident.",
+                "kind": "runnable",
+                "used_by": ["setup"],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (sample_dir / "README.md").write_text("# Event lab\n", encoding="utf-8")
+    return root
 
 
 def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
@@ -249,6 +457,96 @@ def test_page_hook_keeps_sources_without_workflow_notices() -> None:
     assert missing == "# Page\n"
 
 
+def test_on_files_excludes_all_markdown_under_samples() -> None:
+    readme = SimpleNamespace(
+        src_uri="services/aks/network-diagnosis/samples/event-lab/README.md",
+        inclusion=InclusionLevel.UNDEFINED,
+    )
+    notes = SimpleNamespace(
+        src_uri="services/aks/network-diagnosis/samples/event-lab/notes.md",
+        inclusion=InclusionLevel.UNDEFINED,
+    )
+    regular = SimpleNamespace(
+        src_uri="services/aks/network-diagnosis/index.md",
+        inclusion=InclusionLevel.UNDEFINED,
+    )
+    manifest = SimpleNamespace(
+        src_uri="services/aks/network-diagnosis/samples/event-lab/sample.yml",
+        inclusion=InclusionLevel.UNDEFINED,
+    )
+
+    on_files([readme, notes, manifest, regular], {})
+
+    assert readme.inclusion is InclusionLevel.EXCLUDED
+    assert notes.inclusion is InclusionLevel.EXCLUDED
+    assert manifest.inclusion is InclusionLevel.EXCLUDED
+    assert regular.inclusion is InclusionLevel.UNDEFINED
+
+
+def test_topic_catalog_integration_preserves_public_path_filter(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    taxonomy = {
+        "collections": {"guide": {"path": "guides", "title": "구현 가이드"}},
+        "services": {"aks": "Azure Kubernetes Service"},
+        "technologies": {"kubernetes": "Kubernetes"},
+        "tags": {"networking": "Networking", "troubleshooting": "Troubleshooting"},
+        "verification_statuses": ["verified", "needs-review"],
+        "official_source_hosts": ["learn.microsoft.com"],
+        "required_source_host": "learn.microsoft.com",
+    }
+    (tmp_path / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    invalid = docs / "services" / "AKS" / "MixedTopic"
+    invalid.mkdir(parents=True)
+    (invalid / "index.md").write_text(SEARCH_DOCUMENT, encoding="utf-8")
+
+    public_documents = list(iter_public_documents(docs, taxonomy))
+    catalog = build_topic_catalog(docs, taxonomy, documents=public_documents)
+    pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
+
+    assert public_documents == []
+    assert catalog.documents == ()
+    assert "AKS 네트워크 진단" not in pages[PurePosixPath("articles/index.md")]
+
+
+def test_on_post_page_injects_head_redirect_tags_when_theme_canonical_is_missing(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    taxonomy = {
+        "collections": {"guide": {"path": "guides", "title": "구현 가이드"}},
+        "services": {"aks": "Azure Kubernetes Service"},
+        "technologies": {"kubernetes": "Kubernetes"},
+        "tags": {"networking": "Networking"},
+        "verification_statuses": ["verified", "needs-review"],
+        "official_source_hosts": ["learn.microsoft.com"],
+        "required_source_host": "learn.microsoft.com",
+    }
+    (tmp_path / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    canonical = docs / "services" / "aks" / "network-diagnosis"
+    canonical.mkdir(parents=True)
+    (canonical / "index.md").write_text(
+        SEARCH_DOCUMENT.replace(
+            "last_verified: 2026-09-12",
+            "redirect_from: [guides/aks/old-topic/index.md]\nlast_verified: 2026-09-12",
+        ),
+        encoding="utf-8",
+    )
+    page = SimpleNamespace(file=SimpleNamespace(src_uri="guides/aks/old-topic/index.md"))
+
+    rendered = on_post_page("<html><head></head><body></body></html>", page, {"docs_dir": str(docs)})
+
+    assert '<link rel="canonical" href="../../../services/aks/network-diagnosis/">' in rendered
+    assert '<meta http-equiv="refresh" content="0; url=../../../services/aks/network-diagnosis/">' in rendered
+
+
 def make_search_repository(tmp_path: Path) -> Path:
     taxonomy = {
         "collections": {"guide": {"path": "guides"}},
@@ -409,6 +707,59 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     assert resolved_links["https://example.test/services/aks/"] == "Azure Kubernetes Service"
     assert resolved_links["https://example.test/guides/aks/new-topic/"] == "자동 게시 확인"
     assert resolved_links["https://example.test/guides/aks/z-last-topic/"] == "세 번째 문서"
+
+
+def test_topic_packages_drive_sidebar_navigation_redirects_and_bounded_topic_links(
+    tmp_path: Path,
+) -> None:
+    root = make_topic_repository(tmp_path)
+    build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+    home = TopicReaderPage(root / "site" / "index.html")
+    sidebar_documents = [
+        entry
+        for entry in home.navigation_entries
+        if entry[0].startswith("services/aks/")
+    ]
+    assert ("services/aks/network-diagnosis/", "Topic title", ("services/", "services/aks/")) in sidebar_documents
+    assert (
+        "services/aks/network-diagnosis/setup/",
+        "1. Setup child",
+        ("services/", "services/aks/", "services/aks/network-diagnosis/"),
+    ) in sidebar_documents
+    assert (
+        "services/aks/network-diagnosis/results/",
+        "2. Results child",
+        ("services/", "services/aks/", "services/aks/network-diagnosis/"),
+    ) in sidebar_documents
+    assert ("services/aks/standalone-topic/", "Standalone topic", ("services/", "services/aks/")) in sidebar_documents
+    assert all("old-topic" not in target for target, _, _ in sidebar_documents)
+
+    entry_page = TopicReaderPage(root / "site" / "services" / "aks" / "network-diagnosis" / "index.html")
+    assert entry_page.topic_nav_links == [("setup/", "다음 문서")]
+
+    middle_page = TopicReaderPage(
+        root / "site" / "services" / "aks" / "network-diagnosis" / "setup" / "index.html"
+    )
+    assert middle_page.expanded_groups == 3
+    assert middle_page.topic_nav_links == [("../", "이전 문서"), ("../results/", "다음 문서")]
+
+    final_page = TopicReaderPage(
+        root / "site" / "services" / "aks" / "network-diagnosis" / "results" / "index.html"
+    )
+    assert final_page.topic_nav_links == [("../setup/", "이전 문서")]
+
+    redirect_page_path = root / "site" / "guides" / "aks" / "old-topic" / "index.html"
+    redirect_page = redirect_page_path.read_text(encoding="utf-8")
+    assert "services/aks/network-diagnosis/" in redirect_page
+    assert '<link rel="canonical" href="../../../services/aks/network-diagnosis/">' in redirect_page
+    assert '<meta http-equiv="refresh" content="0; url=../../../services/aks/network-diagnosis/">' in redirect_page
+    search = json.loads((root / "site" / "search" / "search_index.json").read_text(encoding="utf-8"))
+    locations = {entry["location"] for entry in search["docs"]}
+    assert "guides/aks/old-topic/" not in locations
+    assert not any("/samples/" in location for location in locations)
+    assert not any("Event lab" in entry.get("text", "") for entry in search["docs"])
+    assert not (root / "site" / "services" / "aks" / "network-diagnosis" / "samples").exists()
 
 
 def write_search_index(root: Path, documents: list[dict[str, str]]) -> None:

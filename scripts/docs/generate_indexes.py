@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 import html
 from pathlib import Path, PurePosixPath
 import posixpath
@@ -16,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.docs.content import Document, iter_public_documents, load_taxonomy
+from scripts.docs.topics import Topic, TopicCatalog, build_topic_catalog
 
 
 # Static English eyebrow labels for each document type / overview page, matching
@@ -44,6 +46,12 @@ _DATE_FIELD_BY_TYPE: dict[str, tuple[str, str]] = {
 }
 
 _HOME_SLOTS = ("<!-- home:stats -->", "<!-- home:featured -->", "<!-- home:browse -->")
+
+
+@dataclass(frozen=True)
+class TopicMatch:
+    topic: Topic
+    matching_count: int
 
 
 def _escape(value: Any) -> str:
@@ -211,6 +219,113 @@ def _doc_card(
     )
 
 
+def _topic_match_key(topic: Topic) -> tuple[str, str]:
+    return (topic.primary_service, topic.slug)
+
+
+def _display_title(item: Document | TopicMatch) -> str:
+    if isinstance(item, TopicMatch):
+        return str(item.topic.entry.metadata.get("title", ""))
+    return str(item.metadata.get("title", ""))
+
+
+def _topic_tags(topic: Topic) -> list[str]:
+    tags: list[str] = []
+    for member in topic.members:
+        tags.extend(_metadata_values(member, "tags"))
+    return list(dict.fromkeys(tags))
+
+
+def _topic_card(
+    index_path: PurePosixPath,
+    match: TopicMatch,
+    taxonomy: Mapping[str, Any],
+    *,
+    extra_classes: str = "",
+) -> str:
+    topic = match.topic
+    entry = topic.entry
+    metadata = entry.metadata
+    document_type = metadata.get("document_type", "")
+    link = _relative_link(index_path, entry)
+    title = metadata.get("title", "")
+    description = metadata.get("description", "")
+    services = taxonomy.get("services", {})
+    if index_path.parts[:1] == ("services",) and len(index_path.parts) == 3:
+        service_label = _label_for(services, index_path.parts[1])
+    else:
+        service_label = " · ".join(
+            _label_for(services, service) for service in _metadata_values(entry, "services")
+        )
+    topic_count = len(topic.members)
+    if match.matching_count == topic_count:
+        count_label = f"{topic_count}개 문서"
+    else:
+        count_label = f"{match.matching_count} / {topic_count}개 문서 일치"
+
+    meta_spans = ""
+    if service_label:
+        meta_spans += f"<span>{_escape(service_label)}</span>"
+    meta_spans += f"<span>{_escape(count_label)}</span>"
+
+    classes = f"dg-doc-card dg-topic-card dg-doc-card--{document_type}"
+    if extra_classes:
+        classes = f"{classes} {extra_classes}"
+
+    tag_html = build_tag_links(index_path, _topic_tags(topic)[:3], taxonomy)
+    return (
+        f'<article class="{classes}" markdown="1">\n\n'
+        f'<div class="dg-doc-meta">\n{meta_spans}\n</div>\n\n'
+        f'### [{_md_label(title)}]({link})\n\n'
+        f'<p class="dg-doc-summary">{_escape(description)}</p>\n'
+        f"{tag_html}"
+        f"\n</article>\n"
+    )
+
+
+def _collapse_documents(
+    documents: Sequence[Document], catalog: TopicCatalog | None
+) -> list[Document | TopicMatch]:
+    if catalog is None:
+        return sorted(documents, key=lambda document: str(document.metadata.get("title", "")).casefold())
+
+    matched_paths: dict[tuple[str, str], set[PurePosixPath]] = {}
+    standalone: dict[PurePosixPath, Document] = {}
+    for document in documents:
+        topic = catalog.by_document.get(document.relative_path)
+        if topic is None:
+            standalone.setdefault(document.relative_path, document)
+            continue
+        key = _topic_match_key(topic)
+        member_paths = {member.relative_path for member in topic.members}
+        if len(topic.members) <= 1:
+            standalone.setdefault(
+                document.relative_path if document.relative_path not in member_paths else topic.entry.relative_path,
+                document if document.relative_path not in member_paths else topic.entry,
+            )
+            continue
+        if document.relative_path not in member_paths:
+            standalone.setdefault(document.relative_path, document)
+            continue
+        if topic.entry.relative_path.parts[0] != "services":
+            standalone.setdefault(document.relative_path, document)
+            continue
+        matched_paths.setdefault(key, set()).add(document.relative_path)
+
+    topic_matches = [
+        TopicMatch(topic=catalog.topics[key], matching_count=len(paths))
+        for key, paths in matched_paths.items()
+    ]
+    collapsed: list[Document | TopicMatch] = [*standalone.values(), *topic_matches]
+    return sorted(collapsed, key=lambda item: _display_title(item).casefold())
+
+
+def _visible_documents(
+    documents: Sequence[Document], catalog: TopicCatalog | None
+) -> list[Document]:
+    return list(documents)
+
+
 def _page_heading(eyebrow_prefix: str, count: int, title: str, description: str) -> str:
     eyebrow = f"{eyebrow_prefix} / {count} DOCUMENTS"
     return (
@@ -236,12 +351,32 @@ def _empty_state(message: str) -> str:
     return f'<p class="dg-empty-state">{_escape(message)}</p>\n'
 
 
+def _primary_service(document: Document, catalog: TopicCatalog | None) -> str | None:
+    if catalog is not None:
+        topic = catalog.by_document.get(document.relative_path)
+        if topic is not None:
+            return topic.primary_service
+    parts = document.relative_path.parts
+    return parts[1] if len(parts) >= 2 else None
+
+
 def _document_grid(
-    index_path: PurePosixPath, documents: list[Document], taxonomy: Mapping[str, Any]
+    index_path: PurePosixPath,
+    documents: list[Document],
+    taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
 ) -> str:
     if not documents:
         return _empty_state("아직 등록된 문서가 없습니다.")
-    cards = "\n".join(_doc_card(index_path, document, taxonomy) for document in documents)
+    cards = "\n".join(
+        (
+            _topic_card(index_path, item, taxonomy)
+            if isinstance(item, TopicMatch)
+            else _doc_card(index_path, item, taxonomy)
+        )
+        for item in _collapse_documents(documents, catalog)
+    )
     return f'<div class="dg-doc-grid" markdown="1">\n\n{cards}\n</div>\n'
 
 
@@ -250,6 +385,8 @@ def _build_collection_page(
     config: Mapping[str, Any],
     matching: list[Document],
     taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
 ) -> tuple[PurePosixPath, str]:
     index_path = PurePosixPath(config["path"]) / "index.md"
     title = config.get("title", document_type)
@@ -259,9 +396,9 @@ def _build_collection_page(
 
     by_service: dict[str, list[Document]] = defaultdict(list)
     for document in matching:
-        parts = document.relative_path.parts
-        if len(parts) >= 2:
-            by_service[parts[1]].append(document)
+        service = _primary_service(document, catalog)
+        if service:
+            by_service[service].append(document)
 
     ordered_service_keys = _ordered_keys(by_service.keys(), services.keys())
 
@@ -282,8 +419,12 @@ def _build_collection_page(
             label = _label_for(services, slug)
             body += f"## {_md_label(label)} {{ #service-{slug} }}\n\n"
             body += '<div class="dg-doc-grid" markdown="1">\n\n'
-            for document in by_service[slug]:
-                body += _doc_card(index_path, document, taxonomy)
+            for item in _collapse_documents(by_service[slug], catalog):
+                body += (
+                    _topic_card(index_path, item, taxonomy)
+                    if isinstance(item, TopicMatch)
+                    else _doc_card(index_path, item, taxonomy)
+                )
                 body += "\n"
             body += "</div>\n\n"
 
@@ -297,6 +438,7 @@ def _build_service_page(
     taxonomy: Mapping[str, Any],
     *,
     page_path: PurePosixPath | None = None,
+    catalog: TopicCatalog | None = None,
 ) -> tuple[PurePosixPath, str]:
     if page_path is None:
         page_path = PurePosixPath("services") / slug / "index.md"
@@ -309,7 +451,7 @@ def _build_service_page(
     body += _page_heading(_SERVICES_EYEBROW, len(matching), label, description)
     body += "\n"
 
-    body += _document_grid(page_path, matching, taxonomy)
+    body += _document_grid(page_path, matching, taxonomy, catalog=catalog)
     body += "</div>\n"
     return page_path, body
 
@@ -330,6 +472,10 @@ def _build_services_overview_page(
     body += "\n"
 
     if not services:
+        available_slugs = sorted(by_service)
+    else:
+        available_slugs = _ordered_keys(set(services) | set(by_service), services.keys())
+    if not available_slugs:
         body += _empty_state("아직 등록된 서비스가 없습니다.")
     else:
         # Nonempty services surface first (highest document count first, then
@@ -337,7 +483,7 @@ def _build_services_overview_page(
         # services are still rendered afterward with an explicit 0 marker to
         # preserve their paths.
         ordered_slugs = sorted(
-            services,
+            available_slugs,
             key=lambda slug: (
                 len(by_service.get(slug, [])) == 0,
                 -len(by_service.get(slug, [])),
@@ -346,7 +492,7 @@ def _build_services_overview_page(
         )
         body += '<div class="dg-service-grid" markdown="1">\n\n'
         for slug in ordered_slugs:
-            label = services[slug]
+            label = _label_for(services, slug)
             matching = by_service.get(slug, [])
             body += '<article class="dg-service-card" markdown="1">\n\n'
             body += f"## [{_md_label(label)}]({slug}/index.md)\n\n"
@@ -359,7 +505,10 @@ def _build_services_overview_page(
 
 
 def _build_tag_pages(
-    documents: list[Document], taxonomy: Mapping[str, Any]
+    documents: list[Document],
+    taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
 ) -> dict[PurePosixPath, str]:
     by_tag: dict[str, list[Document]] = defaultdict(list)
     for document in documents:
@@ -392,7 +541,7 @@ def _build_tag_pages(
             body += '<div class="dg-landing dg-tag-results" markdown="1">\n\n'
             body += _page_heading("TAG", len(matching), label, tag_description)
             body += '\n[모든 태그](index.md){ .dg-text-link }\n\n'
-            body += _document_grid(page_path, matching, taxonomy)
+            body += _document_grid(page_path, matching, taxonomy, catalog=catalog)
             body += "</div>\n"
             pages[page_path] = body
         overview += "</div>\n"
@@ -402,7 +551,10 @@ def _build_tag_pages(
 
 
 def _build_articles_page(
-    documents: list[Document], taxonomy: Mapping[str, Any]
+    documents: list[Document],
+    taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
 ) -> tuple[PurePosixPath, str]:
     page_path = PurePosixPath("articles/index.md")
     title = "전체 글"
@@ -411,26 +563,36 @@ def _build_articles_page(
     body += '<div class="dg-landing dg-articles" markdown="1">\n\n'
     body += _page_heading("ARTICLES", len(documents), title, description)
     body += '\n[서비스별 보기](../services/index.md){ .dg-text-link } · [태그별 보기](../tags/index.md){ .dg-text-link }\n\n'
-    body += _document_grid(page_path, documents, taxonomy)
+    body += _document_grid(page_path, documents, taxonomy, catalog=catalog)
     body += "</div>\n"
     return page_path, body
 
 
 def build_index_pages(
-    documents: Iterable[Document], taxonomy: Mapping[str, Any]
+    documents: Iterable[Document],
+    taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
 ) -> dict[PurePosixPath, str]:
     """Return virtual Markdown pages keyed by their docs-relative path."""
-    docs = sorted(documents, key=lambda item: str(item.metadata.get("title", "")).casefold())
+    docs = sorted(
+        _visible_documents(list(documents), catalog),
+        key=lambda item: str(item.metadata.get("title", "")).casefold(),
+    )
     pages: dict[PurePosixPath, str] = {}
     collections = taxonomy.get("collections", {})
 
     for document_type, config in collections.items():
         matching = [doc for doc in docs if doc.metadata.get("document_type") == document_type]
-        index_path, body = _build_collection_page(document_type, config, matching, taxonomy)
+        index_path, body = _build_collection_page(
+            document_type, config, matching, taxonomy, catalog=catalog
+        )
         pages[index_path] = body
         by_primary_service: dict[str, list[Document]] = defaultdict(list)
         for document in matching:
-            by_primary_service[document.relative_path.parts[1]].append(document)
+            service = _primary_service(document, catalog)
+            if service:
+                by_primary_service[service].append(document)
         for slug, service_docs in by_primary_service.items():
             # A real section index prevents Material from promoting the first bundle.
             service_path, service_body = _build_service_page(
@@ -438,6 +600,7 @@ def build_index_pages(
                 service_docs,
                 taxonomy,
                 page_path=PurePosixPath(config["path"]) / slug / "index.md",
+                catalog=catalog,
             )
             pages[service_path] = service_body
 
@@ -447,14 +610,19 @@ def build_index_pages(
             by_service[service].append(document)
 
     services = taxonomy.get("services", {})
-    for slug in services:
-        page_path, page_body = _build_service_page(slug, by_service.get(slug, []), taxonomy)
+    for slug in _ordered_keys(set(services) | set(by_service), services.keys()):
+        page_path, page_body = _build_service_page(
+            slug,
+            by_service.get(slug, []),
+            taxonomy,
+            catalog=catalog,
+        )
         pages[page_path] = page_body
 
     services_path, services_body = _build_services_overview_page(by_service, taxonomy, len(docs))
     pages[services_path] = services_body
-    pages.update(_build_tag_pages(docs, taxonomy))
-    articles_path, articles_body = _build_articles_page(docs, taxonomy)
+    pages.update(_build_tag_pages(docs, taxonomy, catalog=catalog))
+    articles_path, articles_body = _build_articles_page(docs, taxonomy, catalog=catalog)
     pages[articles_path] = articles_body
     return pages
 
@@ -505,8 +673,12 @@ def _select_featured(documents: list[Document], taxonomy: Mapping[str, Any]) -> 
     return selected[:3]
 
 
-def _feature_card(document: Document, taxonomy: Mapping[str, Any]) -> str:
+def _feature_card(
+    document: Document | TopicMatch, taxonomy: Mapping[str, Any]
+) -> str:
     index_path = PurePosixPath("index.md")
+    if isinstance(document, TopicMatch):
+        return _topic_card(index_path, document, taxonomy, extra_classes="dg-feature-card")
     return _doc_card(index_path, document, taxonomy, extra_classes="dg-feature-card")
 
 
@@ -536,14 +708,19 @@ def _build_home_stats(documents: list[Document]) -> str:
     return body
 
 
-def _build_home_featured(documents: list[Document], taxonomy: Mapping[str, Any]) -> str:
+def _build_home_featured(
+    documents: list[Document],
+    taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
+) -> str:
     selected = _select_featured(documents, taxonomy)
     if not selected:
         return _empty_state("아직 소개할 문서가 없습니다.")
 
     body = '<div class="dg-feature-grid" markdown="1">\n\n'
-    for document in selected:
-        body += _feature_card(document, taxonomy)
+    for item in _collapse_documents(selected, catalog):
+        body += _feature_card(item, taxonomy)
         body += "\n"
     body += "</div>\n"
     return body
@@ -569,8 +746,40 @@ def _build_home_browse(documents: list[Document]) -> str:
     return body
 
 
+def build_redirect_pages(catalog: TopicCatalog) -> dict[PurePosixPath, str]:
+    pages: dict[PurePosixPath, str] = {}
+    front_matter = yaml.safe_dump(
+        {
+            "title": "문서 이동",
+            "search": {"exclude": True},
+            "hide": ["navigation", "toc"],
+        },
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=False,
+    ).rstrip()
+    for redirect_path, canonical_path in sorted(catalog.redirects.items()):
+        target = posixpath.relpath(
+            canonical_path.parent.as_posix(), start=redirect_path.parent.as_posix()
+        ).rstrip("/") + "/"
+        label = canonical_path.as_posix()
+        pages[redirect_path] = (
+            f"---\n{front_matter}\n---\n\n"
+            f'<meta http-equiv="refresh" content="0; url={_escape(target)}">\n'
+            f'<link rel="canonical" href="{_escape(target)}">\n\n'
+            "# 문서 이동\n\n"
+            "이 문서는 새 위치로 이동했습니다.\n\n"
+            f'<p><a href="{_escape(target)}">{_escape(label)}</a></p>\n'
+        )
+    return pages
+
+
 def build_home_page(
-    template: str, documents: Iterable[Document], taxonomy: Mapping[str, Any]
+    template: str,
+    documents: Iterable[Document],
+    taxonomy: Mapping[str, Any],
+    *,
+    catalog: TopicCatalog | None = None,
 ) -> str:
     """Render the home landing page by filling metadata-driven slots in ``template``."""
     for slot in _HOME_SLOTS:
@@ -580,11 +789,18 @@ def build_home_page(
         if occurrences > 1:
             raise ValueError(f"home template has duplicate slot: {slot}")
 
-    docs = sorted(documents, key=lambda item: str(item.metadata.get("title", "")).casefold())
+    docs = sorted(
+        _visible_documents(list(documents), catalog),
+        key=lambda item: str(item.metadata.get("title", "")).casefold(),
+    )
 
     rendered = template
     rendered = rendered.replace("<!-- home:stats -->", _build_home_stats(docs), 1)
-    rendered = rendered.replace("<!-- home:featured -->", _build_home_featured(docs, taxonomy), 1)
+    rendered = rendered.replace(
+        "<!-- home:featured -->",
+        _build_home_featured(docs, taxonomy, catalog=catalog),
+        1,
+    )
     rendered = rendered.replace(
         "<!-- home:browse -->", _build_home_browse(docs), 1
     )
@@ -597,14 +813,19 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
 
     root = repo_root or REPO_ROOT
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
-    documents = list(iter_public_documents(root / "docs", taxonomy))
+    public_documents = list(iter_public_documents(root / "docs", taxonomy))
+    catalog = build_topic_catalog(root / "docs", taxonomy, documents=public_documents)
+    documents = list(catalog.documents)
 
-    for path, content in build_index_pages(documents, taxonomy).items():
+    for path, content in build_index_pages(documents, taxonomy, catalog=catalog).items():
+        with mkdocs_gen_files.open(path.as_posix(), "w") as generated:
+            generated.write(content)
+    for path, content in build_redirect_pages(catalog).items():
         with mkdocs_gen_files.open(path.as_posix(), "w") as generated:
             generated.write(content)
 
     template = (root / "docs" / "index.md").read_text(encoding="utf-8")
-    home_page = build_home_page(template, documents, taxonomy)
+    home_page = build_home_page(template, documents, taxonomy, catalog=catalog)
     with mkdocs_gen_files.open("index.md", "w") as generated:
         generated.write(home_page)
 

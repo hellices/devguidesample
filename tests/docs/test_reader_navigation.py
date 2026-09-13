@@ -15,6 +15,7 @@ import yaml
 from scripts.docs.content import Document
 from scripts.docs.generate_indexes import build_home_page, build_index_pages
 from scripts.docs.hooks import on_page_markdown
+from scripts.docs.topics import build_topic_catalog
 
 
 @pytest.fixture
@@ -42,6 +43,121 @@ def document(collection: str, topic: str, title: str, tags: list[str]) -> Docume
             "tags": tags,
         },
         body="networking이라는 단어를 본문에서 사용합니다.",
+    )
+
+
+def write_topic_document(
+    docs_dir: Path,
+    relative_path: str,
+    title: str,
+    *,
+    tags: list[str],
+    topic_order: int | None = None,
+) -> None:
+    metadata: dict[str, object] = {
+        "title": title,
+        "description": f"{title} 설명",
+        "document_type": "guide",
+        "services": ["azure-monitor"],
+        "technologies": ["kubernetes"],
+        "tags": tags,
+        "status": "current",
+        "verification_status": "verified",
+        "sources_checked_at": "2026-09-12",
+        "official_sources": [
+            {
+                "title": "Azure Monitor documentation",
+                "url": "https://learn.microsoft.com/azure/azure-monitor/",
+            }
+        ],
+        "last_verified": "2026-09-12",
+        "review_cycle_days": 180,
+        "applies_to": ["Azure Monitor"],
+    }
+    if topic_order is not None:
+        metadata["topic_order"] = topic_order
+
+    path = docs_dir / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False).strip()
+        + "\n---\n\n"
+        + f"# {title}\n\n본문입니다.\n",
+        encoding="utf-8",
+    )
+
+
+def build_topic_fixture(tmp_path: Path, taxonomy: dict) -> tuple[Path, object]:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (tmp_path / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/index.md",
+        "Topic title",
+        tags=["networking"],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/setup/index.md",
+        "Setup child",
+        tags=["networking"],
+        topic_order=1,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/results/index.md",
+        "Results child",
+        tags=["monitoring"],
+        topic_order=2,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/standalone-topic/index.md",
+        "Standalone topic",
+        tags=["networking"],
+    )
+
+    sample_dir = docs_dir / "services" / "azure-monitor" / "new-topic" / "samples" / "event-lab"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.yml").write_text(
+        yaml.safe_dump(
+            {
+                "title": "Event lab",
+                "description": "Reproduces the monitored incident.",
+                "kind": "runnable",
+                "used_by": ["setup"],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (sample_dir / "README.md").write_text("# Event lab\n", encoding="utf-8")
+
+    return docs_dir, build_topic_catalog(docs_dir, taxonomy, include_legacy=False)
+
+
+def page_namespace(document: Document, *, previous: Document | None = None, next_: Document | None = None):
+    def nav_item(item: Document | None):
+        if item is None:
+            return None
+        return SimpleNamespace(
+            title=item.metadata["title"],
+            url=item.relative_path.as_posix().removesuffix("index.md"),
+        )
+
+    return SimpleNamespace(
+        title=document.metadata["title"],
+        meta=document.metadata,
+        file=SimpleNamespace(src_uri=str(document.relative_path)),
+        url=document.relative_path.as_posix().removesuffix("index.md"),
+        previous_page=nav_item(previous),
+        next_page=nav_item(next_),
     )
 
 
@@ -200,6 +316,131 @@ def test_article_tags_use_the_same_detail_pages(tmp_path: Path, taxonomy: dict) 
     assert "../../../tags/networking.md" in targets(rendered)
     assert "?q=" not in rendered
     assert "본문입니다." in rendered
+
+
+def test_topic_pages_render_context_outline_and_related_samples(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir, catalog = build_topic_fixture(tmp_path, taxonomy)
+    entry = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/index.md")
+    )
+    setup = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/setup/index.md")
+    )
+    results = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/results/index.md")
+    )
+    standalone = next(
+        document
+        for document in catalog.documents
+        if document.relative_path
+        == PurePosixPath("services/azure-monitor/standalone-topic/index.md")
+    )
+    config = {
+        "docs_dir": str(docs_dir),
+        "repo_url": "https://github.com/example/devguidesample",
+    }
+
+    entry_rendered = on_page_markdown(
+        "# Topic title\n\n본문입니다.\n",
+        page_namespace(entry, next_=setup),
+        config,
+        None,
+    )
+    setup_rendered = on_page_markdown(
+        "# Setup child\n\n본문입니다.\n",
+        page_namespace(setup, previous=entry, next_=results),
+        config,
+        None,
+    )
+    results_rendered = on_page_markdown(
+        "# Results child\n\n본문입니다.\n",
+        page_namespace(results, previous=setup),
+        config,
+        None,
+    )
+    standalone_rendered = on_page_markdown(
+        "# Standalone topic\n\n본문입니다.\n",
+        page_namespace(standalone),
+        config,
+        None,
+    )
+
+    assert 'class="dg-topic-overview"' in entry_rendered
+    assert "TOPIC · 3 DOCUMENTS" in entry_rendered
+    assert "Topic title · 1 / 3" in entry_rendered
+    assert entry_rendered.count("Setup child") == 1
+    assert entry_rendered.count("Results child") == 1
+    assert entry_rendered.index("Setup child") < entry_rendered.index("Results child")
+
+    assert 'class="dg-topic-context"' in setup_rendered
+    assert "Topic title · 2 / 3" in setup_rendered
+    assert ">전체 목차<" in setup_rendered
+    assert 'class="dg-topic-nav"' in setup_rendered
+    assert setup_rendered.index("본문입니다.") < setup_rendered.index('class="dg-topic-nav"')
+    assert 'class="dg-sample-card"' in setup_rendered
+    assert "Event lab" in setup_rendered
+    assert (
+        "https://github.com/example/devguidesample/tree/main/"
+        "docs/services/azure-monitor/new-topic/samples/event-lab"
+    ) in setup_rendered
+    assert setup_rendered.index('class="dg-sample-card"') < setup_rendered.index(
+        'class="doc-sources"'
+    )
+
+    assert "Topic title · 3 / 3" in results_rendered
+    assert 'class="dg-topic-nav"' in results_rendered
+    assert 'class="dg-sample-card"' not in results_rendered
+    assert 'class="dg-sample-card"' not in standalone_rendered
+
+
+def test_legacy_same_slug_pages_do_not_get_canonical_topic_ui(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (tmp_path / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    write_topic_document(
+        docs_dir,
+        "guides/azure-monitor/shared/index.md",
+        "Guide title",
+        tags=["networking"],
+    )
+    write_topic_document(
+        docs_dir,
+        "research/azure-monitor/shared/index.md",
+        "Research title",
+        tags=["networking"],
+    )
+    research_path = docs_dir / "research" / "azure-monitor" / "shared" / "index.md"
+    research_path.write_text(
+        research_path.read_text(encoding="utf-8").replace("document_type: guide", "document_type: research"),
+        encoding="utf-8",
+    )
+    guide = document("guides", "shared", "Guide title", ["networking"])
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    rendered = on_page_markdown(
+        "# Guide title\n\n본문입니다.\n",
+        page_namespace(guide),
+        {"docs_dir": str(docs_dir)},
+        None,
+    )
+
+    assert catalog.by_document[guide.relative_path].entry.relative_path == guide.relative_path
+    assert 'class="dg-topic-overview"' not in rendered
+    assert 'class="dg-topic-context"' not in rendered
+    assert 'class="dg-topic-nav"' not in rendered
 
 
 class ReaderPage(HTMLParser):
