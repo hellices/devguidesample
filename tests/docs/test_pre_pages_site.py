@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+from html import escape
 import json
 from pathlib import Path, PurePosixPath
 import shutil
@@ -598,3 +599,276 @@ def test_cli_emits_one_path_specific_line_per_finding(monkeypatch, capsys):
     assert capsys.readouterr().out.splitlines() == [
         "docs/services/service/topic/index.md: lost code: first\\nsecond",
     ]
+
+
+@pytest.mark.parametrize("raw", [
+    "/services/service/topic/",
+    "https://hellices.github.io/services/service/topic/",
+    "/devguidesample/../services/service/topic/",
+    "/devguidesample/services/service/topic/%2e/",
+    "/devguidesample/services/service/topic/%2E%2e/topic/",
+    "/devguidesample/services/service/topic/%2f..%2ftopic/",
+    "/devguidesample/services/service/topic/index.html/.",
+    "/devguidesample/services/service/topic/index.html/%2e",
+    "/devguidesample/services/service/topic/index.html/",
+])
+def test_review_url_semantics_do_not_collapse_into_existing_files(site_repo, raw):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    write(root, "site/" + CHILD.replace(".md", ".html"), html(f'<a href="{raw}">Document</a>'))
+    assert raw in findings(site_repo)
+
+
+@pytest.mark.parametrize("location", [
+    "/services/service/topic/",
+    "/devguidesample/../services/service/topic/",
+    "services/service/topic/%2e/",
+    "services/service/topic/%2e%2e/topic/",
+    "services/service/topic/index.html/.",
+    "services/service/topic/index.html/",
+])
+def test_review_search_rejects_url_to_filesystem_aliases(site_repo, location):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    entries = [dict(search_entry(ENTRY), location=location), search_entry(CHILD)]
+    write(root, "site/search/search_index.json", json.dumps({"docs": entries}))
+    assert "malformed or missing search index" in findings(site_repo)
+
+
+@pytest.mark.parametrize("raw", [
+    "C:/images/a.png", r"C:\images\a.png", "C:images/a.png",
+    "file:///C:/images/a.png", r"\\hellices.github.io\devguidesample\image.png",
+    "https://external.test\\image.png", "%43%3a/images/a.png",
+])
+def test_review_windows_and_local_file_syntax_cannot_be_ignored_as_external(site_repo, raw):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<img src="{raw}">'))
+    assert "unsafe" in findings(site_repo)
+
+
+@pytest.mark.parametrize("authority", [
+    "hellices.github.io", "hellices.github.io:443", "HELLICES.github.io",
+])
+def test_review_same_origin_protocol_relative_targets_are_inspected(site_repo, authority):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    raw = f"//{authority}/devguidesample/images/missing.png"
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<img src="{raw}">'))
+    assert raw in findings(site_repo)
+
+
+def test_review_protocol_relative_assets_preserve_origin_and_prefix(site_repo):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    write(root, "site/images/present.png", b"image")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        '<img src="//hellices.github.io/devguidesample/images/present.png">'
+        '<img src="//external.test/devguidesample/images/not-built.png">'
+        '<img src="//hellices.github.io:0/devguidesample/images/not-built.png">'
+    ))
+    assert inspect(site_repo).errors == ()
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        '<img src="//hellices.github.io/images/present.png">',
+    ))
+    assert "unsafe" in findings(site_repo)
+
+
+@pytest.mark.parametrize("quotes", [
+    ("''", "''"), ('""', '""'), ("'", '"'), ('"', "'"),
+    ("", "'"), ("'", ""), ('"', ""), ("", '"'),
+    ("'\"", "\"'"), ("\"'", "'\""), ('"""', '"""'),
+])
+def test_review_refresh_rejects_browser_invalid_url_quoting(site_repo, quotes):
+    root, _ = site_repo
+    target = "../../../services/service/topic/"
+    value = "0; url=" + quotes[0] + target + quotes[1]
+    path = root / "site" / OLD.replace(".md", ".html")
+    path.write_text(path.read_text().replace("0; url=" + target, escape(value, quote=True)))
+    assert "redirect refresh" in findings(site_repo)
+
+
+@pytest.mark.parametrize("quote_character", ["", "'", '"'])
+def test_review_refresh_accepts_exactly_one_matching_quote_pair(site_repo, quote_character):
+    root, _ = site_repo
+    target = "../../../services/service/topic/"
+    value = f" 0 ; URL = {quote_character}{target}{quote_character} \t"
+    path = root / "site" / OLD.replace(".md", ".html")
+    path.write_text(path.read_text().replace("0; url=" + target, escape(value, quote=True)))
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("attribute", ["inert", 'inert="false"'])
+@pytest.mark.parametrize("page", ["service", "explore", "redirect"])
+def test_review_nested_inert_anchors_cannot_prove_reachability(site_repo, attribute, page):
+    root, _ = site_repo
+    if page == "service":
+        path = "services/service/index.html"
+    elif page == "explore":
+        path = "explore/index.html"
+    else:
+        path = OLD.replace(".md", ".html")
+    document = (root / "site" / path).read_text()
+    document = document.replace(
+        "<main>", f"<main><section {attribute}><div><span>",
+    ).replace("</main>", "</span></div></section></main>")
+    write(root, "site/" + path, document)
+    error = findings(site_repo)
+    assert "redirect fallback" in error if page == "redirect" else "not linked" in error
+    assert path in error or OLD in error
+
+
+def test_review_inert_descendants_still_check_image_and_source_assets(site_repo):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        '<section inert><div><img src="images/missing.png">'
+        '<source srcset="images/missing-source.png 2x"></div></section>'
+    ))
+    error = findings(site_repo)
+    assert "images/missing.png" in error
+    assert "images/missing-source.png" in error
+
+
+def test_review_inert_state_ends_with_the_owning_element(site_repo):
+    root, _ = site_repo
+    write(root, "site/services/service/index.html", html(
+        '<section inert><div><a href="topic/">Inert</a></div></section>'
+        '<a href="topic/">Reachable</a>'
+    ))
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("descriptor,valid", [
+    ("1x", True), (".5x", True), ("1.5x", True), ("0x", True), ("-0x", True),
+    ("1e2x", True), ("1E+2x", True), ("1e-2x", True), ("100w", True), ("00100w", True),
+    ("١x", False), ("１x", False), ("1٢w", False), ("١٠٠w", False),
+    ("1x\u00a0", False), ("1x\u2003", False),
+    ("0w", False), ("000w", False), ("-1x", False), ("+1x", False),
+    ("1.x", False), ("NaNx", False), ("Infinityx", False), ("1e999x", False),
+    ("100h", False), ("100w 100h", False), ("100h 100w", False),
+    ("0h", False), ("١٠٠h", False), ("100w 1x", False), ("1x 2x", False),
+])
+def test_review_srcset_ascii_descriptor_grammar(site_repo, descriptor, valid):
+    root, _ = site_repo
+    write(root, "site/services/service/topic/images/a.png", b"image")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        f'<source srcset="images/a.png {descriptor}">',
+    ))
+    result = inspect(site_repo)
+    if valid:
+        assert result.errors == ()
+    else:
+        assert "malformed HTML" in "\n".join(result.errors)
+
+
+@pytest.mark.parametrize("separator", ["\u00a0", "\u2003", "\u2028"])
+def test_review_srcset_non_ascii_whitespace_remains_part_of_the_url(site_repo, separator):
+    root, _ = site_repo
+    raw = f"images/a.png{separator}1x"
+    write(root, "site/services/service/topic/images/a.png", b"only the shorter filename exists")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<source srcset="{raw}">'))
+    assert inspect(site_repo).errors
+    write(root, "site/services/service/topic/" + raw, b"the actual URL now exists")
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("srcset,valid", [
+    ("images/a.png, images/b.png 2x", True),
+    ("images/a.png 1x,images/b.png 2x", True),
+    ("\t images/a.png\n1x,\rimages/b.png\f2x\t", True),
+    ("images/a.png,", True), ("images/a.png 1x,", True),
+    ("images/a.png,b.png", True),
+    ("data:image/png;base64,AAAA 1x, images/a.png 2x", True),
+    ("data:image/svg+xml,%3Csvg%3E,%3C/svg%3E 1x, images/a.png 2x", True),
+    ("", False), (" \t\r\n\f", False), (",images/a.png", False),
+    ("images/a.png,, images/b.png", False),
+    ("images/a.png 1x,,images/b.png", False),
+    ("images/a.png, ,images/b.png", False),
+    ("images/a.png 1x,\u00a0images/b.png 2x", False),
+    ("images/a.png\v1x", False),
+])
+def test_review_srcset_commas_data_urls_and_empty_candidates(site_repo, srcset, valid):
+    root, _ = site_repo
+    for name in ("a.png", "b.png", "a.png,b.png"):
+        write(root, "site/services/service/topic/images/" + name, b"image")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        f'<source srcset="{escape(srcset, quote=True)}">',
+    ))
+    result = inspect(site_repo)
+    assert (not result.errors) == valid, result.errors
+
+
+def publish_markdown_download(site_repo, name="raw.md"):
+    root, _ = site_repo
+    manifest_path = root / "docs/services/service/topic/samples/example/sample.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["publish"].append({"source": "README.md", "target": "downloads/" + name})
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    payload = (manifest_path.parent / "README.md").read_bytes()
+    return write(root, "site/services/service/topic/downloads/" + name, payload)
+
+
+@pytest.mark.parametrize("name,alias", [
+    ("raw.md", "raw/index.html"), ("raw.md", "raw.html"),
+    ("index.md", "index.html"), ("index.md", "index/index.html"),
+])
+def test_review_published_markdown_generated_html_aliases_are_forbidden(site_repo, name, alias):
+    root, _ = site_repo
+    raw_file = publish_markdown_download(site_repo, name)
+    payload = raw_file.read_bytes()
+    write(root, "site/services/service/topic/downloads/" + alias, html("Leaked sample source"))
+    error = findings(site_repo)
+    assert "published Markdown" in error and "built HTML alias" in error
+    assert alias in error
+    assert raw_file.read_bytes() == payload
+
+
+@pytest.mark.parametrize("location", ["raw/", "raw/index.html#section", "raw.html", "./"])
+@pytest.mark.parametrize("build_alias", [False, True])
+def test_review_published_markdown_search_aliases_are_forbidden(site_repo, location, build_alias):
+    root, _ = site_repo
+    name = "index.md" if location == "./" else "raw.md"
+    publish_markdown_download(site_repo, name)
+    base = "services/service/topic/downloads/"
+    if build_alias:
+        alias = "index.html" if location == "./" else "raw.html" if location == "raw.html" else "raw/index.html"
+        write(root, "site/" + base + alias, html("Leaked sample source"))
+    search_path = root / "site/search/search_index.json"
+    data = json.loads(search_path.read_text())
+    data["docs"].append({"location": base + location, "title": "Sample", "text": "Leaked source"})
+    search_path.write_text(json.dumps(data))
+    assert "published Markdown search alias" in findings(site_repo)
+
+
+def test_review_exact_raw_md_page_and_search_leak_with_intact_raw_bytes(site_repo):
+    root, _ = site_repo
+    raw_file = publish_markdown_download(site_repo)
+    original_bytes = raw_file.read_bytes()
+    base = "services/service/topic/downloads/raw/"
+    write(root, "site/" + base + "index.html", html("Sample"))
+    search_path = root / "site/search/search_index.json"
+    data = json.loads(search_path.read_text())
+    data["docs"].append({"location": base, "title": "Sample", "text": "Sample"})
+    search_path.write_text(json.dumps(data))
+    error = findings(site_repo)
+    assert "built HTML alias" in error
+    assert "published Markdown search alias" in error
+    assert raw_file.read_bytes() == original_bytes
+
+
+def test_review_markdown_alias_detection_is_independent_of_raw_byte_validation(site_repo):
+    root, _ = site_repo
+    raw_file = publish_markdown_download(site_repo)
+    raw_file.write_text("Modified payload")
+    write(root, "site/services/service/topic/downloads/raw/index.html", html("Sample"))
+    error = findings(site_repo)
+    assert "published bytes differ" in error
+    assert "built HTML alias" in error
+
+
+def test_review_plain_raw_markdown_download_is_still_published_unchanged(site_repo):
+    root, _ = site_repo
+    publish_markdown_download(site_repo)
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        '<a href="downloads/raw.md" download>Raw Markdown</a>',
+    ))
+    assert inspect(site_repo).errors == ()

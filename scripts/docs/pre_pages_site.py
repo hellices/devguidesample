@@ -6,10 +6,11 @@ from collections import Counter
 from dataclasses import dataclass
 from html.parser import HTMLParser
 import json
+import math
 from pathlib import Path, PurePosixPath
 import re
 from typing import Mapping
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
 import yaml
 
@@ -29,34 +30,55 @@ _VOID = frozenset((
 ))
 _INERT = frozenset(("script", "style", "template", "noscript"))
 _CHROME = frozenset(("nav", "header", "footer", "aside"))
+_HTML_WHITESPACE = " \t\n\f\r"
+
+
+def _valid_srcset_descriptor(value: str) -> bool:
+    width = re.fullmatch(r"([0-9]+)w", value)
+    if width:
+        return any(digit != "0" for digit in width[1])
+    if re.fullmatch(r"-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?x", value):
+        density = float(value[:-1])
+        return math.isfinite(density) and density >= 0
+    # HTML treats even the future-compatible h descriptor as a parse error.
+    return False
 
 
 def _srcset(value: str) -> list[str]:
     """Read URL tokens without splitting embedded commas in data URLs."""
     urls = []
-    remaining = value.strip()
+    remaining = value.strip(_HTML_WHITESPACE)
     if not remaining:
         raise AuditFormatError("empty srcset")
     while remaining:
-        match = re.match(r"(\S+)(.*)", remaining, re.DOTALL)
+        if remaining.startswith(","):
+            raise AuditFormatError("empty srcset candidate")
+        match = re.match(r"([^ \t\n\f\r]+)(.*)", remaining, re.DOTALL)
         assert match is not None
         token, remaining = match.groups()
         if token.endswith(","):
-            token = token.rstrip(",")
+            if token.endswith(",,"):
+                raise AuditFormatError("empty srcset candidate")
+            token = token[:-1]
         else:
             descriptors, _, remaining = remaining.partition(",")
-            descriptors = descriptors.split()
-            if len(descriptors) > 1 or any(
-                not re.fullmatch(r"(?:[1-9]\d*w|(?:\d+(?:\.\d+)?|\.\d+)x)", item)
-                or float(item[:-1]) <= 0
-                for item in descriptors
-            ):
+            descriptors = re.findall(r"[^ \t\n\f\r]+", descriptors)
+            if len(descriptors) > 1 or any(not _valid_srcset_descriptor(item) for item in descriptors):
                 raise AuditFormatError(f"malformed srcset descriptors: {descriptors}")
         if not token:
             raise AuditFormatError("empty srcset URL")
         urls.append(token)
-        remaining = remaining.strip()
+        remaining = remaining.strip(_HTML_WHITESPACE)
     return urls
+
+
+def _refresh_url(value: str) -> str | None:
+    space = r"[ \t\n\f\r]*"
+    match = re.fullmatch(
+        rf"""{space}0{space};{space}url{space}={space}(?:"([^"']+)"|'([^"']+)'|([^"']+?)){space}""",
+        value, re.IGNORECASE,
+    )
+    return next(group for group in match.groups() if group is not None) if match else None
 
 
 class _Page(HTMLParser):
@@ -83,6 +105,7 @@ class _Page(HTMLParser):
         hidden = (
             any(hidden for _, hidden in self.stack)
             or "hidden" in attributes
+            or "inert" in attributes
             or (attributes.get("aria-hidden") or "").casefold() == "true"
             or bool(re.search(
                 r"(?:display\s*:\s*none|visibility\s*:\s*hidden)",
@@ -190,38 +213,51 @@ def _contained(root: Path, path: Path, label: str) -> Path:
 class _Site:
     def __init__(self, root: Path, site_url: str) -> None:
         self.root = root.resolve()
-        self.site_url = urlsplit(site_url)
-        self.prefix = self.site_url.path.rstrip("/") + "/" if site_url else "/"
+        self.site_url = urlsplit(site_url or "https://pre-pages.invalid/")
+        if (
+            self.site_url.scheme not in {"http", "https"} or not self.site_url.hostname
+            or self.site_url.query or self.site_url.fragment
+        ):
+            raise AuditFormatError("site_url must be an absolute HTTP(S) deployment URL")
+        self.origin = self._origin(self.site_url)
+        self.prefix = self.site_url.path.rstrip("/") + "/"
+        self.base = urlunsplit((*self.site_url[:2], self.prefix, "", ""))
+
+    @staticmethod
+    def _origin(url) -> tuple[str, str | None, int | None]:
+        port = url.port if url.port is not None else {"http": 80, "https": 443}.get(url.scheme)
+        return url.scheme, url.hostname, port
 
     def resolve(self, html_path: Path, raw: str) -> Path | None:
         try:
+            if "\\" in raw or re.match(r"^[\x00-\x20]*[A-Za-z][:|]", raw):
+                raise ValueError("Windows drive or backslash syntax is not a web URL")
             url = urlsplit(raw)
-            if url.scheme or url.netloc:
-                if not (
-                    self.site_url.netloc and url.scheme in {"http", "https"}
-                    and url.netloc == self.site_url.netloc
-                    and url.path.startswith(self.prefix)
-                ):
-                    return None
-            if not url.path:
+            if url.scheme == "file":
+                raise ValueError("local file URLs are not published web targets")
+            if not url.path and not url.scheme and not url.netloc:
+                return None
+            document_url = urljoin(self.base, quote(html_path.relative_to(self.root).as_posix()))
+            resolved_url = urlsplit(urljoin(document_url, raw))
+            if self._origin(resolved_url) != self.origin:
                 return None
             if re.search(r"[\x00-\x20\x7f\\]", raw):
                 raise ValueError("local URLs must encode spaces and reject controls/backslashes")
-            if re.search(r"%(?![0-9a-fA-F]{2})", url.path):
+            if re.search(r"%(?![0-9a-fA-F]{2})", resolved_url.path):
                 raise ValueError("malformed percent encoding")
-            decoded = unquote(url.path, errors="strict")
+            if re.match(r"^/?[A-Za-z][:|]", unquote(url.path, errors="strict")):
+                raise ValueError("decoded Windows drive syntax is not a web path")
+            decoded = unquote(resolved_url.path, errors="strict")
             if re.search(r"[\x00-\x1f\x7f\\]", decoded):
                 raise ValueError("control character or backslash in decoded path")
-            if decoded.startswith("/"):
-                if decoded.startswith(self.prefix):
-                    decoded = decoded[len(self.prefix):]
-                else:
-                    decoded = decoded[1:]
-                path = self.root / decoded
-            else:
-                path = html_path.parent / decoded
+            if any(segment in {".", ".."} for segment in decoded.split("/")):
+                raise ValueError("encoded/decoded dot segments are not published paths")
+            prefix = unquote(self.prefix, errors="strict")
+            if not decoded.startswith(prefix):
+                raise ValueError(f"URL is outside the configured deployment prefix {self.prefix!r}")
+            path = self.root / decoded[len(prefix):]
             path = _contained(self.root, path, f"unsafe URL {raw!r}")
-            if url.path.endswith("/") or path.is_dir():
+            if decoded.endswith("/") or path.is_dir():
                 path = _contained(self.root, path / "index.html", f"unsafe URL {raw!r}")
             return path
         except (ValueError, OSError, RuntimeError) as error:
@@ -298,6 +334,18 @@ def inspect_built_site(
     search_path = site.root / "search/search_index.json"
     published_targets = set(catalog.published_assets)
     published_paths = {site.root / path for path in published_targets}
+    markdown_aliases: dict[Path, PurePosixPath] = {}
+    for published in sorted(published_targets):
+        if published.suffix.casefold() != ".md":
+            continue
+        for alias in (published.with_suffix(".html"), published.with_suffix("") / "index.html"):
+            path = site.root / alias
+            markdown_aliases[path] = published
+            try:
+                if _contained(site.root, path, "published Markdown alias").exists():
+                    errors.append(f"{published}: published Markdown built HTML alias exists: {alias}")
+            except (OSError, ValueError, RuntimeError) as error:
+                errors.append(f"{published}: built HTML alias {alias}: {error}")
     bases: Counter[Path] = Counter()
     search_locations: set[Path] = set()
     try:
@@ -324,6 +372,10 @@ def inspect_built_site(
                 raise AuditFormatError(f"duplicate search location {raw!r}")
             seen.add(raw)
             resolved = site.resolve(site.root / "index.html", url.path or "./")
+            if resolved in markdown_aliases:
+                raise AuditFormatError(
+                    f"entry {i}: published Markdown search alias for {markdown_aliases[resolved]}: {raw!r}"
+                )
             if resolved in published_paths:
                 raise AuditFormatError(f"entry {i}: published sample asset leaked into search: {raw!r}")
             if resolved is None or resolved.suffix != ".html" or not resolved.is_file():
@@ -384,11 +436,8 @@ def inspect_built_site(
             redirect_page.canonicals[0],
         ) != canonical_html:
             errors.append(f"{entry.pages_path}: redirect canonical target does not match {canonical}")
-        refresh = (
-            re.fullmatch(r"\s*0\s*;\s*url\s*=\s*(.*?)\s*", redirect_page.refreshes[0], re.IGNORECASE)
-            if len(redirect_page.refreshes) == 1 else None
-        )
-        if refresh is None or redirect_target(refresh[1].strip("\"'")) != canonical_html:
+        refresh = _refresh_url(redirect_page.refreshes[0]) if len(redirect_page.refreshes) == 1 else None
+        if refresh is None or redirect_target(refresh) != canonical_html:
             errors.append(f"{entry.pages_path}: redirect refresh target does not match {canonical}")
         if canonical_html not in links(redirect_path, "redirect fallback"):
             errors.append(f"{entry.pages_path}: redirect fallback link does not match {canonical}")
