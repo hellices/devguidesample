@@ -12,7 +12,6 @@ import subprocess
 import unicodedata
 from urllib.parse import unquote, urlsplit
 
-import markdown
 import pytest
 import yaml
 
@@ -94,7 +93,7 @@ class RendererOracle(HTMLParser):
 def renderer_oracle(source: str) -> RendererOracle:
     source = unicodedata.normalize("NFKC", source.replace("\r\n", "\n").replace("\r", "\n"))
     source = re.sub(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|$)", "", source, count=1, flags=re.DOTALL)
-    html = markdown.markdown(source, extensions=["tables", "md_in_html", "pymdownx.superfences"])
+    html = pre_pages_content.create_semantic_renderer().convert(source)
     collector = RendererOracle()
     collector.feed(html)
     collector.close()
@@ -1574,3 +1573,88 @@ def test_table_code_span_escaped_pipe_is_unescaped_once_after_literal_restoratio
     assert structure.tables[-1] == r"ps aux \| grep MetricsExtension | present"
     assert structure.links == tuple(renderer_oracle(source).links)
     assert structure.images == tuple(renderer_oracle(source).images)
+
+
+def test_real_s1_src_attribute_override_invalidates_the_existing_image_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "monitor/sre-agent-event-lab/validation-results.md",
+        "docs/services/azure-monitor/azure-sre-agent/validation-results/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    image = "![S1 SRE Agent investigation](images/s1-investigation.gif)"
+    source = path.read_text()
+    assert source.count(image) == 1
+    changed = source.replace(image, image + '{: src="images/investigation.gif"}')
+    path.write_text(changed)
+    expected = "S1 SRE Agent investigation\ninvestigation.gif"
+    assert expected in renderer_oracle(changed).images
+    assert expected in extract_markdown_structure(changed).images
+    with pytest.raises(AuditFormatError, match="stale.*images|evidence.*images|images.*count"):
+        audit_document_content(tmp_path, inventory)
+
+
+@pytest.mark.parametrize(
+    ("source", "links", "images"),
+    [
+        ('![S1](images/s1-investigation.gif){: src="images/investigation.gif"}', (), ("S1\ninvestigation.gif",)),
+        ("[Guide](original.md){href=override.md}", ("Guide\noverride.md",), ()),
+        ('[Guide](original.md){: href="override.md#part" .button}', ("Guide\noverride.md#part",), ()),
+        ('![Original](images/original.png){alt="Final alt" .photo}', (), ("Final alt\noriginal.png",)),
+        ('![Original](images/original.png){: src="images/final.png" alt="Final" .photo}', (), ("Final\nfinal.png",)),
+        ('![Original](images/original.png){.photo width="400"}', (), ("Original\noriginal.png",)),
+        ('[Guide](original.md){.button #guide title="Visible title"}', ("Guide\noriginal.md",), ()),
+        ('[![Original](images/original.png){alt="Final"}](guide.md){href=final.md}', ("Final\nfinal.md",), ("Final\noriginal.png",)),
+    ],
+)
+def test_repository_attribute_lists_define_final_element_semantics(source: str, links: tuple, images: tuple) -> None:
+    structure = extract_markdown_structure(source)
+    assert structure.links == links
+    assert structure.images == images
+    oracle = renderer_oracle(source)
+    assert structure.links == tuple(oracle.links)
+    assert structure.images == tuple(oracle.images)
+
+
+def test_raw_html_markdown_enabled_block_uses_nested_link_and_image_attributes() -> None:
+    source = (
+        '<div markdown="1">\n\n'
+        '[Guide](original.md){href=final.md}\n\n'
+        '![Original](images/original.png){src="images/final.png" alt="Final" .photo}\n\n'
+        '</div>'
+    )
+    structure = extract_markdown_structure(source)
+    assert structure.links == ("Guide\nfinal.md",)
+    assert structure.images == ("Final\nfinal.png",)
+    oracle = renderer_oracle(source)
+    assert structure.links == tuple(oracle.links)
+    assert structure.images == tuple(oracle.images)
+
+
+def test_semantic_configuration_accounts_for_every_repository_extension() -> None:
+    configured = yaml.safe_load((ROOT / "mkdocs.yml").read_text())["markdown_extensions"]
+    site = {}
+    for entry in configured:
+        if isinstance(entry, str):
+            site[entry] = {}
+        else:
+            site.update(entry)
+    config = pre_pages_content.SEMANTIC_MARKDOWN_CONFIG
+    exclusions = pre_pages_content.SEMANTIC_MARKDOWN_EXCLUSIONS
+    assert {"attr_list", "md_in_html"} <= set(config["extensions"])
+    assert set(config["extensions"]) == set(site) - set(exclusions)
+    assert set(exclusions) == {"toc", "pymdownx.snippets"}
+    assert all(exclusions.values())
+    for extension in config["extensions"]:
+        for key, value in site[extension].items():
+            assert config["extension_configs"][extension][key] == value
+
+
+def test_safe_semantic_renderer_does_not_execute_snippet_inclusion(tmp_path: Path) -> None:
+    include = tmp_path / "not-an-audit-source.md"
+    include.write_text("[Included](should-not-be-read.md)\n")
+    source = f'--8<-- "{include.as_posix()}"'
+    assert "pymdownx.snippets" not in pre_pages_content.SEMANTIC_MARKDOWN_CONFIG["extensions"]
+    assert renderer_oracle(source).links == []
+    assert extract_markdown_structure(source).links == ()

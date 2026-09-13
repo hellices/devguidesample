@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 import posixpath
 import re
 from typing import Mapping
+from types import MappingProxyType
 import unicodedata
 from urllib.parse import unquote, urlsplit
 
@@ -91,9 +92,40 @@ _WRAPPER = re.compile(
     r"</?(?:div|section|article|aside|nav|p|span|strong|em|b|i|a|ol|ul|li|br)\b[^>]*>",
     re.IGNORECASE,
 )
-_SEMANTIC_EXTENSIONS = ("tables", "md_in_html", "pymdownx.superfences")
+# Source-semantic subset of mkdocs.yml, shared with renderer-oracle tests:
+# attr_list changes final href/src/alt; md_in_html enables nested Markdown.
+# tables/admonition/details/tabbed/tasklist expose source content in containers.
+# highlight/inlinehilite/superfences identify code that must not supply evidence.
+# Coloring is disabled only for speed; generated code markup is ignored either way.
+SEMANTIC_MARKDOWN_CONFIG = MappingProxyType({
+    "extensions": (
+        "admonition", "attr_list", "md_in_html", "tables", "pymdownx.details",
+        "pymdownx.highlight", "pymdownx.inlinehilite", "pymdownx.superfences",
+        "pymdownx.tabbed", "pymdownx.tasklist",
+    ),
+    "extension_configs": MappingProxyType({
+        "pymdownx.highlight": MappingProxyType({"anchor_linenums": True, "use_pygments": False}),
+        "pymdownx.tabbed": MappingProxyType({"alternate_style": True}),
+        "pymdownx.tasklist": MappingProxyType({"custom_checkbox": True}),
+    }),
+})
+SEMANTIC_MARKDOWN_EXCLUSIONS = MappingProxyType({
+    "toc": "Generated TOC/permalink navigation is not authored evidence; source headings are compared separately.",
+    "pymdownx.snippets": "File inclusion has side effects; no snippet directives occur in the audited source corpus.",
+})
 _VOID_TAGS = frozenset(("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"))
 _HIDDEN_TAGS = frozenset(("script", "style", "template", "iframe", "noembed", "noframes", "noscript", "title"))
+
+
+def create_semantic_renderer() -> markdown.Markdown:
+    """Build a fresh renderer from the single audited, side-effect-free site configuration."""
+    return markdown.Markdown(
+        extensions=list(SEMANTIC_MARKDOWN_CONFIG["extensions"]),
+        extension_configs={
+            name: dict(options)
+            for name, options in SEMANTIC_MARKDOWN_CONFIG["extension_configs"].items()
+        },
+    )
 
 
 def _space(text: str) -> str:
@@ -288,10 +320,7 @@ def _rendered_semantics(
         reader.feed(text[start:end])
         reader.close()
         text = text[:start] + "".join(reader.output) + text[end:]
-    renderer = markdown.Markdown(
-        extensions=list(_SEMANTIC_EXTENSIONS),
-        extension_configs={"pymdownx.highlight": {"use_pygments": False}},
-    )
+    renderer = create_semantic_renderer()
     output = renderer.convert(text)
     collector = _RenderedSemantics()
     collector.feed(output)
