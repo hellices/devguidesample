@@ -48,25 +48,6 @@ class Document:
         return replace(self, metadata=dict(metadata))
 
 
-SERIES_ROLES = frozenset(("overview", "chapter"))
-
-
-@dataclass(frozen=True)
-class DocumentSeries:
-    slug: str
-    title: str
-    description: str
-    overview: Document
-    members: tuple[Document, ...]
-
-
-@dataclass(frozen=True)
-class SeriesCatalog:
-    by_slug: dict[str, DocumentSeries]
-    by_document: dict[PurePosixPath, DocumentSeries]
-    positions: dict[PurePosixPath, int]
-
-
 def load_taxonomy(path: Path | str) -> dict[str, Any]:
     """Load the declarative documentation taxonomy."""
     source = Path(path)
@@ -114,26 +95,65 @@ def load_document(path: Path | str, docs_dir: Path | str | None = None) -> Docum
     return Document(source, PurePosixPath(relative.as_posix()), metadata, body)
 
 
+def _collection_paths(taxonomy: Mapping[str, Any]) -> set[str]:
+    return {
+        config["path"]
+        for config in taxonomy.get("collections", {}).values()
+        if isinstance(config, Mapping) and isinstance(config.get("path"), str)
+    }
+
+
+def _is_legacy_document_path(
+    relative_path: PurePosixPath, taxonomy: Mapping[str, Any]
+) -> bool:
+    parts = relative_path.parts
+    return (
+        len(parts) == 4
+        and parts[-1] == "index.md"
+        and parts[0] in _collection_paths(taxonomy)
+        and KEBAB_CASE.fullmatch(parts[2]) is not None
+    )
+
+
+def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
+    parts = relative_path.parts
+    if (
+        len(parts) not in {4, 5}
+        or parts[0] != "services"
+        or parts[-1] != "index.md"
+        or "samples" in parts
+    ):
+        return False
+    slugs = parts[1:-1]
+    return all(KEBAB_CASE.fullmatch(slug) for slug in slugs)
+
+
 def iter_public_documents(
-    docs_dir: Path | str, taxonomy: Mapping[str, Any]
+    docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
 ) -> Iterable[Document]:
     """Yield page-bundle documents from configured public collections."""
     root = Path(docs_dir)
-    collection_paths = sorted(
-        {
-            config["path"]
-            for config in taxonomy.get("collections", {}).values()
-            if isinstance(config, Mapping) and isinstance(config.get("path"), str)
-        }
-    )
-    for collection_path in collection_paths:
-        collection_root = root / collection_path
-        if not collection_root.is_dir():
-            continue
-        for path in sorted(collection_root.rglob("index.md")):
-            relative = path.relative_to(root)
-            if len(relative.parts) == 4:
-                yield load_document(path, docs_dir=root)
+    candidate_paths: list[Path] = []
+
+    services_root = root / "services"
+    if services_root.is_dir():
+        for path in services_root.rglob("index.md"):
+            if _is_canonical_document_path(PurePosixPath(path.relative_to(root).as_posix())):
+                candidate_paths.append(path)
+
+    if include_legacy:
+        for collection_path in sorted(_collection_paths(taxonomy)):
+            collection_root = root / collection_path
+            if not collection_root.is_dir():
+                continue
+            for path in collection_root.rglob("index.md"):
+                if _is_legacy_document_path(
+                    PurePosixPath(path.relative_to(root).as_posix()), taxonomy
+                ):
+                    candidate_paths.append(path)
+
+    for path in sorted(candidate_paths, key=lambda item: item.relative_to(root).as_posix()):
+        yield load_document(path, docs_dir=root)
 
 
 def _is_date(value: Any) -> bool:
@@ -199,97 +219,6 @@ def _append_source_errors(
         errors.append(f"at least one official source must use {required_host}")
 
 
-def _series_metadata_errors(
-    metadata: Mapping[str, Any], taxonomy: Mapping[str, Any]
-) -> list[str]:
-    errors: list[str] = []
-    slug = metadata.get("series")
-    has_order = "series_order" in metadata
-    has_role = "series_role" in metadata
-    if slug is None:
-        if has_order:
-            errors.append("series_order requires series")
-        if has_role:
-            errors.append("series_role requires series")
-        return errors
-    if not isinstance(slug, str) or not KEBAB_CASE.fullmatch(slug):
-        errors.append("series must be a kebab-case string")
-    elif slug not in taxonomy.get("series", {}):
-        errors.append(f"unknown series: {slug}")
-    order = metadata.get("series_order")
-    if isinstance(order, bool) or not isinstance(order, int) or order < 0:
-        errors.append("series_order must be a non-negative integer")
-    role = metadata.get("series_role")
-    if role not in SERIES_ROLES:
-        errors.append("series_role must be overview or chapter")
-    return errors
-
-
-def series_validation_errors(
-    documents: Iterable[Document], taxonomy: Mapping[str, Any]
-) -> list[str]:
-    definitions = taxonomy.get("series", {})
-    grouped: dict[str, list[Document]] = {}
-    for document in documents:
-        if _series_metadata_errors(document.metadata, taxonomy):
-            continue
-        slug = document.metadata.get("series")
-        if isinstance(slug, str):
-            grouped.setdefault(slug, []).append(document)
-
-    errors: list[str] = []
-    for slug, members in grouped.items():
-        ordered = tuple(sorted(members, key=lambda item: item.metadata["series_order"]))
-        anchor = ordered[0].relative_path.as_posix()
-        definition = definitions.get(slug)
-        if not isinstance(definition, Mapping):
-            errors.append(f"{anchor}: series definition {slug} must be a mapping")
-        else:
-            for field in ("title", "description"):
-                value = definition.get(field)
-                if not isinstance(value, str) or not value.strip():
-                    errors.append(
-                        f"{anchor}: series definition {slug}.{field} must be a non-empty string"
-                    )
-
-        orders: dict[int, list[Document]] = {}
-        for member in members:
-            orders.setdefault(member.metadata["series_order"], []).append(member)
-        for order, duplicates in sorted(orders.items()):
-            if len(duplicates) > 1:
-                paths = sorted(
-                    item.relative_path.as_posix()
-                    for item in duplicates
-                )
-                errors.append(
-                    f"{paths[0]}: duplicate series_order {order} for series {slug}: {', '.join(paths)}"
-                )
-
-        actual_orders = [member.metadata["series_order"] for member in ordered]
-        expected_orders = list(range(len(ordered)))
-        if actual_orders != expected_orders:
-            errors.append(
-                f"{anchor}: series {slug} orders must be contiguous from 0: {actual_orders}"
-            )
-
-        overviews = [
-            member
-            for member in ordered
-            if member.metadata.get("series_role") == "overview"
-        ]
-        if len(overviews) != 1:
-            errors.append(f"{anchor}: series {slug} must contain exactly one overview")
-        if ordered and ordered[0].metadata.get("series_role") != "overview":
-            errors.append(f"{anchor}: series {slug} overview must use series_order 0")
-        for member in ordered[1:]:
-            if member.metadata.get("series_role") != "chapter":
-                errors.append(
-                    f"{member.relative_path.as_posix()}: series {slug} members after order 0 must use chapter role"
-                )
-
-    return errors
-
-
 def validate_source_metadata(
     metadata: Mapping[str, Any],
     taxonomy: Mapping[str, Any],
@@ -318,6 +247,7 @@ def validate_document(
     document: Document,
     taxonomy: Mapping[str, Any],
     today: date | None = None,
+    include_legacy: bool = True,
 ) -> list[str]:
     """Return every content-contract violation for one public document."""
     current_date = today or date.today()
@@ -342,7 +272,9 @@ def validate_document(
         else None
     )
     parts = document.relative_path.parts
-    if len(parts) != 4 or parts[-1] != "index.md" or not KEBAB_CASE.fullmatch(parts[2]):
+    is_legacy_path = _is_legacy_document_path(document.relative_path, taxonomy)
+    is_canonical_path = _is_canonical_document_path(document.relative_path)
+    if not is_canonical_path and not (include_legacy and is_legacy_path):
         errors.append("public documents must use <collection>/<service>/<topic>/index.md")
 
     if not isinstance(collection, Mapping):
@@ -350,7 +282,7 @@ def validate_document(
             errors.append(f"unknown document_type: {document_type}")
     else:
         expected_folder = collection.get("path")
-        if parts and parts[0] != expected_folder:
+        if is_legacy_path and parts and parts[0] != expected_folder:
             errors.append(
                 f"folder '{parts[0]}' does not match {document_type} collection '{expected_folder}'"
             )
@@ -429,50 +361,4 @@ def validate_document(
     if "featured" in metadata and not isinstance(metadata["featured"], bool):
         errors.append("featured must be a boolean")
 
-    errors.extend(_series_metadata_errors(metadata, taxonomy))
-
     return errors
-
-
-def build_series_catalog(
-    documents: Iterable[Document], taxonomy: Mapping[str, Any]
-) -> SeriesCatalog:
-    docs = tuple(documents)
-    errors = [
-        f"{document.relative_path}: {message}"
-        for document in docs
-        for message in _series_metadata_errors(document.metadata, taxonomy)
-    ]
-    errors.extend(series_validation_errors(docs, taxonomy))
-    if errors:
-        raise DocumentFormatError(
-            "invalid series metadata:\n" + "\n".join(errors)
-        )
-
-    grouped: dict[str, list[Document]] = {}
-    for document in docs:
-        slug = document.metadata.get("series")
-        if isinstance(slug, str):
-            grouped.setdefault(slug, []).append(document)
-
-    by_slug: dict[str, DocumentSeries] = {}
-    by_document: dict[PurePosixPath, DocumentSeries] = {}
-    positions: dict[PurePosixPath, int] = {}
-    definitions = taxonomy.get("series", {})
-    for slug, members in grouped.items():
-        ordered = tuple(
-            sorted(members, key=lambda item: item.metadata["series_order"])
-        )
-        definition = definitions[slug]
-        series = DocumentSeries(
-            slug=slug,
-            title=definition["title"],
-            description=definition["description"],
-            overview=ordered[0],
-            members=ordered,
-        )
-        by_slug[slug] = series
-        for position, member in enumerate(ordered):
-            by_document[member.relative_path] = series
-            positions[member.relative_path] = position
-    return SeriesCatalog(by_slug, by_document, positions)

@@ -8,11 +8,9 @@ import pytest
 from scripts.docs.content import (
     Document,
     DocumentFormatError,
-    build_series_catalog,
     iter_public_documents,
     load_document,
     load_taxonomy,
-    series_validation_errors,
     validate_document,
 )
 
@@ -52,21 +50,6 @@ def copy_fixture(tmp_path: Path, name: str, relative: str) -> Path:
     target.parent.mkdir(parents=True)
     target.write_text((FIXTURES / name).read_text(encoding="utf-8"), encoding="utf-8")
     return target
-
-
-def series_document(path: str, order: int, role: str) -> Document:
-    return Document(
-        path=Path(path),
-        relative_path=PurePosixPath(path),
-        metadata={
-            "title": path,
-            "description": f"{path} description",
-            "series": "agent-memory",
-            "series_order": order,
-            "series_role": role,
-        },
-        body="",
-    )
 
 
 def test_valid_page_bundle_satisfies_the_content_contract(
@@ -171,10 +154,6 @@ def test_unverified_guide_can_leave_last_verified_empty(
         ("applies_to", []),
         ("featured", "true"),
         ("featured", 1),
-        ("series", ["agent-memory"]),
-        ("series_order", True),
-        ("series_order", -1),
-        ("series_role", "appendix"),
     ],
 )
 def test_invalid_metadata_values_return_validation_errors(
@@ -194,92 +173,19 @@ def test_invalid_metadata_values_return_validation_errors(
     assert any(field in error for error in errors), errors
 
 
-@pytest.mark.parametrize(
-    ("metadata", "message"),
-    [
-        ({"series": "unknown-series", "series_order": 0, "series_role": "overview"}, "unknown series: unknown-series"),
-        ({"series_order": 0}, "series_order requires series"),
-        ({"series_role": "overview"}, "series_role requires series"),
-    ],
-)
-def test_series_metadata_requires_known_series_context(
-    tmp_path: Path, taxonomy: dict, metadata: dict[str, object], message: str
+def test_canonical_topic_paths_are_valid_during_transition(
+    tmp_path: Path, taxonomy: dict
 ) -> None:
-    path = copy_fixture(
-        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
-    )
+    path = tmp_path / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
+    path.parent.mkdir(parents=True)
+    path.write_text((FIXTURES / "valid-guide.md").read_text(encoding="utf-8"), encoding="utf-8")
     loaded = load_document(path, docs_dir=tmp_path / "docs")
 
-    errors = validate_document(
-        loaded.with_metadata({**loaded.metadata, **metadata}),
+    assert validate_document(
+        loaded.with_metadata({**loaded.metadata, "services": ["aks"]}),
         taxonomy,
         today=date(2026, 9, 12),
-    )
-
-    assert any(message in error for error in errors), errors
-
-
-def test_build_series_catalog_orders_members_and_indexes_paths(
-    taxonomy: dict,
-) -> None:
-    taxonomy["series"] = {
-        "agent-memory": {
-            "title": "Agent Memory",
-            "description": "Ordered memory research",
-        }
-    }
-    chapter = series_document(
-        "research/microsoft-foundry/chapter/index.md", 1, "chapter"
-    )
-    overview = series_document(
-        "research/microsoft-foundry/overview/index.md", 0, "overview"
-    )
-
-    catalog = build_series_catalog([chapter, overview], taxonomy)
-
-    series = catalog.by_slug["agent-memory"]
-    assert [member.relative_path for member in series.members] == [
-        overview.relative_path,
-        chapter.relative_path,
-    ]
-    assert series.overview == overview
-    assert catalog.by_document[chapter.relative_path] == series
-    assert catalog.positions[chapter.relative_path] == 1
-
-
-@pytest.mark.parametrize(
-    ("documents", "message"),
-    [
-        (
-            [series_document("research/x/overview/index.md", 0, "chapter")],
-            "exactly one overview",
-        ),
-        (
-            [
-                series_document("research/x/overview/index.md", 0, "overview"),
-                series_document("research/x/chapter/index.md", 0, "chapter"),
-            ],
-            "duplicate series_order 0",
-        ),
-        (
-            [
-                series_document("research/x/overview/index.md", 0, "overview"),
-                series_document("research/x/chapter/index.md", 2, "chapter"),
-            ],
-            "contiguous from 0",
-        ),
-    ],
-)
-def test_series_validation_rejects_invalid_groups(
-    taxonomy: dict, documents: list[Document], message: str
-) -> None:
-    taxonomy["series"] = {
-        "agent-memory": {"title": "Agent Memory", "description": "Description"}
-    }
-    errors = series_validation_errors(documents, taxonomy)
-    assert any(message in error for error in errors), errors
-    with pytest.raises(DocumentFormatError, match=message):
-        build_series_catalog(documents, taxonomy)
+    ) == []
 
 
 @pytest.mark.parametrize("featured", [True, False])

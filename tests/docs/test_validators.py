@@ -34,7 +34,8 @@ applies_to: [AKS 1.34+]
 """
 
 
-def series_guide(title: str, order: int, role: str) -> str:
+def canonical_guide(title: str, *, topic_order: int | None = None) -> str:
+    topic_order_line = f"topic_order: {topic_order}\n" if topic_order is not None else ""
     return f"""\
 ---
 title: {title}
@@ -52,10 +53,7 @@ official_sources:
 last_verified: 2026-09-12
 review_cycle_days: 180
 applies_to: [AKS 1.34+]
-series: agent-memory
-series_order: {order}
-series_role: {role}
----
+{topic_order_line}---
 
 # {title}
 """
@@ -236,37 +234,26 @@ def test_link_gate_reports_invalid_front_matter(tmp_path: Path) -> None:
     assert any("YAML front matter" in error for error in result.errors)
 
 
-def test_metadata_gate_reports_cross_document_series_errors(tmp_path: Path) -> None:
+def test_metadata_gate_reports_topic_catalog_errors_once_per_path(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
-    taxonomy_path = root / "docs-taxonomy.yml"
-    taxonomy = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
-    taxonomy["series"] = {
-        "agent-memory": {
-            "title": "Agent Memory",
-            "description": "Ordered memory research",
-        }
-    }
-    taxonomy_path.write_text(
-        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+    topic = root / "docs" / "services" / "aks" / "network-diagnosis"
+    (topic / "index.md").parent.mkdir(parents=True)
+    (topic / "index.md").write_text(
+        canonical_guide("Overview"),
         encoding="utf-8",
     )
-
-    overview = root / "docs" / "guides" / "aks" / "overview"
-    overview.mkdir(parents=True)
-    (overview / "index.md").write_text(
-        series_guide("Overview", 0, "overview"),
-        encoding="utf-8",
-    )
-
-    chapter = root / "docs" / "guides" / "aks" / "chapter"
-    chapter.mkdir(parents=True)
-    (chapter / "index.md").write_text(
-        series_guide("Chapter", 0, "chapter"),
+    (topic / "setup" / "index.md").parent.mkdir(parents=True)
+    (topic / "setup" / "index.md").write_text(
+        canonical_guide("Setup"),
         encoding="utf-8",
     )
 
     result = validate_metadata.validate_repository(root, today=date(2026, 9, 12))
 
-    assert any("duplicate series_order 0" in error for error in result.errors)
-    assert any("overview/index.md" in error for error in result.errors)
-    assert any("chapter/index.md" in error for error in result.errors)
+    matching = [
+        error
+        for error in result.errors
+        if "services/aks/network-diagnosis/setup/index.md" in error
+    ]
+    assert len(matching) == 1
+    assert "topic_order must be a positive integer" in matching[0]

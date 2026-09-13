@@ -17,9 +17,9 @@ from scripts.docs.content import (
     ValidationResult,
     load_document,
     load_taxonomy,
-    series_validation_errors,
     validate_document,
 )
+from scripts.docs.topics import build_topic_catalog
 
 
 def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Path]:
@@ -32,6 +32,19 @@ def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Pa
         root = docs_dir / collection
         if root.is_dir():
             yield from sorted(root.rglob("*.md"))
+    services_root = docs_dir / "services"
+    if services_root.is_dir():
+        for path in sorted(services_root.rglob("index.md")):
+            relative = path.relative_to(docs_dir).parts
+            if "samples" not in relative:
+                yield path
+
+
+def _topic_catalog_errors(error: DocumentFormatError) -> list[str]:
+    lines = [line for line in str(error).splitlines() if line.strip()]
+    if lines and lines[0] == "invalid topic catalog:":
+        lines = lines[1:]
+    return [f"docs/{line}" for line in lines]
 
 
 def validate_repository(repo_root: Path | str, today: date | None = None) -> ValidationResult:
@@ -41,6 +54,7 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
     errors: list[str] = []
     documents = []
     count = 0
+    parse_failed = False
     for path in _candidate_paths(docs_dir, taxonomy):
         relative = path.relative_to(root).as_posix()
         count += 1
@@ -48,16 +62,18 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
             document = load_document(path, docs_dir=docs_dir)
         except DocumentFormatError as error:
             errors.append(str(error))
+            parse_failed = True
             continue
         documents.append(document)
         errors.extend(
             f"{relative}: {message}"
             for message in validate_document(document, taxonomy, today=today)
         )
-    errors.extend(
-        f"docs/{message}"
-        for message in series_validation_errors(documents, taxonomy)
-    )
+    if not parse_failed:
+        try:
+            build_topic_catalog(docs_dir, taxonomy)
+        except DocumentFormatError as error:
+            errors.extend(_topic_catalog_errors(error))
     return ValidationResult(count, errors)
 
 
