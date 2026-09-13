@@ -224,6 +224,55 @@ def test_reference_links_accept_existing_targets(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "snippet",
     [
+        "![Published diagram](images/published.svg)",
+        "[Download](images/published.svg?download=1#diagram)",
+        "![Published diagram][asset]\n\n[asset]: images/published.svg",
+        '<img src="images/published.svg" alt="Published diagram">',
+        "[Download](/services/aks/network-diagnosis/images/published.svg)",
+        "[Download](images/%70ublished.svg)",
+    ],
+)
+def test_link_gate_accepts_exact_virtual_published_targets(tmp_path: Path, snippet: str) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs/services/aks/network-diagnosis"
+    sample = topic / "samples/example"
+    sample.mkdir(parents=True)
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "source.svg").write_bytes(b"<svg/>")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
+        "publish:\n  - source: source.svg\n    target: images/published.svg\n"
+    )
+    (topic / "index.md").write_text(
+        VALID_GUIDE + "\n" + snippet + "\n[Missing](images/undeclared.svg)\n"
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert result.errors == [
+        "docs/services/aks/network-diagnosis/index.md: target does not exist: images/undeclared.svg"
+    ]
+    assert not (topic / "images/published.svg").exists()
+
+
+def test_link_gate_rejects_invalid_publish_declarations(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    sample = root / "docs/services/aks/network-diagnosis/samples/example"
+    sample.mkdir(parents=True)
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
+        "publish:\n  - source: missing.svg\n    target: images/missing.svg\n"
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert any("publish source must be an existing file" in error for error in result.errors)
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
         "````markdown\n```text\n[example](missing.md)\n```\n````",
         "~~~~markdown\n~~~text\n[example](missing.md)\n~~~\n~~~~",
         "````markdown\n~~~text\n[example](missing.md)\n~~~\n````",
@@ -280,6 +329,10 @@ def test_link_gate_validates_mixed_layout_pages_without_topic_samples(
     (sample / "index.md").write_text(
         canonical_guide("Sample") + "\n[ignored sample link](missing-sample.md)\n",
         encoding="utf-8",
+    )
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
     )
 
     result = validate_links.validate_repository(root)

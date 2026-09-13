@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.docs.content import Document, load_taxonomy
+from scripts.docs.content import Document, DocumentFormatError, load_taxonomy
 from scripts.docs.topics import (
     LEGACY_COLLECTIONS,
     Topic,
@@ -853,6 +853,16 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
     public_documents = list(iter_topic_documents(root / "docs", taxonomy))
     catalog = build_topic_catalog(root / "docs", taxonomy, documents=public_documents)
     documents = list(catalog.documents)
+
+    for asset in catalog.published_assets.values():
+        try:
+            content = (root / "docs" / asset.source).read_bytes()
+            with mkdocs_gen_files.open(asset.target.as_posix(), "wb") as generated:
+                generated.write(content)
+        except OSError as error:
+            raise DocumentFormatError(
+                f"cannot publish asset {asset.source} to {asset.target}: {error}"
+            ) from error
 
     for path, content in build_index_pages(documents, taxonomy, catalog=catalog).items():
         with mkdocs_gen_files.open(path.as_posix(), "w") as generated:

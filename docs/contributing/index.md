@@ -84,6 +84,11 @@ kind: runnable
 used_by:
   - index
   - setup
+publish:
+  - source: assets/architecture.svg
+    target: images/architecture.svg
+  - source: assets/architecture.svg
+    target: setup/images/architecture.svg
 ```
 
 - `title`, `description`, `kind`는 비어 있지 않은 문자열입니다.
@@ -95,9 +100,23 @@ used_by:
   자식 문서 아래에 `samples/`를 두거나 topic의 `samples/` 바로 아래에
   파일을 두지 않습니다. sample package 내부의 하위 `samples/` 폴더는
   해당 package의 payload로 취급합니다.
-- sample 파일은 공개 안전성 검사를 받지만 MkDocs 사이트와 검색 색인에는
+- sample 원본 폴더는 공개 안전성 검사를 받지만 MkDocs 사이트와 검색 색인에는
   복사되지 않습니다. 문서에서는 생성되는 sample card 또는 GitHub 소스
   링크로 연결합니다.
+- 페이지와 sample에서 같은 이미지나 파일을 사용하는 경우 원본은 sample에만
+  보관하고 선택적 `publish` 목록에 명시합니다. `source`는 sample package,
+  `target`은 소유 topic 루트 기준 상대 경로입니다. 위 예의 페이지 링크는
+  각각 `images/architecture.svg`이며 실제 target 파일을 중복 저장하지 않습니다.
+- 빌드는 선언한 파일만 원본 바이트 그대로 target에 게시합니다. 텍스트와
+  Markdown 파일도 독립 문서나 검색 항목이 아닌 다운로드 자산으로 유지합니다.
+  페이지 본문과 링크 텍스트는 기존처럼 검색됩니다. `used_by`는 sample card의
+  표시 위치만 결정하며 `publish`와 독립적입니다.
+- `publish`는 생략하거나 빈 목록으로 둘 수 있습니다. 각 항목의 `source`와
+  `target`은 비어 있지 않은 문자열이어야 합니다. 절대 경로, `..`, 역슬래시,
+  소유 경계를 벗어나는 심볼릭 링크와 존재하지 않는 원본은 허용하지 않습니다.
+  target은 `samples/` 아래, canonical 문서와 HTML 출력 경로, 이미 존재하는 파일이나
+  디렉터리를 가리킬 수 없습니다. 하나의 원본을 여러 target으로 게시할 수
+  있지만 각 target에는 하나의 선언만 허용합니다.
 
 최상위 `samples/`에는 공개 콘텐츠를 추가하지 않습니다.
 
@@ -160,7 +179,8 @@ collection 호환 색인은 빌드가 생성합니다. 개별 문서를 추가�
 3. 코드·매니페스트·결과물을 같은 sample 폴더에 둡니다.
 4. 실제 식별자와 비밀을 가상 값으로 치환합니다.
 5. public-safety 검사가 sample을 검사하고 strict build의 `site/`에는 sample
-   파일이 없는지 확인합니다.
+   원본 폴더가 없는지 확인합니다. `publish`를 사용하면 선언한 target만
+   게시되며 원본과 바이트가 같은지도 확인합니다.
 
 ## 공통 front matter
 

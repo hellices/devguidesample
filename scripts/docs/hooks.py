@@ -10,7 +10,7 @@ import re
 import sys
 from typing import Any, Mapping
 
-from mkdocs.structure.files import InclusionLevel
+from mkdocs.structure.files import File, InclusionLevel
 from mkdocs.structure import StructureItem
 from mkdocs.structure.nav import Navigation, Section
 from mkdocs.structure.pages import Page
@@ -38,16 +38,30 @@ def _navigation_pages(
     return pages
 
 
+class _PublishedAssetFile(File):
+    def is_documentation_page(self) -> bool:
+        return False
+
+
 def on_files(files: Any, config: Mapping[str, Any]) -> Any:
-    """Keep internal sample READMEs out of the published site and search index."""
+    """Exclude sample sources and keep published Markdown payloads as raw assets."""
     try:
         config.pop("_topic_catalog", None)  # type: ignore[union-attr]
     except Exception:
         pass
-    for file in files:
+    catalog = _topic_catalog_from_config(config)
+    for file in list(files):
         src_uri = getattr(file, "src_uri", "")
         if isinstance(src_uri, str) and "/samples/" in src_uri:
             file.inclusion = InclusionLevel.EXCLUDED
+        elif catalog is not None and PurePosixPath(src_uri) in catalog.published_assets:
+            if file.is_documentation_page():
+                published = _PublishedAssetFile(
+                    src_uri, file.src_dir, file.dest_dir, file.use_directory_urls,
+                    dest_uri=src_uri, inclusion=file.inclusion,
+                )
+                files.remove(file)
+                files.append(published)
     return files
 
 

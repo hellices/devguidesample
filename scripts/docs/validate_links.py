@@ -22,7 +22,7 @@ from scripts.docs.content import (
     iter_public_document_paths,
     load_taxonomy,
 )
-from scripts.docs.topics import iter_topic_documents
+from scripts.docs.topics import build_topic_catalog
 
 
 @dataclass(frozen=True)
@@ -82,11 +82,12 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
     errors: list[str] = []
     count = 0
     try:
-        documents = list(iter_topic_documents(docs_dir, taxonomy))
+        catalog = build_topic_catalog(docs_dir, taxonomy)
     except DocumentFormatError as error:
         count = sum(1 for _ in iter_public_document_paths(docs_dir, taxonomy))
         return ValidationResult(count, [str(error)])
-    for document in documents:
+    published_targets = {(docs_dir / target).resolve() for target in catalog.published_assets}
+    for document in catalog.documents:
         count += 1
         page = document.path
         relative = page.relative_to(root).as_posix()
@@ -98,7 +99,7 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
             if link.alt_text is not None and not link.alt_text:
                 errors.append(f"{relative}: image alt text is required")
             target = _resolve_target(page, docs_dir, link.target)
-            if target is not None and not target.exists():
+            if target is not None and not target.exists() and target not in published_targets:
                 errors.append(f"{relative}: target does not exist: {link.target}")
     return ValidationResult(count, errors)
 

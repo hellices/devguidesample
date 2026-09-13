@@ -12,3 +12,62 @@ used_by:
 - validation-results
 - incident-runbook
 - dynamic-thresholds
+publish:
+  - source: assets/official/agent-reasoning-flow.svg
+    target: images/agent-reasoning-flow.svg
+  - source: assets/official/azure-sre-agent-networking-vnet.png
+    target: images/azure-sre-agent-networking-vnet.png
+  - source: assets/official/custom-skill-flow.svg
+    target: images/custom-skill-flow.svg
+  - source: assets/official/diagnose-azure-services.svg
+    target: images/diagnose-azure-services.svg
+  - source: assets/notifications/github-issue.png
+    target: images/github-issue.png
+  - source: assets/official/incident-platform-flow.svg
+    target: images/incident-platform-flow.svg
+  - source: assets/official/incident-response-flow.svg
+    target: images/incident-response-flow.svg
+  - source: assets/official/knowledge-sources.svg
+    target: images/knowledge-sources.svg
+  - source: assets/official/managed-connectors-icon-grid.png
+    target: images/managed-connectors-icon-grid.png
+  - source: assets/official/memory-auto-learning.svg
+    target: images/memory-auto-learning.svg
+  - source: assets/official/memory-unified-search.svg
+    target: images/memory-unified-search.svg
+  - source: assets/official/notification-paths.svg
+    target: images/notification-paths.svg
+  - source: assets/official/operations-hub-overview-tab.png
+    target: images/operations-hub-overview-tab.png
+  - source: assets/official/permission-flow.svg
+    target: images/permission-flow.svg
+  - source: assets/official/portal-sub-agent-canvas-full.png
+    target: images/portal-sub-agent-canvas-full.png
+  - source: assets/official/root-cause-analysis.svg
+    target: images/root-cause-analysis.svg
+  - source: assets/official/run-modes-comparison.svg
+    target: images/run-modes-comparison.svg
+  - source: assets/briefing/s1-agent-conclusion.png
+    target: images/s1-agent-conclusion.png
+  - source: assets/notifications/s1-email-preview.png
+    target: images/s1-email-preview.png
+  - source: assets/briefing/s1-three-panel.png
+    target: images/s1-three-panel.png
+  - source: assets/briefing/sre-agent-process.png
+    target: images/sre-agent-process.png
+  - source: assets/captures/s1-before-bridge/investigation.gif
+    target: validation-results/images/investigation.gif
+  - source: assets/captures/s1/investigation.gif
+    target: validation-results/images/s1-investigation.gif
+  - source: assets/captures/s2/investigation.gif
+    target: validation-results/images/s2-investigation.gif
+  - source: assets/captures/s3/investigation.gif
+    target: validation-results/images/s3-investigation.gif
+  - source: assets/official/portal-complete-setup-page.png
+    target: setup/images/portal-complete-setup-page.png
+  - source: assets/official/portal-incident-response-plans-list.png
+    target: setup/images/portal-incident-response-plans-list.png
+  - source: assets/official/portal-response-plan-autonomy-step.png
+    target: setup/images/portal-response-plan-autonomy-step.png
+  - source: assets/official/portal-setup-status-bar.png
+    target: setup/images/portal-setup-status-bar.png

@@ -5,3 +5,12 @@ used_by:
 - index
 - prometheus-grafana
 - catch-up-benchmark
+publish:
+  - source: images/hdinsight_monitor_integration_1.png
+    target: images/hdinsight_monitor_integration_1.png
+  - source: images/kafka-exporter-adv.png
+    target: prometheus-grafana/images/kafka-exporter-adv.png
+  - source: images/kafka-exporter-overview.png
+    target: prometheus-grafana/images/kafka-exporter-overview.png
+  - source: images/kafka-jmx-broker.png
+    target: prometheus-grafana/images/kafka-jmx-broker.png

@@ -9,3 +9,14 @@ used_by:
 - frameworks
 - production-evaluation
 - commerce
+publish:
+  - source: images/02-architecture-patterns.svg
+    target: architecture-patterns/images/02-architecture-patterns.svg
+  - source: images/05-commerce-blueprint.svg
+    target: commerce/images/05-commerce-blueprint.svg
+  - source: images/03-memory-pipeline.svg
+    target: pipeline-retrieval/images/03-memory-pipeline.svg
+  - source: images/04-production-tiers.svg
+    target: production-evaluation/images/04-production-tiers.svg
+  - source: images/01-memory-taxonomy.svg
+    target: taxonomy/images/01-memory-taxonomy.svg

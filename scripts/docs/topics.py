@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable, Mapping
 
 import yaml
@@ -15,6 +15,14 @@ LEGACY_COLLECTIONS = frozenset(("cases", "guides", "labs", "research"))
 
 
 @dataclass(frozen=True)
+class PublishedAsset:
+    """Validated docs-relative source and virtual destination paths."""
+
+    source: PurePosixPath
+    target: PurePosixPath
+
+
+@dataclass(frozen=True)
 class SampleAsset:
     slug: str
     title: str
@@ -22,6 +30,7 @@ class SampleAsset:
     kind: str
     relative_path: PurePosixPath
     used_by: tuple[PurePosixPath, ...]
+    publish: tuple[PublishedAsset, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +50,7 @@ class TopicCatalog:
     position_by_document: dict[PurePosixPath, int]
     samples_by_document: dict[PurePosixPath, tuple[SampleAsset, ...]]
     redirects: dict[PurePosixPath, PurePosixPath]
+    published_assets: dict[PurePosixPath, PublishedAsset]
 
 
 def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
@@ -142,6 +152,75 @@ def _normalize_redirects(document: Document) -> tuple[list[PurePosixPath], list[
     return paths, errors
 
 
+def _published_assets(
+    manifest: Mapping[str, Any],
+    sample_dir: Path,
+    docs_root: Path,
+    document_paths: Iterable[PurePosixPath],
+) -> tuple[tuple[PublishedAsset, ...], list[str]]:
+    relative = PurePosixPath(sample_dir.relative_to(docs_root).as_posix())
+    publish = manifest.get("publish", [])
+    if not isinstance(publish, list):
+        return (), [f"{relative}: publish must be a list"]
+
+    assets: list[PublishedAsset] = []
+    errors: list[str] = []
+    canonical_paths = set(document_paths)
+    for mapping in publish:
+        if not isinstance(mapping, Mapping):
+            errors.append(f"{relative}: publish entries must be mappings")
+            continue
+        paths: dict[str, PurePosixPath] = {}
+        for field in ("source", "target"):
+            raw = mapping.get(field)
+            if not isinstance(raw, str) or not raw.strip():
+                errors.append(f"{relative}: publish {field} must be a non-empty string")
+                continue
+            path = PurePosixPath(raw)
+            if path.is_absolute() or PureWindowsPath(raw).drive or "\\" in raw or ".." in path.parts:
+                errors.append(
+                    f"{relative}: publish {field} must be a relative path without '..' or backslashes: {raw}"
+                )
+                continue
+            paths[field] = path
+        if len(paths) != 2:
+            continue
+
+        source = sample_dir / paths["source"]
+        topic_root = sample_dir.parent.parent
+        target = topic_root / paths["target"]
+        escaped = False
+        for field, path, boundary in (
+            ("source", source, sample_dir),
+            ("target", target, topic_root),
+        ):
+            if not path.resolve().is_relative_to(boundary.resolve()):
+                errors.append(f"{relative}: publish {field} must stay within {boundary.name}: {paths[field]}")
+                escaped = True
+        if escaped:
+            continue
+        if not source.is_file():
+            errors.append(f"{relative}: publish source must be an existing file: {paths['source']}")
+            continue
+        target_relative = relative.parent.parent / paths["target"]
+        if "samples" in paths["target"].parts:
+            errors.append(f"{relative}: publish target must not be under samples: {paths['target']}")
+            continue
+        document_target = (
+            target_relative.with_suffix(".md")
+            if target_relative.suffix == ".html"
+            else target_relative
+        )
+        if document_target in canonical_paths:
+            errors.append(f"{relative}: publish target collides with a canonical document: {target_relative}")
+            continue
+        if target.exists() or target.is_symlink():
+            errors.append(f"{relative}: publish target already exists: {target_relative}")
+            continue
+        assets.append(PublishedAsset(source=relative / paths["source"], target=target_relative))
+    return tuple(assets), errors
+
+
 def _build_sample_asset(
     sample_dir: Path,
     docs_root: Path,
@@ -192,6 +271,10 @@ def _build_sample_asset(
         else:
             linked_documents.append(document_path)
 
+    publish, publish_errors = _published_assets(
+        manifest, sample_dir, docs_root, slug_to_document.values()
+    )
+    errors.extend(publish_errors)
     if errors:
         return None, errors
 
@@ -203,6 +286,7 @@ def _build_sample_asset(
             kind=values["kind"],
             relative_path=relative,
             used_by=tuple(linked_documents),
+            publish=publish,
         ),
         [],
     )
@@ -248,6 +332,7 @@ def build_topic_catalog(
     by_document: dict[PurePosixPath, Topic] = {}
     position_by_document: dict[PurePosixPath, int] = {}
     samples_by_document: dict[PurePosixPath, tuple[SampleAsset, ...]] = {}
+    published_assets: dict[PurePosixPath, PublishedAsset] = {}
 
     for key in sorted(grouped):
         service, slug = key
@@ -312,6 +397,13 @@ def build_topic_catalog(
                 errors.extend(sample_errors)
                 if sample is not None:
                     samples.append(sample)
+                    for asset in sample.publish:
+                        if asset.target in published_assets:
+                            errors.append(
+                                f"{sample.relative_path}: publish target is already owned: {asset.target}"
+                            )
+                        else:
+                            published_assets[asset.target] = asset
 
         if errors:
             continue
@@ -365,4 +457,5 @@ def build_topic_catalog(
         position_by_document=position_by_document,
         samples_by_document=samples_by_document,
         redirects=redirects,
+        published_assets=published_assets,
     )
