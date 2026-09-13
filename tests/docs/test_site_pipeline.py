@@ -86,8 +86,12 @@ def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
         PurePosixPath("guides/index.md"),
         PurePosixPath("guides/aks/index.md"),
         PurePosixPath("services/index.md"),
-        PurePosixPath("services/aks.md"),
-        PurePosixPath("services/azure-monitor.md"),
+        PurePosixPath("services/aks/index.md"),
+        PurePosixPath("services/azure-monitor/index.md"),
+        PurePosixPath("articles/index.md"),
+        PurePosixPath("tags/index.md"),
+        PurePosixPath("tags/networking.md"),
+        PurePosixPath("tags/troubleshooting.md"),
     }
     guide_front_matter = pages[PurePosixPath("guides/index.md")].split("---", 2)[1]
     assert yaml.safe_load(guide_front_matter) == {
@@ -96,8 +100,8 @@ def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
         "hide": ["toc"],
     }
     assert pages[PurePosixPath("guides/index.md")].count("AKS: 파일 I/O") == 1
-    assert "../guides/aks/network-diagnosis/index.md" in pages[
-        PurePosixPath("services/aks.md")
+    assert "../../guides/aks/network-diagnosis/index.md" in pages[
+        PurePosixPath("services/aks/index.md")
     ]
 
 
@@ -108,7 +112,7 @@ def test_mkdocs_keeps_navigation_and_search_metadata_driven() -> None:
     assert "nav" not in config
     plugins = config["plugins"]
     assert "awesome-nav" in plugins
-    assert "tags" in plugins
+    assert any(plugin == "tags" or isinstance(plugin, dict) and "tags" in plugin for plugin in plugins)
     assert any(
         isinstance(plugin, dict) and "gen-files" in plugin
         for plugin in plugins
@@ -314,13 +318,13 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     root = make_search_repository(tmp_path)
     docs = root / "docs"
     (docs / "index.md").write_text(
-        "# Home\n\n<!-- home:stats -->\n\n<!-- home:featured -->\n\n<!-- home:collections -->\n",
+        "# Home\n\n<!-- home:stats -->\n\n<!-- home:featured -->\n\n<!-- home:browse -->\n",
         encoding="utf-8",
     )
-    (docs / "tags.md").write_text("# Tags\n\n<!-- material/tags -->\n", encoding="utf-8")
     nav_path = docs / ".nav.yml"
     nav_path.write_text(
-        "nav:\n  - Home: index.md\n  - Guides: guides\n  - Services: services\n  - Tags: tags.md\n",
+        "nav:\n  - Home: index.md\n  - Services: services\n  - Tags: tags\n"
+        "  - Articles: articles\n  - glob: '*'\n    ignore_no_matches: true\n",
         encoding="utf-8",
     )
     generator = root / "generate.py"
@@ -338,7 +342,7 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
             "hooks": [str(Path(__file__).parents[2] / "scripts" / "docs" / "hooks.py")],
             "plugins": [
                 {"search": {"lang": ["ko", "en"]}},
-                "tags",
+                {"tags": {"tags": False, "listings": False}},
                 {"gen-files": {"scripts": [str(generator)]}},
                 "awesome-nav",
             ],
@@ -355,7 +359,7 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     )
 
     assert single_document_navigation.links["guides/aks/network-diagnosis/"] == "AKS 네트워크 진단"
-    assert single_document_navigation.links["guides/aks/"] == "Azure Kubernetes Service"
+    assert single_document_navigation.links["services/aks/"] == "Azure Kubernetes Service"
 
     page = docs / "guides" / "aks" / "new-topic" / "index.md"
     page.parent.mkdir(parents=True)
@@ -381,8 +385,9 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     assert navigation.links["guides/aks/network-diagnosis/"] == "AKS 네트워크 진단"
     assert navigation.links["guides/aks/new-topic/"] == "자동 게시 확인"
     assert navigation.links["guides/aks/z-last-topic/"] == "세 번째 문서"
-    assert navigation.links["guides/aks/"] == "Azure Kubernetes Service"
-    assert navigation.links["guides/"] == "Guides"
+    assert navigation.links["services/aks/"] == "Azure Kubernetes Service"
+    assert "guides/" not in navigation.links
+    assert navigation.links["articles/"] == "Articles"
     assert "자동 게시 확인" in (root / "site" / "guides" / "index.html").read_text(encoding="utf-8")
     assert any(
         entry["location"] == "guides/aks/new-topic/"
@@ -401,7 +406,7 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
         for target, title in article_navigation.links.items()
     }
     assert resolved_links[article_url] == "AKS 네트워크 진단"
-    assert resolved_links["https://example.test/guides/aks/"] == "Azure Kubernetes Service"
+    assert resolved_links["https://example.test/services/aks/"] == "Azure Kubernetes Service"
     assert resolved_links["https://example.test/guides/aks/new-topic/"] == "자동 게시 확인"
     assert resolved_links["https://example.test/guides/aks/z-last-topic/"] == "세 번째 문서"
 
@@ -431,12 +436,12 @@ def test_search_gate_accepts_full_text_and_tag_entries(tmp_path: Path) -> None:
                 "Azure Kubernetes Service diagnostic workflow를 설명합니다.</p>"
             ),
             {
-                "location": "tags/#tag:networking",
+                "location": "tags/networking/",
                 "title": "networking",
                 "text": "AKS 네트워크 진단",
             },
             {
-                "location": "tags/#tag:troubleshooting",
+                "location": "tags/troubleshooting/",
                 "title": "troubleshooting",
                 "text": "AKS 네트워크 진단",
             },
@@ -460,6 +465,28 @@ def test_search_gate_rejects_missing_tags_and_body_text(tmp_path: Path) -> None:
     assert any("tag is missing: networking" in error for error in result.errors)
     assert any("Korean body text" in error for error in result.errors)
     assert any("English product phrase" in error for error in result.errors)
+
+
+def test_search_gate_requires_tag_destinations_not_just_overview_anchors(tmp_path: Path) -> None:
+    root = make_search_repository(tmp_path)
+    write_search_index(
+        root,
+        [
+            page_search_entry(
+                "<p>네트워크 연결 문제를 확인합니다. "
+                "Azure Kubernetes Service diagnostic workflow를 설명합니다.</p>"
+            ),
+        ]
+        + [
+            {"location": f"tags/#tag:{tag}", "title": tag, "text": "AKS 네트워크 진단"}
+            for tag in ("networking", "troubleshooting")
+        ],
+    )
+
+    result = validate_search_index.validate_repository(root)
+
+    assert any("tag is missing: networking" in error for error in result.errors)
+    assert any("tag is missing: troubleshooting" in error for error in result.errors)
 
 
 @pytest.mark.parametrize(
@@ -501,7 +528,7 @@ def test_search_gate_accepts_visible_rendered_markdown(
         index.entries
         + [
             {
-                "location": f"tags/#tag:{tag}",
+                "location": f"tags/{tag}/",
                 "title": tag,
                 "text": page.title,
             }

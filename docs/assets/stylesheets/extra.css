@@ -305,10 +305,6 @@ body {
 }
 
 .dg-hero {
-  display: grid;
-  grid-template-columns: 1.25fr 0.85fr;
-  gap: 2rem;
-  align-items: center;
   padding-block: 1.2rem 1.4rem;
 }
 
@@ -358,33 +354,6 @@ body {
 .md-typeset .dg-button:hover {
   border-color: var(--dg-accent);
   filter: brightness(0.95);
-}
-
-.dg-hero-topics {
-  border-left: 1px solid var(--dg-border);
-  padding-left: 1.6rem;
-}
-
-.dg-hero-topics p {
-  margin: 0;
-}
-
-.md-typeset .dg-topic-link {
-  display: block;
-  color: var(--dg-muted);
-  border-top: 1px solid var(--dg-border);
-  padding: 0.9rem 0;
-  font-size: 0.74rem;
-  line-height: 1.8;
-}
-
-.dg-topic-link strong {
-  color: var(--dg-text);
-  font-size: var(--dg-font-body);
-}
-
-.md-typeset .dg-topic-link:hover strong {
-  color: var(--dg-accent);
 }
 
 .dg-stats {
@@ -474,7 +443,9 @@ body {
 .dg-doc-grid,
 .dg-feature-grid,
 .dg-collection-grid,
-.dg-service-grid {
+.dg-service-grid,
+.dg-browse-grid,
+.dg-tag-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.9rem;
@@ -482,7 +453,9 @@ body {
 
 .dg-doc-card,
 .dg-collection-card,
-.dg-service-card {
+.dg-service-card,
+.dg-browse-card,
+.dg-tag-card {
   --dg-card-accent: var(--dg-accent);
   position: relative;
   display: flex;
@@ -497,7 +470,9 @@ body {
 
 .dg-doc-card:hover,
 .dg-collection-card:hover,
-.dg-service-card:hover {
+.dg-service-card:hover,
+.dg-browse-card:hover,
+.dg-tag-card:hover {
   border-color: var(--dg-card-accent);
   transform: translateY(-2px);
 }
@@ -522,6 +497,10 @@ body {
   --dg-card-accent: var(--dg-research);
 }
 
+:is(.dg-home, .dg-service, .dg-tag-results, .dg-articles) .dg-doc-card {
+  --dg-card-accent: var(--dg-accent);
+}
+
 .dg-doc-meta {
   display: flex;
   flex-wrap: wrap;
@@ -538,42 +517,53 @@ body {
   color: var(--dg-card-accent);
 }
 
-.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card) :is(h2, h3) {
-  font-size: 0.9rem;
+.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card, .dg-browse-card, .dg-tag-card) :is(h2, h3) {
   line-height: 1.4;
   margin: 0.65rem 0;
 }
 
-.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card) :is(h2, h3) a {
+.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card, .dg-browse-card, .dg-tag-card) :is(h2, h3) a {
   color: var(--dg-text);
 }
 
-.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card) :is(h2, h3) a::after {
+.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card, .dg-browse-card, .dg-tag-card) :is(h2, h3) a::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: 0.5rem;
 }
 
-.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card) :is(h2, h3) .headerlink {
+.md-typeset :is(.dg-doc-card, .dg-collection-card, .dg-service-card, .dg-browse-card, .dg-tag-card) :is(h2, h3) .headerlink {
   display: none;
 }
 
 .md-typeset .dg-doc-summary {
   color: var(--dg-muted);
-  font-size: 0.7rem;
+  font-size: var(--dg-font-body);
   line-height: 1.6;
   margin: 0 0 0.95rem;
 }
 
-.dg-doc-tags {
+.dg-doc-tags,
+.dg-doc-tags > p {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 0.35rem;
+}
+
+.dg-doc-tags {
   margin-top: 0.3rem;
 }
 
-.dg-tag {
+.md-typeset .dg-doc-tags > p {
+  min-width: 0;
+  margin: 0;
+}
+
+.md-typeset .dg-tag {
+  display: inline-block;
+  max-width: 100%;
   color: var(--dg-muted);
   background: var(--dg-soft);
   border-radius: 0.2rem;
@@ -582,6 +572,16 @@ body {
   font-size: 0.6rem;
   line-height: 1.75;
   letter-spacing: 0;
+}
+
+.md-typeset a.dg-tag:hover {
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+}
+
+.dg-doc-card .dg-tag {
+  position: relative;
+  z-index: 1;
 }
 
 .dg-doc-details {
@@ -613,10 +613,6 @@ body {
   margin-block: 0.7rem;
 }
 
-.md-typeset .dg-feature-card:first-child .dg-doc-summary {
-  font-size: var(--dg-font-body);
-}
-
 .dg-feature-card:first-child .dg-doc-tags {
   margin-top: auto;
 }
@@ -629,21 +625,23 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.dg-collection-card {
+.dg-collection-card,
+.dg-browse-card {
   padding: 1.1rem;
 }
 
-.dg-card-count {
+.md-typeset .dg-card-count,
+.md-typeset .dg-tag-card > p {
   color: var(--dg-muted);
   font-family: var(--md-code-font-family);
   font-size: 0.65rem;
-  margin-top: auto;
+  margin: auto 0 0;
   padding-top: 0.6rem;
 }
 
 .md-typeset .dg-collection > h2,
 .md-typeset .dg-service > h2 {
-  font-size: var(--dg-font-h3);
+  font-size: var(--dg-font-h2);
   margin-top: 2rem;
 }
 
@@ -689,11 +687,14 @@ body {
 }
 
 .dg-collection--research .dg-doc-grid,
-.dg-service-grid {
+.dg-service-grid,
+.dg-browse-grid,
+.dg-tag-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.dg-service-card {
+.dg-service-card,
+.dg-tag-card {
   padding: 1.1rem 1.3rem;
 }
 
@@ -711,24 +712,6 @@ body {
 
 .dg-service-card li {
   margin-left: 0;
-}
-
-.dg-tags > h2 {
-  border-top: 1px solid var(--dg-border);
-  padding-top: 1.25rem;
-}
-
-.dg-tags > ul {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.4rem 1.5rem;
-  list-style: none;
-}
-
-.dg-tags > ul > li {
-  padding-block: 0.4rem;
-  margin-left: 0;
-  font-size: 0.76rem;
 }
 
 .dg-contribute {
@@ -800,14 +783,11 @@ body {
 }
 
 @media (max-width: 1100px) {
-  .dg-hero {
-    grid-template-columns: 1.1fr 0.9fr;
-    gap: 1.5rem;
-  }
-
   .dg-collection-grid,
   .dg-collection--research .dg-doc-grid,
-  .dg-service-grid {
+  .dg-service-grid,
+  .dg-browse-grid,
+  .dg-tag-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -823,13 +803,7 @@ body {
   }
 
   .dg-hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.5rem;
     padding-block: 1.4rem 1.8rem;
-  }
-
-  .dg-hero-topics {
-    display: none;
   }
 
   .dg-stats {
@@ -844,7 +818,8 @@ body {
   .dg-feature-grid,
   .dg-collection--research .dg-doc-grid,
   .dg-service-grid,
-  .dg-tags > ul {
+  .dg-browse-grid,
+  .dg-tag-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -898,13 +873,17 @@ body {
   .dg-doc-card,
   .dg-collection-card,
   .dg-service-card,
+  .dg-browse-card,
+  .dg-tag-card,
   .md-typeset .dg-button {
     transition: none;
   }
 
   .dg-doc-card:hover,
   .dg-collection-card:hover,
-  .dg-service-card:hover {
+  .dg-service-card:hover,
+  .dg-browse-card:hover,
+  .dg-tag-card:hover {
     transform: none;
   }
 }
