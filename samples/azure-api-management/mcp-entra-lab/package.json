@@ -4,12 +4,15 @@
   "private": true,
   "description": "Pinned local Azure MCP runtime for the isolated Entra lab",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "@azure/mcp": "2.0.5"
   },
   "scripts": {
     "azure-mcp": "azmcp server start --mode all --read-only --namespace group"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/inspector": "2.5.0"
   }
 }

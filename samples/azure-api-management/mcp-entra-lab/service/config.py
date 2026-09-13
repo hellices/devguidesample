@@ -72,7 +72,7 @@ def _require_https_url(env: Mapping[str, str], name: str) -> str:
     value = _require(env, name)
     parts = urlsplit(value)
     if (
-        parts.scheme != "https" or not parts.hostname
+        parts.scheme != "https" or not parts.hostname or parts.port not in (None, 443)
         or parts.username is not None or parts.password is not None
         or parts.query or parts.fragment or parts.path != "/mcp"
     ):

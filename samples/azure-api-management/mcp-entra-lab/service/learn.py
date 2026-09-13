@@ -14,6 +14,7 @@ import logging
 from enum import Enum
 from typing import Any
 
+import httpx2
 from pydantic import BaseModel
 
 from mcp import Client
@@ -115,43 +116,19 @@ def _parse_results(raw_text: str) -> list[LearnResultItem]:
 
 
 class LearnConnector:
-    """Production connector: an anonymous SDK `Client` against the public Learn MCP server.
-
-    The real Learn MCP server currently speaks only the legacy (pre-2026-07-28)
-    initialize handshake. `mode` is left at the SDK default, `"auto"`: the
-    `Client` probes the modern `server/discover` first and falls back to the
-    initialize handshake automatically, so this connects correctly whether
-    Learn is on the legacy or the modern wire protocol without this module
-    needing to know or care which.
-
-    `transport_factory` is a test-only seam: when given (each call building a
-    fresh in-process ASGI-backed transport, in tests), its result is
-    connected to instead of `base_url`. A factory, not a fixed instance,
-    because a `Transport` is a one-shot async context manager -- reusing one
-    across calls would fail the second time. `mode` is also overridable in
-    tests, to prove this connector's discovery/parsing logic (not just the
-    SDK's own negotiation) works correctly when forced over the legacy wire
-    protocol specifically. Production code sets neither, so
-    `Client(self._base_url)` -- a bare URL, default `mode`, no headers
-    attached -- is what actually runs.
-    """
-
-    def __init__(
-        self,
-        *,
-        base_url: str = LEARN_MCP_URL,
-        transport_factory: Any = None,
-        mode: str = "auto",
-    ) -> None:
-        self._base_url = base_url
-        self._transport_factory = transport_factory
-        self._mode = mode
+    """Anonymous Learn connection; the SDK negotiates the upstream revision."""
 
     async def search(self, topic: LearnTopic) -> LearnSearchResult:
-        query = _TOPIC_QUERIES[topic]
-        server = self._transport_factory() if self._transport_factory is not None else self._base_url
+        try:
+            return await self._search(topic)
+        except* (MCPError, httpx2.HTTPError):
+            logger.warning("learn connection, discovery or call failed")
+            raise LearnSearchError("McpError") from None
 
-        async with Client(server, mode=self._mode) as client:
+    async def _search(self, topic: LearnTopic) -> LearnSearchResult:
+        query = _TOPIC_QUERIES[topic]
+
+        async with Client(LEARN_MCP_URL) as client:
             listing = await client.list_tools()
             tool = next(
                 (t for t in listing.tools if t.name == _KNOWN_SEARCH_TOOL_NAME), None
@@ -164,11 +141,7 @@ class LearnConnector:
                 raise LearnSearchError("Unsupported")
 
             param_name = _pick_query_parameter(tool)
-            try:
-                result = await client.call_tool(tool.name, {param_name: query})
-            except MCPError as exc:
-                logger.info("learn search failed: %s", type(exc).__name__)
-                raise LearnSearchError("McpError") from exc
+            result = await client.call_tool(tool.name, {param_name: query})
 
             if result.is_error:
                 logger.info("learn search failed: tool reported is_error")

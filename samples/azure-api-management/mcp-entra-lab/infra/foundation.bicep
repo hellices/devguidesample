@@ -3,7 +3,7 @@ param location string = resourceGroup().location
 
 @minLength(6)
 @maxLength(10)
-@description('Alphanumeric suffix chosen once per lab. Do not reuse an existing deployment.')
+@description('The alphanumeric azd environment name.')
 param suffix string
 
 @description('Object ID of the lab operator, used only on the new AKS cluster.')
@@ -16,9 +16,10 @@ param kubernetesVersion string = '1.35'
 param expiresOn string
 
 var tags = {
-  purpose: 'mcp-entra-validation'
+  purpose: 'mcp-entra-walkthrough'
   environment: 'lab'
   labId: suffix
+  'azd-env-name': suffix
   expiresOn: expiresOn
 }
 var apimName = 'apim-mcplab-${suffix}'
@@ -247,5 +248,8 @@ output environmentDomain string = environment.properties.defaultDomain
 output environmentStaticIp string = environment.properties.staticIp
 output vnetId string = vnet.id
 output appIdentityId string = appIdentity.id
+output appIdentityClientId string = appIdentity.properties.clientId
+output appIdentityPrincipalId string = appIdentity.properties.principalId
+output environmentId string = environment.id
 output aksName string = aks.name
 output managedNodeResourceGroup string = aks.properties.nodeResourceGroup

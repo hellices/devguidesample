@@ -1,10 +1,30 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 
 import pytest
 
 from scripts.docs import validate_public_safety
+
+
+def test_public_safety_ignores_local_azd_state_but_scans_force_added_files(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    (root / ".gitignore").write_text(".azure/\nnode_modules/\n", encoding="utf-8")
+    (root / "docs" / "index.md").write_text("# Public page\n", encoding="utf-8")
+    local = root / "samples" / "aks" / "example" / ".azure" / "demo" / ".env"
+    local.parent.mkdir(parents=True)
+    local.write_text("ENDPOINT=https://private-service.azurecontainerapps.io\n", encoding="utf-8")
+
+    result = validate_public_safety.validate_repository(root)
+    assert result.file_count == 1
+    assert result.errors == []
+
+    subprocess.run(["git", "-C", str(root), "add", "--force", str(local)], check=True)
+    result = validate_public_safety.validate_repository(root)
+    assert result.file_count == 2
+    assert any("non-example Azure service hostname" in error for error in result.errors)
 
 
 def make_repository(tmp_path: Path) -> Path:

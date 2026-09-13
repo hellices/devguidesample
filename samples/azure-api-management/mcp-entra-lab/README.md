@@ -1,142 +1,93 @@
-# MCP + Entra isolated Azure lab
+# Azure MCP + Entra ID walkthrough
 
-Read-only examples for:
+Deploy with Azure Developer CLI, then follow the [scenario guide](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md). Each scenario sends a request and explains the response.
 
-- GitHub and Microsoft Learn hosted MCP.
-- Azure MCP 2.0.5 and AKS MCP 0.0.20 local stdio.
-- Native Azure MCP with Entra OBO in an internal Container Apps environment.
-- A separate Python MCP SDK 2.2.0 resource server.
-- **APIM native REST-operation-to-MCP-tool conversion**, separately from an existing MCP proxy.
+## What is deployed
 
-The [Korean lab guide](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md), [architecture research](../../../docs/research/azure-api-management/mcp-authentication-options/index.md), and [actual observations](../../../docs/cases/azure-api-management/mcp-entra-validation/index.md) explain scope, costs, diagrams and evidence.
+- Internal Azure API Management Developer gateway: native REST-to-MCP and a Microsoft Learn MCP proxy.
+- Internal Container Apps environment: Azure MCP 2.0.5 with Entra OBO and a Python MCP server.
+- AKS cluster for the local AKS MCP example and an optional private-network tunnel.
+- ACR for `azd` remote builds, private DNS and managed identities.
 
-## Boundaries
+One project resource group plus AKS/Container Apps managed resource groups are created. Three Entra app registrations are tracked separately because they are directory objects, not ARM resources.
 
-This is a paid, non-production lab. One explicit RG is created, plus AKS and Container Apps provider-managed RGs. Entra apps are tenant objects. Existing resources and the default kubeconfig are not adopted.
+## Prerequisites
 
-The private-network probe uses authenticated `kubectl port-forward`, not a corporate VPN. GitHub credentials are never uploaded to Azure. The public `/inventory` route contains only fictitious widgets; it is not a template for exposing business data.
+- Azure Developer CLI (`azd`) 1.29+, Azure CLI and Bicep.
+- Python 3.13 for local MCP clients; the azd identity hook also supports Python 3.9+.
+- Node.js 22.19+, npm, `curl`, `jq`, `kubectl`, `kubelogin` and GitHub CLI.
+- An Azure subscription with permissions to create resources and role assignments.
+- Entra permissions to register applications and grant the operator's delegated permission to ARM.
 
-## Setup and deployment
+Use Bash for the documented commands. No local Docker daemon is required: `docker.remoteBuild: true` uses ACR.
 
-Run from the repository root with Python 3.13, Azure CLI, Bicep, Node 20+, `gh`, `kubectl` and `kubelogin`. Azure CLI must have a user login. The operator needs deployment, role-assignment and appropriate tenant app/consent permissions.
+## Deploy
 
-```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-export LAB_SAMPLE="samples/azure-api-management/mcp-entra-lab"
-python -m pip install -r requirements-docs.txt -r "$LAB_SAMPLE/requirements.txt"
-npm ci --prefix "$LAB_SAMPLE" --no-audit --no-fund
-
-export LAB_PRIVATE="$(mktemp -d)"
-chmod 700 "$LAB_PRIVATE"
-export LAB_STATE="$LAB_PRIVATE/state.json"
-export PYTHONPATH="$LAB_SAMPLE"
-
-python -m cloud_lab --state "$LAB_STATE" plan --location koreacentral
-python -m cloud_lab --state "$LAB_STATE" validate
-python -m cloud_lab --state "$LAB_STATE" deploy-foundation
-python -m entra_setup --state "$LAB_STATE" apps
-python -m entra_setup --state "$LAB_STATE" grant-operator
-python -m entra_setup --state "$LAB_STATE" federate-azure
-python -m auth_probe --state "$LAB_STATE" --output "$LAB_SAMPLE/evidence/auth-local-live.json"
-
-python -m cloud_stage --state "$LAB_STATE" build
-python -m cloud_stage --state "$LAB_STATE" deploy-apps
-python -m cloud_stage --state "$LAB_STATE" deploy-apim
-python -m network_probe --state "$LAB_STATE" prepare
-```
-
-Keep the state directory for resuming and cleanup. It contains actual identifiers and a short-lived lab secret. Do not commit or publish it. Production images are built in ACR, so a local Docker daemon is not required.
-
-In a separate terminal with the same environment:
+Run inside this sample directory:
 
 ```bash
-python -m network_probe --state "$LAB_STATE" forward
+az login
+azd auth login
+azd env new mcpdemo01
+azd env set AZURE_SUBSCRIPTION_ID "$(az account show --query id -o tsv)"
+azd env set AZURE_LOCATION koreacentral
+python3 scripts/identity.py prepare
+azd provision --preview
+azd up
 ```
 
-This chooses an unused loopback port and writes its URL to private `network.json`. SDK clients use that HTTP CONNECT proxy while retaining end-to-end HTTPS hostname verification.
+Choose a unique environment name of 6–10 lowercase letters/digits. The template creates `rg-<environment>`. It does not adopt unrelated resource groups.
 
-## Pinned AKS MCP runtime
+Prepare the directory objects before `azd provision --preview`, because `azd` resolves required Bicep inputs before a provisioning hook. `azd up` also performs this idempotent preparation through its `preup` hook, then provisions Bicep, builds the image in ACR and deploys the declared `mcp` service. The hooks only manage Entra objects; they do not run a custom Azure deployment pipeline.
 
-The following is the **macOS arm64** asset verified in this run. For another platform choose the corresponding asset and its published digest from the same release.
+The `.azure/` directory contains environment settings and a short-lived credential. It is ignored by Git. Do not publish it or capture `azd env get-values` output. `azd provision` alone leaves a placeholder Python application until `azd deploy mcp` runs.
 
-```bash
-export AKS_MCP_BIN="$LAB_PRIVATE/aks-mcp"
-gh release download v0.0.20 --repo Azure/aks-mcp \
-  --pattern aks-mcp-darwin-arm64 --output "$AKS_MCP_BIN"
-printf '%s  %s\n' \
-  '1104b6abfeec05de836b67f309c47bdfff4aaa1d21f78505a4a1c090a0ef5c61' \
-  "$AKS_MCP_BIN" | shasum -a 256 -c - &&
-  chmod 700 "$AKS_MCP_BIN"
-```
+## Follow the scenarios
 
-Do not execute a download with a mismatched digest. AKS MCP 0.0.20 is local stdio-only; do not add removed HTTP/OBO/Helm flags.
+Use the [full walkthrough](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md) in order:
 
-## Real verification
+1. Inspect the deployed resources and private endpoints.
+2. Connect local GitHub, Azure, AKS and Microsoft Learn MCP clients.
+3. Connect from the local PC to the internal endpoints.
+4. Obtain Entra access tokens and inspect an unauthenticated response.
+5. Call an existing REST API as an APIM MCP tool.
+6. Call Azure MCP and the Python MCP tool with OBO.
+7. Call Microsoft Learn through APIM.
+8. Check 401/403 behavior and remove the environment when finished.
 
-```bash
-python -m probe_upstreams --state "$LAB_STATE" --aks-binary "$AKS_MCP_BIN" \
-  --output "$LAB_SAMPLE/evidence/upstreams.json"
-python -m probe_cloud --state "$LAB_STATE" \
-  --output "$LAB_SAMPLE/evidence/cloud.json"
-python -m probe_native_gate --state "$LAB_STATE" \
-  --output "$LAB_SAMPLE/evidence/native-client-gate.json" --exercise-denial
-python -m pytest "$LAB_SAMPLE/tests" -q
-```
+[requests/](requests/) contains JSON-RPC request bodies, not tests. [mcp.example.json](mcp.example.json) shows VS Code MCP connections. [network/](network/) provides an optional loopback-only CONNECT tunnel for a workstation without a VPN route to the VNet.
 
-Use `probe_upstreams --only github|learn|azure|aks` for targeted diagnosis. Azure stdio explicitly selects the Azure CLI credential; hosted Azure MCP instead uses the configured OBO strategy.
+## Application configuration
 
-The probes validate MCP `is_error`, JSON/command status, requested resource-group membership, generated tool schemas and real backend correlation. A suite-complete record is written only after all its checks finish. An interrupted run is not a passing suite.
+The Python application runs `service.app:create_app` on port 8000.
 
-`probe_native_gate` is read-only by default. `--exercise-denial` deliberately removes only the Azure CLI client from the new native app's nonempty allowlist, verifies that the same otherwise-valid token is denied, and restores the original policy in `finally`. Run this opt-in test only while the lab is reserved for validation; it briefly blocks that client.
-
-`evidence.py` accepts only allowlisted measurements. Render captured data, not invented portal screenshots:
-
-```bash
-python -m evidence "$LAB_SAMPLE/evidence/cloud.json" "$LAB_SAMPLE/evidence/cloud.html"
-```
-
-## Local development client configuration
-
-[mcp.example.json](mcp.example.json) is a VS Code-style configuration to merge into a local `.vscode/mcp.json`. Keep real endpoint values in local inputs, not the public repository. Do not replace the repository's existing MCP configuration blindly.
-
-- Local Azure/AKS credentials and remote GitHub authorization are separate.
-- Private examples are explicitly **manual-token** clients. Tokens expire and are not automatically refreshed by a pasted input.
-- Native Azure and custom/APIM API tokens have different audiences; their inputs must not be interchanged.
-- The SDK probes are verified. Each IDE's trust prompts, interactive OAuth/PKCE and corporate private route require separate testing.
-- Private HTTP endpoints need an actual private route. The SDK probe's per-client CONNECT proxy is not automatically inherited by VS Code.
-
-## Configuration
-
-The Python server uses `service.app:create_app` on port 8000. Required environment variables are `ENTRA_TENANT_ID` (GUID), `ENTRA_API_CLIENT_ID`, `ENTRA_API_CLIENT_SECRET`, `MCP_RESOURCE_URL` (HTTPS `/mcp`), `LAB_SUBSCRIPTION_ID`, `LAB_RESOURCE_GROUP` and a nonempty CSV `ENTRA_ALLOWED_CLIENT_IDS`. Missing/empty client allowlists fail closed.
-
-The native Azure MCP container keeps its own token/scope validation, while Container Apps authentication separately enforces `defaultAuthorizationPolicy.allowedApplications`. App-registration preauthorization alone is not a caller ACL. Public exceptions are limited to health and protected-resource metadata; no extra client secret is used by this bearer-validation layer.
-
-| Route | Purpose |
+| Setting | Purpose |
 |---|---|
-| `POST /mcp` | Entra-protected MCP |
-| `GET /.well-known/oauth-protected-resource/mcp` | Public metadata, no business data |
-| `GET /healthz` | Public liveness |
-| `GET /inventory` | Fictitious REST fixture with a fresh invocation marker; rejects an Authorization header |
-| `GET /delegated-resource-group` | Separately enforced authenticated OBO REST route |
+| `ENTRA_TENANT_ID` | Tenant GUID used for issuer and JWKS |
+| `ENTRA_API_CLIENT_ID` | Intended access-token audience |
+| `ENTRA_API_CLIENT_SECRET` | Short-lived confidential-client credential for the OBO example |
+| `ENTRA_ALLOWED_CLIENT_IDS` | Required, nonempty client allowlist |
+| `MCP_RESOURCE_URL` | HTTPS MCP URL |
+| `LAB_SUBSCRIPTION_ID`, `LAB_RESOURCE_GROUP` | Fixed ARM resource-group target |
 
-App-only tokens can carry an `oid`; the delegated scope gate is essential. Entra's bare JWT `scp` is normalized to the qualified OAuth scope only after signature/audience validation. The server surfaces OBO errors rather than falling back to managed identity. Full Conditional Access reauthentication UI is not implemented.
+The authenticated `/mcp` endpoint exposes `lab_inventory`, `read_lab_resource_group` and `learn_search`. `/healthz` and `/inventory` contain no protected business data. The REST inventory rejects Authorization headers so an APIM policy that accidentally forwards a token is visible.
+
+Native Azure MCP uses a separate Entra API and `Mcp.Tools.ReadWrite`. Its managed identity authenticates the confidential client through federation; the downstream ARM request uses the user's OBO token. Container Apps authentication restricts permitted client applications.
 
 ## Cleanup
 
-Stop the local tunnel first. Preview checks ownership without deleting anything:
+Close any local port-forward first. Remove ARM resources with:
 
 ```bash
-python -m cleanup --state "$LAB_STATE"
+azd down
 ```
 
-Only after reviewing the private state's lab identity, explicitly confirm deletion:
+Then explicitly remove this environment's Entra objects:
 
 ```bash
-python -m cleanup --state "$LAB_STATE" \
-  --confirm-delete "$(jq -r .suffix "$LAB_STATE")"
+python3 scripts/identity.py remove --confirm "$(azd env get-value AZURE_ENV_NAME)"
 ```
 
-The command verifies ownership, removes recorded service principals/apps, deletes the lab RG and checks provider-managed RG removal. Deletion requires real Graph/ARM permissions and was **not executed** for the published run; its ownership preview and unit guards were checked.
+The identity command checks recorded app IDs and ownership tags. It does not grant tenant-wide consent or remove unrelated apps. Keep `.azure/` until both cleanup steps have finished.
 
-The expiry tag does not delete resources. PR creation/merge does not stop billing. The lab secret expires after two days; the native server's managed-identity federation is a separate credential mechanism.
+APIM Developer, the AKS node and other infrastructure incur charges even when no MCP tool is called. The `expiresOn` tag is informational, not automatic cleanup.

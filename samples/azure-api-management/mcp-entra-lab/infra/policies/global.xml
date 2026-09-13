@@ -20,7 +20,7 @@
         <return-response>
           <set-status code="401" reason="Unauthorized" />
           <set-header name="WWW-Authenticate" exists-action="override">
-            <value>@("Bearer resource_metadata=\"__GATEWAY_URL__/oauth-metadata/" + (context.Api.Id == "learn-mcp" ? "learn/mcp" : "rest-tools/mcp") + "\", scope=\"__SCOPE__\"")</value>
+            <value>@(context.Api.Id == "lab-rest" ? "Bearer scope=\"__SCOPE__\"" : "Bearer resource_metadata=\"__GATEWAY_URL__/oauth-metadata/" + (context.Api.Id == "learn-mcp" ? "learn/mcp" : "rest-tools/mcp") + "\", scope=\"__SCOPE__\"")</value>
           </set-header>
           <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
           <set-body>{"error":"invalid_token"}</set-body>

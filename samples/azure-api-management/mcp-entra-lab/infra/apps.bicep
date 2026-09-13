@@ -21,9 +21,10 @@ param customApiClientSecret string
 var pythonName = 'ca-mcp-python-${suffix}'
 var azureName = 'ca-mcp-azure-${suffix}'
 var tags = {
-  purpose: 'mcp-entra-validation'
+  purpose: 'mcp-entra-walkthrough'
   environment: 'lab'
   labId: suffix
+  'azd-env-name': suffix
 }
 
 resource environment 'Microsoft.App/managedEnvironments@2025-01-01' existing = {
@@ -41,54 +42,20 @@ module dns './private-dns.bicep' = {
   }
 }
 
-resource pythonApp 'Microsoft.App/containerApps@2025-01-01' = {
-  name: pythonName
-  location: location
-  tags: tags
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: { '${appIdentityId}': {} }
-  }
-  properties: {
-    managedEnvironmentId: environment.id
-    workloadProfileName: 'Consumption'
-    configuration: {
-      activeRevisionsMode: 'Single'
-      secrets: [{ name: 'entra-client-secret', value: customApiClientSecret }]
-      registries: [{
-        server: registryHost
-        identity: appIdentityId
-      }]
-      ingress: {
-        external: true
-        allowInsecure: false
-        targetPort: 8000
-        transport: 'http'
-      }
-    }
-    template: {
-      containers: [{
-        name: 'mcp'
-        image: pythonImage
-        resources: { cpu: json('0.5'), memory: '1Gi' }
-        env: [
-          { name: 'ENTRA_TENANT_ID', value: tenantId }
-          { name: 'ENTRA_API_CLIENT_ID', value: customApiClientId }
-          { name: 'ENTRA_API_CLIENT_SECRET', secretRef: 'entra-client-secret' }
-          { name: 'ENTRA_ALLOWED_CLIENT_IDS', value: allowedClientIds }
-          { name: 'MCP_RESOURCE_URL', value: 'https://${pythonName}.${environmentDomain}/mcp' }
-          { name: 'LAB_SUBSCRIPTION_ID', value: subscription().subscriptionId }
-          { name: 'LAB_RESOURCE_GROUP', value: resourceGroup().name }
-        ]
-        probes: [{
-          type: 'Readiness'
-          httpGet: { path: '/healthz', port: 8000, scheme: 'HTTP' }
-          initialDelaySeconds: 3
-          periodSeconds: 10
-        }]
-      }]
-      scale: { minReplicas: 0, maxReplicas: 1 }
-    }
+module pythonApp './python-app.bicep' = {
+  name: 'python-mcp'
+  params: {
+    location: location
+    suffix: suffix
+    environmentId: environment.id
+    environmentDomain: environmentDomain
+    appIdentityId: appIdentityId
+    registryHost: registryHost
+    pythonImage: pythonImage
+    tenantId: tenantId
+    customApiClientId: customApiClientId
+    customApiClientSecret: customApiClientSecret
+    allowedClientIds: allowedClientIds
   }
 }
 
@@ -166,5 +133,5 @@ module nativeAuth './native-auth.bicep' = {
 
 output pythonUrl string = 'https://${pythonName}.${environmentDomain}'
 output azureUrl string = 'https://${azureName}.${environmentDomain}'
-output pythonAppName string = pythonApp.name
+output pythonAppName string = pythonApp.outputs.pythonAppName
 output azureAppName string = azureApp.name

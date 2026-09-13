@@ -6,6 +6,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -98,18 +99,27 @@ def _is_example_azure_service_hostname(hostname: str) -> bool:
 
 
 def _text_files(root: Path):
-    for top_level in SCAN_ROOTS:
-        directory = root / top_level
-        if not directory.is_dir():
-            continue
-        for path in sorted(directory.rglob("*")):
-            lowered_name = path.name.casefold()
-            if path.is_file() and (
-                path.suffix.casefold() in TEXT_SUFFIXES
-                or lowered_name in TEXT_FILENAMES
-                or lowered_name.endswith(TEXT_COMPOUND_SUFFIXES)
-            ):
-                yield path
+    if (root / ".git").exists():
+        # Local azd state is private; a force-added file must still be inspected.
+        listing = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--cached", "--others",
+             "--exclude-standard", "--", *SCAN_ROOTS],
+            capture_output=True, text=True, check=True,
+        )
+        paths = [root / name for name in sorted(set(listing.stdout.split("\0"))) if name]
+    else:
+        paths = [
+            path for top_level in SCAN_ROOTS
+            for path in sorted((root / top_level).rglob("*"))
+        ]
+    for path in paths:
+        lowered_name = path.name.casefold()
+        if path.is_file() and (
+            path.suffix.casefold() in TEXT_SUFFIXES
+            or lowered_name in TEXT_FILENAMES
+            or lowered_name.endswith(TEXT_COMPOUND_SUFFIXES)
+        ):
+            yield path
 
 
 def validate_repository(repo_root: Path | str) -> PublicSafetyResult:

@@ -1,0 +1,150 @@
+{
+  "recorded_at": "2026-09-13T04:29:17Z",
+  "note": "Actual azd/Inspector/curl output excerpts. Environment identifiers, tokens and resource IDs omitted.",
+  "deployment": {
+    "command": "azd up",
+    "output": [
+      "SUCCESS: Your application was provisioned and deployed to Azure in 33 minutes 26 seconds.",
+      "  Provisioning: 32 minutes 25 seconds",
+      "  Deploying:    1 minute 1 second"
+    ]
+  },
+  "rest": {
+    "command": "curl <REST_URL>",
+    "response": {
+      "source": "inventory-rest",
+      "widgets": [
+        {
+          "sku": "WID-100",
+          "name": "Widget Sprocket",
+          "quantity": 42,
+          "unit": "each"
+        },
+        {
+          "sku": "WID-200",
+          "name": "Widget Gizmo",
+          "quantity": 7,
+          "unit": "crate"
+        },
+        {
+          "sku": "WID-300",
+          "name": "Widget Doohickey",
+          "quantity": 128,
+          "unit": "each"
+        }
+      ],
+      "authorization_present": false
+    }
+  },
+  "rest_mcp": {
+    "request": "requests/inventory.json",
+    "response": {
+      "source": "inventory-rest",
+      "widgets": [
+        {
+          "sku": "WID-100",
+          "name": "Widget Sprocket",
+          "quantity": 42,
+          "unit": "each"
+        },
+        {
+          "sku": "WID-200",
+          "name": "Widget Gizmo",
+          "quantity": 7,
+          "unit": "crate"
+        },
+        {
+          "sku": "WID-300",
+          "name": "Widget Doohickey",
+          "quantity": 128,
+          "unit": "each"
+        }
+      ],
+      "authorization_present": false
+    }
+  },
+  "azure_obo": {
+    "method": "tools/call: group_resource_list",
+    "response": {
+      "status": 200,
+      "resourceTypes": [
+        "Microsoft.ApiManagement/service",
+        "Microsoft.App/containerApps",
+        "Microsoft.App/managedEnvironments",
+        "Microsoft.ContainerRegistry/registries",
+        "Microsoft.ContainerService/managedClusters",
+        "Microsoft.ManagedIdentity/userAssignedIdentities",
+        "Microsoft.Network/networkSecurityGroups",
+        "Microsoft.Network/privateDnsZones",
+        "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+        "Microsoft.Network/publicIPAddresses",
+        "Microsoft.Network/virtualNetworks"
+      ]
+    }
+  },
+  "python_obo": {
+    "method": "tools/call: read_lab_resource_group",
+    "protocol": {
+      "protocolVersion": "2026-07-28",
+      "serverInfo": {
+        "name": "azure-mcp-entra-lab",
+        "version": "0.2.0"
+      }
+    },
+    "response": {
+      "exists": true,
+      "region": "koreacentral",
+      "provisioning_succeeded": true
+    }
+  },
+  "learn_proxy": {
+    "method": "tools/call: microsoft_docs_search",
+    "response": {
+      "results": [
+        {
+          "title": "About MCP servers in Azure API Management",
+          "contentUrl": "https://learn.microsoft.com/azure/api-management/mcp-server-overview#mcp-server-endpoints"
+        },
+        {
+          "title": "Govern MCP servers with API Management products",
+          "contentUrl": "https://learn.microsoft.com/azure/api-management/govern-mcp-server-products"
+        }
+      ]
+    }
+  },
+  "github": {
+    "method": "tools/call: search_repositories",
+    "response": {
+      "total_count": 1,
+      "items": [
+        {
+          "full_name": "hellices/devguidesample",
+          "private": false
+        }
+      ]
+    }
+  },
+  "aks": {
+    "method": "tools/call: call_kubectl",
+    "response": {
+      "items": [
+        {
+          "name": "mcp-tunnel",
+          "namespace": "mcp-lab",
+          "phase": "Running"
+        }
+      ]
+    }
+  },
+  "authorization": {
+    "anonymous": "HTTP/1.1 401 Unauthorized",
+    "wrong_audience": "HTTP/1.1 401 Unauthorized",
+    "client_not_allowed": "HTTP/2 403 ",
+    "after_restore": {
+      "tools": [
+        "group_list",
+        "group_resource_list"
+      ]
+    }
+  }
+}

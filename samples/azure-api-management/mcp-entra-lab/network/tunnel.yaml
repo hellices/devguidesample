@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mcp-tunnel
+  namespace: mcp-lab
+  labels:
+    app: mcp-tunnel
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: connect
+      image: python@sha256:7415fbc3c9e4979cc717d92377ab2bc7b2b4a2af1ac03cc52b5f3f88efedaf3a
+      command: [python, -B, /app/connect_proxy.py]
+      env:
+        - name: MCP_ALLOWED_HOSTS
+          valueFrom:
+            configMapKeyRef:
+              name: mcp-endpoints
+              key: hosts
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+        seccompProfile:
+          type: RuntimeDefault
+      resources:
+        requests:
+          cpu: 20m
+          memory: 24Mi
+        limits:
+          cpu: 150m
+          memory: 64Mi
+      volumeMounts:
+        - name: code
+          mountPath: /app
+          readOnly: true
+  volumes:
+    - name: code
+      configMap:
+        name: mcp-tunnel-code

@@ -9,7 +9,6 @@ the HTTP boundary. Rejections log reason labels, not tokens or claim values.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any, Protocol
 
 import anyio
@@ -46,22 +45,12 @@ class EntraJwksResolver:
         return self._client.get_signing_key(kid).key
 
 
-@dataclass(frozen=True, slots=True)
-class StaticSigningKeyResolver:
-    """Test resolver: one fixed, pre-generated public key, no network."""
-
-    public_key: Any
-
-    def resolve(self, kid: str | None) -> Any:
-        return self.public_key
-
-
 class EntraTokenVerifier(TokenVerifier):
     """Verifies bearer tokens issued by one fixed Entra tenant for one fixed application."""
 
-    def __init__(self, config: Config, *, key_resolver: SigningKeyResolver | None = None) -> None:
+    def __init__(self, config: Config) -> None:
         self._config = config
-        self._key_resolver: SigningKeyResolver = key_resolver or EntraJwksResolver(config.jwks_uri)
+        self._key_resolver: SigningKeyResolver = EntraJwksResolver(config.jwks_uri)
 
     async def verify_token(self, token: str) -> AccessToken | None:
         try:
