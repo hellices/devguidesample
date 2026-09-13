@@ -1,8 +1,8 @@
 ---
 title: MCP 서버별 인증과 Azure 호스팅 옵션 비교
-description: Azure·AKS·GitHub·Learn MCP의 인증 방식을 비교하고, Container Apps의 Entra OBO와 APIM의 REST-to-MCP·기존 MCP 프록시 구성을 설명합니다.
+description: MCP 직접 호스팅, Microsoft Foundry Toolbox, REST API 변환과 선택적 gateway의 역할을 비교하고 구성에 필요한 인증·네트워크·버전 관리를 설명합니다.
 document_type: research
-services: [azure-api-management, azure-container-apps, azure-app-service, azure-functions, azure-kubernetes-service, microsoft-entra-id]
+services: [azure-api-management, azure-container-apps, azure-app-service, azure-functions, azure-kubernetes-service, microsoft-foundry, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python]
 tags: [ai-agents, architecture, authentication, authorization, networking]
 status: current
@@ -10,6 +10,16 @@ verification_status: needs-review
 sources_checked_at: 2026-09-13
 published_at: 2026-09-12
 official_sources:
+  - title: What is Toolbox in Foundry?
+    url: https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview
+  - title: Create and manage a toolbox in Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
+  - title: Network isolation for a toolbox in Microsoft Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation
+  - title: Choose an Azure service for your MCP server
+    url: https://learn.microsoft.com/azure/container-apps/mcp-choosing-azure-service
+  - title: Configure App Service built-in MCP (preview)
+    url: https://learn.microsoft.com/azure/app-service/configure-mcp-built-in
   - title: Versioning and Compatibility
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning
   - title: Authorization
@@ -64,9 +74,9 @@ official_sources:
 
 # MCP 서버별 인증과 Azure 호스팅 옵션 비교
 
-Azure 리소스를 사용자의 권한으로 조회하려면 Azure MCP와 Entra OBO를 사용할 수 있습니다. 기존 REST API를 MCP tool로 제공하려면 APIM의 REST-to-MCP가, 이미 운영 중인 MCP 서버 앞에 인증 정책을 적용하려면 APIM의 기존 MCP 프록시가 적합합니다.
+MCP는 특정 Azure 서비스의 기능이 아니라 client와 tool server를 연결하는 protocol입니다. 서버 코드를 직접 호스팅할지, Microsoft Foundry Toolbox로 도구를 관리·공유할지, 기존 REST API를 변환할지를 먼저 선택합니다. APIM은 API 변환이나 gateway 정책을 사용할 때 추가하는 옵션입니다.
 
-**처음 구성할 때는 [Azure MCP 통합 가이드](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)를 따르세요.** 구성 선택부터 azd 배포·호출·결과 확인까지 한 페이지에서 진행할 수 있습니다. 아래는 **2026-09-13** 기준의 선택 근거와 지원 범위를 정리한 참고 자료입니다. App Service와 Functions는 공식 문서에 따른 대안이며, 통합 가이드의 배포 대상은 아닙니다.
+**처음 구성할 때는 [Azure MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 따르세요.** 직접 호스팅·Foundry Toolbox·REST 변환·gateway를 비교하고 목적에 맞는 시나리오를 선택할 수 있습니다. 아래는 **2026-09-13** 기준의 선택 근거와 지원 범위를 정리한 참고 자료입니다.
 
 ## MCP protocol과 패키지 버전
 
@@ -128,6 +138,33 @@ Learn은 익명으로 호출합니다. APIM에서 Entra 인증을 추가하더�
 
 로컬 PC가 private endpoint나 internal VNet의 MCP에 접속하려면 private IP까지의 VPN/ExpressRoute 경로와 DNS가 필요합니다. 그 연결 위에서 전달한 HTTP 요청을 Entra access token으로 인증합니다.
 
+Container Apps dynamic sessions는 별도 선택지입니다. Platform이 제공하는 Python·shell 실행 도구와 session별 격리를 사용하며, 직접 작성한 MCP 서버를 배포하는 standalone Container Apps와는 다릅니다.
+
+### Microsoft Foundry Toolbox: 도구 구성·공유·버전 관리
+
+Toolbox는 여러 MCP 서버, OpenAPI, 검색 도구 등을 **하나의 MCP-compatible endpoint**로 제공합니다. Foundry에 정의한 toolset을 Foundry Agent Service, VS Code의 MCP client, Agent Framework, LangGraph 등에서 재사용할 수 있습니다. 자체 MCP 서버를 container로 실행하는 호스팅 서비스나 APIM의 다른 이름은 아닙니다.
+
+| 기능 | 직접 호스팅한 MCP | Foundry Toolbox | APIM |
+|---|---|---|---|
+| Custom MCP server code 실행 | 호스팅 서비스에서 실행 | 외부 MCP server에 연결 | 외부 MCP server에 연결 |
+| 여러 종류의 tool 구성 공유 | 직접 구현·배포 | MCP·OpenAPI·검색 등을 toolset으로 관리 | 관리하는 API/MCP에 gateway 기능 적용 |
+| REST API의 tool 노출 | SDK로 구현하거나 App Service built-in MCP 사용 | OpenAPI tool로 포함 | Native REST-to-MCP |
+| 버전 선택 | 앱·image revision 관리 | Toolbox version과 default version | API·policy·backend 구성 관리 |
+| Backend 인증 | 서버 코드·플랫폼에서 구성 | Connection의 OAuth·credential·identity 설정 | Backend와 policy에서 구성 |
+| 내부망 | 각 호스팅 서비스의 네트워크 구성 | Foundry project의 network isolation | APIM SKU의 VNet/private endpoint 기능 |
+
+Toolbox consumer는 `https://ai.azure.com/.default` token과 Foundry project 권한을 사용합니다. Backend에는 해당 connection의 인증 방식이 적용되므로, Toolbox token을 모든 MCP 서버에 그대로 전달하는 구조로 설명하면 안 됩니다. 특히 자체 Azure MCP의 OBO는 올바른 audience·scope·client 설정과 delegated permission이 필요합니다.
+
+Consumer endpoint는 default version을 제공하고, version-specific endpoint는 새 버전 확인에 사용합니다. Tool search **preview**를 켜면 `tools/list`에서 모든 도구 대신 `tool_search`, `call_tool`이 노출될 수 있습니다.
+
+Private network는 Toolbox가 독립적으로 만드는 것이 아니라 Foundry project 설정을 따릅니다. MCP·OpenAPI의 backend traffic은 project의 delegated subnet을 사용할 수 있으며, 해당 subnet에서 backend의 route와 DNS가 연결되어야 합니다.
+
+[구성 가이드의 Toolbox 절차](../../../labs/azure-architecture/mcp-configuration/index.md)는 공개 Learn MCP로 시작해 `azd deploy` → endpoint 확인 → 도구 호출 → version 관리 순서로 진행합니다. 이 절차는 공식 문서·CLI 계약을 확인한 예제이며, 기존 Container Apps/APIM 실행 캡처를 Toolbox의 결과로 재사용하지 않습니다.
+
+### APIM 없이 REST API를 변환하는 옵션
+
+App Service built-in MCP **preview**는 이미 실행 중인 API의 OpenAPI **3.0.x** 명세를 읽고 operation을 MCP tool로 노출합니다. OpenAPI 3.1.x는 지원하지 않습니다. Foundry Toolbox의 OpenAPI tool도 REST API를 toolset에 포함할 수 있습니다. 따라서 REST-to-MCP가 필요하다는 이유만으로 APIM을 필수로 선택할 필요는 없습니다.
+
 ### 1. Container Apps에서 Azure MCP OBO 사용
 
 ![내부 Container Apps의 Azure MCP가 Entra 사용자 토큰을 검증하고 관리 ID 기반 federated credential로 confidential client를 인증한 뒤 별도 ARM 토큰을 얻는 구조](images/container-apps-obo.svg)
@@ -151,7 +188,7 @@ Internal Container Apps 환경의 앱 ingress `external: true`는 VNet에서 앱
 
 APIM이 관리하는 REST API operation을 선택하면 MCP tool로 노출할 수 있습니다. 별도 MCP 서버 프로세스 없이 APIM이 MCP 요청을 REST 호출로 연결합니다.
 
-샘플은 가상 inventory REST API를 사용합니다. [실습](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)에서는 inventory를 REST로 조회하고, MCP 도구 목록을 확인한 뒤 같은 항목을 tool로 조회합니다. Tool 리소스의 **`operationId`가 실제 REST operation의 리소스 ID를 가리켜야** 이 호출이 연결됩니다.
+샘플은 가상 inventory REST API를 사용합니다. [실습](../../../labs/azure-architecture/mcp-configuration/index.md)에서는 inventory를 REST로 조회하고, MCP 도구 목록을 확인한 뒤 같은 항목을 tool로 조회합니다. Tool 리소스의 **`operationId`가 실제 REST operation의 리소스 ID를 가리켜야** 이 호출이 연결됩니다.
 
 이 기능 자체가 REST backend의 인증을 OBO로 바꾸지는 않습니다. 업무 API를 연결할 때는 그 API의 access token, managed identity 또는 다른 인증 방식을 별도로 구성합니다. Python MCP의 resource group OBO 조회는 이 REST inventory 경로와 별개의 MCP 도구입니다.
 
@@ -197,7 +234,7 @@ Preview 전에는 `python3 scripts/identity.py prepare`로 필요한 Entra 앱 I
 6. Inspector CLI로 APIM의 Learn MCP 프록시에 연결해 문서를 검색합니다.
 7. Azure 리소스와 Entra 앱 객체를 정리합니다.
 
-명령과 비용·정리 절차는 [실습 문서](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)를 따릅니다. App Service와 Functions로 변경한다면 각 제품의 preview 범위, 네트워크 구성, 사용자별 OBO 흐름을 별도로 확인해야 합니다.
+명령과 비용·정리 절차는 [MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 따릅니다. App Service와 Functions로 변경한다면 각 제품의 preview 범위, 네트워크 구성, 사용자별 OBO 흐름을 별도로 확인해야 합니다.
 
 ## APIM SKU 선택
 

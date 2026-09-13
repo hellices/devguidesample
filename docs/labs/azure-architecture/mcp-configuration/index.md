@@ -1,14 +1,26 @@
 ---
-title: Azure MCP 통합 가이드 — 구성 선택부터 azd 배포와 OBO까지
-description: 아키텍처 선택, Entra 인증, azd 배포, MCP 호출 시나리오와 실제 응답 캡처를 한 문서에서 따라갑니다.
+title: Azure MCP 구성 가이드 — 호스팅·Foundry Toolbox·API 변환
+description: 기존 MCP 연결, Azure 직접 호스팅, Microsoft Foundry Toolbox와 REST-to-MCP를 비교하고 필요한 방식의 구성·인증·호출 절차를 따라갑니다.
 document_type: lab
-services: [azure-api-management, azure-container-apps, azure-kubernetes-service, microsoft-entra-id]
+services: [azure-architecture, microsoft-foundry, azure-container-apps, azure-app-service, azure-functions, azure-kubernetes-service, azure-api-management, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python, nodejs]
 tags: [ai-agents, authentication, authorization, deployment, networking]
-status: verified
+status: needs-review
 verification_status: needs-review
 sources_checked_at: 2026-09-13
 official_sources:
+  - title: Choose an Azure service for your MCP server
+    url: https://learn.microsoft.com/azure/container-apps/mcp-choosing-azure-service
+  - title: What is Toolbox in Foundry?
+    url: https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview
+  - title: Create and manage a toolbox in Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
+  - title: Network isolation for a toolbox in Microsoft Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation
+  - title: Configure App Service built-in MCP (preview)
+    url: https://learn.microsoft.com/azure/app-service/configure-mcp-built-in
+  - title: Self-hosted remote MCP server on Azure Functions (public preview)
+    url: https://learn.microsoft.com/azure/azure-functions/self-hosted-mcp-servers
   - title: About MCP servers in Azure API Management
     url: https://learn.microsoft.com/azure/api-management/mcp-server-overview
   - title: Remote builds support with Azure Container Registry
@@ -46,33 +58,210 @@ related_guides:
   - ../../../guides/azure-api-management/mcp-entra-private-access/index.md
 ---
 
-# Azure MCP 통합 가이드 — 구성 선택부터 azd 배포와 OBO까지
+# Azure MCP 구성 가이드 — 호스팅·Foundry Toolbox·API 변환
 
-Azure에서 MCP를 구성할 때 사용할 **시작 문서**입니다. 아키텍처와 인증 방식을 확인한 뒤 Azure Developer CLI(`azd`)로 배포하고, 로컬 클라이언트에서 도구를 호출하는 과정까지 이 페이지에서 진행합니다. 구성도와 실제 응답 캡처도 해당 단계에 함께 배치했습니다.
+MCP를 구성하는 방법은 하나가 아닙니다. 이미 있는 MCP 서버에 클라이언트를 연결할 수도 있고, 서버 코드를 Azure에 직접 배포하거나, **Microsoft Foundry Toolbox**로 도구를 모아 하나의 MCP endpoint로 제공할 수도 있습니다. 기존 REST API를 변환하는 방법도 있습니다. **APIM은 필수 구성 요소가 아니라 API 변환과 gateway 정책이 필요한 경우의 선택지입니다.**
 
-| 진행 순서 | 이 페이지에서 확인할 내용 |
-|---|---|
-| 구성 선택과 준비 | 사용할 MCP 서버, Azure 서비스, access token과 OBO 흐름 |
-| 1. 배포 | azd environment, Entra 앱 준비, Azure 리소스와 서비스 배포 |
-| 2–4. 연결과 인증 | 로컬 MCP, private network 접속, API별 access token 발급 |
-| 5–7. 도구 호출 | APIM REST-to-MCP, Azure·Python OBO, Learn MCP 프록시 |
-| 8–9. 오류 확인과 정리 | 401/403 비교, 설정 복구, Azure·Entra 리소스 정리 |
+## MCP 구성 방법 선택
 
-추가 조사가 필요할 때만 마지막의 참고 자료를 확인하면 됩니다. 실행 파일은 [샘플 소스](https://github.com/hellices/devguidesample/tree/main/samples/azure-api-management/mcp-entra-lab)에 있습니다.
-
-## 구성 선택과 준비
-
-### 어떤 방식을 사용할지 선택
-
-| 필요한 기능 | 사용할 구성 | 이 가이드의 시나리오 |
+| 하려는 일 | 구성 방법 | APIM 필요 여부 |
 |---|---|---|
-| 기존 REST API를 AI 도구로 제공 | APIM이 REST operation을 MCP tool로 노출 | 5. REST-to-MCP |
-| 기존 MCP 서버에 Entra 인증과 gateway 정책 적용 | APIM의 기존 MCP 프록시 | 7. Learn 프록시 |
-| 로그인한 사용자의 Azure 권한으로 리소스 조회 | Container Apps의 공식 Azure MCP + OBO | 6-1. Native Azure MCP |
-| 업무용 MCP tool에 사용자 OBO 구현 | Container Apps의 Python MCP 예제 | 6-2. Python MCP |
-| 로컬 개발에서 GitHub·Azure·AKS·Learn 연결 | 서버별 MCP client 설정과 자격 증명 | 2–3. 로컬 연결 |
+| GitHub·Azure·AKS·Learn의 기존 기능 사용 | 기존 remote MCP 또는 로컬 stdio 서버에 직접 연결 | 필요 없음 |
+| 직접 만든 MCP server code 실행 | Container Apps, App Service, Functions, AKS에 호스팅 | 필요 없음 |
+| 여러 MCP·API·검색 도구를 공통 endpoint로 공유 | Microsoft Foundry Toolbox | 필요 없음 |
+| App Service의 기존 REST API를 MCP로 제공 | App Service built-in MCP **preview** | 필요 없음 |
+| OpenAPI로 정의한 API를 Toolbox 도구에 포함 | Foundry Toolbox의 OpenAPI tool | 필요 없음 |
+| APIM에서 관리 중인 REST API를 MCP로 제공 | APIM native REST-to-MCP | 해당 방식을 선택할 때 사용 |
+| 기존 MCP에 API gateway 정책 적용 | 선택적으로 APIM을 MCP 앞에 배치 | 해당 방식을 선택할 때 사용 |
 
-APIM의 **REST-to-MCP**와 **기존 MCP 프록시**는 다른 기능입니다. 앞의 구성은 APIM이 REST operation을 tool로 만들고, 뒤의 구성은 이미 MCP protocol을 지원하는 서버에 연결합니다. 두 방식 모두 아래에서 직접 호출합니다.
+![기존 MCP 직접 연결, Azure 직접 호스팅, Foundry Toolbox, 선택적 APIM gateway를 비교한 구성도](images/mcp-configuration-options.svg)
+
+이 문서에서 **Toolbox 방식**과 **직접 호스팅·gateway 비교 실습**을 각각 따라 할 수 있습니다. 한쪽을 쓰기 위해 다른 쪽까지 배포할 필요는 없습니다.
+
+## MCP 서버를 직접 호스팅하는 방법
+
+| 서비스 | 사용할 때 | 직접 구성할 항목 |
+|---|---|---|
+| Container Apps standalone | MCP SDK로 만든 서버를 container로 배포하고 scale-to-zero 사용 | Image, HTTP ingress, 인증, replica·timeout·private DNS |
+| App Service | 기존 웹 앱에 MCP endpoint를 추가하거나 code 기반 배포 사용 | MCP route, App Service authentication, 배포·네트워크 설정 |
+| Functions | 함수의 trigger/binding으로 tool을 만들거나 SDK 서버를 custom handler로 호스팅 | MCP extension 또는 SDK hosting 방식, 인증과 실행 계획 |
+| AKS | 기존 Kubernetes 운영 환경이나 custom networking·operator가 필요 | Deployment, ingress, 인증, RBAC·network policy·autoscaling |
+| Container Apps dynamic sessions | 격리된 Python·shell 실행 도구가 필요 | Session pool과 접근 권한. 임의의 custom MCP tool 서버를 배포하는 방식은 아님 |
+
+Container Apps dynamic sessions는 platform이 제공하는 실행 도구를 사용하는 방식입니다. 직접 MCP server code를 배포하는 Container Apps standalone과 구분합니다. Functions의 SDK 기반 self-hosted 방식은 **public preview이며 Flex Consumption·stateless Streamable HTTP** 범위를 확인해야 합니다.
+
+AKS에 **자체 MCP application**을 배포하는 것과 **AKS MCP binary**를 사용하는 것도 다릅니다. 이 가이드의 AKS MCP `0.0.20`은 local stdio-only이므로 원격 HTTP 서버로 배포하지 않습니다.
+
+공식 Azure MCP와 OBO만 필요하면 APIM을 포함하지 않는 [Azure MCP OBO azd 템플릿](https://learn.microsoft.com/azure/developer/azure-mcp-server/how-to/deploy-remote-mcp-server-on-behalf-of)도 시작점으로 사용할 수 있습니다. 내부망으로 제공할 때는 호스팅 서비스의 VNet·DNS·인증을 함께 구성합니다.
+
+## REST API를 MCP 도구로 제공하는 방법
+
+| 방식 | API와 연결하는 방법 | 적합한 상황 |
+|---|---|---|
+| App Service built-in MCP **preview** | App Service의 OpenAPI **3.0.x** 문서를 읽어 operation을 tool로 노출 | 이미 App Service에서 운영하는 REST API |
+| Foundry Toolbox OpenAPI tool | API 명세와 인증을 Toolbox에 구성하고 다른 도구와 함께 제공 | API·MCP·검색 도구를 공통 toolset으로 공유 |
+| APIM REST-to-MCP | APIM의 기존 REST operation을 MCP tool의 `operationId`로 연결 | 이미 APIM에서 관리하는 API와 정책을 재사용 |
+
+App Service built-in MCP는 OpenAPI 3.1.x를 지원하지 않습니다. 여러 단계의 업무 로직이나 MCP resources·prompts가 필요하면 custom MCP server를 고려합니다. 아래 APIM 시나리오는 위 선택지 중 하나를 실행하는 예제입니다.
+
+## Microsoft Foundry Toolbox로 MCP endpoint 제공
+
+### Toolbox에서 관리하는 것
+
+Foundry Toolbox는 **이름과 버전이 있는 관리형 도구 모음**입니다. MCP 서버, OpenAPI, Azure AI Search, File search, Web search 등의 도구 구성을 모아 하나의 MCP-compatible endpoint로 제공합니다. Foundry Agent Service뿐 아니라 VS Code의 MCP client, Microsoft Agent Framework, LangGraph와 custom client에서도 사용할 수 있습니다.
+
+![Foundry Toolbox가 여러 MCP와 OpenAPI 도구의 구성·인증·버전을 관리하고 여러 클라이언트에 단일 MCP endpoint로 제공하는 구조](images/foundry-toolbox.svg)
+
+| 관리 항목 | Toolbox의 역할 |
+|---|---|
+| 도구 구성 | 연결할 MCP·API·검색 도구를 프로젝트에서 관리 |
+| 인증 | Connection에 설정한 credential·OAuth·identity 방식으로 backend 호출 |
+| 공유 | 여러 client·agent가 동일한 consumer MCP endpoint 사용 |
+| 버전 | 변경된 구성을 새 버전으로 만들고 default version을 선택 |
+| 정책·운영 | Toolbox의 guardrail·접근 제어·관측 기능 활용 |
+| Tool search **preview** | 많은 도구를 모두 나열하는 대신 `tool_search`와 `call_tool`로 필요한 도구 탐색 |
+
+Toolbox는 임의의 MCP 서버 container를 실행하는 호스팅 서비스가 아닙니다. 연결 대상 custom MCP 서버는 Container Apps·App Service 등에서 별도로 운영합니다. 반대로 도구 집합과 인증·버전 관리만 필요하면 APIM을 추가할 이유는 없습니다. API gateway 정책도 필요할 때는 Toolbox가 APIM 뒤의 MCP/API를 사용하도록 조합할 수 있습니다.
+
+### Toolbox와 backend의 인증
+
+- **Client → Toolbox:** Foundry project에 대한 권한과 `https://ai.azure.com/.default` access token을 사용합니다.
+- **Toolbox → MCP/API:** 해당 connection에 구성한 인증 방식을 사용합니다. 공개 Learn MCP는 익명, GitHub는 GitHub OAuth/PAT, Azure backend는 대상 API에 맞는 identity·OAuth 설정이 필요합니다.
+- Toolbox token을 자체 Azure MCP API에 그대로 넣는다고 OBO가 되는 것은 아닙니다. Backend의 audience·scope·허용 client와 delegated permission이 맞아야 합니다.
+
+Toolbox 자체가 별도 VNet을 만드는 것도 아닙니다. **Foundry project의 network isolation**을 따릅니다. Private project의 consumer endpoint는 project private endpoint로 접근하며, MCP·OpenAPI backend 통신은 project의 delegated subnet을 사용할 수 있습니다. Backend의 private DNS와 route도 그 subnet에서 연결되어야 합니다. 이 가이드 후반의 Container Apps VNet이 자동으로 Foundry project에 연결되지는 않습니다.
+
+### T1. 프로젝트와 도구 준비
+
+기존 Foundry project, project endpoint, 프로젝트의 **Foundry User** 역할이 필요합니다. 사용할 도구의 region·model 지원도 확인합니다. [Toolbox 샘플](https://github.com/hellices/devguidesample/tree/main/samples/microsoft-foundry/mcp-toolbox)은 공개 Microsoft Learn MCP 하나로 시작하며, model이나 APIM을 새로 배포하지 않습니다.
+
+연결한 도구에 따라 별도 비용이 발생할 수 있고, 외부 MCP/API로 보낸 데이터에는 해당 서비스의 처리 정책이 적용됩니다. 업무 데이터를 연결하기 전에 도구별 권한과 데이터 처리 조건을 확인합니다.
+
+```bash
+git clone https://github.com/hellices/devguidesample.git
+cd devguidesample/samples/microsoft-foundry/mcp-toolbox
+azd extension install microsoft.foundry
+azd auth login
+az login
+azd env new toolboxdemo
+azd env set AZURE_SUBSCRIPTION_ID "$(az account show --query id -o tsv)"
+read -r -p "Foundry project endpoint: " PROJECT_ENDPOINT
+azd env set FOUNDRY_PROJECT_ENDPOINT "$PROJECT_ENDPOINT"
+```
+
+이미 저장소를 내려받았다면 clone은 생략하고 해당 Toolbox sample 디렉터리로 이동합니다. 이후 명령은 그 디렉터리에서 실행합니다. Node.js 22.19+와 `jq`도 준비합니다. Container Apps/APIM 실습과는 별도 azd environment입니다.
+
+### T2. Toolbox 배포
+
+샘플의 `azure.yaml`은 다음과 같이 관리형 Toolbox service를 선언합니다.
+
+```yaml
+name: mcp-toolbox
+services:
+  learn-tools:
+    host: azure.ai.toolbox
+    description: Shared read-only Microsoft Learn documentation tools
+    tools:
+      - type: mcp
+        server_label: microsoft_learn
+        server_url: https://learn.microsoft.com/api/mcp
+        require_approval: never
+```
+
+```bash
+azd ai toolbox list --project-endpoint "$PROJECT_ENDPOINT"
+azd deploy learn-tools
+azd ai toolbox show learn-tools --project-endpoint "$PROJECT_ENDPOINT" --output json
+```
+
+`require_approval: never`는 이 예제의 읽기 전용 Learn 도구에 한정한 설정입니다. 데이터 변경·외부 전송 도구를 추가할 때는 승인 정책과 backend 인증을 검토합니다.
+
+`learn-tools`가 이미 다른 애플리케이션에서 사용하는 이름이면 배포하지 않습니다. `azure.yaml`의 service 이름과 이후 명령의 Toolbox 이름을 사용하지 않는 값으로 바꿔 진행합니다.
+
+UI로 구성하려면 VS Code의 **Foundry Toolkit → My Resources → 프로젝트 → Tools → Add Toolbox**에서 도구를 선택하고 **Publish**합니다. 게시 후 **Toolboxes**의 **Endpoint URL**에서 consumer endpoint를 복사할 수 있습니다.
+
+### T3. MCP client에서 도구 호출
+
+Consumer endpoint와 특정 버전을 확인하는 endpoint가 구분됩니다.
+
+```text
+Consumer:
+<project-endpoint>/toolboxes/learn-tools/mcp?api-version=v1
+
+Version-specific:
+<project-endpoint>/toolboxes/learn-tools/versions/<version>/mcp?api-version=v1
+```
+
+Consumer endpoint는 선택된 default version을 제공합니다. 클라이언트는 그대로 두고 Toolbox의 기본 버전을 변경할 수 있습니다.
+
+```bash
+export TOOLBOX_ENDPOINT="${PROJECT_ENDPOINT%/}/toolboxes/learn-tools/mcp?api-version=v1"
+umask 077
+mkdir -p .private
+az account get-access-token --scope https://ai.azure.com/.default -o json \
+  | jq --arg url "$TOOLBOX_ENDPOINT" '{mcpServers:{toolbox:{
+      type:"streamable-http",url:$url,headers:{Authorization:("Bearer "+.accessToken)}
+    }}}' > .private/toolbox-client.json
+
+npx --yes @modelcontextprotocol/inspector@2.5.0 --cli \
+  --config .private/toolbox-client.json --server toolbox --method tools/list
+```
+
+Toolbox의 tool 이름은 backend 이름과 다르게 qualified name으로 반환될 수 있습니다. 목록에서 Learn 검색 tool의 실제 이름을 확인하고 호출합니다.
+
+```bash
+read -r -p "Learn search tool name from tools/list: " SEARCH_TOOL
+npx --yes @modelcontextprotocol/inspector@2.5.0 --cli \
+  --config .private/toolbox-client.json --server toolbox \
+  --method tools/call --tool-name "$SEARCH_TOOL" \
+  --tool-arg 'query=Azure MCP hosting options'
+```
+
+Tool search를 켠 Toolbox라면 `tools/list`에 `tool_search`와 `call_tool`이 보이는 것이 정상일 수 있습니다. 이 시작 예제에는 Tool search를 켜지 않았습니다.
+
+### T4. 버전 변경과 정리
+
+```bash
+azd ai toolbox versions list learn-tools --project-endpoint "$PROJECT_ENDPOINT"
+read -r -p "확인할 Toolbox version: " TOOLBOX_VERSION
+VERSION_ENDPOINT="${PROJECT_ENDPOINT%/}/toolboxes/learn-tools/versions/$TOOLBOX_VERSION/mcp?api-version=v1"
+jq --arg url "$VERSION_ENDPOINT" '.mcpServers.toolbox.url=$url' \
+  .private/toolbox-client.json > .private/toolbox-version-client.json
+npx --yes @modelcontextprotocol/inspector@2.5.0 --cli \
+  --config .private/toolbox-version-client.json --server toolbox --method tools/list
+```
+
+선택한 버전의 도구를 확인하고, 그 버전을 사용할 준비가 되면 default로 publish합니다. 이전 버전을 선택하면 rollback에도 사용할 수 있습니다.
+
+```bash
+azd ai toolbox publish learn-tools "$TOOLBOX_VERSION" --project-endpoint "$PROJECT_ENDPOINT"
+```
+
+실습이 끝나면 Toolbox만 제거합니다. 기존 Foundry project나 공유 resource group을 삭제할 필요는 없습니다.
+
+```bash
+azd ai toolbox delete learn-tools --project-endpoint "$PROJECT_ENDPOINT"
+```
+
+T1–T4는 공식 Toolbox 문서와 CLI 계약을 확인한 구성 절차입니다. 아래 실제 응답 캡처는 Container Apps·APIM 실습의 관측값이며 Toolbox 실행 결과로 표시하지 않습니다.
+
+## MCP 운영 기능 선택
+
+| 운영 요구 | 구성할 서비스·설정 |
+|---|---|
+| MCP server process, scale, cold start | Container Apps/App Service/Functions/AKS의 실행·확장 설정 |
+| 공통 toolset과 version rollout | Foundry Toolbox의 version-specific/consumer endpoint와 default version |
+| Incoming client 인증·사용자별 권한 | 각 MCP API의 Entra 설정, Foundry project RBAC, 필요한 OBO |
+| 외부 API credential과 OAuth 연결 | Toolbox connection 또는 MCP server의 backend 인증 구현 |
+| API rate limit·IP filtering·기존 API 정책 | 필요한 경로에 APIM gateway 추가 |
+| 격리된 코드 실행 | Container Apps dynamic sessions 같은 전용 실행 환경 |
+| 로그·호출 추적 | 선택한 호스팅 서비스와 Foundry/APIM의 관측 기능을 연결 |
+
+## 직접 호스팅과 gateway 비교 실습
+
+이하 1–9는 **Container Apps 직접 호스팅과 선택적 APIM 기능을 함께 비교하는 실습 묶음**입니다. 기존 sample은 두 방식을 한 번에 확인하기 위해 APIM도 배포합니다. Native Azure·Python MCP를 직접 호출하는 6번 경로는 APIM을 거치지 않습니다. Toolbox만 필요하면 앞의 T1–T4를 사용하며 이 묶음을 배포하지 않아도 됩니다.
+
+실행 파일은 [Container Apps + APIM sample](https://github.com/hellices/devguidesample/tree/main/samples/azure-api-management/mcp-entra-lab)에 있습니다.
 
 ### 배포할 구성
 

@@ -2,13 +2,17 @@
 title: Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 description: Azure MCP 통합 가이드에서 사용하는 Entra app registration, client ACL, access token과 OBO 설정을 상세히 설명합니다.
 document_type: guide
-services: [azure-api-management, azure-container-apps, microsoft-entra-id]
+services: [azure-api-management, azure-container-apps, microsoft-foundry, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python]
 tags: [ai-agents, authentication, authorization, networking, security]
 status: current
 verification_status: verified
 sources_checked_at: 2026-09-13
 official_sources:
+  - title: Create and manage a toolbox in Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
+  - title: Network isolation for a toolbox in Microsoft Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation
   - title: Azure Developer CLI reference
     url: https://learn.microsoft.com/azure/developer/azure-developer-cli/reference
   - title: Remote builds support with Azure Container Registry
@@ -60,7 +64,7 @@ related_cases:
 
 # Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 
-**처음 구성할 때는 [Azure MCP 통합 가이드](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)를 따르세요.** 아키텍처, azd 배포, 호출 명령과 결과 캡처가 한 페이지에 있습니다. 이 문서는 app registration·scope·client ACL·OBO 설정을 변경하거나 인증 문제를 조사할 때 사용하는 상세 참고 자료입니다.
+**처음 구성할 때는 [Azure MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 따르세요.** 직접 호스팅, Foundry Toolbox와 선택적 APIM 구성 방법을 한 페이지에서 비교할 수 있습니다. 이 문서는 자체 MCP API의 app registration·scope·client ACL·OBO 설정을 변경하거나 인증 문제를 조사할 때 사용하는 상세 참고 자료입니다.
 
 ## 구성 요소와 인증 흐름
 
@@ -156,6 +160,14 @@ Entra ID의 dynamic client registration(DCR)을 전제로 설정하는 대신, �
 - **공식 Azure MCP:** Container Apps `authConfigs`의 `identityProviders.azureActiveDirectory.validation.defaultAuthorizationPolicy.allowedApplications`.
 
 공식 Azure MCP 앞의 Container Apps authentication과 Azure MCP 자체의 tenant·audience·scope 검사를 함께 적용합니다. tenant와 scope가 맞아도 허용하지 않은 클라이언트의 token은 거부하도록 구성합니다.
+
+### Foundry Toolbox에 연결할 때
+
+Toolbox consumer endpoint는 자체 MCP API의 `Mcp.Access` token이 아니라 **`https://ai.azure.com/.default` access token과 Foundry project 권한**을 사용합니다. Developer에게는 project의 Foundry User 역할이 필요하며, agent·end-user identity는 사용 방식에 맞는 권한을 별도로 준비합니다.
+
+Toolbox가 backend MCP에 연결할 때는 그 connection에 구성한 OAuth·credential·identity 설정을 사용합니다. 이 인증을 자체 MCP server의 OBO와 혼동하지 않습니다. GitHub는 GitHub 인증, Learn은 익명 호출, Azure MCP는 대상 API에 맞는 token이 필요합니다.
+
+Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결을 함께 구성합니다. 자세한 순서는 [MCP 구성 가이드의 Toolbox 절차](../../../labs/azure-architecture/mcp-configuration/index.md)에 있습니다.
 
 ## 4. access token으로 MCP 호출
 
@@ -262,4 +274,4 @@ Scope URI는 서버가 안내하는 값을 사용합니다. Azure MCP 2.0.5의 `
 | 도구 목록은 나오지만 호출 실패 | REST operation 연결, backend 연결·인증, 요청 인자 |
 | HTTP 200이고 `isError=true` | MCP 응답에 담긴 도구 실행 오류 |
 
-실제 HTTP status는 APIM 정책과 앱 설정에 따라 달라질 수 있습니다. 오류 응답의 내용도 함께 확인합니다. 비용과 리소스·Entra 앱 정리는 [실습의 정리 절차](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md), 버전별 동작과 응답 차이는 [사례 기록](../../../cases/azure-api-management/mcp-entra-validation/index.md)을 참고하세요.
+실제 HTTP status는 APIM 정책과 앱 설정에 따라 달라질 수 있습니다. 오류 응답의 내용도 함께 확인합니다. 비용과 리소스·Entra 앱 정리는 [구성 가이드의 정리 절차](../../../labs/azure-architecture/mcp-configuration/index.md), 버전별 동작과 응답 차이는 [사례 기록](../../../cases/azure-api-management/mcp-entra-validation/index.md)을 참고하세요.

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 870" role="img" aria-labelledby="title desc">
+  <title id="title">MCP configuration methods on Azure</title>
+  <desc id="desc">Clients can connect directly to existing MCP servers, custom servers hosted on Azure, or Microsoft Foundry Toolbox. API Management is an optional gateway and REST-to-MCP option, not a prerequisite for the other methods.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;fill:#162b40;font-size:20px}.title{font-size:28px;font-weight:700}.small{font-size:18px}.box{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.managed{fill:#f3efff;stroke:#7453a6;stroke-width:2}.optional{fill:#fff7e7;stroke:#9c661c;stroke-width:2}.backend{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1160" height="870" fill="white"/>
+  <text x="30" y="45" class="title">Choose how to provide MCP tools — APIM is optional</text>
+  <rect x="30" y="330" width="245" height="185" rx="12" class="box"/>
+  <text x="152" y="376" text-anchor="middle"><tspan x="152">MCP clients / agents</tspan><tspan x="152" dy="35" class="small">VS Code / Inspector</tspan><tspan x="152" dy="30" class="small">Foundry Agent Service</tspan><tspan x="152" dy="30" class="small">Framework / custom app</tspan></text>
+  <rect x="385" y="115" width="365" height="120" rx="12" class="box"/>
+  <text x="567" y="155" text-anchor="middle"><tspan x="567">Connect to existing MCP</tspan><tspan x="567" dy="33" class="small">Remote HTTP or local stdio</tspan><tspan x="567" dy="28" class="small">Use each server's authentication</tspan></text>
+  <rect x="850" y="115" width="275" height="120" rx="12" class="backend"/>
+  <text x="987" y="163" text-anchor="middle"><tspan x="987">GitHub / Learn</tspan><tspan x="987" dy="35">Local Azure / AKS MCP</tspan></text>
+  <rect x="385" y="290" width="365" height="130" rx="12" class="box"/>
+  <text x="567" y="331" text-anchor="middle"><tspan x="567">Host your own MCP server</tspan><tspan x="567" dy="33" class="small">Container Apps / App Service</tspan><tspan x="567" dy="28" class="small">Functions / AKS</tspan></text>
+  <rect x="850" y="290" width="275" height="130" rx="12" class="backend"/>
+  <text x="987" y="339" text-anchor="middle"><tspan x="987">Your APIs and data</tspan><tspan x="987" dy="34" class="small">User OBO or workload ID</tspan></text>
+  <rect x="385" y="475" width="365" height="135" rx="12" class="managed"/>
+  <text x="567" y="516" text-anchor="middle"><tspan x="567">Microsoft Foundry Toolbox</tspan><tspan x="567" dy="33" class="small">Managed, versioned toolset</tspan><tspan x="567" dy="28" class="small">One MCP consumer endpoint</tspan></text>
+  <rect x="850" y="475" width="275" height="135" rx="12" class="backend"/>
+  <text x="987" y="518" text-anchor="middle"><tspan x="987">MCP + OpenAPI + Search</tspan><tspan x="987" dy="33" class="small">Connections and tool policies</tspan><tspan x="987" dy="28" class="small">MCP hosting remains separate</tspan></text>
+  <rect x="385" y="665" width="365" height="115" rx="12" class="optional"/>
+  <text x="567" y="708" text-anchor="middle"><tspan x="567">Optional API Management</tspan><tspan x="567" dy="33" class="small">REST-to-MCP / gateway policies</tspan></text>
+  <rect x="850" y="665" width="275" height="115" rx="12" class="backend"/>
+  <text x="987" y="708" text-anchor="middle"><tspan x="987">Managed REST APIs</tspan><tspan x="987" dy="33">Existing MCP backends</tspan></text>
+  <path d="M275 365H320V175H385" class="flow"/>
+  <path d="M275 405H345V355H385" class="flow"/>
+  <path d="M275 445H345V542H385" class="flow"/>
+  <path d="M275 485H320V722H385" class="flow"/>
+  <path d="M750 175H850" class="flow"/><path d="M750 355H850" class="flow"/>
+  <path d="M750 542H850" class="flow"/><path d="M750 722H850" class="flow"/>
+  <text x="30" y="830" class="small">REST conversion also exists in App Service built-in MCP (preview) and Foundry Toolbox OpenAPI tools.</text>
+</svg>

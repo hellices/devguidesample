@@ -1,6 +1,6 @@
 # Azure MCP + Entra ID walkthrough
 
-Start with the [Azure MCP unified guide](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md). It includes architecture choices, Entra authentication, azd deployment, all scenarios and actual response captures in one page. This directory contains the runnable files used by that guide.
+Start with the [Azure MCP configuration guide](../../../docs/labs/azure-architecture/mcp-configuration/index.md). It covers direct hosting, Foundry Toolbox and optional API Management. This directory is the Container Apps + APIM comparison lab, not a requirement for every MCP deployment.
 
 ## What is deployed
 
@@ -44,7 +44,7 @@ The `.azure/` directory contains environment settings and a short-lived credenti
 
 ## Follow the scenarios
 
-Use the [full walkthrough](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md) in order:
+Use the [self-hosting and gateway walkthrough](../../../docs/labs/azure-architecture/mcp-configuration/index.md) in order:
 
 1. Inspect the deployed resources and private endpoints.
 2. Connect local GitHub, Azure, AKS and Microsoft Learn MCP clients.
