@@ -252,8 +252,10 @@ class _Site:
         port = url.port if url.port is not None else {"http": 80, "https": 443}.get(url.scheme)
         return url.scheme, host, port
 
-    def resolve(self, html_path: Path, raw: str) -> Path | None:
+    def resolve(self, html_path: Path, raw: str, *, same_document: bool = False) -> Path | None:
         try:
+            if re.match(r"^[\x00-\x20]*(?:/|%2[fF]){3}", raw):
+                raise ValueError("ambiguous leading slashes must be rejected before URL parsing")
             if "\\" in raw or re.match(r"^[\x00-\x20]*[A-Za-z][:|]", raw):
                 raise ValueError("Windows drive or backslash syntax is not a web URL")
             url = urlsplit(raw)
@@ -264,7 +266,7 @@ class _Site:
             if (url.netloc or url.scheme in {"http", "https"}) and re.search(r"[\x00-\x1f\x7f]", raw):
                 raise ValueError("control characters in web URLs are unsupported")
             if not url.path and not url.scheme and not url.netloc:
-                return None
+                return _contained(self.root, html_path, "same-document URL") if same_document else None
             if not (url.scheme or url.netloc) or self._origin(
                 url._replace(scheme=url.scheme or self.site_url.scheme),
             ) == self.origin:
@@ -410,13 +412,13 @@ def inspect_built_site(
             raw = entry["location"]
             if re.search(r"[\x00-\x20\x7f\\]", raw):
                 raise AuditFormatError(f"entry {i}: unsafe search location {raw!r}")
+            resolved = site.resolve(site.root / "index.html", raw, same_document=True)
             url = urlsplit(raw)
             if url.scheme or url.netloc or url.query:
                 raise AuditFormatError(f"entry {i}: invalid search location {raw!r}")
             if raw in seen:
                 raise AuditFormatError(f"duplicate search location {raw!r}")
             seen.add(raw)
-            resolved = site.resolve(site.root / "index.html", url.path or "./")
             if resolved in markdown_aliases:
                 raise AuditFormatError(
                     f"entry {i}: published Markdown search alias for {markdown_aliases[resolved]}: {raw!r}"

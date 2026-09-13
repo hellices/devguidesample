@@ -1055,3 +1055,112 @@ def test_rereview_index_md_has_no_invented_index_subdirectory_alias(site_repo):
     publish_markdown_download(site_repo, "index.md")
     write(root, "site/services/service/topic/downloads/index/index.html", html("Independent page"))
     assert inspect(site_repo).errors == ()
+
+
+AMBIGUOUS_LEADING_SLASHES = [
+    "///", "////", "/////", "//////",
+    "%2f%2f%2f", "/%2F%2f", "//%2F", "%2F//", "%2f%2f%2f%2f",
+]
+
+
+@pytest.mark.parametrize("prefix", AMBIGUOUS_LEADING_SLASHES)
+@pytest.mark.parametrize("element", [
+    '<img src="{raw}">', '<source srcset="{raw} 1x">', '<a href="{raw}">Document</a>',
+])
+def test_raw_leading_slashes_are_rejected_for_rendered_references(site_repo, prefix, element):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    raw = prefix + "devguidesample/services/service/topic/index.html"
+    write(root, "site/" + CHILD.replace(".md", ".html"), html(element.format(raw=raw)))
+    assert "ambiguous leading slashes" in findings(site_repo)
+
+
+@pytest.mark.parametrize("prefix", AMBIGUOUS_LEADING_SLASHES)
+def test_raw_leading_slashes_are_preserved_until_search_validation(site_repo, prefix):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    raw = prefix + "devguidesample/services/service/topic/"
+    write(root, "site/search/search_index.json", json.dumps({
+        "docs": [dict(search_entry(ENTRY), location=raw), search_entry(CHILD)],
+    }))
+    assert "ambiguous leading slashes" in findings(site_repo)
+
+
+@pytest.mark.parametrize("prefix", ["///", "////", "%2f%2f%2f", "//%2F"])
+def test_leading_slash_guard_runs_before_urlsplit(site_repo, prefix, monkeypatch):
+    from scripts.docs import pre_pages_site
+    from scripts.docs.pre_pages import AuditFormatError
+
+    root, _ = site_repo
+    site = pre_pages_site._Site(root / "site", "https://hellices.github.io/devguidesample/")
+    original = pre_pages_site.urlsplit
+    parsed = []
+
+    def record_parse(raw):
+        parsed.append(raw)
+        return original(raw)
+
+    monkeypatch.setattr(pre_pages_site, "urlsplit", record_parse)
+    with pytest.raises(AuditFormatError):
+        site.resolve(
+            root / "site" / CHILD.replace(".md", ".html"),
+            prefix + "devguidesample/services/service/topic/index.html",
+        )
+    assert parsed == []
+
+
+@pytest.mark.parametrize("raw", [
+    "/devguidesample/services/service/topic/",
+    "//hellices.github.io/devguidesample/services/service/topic/",
+])
+def test_valid_root_and_authority_leading_slashes_remain_reachable(site_repo, raw):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    write(root, "site/services/service/index.html", html(f'<a href="{raw}">Topic</a>'))
+    index = root / "site/search/search_index.json"
+    entries = json.loads(index.read_text())
+    entries["docs"][0]["location"] = "/devguidesample/services/service/topic/"
+    index.write_text(json.dumps(entries))
+    assert inspect(site_repo).errors == ()
+
+
+def test_leading_slashes_have_browser_whatwg_origin_expectations():
+    references = [
+        ("///devguidesample/services/service/topic/", "https://devguidesample"),
+        ("////devguidesample/services/service/topic/", "https://devguidesample"),
+        ("//////devguidesample/services/service/topic/", "https://devguidesample"),
+        ("/devguidesample/services/service/topic/", "https://hellices.github.io"),
+        ("//hellices.github.io/devguidesample/services/service/topic/", "https://hellices.github.io"),
+        ("///hellices.github.io/devguidesample/services/service/topic/", "https://hellices.github.io"),
+        ("%2f%2f%2fdevguidesample/services/service/topic/", "https://hellices.github.io"),
+    ]
+    command = subprocess.run([
+        "node", "-e",
+        "const refs=JSON.parse(process.argv[1]);"
+        "console.log(JSON.stringify(refs.map(raw=>new URL(raw,"
+        "'https://hellices.github.io/devguidesample/').origin)));",
+        json.dumps([raw for raw, _ in references]),
+    ], check=True, capture_output=True, text=True)
+    assert json.loads(command.stdout) == [origin for _, origin in references]
+
+
+def test_search_resolver_receives_original_locations_including_fragments(site_repo, monkeypatch):
+    from scripts.docs.pre_pages_site import _Site
+
+    root, _ = site_repo
+    write(root, "site/index.html", html())
+    path = root / "site/search/search_index.json"
+    data = json.loads(path.read_text())
+    data["docs"].extend({"location": raw, "title": "Home", "text": "Home"} for raw in ("", "#home"))
+    path.write_text(json.dumps(data))
+    original = _Site.resolve
+    received = []
+
+    def record_resolve(self, page, raw, **kwargs):
+        if page == root / "site/index.html":
+            received.append(raw)
+        return original(self, page, raw, **kwargs)
+
+    monkeypatch.setattr(_Site, "resolve", record_resolve)
+    assert inspect(site_repo).errors == ()
+    assert {"", "#home", search_entry(CHILD, "#heading")["location"]} <= set(received)
