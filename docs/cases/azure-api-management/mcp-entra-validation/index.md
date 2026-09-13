@@ -26,6 +26,7 @@ official_sources:
 occurred_at: 2026-09-13
 resolved_at: 2026-09-13
 related_guides:
+  - ../../../guides/azure-architecture/mcp-configuration/index.md
   - ../../../guides/azure-api-management/mcp-entra-private-access/index.md
 ---
 
@@ -33,7 +34,7 @@ related_guides:
 
 ## 구성
 
-**배포와 호출을 따라 하려면 [Azure MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 사용하세요.** 필요한 구성도와 주요 결과 캡처도 그 문서에 함께 있습니다. 이 문서는 2026-09-13의 Container Apps·APIM 실행 이력과 관측값을 보관하는 참고 자료이며, Foundry Toolbox의 실행 결과는 포함하지 않습니다.
+운영 전략은 [Azure MCP 운영 아키텍처](../../../guides/azure-architecture/mcp-configuration/index.md), 구체적인 배포·호출은 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/walkthrough.md)를 사용합니다. 이 문서는 2026-09-13의 Container Apps·APIM 실행 이력과 관측값을 보관하며, Foundry hosted agent + Toolbox 통합 구성의 실행 결과는 포함하지 않습니다.
 
 | 항목 | 구성 |
 |---|---|
@@ -192,8 +193,8 @@ Inspector 예제에서는 `mcpServers` 아래에 `type: streamable-http`를 사�
 
 ## 관련 자료
 
-시나리오 확인 후 개발용 port-forward는 종료했습니다. 새 Azure 환경은 후속 실습을 위해 유지하며, 사용이 끝나면 [실습의 정리 절차](../../../labs/azure-architecture/mcp-configuration/index.md)로 ARM 리소스와 Entra 앱을 각각 제거합니다.
+시나리오 확인 후 개발용 port-forward는 종료했습니다. 새 Azure 환경은 후속 실습을 위해 유지하며, 사용이 끝나면 [sample의 정리 절차](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/walkthrough.md)로 ARM 리소스와 Entra 앱을 각각 제거합니다.
 
-- [MCP 구성 방법과 실행 시나리오](../../../labs/azure-architecture/mcp-configuration/index.md)
+- [MCP 관리·연결·인증 설계](../../../guides/azure-architecture/mcp-configuration/index.md)
 - [Entra 인증과 OBO 가이드](../../../guides/azure-api-management/mcp-entra-private-access/index.md)
 - [아키텍처 SVG와 Azure 서비스 비교](../../../research/azure-api-management/mcp-authentication-options/index.md)

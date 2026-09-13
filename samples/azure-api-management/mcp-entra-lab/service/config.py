@@ -70,9 +70,13 @@ def _require_guid(env: Mapping[str, str], name: str) -> str:
 
 def _require_https_url(env: Mapping[str, str], name: str) -> str:
     value = _require(env, name)
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+        port = parts.port
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be a valid HTTPS URL") from exc
     if (
-        parts.scheme != "https" or not parts.hostname or parts.port not in (None, 443)
+        parts.scheme != "https" or not parts.hostname or port not in (None, 443)
         or parts.username is not None or parts.password is not None
         or parts.query or parts.fragment or parts.path != "/mcp"
     ):

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 930" role="img" aria-labelledby="title desc">
+  <title id="title">Shared MCP governance with APIM, hosted agents and Toolbox</title>
+  <desc id="desc">Local clients and hosted agents can call a shared APIM MCP gateway. Toolbox optionally selects tools before routing governed external MCP calls through APIM. MCP hosting is a separate backend layer. Foundry built-in tools have their own routing and policy scope.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.small{font-size:18px}.box{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.toolbox{fill:#f3efff;stroke:#7453a6;stroke-width:2}.gateway{fill:#fff7e7;stroke:#9c661c;stroke-width:2}.backend{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}.optional{stroke-dasharray:7 5}</style>
+  <rect width="1180" height="930" fill="white"/>
+  <text x="30" y="43" class="title">MCP management, agent execution and hosting have different roles</text>
+  <rect x="40" y="110" width="260" height="110" rx="12" class="box"/>
+  <text x="170" y="151" text-anchor="middle"><tspan x="170">Local MCP clients</tspan><tspan x="170" dy="34" class="small">IDE / developer tools</tspan></text>
+  <rect x="440" y="110" width="335" height="110" rx="12" class="box"/>
+  <text x="607" y="151" text-anchor="middle"><tspan x="607">Foundry hosted agent</tspan><tspan x="607" dy="34" class="small">Agent code / session / identity</tspan></text>
+  <rect x="900" y="110" width="240" height="110" rx="12" class="backend"/>
+  <text x="1020" y="151" text-anchor="middle"><tspan x="1020">Models</tspan><tspan x="1020" dy="34" class="small">Model routing and quota</tspan></text>
+  <path d="M775 165H900" class="flow"/>
+  <rect x="440" y="300" width="335" height="135" rx="12" class="toolbox"/>
+  <text x="607" y="341" text-anchor="middle"><tspan x="607">Foundry Toolbox</tspan><tspan x="607" dy="32" class="small">Tool selection / connections</tspan><tspan x="607" dy="29" class="small">Tool search / versions</tspan></text>
+  <path d="M607 220V300" class="flow"/>
+  <text x="627" y="269" class="small">MCP</text>
+  <path d="M170 270H380V365H440" class="flow optional"/>
+  <text x="190" y="255" class="small">With tool discovery</text>
+  <rect x="900" y="300" width="240" height="135" rx="12" class="backend"/>
+  <text x="1020" y="341" text-anchor="middle"><tspan x="1020">Foundry built-in tools</tspan><tspan x="1020" dy="32" class="small">Project policies</tspan><tspan x="1020" dy="29" class="small">Separate routing scope</tspan></text>
+  <path d="M775 365H900" class="flow"/>
+  <rect x="40" y="550" width="1100" height="125" rx="12" class="gateway"/>
+  <text x="590" y="592" text-anchor="middle"><tspan x="590">API Management / AI gateway</tspan><tspan x="590" dy="34" class="small">Authentication and authorization | rate limits | routing | HTTP audit</tspan></text>
+  <path d="M170 220V550" class="flow"/>
+  <text x="188" y="482" class="small">Shared MCP endpoint</text>
+  <path d="M607 435V550" class="flow"/>
+  <text x="627" y="473" class="small"><tspan x="627">External MCP</tspan><tspan x="627" dy="26">via APIM</tspan></text>
+  <path d="M760 220H840V550" class="flow optional"/>
+  <text x="857" y="505" class="small">Direct tool path</text>
+  <rect x="90" y="760" width="460" height="115" rx="12" class="backend"/>
+  <text x="320" y="803" text-anchor="middle"><tspan x="320">MCP server: business tool execution</tspan><tspan x="320" dy="33" class="small">Container Apps / App Service / Functions / AKS</tspan></text>
+  <rect x="650" y="760" width="440" height="115" rx="12" class="backend"/>
+  <text x="870" y="803" text-anchor="middle"><tspan x="870">REST APIs and data services</tspan><tspan x="870" dy="33" class="small">APIM REST operations can become MCP tools</tspan></text>
+  <path d="M320 675V760" class="flow"/><path d="M870 675V760" class="flow"/>
+  <text x="40" y="911" class="small">Reference routing must be configured and verified. Foundry automatic gateway integration has preview limits.</text>
+</svg>

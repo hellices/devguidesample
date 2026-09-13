@@ -1,6 +1,6 @@
 ---
-title: MCP 서버별 인증과 Azure 호스팅 옵션 비교
-description: MCP 직접 호스팅, Microsoft Foundry Toolbox, REST API 변환과 선택적 gateway의 역할을 비교하고 구성에 필요한 인증·네트워크·버전 관리를 설명합니다.
+title: MCP backend 호스팅과 예제 서버 참고
+description: MCP server의 실행 환경과 예제별 인증 차이를 정리합니다. Gateway와 agent 운영 전략은 별도의 운영 아키텍처를 기준으로 합니다.
 document_type: research
 services: [azure-api-management, azure-container-apps, azure-app-service, azure-functions, azure-kubernetes-service, microsoft-foundry, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python]
@@ -72,11 +72,11 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-functions/functions-networking-options
 ---
 
-# MCP 서버별 인증과 Azure 호스팅 옵션 비교
+# MCP backend 호스팅과 예제 서버 참고
 
-MCP는 특정 Azure 서비스의 기능이 아니라 client와 tool server를 연결하는 protocol입니다. 서버 코드를 직접 호스팅할지, Microsoft Foundry Toolbox로 도구를 관리·공유할지, 기존 REST API를 변환할지를 먼저 선택합니다. APIM은 API 변환이나 gateway 정책을 사용할 때 추가하는 옵션입니다.
+이 문서는 MCP 업무 코드의 실행 환경과 sample에 사용한 서버의 구현 차이를 정리한 참고 자료입니다. MCP gateway, agent runtime, Toolbox를 서로 대체하는 호스팅 제품으로 비교하지 않습니다.
 
-**처음 구성할 때는 [Azure MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 따르세요.** 직접 호스팅·Foundry Toolbox·REST 변환·gateway를 비교하고 목적에 맞는 시나리오를 선택할 수 있습니다. 아래는 **2026-09-13** 기준의 선택 근거와 지원 범위를 정리한 참고 자료입니다.
+관리·연결·인증 전략은 [Azure MCP 운영 아키텍처](../../../guides/azure-architecture/mcp-configuration/index.md)를 기준으로 합니다. 아래 내용은 **2026-09-13**에 확인한 backend 실행과 버전별 동작의 참고 자료입니다.
 
 ## MCP protocol과 패키지 버전
 
@@ -96,7 +96,9 @@ Python SDK v2는 최신 사양과 이전 revision을 함께 지원합니다. SDK
 
 MCP의 `server/discover`는 서버 기능을 확인하는 요청입니다. OAuth의 protected-resource metadata(PRM)는 클라이언트가 사용할 authorization server와 scope를 알려주는 문서로, 목적이 다릅니다.
 
-## Azure·AKS·GitHub·Learn의 인증 방식
+## Sample에 사용한 MCP 서버의 인증 차이
+
+다음 서버는 구성과 도구 호출을 보여주기 위한 예제 대상입니다. 고객이 선택할 운영 전략의 목록은 아닙니다.
 
 | MCP 서버 | 연결 방식 | 사용하는 자격 증명과 권한 |
 |---|---|---|
@@ -159,7 +161,7 @@ Consumer endpoint는 default version을 제공하고, version-specific endpoint�
 
 Private network는 Toolbox가 독립적으로 만드는 것이 아니라 Foundry project 설정을 따릅니다. MCP·OpenAPI의 backend traffic은 project의 delegated subnet을 사용할 수 있으며, 해당 subnet에서 backend의 route와 DNS가 연결되어야 합니다.
 
-[구성 가이드의 Toolbox 절차](../../../labs/azure-architecture/mcp-configuration/index.md)는 공개 Learn MCP로 시작해 `azd deploy` → endpoint 확인 → 도구 호출 → version 관리 순서로 진행합니다. 이 절차는 공식 문서·CLI 계약을 확인한 예제이며, 기존 Container Apps/APIM 실행 캡처를 Toolbox의 결과로 재사용하지 않습니다.
+[Toolbox sample](https://github.com/hellices/devguidesample/tree/main/samples/microsoft-foundry/mcp-toolbox)은 공개 Learn MCP로 시작해 `azd deploy` → endpoint 확인 → 도구 호출 → version 관리 순서로 진행합니다. 기존 Container Apps/APIM 실행 캡처를 Toolbox의 결과로 재사용하지 않습니다.
 
 ### APIM 없이 REST API를 변환하는 옵션
 
@@ -188,7 +190,7 @@ Internal Container Apps 환경의 앱 ingress `external: true`는 VNet에서 앱
 
 APIM이 관리하는 REST API operation을 선택하면 MCP tool로 노출할 수 있습니다. 별도 MCP 서버 프로세스 없이 APIM이 MCP 요청을 REST 호출로 연결합니다.
 
-샘플은 가상 inventory REST API를 사용합니다. [실습](../../../labs/azure-architecture/mcp-configuration/index.md)에서는 inventory를 REST로 조회하고, MCP 도구 목록을 확인한 뒤 같은 항목을 tool로 조회합니다. Tool 리소스의 **`operationId`가 실제 REST operation의 리소스 ID를 가리켜야** 이 호출이 연결됩니다.
+샘플은 가상 inventory REST API를 사용합니다. [Sample walkthrough](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/walkthrough.md)에서는 inventory를 REST로 조회하고, MCP 도구 목록을 확인한 뒤 같은 항목을 tool로 조회합니다. Tool 리소스의 **`operationId`가 실제 REST operation의 리소스 ID를 가리켜야** 이 호출이 연결됩니다.
 
 이 기능 자체가 REST backend의 인증을 OBO로 바꾸지는 않습니다. 업무 API를 연결할 때는 그 API의 access token, managed identity 또는 다른 인증 방식을 별도로 구성합니다. Python MCP의 resource group OBO 조회는 이 REST inventory 경로와 별개의 MCP 도구입니다.
 
@@ -234,7 +236,7 @@ Preview 전에는 `python3 scripts/identity.py prepare`로 필요한 Entra 앱 I
 6. Inspector CLI로 APIM의 Learn MCP 프록시에 연결해 문서를 검색합니다.
 7. Azure 리소스와 Entra 앱 객체를 정리합니다.
 
-명령과 비용·정리 절차는 [MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 따릅니다. App Service와 Functions로 변경한다면 각 제품의 preview 범위, 네트워크 구성, 사용자별 OBO 흐름을 별도로 확인해야 합니다.
+명령과 비용·정리 절차는 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/walkthrough.md)를 따릅니다. App Service와 Functions로 변경한다면 각 제품의 preview 범위, 네트워크 구성, 사용자별 OBO 흐름을 별도로 확인해야 합니다.
 
 ## APIM SKU 선택
 

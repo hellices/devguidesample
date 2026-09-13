@@ -1,6 +1,6 @@
 # Azure MCP + Entra ID walkthrough
 
-Start with the [Azure MCP configuration guide](../../../docs/labs/azure-architecture/mcp-configuration/index.md). It covers direct hosting, Foundry Toolbox and optional API Management. This directory is the Container Apps + APIM comparison lab, not a requirement for every MCP deployment.
+Read the [Azure MCP operating architecture](../../../docs/guides/azure-architecture/mcp-configuration/index.md) for gateway governance, Foundry hosted agents, Toolbox and authentication. Follow [walkthrough.md](walkthrough.md) for this sample's concrete deployment and requests. GitHub, Azure, AKS and Learn are demonstration backends, not competing architecture choices.
 
 ## What is deployed
 
@@ -44,7 +44,7 @@ The `.azure/` directory contains environment settings and a short-lived credenti
 
 ## Follow the scenarios
 
-Use the [self-hosting and gateway walkthrough](../../../docs/labs/azure-architecture/mcp-configuration/index.md) in order:
+Use the [sample walkthrough](walkthrough.md) in order:
 
 1. Inspect the deployed resources and private endpoints.
 2. Connect local GitHub, Azure, AKS and Microsoft Learn MCP clients.

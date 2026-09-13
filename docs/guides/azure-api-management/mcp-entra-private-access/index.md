@@ -64,7 +64,7 @@ related_cases:
 
 # Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 
-**처음 구성할 때는 [Azure MCP 구성 가이드](../../../labs/azure-architecture/mcp-configuration/index.md)를 따르세요.** 직접 호스팅, Foundry Toolbox와 선택적 APIM 구성 방법을 한 페이지에서 비교할 수 있습니다. 이 문서는 자체 MCP API의 app registration·scope·client ACL·OBO 설정을 변경하거나 인증 문제를 조사할 때 사용하는 상세 참고 자료입니다.
+전체 인증 흐름은 [Azure MCP 운영 아키텍처](../../../guides/azure-architecture/mcp-configuration/index.md)에서 MCP OAuth와 OBO를 기준으로 설명합니다. 이 문서는 자체 MCP API의 app registration·scope·client ACL을 확인할 때 사용하는 상세 참고 자료입니다. 구체적인 배포 명령은 sample에 둡니다.
 
 ## 구성 요소와 인증 흐름
 
@@ -91,15 +91,7 @@ Python MCP와 공식 Azure MCP는 internal Container Apps 환경에서 실행합
 - 사용할 로컬 클라이언트의 client ID, redirect URI, 접속할 tenant와 API client ID.
 - 개발 PC에서 Azure VNet으로 연결할 VPN/ExpressRoute와 DNS 구성, 또는 실습에서 안내하는 개발용 접속 방법.
 
-로그인과 환경 변수 설정은 실습의 준비 절차를 따른 뒤, 샘플 디렉터리에서 Entra 앱을 준비하고 배포 변경 내용을 확인합니다.
-
-```bash
-python3 scripts/identity.py prepare
-azd provision --preview
-azd up
-```
-
-Preview에 필요한 API client ID 등을 준비하기 위해 `identity.py prepare`를 먼저 실행합니다. `azd up`의 `preup` hook도 같은 Entra 준비 작업을 수행하며, `postprovision` hook은 서버 앱의 FIC가 생성된 managed identity를 신뢰하도록 구성합니다. `azd`가 리소스 배포, image build, 앱 배포를 진행합니다. 설정 형식은 [azure.yaml reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema), build 방식은 [ACR remote build](https://learn.microsoft.com/azure/developer/azure-developer-cli/remote-builds)를 참고할 수 있습니다.
+로그인·Entra 앱 준비·preview·`azd up`의 실행 순서는 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/walkthrough.md)에 있습니다. Sample의 `postprovision` hook은 서버 앱의 FIC가 생성된 managed identity를 신뢰하도록 구성합니다. 설정 형식은 [azure.yaml reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema), build 방식은 [ACR remote build](https://learn.microsoft.com/azure/developer/azure-developer-cli/remote-builds)를 참고할 수 있습니다.
 
 ## 2. 로컬 PC에서 private endpoint와 내부 MCP에 접속하기
 
@@ -133,21 +125,7 @@ Azure MCP의 `--read-only`는 제공할 도구를 제한하는 옵션입니다. 
 
 대화형 MCP 클라이언트는 사전에 등록한 public client와 authorization code + PKCE를 사용합니다. 등록한 redirect URI와 클라이언트 설정이 일치해야 합니다. public client에는 client secret을 저장하지 않습니다.
 
-Entra ID의 dynamic client registration(DCR)을 전제로 설정하는 대신, 사용할 IDE나 MCP 클라이언트의 client ID를 준비합니다. 사용자 consent를 생략하도록 특정 클라이언트를 사전 승인할 때는 API 앱 등록에 다음을 설정합니다.
-
-```json
-{
-  "api": {
-    "requestedAccessTokenVersion": 2,
-    "preAuthorizedApplications": [
-      {
-        "appId": "<public-client-id>",
-        "delegatedPermissionIds": ["<enabled-scope-id>"]
-      }
-    ]
-  }
-}
-```
+Entra ID의 dynamic client registration(DCR)을 전제로 설정하는 대신, 사용할 IDE나 MCP 클라이언트의 client ID를 준비합니다. 특정 클라이언트를 사전 승인할 때는 API 앱의 `preAuthorizedApplications`에 client의 `appId`와 승인할 `delegatedPermissionIds`를 지정합니다. 구체적인 설정은 [sample의 identity 구성](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/scripts/identity.py)에 있습니다.
 
 `delegatedPermissionIds`는 scope 이름이 아니라 **해당 scope의 GUID**입니다. 이 사전 승인은 지정한 API permission에만 적용되며, ARM OBO에 필요한 permission과 consent는 별도로 구성합니다. 필드 정의는 [Microsoft Graph의 preAuthorizedApplication](https://learn.microsoft.com/graph/api/resources/preauthorizedapplication?view=graph-rest-1.0)를 따릅니다.
 
@@ -167,7 +145,7 @@ Toolbox consumer endpoint는 자체 MCP API의 `Mcp.Access` token이 아니라 *
 
 Toolbox가 backend MCP에 연결할 때는 그 connection에 구성한 OAuth·credential·identity 설정을 사용합니다. 이 인증을 자체 MCP server의 OBO와 혼동하지 않습니다. GitHub는 GitHub 인증, Learn은 익명 호출, Azure MCP는 대상 API에 맞는 token이 필요합니다.
 
-Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결을 함께 구성합니다. 자세한 순서는 [MCP 구성 가이드의 Toolbox 절차](../../../labs/azure-architecture/mcp-configuration/index.md)에 있습니다.
+Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결을 함께 구성합니다. 실제 설정은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/samples/microsoft-foundry/mcp-toolbox)에 있습니다.
 
 ## 4. access token으로 MCP 호출
 
@@ -186,26 +164,7 @@ MCP API는 도구 실행이나 OBO 교환 전에 access token을 검사합니다
 
 App-only token에도 서비스 주체의 `oid`가 들어갈 수 있습니다. `oid`가 있다는 이유만으로 사용자 token으로 처리하지 않고 delegated scope와 사용자 권한을 확인합니다. JWT 내용을 decode하는 것만으로는 서명 검사가 수행되지 않습니다.
 
-APIM에서는 다음과 같이 audience, client ID, scope를 지정할 수 있습니다. `{{...}}`는 환경에 맞게 구성할 APIM named value입니다.
-
-```xml
-<validate-azure-ad-token
-    tenant-id="{{tenant-id}}"
-    header-name="Authorization"
-    failed-validation-httpcode="401">
-  <client-application-ids>
-    <application-id>{{allowed-client-id}}</application-id>
-  </client-application-ids>
-  <audiences>
-    <audience>{{mcp-api-client-id}}</audience>
-  </audiences>
-  <required-claims>
-    <claim name="scp" match="all" separator=" ">
-      <value>Mcp.Access</value>
-    </claim>
-  </required-claims>
-</validate-azure-ad-token>
-```
+APIM에서는 `validate-azure-ad-token`의 `audiences`, `client-application-ids`, `required-claims`로 대상 API, 허용 client, scope를 검사할 수 있습니다. 배포에 사용하는 실제 정책은 [sample의 APIM 구성](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/infra/apim.bicep)에 있습니다.
 
 실습에서는 access token 없이 접속한 경우와 정상 token으로 접속한 경우를 차례로 비교합니다. `tools/list`와 `tools/call` 모두 인증 정책의 적용 대상입니다. 이전 MCP revision의 `initialize` 요청을 사용하는 클라이언트도 같은 정책을 적용받습니다.
 
@@ -274,4 +233,4 @@ Scope URI는 서버가 안내하는 값을 사용합니다. Azure MCP 2.0.5의 `
 | 도구 목록은 나오지만 호출 실패 | REST operation 연결, backend 연결·인증, 요청 인자 |
 | HTTP 200이고 `isError=true` | MCP 응답에 담긴 도구 실행 오류 |
 
-실제 HTTP status는 APIM 정책과 앱 설정에 따라 달라질 수 있습니다. 오류 응답의 내용도 함께 확인합니다. 비용과 리소스·Entra 앱 정리는 [구성 가이드의 정리 절차](../../../labs/azure-architecture/mcp-configuration/index.md), 버전별 동작과 응답 차이는 [사례 기록](../../../cases/azure-api-management/mcp-entra-validation/index.md)을 참고하세요.
+실제 HTTP status는 APIM 정책과 앱 설정에 따라 달라질 수 있습니다. 오류 응답의 내용도 함께 확인합니다. 실행과 정리는 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/walkthrough.md), 버전별 동작과 응답 차이는 [사례 기록](../../../cases/azure-api-management/mcp-entra-validation/index.md)을 참고하세요.

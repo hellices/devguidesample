@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 890" role="img" aria-labelledby="title desc">
+  <title id="title">MCP OAuth authorization followed by Entra OBO</title>
+  <desc id="desc">The client obtains a token for the logical MCP API using OAuth and PKCE. APIM and the MCP server validate that resource token. The MCP server then uses OBO to obtain a different audience token for the downstream API. App-only identity is not user OBO.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;font-size:19px;fill:#162b40}.title{font-size:28px;font-weight:700}.small{font-size:17px}.head{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.life{stroke:#a4b3c2;stroke-width:2;stroke-dasharray:7 6}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1180" height="890" fill="white"/>
+  <text x="30" y="43" class="title">MCP API authorization and downstream user delegation</text>
+  <rect x="25" y="90" width="170" height="65" rx="10" class="head"/><text x="110" y="130" text-anchor="middle">MCP client</text>
+  <rect x="250" y="90" width="180" height="65" rx="10" class="head"/><text x="340" y="130" text-anchor="middle">Entra ID</text>
+  <rect x="490" y="90" width="170" height="65" rx="10" class="head"/><text x="575" y="130" text-anchor="middle">APIM</text>
+  <rect x="730" y="90" width="170" height="65" rx="10" class="head"/><text x="815" y="130" text-anchor="middle">MCP server</text>
+  <rect x="975" y="90" width="180" height="65" rx="10" class="head"/><text x="1065" y="130" text-anchor="middle">Data API</text>
+  <path d="M110 155V765M340 155V765M575 155V765M815 155V765M1065 155V765" class="life"/>
+  <path d="M110 205H575" class="flow"/><text x="132" y="191" class="small">MCP request without an access token</text>
+  <path d="M575 260H110" class="flow"/><text x="132" y="247" class="small">401 + protected-resource metadata location</text>
+  <path d="M110 320H340" class="flow"/><text x="118" y="307" class="small">Authorization code + PKCE</text>
+  <path d="M340 380H110" class="flow"/><text x="120" y="366" class="small">Token A for the MCP API</text>
+  <path d="M110 440H575" class="flow"/><text x="132" y="426" class="small">Bearer token A: aud = logical MCP API</text>
+  <path d="M575 500H815" class="flow"/><text x="585" y="486" class="small">Validate / same resource A</text>
+  <path d="M815 562H340" class="flow"/><text x="362" y="547" class="small">OBO: user assertion A + confidential-client proof</text>
+  <path d="M340 623H815" class="flow"/><text x="362" y="608" class="small">Token B: aud = downstream data API</text>
+  <path d="M815 685H1065" class="flow"/><text x="837" y="670" class="small">Bearer token B</text>
+  <path d="M1065 742H815" class="flow"/><text x="837" y="728" class="small">User-authorized result</text>
+  <text x="30" y="814" class="small">APIM and the backend share resource A only when deliberately configured as the same protected MCP API.</text>
+  <text x="30" y="844" class="small">Different audiences need a separate token design. Never forward an unrelated token or turn app-only auth into user OBO.</text>
+</svg>

@@ -1,8 +1,8 @@
 # Microsoft Foundry Toolbox for MCP
 
-This example publishes the public Microsoft Learn MCP tools through a Foundry Toolbox. It does not provision API Management, a model deployment or a new Foundry project.
+This example publishes Microsoft Learn MCP tools through a Foundry Toolbox. It has a normal `learn-tools` service and a separate `learn-tools-search` service that demonstrates deferred discovery. It does not provision API Management, a model deployment or a new Foundry project.
 
-Use the [MCP configuration guide](../../../docs/labs/azure-architecture/mcp-configuration/index.md) for the full choice of hosting, Toolbox and gateway patterns.
+Use the [MCP operating architecture](../../../docs/guides/azure-architecture/mcp-configuration/index.md) to distinguish agent runtime, Toolbox discovery, APIM governance and backend hosting. This sample demonstrates tooling with Learn; it is not a comparison of customer MCP products.
 
 ## Prerequisites
 
@@ -61,6 +61,46 @@ npx --yes @modelcontextprotocol/inspector@2.5.0 --cli \
 
 The consumer authenticates to Foundry. The downstream Learn request is anonymous. Do not pass the Foundry access token to an arbitrary downstream MCP server.
 
+## Compare normal discovery and Tool search
+
+Use an unused `learn-tools-search` name; check the project toolbox list before deploying. Deploy only the second service when you want this comparison:
+
+```bash
+azd deploy learn-tools-search
+export SEARCH_ENDPOINT="${PROJECT_ENDPOINT%/}/toolboxes/learn-tools-search/mcp?api-version=v1"
+jq --arg url "$SEARCH_ENDPOINT" '.mcpServers.toolbox.url=$url' \
+  .private/toolbox-client.json > .private/toolbox-search-client.json
+
+npx --yes @modelcontextprotocol/inspector@2.5.0 --cli \
+  --config .private/toolbox-search-client.json --server toolbox --method tools/list
+```
+
+Look for `tool_search` and `call_tool`. Explicitly pinned or auto-pinned tools may also appear; do not require the result count to be exactly two.
+
+Search for the capability you need:
+
+```bash
+npx --yes @modelcontextprotocol/inspector@2.5.0 --cli \
+  --config .private/toolbox-search-client.json --server toolbox \
+  --method tools/call --tool-name tool_search \
+  --tool-arg 'query=Search official Microsoft documentation' --tool-arg limit=3
+```
+
+Read the returned tool definitions. To invoke the selected tool, open the Inspector against this configuration, select `call_tool`, and fill its actual `inputSchema` with the selected tool name and arguments:
+
+```bash
+npx --yes @modelcontextprotocol/inspector@2.5.0 \
+  --config .private/toolbox-search-client.json
+```
+
+Learn has only a few tools, so this is a protocol/configuration demonstration, **not a token-savings benchmark**. For a business catalog, compare the same model, task set, permissions and toolbox version with and without Tool search. Record cumulative model input/output tokens, cache usage, search round-trips, task latency and correctness. Do not infer end-to-end savings from the smaller initial `tools/list` alone.
+
+Tool search uses metadata ranking; improve descriptions and `additional_search_text`, then pin only genuinely frequent tools. It does not replace backend authorization or API gateway policy.
+
+## Use the tools from a hosted agent
+
+Follow [hosted-agent.md](hosted-agent.md) for the maintained Foundry hosted-agent sample. That agent is a consumer of Toolbox; it is not the MCP backend server.
+
 ## Versions and cleanup
 
 Use the version-specific endpoint before promoting a new default version:
@@ -79,12 +119,13 @@ Delete only this toolbox when finished:
 
 ```bash
 azd ai toolbox delete learn-tools --project-endpoint "$PROJECT_ENDPOINT"
+azd ai toolbox delete learn-tools-search --project-endpoint "$PROJECT_ENDPOINT"
 ```
 
-Do not delete a shared Foundry project or its resource group to remove this example. The local `.private/` client file contains a short-lived bearer token and must not be committed.
+Delete `learn-tools-search` only if you created it. Do not delete a shared Foundry project or its resource group to remove this example. The local `.private/` client files contain short-lived bearer tokens and must not be committed.
 
 ## Verification scope
 
 The configuration and commands were checked against the official Toolbox documentation and installed CLI help. This example is not included in the live Container Apps/APIM execution captures.
 
-Sources: [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview), [create and manage a toolbox](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox), [network isolation](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation).
+Sources: [Toolbox overview](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview), [create and manage a toolbox](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox), [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search), [network isolation](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation).

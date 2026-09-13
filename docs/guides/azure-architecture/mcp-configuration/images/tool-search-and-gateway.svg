@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 815" role="img" aria-labelledby="title desc">
+  <title id="title">Tool search reduces tool-definition context while APIM enforces policy</title>
+  <desc id="desc">The model initially sees search and invocation meta-tools plus pinned tools. Toolbox finds matching tool definitions, then sends the selected external MCP call through APIM. Discovery and pinning do not replace authorization.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.small{font-size:18px}.box{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.toolbox{fill:#f3efff;stroke:#7453a6;stroke-width:2}.gateway{fill:#fff7e7;stroke:#9c661c;stroke-width:2}.backend{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1160" height="815" fill="white"/>
+  <text x="30" y="44" class="title">Toolbox selects the tool; APIM enforces the external API policy</text>
+  <rect x="45" y="155" width="325" height="250" rx="12" class="box"/>
+  <text x="207" y="201" text-anchor="middle"><tspan x="207">Model context</tspan><tspan x="207" dy="39" class="small">tool_search</tspan><tspan x="207" dy="31" class="small">call_tool</tspan><tspan x="207" dy="31" class="small">+ pinned / auto-pinned tools</tspan><tspan x="207" dy="47" class="small">Only relevant definitions added</tspan></text>
+  <rect x="720" y="135" width="395" height="290" rx="12" class="toolbox"/>
+  <text x="917" y="181" text-anchor="middle"><tspan x="917">Foundry Toolbox</tspan><tspan x="917" dy="40" class="small">BM25 tool metadata index</tspan><tspan x="917" dy="31" class="small">Names / descriptions / parameters</tspan><tspan x="917" dy="31" class="small">Search keywords and pin configuration</tspan><tspan x="917" dy="48" class="small">Connection auth + tool invocation</tspan></text>
+  <path d="M370 220H720" class="flow"/><text x="415" y="207" class="small">1. tool_search(query)</text>
+  <path d="M720 282H370" class="flow"/><text x="415" y="269" class="small">2. Matching definitions</text>
+  <path d="M370 348H720" class="flow"/><text x="415" y="335" class="small">3. call_tool request</text>
+  <rect x="720" y="515" width="395" height="105" rx="12" class="gateway"/>
+  <text x="917" y="557" text-anchor="middle"><tspan x="917">APIM / AI gateway</tspan><tspan x="917" dy="32" class="small">Auth / rate limit / routing / HTTP logs</tspan></text>
+  <path d="M917 425V515" class="flow"/><text x="940" y="477" class="small">External MCP call</text>
+  <rect x="720" y="675" width="395" height="95" rx="12" class="backend"/>
+  <text x="917" y="715" text-anchor="middle"><tspan x="917">MCP server / API</tspan><tspan x="917" dy="31" class="small">Actual authorization and execution</tspan></text>
+  <path d="M917 620V675" class="flow"/>
+  <text x="45" y="515" class="small"><tspan x="45">Compare the whole task:</tspan><tspan x="45" dy="35">input/output tokens and cache usage</tspan><tspan x="45" dy="31">search round-trips and latency</tspan><tspan x="45" dy="31">tool selection quality and failures</tspan><tspan x="45" dy="54">A smaller tool list is not an authorization policy</tspan><tspan x="45" dy="31">or a guarantee of lower end-to-end cost.</tspan></text>
+</svg>
