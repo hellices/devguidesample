@@ -543,8 +543,9 @@ def isolated_real_document_audit(
     inventory = load_inventory(ROOT / "scripts/docs/pre_pages_inventory.yml")
     entry = next(doc for doc in inventory.documents if str(doc.baseline_path) == baseline)
     current_path = tmp_path / current
-    shutil.copytree((ROOT / current).parent, current_path.parent)
-    track_files(tmp_path, str(current_path.parent.relative_to(tmp_path)))
+    topic = Path(*Path(current).parts[:4])
+    shutil.copytree(ROOT / topic, tmp_path / topic)
+    track_files(tmp_path, topic.as_posix())
     monkeypatch.setattr(
         pre_pages_content, "resolve_current_documents",
         lambda repo, manifest: {entry.baseline_path: load_document(current_path, tmp_path / "docs")},
@@ -1128,3 +1129,214 @@ def test_devcontainer_path_itself_cannot_make_a_generic_reason_concrete() -> Non
     reason = "Safety: updated and no longer needed for this content. Evidence: .devcontainer/README.md."
     with pytest.raises(AuditFormatError, match="reason"):
         validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(reason, evidence=[reference])}})
+
+
+def test_real_tei_link_cannot_be_forged_inside_a_span_attribute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "aisearch/custom_vectorization/01_custom_embedding_guide.md",
+        "docs/services/azure-ai-search/custom-vectorization/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    destination = (
+        "https://github.com/hellices/devguidesample/tree/main/docs/services/azure-ai-search/"
+        "custom-vectorization/samples/implementation/tei-adapter"
+    )
+    link = f"[tei-adapter]({destination})"
+    source = path.read_text()
+    assert source.count(link) == 1
+    path.write_text(source.replace(link, f'<span data-link="{link}">tei-adapter</span>'))
+    with pytest.raises(AuditFormatError, match="evidence.*links|links.*count"):
+        audit_document_content(tmp_path, inventory)
+
+
+def test_real_s1_escaped_image_invalidates_its_current_image_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "monitor/sre-agent-event-lab/validation-results.md",
+        "docs/services/azure-monitor/azure-sre-agent/validation-results/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    image = "![S1 SRE Agent investigation](images/s1-investigation.gif)"
+    source = path.read_text()
+    assert source.count(image) == 1
+    path.write_text(source.replace(image, "\\" + image))
+    with pytest.raises(AuditFormatError, match="evidence.*images|images.*count"):
+        audit_document_content(tmp_path, inventory)
+
+
+@pytest.mark.parametrize("attribute", [
+    'data-link="[Fake](https://example.com/fake)"',
+    "data-link='[Fake](https://example.com/fake)'",
+    "data-link=[Fake](https://example.com/fake)",
+    'data-image="![Fake](images/fake.png)"',
+    "data-image=![Fake](images/fake.png)",
+    'data-auto="<https://example.com/fake>"',
+    'data-reference="[Fake][ref]"',
+])
+@pytest.mark.parametrize("tag", ["span", "custom-widget"])
+def test_markdown_evidence_is_never_scanned_inside_html_attributes(tag: str, attribute: str) -> None:
+    text = f"<{tag} {attribute}>Visible</{tag}>\n\n[ref]: https://example.com/fake"
+    structure = extract_markdown_structure(text)
+    assert structure.links == ()
+    assert structure.images == ()
+
+
+def test_attribute_reference_definitions_cannot_create_links_outside_the_tag() -> None:
+    structure = extract_markdown_structure(
+        '<span data-definition="\n[ref]: https://example.com/fake\n">Visible</span>\n\n[ref]'
+    )
+    assert structure.links == ()
+
+
+def test_attribute_markdown_blocks_are_masked_before_structure_extraction() -> None:
+    structure = extract_markdown_structure(
+        '<span data-body="\n\n## Fake heading\n\n```sh\nfake command\n```\n\n'
+        '| Fake | Table |\n|---|---|\n">Visible</span>'
+    )
+    assert not structure.headings and not structure.code and not structure.tables
+
+
+@pytest.mark.parametrize("tag", [
+    "script", "style", "code", "pre", "textarea", "title", "xmp", "iframe",
+    "noembed", "noframes", "template",
+])
+def test_raw_or_code_html_containers_do_not_supply_markdown_or_nested_html_evidence(tag: str) -> None:
+    structure = extract_markdown_structure(
+        f'<{tag}>[Fake](https://example.com/fake) ![Fake](images/fake.png)\n\n'
+        '<a href="https://example.com/fake">Fake</a><img alt="Fake" src="images/fake.png">\n\n'
+        f'```sh\nfake command\n```\n</{tag}>\n\n[Real](real.md)'
+    )
+    assert structure.links == ("Real\nreal.md",)
+    assert structure.images == () and structure.code == ()
+
+
+def test_genuine_html_anchor_uses_rendered_nested_text_and_real_href_only() -> None:
+    structure = extract_markdown_structure(
+        '<a data-link="[Fake](fake.md)" href="actual.md?x=1&amp;y=2#part">'
+        '<span title="![Fake](fake.png)">Read</span> <strong>now</strong>'
+        '<script>[Ghost](ghost.md)</script><style>![Ghost](ghost.png)</style>'
+        '</a>'
+    )
+    assert structure.links == ("Read now\nactual.md?x=1&y=2#part",)
+    assert structure.images == ()
+
+
+def test_html_anchor_text_is_not_reinterpreted_as_markdown() -> None:
+    structure = extract_markdown_structure(
+        '<a href="actual.md"><span>**literal**</span><code>[Text](not-a-link.md)</code></a>'
+    )
+    assert structure.links == ("**literal**[Text](not-a-link.md)\nactual.md",)
+    assert structure.images == ()
+
+
+def test_genuine_html_image_uses_actual_alt_and_src_not_attribute_markdown() -> None:
+    structure = extract_markdown_structure(
+        '<img data-link="[Fake](fake.md)" data-image="![Fake](fake.png)" '
+        'alt="**Literal** [label](not-link.md)" src="images/actual.png">'
+    )
+    assert structure.links == ()
+    assert structure.images == ("**Literal** [label](not-link.md)\nactual.png",)
+
+
+def test_html_anchor_and_image_attributes_keep_first_duplicate_values() -> None:
+    structure = extract_markdown_structure(
+        '<a href="first.md" href="second.md">Actual</a> '
+        '<img alt="First" alt="Second" src="images/first.png" src="images/second.png">'
+    )
+    assert structure.links == ("Actual\nfirst.md",)
+    assert structure.images == ("First\nfirst.png",)
+
+
+def test_genuine_html_image_nested_in_anchor_is_not_a_textual_link() -> None:
+    structure = extract_markdown_structure(
+        '<a href="target.md"><img src="images/actual.png" alt="Actual" data-link="[Fake](fake.md)"></a>'
+    )
+    assert structure.links == ()
+    assert structure.images == ("Actual\nactual.png",)
+
+
+@pytest.mark.parametrize("slashes", range(5))
+@pytest.mark.parametrize("style", ["inline", "reference", "collapsed", "shortcut"])
+def test_image_openers_obey_escape_parity_for_all_markdown_styles(slashes: int, style: str) -> None:
+    image = {
+        "inline": "![Alt](images/picture.png)",
+        "reference": "![Alt][image]",
+        "collapsed": "![Alt][]",
+        "shortcut": "![Alt]",
+    }[style]
+    definitions = "\n\n[image]: images/picture.png\n[Alt]: images/picture.png"
+    structure = extract_markdown_structure("\\" * slashes + image + definitions)
+    assert structure.images == (("Alt\npicture.png",) if slashes % 2 == 0 else ())
+
+
+@pytest.mark.parametrize("slashes", range(4))
+@pytest.mark.parametrize("image", ["![Alt](images/picture.png)", "![Alt][asset]"])
+def test_nested_linked_image_escape_parity(slashes: int, image: str) -> None:
+    text = "[" + "\\" * slashes + image + "](target.md)\n\n[asset]: images/picture.png"
+    structure = extract_markdown_structure(text)
+    assert structure.images == (("Alt\npicture.png",) if slashes % 2 == 0 else ())
+    if slashes == 0:
+        assert structure.links == ()
+
+
+def test_escaped_image_bang_leaves_an_ordinary_link_not_an_image() -> None:
+    structure = extract_markdown_structure(r"\![Alt](images/picture.png)")
+    assert structure.images == ()
+    assert structure.links == ("Alt\nimages/picture.png",)
+
+
+@pytest.mark.parametrize("tag", ["noscript", "plaintext"])
+def test_additional_raw_html_containers_do_not_supply_evidence(tag: str) -> None:
+    structure = extract_markdown_structure(
+        f'<{tag}>[Fake](fake.md) ![Fake](fake.png) <a href="fake.md">Fake</a></{tag}>'
+    )
+    assert structure.links == () and structure.images == ()
+
+
+def test_html_tag_tokens_inside_markdown_image_alt_or_destination_do_not_emit_elements() -> None:
+    structure = extract_markdown_structure(
+        '![Outer <img alt="Fake" src="fake.png">](outer.png) '
+        '[Actual](<img>)'
+    )
+    assert structure.images == ("Outer\nouter.png",)
+    assert structure.links == ("Actual\nimg",)
+
+
+def test_html_anchor_attributes_cannot_forge_a_closing_tag_or_child_image() -> None:
+    structure = extract_markdown_structure(
+        '<a href="actual.md" data-close="</a><img alt=\'Fake\' src=\'fake.png\'>">'
+        '<span data-link="[Fake](fake.md)">Actual</span></a>'
+    )
+    assert structure.links == ("Actual\nactual.md",)
+    assert structure.images == ()
+
+
+def test_html_anchor_text_decodes_entities_once() -> None:
+    structure = extract_markdown_structure('<a href="actual.md">&amp;lt;literal&amp;gt;</a>')
+    assert structure.links == ("&lt;literal&gt;\nactual.md",)
+
+
+def test_html_text_cannot_collide_with_inline_code_placeholder_tokens() -> None:
+    marker = "\ue0000\ue001"
+    structure = extract_markdown_structure(f'`Expected` <a href="actual.md">{marker}</a>')
+    assert structure.links == (f"{marker}\nactual.md",)
+
+
+@pytest.mark.parametrize("tag", ["script", "style", "code", "pre", "textarea", "noscript"])
+def test_nonvoid_html_slash_does_not_expose_raw_content_to_markdown(tag: str) -> None:
+    structure = extract_markdown_structure(
+        f'<{tag}/>[Fake](fake.md) ![Fake](fake.png)</{tag}>\n\n[Real](real.md)'
+    )
+    assert structure.links == ("Real\nreal.md",)
+    assert structure.images == ()
+
+
+def test_self_closing_syntax_on_nonvoid_anchor_children_keeps_actual_rendered_text() -> None:
+    structure = extract_markdown_structure(
+        '<a href="actual.md"/>Actual<script/>[Hidden](hidden.md)</script> text</a>'
+    )
+    assert structure.links == ("Actual text\nactual.md",)
+    assert structure.images == ()

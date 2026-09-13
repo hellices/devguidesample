@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from hashlib import sha256
 from html import unescape
+from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
 import posixpath
@@ -67,11 +68,22 @@ _LINK = re.compile(
 _IMAGE = re.compile(r'!\[([^\[\]]*)\]\(\s*' + _DESTINATION + _LINK_END)
 _REFERENCE = re.compile(r"(!?)\[([^\[\]]+)\](?:\[([^\[\]]*)\])?")
 _DEFINITION = re.compile(r"(?m)^ {0,3}\[([^\]]+)\]:\s*" + _DESTINATION + r"[^\n]*$")
-_ATTRIBUTE = re.compile(r'''([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))''')
-_HTML_LINK = re.compile(
-    r"""<a\b((?:"[^"]*"|'[^']*'|[^'">])*)>(.*?)</a\s*>""",
-    re.IGNORECASE | re.DOTALL,
+_HTML_TAG = re.compile(
+    r"""</?([A-Za-z][A-Za-z0-9:_-]*)(?=[\s/>])(?:"[^"]*"|'[^']*'|[^'">])*>""",
+    re.DOTALL,
 )
+_HTML_OPEN = re.compile(r"</?[A-Za-z][A-Za-z0-9:_-]*(?=[\s/>])")
+_AUTOLINK = re.compile(r"<((?:https?://|mailto:)[^<>\s]+)>", re.IGNORECASE)
+_FENCE_OPEN = re.compile(r"((?:[ \t]{0,3}>[ \t]?)*)([ \t]*)(`{3,}|~{3,})(.*)")
+_PRESENTATION_TAGS = frozenset((
+    "div", "section", "article", "aside", "nav", "p", "span", "strong",
+    "em", "b", "i", "a", "ol", "ul", "li", "br",
+))
+_RAW_TAGS = frozenset((
+    "script", "style", "code", "pre", "textarea", "title", "xmp", "iframe",
+    "noembed", "noframes", "noscript", "template", "plaintext",
+))
+_TEXT_RAW_TAGS = _RAW_TAGS - {"code", "pre", "template"}
 _WRAPPER = re.compile(
     r"</?(?:div|section|article|aside|nav|p|span|strong|em|b|i|a|ol|ul|li|br)\b[^>]*>",
     re.IGNORECASE,
@@ -87,6 +99,166 @@ def _escaped_match(match: re.Match) -> bool:
     return (len(prefix) - len(prefix.rstrip("\\"))) % 2 == 1
 
 
+@dataclass(frozen=True)
+class _HtmlFragment:
+    raw: str
+    rendered: str
+    label: str
+    images: tuple[tuple[str, str], ...] = ()
+    links: tuple[tuple[str, str], ...] = ()
+    wrapper: bool = False
+
+
+class _HtmlElementReader(HTMLParser):
+    """Read element semantics without interpreting any attribute or text as Markdown."""
+
+    CDATA_CONTENT_ELEMENTS = tuple(_RAW_TAGS - {"template"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.text: list[str] = []
+        self.images: list[tuple[str, str]] = []
+        self.href: str | None = None
+        self.raw_tag: str | None = None
+        self.template_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.template_depth:
+            self.template_depth += tag == "template"
+            return
+        if tag == "template":
+            self.template_depth = 1
+            return
+        if tag in _RAW_TAGS:
+            self.raw_tag = tag
+            return
+        values = {}
+        for name, value in attrs:
+            values.setdefault(name, value or "")
+        if tag == "a" and self.href is None:
+            self.href = values.get("href")
+        elif tag == "img":
+            self.images.append((values.get("alt", ""), values.get("src", "")))
+        elif tag in {"br", "hr", "p", "div", "li", "tr"}:
+            self.text.append(" ")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag in _RAW_TAGS:
+            if tag != "template":
+                self.set_cdata_mode(tag)
+            return
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.template_depth:
+            self.template_depth -= tag == "template"
+        elif self.raw_tag == tag:
+            self.raw_tag = None
+        elif tag in {"p", "div", "li", "tr"}:
+            self.text.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self.template_depth and self.raw_tag not in {"script", "style", "iframe", "noembed", "noframes", "noscript"}:
+            self.text.append(unescape(data) if self.raw_tag else data)
+
+
+def _html_element_end(text: str, start: int, tag: str) -> int | None:
+    if tag == "plaintext":
+        return len(text)
+    if tag in _TEXT_RAW_TAGS:
+        closing = re.search(r"</" + re.escape(tag) + r"\s*>", text[start:], re.IGNORECASE)
+        return start + closing.end() if closing else None
+    depth = 1
+    position = start
+    while position < len(text):
+        position = text.find("<", position)
+        if position < 0:
+            return None
+        if text.startswith("<!--", position):
+            end = text.find("-->", position + 4)
+            position = len(text) if end < 0 else end + 3
+            continue
+        token = _HTML_TAG.match(text, position)
+        if token is None:
+            position += 1
+            continue
+        name = token[1].lower()
+        closing = token[0].startswith("</")
+        position = token.end()
+        if name == tag:
+            depth += -1 if closing else 1
+            if not depth:
+                return position
+        elif not closing and name in _RAW_TAGS:
+            position = _html_element_end(text, position, name) or len(text)
+    return None
+
+
+def _html_fragment(text: str, position: int) -> tuple[int, _HtmlFragment] | None:
+    token = _HTML_TAG.match(text, position)
+    if token is None:
+        if _HTML_OPEN.match(text, position):
+            raw = text[position:]
+            return len(text), _HtmlFragment(raw, raw, raw)
+        return None
+    raw, tag, end = token[0], token[1].lower(), token.end()
+    escaped = _escaped_match(token)
+    opening = not raw.startswith("</")
+    if opening and not escaped and (tag == "a" or tag in _RAW_TAGS):
+        complete = _html_element_end(text, end, tag)
+        if complete is not None or tag in _RAW_TAGS:
+            end = complete or len(text)
+            raw = text[position:end]
+            reader = _HtmlElementReader()
+            reader.feed(raw)
+            reader.close()
+            label = _space("".join(reader.text))
+            if tag == "a":
+                links = ((label, reader.href),) if label and reader.href is not None else ()
+                return end, _HtmlFragment(raw, f" {label} ", label, tuple(reader.images), links)
+            return end, _HtmlFragment(raw, raw, label)
+    if opening and tag == "img" and not escaped:
+        reader = _HtmlElementReader()
+        reader.feed(raw)
+        reader.close()
+        return end, _HtmlFragment(raw, "", "", tuple(reader.images))
+    wrapper = tag in _PRESENTATION_TAGS
+    return end, _HtmlFragment(raw, " " if wrapper else raw, raw if escaped else "", wrapper=wrapper)
+
+
+def _source_line(
+    text: str, position: int, html: dict[str, _HtmlFragment], prefix: str,
+) -> tuple[str, int]:
+    parts = []
+    while position < len(text) and text[position] != "\n":
+        if text.startswith("<!--", position):
+            end = text.find("-->", position + 4)
+            position = len(text) if end < 0 else end + 3
+            continue
+        code = re.match(r"(`+)(.*?)\1", text[position:]) if text[position] == "`" else None
+        if code:
+            parts.append(code[0])
+            position += code.end()
+            continue
+        autolink = _AUTOLINK.match(text, position)
+        if autolink:
+            parts.append(autolink[0])
+            position = autolink.end()
+            continue
+        if text[position] == "<":
+            fragment = _html_fragment(text, position)
+            if fragment:
+                position, value = fragment
+                key = f"{prefix}{len(html)}\ue101"
+                html[key] = value
+                parts.append(key)
+                continue
+        parts.append(text[position])
+        position += 1
+    return "".join(parts), position + (position < len(text))
+
+
 def _unquote(line: str, depth: int) -> str | None:
     for _ in range(depth):
         prefix = re.match(r"^[ \t]{0,3}>[ \t]?", line)
@@ -96,7 +268,9 @@ def _unquote(line: str, depth: int) -> str | None:
     return line
 
 
-def _segments(text: str) -> list[tuple[str | None, str]]:
+def _segments(
+    text: str, html: dict[str, _HtmlFragment] | None = None,
+) -> list[tuple[str | None, str]]:
     """Separate fences before applying any prose-only normalization."""
     segments = []
     normal: list[str] = []
@@ -105,8 +279,15 @@ def _segments(text: str) -> list[tuple[str | None, str]]:
     language = ""
     indent = ""
     quote_depth = 0
-    comment = False
-    for line in text.split("\n"):
+    html = html if html is not None else {}
+    prefix = "\ue100html"
+    while prefix in text:
+        prefix += "x"
+    position = 0
+    while position < len(text):
+        end = text.find("\n", position)
+        end = len(text) if end < 0 else end
+        line = text[position:end]
         if fence:
             code_line = _unquote(line, quote_depth)
             if code_line is None:
@@ -117,31 +298,18 @@ def _segments(text: str) -> list[tuple[str | None, str]]:
             ):
                 segments.append((language, "\n".join(code).strip("\n")))
                 fence, code = "", []
+                position = end + 1
                 continue
             else:
                 code.append(code_line.removeprefix(indent).rstrip())
+                position = end + 1
                 continue
-        visible = []
-        offset = 0
-        while offset < len(line):
-            if comment:
-                end = line.find("-->", offset)
-                if end < 0:
-                    break
-                offset, comment = end + 3, False
-                continue
-            token = re.search(r"(`+).*?\1|<!--", line[offset:])
-            if token is None:
-                visible.append(line[offset:])
-                break
-            visible.append(line[offset:offset + token.start()])
-            if token[0] == "<!--":
-                comment = True
-            else:
-                visible.append(token[0])
-            offset += token.end()
-        line = "".join(visible)
-        opening = re.fullmatch(r"((?:[ \t]{0,3}>[ \t]?)*)([ \t]*)(`{3,}|~{3,})(.*)", line)
+        opening = _FENCE_OPEN.fullmatch(line)
+        if opening:
+            position = end + 1
+        else:
+            line, position = _source_line(text, position, html, prefix)
+            opening = _FENCE_OPEN.fullmatch(line)
         if opening:
             segments.append((None, "\n".join(normal)))
             normal = []
@@ -180,7 +348,11 @@ def _separator(line: str) -> bool:
 def extract_markdown_structure(text: str) -> MarkdownStructure:
     text = unicodedata.normalize("NFKC", text.replace("\r\n", "\n").replace("\r", "\n")).lstrip("\ufeff")
     text = re.sub(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|$)", "", text, count=1, flags=re.DOTALL)
-    segments = _segments(text)
+    literal_prefix = "\ue000code"
+    while literal_prefix in text:
+        literal_prefix += "x"
+    html: dict[str, _HtmlFragment] = {}
+    segments = _segments(text, html)
     definitions = {
         _space(match[1]).casefold(): match[2].strip("<>")
         for language, body in segments if language is None
@@ -195,6 +367,11 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
     local_link_labels: list[str] = []
     links: list[str] = []
 
+    def html_text(value: str, field: str) -> str:
+        for token, fragment in html.items():
+            value = value.replace(token, getattr(fragment, field))
+        return value
+
     def visible(value: str) -> str:
         value = _WRAPPER.sub(" ", unescape(value))
         value = re.sub(r"(`+)(.*?)\1", r"\2", value)
@@ -204,8 +381,9 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
         return _space(value)
 
     def link(label: str, target: str, image: bool) -> str:
-        label = visible(label)
-        target = unescape(target.strip("<>"))
+        markup = visible(label)
+        label = _space(html_text(markup, "label"))
+        target = unescape(html_text(target, "raw").strip("<>"))
         if image:
             images.append(f"{label}\n{PurePosixPath(unquote(urlsplit(target).path)).name}")
             return ""
@@ -213,14 +391,14 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
             links.append(f"{label}\n{target}")
         if label and not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
             local_link_labels.append(label)
-        return label
+        return markup
 
     def inline(value: str) -> str:
         literals: dict[str, str] = {}
         image_start, label_start, link_start = len(images), len(local_link_labels), len(links)
 
         def protect(match: re.Match) -> str:
-            token = f"\ue000{len(literals)}\ue001"
+            token = f"{literal_prefix}{len(literals)}\ue001"
             literals[token] = match[2]
             return token
 
@@ -231,40 +409,36 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
 
         value = re.sub(r"(`+)(.*?)\1", protect, value)
 
-        def attributes(raw: str) -> dict[str, str]:
-            return {
-                name.lower(): double or single or bare
-                for name, double, single, bare in _ATTRIBUTE.findall(raw)
-            }
+        def markdown_image(match: re.Match) -> str:
+            return match[0] if _escaped_match(match) else link(match[1], match[2], True)
 
-        def html_image(match: re.Match) -> str:
-            attrs = attributes(match[0])
-            return link(attrs.get("alt", ""), attrs.get("src", ""), True)
-
-        def html_link(match: re.Match) -> str:
-            if _escaped_match(match):
+        def reference_image(match: re.Match) -> str:
+            if not match[1] or _escaped_match(match):
                 return match[0]
-            attrs = attributes(match[1])
-            label = link(match[2], attrs["href"], False) if "href" in attrs else match[2]
-            return f" {label} "
+            key = _space(match[3] or match[2]).casefold()
+            return link(match[2], definitions[key], True) if key in definitions else match[0]
 
-        value = re.sub(r"<img\b[^>]*>", html_image, value, flags=re.IGNORECASE)
-        value = _IMAGE.sub(lambda match: link(match[1], match[2], True), value)
-        value = _HTML_LINK.sub(html_link, value)
+        value = _IMAGE.sub(markdown_image, value)
+        value = _REFERENCE.sub(reference_image, value)
 
         def markdown_link(match: re.Match) -> str:
             if _escaped_match(match):
+                if match[1]:
+                    return "!" + link(match[2], match[3], False)
                 return match[0]
             return link(match[2], match[3], bool(match[1]))
 
         value = _LINK.sub(markdown_link, value)
 
         def reference(match: re.Match) -> str:
-            if _escaped_match(match):
+            escaped = _escaped_match(match)
+            if escaped and not match[1]:
                 return match[0]
             key = _space(match[3] or match[2]).casefold()
             if key not in definitions:
                 return match[0]
+            if escaped:
+                return "!" + link(match[2], definitions[key], False)
             return link(match[2], definitions[key], bool(match[1]))
 
         value = _REFERENCE.sub(reference, value)
@@ -275,7 +449,18 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
             return match[0]
 
         value = re.sub(r"<((?:https?://|mailto:)[^<>\s]+)>", autolink, value, flags=re.IGNORECASE)
-        result = visible(value)
+        for token, fragment in html.items():
+            for _ in range(value.count(token)):
+                for alt, source in fragment.images:
+                    alt = _space(unicodedata.normalize("NFKC", alt))
+                    images.append(f"{alt}\n{PurePosixPath(unquote(urlsplit(source).path)).name}")
+                for label, target in fragment.links:
+                    label = _space(unicodedata.normalize("NFKC", label))
+                    target = unicodedata.normalize("NFKC", target)
+                    links.append(f"{label}\n{target}")
+                    if not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
+                        local_link_labels.append(label)
+        result = _space(html_text(visible(value), "rendered"))
         images[image_start:] = [restore(image) for image in images[image_start:]]
         local_link_labels[label_start:] = [restore(label) for label in local_link_labels[label_start:]]
         links[link_start:] = [restore(value) for value in links[link_start:]]
@@ -294,12 +479,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
         if language is not None:
             code.append(f"{language}\n{body}")
             continue
-        body = re.sub(
-            r"(?m)^[ \t]*" + _WRAPPER.pattern + r"[ \t]*$",
-            lambda match: match[0] if re.match(r"\s*</?a\b", match[0], re.IGNORECASE) else "",
-            _DEFINITION.sub("", body),
-            flags=re.IGNORECASE,
-        )
+        body = _DEFINITION.sub("", body)
         lines = body.split("\n")
         paragraph: list[str] = []
 
@@ -313,6 +493,8 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
         index = 0
         while index < len(lines):
             line = lines[index].strip()
+            if line in html and html[line].wrapper:
+                line = ""
             following = lines[index + 1].strip() if index + 1 < len(lines) else ""
             index += 1
             if not line:
