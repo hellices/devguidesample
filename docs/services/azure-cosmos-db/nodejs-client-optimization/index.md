@@ -18,8 +18,8 @@ technologies:
 - nodejs
 - cosmos-db
 tags:
-- performance
-- development
+- optimize
+- build
 redirect_from:
 - guides/azure-cosmos-db/nodejs-client-optimization/index.md
 ---

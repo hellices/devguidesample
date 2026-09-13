@@ -13,8 +13,8 @@ description: Azure AI Search 버전 기반 재색인에서 관측한 eventual co
 technologies:
 - python
 tags:
-- reliability
-- troubleshooting
+- operate
+- diagnose
 occurred_at: 2026-04-17
 redirect_from:
 - cases/azure-ai-search/eventual-consistency-reindex/index.md

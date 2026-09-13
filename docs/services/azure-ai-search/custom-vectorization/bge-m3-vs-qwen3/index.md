@@ -14,8 +14,8 @@ technologies:
 - python
 - rag
 tags:
-- benchmarking
-- performance
+- evaluate
+- optimize
 published_at: 2026-05-22
 topic_order: 4
 redirect_from:

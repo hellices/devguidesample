@@ -75,6 +75,7 @@ def make_repository(tmp_path: Path) -> Path:
         "services": {"aks": "Azure Kubernetes Service"},
         "technologies": {"kubernetes": "Kubernetes"},
         "tags": {"networking": "Networking"},
+        "tag_groups": {"subject": {"label": "주제", "tags": ["networking"]}},
         "verification_statuses": ["verified", "needs-review"],
         "required_source_host": "learn.microsoft.com",
         "official_source_hosts": ["learn.microsoft.com", "kubernetes.io"],
@@ -113,6 +114,26 @@ def test_validation_gates_accept_a_publishable_repository(tmp_path: Path) -> Non
 
     assert all(result.document_count == 1 for result in results)
     assert all(result.errors == [] for result in results)
+
+
+@pytest.mark.parametrize("tags", [None, 123])
+def test_metadata_gate_reports_malformed_tags_without_crashing(tmp_path: Path, tags) -> None:
+    root = make_repository(tmp_path)
+    path = root / "docs/services/aks/network-diagnosis/index.md"
+    path.write_text(path.read_text().replace("tags: [networking]", f"tags: {yaml.safe_dump(tags).splitlines()[0]}"))
+    result = validate_metadata.validate_repository(root)
+    assert any("tags must be" in error for error in result.errors)
+
+
+def test_metadata_gate_rejects_unused_and_ungrouped_tags(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    path = root / "docs-taxonomy.yml"
+    taxonomy = yaml.safe_load(path.read_text())
+    taxonomy["tags"]["unused"] = "Unused"
+    path.write_text(yaml.safe_dump(taxonomy))
+    errors = validate_metadata.validate_repository(root).errors
+    assert any("missing tag: unused" in error for error in errors)
+    assert any("unused tag: unused" in error for error in errors)
 
 
 def test_metadata_gate_rejects_non_bundle_markdown_below_services(tmp_path: Path) -> None:
@@ -224,6 +245,98 @@ def test_reference_links_accept_existing_targets(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "snippet",
     [
+        "![Published diagram](images/published.svg)",
+        "[Download](images/published.svg?download=1#diagram)",
+        "![Published diagram][asset]\n\n[asset]: images/published.svg",
+        '<img src="images/published.svg" alt="Published diagram">',
+        "[Download](/services/aks/network-diagnosis/images/published.svg)",
+        "[Download](images/%70ublished.svg)",
+    ],
+)
+def test_link_gate_accepts_exact_virtual_published_targets(tmp_path: Path, snippet: str) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs/services/aks/network-diagnosis"
+    sample = topic / "samples/example"
+    sample.mkdir(parents=True)
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "source.svg").write_bytes(b"<svg/>")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
+        "publish:\n  - source: source.svg\n    target: images/published.svg\n"
+    )
+    (topic / "index.md").write_text(
+        VALID_GUIDE + "\n" + snippet + "\n[Missing](images/undeclared.svg)\n"
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert result.errors == [
+        "docs/services/aks/network-diagnosis/index.md: target does not exist: images/undeclared.svg"
+    ]
+    assert not (topic / "images/published.svg").exists()
+
+
+def test_link_gate_rejects_invalid_publish_declarations(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    sample = root / "docs/services/aks/network-diagnosis/samples/example"
+    sample.mkdir(parents=True)
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
+        "publish:\n  - source: missing.svg\n    target: images/missing.svg\n"
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert any("publish source must be an existing file" in error for error in result.errors)
+
+
+@pytest.mark.parametrize("existing_directory", [False, True])
+@pytest.mark.parametrize(
+    "download",
+    [
+        "downloads/",
+        "downloads/?download=1#notes",
+        "/services/aks/network-diagnosis/downloads/",
+        "downloads%2F",
+        "downloads/index.md/",
+    ],
+)
+def test_link_gate_requires_explicit_raw_asset_paths_instead_of_directory_shorthand(
+    tmp_path: Path, existing_directory: bool, download: str
+) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs/services/aks/network-diagnosis"
+    sample = topic / "samples/example"
+    sample.mkdir(parents=True)
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "notes.md").write_text("# Downloadable notes\n")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
+        "publish:\n  - source: notes.md\n    target: downloads/index.md\n"
+    )
+    if existing_directory:
+        (topic / "downloads").mkdir()
+    (topic / "setup").mkdir()
+    (topic / "setup/index.md").write_text(canonical_guide("Setup", topic_order=1))
+    (topic / "index.md").write_text(
+        VALID_GUIDE
+        + "\n[Explicit raw download](downloads/index.md)\n"
+        + "[Encoded raw download](downloads/%69ndex.md?download=1#notes)\n"
+        + "[Canonical child](setup/)\n[Canonical child without slash](setup)\n"
+        + f"[Invalid shorthand]({download})\n"
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert result.errors == [
+        f"docs/services/aks/network-diagnosis/index.md: target does not exist: {download}"
+    ]
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
         "````markdown\n```text\n[example](missing.md)\n```\n````",
         "~~~~markdown\n~~~text\n[example](missing.md)\n~~~\n~~~~",
         "````markdown\n~~~text\n[example](missing.md)\n~~~\n````",
@@ -280,6 +393,10 @@ def test_link_gate_validates_mixed_layout_pages_without_topic_samples(
     (sample / "index.md").write_text(
         canonical_guide("Sample") + "\n[ignored sample link](missing-sample.md)\n",
         encoding="utf-8",
+    )
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
     )
 
     result = validate_links.validate_repository(root)

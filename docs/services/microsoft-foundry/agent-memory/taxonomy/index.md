@@ -13,8 +13,8 @@ description: AI agent가 기억할 정보의 유형과 수명주기를 분류합
 technologies:
 - rag
 tags:
+- design
 - ai-agents
-- architecture
 published_at: 2026-08-24
 topic_order: 1
 redirect_from:

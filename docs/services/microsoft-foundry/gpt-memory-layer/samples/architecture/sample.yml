@@ -3,3 +3,6 @@ description: Editable and rendered hybrid memory architecture diagrams.
 kind: artifact
 used_by:
 - index
+publish:
+  - source: hybrid-architecture.png
+    target: images/hybrid-architecture.png

@@ -18,8 +18,7 @@ technologies:
 - kubernetes
 - open-telemetry
 tags:
-- observability
-- monitoring
+- operate
 - networking
 redirect_from:
 - guides/azure-monitor/aks-private-opentelemetry/index.md

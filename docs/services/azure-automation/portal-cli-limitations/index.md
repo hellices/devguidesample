@@ -18,8 +18,8 @@ technologies:
 - azure-cli
 - powershell
 tags:
-- troubleshooting
-- development
+- diagnose
+- build
 redirect_from:
 - guides/azure-automation/portal-cli-limitations/index.md
 ---

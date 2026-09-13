@@ -20,8 +20,8 @@ technologies:
 - kubernetes
 - nodejs
 tags:
-- authentication
-- security
+- secure
+- identity
 redirect_from:
 - guides/azure-kubernetes-service/workload-identity-databricks/index.md
 ---

@@ -64,27 +64,50 @@ technologies:
   rest-api: REST API
 
 tags:
+  design: 설계
+  build: 구현
+  deploy: 배포
+  diagnose: 진단
+  optimize: 최적화
+  operate: 운영
+  secure: 보안
+  evaluate: 비교·검증
+  migrate: 마이그레이션
   ai-agents: AI agents
-  architecture: Architecture
-  authentication: Authentication
-  authorization: Authorization
-  benchmarking: Benchmarking
-  deployment: Deployment
-  development: Development
-  diagnostics: Diagnostics
-  disaster-recovery: Disaster recovery
-  high-availability: High availability
-  kubernetes: Kubernetes
-  latency: Latency
-  migration: Migration
-  monitoring: Monitoring
-  networking: Networking
-  observability: Observability
-  performance: Performance
-  reliability: Reliability
-  security: Security
-  storage: Storage
-  troubleshooting: Troubleshooting
+  networking: 네트워킹
+  identity: ID·권한
+  storage: 스토리지
+
+tag_groups:
+  goal:
+    label: 목적
+    tags: [design, build, deploy, diagnose, optimize, operate, secure, evaluate, migrate]
+  subject:
+    label: 주제
+    tags: [ai-agents, networking, identity, storage]
+
+legacy_tag_redirects:
+  ai-agents: {tag: [ai-agents]}
+  architecture: {tag: [design]}
+  authentication: {tag: [identity, secure]}
+  authorization: {tag: [identity, secure]}
+  benchmarking: {tag: [evaluate]}
+  deployment: {tag: [deploy]}
+  development: {tag: [build]}
+  diagnostics: {tag: [diagnose]}
+  troubleshooting: {tag: [diagnose]}
+  disaster-recovery: {tag: [operate]}
+  high-availability: {tag: [operate]}
+  monitoring: {tag: [operate]}
+  observability: {tag: [operate]}
+  reliability: {tag: [operate]}
+  kubernetes: {technology: [kubernetes]}
+  latency: {tag: [optimize]}
+  performance: {tag: [optimize]}
+  migration: {tag: [migrate]}
+  networking: {tag: [networking]}
+  security: {tag: [secure]}
+  storage: {tag: [storage]}
 
 verification_statuses: [verified, needs-review]
 required_source_host: learn.microsoft.com

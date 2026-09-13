@@ -2,7 +2,11 @@ import re
 import unicodedata
 from collections import Counter
 
-from published_layout import BRIEFING, OFFICIAL_ASSETS as SOURCE_OFFICIAL_ASSETS
+from published_layout import (
+    BRIEFING,
+    OFFICIAL_ASSETS as SOURCE_OFFICIAL_ASSETS,
+    resolve_published_file,
+)
 
 OFFICIAL_SVGS = {
     "incident-response-flow.svg",
@@ -391,7 +395,7 @@ def test_briefing_uses_only_local_images_and_no_storyboards():
     assert "storyboard" not in text.lower()
     assert ".gif" not in text.lower()
     for target in image_targets:
-        assert (BRIEFING.parent / target).resolve().exists(), target
+        assert resolve_published_file((BRIEFING.parent / target).resolve()).is_file(), target
 
 
 def test_every_official_asset_is_rendered_as_a_markdown_image():

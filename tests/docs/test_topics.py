@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from collections import defaultdict
+from dataclasses import FrozenInstanceError
+import hashlib
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 
 import pytest
 import yaml
@@ -15,6 +19,19 @@ from scripts.docs.topics import build_topic_catalog
 
 
 ROOT = Path(__file__).parents[2]
+
+
+def test_repository_tracked_topic_assets_have_no_duplicate_hashes() -> None:
+    tracked = subprocess.check_output(
+        ["git", "ls-files", "-z", "--", "docs/services"], cwd=ROOT
+    ).decode().split("\0")
+    by_hash: dict[str, list[str]] = defaultdict(list)
+    for relative in filter(None, tracked):
+        path = ROOT / relative
+        if path.stat().st_size >= 1024:
+            by_hash[hashlib.sha256(path.read_bytes()).hexdigest()].append(relative)
+    duplicates = [paths for paths in by_hash.values() if len(paths) > 1]
+    assert not duplicates, f"{len(duplicates)} duplicate groups >=1KB: {duplicates}"
 
 
 @pytest.fixture
@@ -106,6 +123,314 @@ def write_sample(
             encoding="utf-8",
         )
     return sample_dir
+
+
+def published_sample(docs_dir: Path, publish: object) -> Path:
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    sample_dir = write_sample(
+        docs_dir,
+        "services/azure-monitor/agent-topic/samples/event-lab",
+        {
+            "title": "Event lab",
+            "description": "Published sample assets.",
+            "kind": "artifact",
+            "used_by": ["index"],
+            "publish": publish,
+        },
+    )
+    (sample_dir / "diagram.svg").write_bytes(b"<svg>diagram</svg>\r\n")
+    return sample_dir
+
+
+def test_catalog_exposes_immutable_published_assets_without_changing_used_by(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    sample_dir = published_sample(
+        docs_dir,
+        [
+            {"source": "diagram.svg", "target": "images/diagram.svg"},
+            {"source": "diagram.svg", "target": "setup/images/diagram.svg"},
+        ],
+    )
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+    targets = [
+        PurePosixPath("services/azure-monitor/agent-topic") / target
+        for target in ("images/diagram.svg", "setup/images/diagram.svg")
+    ]
+
+    assert hasattr(catalog, "published_assets"), "catalog must expose validated published assets"
+    assert set(catalog.published_assets) == set(targets)
+    for target in targets:
+        asset = catalog.published_assets[target]
+        assert asset.source == PurePosixPath(sample_dir.relative_to(docs_dir).as_posix()) / "diagram.svg"
+        assert asset.target == target
+        assert not (docs_dir / target).exists()
+        with pytest.raises(FrozenInstanceError):
+            asset.target = PurePosixPath("changed.svg")
+    entry = PurePosixPath("services/azure-monitor/agent-topic/index.md")
+    assert catalog.samples_by_document[entry][0].used_by == (entry,)
+    assert [doc.relative_path for doc in catalog.documents] == [entry]
+
+
+@pytest.mark.parametrize("publish", [None, {}, "", "diagram.svg", True, 12])
+def test_catalog_rejects_non_list_publish(
+    tmp_path: Path, taxonomy: dict, publish: object
+) -> None:
+    published_sample(tmp_path, publish)
+    with pytest.raises(DocumentFormatError, match="publish must be a list"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("entry", [None, [], "", "diagram.svg", True, 12])
+def test_catalog_rejects_non_mapping_publish_entries(
+    tmp_path: Path, taxonomy: dict, entry: object
+) -> None:
+    published_sample(tmp_path, [entry])
+    with pytest.raises(DocumentFormatError, match="publish entries must be mappings"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("field", ["source", "target"])
+@pytest.mark.parametrize("value", [None, "", "  ", 12, True, [], {}])
+def test_catalog_rejects_missing_or_invalid_publish_paths(
+    tmp_path: Path, taxonomy: dict, field: str, value: object
+) -> None:
+    mapping = {"source": "diagram.svg", "target": "images/diagram.svg"}
+    mapping[field] = value
+    published_sample(tmp_path, [mapping])
+    with pytest.raises(DocumentFormatError, match=f"publish {field} must be a non-empty string"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("field", ["source", "target"])
+@pytest.mark.parametrize(
+    "value",
+    ["/absolute.svg", "../escape.svg", "images/../escape.svg", "C:/absolute.svg", r"C:\absolute.svg", r"..\escape.svg"],
+)
+def test_catalog_rejects_unsafe_publish_paths(
+    tmp_path: Path, taxonomy: dict, field: str, value: str
+) -> None:
+    mapping = {"source": "diagram.svg", "target": "images/diagram.svg"}
+    mapping[field] = value
+    published_sample(tmp_path, [mapping])
+    with pytest.raises(DocumentFormatError, match=f"publish {field} must be a relative path without"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("source", ["missing.svg", ".", "assets"])
+def test_catalog_rejects_missing_or_non_file_publish_sources(
+    tmp_path: Path, taxonomy: dict, source: str
+) -> None:
+    sample_dir = published_sample(tmp_path, [{"source": source, "target": "images/diagram.svg"}])
+    (sample_dir / "assets").mkdir()
+    with pytest.raises(DocumentFormatError, match="publish source must be an existing file"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        ".notes.md",
+        "downloads/.env.example",
+        ".artifacts/diagram.svg",
+        "downloads/.private/diagram.svg",
+        "./images/diagram.svg",
+        "images/./diagram.svg",
+    ],
+)
+def test_catalog_rejects_hidden_publish_target_components(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    with pytest.raises(
+        DocumentFormatError, match="publish target must not contain hidden path components"
+    ) as error:
+        build_topic_catalog(tmp_path, taxonomy)
+    assert target in str(error.value)
+    assert "services/azure-monitor/agent-topic/samples/event-lab" in str(error.value)
+
+
+@pytest.mark.parametrize("source", [".diagram.svg", ".private/diagram.svg"])
+def test_catalog_allows_hidden_source_payloads_for_visible_publish_targets(
+    tmp_path: Path, taxonomy: dict, source: str
+) -> None:
+    sample_dir = published_sample(tmp_path, [{"source": source, "target": "images/diagram.svg"}])
+    hidden = sample_dir / source
+    hidden.parent.mkdir(exist_ok=True)
+    hidden.write_bytes(b"<svg>source payload</svg>")
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+    target = PurePosixPath("services/azure-monitor/agent-topic/images/diagram.svg")
+    assert catalog.published_assets[target].source == PurePosixPath(
+        hidden.relative_to(tmp_path).as_posix()
+    )
+
+
+@pytest.mark.parametrize("target", ["samples/image.svg", "setup/samples/image.svg"])
+def test_catalog_rejects_publish_targets_under_samples(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    with pytest.raises(DocumentFormatError, match="publish target must not be under samples"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("other_sample", [False, True])
+def test_catalog_rejects_duplicate_publish_target_ownership(
+    tmp_path: Path, taxonomy: dict, other_sample: bool
+) -> None:
+    mapping = {"source": "diagram.svg", "target": "images/diagram.svg"}
+    sample_dir = published_sample(tmp_path, [mapping] if other_sample else [mapping, mapping])
+    if other_sample:
+        manifest = yaml.safe_load((sample_dir / "sample.yml").read_text())
+        second = write_sample(
+            tmp_path, "services/azure-monitor/agent-topic/samples/other-lab", manifest
+        )
+        (second / "diagram.svg").write_bytes(b"another diagram")
+    with pytest.raises(DocumentFormatError, match="publish target is already owned"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("descendant_first", [False, True])
+@pytest.mark.parametrize("other_sample", [False, True])
+def test_catalog_rejects_overlapping_publish_targets(
+    tmp_path: Path, taxonomy: dict, descendant_first: bool, other_sample: bool
+) -> None:
+    mappings = [
+        {"source": "diagram.svg", "target": "downloads/archive"},
+        {"source": "diagram.svg", "target": "downloads/archive/diagram.svg"},
+    ]
+    if descendant_first:
+        mappings.reverse()
+    sample_dir = published_sample(tmp_path, mappings[:1] if other_sample else mappings)
+    if other_sample:
+        manifest = yaml.safe_load((sample_dir / "sample.yml").read_text())
+        manifest["publish"] = mappings[1:]
+        second = write_sample(
+            tmp_path, "services/azure-monitor/agent-topic/samples/other-lab", manifest
+        )
+        (second / "diagram.svg").write_bytes(b"another diagram")
+
+    with pytest.raises(DocumentFormatError, match="publish target.*(owned|overlap|conflict)"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["index.html/diagram.svg", "setup/index.html/diagram.svg", "index.md/diagram.svg", "setup"],
+)
+def test_catalog_rejects_publish_targets_overlapping_canonical_paths(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    write_document(
+        tmp_path, "services/azure-monitor/agent-topic/setup/index.md", "Setup", topic_order=1
+    )
+    with pytest.raises(DocumentFormatError, match="publish target.*(collid|exist)"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize(
+    ("physical_path", "directory", "target"),
+    [
+        ("downloads/archive", False, "downloads/archive/diagram.svg"),
+        ("downloads/archive/diagram.svg", False, "downloads/archive"),
+        ("downloads/archive/nested", True, "downloads/archive"),
+        ("downloads/archive", True, "downloads/archive"),
+    ],
+)
+def test_catalog_rejects_publish_targets_conflicting_with_physical_paths(
+    tmp_path: Path, taxonomy: dict, physical_path: str, directory: bool, target: str
+) -> None:
+    sample_dir = published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    physical = sample_dir.parent.parent / physical_path
+    physical.parent.mkdir(parents=True)
+    if directory:
+        physical.mkdir()
+    else:
+        physical.write_bytes(b"physical asset")
+    with pytest.raises(DocumentFormatError, match="publish target.*(collid|exist|conflict)"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+def test_catalog_allows_existing_parent_directories_and_similarly_named_targets(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    mappings = [
+        {"source": "diagram.svg", "target": "downloads/archive.svg"},
+        {"source": "diagram.svg", "target": "downloads/archive.svg-backup/diagram.svg"},
+    ]
+    sample_dir = published_sample(tmp_path, mappings)
+    (sample_dir.parent.parent / "downloads").mkdir()
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+    assert len(catalog.published_assets) == 2
+
+
+@pytest.mark.parametrize("target", ["index.md", "setup/index.md", "index.html", "setup/index.html"])
+def test_catalog_rejects_publish_targets_colliding_with_canonical_documents(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    if target.startswith("setup/"):
+        write_document(
+            tmp_path, "services/azure-monitor/agent-topic/setup/index.md", "Setup", topic_order=1
+        )
+    with pytest.raises(DocumentFormatError, match="publish target collides with a canonical document"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("target", ["downloads/index.md", "downloads/index.html"])
+def test_catalog_allows_index_assets_without_a_canonical_document_collision(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+    assert PurePosixPath("services/azure-monitor/agent-topic") / target in catalog.published_assets
+
+
+@pytest.mark.parametrize("same_bytes", [False, True])
+def test_catalog_rejects_physical_publish_targets(
+    tmp_path: Path, taxonomy: dict, same_bytes: bool
+) -> None:
+    sample_dir = published_sample(tmp_path, [{"source": "diagram.svg", "target": "images/diagram.svg"}])
+    physical = sample_dir.parent.parent / "images/diagram.svg"
+    physical.parent.mkdir()
+    physical.write_bytes((sample_dir / "diagram.svg").read_bytes() if same_bytes else b"other bytes")
+    with pytest.raises(DocumentFormatError, match="publish target already exists"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("field", ["source", "target"])
+def test_catalog_rejects_publish_symlink_escapes(
+    tmp_path: Path, taxonomy: dict, field: str
+) -> None:
+    sample_dir = published_sample(
+        tmp_path, [{"source": "diagram.svg", "target": "images/diagram.svg"}]
+    )
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    if field == "source":
+        (outside / "diagram.svg").write_bytes(b"outside")
+        (sample_dir / "diagram.svg").unlink()
+        (sample_dir / "diagram.svg").symlink_to(outside / "diagram.svg")
+    else:
+        (sample_dir.parent.parent / "images").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(DocumentFormatError, match=f"publish {field} must stay within"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("publish", [[], None])
+def test_catalog_accepts_empty_or_omitted_publish(
+    tmp_path: Path, taxonomy: dict, publish: object
+) -> None:
+    sample_dir = published_sample(tmp_path, publish)
+    if publish is None:
+        manifest_path = sample_dir / "sample.yml"
+        manifest = yaml.safe_load(manifest_path.read_text())
+        del manifest["publish"]
+        manifest_path.write_text(yaml.safe_dump(manifest))
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+    assert getattr(catalog, "published_assets", None) == {}
 
 
 def test_build_topic_catalog_discovers_canonical_topic_documents_and_samples(

@@ -18,8 +18,9 @@ technologies:
 - kubernetes
 - azure-cli
 tags:
-- authorization
-- troubleshooting
+- secure
+- diagnose
+- identity
 redirect_from:
 - guides/azure-kubernetes-service/authorization-troubleshooting/index.md
 ---

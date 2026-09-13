@@ -14,8 +14,8 @@ featured: true
 technologies:
 - python
 tags:
-- benchmarking
-- performance
+- evaluate
+- optimize
 published_at: 2026-07-23
 topic_order: 5
 redirect_from:

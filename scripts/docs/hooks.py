@@ -10,7 +10,7 @@ import re
 import sys
 from typing import Any, Mapping
 
-from mkdocs.structure.files import InclusionLevel
+from mkdocs.structure.files import File, InclusionLevel
 from mkdocs.structure import StructureItem
 from mkdocs.structure.nav import Navigation, Section
 from mkdocs.structure.pages import Page
@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.docs.content import load_taxonomy
 from scripts.docs.generate_indexes import build_tag_links
+from scripts.docs.explore import filter_redirect_targets
 from scripts.docs.topics import TopicCatalog, build_topic_catalog, iter_topic_documents
 
 
@@ -38,16 +39,30 @@ def _navigation_pages(
     return pages
 
 
+class _PublishedAssetFile(File):
+    def is_documentation_page(self) -> bool:
+        return False
+
+
 def on_files(files: Any, config: Mapping[str, Any]) -> Any:
-    """Keep internal sample READMEs out of the published site and search index."""
+    """Exclude sample sources and keep published Markdown payloads as raw assets."""
     try:
         config.pop("_topic_catalog", None)  # type: ignore[union-attr]
     except Exception:
         pass
-    for file in files:
+    catalog = _topic_catalog_from_config(config)
+    for file in list(files):
         src_uri = getattr(file, "src_uri", "")
         if isinstance(src_uri, str) and "/samples/" in src_uri:
             file.inclusion = InclusionLevel.EXCLUDED
+        elif catalog is not None and PurePosixPath(src_uri) in catalog.published_assets:
+            if file.is_documentation_page():
+                published = _PublishedAssetFile(
+                    src_uri, file.src_dir, file.dest_dir, file.use_directory_urls,
+                    dest_uri=src_uri, inclusion=file.inclusion,
+                )
+                files.remove(file)
+                files.append(published)
     return files
 
 
@@ -251,6 +266,11 @@ def on_nav(nav: Navigation, config: Mapping[str, Any], files: Any) -> Navigation
         direct_pages = [child for child in children if isinstance(child, Page)]
         if any(page.file.src_uri in collection_indexes for page in direct_pages):
             continue
+        if any(
+            page.file.src_uri.startswith(("tags/", "articles/"))
+            for page in direct_pages
+        ):
+            continue
         if isinstance(item, Section) and any(
             page.file.src_uri == "services/index.md" for page in direct_pages
         ):
@@ -368,11 +388,15 @@ def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
         return output
 
     redirect_path = PurePosixPath(src_uri)
+    taxonomy = load_taxonomy(Path(config["docs_dir"]).parent / "docs-taxonomy.yml")
+    destination = filter_redirect_targets(taxonomy).get(redirect_path)
     canonical_path = catalog.redirects.get(redirect_path)
-    if canonical_path is None:
+    if destination is None and canonical_path is not None:
+        destination = _redirect_target(redirect_path, canonical_path)
+    if destination is None:
         return output
 
-    target = escape(_redirect_target(redirect_path, canonical_path), quote=True)
+    target = escape(destination, quote=True)
     output = re.sub(
         r'<link rel="canonical" href="[^"]*"\s*/?>',
         f'<link rel="canonical" href="{target}">',

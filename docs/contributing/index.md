@@ -84,6 +84,11 @@ kind: runnable
 used_by:
   - index
   - setup
+publish:
+  - source: assets/architecture.svg
+    target: images/architecture.svg
+  - source: assets/architecture.svg
+    target: setup/images/architecture.svg
 ```
 
 - `title`, `description`, `kind`는 비어 있지 않은 문자열입니다.
@@ -95,9 +100,32 @@ used_by:
   자식 문서 아래에 `samples/`를 두거나 topic의 `samples/` 바로 아래에
   파일을 두지 않습니다. sample package 내부의 하위 `samples/` 폴더는
   해당 package의 payload로 취급합니다.
-- sample 파일은 공개 안전성 검사를 받지만 MkDocs 사이트와 검색 색인에는
+- sample 원본 폴더는 공개 안전성 검사를 받지만 MkDocs 사이트와 검색 색인에는
   복사되지 않습니다. 문서에서는 생성되는 sample card 또는 GitHub 소스
   링크로 연결합니다.
+- 페이지와 sample에서 같은 이미지나 파일을 사용하는 경우 원본은 sample에만
+  보관하고 선택적 `publish` 목록에 명시합니다. `source`는 sample package,
+  `target`은 소유 topic 루트 기준 상대 경로입니다. 위 예의 페이지 링크는
+  각각 `images/architecture.svg`이며 실제 target 파일을 중복 저장하지 않습니다.
+- 빌드는 선언한 파일만 원본 바이트 그대로 target에 게시합니다. 텍스트와
+  Markdown 파일도 독립 문서나 검색 항목이 아닌 다운로드 자산으로 유지합니다.
+  `downloads/index.md` 같은 원본 자산은 해당 파일 경로로 직접 링크합니다.
+  `downloads/`처럼 문서 디렉터리로 줄여 쓰면 다운로드 자산을 가리키지 않습니다.
+  공개 target의 경로 구성 요소는 어느 깊이에서도 `.`으로 시작할 수 없습니다.
+  [Pages artifact 패키징](https://github.com/actions/upload-pages-artifact/blob/v4/action.yml)이
+  숨김 파일과 숨김 디렉터리를 제외하므로, 이런 target은 빌드 전에 거부합니다.
+  sample 원본 payload 내부의 숨김 파일은 허용하며 원본 폴더는 계속 게시에서 제외합니다.
+  페이지 본문과 링크 텍스트는 기존처럼 검색됩니다. `used_by`는 sample card의
+  표시 위치만 결정하며 `publish`와 독립적입니다.
+- `publish`는 생략하거나 빈 목록으로 둘 수 있습니다. 각 항목의 `source`와
+  `target`은 비어 있지 않은 문자열이어야 합니다. 절대 경로, `..`, 역슬래시,
+  소유 경계를 벗어나는 심볼릭 링크와 존재하지 않는 원본은 허용하지 않습니다.
+  target은 `samples/` 아래, canonical 문서와 HTML 출력 경로, 이미 존재하는 파일이나
+  디렉터리를 가리킬 수 없습니다. 하나의 원본을 여러 target으로 게시할 수
+  있지만 각 target에는 하나의 선언만 허용합니다.
+  target 파일은 다른 target이나 canonical 출력 파일의 상위·하위 경로와도
+  충돌할 수 없습니다. 기존 파일을 target의 상위 디렉터리처럼 사용할 수 없으며,
+  기존 디렉터리 아래에 새 파일을 게시하는 것은 허용합니다.
 
 최상위 `samples/`에는 공개 콘텐츠를 추가하지 않습니다.
 
@@ -125,10 +153,53 @@ redirect 경로는 `cases`, `guides`, `labs`, `research` 중 하나로 시작하
 카드와 함께 해당 자식 문서로 바로 가는 링크도 제공합니다.
 
 `document_type`은 collection 호환 색인과 수명주기 요구사항을 선택하지만
-물리 경로를 결정하지 않습니다. `services/`, `tags/`, `articles/`와
-collection 호환 색인은 빌드가 생성합니다. 개별 문서를 추가하기 위해
+물리 경로를 결정하지 않습니다. `services/`, `explore/`와 collection 호환
+색인은 빌드가 생성합니다. `tags/`, `articles/`는 `explore/`로 이동하는
+검색 제외 redirect입니다. 개별 문서를 추가하기 위해
 `mkdocs.yml`, `docs/.nav.yml`, README 또는 수동 문서 목록을 수정하지
 않습니다.
+
+## 글 찾기와 실용 태그
+
+대메뉴는 **홈 · 서비스별 보기 · 글 찾기 · 기여하기**입니다. 글 찾기는
+모든 주제를 canonical topic 카드로 묶고 실제 catalog에서 계산한
+**주제 수 · 문서 수**를 함께 표시합니다. 여러 문서가 있는 topic도
+카드 하나이며 각 문서로 직접 연결합니다.
+
+- 서비스, 목적·주제별 태그, 기술은 front matter 값과 정확히 일치해야 합니다.
+- 태그 하나를 선택하면 해당 태그가 붙은 문서만 표시합니다. 여러 태그,
+  서비스, 기술은 **같은 문서에 AND**로 적용합니다. 서로 다른 자식의
+  태그를 합쳐서 일치한다고 판단하지 않습니다.
+- 제목·설명 검색도 같은 문서에 적용합니다. 본문 검색은 사이트의 별도
+  전체 텍스트 검색을 사용합니다.
+- 일치하지 않는 문서 행과 일치 문서가 없는 topic 카드는 숨깁니다.
+  JavaScript가 없으면 안내와 함께 모든 topic과 문서 링크를 표시합니다.
+- 선택 조건은 반복 가능한 `tag`, `service`, `technology`, `text` query로
+  공유합니다. 예를 들어 `explore/?tag=design&text=Agent&text=Memory`는
+  `design` 태그와 두 검색어가 모두 일치하는 문서만 표시합니다.
+- `q`는 Material의 사이트 전체 검색 전용입니다. 글 찾기는 이를 자신의
+  검색어나 잘못된 필터로 취급하지 않으며 URL을 갱신할 때 현재 `q` 값을
+  보존합니다. 전체 검색 창을 닫아도 글 찾기의 `text` 조건은 지워지지 않습니다.
+- 그 밖의 알 수 없는 매개변수나 필터 값은 경고 후 제외합니다. 초기화하면
+  글 찾기의 선택과 검색어, 해당 query를 지우되 전체 검색의 `q`는 유지합니다.
+- 문서와 카드의 태그 링크는 `explore/?tag=<slug>`로 연결합니다.
+
+문서의 `tags`는 아래 통제 값에서 **1–4개** 선택합니다. 중복을 제거하고
+목적 태그를 주제 태그보다 먼저 배치합니다. 기술 분류와 중복되는
+`kubernetes`는 태그가 아니라 `technologies`로 지정합니다.
+
+| 그룹 | 값 |
+|---|---|
+| 목적 | `design` 설계 · `build` 구현 · `deploy` 배포 · `diagnose` 진단 · `optimize` 최적화 · `operate` 운영 · `secure` 보안 · `evaluate` 비교·검증 · `migrate` 마이그레이션 |
+| 주제 | `ai-agents` AI agents · `networking` 네트워킹 · `identity` ID·권한 · `storage` 스토리지 |
+
+태그를 추가할 때는 `docs-taxonomy.yml`의 `tags`와 `tag_groups`를 함께
+수정하고 실제 문서에 적용합니다. 각 태그는 그룹 하나에 정확히 한 번
+등장해야 하며 미사용 태그는 허용하지 않습니다. `legacy_tag_redirects`는
+이전 `/tags/<slug>/` 주소를 새 필터로 변환하는 taxonomy 소유 매핑입니다.
+예를 들어 `authentication`은 `identity`와 `secure` 두 태그로,
+`kubernetes`는 기술 필터로 이동합니다. 이 redirect는 검색·메뉴에서
+제외하며 문서마다 legacy 태그를 저장하지 않습니다.
 
 ## 세 가지 작성 workflow
 
@@ -160,7 +231,8 @@ collection 호환 색인은 빌드가 생성합니다. 개별 문서를 추가�
 3. 코드·매니페스트·결과물을 같은 sample 폴더에 둡니다.
 4. 실제 식별자와 비밀을 가상 값으로 치환합니다.
 5. public-safety 검사가 sample을 검사하고 strict build의 `site/`에는 sample
-   파일이 없는지 확인합니다.
+   원본 폴더가 없는지 확인합니다. `publish`를 사용하면 선언한 target만
+   게시되며 원본과 바이트가 같은지도 확인합니다.
 
 ## 공통 front matter
 
@@ -171,7 +243,7 @@ description: AKS 네트워크 문제를 진단하는 현재 절차
 document_type: guide
 services: [azure-kubernetes-service]
 technologies: [kubernetes]
-tags: [networking, troubleshooting]
+tags: [diagnose, networking]
 status: current
 verification_status: verified
 sources_checked_at: 2026-09-12

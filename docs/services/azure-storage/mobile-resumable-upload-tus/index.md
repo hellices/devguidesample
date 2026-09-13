@@ -18,9 +18,9 @@ technologies:
 - java
 - rest-api
 tags:
+- operate
+- build
 - storage
-- reliability
-- development
 redirect_from:
 - guides/azure-storage/mobile-resumable-upload-tus/index.md
 ---

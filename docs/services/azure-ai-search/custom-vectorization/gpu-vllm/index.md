@@ -19,9 +19,9 @@ technologies:
 - kubernetes
 - rag
 tags:
-- performance
-- deployment
-- architecture
+- build
+- deploy
+- optimize
 topic_order: 3
 redirect_from:
 - guides/azure-ai-search/gpu-vllm-rag/index.md

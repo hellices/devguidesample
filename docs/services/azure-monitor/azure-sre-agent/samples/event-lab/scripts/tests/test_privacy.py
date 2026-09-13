@@ -14,6 +14,7 @@ from published_layout import (
     README,
     REPO_ROOT,
     VALIDATION_RESULTS,
+    resolve_published_file,
 )
 
 
@@ -74,7 +75,7 @@ def test_briefing_relative_links_resolve():
 
     assert targets
     for target in targets:
-        assert (BRIEFING.parent / target).resolve().exists(), target
+        assert resolve_published_file((BRIEFING.parent / target).resolve()).is_file(), target
 
 
 def test_relocated_lab_docs_drop_internal_workflow_directives():

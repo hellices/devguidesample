@@ -18,9 +18,8 @@ technologies:
 - kubernetes
 - python
 tags:
-- diagnostics
-- performance
-- troubleshooting
+- diagnose
+- optimize
 redirect_from:
 - guides/azure-kubernetes-service/python-memory-leak-memray/index.md
 ---

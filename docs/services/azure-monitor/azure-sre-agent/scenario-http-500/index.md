@@ -18,9 +18,9 @@ description: HTTP 500 장애를 주입하고 SRE Agent의 탐지와 조사를 �
 technologies:
 - python
 tags:
+- diagnose
+- operate
 - ai-agents
-- troubleshooting
-- monitoring
 topic_order: 3
 redirect_from:
 - labs/azure-monitor/sre-agent-scenario-http-500/index.md

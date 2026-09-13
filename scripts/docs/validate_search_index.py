@@ -154,9 +154,20 @@ def validate_repository(repo_root: Path | str) -> SearchIndexResult:
     locations = {
         str(entry.get("location", "")) for entry in entries if isinstance(entry, dict)
     }
+    if "explore/" not in locations:
+        errors.append("search index explore page is missing")
+    explore_text = _normalized(" ".join(
+        _visible_text(str(entry.get("text", "")))
+        for entry in entries if isinstance(entry, dict)
+        and (entry.get("location") == "explore/" or str(entry.get("location", "")).startswith("explore/#"))
+    ))
     for tag in sorted(used_tags):
-        if f"tags/{tag}/" not in locations:
-            errors.append(f"search index tag is missing: {tag}")
+        label = str(taxonomy.get("tags", {}).get(tag, tag))
+        if _normalized(label) not in explore_text:
+            errors.append(f"search index explore tag is missing: {tag}")
+    for location in sorted(locations):
+        if location.startswith(("tags/", "articles/")):
+            errors.append(f"search index contains a discovery redirect: {location}")
 
     return SearchIndexResult(len(documents), len(used_tags), errors)
 

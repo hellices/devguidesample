@@ -14,9 +14,8 @@ technologies:
 - nodejs
 - redis
 tags:
-- disaster-recovery
-- high-availability
-- troubleshooting
+- operate
+- diagnose
 occurred_at: 2026-02-22
 redirect_from:
 - cases/azure-managed-redis/cluster-failover-recovery/index.md

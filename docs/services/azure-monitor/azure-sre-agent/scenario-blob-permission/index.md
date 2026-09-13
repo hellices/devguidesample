@@ -18,9 +18,10 @@ description: Blob 권한을 제거하고 SRE Agent의 권한 문제 진단을 �
 technologies:
 - python
 tags:
+- secure
+- operate
+- identity
 - ai-agents
-- authorization
-- monitoring
 topic_order: 5
 redirect_from:
 - labs/azure-monitor/sre-agent-scenario-blob-permission/index.md

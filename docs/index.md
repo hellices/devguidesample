@@ -20,8 +20,7 @@ hide:
 <div class="dg-actions" markdown="1">
 
 [서비스별 보기](services/index.md){ .dg-button .dg-button--primary }
-[태그별 보기](tags/index.md){ .dg-button .dg-button--secondary }
-[전체 글](articles/index.md){ .dg-button .dg-button--secondary }
+[글 찾기](explore/index.md){ .dg-button .dg-button--secondary }
 
 </div>
 </div>
@@ -46,7 +45,8 @@ hide:
 
 ## 글 찾아보기
 
-서비스별로 관련 글을 모아 보거나, 태그로 주제를 좁히거나, 전체 글을 한 번에 살펴보세요.
+서비스별로 관련 글을 모아 보거나, 글 찾기에서 모든 주제를 살펴보세요.
+여러 태그를 선택하면 모든 태그가 붙은 문서만 주제별로 표시합니다.
 
 </div>
 

@@ -17,9 +17,8 @@ description: 초 단위 응답 시간을 줄이기 위한 Azure 아키텍처 고
 technologies:
 - rest-api
 tags:
-- architecture
-- latency
-- performance
+- design
+- optimize
 redirect_from:
 - guides/azure-architecture/response-time-optimization/index.md
 ---

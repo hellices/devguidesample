@@ -22,7 +22,7 @@ from scripts.docs.content import (
     iter_public_document_paths,
     load_taxonomy,
 )
-from scripts.docs.topics import iter_topic_documents
+from scripts.docs.topics import build_topic_catalog
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,9 @@ class _LinkParser(HTMLParser):
             self.links.append(_RenderedLink(target, alt_text))
 
 
-def _resolve_target(page: Path, docs_dir: Path, raw_target: str) -> Path | None:
+def _resolve_target(
+    page: Path, docs_dir: Path, raw_target: str, *, directory_shorthand: bool = True
+) -> Path | None:
     target = raw_target.removeprefix("<").removesuffix(">")
     if target.startswith("#"):
         return None
@@ -62,6 +64,8 @@ def _resolve_target(page: Path, docs_dir: Path, raw_target: str) -> Path | None:
         return None
     resolved = (docs_dir / path_text.lstrip("/")) if path_text.startswith("/") else (page.parent / path_text)
     resolved = resolved.resolve()
+    if not directory_shorthand:
+        return None if path_text.endswith("/") else resolved
     if resolved.is_dir() or path_text.endswith("/"):
         return resolved / "index.md"
     if not resolved.suffix:
@@ -82,11 +86,12 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
     errors: list[str] = []
     count = 0
     try:
-        documents = list(iter_topic_documents(docs_dir, taxonomy))
+        catalog = build_topic_catalog(docs_dir, taxonomy)
     except DocumentFormatError as error:
         count = sum(1 for _ in iter_public_document_paths(docs_dir, taxonomy))
         return ValidationResult(count, [str(error)])
-    for document in documents:
+    published_targets = {(docs_dir / target).resolve() for target in catalog.published_assets}
+    for document in catalog.documents:
         count += 1
         page = document.path
         relative = page.relative_to(root).as_posix()
@@ -99,7 +104,11 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
                 errors.append(f"{relative}: image alt text is required")
             target = _resolve_target(page, docs_dir, link.target)
             if target is not None and not target.exists():
-                errors.append(f"{relative}: target does not exist: {link.target}")
+                asset_target = _resolve_target(
+                    page, docs_dir, link.target, directory_shorthand=False
+                )
+                if asset_target not in published_targets:
+                    errors.append(f"{relative}: target does not exist: {link.target}")
     return ValidationResult(count, errors)
 
 

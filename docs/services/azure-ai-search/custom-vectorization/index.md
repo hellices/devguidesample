@@ -18,9 +18,9 @@ technologies:
 - python
 - rag
 tags:
-- architecture
-- performance
-- deployment
+- design
+- build
+- optimize
 redirect_from:
 - guides/azure-ai-search/custom-embedding-ingestion/index.md
 ---

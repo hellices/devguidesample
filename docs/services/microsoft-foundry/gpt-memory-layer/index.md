@@ -17,8 +17,8 @@ description: Microsoft Foundry 기반 GPT 애플리케이션의 메모리 레이
 technologies:
 - rag
 tags:
+- design
 - ai-agents
-- architecture
 redirect_from:
 - guides/microsoft-foundry/gpt-memory-layer/index.md
 ---

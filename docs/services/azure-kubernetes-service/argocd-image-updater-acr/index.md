@@ -18,8 +18,9 @@ technologies:
 - kubernetes
 - gitops
 tags:
-- deployment
-- authentication
+- deploy
+- secure
+- identity
 redirect_from:
 - guides/azure-kubernetes-service/argocd-image-updater-acr/index.md
 ---
