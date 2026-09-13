@@ -3,7 +3,7 @@ name: Oryx Python 3.11 Build Test
 on:
   push:
     paths:
-      - 'samples/azure-app-service/oryx-test/**'
+      - 'tests/fixtures/oryx-python-app/**'
       - '.github/workflows/oryx-python-build-test.yml'
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ jobs:
       - name: Oryx build Python 3.11
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}/samples/azure-app-service/oryx-test:/app \
+            -v ${{ github.workspace }}/tests/fixtures/oryx-python-app:/app \
             mcr.microsoft.com/oryx/build:github-actions-debian-bullseye \
             oryx build /app \
               --platform python \
@@ -29,4 +29,4 @@ jobs:
       - name: Verify build output
         run: |
           echo "=== Build output ==="
-          ls -la ./samples/azure-app-service/oryx-test/
+          ls -la ./tests/fixtures/oryx-python-app/

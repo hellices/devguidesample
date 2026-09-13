@@ -14,7 +14,10 @@ def test_public_safety_ignores_local_azd_state_but_scans_force_added_files(tmp_p
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     (root / ".gitignore").write_text(".azure/\nnode_modules/\n", encoding="utf-8")
     (root / "docs" / "index.md").write_text("# Public page\n", encoding="utf-8")
-    local = root / "samples" / "aks" / "example" / ".azure" / "demo" / ".env"
+    local = (
+        root / "docs" / "services" / "aks" / "example"
+        / "samples" / "example" / ".azure" / "demo" / ".env"
+    )
     local.parent.mkdir(parents=True)
     local.write_text("ENDPOINT=https://private-service.azurecontainerapps.io\n", encoding="utf-8")
 
@@ -41,21 +44,21 @@ def test_git_ignores_local_state_without_hiding_shared_inputs(tmp_path: Path) ->
     local_paths = {
         ".azure/deployment-plan.md",
         ".azure/validate-status.json",
-        "samples/example/.azure/environment.json",
+        "docs/services/example/topic/samples/example/.azure/environment.json",
         ".claude/settings.local.json",
         ".DS_Store",
-        "docs/guides/example/.DS_Store",
+        "docs/services/example/topic/.DS_Store",
         "sim-env.json",
-        "samples/example/sim-env.json",
-        "samples/azure-monitor/source-material/sre-agent-event-lab/evidence/run.json",
+        "docs/services/example/topic/samples/example/sim-env.json",
+        "docs/services/azure-monitor/azure-sre-agent/samples/event-lab/evidence/run.json",
         *COMPLETED_PLAN_PATHS,
     }
     shared_paths = {
         ".vscode/mcp.json",
         ".devcontainer/devcontainer.json",
-        "samples/example/.env.example",
-        "samples/example/infra/main.parameters.json",
-        "samples/example/assets/captures/report.md",
+        "docs/services/example/topic/samples/example/.env.example",
+        "docs/services/example/topic/samples/example/infra/main.parameters.json",
+        "docs/services/example/topic/samples/example/assets/captures/report.md",
         "project/specs/maintained-design.md",
     }
     result = subprocess.run(
@@ -85,8 +88,9 @@ def test_repository_does_not_track_local_artifacts() -> None:
 
 
 def make_repository(tmp_path: Path) -> Path:
-    (tmp_path / "docs" / "guides" / "aks" / "example").mkdir(parents=True)
-    (tmp_path / "samples" / "aks" / "example").mkdir(parents=True)
+    topic = tmp_path / "docs" / "services" / "aks" / "example"
+    topic.mkdir(parents=True)
+    (topic / "samples" / "example").mkdir(parents=True)
     return tmp_path
 
 
@@ -94,7 +98,8 @@ def test_public_safety_accepts_placeholders_and_example_hosts(
     tmp_path: Path,
 ) -> None:
     root = make_repository(tmp_path)
-    (root / "docs" / "guides" / "aks" / "example" / "index.md").write_text(
+    assert not (root / "samples").exists()
+    (root / "docs" / "services" / "aks" / "example" / "index.md").write_text(
         """\
 # Safe example
 
@@ -113,12 +118,31 @@ def test_public_safety_accepts_placeholders_and_example_hosts(
     assert result.errors == []
 
 
+def test_public_safety_rejects_legacy_top_level_sample_content(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    (root / "docs" / "services" / "aks" / "example" / "index.md").write_text(
+        "# Safe example\n", encoding="utf-8"
+    )
+    legacy_sample = root / "samples" / "example"
+    legacy_sample.mkdir(parents=True)
+    (legacy_sample / "README.md").write_text("# Legacy sample\n", encoding="utf-8")
+
+    result = validate_public_safety.validate_repository(root)
+
+    assert result.file_count == 1
+    assert any(
+        "samples/example/README.md: legacy samples directory must not contain tracked public content"
+        in error
+        for error in result.errors
+    )
+
+
 def test_public_safety_scans_supported_text_and_detects_sensitive_values(
     tmp_path: Path,
 ) -> None:
     root = make_repository(tmp_path)
-    docs = root / "docs" / "guides" / "aks" / "example"
-    samples = root / "samples" / "aks" / "example"
+    docs = root / "docs" / "services" / "aks" / "example"
+    samples = docs / "samples" / "example"
     (docs / "index.md").write_text(
         """\
 # Unsafe example
@@ -159,20 +183,19 @@ def test_public_safety_scans_supported_text_and_detects_sensitive_values(
     assert any("file is not valid UTF-8" in error for error in result.errors)
 
 
-def test_public_safety_fails_closed_for_missing_or_empty_scan_roots(
+def test_public_safety_fails_closed_for_missing_or_empty_docs_root(
     tmp_path: Path,
 ) -> None:
-    missing_samples = tmp_path / "missing-samples"
-    (missing_samples / "docs").mkdir(parents=True)
+    missing_docs = tmp_path / "missing-docs"
+    missing_docs.mkdir()
     empty = tmp_path / "empty"
     (empty / "docs").mkdir(parents=True)
-    (empty / "samples").mkdir()
 
-    missing_result = validate_public_safety.validate_repository(missing_samples)
+    missing_result = validate_public_safety.validate_repository(missing_docs)
     empty_result = validate_public_safety.validate_repository(empty)
 
     assert any(
-        "samples" in error and "missing" in error
+        "docs" in error and "missing" in error
         for error in missing_result.errors
     )
     assert any("no public text files" in error for error in missing_result.errors)
@@ -182,10 +205,12 @@ def test_public_safety_fails_closed_for_missing_or_empty_scan_roots(
 @pytest.mark.parametrize("name", [".env", ".ENV"])
 def test_public_safety_scans_bare_dotenv_files(tmp_path: Path, name: str) -> None:
     root = make_repository(tmp_path)
-    (root / "docs" / "guides" / "aks" / "example" / "index.md").write_text(
+    (root / "docs" / "services" / "aks" / "example" / "index.md").write_text(
         "# Safe example\n", encoding="utf-8"
     )
-    environment = root / "samples" / name
+    environment = (
+        root / "docs" / "services" / "aks" / "example" / "samples" / "example" / name
+    )
     environment.write_text(
         "SEARCH_ENDPOINT=https://private-search-123.search.windows.net\n",
         encoding="utf-8",
@@ -195,7 +220,8 @@ def test_public_safety_scans_bare_dotenv_files(tmp_path: Path, name: str) -> Non
 
     assert result.file_count == 2
     assert any(
-        f"samples/{name}:1:" in error and "non-example Azure service hostname" in error
+        f"docs/services/aks/example/samples/example/{name}:1:" in error
+        and "non-example Azure service hostname" in error
         for error in result.errors
     )
 

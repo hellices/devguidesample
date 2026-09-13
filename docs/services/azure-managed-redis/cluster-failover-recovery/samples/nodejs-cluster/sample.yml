@@ -1,0 +1,5 @@
+title: Node.js cluster failover sample
+description: Runnable Node.js cluster client and failover recovery assets.
+kind: runnable
+used_by:
+- index

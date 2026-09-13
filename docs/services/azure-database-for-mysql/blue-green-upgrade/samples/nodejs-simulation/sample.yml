@@ -1,0 +1,5 @@
+title: Node.js blue-green upgrade simulation
+description: Runnable application and deployment assets for upgrade rehearsals.
+kind: runnable
+used_by:
+- index

@@ -18,7 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.docs.content import iter_public_documents, load_taxonomy
+from scripts.docs.content import load_taxonomy
+from scripts.docs.topics import iter_topic_documents
 
 
 KOREAN_WORD = re.compile(r"[가-힣]{2,}")
@@ -90,7 +91,7 @@ def _representative_match(pattern: re.Pattern[str], body: str, title: str) -> st
 def validate_repository(repo_root: Path | str) -> SearchIndexResult:
     root = Path(repo_root)
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
-    documents = list(iter_public_documents(root / "docs", taxonomy))
+    documents = list(iter_topic_documents(root / "docs", taxonomy))
     index_path = root / "site" / "search" / "search_index.json"
     if not index_path.is_file():
         return SearchIndexResult(

@@ -1,0 +1,5 @@
+title: Korean analyzer comparison
+description: Runnable analyzer and synonym comparison scripts with sample data.
+kind: runnable
+used_by:
+- index

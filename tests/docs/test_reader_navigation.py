@@ -15,6 +15,7 @@ import yaml
 from scripts.docs.content import Document
 from scripts.docs.generate_indexes import build_home_page, build_index_pages
 from scripts.docs.hooks import on_page_markdown
+from scripts.docs.topics import build_topic_catalog
 
 
 @pytest.fixture
@@ -42,6 +43,139 @@ def document(collection: str, topic: str, title: str, tags: list[str]) -> Docume
             "tags": tags,
         },
         body="networking이라는 단어를 본문에서 사용합니다.",
+    )
+
+
+def canonical_document(
+    document_type: str, topic: str, title: str, tags: list[str]
+) -> Document:
+    relative_path = PurePosixPath("services") / "azure-monitor" / topic / "index.md"
+    return Document(
+        path=Path(relative_path),
+        relative_path=relative_path,
+        metadata={
+            "title": title,
+            "description": f"{title} 설명",
+            "document_type": document_type,
+            "services": ["azure-monitor", "azure-storage"],
+            "tags": tags,
+        },
+        body="networking이라는 단어를 본문에서 사용합니다.",
+    )
+
+
+def write_topic_document(
+    docs_dir: Path,
+    relative_path: str,
+    title: str,
+    *,
+    tags: list[str],
+    topic_order: int | None = None,
+) -> None:
+    metadata: dict[str, object] = {
+        "title": title,
+        "description": f"{title} 설명",
+        "document_type": "guide",
+        "services": ["azure-monitor"],
+        "technologies": ["kubernetes"],
+        "tags": tags,
+        "status": "current",
+        "verification_status": "verified",
+        "sources_checked_at": "2026-09-12",
+        "official_sources": [
+            {
+                "title": "Azure Monitor documentation",
+                "url": "https://learn.microsoft.com/azure/azure-monitor/",
+            }
+        ],
+        "last_verified": "2026-09-12",
+        "review_cycle_days": 180,
+        "applies_to": ["Azure Monitor"],
+    }
+    if topic_order is not None:
+        metadata["topic_order"] = topic_order
+
+    path = docs_dir / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False).strip()
+        + "\n---\n\n"
+        + f"# {title}\n\n본문입니다.\n",
+        encoding="utf-8",
+    )
+
+
+def build_topic_fixture(tmp_path: Path, taxonomy: dict) -> tuple[Path, object]:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (tmp_path / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/index.md",
+        "Topic title",
+        tags=["networking"],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/setup/index.md",
+        "Setup child",
+        tags=["networking"],
+        topic_order=1,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/results/index.md",
+        "Results child",
+        tags=["monitoring"],
+        topic_order=2,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/standalone-topic/index.md",
+        "Standalone topic",
+        tags=["networking"],
+    )
+
+    sample_dir = docs_dir / "services" / "azure-monitor" / "new-topic" / "samples" / "event-lab"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.yml").write_text(
+        yaml.safe_dump(
+            {
+                "title": "Event lab",
+                "description": "Reproduces the monitored incident.",
+                "kind": "runnable",
+                "used_by": ["setup"],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (sample_dir / "README.md").write_text("# Event lab\n", encoding="utf-8")
+
+    return docs_dir, build_topic_catalog(docs_dir, taxonomy)
+
+
+def page_namespace(document: Document, *, previous: Document | None = None, next_: Document | None = None):
+    def nav_item(item: Document | None):
+        if item is None:
+            return None
+        return SimpleNamespace(
+            title=item.metadata["title"],
+            url=item.relative_path.as_posix().removesuffix("index.md"),
+        )
+
+    return SimpleNamespace(
+        title=document.metadata["title"],
+        meta=document.metadata,
+        file=SimpleNamespace(src_uri=str(document.relative_path)),
+        url=document.relative_path.as_posix().removesuffix("index.md"),
+        previous_page=nav_item(previous),
+        next_page=nav_item(next_),
     )
 
 
@@ -202,6 +336,89 @@ def test_article_tags_use_the_same_detail_pages(tmp_path: Path, taxonomy: dict) 
     assert "본문입니다." in rendered
 
 
+def test_topic_pages_render_context_outline_and_related_samples(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir, catalog = build_topic_fixture(tmp_path, taxonomy)
+    entry = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/index.md")
+    )
+    setup = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/setup/index.md")
+    )
+    results = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/results/index.md")
+    )
+    standalone = next(
+        document
+        for document in catalog.documents
+        if document.relative_path
+        == PurePosixPath("services/azure-monitor/standalone-topic/index.md")
+    )
+    config = {
+        "docs_dir": str(docs_dir),
+        "repo_url": "https://github.com/example/devguidesample",
+    }
+
+    entry_rendered = on_page_markdown(
+        "# Topic title\n\n본문입니다.\n",
+        page_namespace(entry, next_=setup),
+        config,
+        None,
+    )
+    setup_rendered = on_page_markdown(
+        "# Setup child\n\n본문입니다.\n",
+        page_namespace(setup, previous=entry, next_=results),
+        config,
+        None,
+    )
+    results_rendered = on_page_markdown(
+        "# Results child\n\n본문입니다.\n",
+        page_namespace(results, previous=setup),
+        config,
+        None,
+    )
+    standalone_rendered = on_page_markdown(
+        "# Standalone topic\n\n본문입니다.\n",
+        page_namespace(standalone),
+        config,
+        None,
+    )
+
+    assert 'class="dg-topic-overview"' in entry_rendered
+    assert "TOPIC · 3 DOCUMENTS" in entry_rendered
+    assert "Topic title · 1 / 3" in entry_rendered
+    assert entry_rendered.count("Setup child") == 1
+    assert entry_rendered.count("Results child") == 1
+    assert entry_rendered.index("Setup child") < entry_rendered.index("Results child")
+
+    assert 'class="dg-topic-context"' in setup_rendered
+    assert "Topic title · 2 / 3" in setup_rendered
+    assert ">전체 목차<" in setup_rendered
+    assert 'class="dg-topic-nav"' in setup_rendered
+    assert setup_rendered.index("본문입니다.") < setup_rendered.index('class="dg-topic-nav"')
+    assert 'class="dg-sample-card"' in setup_rendered
+    assert "Event lab" in setup_rendered
+    assert (
+        "https://github.com/example/devguidesample/tree/main/"
+        "docs/services/azure-monitor/new-topic/samples/event-lab"
+    ) in setup_rendered
+    assert setup_rendered.index('class="dg-sample-card"') < setup_rendered.index(
+        'class="doc-sources"'
+    )
+
+    assert "Topic title · 3 / 3" in results_rendered
+    assert 'class="dg-topic-nav"' in results_rendered
+    assert 'class="dg-sample-card"' not in results_rendered
+    assert 'class="dg-sample-card"' not in standalone_rendered
+
+
 class ReaderPage(HTMLParser):
     def __init__(self, path: Path) -> None:
         super().__init__()
@@ -323,7 +540,9 @@ def test_each_new_bundle_updates_all_reader_destinations(
         )
         return path
 
-    original = add_bundle(document("guides", "setup", "B 구성 절차", ["networking"]))
+    original = add_bundle(
+        canonical_document("guide", "setup", "B 구성 절차", ["networking"])
+    )
     unchanged = [settings_path, navigation_path, taxonomy_path, docs / "index.md", original]
     original_bytes = [path.read_bytes() for path in unchanged]
     build(load_config(str(settings_path), strict=True))
@@ -331,11 +550,15 @@ def test_each_new_bundle_updates_all_reader_destinations(
 
     assert list(home.root_links.values()) == ["홈", "서비스별 보기", "태그별 보기", "전체 글", "기여하기"]
     assert home.navigation_links["services/azure-monitor/"] == "Azure Monitor"
-    assert home.navigation_links["guides/azure-monitor/setup/"] == "B 구성 절차"
+    assert home.navigation_links["services/azure-monitor/setup/"] == "B 구성 절차"
     assert home.expanded_groups == 0
     assert not (tmp_path / "site/tags/latency/index.html").exists()
 
-    add_bundle(document("research", "choices", "A 선택 근거", ["networking", "latency"]))
+    add_bundle(
+        canonical_document(
+            "research", "choices", "A 선택 근거", ["networking", "latency"]
+        )
+    )
     build(load_config(str(settings_path), strict=True))
 
     assert [path.read_bytes() for path in unchanged] == original_bytes
@@ -345,18 +568,21 @@ def test_each_new_bundle_updates_all_reader_destinations(
     new_tag = ReaderPage(tmp_path / "site/tags/latency/index.html")
     assert [title for target, title in new_tag.card_entries] == ["A 선택 근거"]
     updated_home = ReaderPage(tmp_path / "site/index.html")
-    assert updated_home.navigation_links["research/azure-monitor/choices/"] == "A 선택 근거"
+    assert updated_home.navigation_links["services/azure-monitor/choices/"] == "A 선택 근거"
     sidebar_documents = [
         entry for entry in updated_home.navigation_entries
-        if entry[0].startswith(("guides/", "research/"))
+        if entry[0].startswith("services/azure-monitor/")
+        and entry[0] != "services/azure-monitor/"
     ]
     primary_service = ("services/", "services/azure-monitor/")
     assert sidebar_documents == [
-        ("research/azure-monitor/choices/", "A 선택 근거", primary_service),
-        ("guides/azure-monitor/setup/", "B 구성 절차", primary_service),
+        ("services/azure-monitor/choices/", "A 선택 근거", primary_service),
+        ("services/azure-monitor/setup/", "B 구성 절차", primary_service),
     ]
 
-    add_bundle(document("guides", "mentions", "C 본문만 일치", ["monitoring"]))
+    add_bundle(
+        canonical_document("guide", "mentions", "C 본문만 일치", ["monitoring"])
+    )
     build(load_config(str(settings_path), strict=True))
 
     assert [path.read_bytes() for path in unchanged] == original_bytes
@@ -368,11 +594,12 @@ def test_each_new_bundle_updates_all_reader_destinations(
     final_home = ReaderPage(tmp_path / "site/index.html")
     assert [
         entry for entry in final_home.navigation_entries
-        if entry[0].startswith(("guides/", "research/"))
+        if entry[0].startswith("services/azure-monitor/")
+        and entry[0] != "services/azure-monitor/"
     ] == [
-        ("research/azure-monitor/choices/", "A 선택 근거", primary_service),
-        ("guides/azure-monitor/setup/", "B 구성 절차", primary_service),
-        ("guides/azure-monitor/mentions/", "C 본문만 일치", primary_service),
+        ("services/azure-monitor/choices/", "A 선택 근거", primary_service),
+        ("services/azure-monitor/setup/", "B 구성 절차", primary_service),
+        ("services/azure-monitor/mentions/", "C 본문만 일치", primary_service),
     ]
 
     tag = ReaderPage(tmp_path / "site/tags/networking/index.html")
@@ -382,8 +609,8 @@ def test_each_new_bundle_updates_all_reader_destinations(
     assert (tmp_path / "site/guides/azure-monitor/index.html").is_file()
     assert (tmp_path / "site/research/index.html").is_file()
 
-    article = ReaderPage(tmp_path / "site/guides/azure-monitor/setup/index.html")
-    article_url = "https://example.test/devguidesample/guides/azure-monitor/setup/"
+    article = ReaderPage(tmp_path / "site/services/azure-monitor/setup/index.html")
+    article_url = "https://example.test/devguidesample/services/azure-monitor/setup/"
     assert {urljoin(article_url, target) for target in article.tag_links} == {
         "https://example.test/devguidesample/tags/networking/"
     }
@@ -396,4 +623,9 @@ def test_each_new_bundle_updates_all_reader_destinations(
 
     search = json.loads((tmp_path / "site/search/search_index.json").read_text(encoding="utf-8"))
     locations = {entry["location"] for entry in search["docs"]}
-    assert {"tags/networking/", "tags/latency/", "articles/", "research/azure-monitor/choices/"} <= locations
+    assert {
+        "tags/networking/",
+        "tags/latency/",
+        "articles/",
+        "services/azure-monitor/choices/",
+    } <= locations

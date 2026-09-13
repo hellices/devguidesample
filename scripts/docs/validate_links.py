@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 import sys
-from typing import Any, Iterable, Mapping
 from urllib.parse import unquote, urlparse
 
 from markdown import Markdown
@@ -17,7 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.docs.content import DocumentFormatError, ValidationResult, load_document, load_taxonomy
+from scripts.docs.content import (
+    DocumentFormatError,
+    ValidationResult,
+    iter_public_document_paths,
+    load_taxonomy,
+)
+from scripts.docs.topics import iter_topic_documents
 
 
 @dataclass(frozen=True)
@@ -43,13 +48,6 @@ class _LinkParser(HTMLParser):
             return
         if target is not None:
             self.links.append(_RenderedLink(target, alt_text))
-
-
-def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Path]:
-    for config in taxonomy.get("collections", {}).values():
-        collection = docs_dir / config["path"]
-        if collection.is_dir():
-            yield from sorted(collection.rglob("index.md"))
 
 
 def _resolve_target(page: Path, docs_dir: Path, raw_target: str) -> Path | None:
@@ -83,14 +81,15 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
     )
     errors: list[str] = []
     count = 0
-    for page in _candidate_paths(docs_dir, taxonomy):
+    try:
+        documents = list(iter_topic_documents(docs_dir, taxonomy))
+    except DocumentFormatError as error:
+        count = sum(1 for _ in iter_public_document_paths(docs_dir, taxonomy))
+        return ValidationResult(count, [str(error)])
+    for document in documents:
         count += 1
+        page = document.path
         relative = page.relative_to(root).as_posix()
-        try:
-            document = load_document(page, docs_dir=docs_dir)
-        except DocumentFormatError as error:
-            errors.append(str(error))
-            continue
         parser = _LinkParser()
         parser.feed(renderer.reset().convert(document.body))
         parser.close()

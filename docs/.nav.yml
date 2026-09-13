@@ -1,3 +1,4 @@
+# Root reader destinations only; service and topic branches are generated.
 nav:
   - 홈: index.md
   - 서비스별 보기: services

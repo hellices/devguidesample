@@ -17,6 +17,11 @@ Azure 기반 시스템의 설계·구현·운영 기록을 공유합니다. 실�
 
 전체 문서 목록은 파일로 중복 관리하지 않습니다. 올바른 폴더와 front matter를 사용하면 Pages 메뉴, 서비스 색인과 태그 색인에 자동으로 포함됩니다.
 
+공개 문서의 canonical 원본은
+`docs/services/<service>/<topic>[/<child>]/index.md` topic package입니다.
+실행 코드와 결과물은 해당 topic의 `samples/<sample>/`에 두며, 최상위
+collection 폴더나 `samples/`에는 새 공개 콘텐츠를 추가하지 않습니다.
+
 ## 로컬 미리보기
 
 ```powershell
@@ -25,6 +30,7 @@ python -m venv .venv
 .\.venv\Scripts\mkdocs serve
 ```
 
-자세한 작성·검증 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 확인하세요.
+자세한 작성·검증 규칙은
+[공개 문서 작성 계약](docs/contributing/index.md)을 확인하세요.
 
 > 이 저장소와 Pages는 공개되어 있습니다. 고객·사용자 식별자, 구독·테넌트 ID, 비밀, 내부 URL 또는 승인되지 않은 화면 캡처를 커밋하지 마세요.

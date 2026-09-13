@@ -19,9 +19,12 @@ from scripts.docs.content import (
     load_taxonomy,
     validate_document,
 )
+from scripts.docs.topics import build_topic_catalog, iter_topic_documents
 
 
-def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Path]:
+def _authoring_markdown_paths(
+    docs_dir: Path, taxonomy: Mapping[str, Any]
+) -> Iterable[Path]:
     paths = {
         config["path"]
         for config in taxonomy.get("collections", {}).values()
@@ -31,6 +34,19 @@ def _candidate_paths(docs_dir: Path, taxonomy: Mapping[str, Any]) -> Iterable[Pa
         root = docs_dir / collection
         if root.is_dir():
             yield from sorted(root.rglob("*.md"))
+    services_root = docs_dir / "services"
+    if services_root.is_dir():
+        for path in sorted(services_root.rglob("*.md")):
+            relative = path.relative_to(docs_dir).parts
+            if "samples" not in relative:
+                yield path
+
+
+def _topic_catalog_errors(error: DocumentFormatError) -> list[str]:
+    lines = [line for line in str(error).splitlines() if line.strip()]
+    if lines and lines[0] == "invalid topic catalog:":
+        lines = lines[1:]
+    return [f"docs/{line}" for line in lines]
 
 
 def validate_repository(repo_root: Path | str, today: date | None = None) -> ValidationResult:
@@ -38,19 +54,36 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
     docs_dir = root / "docs"
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
     errors: list[str] = []
+    authoring_paths = list(_authoring_markdown_paths(docs_dir, taxonomy))
+    try:
+        canonical_documents = list(iter_topic_documents(docs_dir, taxonomy))
+    except DocumentFormatError:
+        canonical_documents = []
+    canonical_by_path = {
+        document.path.resolve(): document for document in canonical_documents
+    }
+    documents = []
     count = 0
-    for path in _candidate_paths(docs_dir, taxonomy):
+    for path in authoring_paths:
         relative = path.relative_to(root).as_posix()
         count += 1
-        try:
-            document = load_document(path, docs_dir=docs_dir)
-        except DocumentFormatError as error:
-            errors.append(str(error))
-            continue
+        document = canonical_by_path.get(path.resolve())
+        if document is None:
+            try:
+                document = load_document(path, docs_dir=docs_dir)
+            except DocumentFormatError as error:
+                errors.append(str(error))
+                continue
+        if document.relative_path.parts[0] == "services":
+            documents.append(document)
         errors.extend(
             f"{relative}: {message}"
             for message in validate_document(document, taxonomy, today=today)
         )
+    try:
+        build_topic_catalog(docs_dir, taxonomy, documents=documents)
+    except DocumentFormatError as error:
+        errors.extend(_topic_catalog_errors(error))
     return ValidationResult(count, errors)
 
 

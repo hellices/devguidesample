@@ -9,15 +9,22 @@ from __future__ import annotations
 
 from datetime import date
 from html import escape
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+import re
 
 from markdown import Markdown
 from mkdocs.config import load_config
 import pytest
 import yaml
 
-from scripts.docs.content import Document
-from scripts.docs.generate_indexes import build_home_page, build_index_pages
+from scripts.docs.content import Document, load_taxonomy
+from scripts.docs.generate_indexes import (
+    build_home_page,
+    build_index_pages,
+    build_redirect_pages,
+)
+from scripts.docs.topics import build_topic_catalog
 
 
 ROOT = Path(__file__).parents[2]
@@ -30,6 +37,96 @@ def doc(relative_path: str, **metadata: object) -> Document:
         metadata=metadata,
         body="",
     )
+
+
+def write_topic_document(
+    docs_dir: Path,
+    relative_path: str,
+    title: str,
+    *,
+    tags: list[str],
+    topic_order: int | None = None,
+    featured: bool = False,
+    redirect_from: list[str] | None = None,
+    document_type: str = "guide",
+) -> None:
+    metadata: dict[str, object] = {
+        "title": title,
+        "description": f"{title} description",
+        "document_type": document_type,
+        "services": ["azure-monitor"],
+        "technologies": ["kubernetes"],
+        "tags": tags,
+        "status": "current",
+        "verification_status": "verified",
+        "sources_checked_at": "2026-09-12",
+        "official_sources": [
+            {
+                "title": "Azure Monitor documentation",
+                "url": "https://learn.microsoft.com/azure/azure-monitor/",
+            }
+        ],
+        "last_verified": "2026-09-12",
+        "review_cycle_days": 180,
+        "applies_to": ["Azure Monitor"],
+    }
+    if topic_order is not None:
+        metadata["topic_order"] = topic_order
+    if featured:
+        metadata["featured"] = True
+    if redirect_from is not None:
+        metadata["redirect_from"] = redirect_from
+
+    path = docs_dir / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False).strip()
+        + "\n---\n\n"
+        + f"# {title}\n",
+        encoding="utf-8",
+    )
+
+
+def build_topic_fixture(
+    tmp_path: Path,
+    taxonomy: dict,
+    *,
+    include_redirect: bool = False,
+) -> tuple[list[Document], object]:
+    docs_dir = tmp_path / "docs"
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/index.md",
+        "Topic title",
+        tags=["networking"],
+        redirect_from=["guides/azure-monitor/old-topic/index.md"] if include_redirect else None,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/setup/index.md",
+        "Setup child",
+        tags=["networking"],
+        topic_order=1,
+        featured=True,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/new-topic/results/index.md",
+        "Results child",
+        tags=["monitoring"],
+        topic_order=2,
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/standalone-topic/index.md",
+        "Standalone topic",
+        tags=["networking"],
+        featured=True,
+    )
+
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+    return list(catalog.documents), catalog
 
 
 @pytest.fixture
@@ -173,6 +270,75 @@ def test_collection_service_landing_contains_only_its_own_documents(taxonomy: di
     assert "A guide" not in service_landing
     assert "First case" not in pages[PurePosixPath("cases/azure-monitor/index.md")]
     assert "First case" in pages[PurePosixPath("services/azure-monitor/index.md")]
+
+
+def test_legacy_service_indexes_include_redirected_documents_deterministically(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/current-topic/index.md",
+        "Current topic",
+        tags=[],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/moved-topic/index.md",
+        "Moved topic",
+        tags=[],
+        redirect_from=[
+            "research/azure-hdinsight/old-topic/index.md",
+            "research/azure-hdinsight/another-old-topic/index.md",
+        ],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/moved-topic/benchmark/index.md",
+        "Benchmark",
+        tags=[],
+        topic_order=1,
+        document_type="research",
+        redirect_from=[
+            "guides/azure-monitor/old-benchmark/index.md",
+            "research/azure-hdinsight/old-benchmark/index.md",
+        ],
+    )
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
+
+    legacy = pages[PurePosixPath("research/azure-hdinsight/index.md")]
+    assert legacy.count("[Moved topic](../../services/azure-monitor/moved-topic/index.md)") == 1
+    assert legacy.count("[Benchmark](../../services/azure-monitor/moved-topic/benchmark/index.md)") == 1
+    assert "SERVICES / 2 DOCUMENTS" in legacy
+    assert "Current topic" not in legacy
+    current = pages[PurePosixPath("guides/azure-monitor/index.md")]
+    assert current.count("[Current topic](../../services/azure-monitor/current-topic/index.md)") == 1
+    assert current.count("[Benchmark](../../services/azure-monitor/moved-topic/benchmark/index.md)") == 1
+    assert "SERVICES / 3 DOCUMENTS" in current
+    assert current.count('class="dg-doc-card dg-topic-card') == 1
+    assert legacy.count('class="dg-doc-card dg-topic-card') == 1
+    assert "old-benchmark" not in current
+    assert pages == build_index_pages(reversed(catalog.documents), taxonomy, catalog=catalog)
+    assert pages[PurePosixPath("guides/index.md")].count('class="dg-doc-card dg-topic-card') == 1
+    assert pages[PurePosixPath("services/azure-monitor/index.md")].count('class="dg-doc-card dg-topic-card') == 1
+
+
+def test_repository_legacy_hdinsight_index_links_to_canonical_benchmark() -> None:
+    taxonomy = load_taxonomy(ROOT / "docs-taxonomy.yml")
+    catalog = build_topic_catalog(ROOT / "docs", taxonomy)
+
+    pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
+
+    assert PurePosixPath("research/azure-hdinsight/index.md") in pages
+    legacy = pages[PurePosixPath("research/azure-hdinsight/index.md")]
+    assert "../../services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md" in legacy
+    assert "kafka-catchup-sku-fetch-benchmark/index.md" not in legacy
+    for redirect, canonical in catalog.redirects.items():
+        service_index = redirect.parent.parent / "index.md"
+        assert service_index in pages
+        assert f"../../{canonical.as_posix()}" in pages[service_index]
 
 
 def test_collection_page_reflects_real_counts_and_wrapper_classes(taxonomy: dict) -> None:
@@ -378,6 +544,8 @@ def test_service_label_falls_back_to_slug_when_taxonomy_omits_it(taxonomy: dict)
     guide_index = pages[PurePosixPath("guides/index.md")]
 
     assert "## unlisted-service { #service-unlisted-service }" in guide_index
+    assert PurePosixPath("services/unlisted-service/index.md") in pages
+    assert "[unlisted-service](unlisted-service/index.md)" in pages[PurePosixPath("services/index.md")]
 
 
 def test_tags_are_capped_at_three_and_labels_fall_back_to_slug(
@@ -475,6 +643,135 @@ def test_generated_collection_page_renders_service_groups_and_links(
     assert '<h2 id="service-azure-kubernetes-service">' in html
     assert '<a href="#service-azure-kubernetes-service">Azure Kubernetes Service</a>' in html
     assert '<a href="azure-kubernetes-service/topic/index.md">AKS 토픽</a>' in html
+
+
+def test_topic_cards_collapse_multi_document_topics_across_generated_indexes(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    documents, catalog = build_topic_fixture(tmp_path, taxonomy)
+
+    pages = build_index_pages(documents, taxonomy, catalog=catalog)
+    home = build_home_page(HOME_TEMPLATE, documents, taxonomy, catalog=catalog)
+
+    for path in (
+        PurePosixPath("guides/index.md"),
+        PurePosixPath("services/azure-monitor/index.md"),
+        PurePosixPath("articles/index.md"),
+    ):
+        page = pages[path]
+        assert page.count('class="dg-doc-card dg-topic-card') == 1
+        assert "3개 문서" in page
+        assert "Setup child" not in page
+        assert "Results child" not in page
+        assert "Standalone topic" in page
+
+    tag_page = pages[PurePosixPath("tags/networking.md")]
+    assert tag_page.count('class="dg-doc-card dg-topic-card') == 1
+    assert "2 / 3개 문서 일치" in tag_page
+    assert "Setup child" not in tag_page
+    assert "Results child" not in tag_page
+    assert "Standalone topic" in tag_page
+
+    assert home.count('class="dg-doc-card dg-topic-card') == 1
+    assert "3개 문서" in home
+    assert "Setup child" not in home
+    assert "Results child" not in home
+    assert "Standalone topic" in home
+    assert "[Topic title](services/azure-monitor/new-topic/index.md)" in home
+
+
+def test_compatibility_child_links_are_stacked_above_the_card_overlay(
+    tmp_path: Path, taxonomy: dict, markdown_renderer: Markdown
+) -> None:
+    class Anchors(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.links: list[dict[str, str | None]] = []
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "a":
+                self.links.append(dict(attrs))
+
+    documents, catalog = build_topic_fixture(tmp_path, taxonomy)
+    pages = build_index_pages(documents, taxonomy, catalog=catalog)
+    parser = Anchors()
+    parser.feed(render_body(markdown_renderer, pages[PurePosixPath("guides/azure-monitor/index.md")]))
+    children = [
+        link for link in parser.links
+        if link.get("href") in {
+            "../../services/azure-monitor/new-topic/setup/index.md",
+            "../../services/azure-monitor/new-topic/results/index.md",
+        }
+    ]
+    assert len(children) == 2
+    child_class = "dg-topic-child-link"
+    for child in children:
+        assert child_class in (child.get("class") or "").split()
+        assert child.get("tabindex", "0") == "0"
+
+    css = (ROOT / "docs/assets/stylesheets/extra.css").read_text(encoding="utf-8")
+    rules = re.findall(r"([^{}]+)\{([^{}]+)\}", css)
+    stacking = next(
+        (
+            body for selectors, body in rules
+            if f".dg-doc-card .{child_class}" in {
+                selector.strip() for selector in selectors.split(",")
+            }
+        ),
+        "",
+    )
+    assert re.search(r"position:\s*relative\s*;", stacking)
+    assert re.search(r"z-index:\s*1\s*;", stacking)
+    overlay = next(body for selectors, body in rules if "a::after" in selectors)
+    assert re.search(r"position:\s*absolute\s*;", overlay)
+    assert re.search(r"inset:\s*0\s*;", overlay)
+    overlay_level = re.search(r"z-index:\s*([^;]+);", overlay)
+    assert (
+        overlay_level is None
+        or overlay_level.group(1).strip() == "auto"
+        or int(overlay_level.group(1)) < 1
+    )
+    assert ".md-typeset a:focus-visible" in css
+
+
+def test_redirect_pages_point_to_canonical_topic_entries_and_stay_out_of_indexes(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    documents, catalog = build_topic_fixture(tmp_path, taxonomy, include_redirect=True)
+
+    redirect_path = PurePosixPath("guides/azure-monitor/old-topic/index.md")
+    redirect_pages = build_redirect_pages(catalog)
+    redirect_page = redirect_pages[redirect_path]
+
+    assert yaml.safe_load(redirect_page.split("---", 2)[1]) == {
+        "title": "문서 이동",
+        "search": {"exclude": True},
+        "hide": ["navigation", "toc"],
+    }
+    assert '<link rel="canonical" href="../../../services/azure-monitor/new-topic/">' in redirect_page
+    assert 'http-equiv="refresh"' in redirect_page
+    assert 'content="0; url=../../../services/azure-monitor/new-topic/"' in redirect_page
+    assert 'href="../../../services/azure-monitor/new-topic/"' in redirect_page
+    assert "services/azure-monitor/new-topic/index.md" in redirect_page
+
+    pages = build_index_pages(documents, taxonomy, catalog=catalog)
+    assert all("old-topic" not in content for content in pages.values())
+
+
+def test_secondary_service_pages_show_the_matching_service_on_topic_cards(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    documents, catalog = build_topic_fixture(tmp_path, taxonomy)
+    for document in documents:
+        if document.relative_path == PurePosixPath("services/azure-monitor/new-topic/setup/index.md"):
+            document.metadata["services"] = ["azure-monitor", "azure-kubernetes-service"]
+            break
+
+    pages = build_index_pages(documents, taxonomy, catalog=catalog)
+    service_page = pages[PurePosixPath("services/azure-kubernetes-service/index.md")]
+
+    assert "Azure Kubernetes Service" in service_page
+    assert "Azure Monitor</span><span>1 / 3개 문서 일치" not in service_page
 
 
 # ---------------------------------------------------------------------------

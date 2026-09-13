@@ -1,0 +1,5 @@
+title: Pyroscope chat profiling
+description: Runnable profiling workload and deployment assets.
+kind: runnable
+used_by:
+- index

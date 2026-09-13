@@ -1,0 +1,7 @@
+title: HDInsight Kafka monitoring assets
+description: Prometheus, Grafana, workbook, dashboard, and reference image assets.
+kind: artifact
+used_by:
+- index
+- prometheus-grafana
+- catch-up-benchmark

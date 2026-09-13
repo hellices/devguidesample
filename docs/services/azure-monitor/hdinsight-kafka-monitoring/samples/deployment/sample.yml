@@ -1,0 +1,7 @@
+title: HDInsight Kafka deployment artifacts
+description: Bicep templates used by the HDInsight Kafka monitoring topic.
+kind: artifact
+used_by:
+- index
+- prometheus-grafana
+- catch-up-benchmark
