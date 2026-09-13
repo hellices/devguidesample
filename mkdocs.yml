@@ -1,5 +1,5 @@
-site_name: DevGuideSample
-site_description: Azure, Kubernetes, AI 시스템의 장애 분석과 구현, 벤치마크를 담은 엔지니어링 노트
+site_name: Azure Engineering Notes
+site_description: Azure 기반 시스템의 설계·구현·운영 기록
 site_url: https://hellices.github.io/devguidesample/
 repo_url: https://github.com/hellices/devguidesample
 repo_name: hellices/devguidesample
@@ -46,7 +46,9 @@ plugins:
       lang:
         - ko
         - en
-  - tags
+  - tags:
+      tags: false
+      listings: false
   - gen-files:
       scripts:
         - scripts/docs/generate_indexes.py
@@ -76,4 +78,4 @@ markdown_extensions:
 extra_css:
   - assets/stylesheets/extra.css
 
-copyright: Copyright &copy; DevGuideSample contributors
+copyright: Copyright &copy; Azure Engineering Notes contributors

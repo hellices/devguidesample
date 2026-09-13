@@ -1,4 +1,4 @@
-"""Generate collection, service, and home landing pages from public document metadata."""
+"""Generate reader destinations and legacy indexes from public document metadata."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ _DATE_FIELD_BY_TYPE: dict[str, tuple[str, str]] = {
     "research": ("published_at", "게시일"),
 }
 
-_HOME_SLOTS = ("<!-- home:stats -->", "<!-- home:featured -->", "<!-- home:collections -->")
+_HOME_SLOTS = ("<!-- home:stats -->", "<!-- home:featured -->", "<!-- home:browse -->")
 
 
 def _escape(value: Any) -> str:
@@ -85,14 +85,24 @@ def _label_for(vocabulary: Mapping[str, Any], slug: str) -> str:
     return label if isinstance(label, str) and label else slug
 
 
-def _collection_title(taxonomy: Mapping[str, Any], document_type: Any) -> str:
-    collections = taxonomy.get("collections", {})
-    config = collections.get(document_type) if isinstance(collections, Mapping) else None
-    if isinstance(config, Mapping):
-        title = config.get("title")
-        if isinstance(title, str) and title:
-            return title
-    return str(document_type)
+def _metadata_values(document: Document, field: str) -> list[str]:
+    values = document.metadata.get(field)
+    if not isinstance(values, list):
+        return []
+    return list(dict.fromkeys(value for value in values if isinstance(value, str)))
+
+
+def build_tag_links(
+    index_path: PurePosixPath, tag_values: Sequence[str], taxonomy: Mapping[str, Any]
+) -> str:
+    tags = taxonomy.get("tags", {})
+    links = []
+    for tag in dict.fromkeys(tag_values):
+        target = posixpath.relpath(f"tags/{tag}.md", start=index_path.parent.as_posix())
+        links.append(f"[{_md_label(_label_for(tags, tag))}]({target}){{ .dg-tag }}")
+    if not links:
+        return ""
+    return '<div class="dg-doc-tags" markdown="1">\n\n' + " ".join(links) + "\n\n</div>\n"
 
 
 def _ordered_keys(present: Iterable[str], preferred_order: Iterable[str]) -> list[str]:
@@ -134,8 +144,9 @@ def _doc_detail_spans(document: Document, taxonomy: Mapping[str, Any]) -> list[s
     elif document_type == "guide":
         applies_to = metadata.get("applies_to")
         if isinstance(applies_to, list) and applies_to:
-            joined = ", ".join(str(item) for item in applies_to)
-            spans.append(f"<span>적용 대상: {_escape(joined)}</span>")
+            scopes = [str(item) for item in applies_to if str(item).strip() != "공식 원문 재검토 필요"]
+            if scopes:
+                spans.append(f"<span>적용 대상: {_escape(', '.join(scopes))}</span>")
     elif document_type == "lab":
         estimated_time = metadata.get("estimated_time")
         if isinstance(estimated_time, str) and estimated_time.strip():
@@ -165,27 +176,20 @@ def _doc_card(
 ) -> str:
     metadata = document.metadata
     document_type = metadata.get("document_type", "")
-    collection_label = _collection_title(taxonomy, document_type)
     link = _relative_link(index_path, document)
     title = metadata.get("title", "")
     description = metadata.get("description", "")
-    tags = taxonomy.get("tags", {})
+    services = taxonomy.get("services", {})
+    service_label = " · ".join(
+        _label_for(services, service) for service in _metadata_values(document, "services")
+    )
 
-    meta_spans = f'<span>{_escape(collection_label)}</span>'
+    meta_spans = f'<span>{_escape(service_label)}</span>' if service_label else ""
     date_text = _doc_meta_date(document)
     if date_text:
         meta_spans += f'<span>{_escape(date_text)}</span>'
 
-    tag_values = metadata.get("tags")
-    tag_html = ""
-    if isinstance(tag_values, list) and tag_values:
-        tag_spans = "".join(
-            f'<span class="dg-tag">{_escape(_label_for(tags, tag))}</span>'
-            for tag in tag_values[:3]
-            if isinstance(tag, str)
-        )
-        if tag_spans:
-            tag_html = f'\n<div class="dg-doc-tags">\n{tag_spans}\n</div>\n'
+    tag_html = build_tag_links(index_path, _metadata_values(document, "tags")[:3], taxonomy)
 
     detail_spans = _doc_detail_spans(document, taxonomy)
     detail_html = ""
@@ -230,6 +234,15 @@ def _jump_links(entries: Sequence[tuple[str, str]]) -> str:
 
 def _empty_state(message: str) -> str:
     return f'<p class="dg-empty-state">{_escape(message)}</p>\n'
+
+
+def _document_grid(
+    index_path: PurePosixPath, documents: list[Document], taxonomy: Mapping[str, Any]
+) -> str:
+    if not documents:
+        return _empty_state("아직 등록된 문서가 없습니다.")
+    cards = "\n".join(_doc_card(index_path, document, taxonomy) for document in documents)
+    return f'<div class="dg-doc-grid" markdown="1">\n\n{cards}\n</div>\n'
 
 
 def _build_collection_page(
@@ -286,35 +299,17 @@ def _build_service_page(
     page_path: PurePosixPath | None = None,
 ) -> tuple[PurePosixPath, str]:
     if page_path is None:
-        page_path = PurePosixPath(f"services/{slug}.md")
+        page_path = PurePosixPath("services") / slug / "index.md"
     services = taxonomy.get("services", {})
-    collections = taxonomy.get("collections", {})
     label = _label_for(services, slug)
-    description = f"{label}을 다룬 기록입니다. 지금 겪는 문제나 구현하려는 작업에 맞는 글부터 살펴보세요."
+    description = f"{label} 관련 설계·구현·운영 기록을 제목순으로 살펴보세요."
 
     body = _front_matter(label, description)
     body += '<div class="dg-landing dg-service" markdown="1">\n\n'
     body += _page_heading(_SERVICES_EYEBROW, len(matching), label, description)
     body += "\n"
 
-    if not matching:
-        body += _empty_state("아직 등록된 문서가 없습니다.")
-    else:
-        by_type: dict[str, list[Document]] = defaultdict(list)
-        for document in matching:
-            by_type[document.metadata.get("document_type")].append(document)
-        for document_type in collections:
-            typed = by_type.get(document_type, [])
-            if not typed:
-                continue
-            group_title = _collection_title(taxonomy, document_type)
-            body += f"## {_md_label(group_title)}\n\n"
-            body += '<div class="dg-doc-grid" markdown="1">\n\n'
-            for document in typed:
-                body += _doc_card(page_path, document, taxonomy)
-                body += "\n"
-            body += "</div>\n\n"
-
+    body += _document_grid(page_path, matching, taxonomy)
     body += "</div>\n"
     return page_path, body
 
@@ -326,9 +321,8 @@ def _build_services_overview_page(
 ) -> tuple[PurePosixPath, str]:
     services_path = PurePosixPath("services/index.md")
     services = taxonomy.get("services", {})
-    collections = taxonomy.get("collections", {})
-    title = "서비스별 찾기"
-    description = "사용 중인 서비스에서 출발하세요. 기록이 많은 순서로 살펴보고, 필요한 문제 해결·구현·비교 자료로 이어갈 수 있습니다."
+    title = "서비스별 보기"
+    description = "사용 중인 서비스를 선택해 설계·구현·운영 기록을 살펴보세요."
 
     body = _front_matter(title, description)
     body += '<div class="dg-landing dg-services" markdown="1">\n\n'
@@ -355,24 +349,71 @@ def _build_services_overview_page(
             label = services[slug]
             matching = by_service.get(slug, [])
             body += '<article class="dg-service-card" markdown="1">\n\n'
-            body += f"## [{_md_label(label)}]({slug}.md)\n\n"
+            body += f"## [{_md_label(label)}]({slug}/index.md)\n\n"
             body += f'<p>{_escape(f"{len(matching)}개 문서")}</p>\n'
-            per_type_counts = [
-                (document_type, sum(1 for doc in matching if doc.metadata.get("document_type") == document_type))
-                for document_type in collections
-            ]
-            present_counts = [(document_type, count) for document_type, count in per_type_counts if count]
-            if present_counts:
-                items = "".join(
-                    f"<li>{_escape(_collection_title(taxonomy, document_type))} {count}</li>"
-                    for document_type, count in present_counts
-                )
-                body += f"<ul>\n{items}\n</ul>\n"
             body += "\n</article>\n\n"
         body += "</div>\n\n"
 
     body += "</div>\n"
     return services_path, body
+
+
+def _build_tag_pages(
+    documents: list[Document], taxonomy: Mapping[str, Any]
+) -> dict[PurePosixPath, str]:
+    by_tag: dict[str, list[Document]] = defaultdict(list)
+    for document in documents:
+        for tag in _metadata_values(document, "tags"):
+            by_tag[tag].append(document)
+
+    tags = taxonomy.get("tags", {})
+    ordered_tags = sorted(by_tag, key=lambda tag: (_label_for(tags, tag).casefold(), tag))
+    title = "태그별 보기"
+    description = "태그를 선택하면 같은 주제를 다룬 글을 볼 수 있습니다."
+    overview = _front_matter(title, description)
+    overview += '<div class="dg-landing dg-tags" markdown="1">\n\n'
+    overview += _page_heading("TAGS", len(documents), title, description)
+    overview += "\n"
+    pages: dict[PurePosixPath, str] = {}
+    if not ordered_tags:
+        overview += _empty_state("아직 사용 중인 태그가 없습니다.")
+    else:
+        overview += '<div class="dg-tag-grid" markdown="1">\n\n'
+        for tag in ordered_tags:
+            label = _label_for(tags, tag)
+            matching = by_tag[tag]
+            overview += '<article class="dg-tag-card" markdown="1">\n\n'
+            overview += f"## [{_md_label(label)}]({tag}.md) {{ #tag:{tag} }}\n\n"
+            overview += f"<p>{len(matching)}개 문서</p>\n\n</article>\n\n"
+
+            page_path = PurePosixPath(f"tags/{tag}.md")
+            tag_description = f"{label} 태그가 붙은 글을 제목순으로 모았습니다."
+            body = _front_matter(label, tag_description)
+            body += '<div class="dg-landing dg-tag-results" markdown="1">\n\n'
+            body += _page_heading("TAG", len(matching), label, tag_description)
+            body += '\n[모든 태그](index.md){ .dg-text-link }\n\n'
+            body += _document_grid(page_path, matching, taxonomy)
+            body += "</div>\n"
+            pages[page_path] = body
+        overview += "</div>\n"
+    overview += "</div>\n"
+    pages[PurePosixPath("tags/index.md")] = overview
+    return pages
+
+
+def _build_articles_page(
+    documents: list[Document], taxonomy: Mapping[str, Any]
+) -> tuple[PurePosixPath, str]:
+    page_path = PurePosixPath("articles/index.md")
+    title = "전체 글"
+    description = "설계·구현·운영 기록을 제목순으로 살펴보세요. 서비스와 태그로도 찾아볼 수 있습니다."
+    body = _front_matter(title, description)
+    body += '<div class="dg-landing dg-articles" markdown="1">\n\n'
+    body += _page_heading("ARTICLES", len(documents), title, description)
+    body += '\n[서비스별 보기](../services/index.md){ .dg-text-link } · [태그별 보기](../tags/index.md){ .dg-text-link }\n\n'
+    body += _document_grid(page_path, documents, taxonomy)
+    body += "</div>\n"
+    return page_path, body
 
 
 def build_index_pages(
@@ -402,11 +443,8 @@ def build_index_pages(
 
     by_service: dict[str, list[Document]] = defaultdict(list)
     for document in docs:
-        services_meta = document.metadata.get("services")
-        if isinstance(services_meta, list):
-            for service in services_meta:
-                if isinstance(service, str):
-                    by_service[service].append(document)
+        for service in _metadata_values(document, "services"):
+            by_service[service].append(document)
 
     services = taxonomy.get("services", {})
     for slug in services:
@@ -415,6 +453,9 @@ def build_index_pages(
 
     services_path, services_body = _build_services_overview_page(by_service, taxonomy, len(docs))
     pages[services_path] = services_body
+    pages.update(_build_tag_pages(docs, taxonomy))
+    articles_path, articles_body = _build_articles_page(docs, taxonomy)
+    pages[articles_path] = articles_body
     return pages
 
 
@@ -476,16 +517,12 @@ def _build_home_stats(documents: list[Document]) -> str:
         services_meta = document.metadata.get("services")
         if isinstance(services_meta, list):
             used_services.update(service for service in services_meta if isinstance(service, str))
-    used_types = {
-        document.metadata.get("document_type")
-        for document in documents
-        if document.metadata.get("document_type")
-    }
+    used_tags = {tag for document in documents for tag in _metadata_values(document, "tags")}
 
     stats = [
         (total, "전체 문서"),
         (len(used_services), "다루는 서비스"),
-        (len(used_types), "문서 유형"),
+        (len(used_tags), "다루는 태그"),
     ]
     body = '<div class="dg-stats" markdown="1">\n\n'
     for number, label in stats:
@@ -512,22 +549,21 @@ def _build_home_featured(documents: list[Document], taxonomy: Mapping[str, Any])
     return body
 
 
-def _build_home_collections(documents: list[Document], taxonomy: Mapping[str, Any]) -> str:
-    collections = taxonomy.get("collections", {})
-    if not collections:
-        return _empty_state("아직 등록된 컬렉션이 없습니다.")
-
-    body = '<div class="dg-collection-grid" markdown="1">\n\n'
-    for document_type, config in collections.items():
-        count = sum(1 for doc in documents if doc.metadata.get("document_type") == document_type)
-        path = config.get("path", document_type)
-        title = config.get("title", document_type)
-        description = config.get("description", "")
-        body += f'<article class="dg-collection-card dg-collection-card--{document_type}" markdown="1">\n\n'
-        body += f'<p class="dg-eyebrow">{_escape(_EYEBROW_LABELS.get(document_type, str(document_type).upper()))}</p>\n\n'
+def _build_home_browse(documents: list[Document]) -> str:
+    used_services = {service for document in documents for service in _metadata_values(document, "services")}
+    used_tags = {tag for document in documents for tag in _metadata_values(document, "tags")}
+    destinations = (
+        ("services", "SERVICES", "서비스별 보기", "사용 중인 서비스의 설계·구현·운영 기록을 함께 읽습니다.", f"{len(used_services)}개 서비스"),
+        ("tags", "TAGS", "태그별 보기", "관심 있는 주제를 선택해 같은 태그가 붙은 글을 모아 봅니다.", f"{len(used_tags)}개 태그"),
+        ("articles", "ARTICLES", "전체 글", "모든 기록을 제목순으로 살펴봅니다.", f"{len(documents)}개 문서"),
+    )
+    body = '<div class="dg-browse-grid" markdown="1">\n\n'
+    for path, eyebrow, title, description, count in destinations:
+        body += '<article class="dg-browse-card" markdown="1">\n\n'
+        body += f'<p class="dg-eyebrow">{eyebrow}</p>\n\n'
         body += f"### [{_md_label(title)}]({path}/index.md)\n\n"
         body += f'<p class="dg-doc-summary">{_escape(description)}</p>\n'
-        body += f'<p class="dg-card-count">{_escape(f"{count}개 문서")}</p>\n\n'
+        body += f'<p class="dg-card-count">{_escape(count)}</p>\n\n'
         body += "</article>\n\n"
     body += "</div>\n"
     return body
@@ -550,7 +586,7 @@ def build_home_page(
     rendered = rendered.replace("<!-- home:stats -->", _build_home_stats(docs), 1)
     rendered = rendered.replace("<!-- home:featured -->", _build_home_featured(docs, taxonomy), 1)
     rendered = rendered.replace(
-        "<!-- home:collections -->", _build_home_collections(docs, taxonomy), 1
+        "<!-- home:browse -->", _build_home_browse(docs), 1
     )
     return rendered
 

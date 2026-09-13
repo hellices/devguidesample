@@ -1,12 +1,12 @@
-# DevGuideSample
+# Azure Engineering Notes
 
-실제 Azure 문제 해결 이력과 지속적으로 갱신하는 기술 가이드를 외부에 공개하는 문서 저장소입니다.
+Azure 기반 시스템의 설계·구현·운영 기록을 공유합니다. 실제 문제 해결 이력과 지속적으로 갱신하는 기술 가이드를 공개하는 문서 저장소입니다.
 
 ## 문서 사이트
 
-**[DevGuideSample GitHub Pages에서 검색하기](https://hellices.github.io/devguidesample/)**
+**[Azure Engineering Notes에서 문서 보기](https://hellices.github.io/devguidesample/)**
 
-사이트에서는 한국어·영어 전체 텍스트, 제품명, 오류 메시지와 태그로 모든 공개 문서를 검색할 수 있습니다.
+사이트에서는 서비스별·태그별 보기로 글을 탐색할 수 있으며, 태그별 목록에는 front matter의 `tags`에 해당 태그가 정확히 지정된 글만 포함됩니다. 이와 별도로 전체 텍스트 검색에서 한국어·영어 제목과 본문, 제품명, 오류 메시지를 찾을 수 있습니다.
 
 | 모음 | 용도 |
 |---|---|
