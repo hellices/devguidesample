@@ -34,6 +34,33 @@ applies_to: [AKS 1.34+]
 """
 
 
+def series_guide(title: str, order: int, role: str) -> str:
+    return f"""\
+---
+title: {title}
+description: {title} 설명
+document_type: guide
+services: [aks]
+technologies: [kubernetes]
+tags: [networking]
+status: current
+verification_status: verified
+sources_checked_at: 2026-09-12
+official_sources:
+  - title: Azure Kubernetes Service documentation
+    url: https://learn.microsoft.com/azure/aks/
+last_verified: 2026-09-12
+review_cycle_days: 180
+applies_to: [AKS 1.34+]
+series: agent-memory
+series_order: {order}
+series_role: {role}
+---
+
+# {title}
+"""
+
+
 def make_repository(tmp_path: Path) -> Path:
     taxonomy = {
         "collections": {
@@ -207,3 +234,39 @@ def test_link_gate_reports_invalid_front_matter(tmp_path: Path) -> None:
 
     assert result.document_count == 1
     assert any("YAML front matter" in error for error in result.errors)
+
+
+def test_metadata_gate_reports_cross_document_series_errors(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    taxonomy_path = root / "docs-taxonomy.yml"
+    taxonomy = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
+    taxonomy["series"] = {
+        "agent-memory": {
+            "title": "Agent Memory",
+            "description": "Ordered memory research",
+        }
+    }
+    taxonomy_path.write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+    overview = root / "docs" / "guides" / "aks" / "overview"
+    overview.mkdir(parents=True)
+    (overview / "index.md").write_text(
+        series_guide("Overview", 0, "overview"),
+        encoding="utf-8",
+    )
+
+    chapter = root / "docs" / "guides" / "aks" / "chapter"
+    chapter.mkdir(parents=True)
+    (chapter / "index.md").write_text(
+        series_guide("Chapter", 0, "chapter"),
+        encoding="utf-8",
+    )
+
+    result = validate_metadata.validate_repository(root, today=date(2026, 9, 12))
+
+    assert any("duplicate series_order 0" in error for error in result.errors)
+    assert any("overview/index.md" in error for error in result.errors)
+    assert any("chapter/index.md" in error for error in result.errors)

@@ -17,6 +17,7 @@ from scripts.docs.content import (
     ValidationResult,
     load_document,
     load_taxonomy,
+    series_validation_errors,
     validate_document,
 )
 
@@ -38,6 +39,7 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
     docs_dir = root / "docs"
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
     errors: list[str] = []
+    documents = []
     count = 0
     for path in _candidate_paths(docs_dir, taxonomy):
         relative = path.relative_to(root).as_posix()
@@ -47,10 +49,15 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
         except DocumentFormatError as error:
             errors.append(str(error))
             continue
+        documents.append(document)
         errors.extend(
             f"{relative}: {message}"
             for message in validate_document(document, taxonomy, today=today)
         )
+    errors.extend(
+        f"docs/{message}"
+        for message in series_validation_errors(documents, taxonomy)
+    )
     return ValidationResult(count, errors)
 
 
