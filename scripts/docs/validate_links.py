@@ -20,9 +20,9 @@ from scripts.docs.content import (
     DocumentFormatError,
     ValidationResult,
     iter_public_document_paths,
-    load_document,
     load_taxonomy,
 )
+from scripts.docs.topics import iter_topic_documents
 
 
 @dataclass(frozen=True)
@@ -81,14 +81,15 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
     )
     errors: list[str] = []
     count = 0
-    for page in iter_public_document_paths(docs_dir, taxonomy):
+    try:
+        documents = list(iter_topic_documents(docs_dir, taxonomy))
+    except DocumentFormatError as error:
+        count = sum(1 for _ in iter_public_document_paths(docs_dir, taxonomy))
+        return ValidationResult(count, [str(error)])
+    for document in documents:
         count += 1
+        page = document.path
         relative = page.relative_to(root).as_posix()
-        try:
-            document = load_document(page, docs_dir=docs_dir)
-        except DocumentFormatError as error:
-            errors.append(str(error))
-            continue
         parser = _LinkParser()
         parser.feed(renderer.reset().convert(document.body))
         parser.close()

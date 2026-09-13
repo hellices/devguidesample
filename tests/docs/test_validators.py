@@ -95,7 +95,7 @@ def make_repository(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    page = tmp_path / "docs" / "guides" / "aks" / "network-diagnosis"
+    page = tmp_path / "docs" / "services" / "aks" / "network-diagnosis"
     (page / "images").mkdir(parents=True)
     (page / "index.md").write_text(VALID_GUIDE, encoding="utf-8")
     (page / "images" / "network.png").write_bytes(b"png")
@@ -115,26 +115,52 @@ def test_validation_gates_accept_a_publishable_repository(tmp_path: Path) -> Non
     assert all(result.errors == [] for result in results)
 
 
-def test_metadata_gate_checks_markdown_below_each_collection(tmp_path: Path) -> None:
+def test_metadata_gate_rejects_non_bundle_markdown_below_services(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
-    stray = root / "docs" / "guides" / "aks" / "network-diagnosis" / "topic.md"
+    stray = root / "docs" / "services" / "aks" / "network-diagnosis" / "topic.md"
     stray.write_text(VALID_GUIDE, encoding="utf-8")
 
     result = validate_metadata.validate_repository(root, today=date(2026, 9, 12))
 
     assert result.document_count == 2
     assert any(
-        "public documents must use <collection>/<service>/<topic>/index.md" in error
+        "public documents must use services/<service>/<topic>[/<child>]/index.md"
+        in error
         and "topic.md" in error
         for error in result.errors
     )
+
+
+def test_validation_gates_discover_only_canonical_documents_and_reject_legacy_sources(
+    tmp_path: Path,
+) -> None:
+    root = make_repository(tmp_path)
+    legacy = root / "docs" / "guides" / "aks" / "legacy-topic" / "index.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(VALID_GUIDE, encoding="utf-8")
+
+    metadata = validate_metadata.validate_repository(root, today=date(2026, 9, 12))
+    sources = validate_sources.validate_repository(root, today=date(2026, 9, 12))
+    links = validate_links.validate_repository(root)
+
+    assert metadata.document_count == 2
+    assert any(
+        "docs/guides/aks/legacy-topic/index.md: "
+        "public documents must use services/<service>/<topic>[/<child>]/index.md"
+        in error
+        for error in metadata.errors
+    )
+    assert sources.document_count == 1
+    assert sources.errors == []
+    assert links.document_count == 1
+    assert links.errors == []
 
 
 def test_source_and_link_gates_reject_an_unpublishable_page(
     tmp_path: Path,
 ) -> None:
     root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page = root / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
     text = (
         VALID_GUIDE.replace("2026-09-12", "2026-09-13", 1)
         .replace(
@@ -173,7 +199,7 @@ def test_reference_links_and_images_are_validated(
     tmp_path: Path, snippet: str, expected: str
 ) -> None:
     root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page = root / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
     page.write_text(VALID_GUIDE + "\n" + snippet + "\n", encoding="utf-8")
 
     result = validate_links.validate_repository(root)
@@ -184,7 +210,7 @@ def test_reference_links_and_images_are_validated(
 
 def test_reference_links_accept_existing_targets(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page = root / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
     page.write_text(
         VALID_GUIDE
         + '\n![diagram][ASSET]\n\n[asset]: <images/network.png> "Diagram"\n'
@@ -210,7 +236,7 @@ def test_link_examples_are_ignored_without_hiding_following_links(
     tmp_path: Path, snippet: str
 ) -> None:
     root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page = root / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
     body = VALID_GUIDE + "\n" + snippet + "\n"
     page.write_text(body, encoding="utf-8")
 
@@ -225,7 +251,7 @@ def test_link_examples_are_ignored_without_hiding_following_links(
 
 def test_link_gate_reports_invalid_front_matter(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
-    page = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    page = root / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
     page.write_text("# Missing front matter\n", encoding="utf-8")
 
     result = validate_links.validate_repository(root)
@@ -239,7 +265,6 @@ def test_link_gate_validates_mixed_layout_pages_without_topic_samples(
 ) -> None:
     root = make_repository(tmp_path)
     topic = root / "docs" / "services" / "aks" / "network-diagnosis"
-    topic.mkdir(parents=True)
     (topic / "index.md").write_text(
         canonical_guide("Overview"),
         encoding="utf-8",
@@ -259,7 +284,7 @@ def test_link_gate_validates_mixed_layout_pages_without_topic_samples(
 
     result = validate_links.validate_repository(root)
 
-    assert result.document_count == 3
+    assert result.document_count == 2
     assert result.errors == [
         "docs/services/aks/network-diagnosis/setup/index.md: "
         "target does not exist: missing-child.md"
@@ -269,7 +294,6 @@ def test_link_gate_validates_mixed_layout_pages_without_topic_samples(
 def test_metadata_gate_reports_topic_catalog_errors_once_per_path(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
     topic = root / "docs" / "services" / "aks" / "network-diagnosis"
-    (topic / "index.md").parent.mkdir(parents=True)
     (topic / "index.md").write_text(
         canonical_guide("Overview"),
         encoding="utf-8",
@@ -295,12 +319,11 @@ def test_metadata_gate_keeps_topic_validation_when_another_document_has_invalid_
     tmp_path: Path,
 ) -> None:
     root = make_repository(tmp_path)
-    bad = root / "docs" / "guides" / "aks" / "broken" / "index.md"
+    bad = root / "docs" / "services" / "aks" / "broken" / "index.md"
     bad.parent.mkdir(parents=True)
     bad.write_text("---\ntitle: [broken\n---\n", encoding="utf-8")
-
     topic = root / "docs" / "services" / "aks" / "network-diagnosis"
-    topic.mkdir(parents=True)
+    topic = root / "docs" / "services" / "aks" / "network-diagnosis"
     (topic / "index.md").write_text(canonical_guide("Overview"), encoding="utf-8")
     (topic / "setup").mkdir()
     (topic / "setup" / "index.md").write_text(

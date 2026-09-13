@@ -14,10 +14,10 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.docs.content import (
     DocumentFormatError,
     ValidationResult,
-    iter_public_documents,
     load_taxonomy,
     validate_source_metadata,
 )
+from scripts.docs.topics import iter_topic_documents
 
 
 def validate_repository(repo_root: Path | str, today: date | None = None) -> ValidationResult:
@@ -27,7 +27,7 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
     errors: list[str] = []
     count = 0
     try:
-        documents = list(iter_public_documents(docs_dir, taxonomy))
+        documents = list(iter_topic_documents(docs_dir, taxonomy))
     except DocumentFormatError as error:
         return ValidationResult(0, [str(error)])
     for document in documents:

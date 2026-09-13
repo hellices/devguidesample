@@ -1,4 +1,4 @@
-"""Topic-package catalog for transitional and canonical documentation layouts."""
+"""Topic-package catalog for canonical documentation layouts."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
-from scripts.docs.content import Document, DocumentFormatError, load_document
+from scripts.docs.content import Document, DocumentFormatError, KEBAB_CASE, load_document
 
 
 LEGACY_COLLECTIONS = frozenset(("cases", "guides", "labs", "research"))
@@ -43,15 +43,6 @@ class TopicCatalog:
     redirects: dict[PurePosixPath, PurePosixPath]
 
 
-def _legacy_collection_paths(taxonomy: Mapping[str, Any]) -> tuple[str, ...]:
-    paths = {
-        config["path"]
-        for config in taxonomy.get("collections", {}).values()
-        if isinstance(config, Mapping) and isinstance(config.get("path"), str)
-    }
-    return tuple(sorted(paths))
-
-
 def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
     parts = relative_path.parts
     return (
@@ -59,25 +50,14 @@ def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
         and parts[0] == "services"
         and parts[-1] == "index.md"
         and "samples" not in parts
-    )
-
-
-def _is_legacy_document_path(
-    relative_path: PurePosixPath, collection_paths: Iterable[str]
-) -> bool:
-    parts = relative_path.parts
-    return (
-        len(parts) == 4
-        and parts[-1] == "index.md"
-        and parts[0] in set(collection_paths)
+        and all(KEBAB_CASE.fullmatch(part) for part in parts[1:-1])
     )
 
 
 def iter_topic_documents(
-    docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
+    docs_dir: Path | str, taxonomy: Mapping[str, Any]
 ) -> Iterable[Document]:
     root = Path(docs_dir)
-    collection_paths = _legacy_collection_paths(taxonomy)
     candidates: list[Path] = []
 
     services_root = root / "services"
@@ -86,16 +66,6 @@ def iter_topic_documents(
             relative = PurePosixPath(path.relative_to(root).as_posix())
             if _is_canonical_document_path(relative):
                 candidates.append(path)
-
-    if include_legacy:
-        for collection_path in collection_paths:
-            collection_root = root / collection_path
-            if not collection_root.is_dir():
-                continue
-            for path in collection_root.rglob("index.md"):
-                relative = PurePosixPath(path.relative_to(root).as_posix())
-                if _is_legacy_document_path(relative, collection_paths):
-                    candidates.append(path)
 
     for path in sorted(candidates, key=lambda item: item.relative_to(root).as_posix()):
         yield load_document(path, docs_dir=root)
@@ -221,16 +191,21 @@ def _build_sample_asset(
 def build_topic_catalog(
     docs_dir: Path | str,
     taxonomy: Mapping[str, Any],
-    include_legacy: bool = True,
     documents: Iterable[Document] | None = None,
 ) -> TopicCatalog:
     root = Path(docs_dir)
     if documents is None:
-        documents = iter_topic_documents(root, taxonomy, include_legacy=include_legacy)
+        documents = iter_topic_documents(root, taxonomy)
     ordered_documents = tuple(
-        sorted(documents, key=lambda document: document.relative_path.as_posix())
+        sorted(
+            (
+                document
+                for document in documents
+                if _is_canonical_document_path(document.relative_path)
+            ),
+            key=lambda document: document.relative_path.as_posix(),
+        )
     )
-    collection_paths = _legacy_collection_paths(taxonomy)
     errors: list[str] = []
 
     services_root = root / "services"
@@ -244,30 +219,14 @@ def build_topic_catalog(
                     f"{relative.as_posix()}: child documents must be directly below the topic"
                 )
 
-    canonical_documents = [
-        document for document in ordered_documents if document.relative_path.parts[0] == "services"
-    ]
-    legacy_documents = [
-        document
-        for document in ordered_documents
-        if document.relative_path.parts[0] in set(collection_paths)
-    ]
     grouped: dict[tuple[str, str], list[Document]] = {}
-    for document in canonical_documents:
+    for document in ordered_documents:
         grouped.setdefault(_topic_key(document.relative_path), []).append(document)
 
     topics: dict[tuple[str, str], Topic] = {}
     by_document: dict[PurePosixPath, Topic] = {}
     position_by_document: dict[PurePosixPath, int] = {}
     samples_by_document: dict[PurePosixPath, tuple[SampleAsset, ...]] = {}
-
-    legacy_by_key: dict[tuple[str, str], list[Document]] = {}
-    for document in legacy_documents:
-        if _is_legacy_document_path(document.relative_path, collection_paths):
-            legacy_by_key.setdefault(
-                (document.relative_path.parts[1], document.relative_path.parts[2]),
-                [],
-            ).append(document)
 
     for key in sorted(grouped):
         service, slug = key
@@ -370,30 +329,6 @@ def build_topic_catalog(
 
     if errors:
         raise DocumentFormatError("invalid topic catalog:\n" + "\n".join(errors))
-
-    for key in sorted(legacy_by_key):
-        legacy_group = tuple(
-            sorted(legacy_by_key[key], key=lambda document: document.relative_path.as_posix())
-        )
-        if key in topics:
-            topic = topics[key]
-            for legacy_document in legacy_group:
-                by_document[legacy_document.relative_path] = topic
-                position_by_document[legacy_document.relative_path] = 0
-                samples_by_document[legacy_document.relative_path] = ()
-            continue
-        topic = Topic(
-            primary_service=key[0],
-            slug=key[1],
-            entry=legacy_group[0],
-            members=legacy_group,
-            samples=(),
-        )
-        topics[key] = topic
-        for position, legacy_document in enumerate(legacy_group):
-            by_document[legacy_document.relative_path] = topic
-            position_by_document[legacy_document.relative_path] = position
-            samples_by_document[legacy_document.relative_path] = ()
 
     for redirect_path, canonical_path in redirects.items():
         topic = by_document.get(canonical_path)

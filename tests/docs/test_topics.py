@@ -158,7 +158,7 @@ def test_build_topic_catalog_discovers_canonical_topic_documents_and_samples(
     ] == ["event-lab"]
 
 
-def test_build_topic_catalog_does_not_leak_canonical_sample_ownership_to_legacy_aliases(
+def test_build_topic_catalog_discovers_only_canonical_documents(
     tmp_path: Path, taxonomy: dict
 ) -> None:
     docs_dir = tmp_path / "docs"
@@ -194,7 +194,13 @@ def test_build_topic_catalog_does_not_leak_canonical_sample_ownership_to_legacy_
     assert [sample.slug for sample in catalog.samples_by_document[PurePosixPath("services/azure-monitor/agent-topic/index.md")]] == [
         "entry-lab"
     ]
-    assert catalog.samples_by_document[PurePosixPath("guides/azure-monitor/agent-topic/index.md")] == ()
+    assert all(
+        document.relative_path.parts[0] == "services"
+        for document in catalog.documents
+    )
+    assert PurePosixPath(
+        "guides/azure-monitor/agent-topic/index.md"
+    ) not in catalog.by_document
 
 
 @pytest.mark.parametrize(
@@ -211,10 +217,6 @@ def test_build_topic_catalog_does_not_leak_canonical_sample_ownership_to_legacy_
         ("empty used_by", "used_by must be a non-empty list"),
         ("unknown used_by", "unknown document slug"),
         ("duplicate redirect", "redirect_from path is already used"),
-        (
-            "canonical redirect collision",
-            "redirect_from collides with a canonical document",
-        ),
     ],
 )
 def test_build_topic_catalog_rejects_invalid_topic_and_sample_layouts(
@@ -328,20 +330,6 @@ def test_build_topic_catalog_rejects_invalid_topic_and_sample_layouts(
             topic_order=3,
             redirect_from=["guides/azure-monitor/shared/index.md"],
         )
-    elif case == "canonical redirect collision":
-        write_document(
-            docs_dir,
-            "guides/azure-monitor/shared/index.md",
-            "Shared",
-        )
-        write_document(
-            docs_dir,
-            "services/azure-monitor/agent-topic/results/index.md",
-            "Results",
-            topic_order=2,
-            redirect_from=["guides/azure-monitor/shared/index.md"],
-        )
-
     with pytest.raises(DocumentFormatError, match=re.escape(expected)):
         build_topic_catalog(docs_dir, taxonomy)
 
@@ -364,50 +352,25 @@ def test_validate_document_rejects_canonical_service_paths_absent_from_taxonomy(
     assert "unknown service: unknown-service" in errors
 
 
-def test_build_topic_catalog_preserves_all_legacy_paths_sharing_one_topic_key(
+def test_build_topic_catalog_ignores_legacy_collection_documents(
     tmp_path: Path, taxonomy: dict
 ) -> None:
     docs_dir = tmp_path / "docs"
-    taxonomy["collections"]["lab"] = {
-        "path": "labs",
-        "statuses": ["verified"],
-        "required_fields": [
-            "last_verified",
-            "review_cycle_days",
-            "estimated_time",
-            "cost",
-            "cleanup_required",
-        ],
-    }
-    guide = write_document(
+    write_document(
         docs_dir,
         "guides/azure-monitor/agent-topic/index.md",
         "Guide legacy topic",
     )
-    lab = write_document(
+    write_document(
         docs_dir,
         "labs/azure-monitor/agent-topic/index.md",
         "Lab legacy topic",
     )
-    lab.write_text(
-        guide.read_text(encoding="utf-8").replace("document_type: guide", "document_type: lab"),
-        encoding="utf-8",
-    )
 
     catalog = build_topic_catalog(docs_dir, taxonomy)
 
-    guide_path = PurePosixPath("guides/azure-monitor/agent-topic/index.md")
-    lab_path = PurePosixPath("labs/azure-monitor/agent-topic/index.md")
-    topic = catalog.topics[("azure-monitor", "agent-topic")]
-
-    assert guide.relative_to(docs_dir).as_posix() in {
-        document.relative_path.as_posix() for document in catalog.documents
-    }
-    assert lab.relative_to(docs_dir).as_posix() in {
-        document.relative_path.as_posix() for document in catalog.documents
-    }
-    assert catalog.by_document[guide_path] == topic
-    assert catalog.by_document[lab_path] == topic
+    assert catalog.documents == ()
+    assert catalog.topics == {}
 
 
 def test_repository_connected_topics_have_canonical_layout() -> None:

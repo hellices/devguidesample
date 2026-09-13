@@ -331,6 +331,36 @@ def test_mkdocs_keeps_navigation_and_search_metadata_driven() -> None:
         if isinstance(plugin, dict) and "search" in plugin
     )
     assert search["lang"] == ["ko", "en"]
+    assert config["exclude_docs"].strip() == "services/**/samples/**"
+
+
+def test_topic_and_sample_styles_are_responsive_and_accessible() -> None:
+    css = (
+        Path(__file__).parents[2] / "docs/assets/stylesheets/extra.css"
+    ).read_text(encoding="utf-8")
+
+    for selector in (
+        ".dg-topic-card",
+        ".dg-topic-overview",
+        ".dg-topic-list",
+        ".dg-topic-context",
+        ".dg-topic-nav",
+        ".dg-sample-grid",
+        ".dg-sample-card",
+    ):
+        assert selector in css
+
+    mobile = css.split("@media (max-width: 760px)", 1)[1].split(
+        "@media (max-width: 480px)", 1
+    )[0]
+    assert ".dg-topic-nav" in mobile
+    assert ".dg-sample-grid" in mobile
+    assert "grid-template-columns: minmax(0, 1fr)" in mobile
+    assert "a:focus-visible" in css
+
+    reduced_motion = css.split("@media (prefers-reduced-motion: reduce)", 1)[1]
+    assert ".dg-sample-card" in reduced_motion
+    assert "transition: none" in reduced_motion
 
 
 def test_strict_build_rejects_missing_anchors(
@@ -573,7 +603,7 @@ def make_search_repository(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    page = tmp_path / "docs" / "guides" / "aks" / "network-diagnosis"
+    page = tmp_path / "docs" / "services" / "aks" / "network-diagnosis"
     page.mkdir(parents=True)
     (page / "index.md").write_text(SEARCH_DOCUMENT, encoding="utf-8")
     (tmp_path / "site" / "search").mkdir(parents=True)
@@ -656,17 +686,17 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
         (root / "site" / "index.html").read_text(encoding="utf-8")
     )
 
-    assert single_document_navigation.links["guides/aks/network-diagnosis/"] == "AKS 네트워크 진단"
+    assert single_document_navigation.links["services/aks/network-diagnosis/"] == "AKS 네트워크 진단"
     assert single_document_navigation.links["services/aks/"] == "Azure Kubernetes Service"
 
-    page = docs / "guides" / "aks" / "new-topic" / "index.md"
+    page = docs / "services" / "aks" / "new-topic" / "index.md"
     page.parent.mkdir(parents=True)
     page.write_text(
         SEARCH_DOCUMENT.replace("AKS 네트워크 진단", "자동 게시 확인")
         + "\n추가된 문서의 검색 본문입니다.\n",
         encoding="utf-8",
     )
-    third_page = docs / "guides" / "aks" / "z-last-topic" / "index.md"
+    third_page = docs / "services" / "aks" / "z-last-topic" / "index.md"
     third_page.parent.mkdir(parents=True)
     third_page.write_text(
         SEARCH_DOCUMENT.replace("AKS 네트워크 진단", "세 번째 문서"),
@@ -680,33 +710,33 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     )
 
     assert [path.read_bytes() for path in unchanged_paths] == original_settings
-    assert navigation.links["guides/aks/network-diagnosis/"] == "AKS 네트워크 진단"
-    assert navigation.links["guides/aks/new-topic/"] == "자동 게시 확인"
-    assert navigation.links["guides/aks/z-last-topic/"] == "세 번째 문서"
+    assert navigation.links["services/aks/network-diagnosis/"] == "AKS 네트워크 진단"
+    assert navigation.links["services/aks/new-topic/"] == "자동 게시 확인"
+    assert navigation.links["services/aks/z-last-topic/"] == "세 번째 문서"
     assert navigation.links["services/aks/"] == "Azure Kubernetes Service"
     assert "guides/" not in navigation.links
     assert navigation.links["articles/"] == "Articles"
     assert "자동 게시 확인" in (root / "site" / "guides" / "index.html").read_text(encoding="utf-8")
     assert any(
-        entry["location"] == "guides/aks/new-topic/"
+        entry["location"] == "services/aks/new-topic/"
         and "추가된 문서" in entry["text"]
         for entry in search["docs"]
     )
     article_navigation = PrimaryNavigation()
     article_navigation.feed(
-        (root / "site" / "guides" / "aks" / "network-diagnosis" / "index.html").read_text(
+        (root / "site" / "services" / "aks" / "network-diagnosis" / "index.html").read_text(
             encoding="utf-8"
         )
     )
-    article_url = "https://example.test/guides/aks/network-diagnosis/"
+    article_url = "https://example.test/services/aks/network-diagnosis/"
     resolved_links = {
         urljoin(article_url, target): title
         for target, title in article_navigation.links.items()
     }
     assert resolved_links[article_url] == "AKS 네트워크 진단"
     assert resolved_links["https://example.test/services/aks/"] == "Azure Kubernetes Service"
-    assert resolved_links["https://example.test/guides/aks/new-topic/"] == "자동 게시 확인"
-    assert resolved_links["https://example.test/guides/aks/z-last-topic/"] == "세 번째 문서"
+    assert resolved_links["https://example.test/services/aks/new-topic/"] == "자동 게시 확인"
+    assert resolved_links["https://example.test/services/aks/z-last-topic/"] == "세 번째 문서"
 
 
 def test_topic_packages_drive_sidebar_navigation_redirects_and_bounded_topic_links(
@@ -771,7 +801,7 @@ def write_search_index(root: Path, documents: list[dict[str, str]]) -> None:
 
 def page_search_entry(text: str) -> dict[str, str]:
     return {
-        "location": "guides/aks/network-diagnosis/",
+        "location": "services/aks/network-diagnosis/",
         "title": "AKS 네트워크 진단",
         "text": text,
     }
@@ -857,7 +887,7 @@ def test_search_gate_accepts_visible_rendered_markdown(
     tmp_path: Path, body: str
 ) -> None:
     root = make_search_repository(tmp_path)
-    path = root / "docs" / "guides" / "aks" / "network-diagnosis" / "index.md"
+    path = root / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
     front_matter = SEARCH_DOCUMENT.split("\n# ", 1)[0]
     path.write_text(front_matter + "\n\n" + body, encoding="utf-8")
     document = load_document(path, docs_dir=root / "docs")
@@ -870,7 +900,7 @@ def test_search_gate_accepts_visible_rendered_markdown(
         title=document.metadata["title"],
         content=renderer.convert(document.body),
         toc=[],
-        url="guides/aks/network-diagnosis/",
+        url="services/aks/network-diagnosis/",
     )
     index = SearchIndex()
     index.add_entry_from_context(page)

@@ -1,4 +1,4 @@
-"""Generate reader destinations and legacy indexes from public document metadata."""
+"""Generate reader destinations and compatibility indexes from document metadata."""
 
 from __future__ import annotations
 
@@ -16,8 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.docs.content import Document, iter_public_documents, load_taxonomy
-from scripts.docs.topics import Topic, TopicCatalog, build_topic_catalog
+from scripts.docs.content import Document, load_taxonomy
+from scripts.docs.topics import (
+    Topic,
+    TopicCatalog,
+    build_topic_catalog,
+    iter_topic_documents,
+)
 
 
 # Static English eyebrow labels for each document type / overview page, matching
@@ -813,7 +818,7 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
 
     root = repo_root or REPO_ROOT
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
-    public_documents = list(iter_public_documents(root / "docs", taxonomy))
+    public_documents = list(iter_topic_documents(root / "docs", taxonomy))
     catalog = build_topic_catalog(root / "docs", taxonomy, documents=public_documents)
     documents = list(catalog.documents)
 

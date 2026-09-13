@@ -96,24 +96,21 @@ def test_public_safety_accepts_placeholders_and_example_hosts(
     assert result.errors == []
 
 
-def test_public_safety_scans_optional_top_level_samples(tmp_path: Path) -> None:
+def test_public_safety_rejects_legacy_top_level_sample_content(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
     (root / "docs" / "services" / "aks" / "example" / "index.md").write_text(
         "# Safe example\n", encoding="utf-8"
     )
     legacy_sample = root / "samples" / "example"
     legacy_sample.mkdir(parents=True)
-    (legacy_sample / ".env.example").write_text(
-        "SEARCH_ENDPOINT=https://private-search-123.search.windows.net\n",
-        encoding="utf-8",
-    )
+    (legacy_sample / "README.md").write_text("# Legacy sample\n", encoding="utf-8")
 
     result = validate_public_safety.validate_repository(root)
 
-    assert result.file_count == 2
+    assert result.file_count == 1
     assert any(
-        "samples/example/.env.example:1:" in error
-        and "non-example Azure service hostname" in error
+        "samples/example/README.md: legacy samples directory must not contain tracked public content"
+        in error
         for error in result.errors
     )
 

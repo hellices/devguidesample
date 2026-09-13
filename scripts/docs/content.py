@@ -95,26 +95,6 @@ def load_document(path: Path | str, docs_dir: Path | str | None = None) -> Docum
     return Document(source, PurePosixPath(relative.as_posix()), metadata, body)
 
 
-def _collection_paths(taxonomy: Mapping[str, Any]) -> set[str]:
-    return {
-        config["path"]
-        for config in taxonomy.get("collections", {}).values()
-        if isinstance(config, Mapping) and isinstance(config.get("path"), str)
-    }
-
-
-def _is_legacy_document_path(
-    relative_path: PurePosixPath, taxonomy: Mapping[str, Any]
-) -> bool:
-    parts = relative_path.parts
-    return (
-        len(parts) == 4
-        and parts[-1] == "index.md"
-        and parts[0] in _collection_paths(taxonomy)
-        and KEBAB_CASE.fullmatch(parts[2]) is not None
-    )
-
-
 def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
     parts = relative_path.parts
     if (
@@ -129,9 +109,9 @@ def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
 
 
 def iter_public_document_paths(
-    docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
+    docs_dir: Path | str, taxonomy: Mapping[str, Any]
 ) -> Iterable[Path]:
-    """Yield canonical and legacy public page-bundle paths."""
+    """Yield canonical public page-bundle paths."""
     root = Path(docs_dir)
     candidate_paths: list[Path] = []
 
@@ -141,27 +121,16 @@ def iter_public_document_paths(
             if _is_canonical_document_path(PurePosixPath(path.relative_to(root).as_posix())):
                 candidate_paths.append(path)
 
-    if include_legacy:
-        for collection_path in sorted(_collection_paths(taxonomy)):
-            collection_root = root / collection_path
-            if not collection_root.is_dir():
-                continue
-            for path in collection_root.rglob("index.md"):
-                if _is_legacy_document_path(
-                    PurePosixPath(path.relative_to(root).as_posix()), taxonomy
-                ):
-                    candidate_paths.append(path)
-
     for path in sorted(candidate_paths, key=lambda item: item.relative_to(root).as_posix()):
         yield path
 
 
 def iter_public_documents(
-    docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
+    docs_dir: Path | str, taxonomy: Mapping[str, Any]
 ) -> Iterable[Document]:
-    """Yield page-bundle documents from configured public collections."""
+    """Yield canonical page-bundle documents."""
     root = Path(docs_dir)
-    for path in iter_public_document_paths(root, taxonomy, include_legacy=include_legacy):
+    for path in iter_public_document_paths(root, taxonomy):
         yield load_document(path, docs_dir=root)
 
 
@@ -256,7 +225,6 @@ def validate_document(
     document: Document,
     taxonomy: Mapping[str, Any],
     today: date | None = None,
-    include_legacy: bool = True,
 ) -> list[str]:
     """Return every content-contract violation for one public document."""
     current_date = today or date.today()
@@ -281,20 +249,17 @@ def validate_document(
         else None
     )
     parts = document.relative_path.parts
-    is_legacy_path = _is_legacy_document_path(document.relative_path, taxonomy)
     is_canonical_path = _is_canonical_document_path(document.relative_path)
-    if not is_canonical_path and not (include_legacy and is_legacy_path):
-        errors.append("public documents must use <collection>/<service>/<topic>/index.md")
+    if not is_canonical_path:
+        errors.append(
+            "public documents must use "
+            "services/<service>/<topic>[/<child>]/index.md"
+        )
 
     if not isinstance(collection, Mapping):
         if isinstance(document_type, str):
             errors.append(f"unknown document_type: {document_type}")
     else:
-        expected_folder = collection.get("path")
-        if is_legacy_path and parts and parts[0] != expected_folder:
-            errors.append(
-                f"folder '{parts[0]}' does not match {document_type} collection '{expected_folder}'"
-            )
         status = metadata.get("status")
         if isinstance(status, str) and status not in collection.get("statuses", []):
             errors.append(f"invalid {document_type} status: {status}")

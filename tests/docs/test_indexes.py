@@ -122,7 +122,7 @@ def build_topic_fixture(
         featured=True,
     )
 
-    catalog = build_topic_catalog(docs_dir, taxonomy, include_legacy=False)
+    catalog = build_topic_catalog(docs_dir, taxonomy)
     return list(catalog.documents), catalog
 
 
@@ -632,71 +632,6 @@ def test_redirect_pages_point_to_canonical_topic_entries_and_stay_out_of_indexes
     assert all("old-topic" not in content for content in pages.values())
 
 
-def test_mixed_canonical_and_legacy_topic_inputs_do_not_overcount_topic_matches(
-    tmp_path: Path, taxonomy: dict
-) -> None:
-    documents, catalog = build_topic_fixture(tmp_path, taxonomy)
-    documents.append(
-        doc(
-            "guides/azure-monitor/new-topic/index.md",
-            title="Legacy topic",
-            description="Legacy topic description",
-            document_type="guide",
-            services=["azure-monitor"],
-            tags=["networking"],
-        )
-    )
-
-    pages = build_index_pages(documents, taxonomy, catalog=catalog)
-
-    assert "4 / 3개 문서 일치" not in pages[PurePosixPath("guides/index.md")]
-    assert "Legacy topic" in pages[PurePosixPath("guides/index.md")]
-
-
-def test_legacy_same_slug_documents_from_different_collections_do_not_collapse(
-    tmp_path: Path, taxonomy: dict
-) -> None:
-    documents = [
-        doc(
-            "guides/azure-monitor/shared/index.md",
-            title="Guide title",
-            description="Guide description",
-            document_type="guide",
-            services=["azure-monitor"],
-            tags=["networking"],
-        ),
-        doc(
-            "research/azure-monitor/shared/index.md",
-            title="Research title",
-            description="Research description",
-            document_type="research",
-            services=["azure-monitor"],
-            tags=["networking"],
-        ),
-    ]
-    docs_dir = tmp_path / "docs"
-    for item in documents:
-        write_topic_document(
-            docs_dir,
-            item.relative_path.as_posix(),
-            str(item.metadata["title"]),
-            tags=list(item.metadata["tags"]),
-        )
-        path = docs_dir / item.relative_path
-        contents = path.read_text(encoding="utf-8")
-        path.write_text(
-            contents.replace("document_type: guide", f"document_type: {item.metadata['document_type']}"),
-            encoding="utf-8",
-        )
-    catalog = build_topic_catalog(docs_dir, taxonomy, documents=documents)
-
-    pages = build_index_pages(documents, taxonomy, catalog=catalog)
-
-    assert "Guide title" in pages[PurePosixPath("guides/index.md")]
-    assert "Research title" in pages[PurePosixPath("research/index.md")]
-    assert pages[PurePosixPath("tags/networking.md")].count('class="dg-topic-card"') == 0
-
-
 def test_secondary_service_pages_show_the_matching_service_on_topic_cards(
     tmp_path: Path, taxonomy: dict
 ) -> None:
@@ -711,48 +646,6 @@ def test_secondary_service_pages_show_the_matching_service_on_topic_cards(
 
     assert "Azure Kubernetes Service" in service_page
     assert "Azure Monitor</span><span>1 / 3개 문서 일치" not in service_page
-
-
-def test_singleton_canonical_topics_keep_same_key_legacy_pages_visible(
-    tmp_path: Path, taxonomy: dict
-) -> None:
-    documents = [
-        doc(
-            "services/azure-monitor/topic/index.md",
-            title="Canonical topic",
-            description="Canonical description",
-            document_type="guide",
-            services=["azure-monitor"],
-            tags=["networking"],
-        ),
-        doc(
-            "guides/azure-monitor/topic/index.md",
-            title="Legacy guide",
-            description="Legacy description",
-            document_type="guide",
-            services=["azure-monitor"],
-            tags=["networking"],
-        ),
-    ]
-    docs_dir = tmp_path / "docs"
-    write_topic_document(
-        docs_dir,
-        "services/azure-monitor/topic/index.md",
-        "Canonical topic",
-        tags=["networking"],
-    )
-    write_topic_document(
-        docs_dir,
-        "guides/azure-monitor/topic/index.md",
-        "Legacy guide",
-        tags=["networking"],
-    )
-    catalog = build_topic_catalog(docs_dir, taxonomy, documents=documents)
-
-    pages = build_index_pages(documents, taxonomy, catalog=catalog)
-
-    assert "Canonical topic" in pages[PurePosixPath("guides/index.md")]
-    assert "Legacy guide" in pages[PurePosixPath("guides/index.md")]
 
 
 # ---------------------------------------------------------------------------

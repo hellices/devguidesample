@@ -32,7 +32,7 @@ TEXT_SUFFIXES = {
 }
 TEXT_FILENAMES = {".env", "dockerfile"}
 TEXT_COMPOUND_SUFFIXES = (".env.example",)
-SCAN_ROOTS = ("docs", "samples")
+SCAN_ROOTS = ("docs",)
 REQUIRED_SCAN_ROOTS = ("docs",)
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 KNOWN_ENVIRONMENT_MARKERS = (
@@ -120,6 +120,14 @@ def validate_repository(repo_root: Path | str) -> PublicSafetyResult:
         for name in REQUIRED_SCAN_ROOTS
         if not (root / name).is_dir()
     ]
+    legacy_samples = root / "samples"
+    if legacy_samples.is_dir():
+        errors.extend(
+            f"{path.relative_to(root).as_posix()}: "
+            "legacy samples directory must not contain tracked public content"
+            for path in sorted(legacy_samples.rglob("*"))
+            if path.is_file()
+        )
     count = 0
     for path in _text_files(root):
         count += 1

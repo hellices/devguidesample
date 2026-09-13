@@ -20,9 +20,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.docs.content import iter_public_documents, load_taxonomy
+from scripts.docs.content import load_taxonomy
 from scripts.docs.generate_indexes import build_tag_links
-from scripts.docs.topics import TopicCatalog, build_topic_catalog
+from scripts.docs.topics import TopicCatalog, build_topic_catalog, iter_topic_documents
 
 
 def _navigation_pages(
@@ -54,7 +54,7 @@ def on_files(files: Any, config: Mapping[str, Any]) -> Any:
 def _topic_catalog_for(docs_dir: str) -> TopicCatalog:
     docs_path = Path(docs_dir)
     taxonomy = load_taxonomy(docs_path.parent / "docs-taxonomy.yml")
-    public_documents = list(iter_public_documents(docs_path, taxonomy))
+    public_documents = list(iter_topic_documents(docs_path, taxonomy))
     return build_topic_catalog(docs_path, taxonomy, documents=public_documents)
 
 
@@ -202,7 +202,7 @@ def _topic_nav(current_path: PurePosixPath, catalog: TopicCatalog) -> str:
 
 
 def on_nav(nav: Navigation, config: Mapping[str, Any], files: Any) -> Navigation:
-    """Keep each article under its primary service without changing its URL."""
+    """Place canonical topic packages under their primary service."""
     docs_dir = Path(config["docs_dir"])
     taxonomy = load_taxonomy(docs_dir.parent / "docs-taxonomy.yml")
     catalog = _topic_catalog_from_config(config)
@@ -211,9 +211,7 @@ def on_nav(nav: Navigation, config: Mapping[str, Any], files: Any) -> Navigation
     collections = {entry["path"] for entry in taxonomy["collections"].values()}
     collection_indexes = {f"{collection}/index.md" for collection in collections}
     pages_by_path = {page.file.src_uri: page for page in nav.pages}
-    redirect_paths = {path.as_posix() for path in catalog.redirects}
     by_service: dict[str, list[tuple[str, StructureItem]]] = defaultdict(list)
-    included_paths: set[str] = set()
     for topic in catalog.topics.values():
         entry_parts = topic.entry.relative_path.parts
         if entry_parts[0] == "services":
@@ -227,7 +225,6 @@ def on_nav(nav: Navigation, config: Mapping[str, Any], files: Any) -> Navigation
                 else:
                     page.title = str(member.metadata.get("title", page.title or ""))
                 member_pages.append(page)
-                included_paths.add(member.relative_path.as_posix())
             if not member_pages:
                 continue
             if len(member_pages) == 1:
@@ -242,26 +239,6 @@ def on_nav(nav: Navigation, config: Mapping[str, Any], files: Any) -> Navigation
                     )
                 )
             continue
-
-        for member in topic.members:
-            page = pages_by_path.get(member.relative_path.as_posix())
-            if page is None:
-                continue
-            included_paths.add(member.relative_path.as_posix())
-            by_service[topic.primary_service].append(
-                (str(member.metadata.get("title", "")).casefold(), page)
-            )
-
-    for page in nav.pages:
-        src_uri = page.file.src_uri
-        parts = PurePosixPath(src_uri).parts
-        if src_uri in included_paths or src_uri in collection_indexes:
-            continue
-        if src_uri in redirect_paths:
-            continue
-        if len(parts) == 4 and parts[0] in collections and parts[-1] == "index.md":
-            by_service[parts[1]].append((str(page.title or "").casefold(), page))
-            included_paths.add(src_uri)
 
     for page in nav.pages:
         page.parent = None
