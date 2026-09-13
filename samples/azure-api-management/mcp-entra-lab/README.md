@@ -1,6 +1,6 @@
 # Azure MCP + Entra ID walkthrough
 
-Read the [Azure MCP operating architecture](../../../docs/guides/azure-architecture/mcp-configuration/index.md) for gateway governance, Foundry hosted agents, Toolbox and authentication. Follow [walkthrough.md](walkthrough.md) for this sample's concrete deployment and requests. GitHub, Azure, AKS and Learn are demonstration backends, not competing architecture choices.
+Read the [Azure MCP solution guide](../../../docs/guides/azure-architecture/mcp-configuration/index.md) for APIM, Toolbox, IQ tools and the distinction between MCP authorization and OBO. Follow [walkthrough.md](walkthrough.md) for this sample's concrete deployment and requests. GitHub, Azure, AKS and Learn are demonstration backends, not competing architecture choices.
 
 ## What is deployed
 

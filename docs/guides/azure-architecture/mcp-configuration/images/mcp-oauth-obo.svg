@@ -1,26 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 890" role="img" aria-labelledby="title desc">
-  <title id="title">MCP OAuth authorization followed by Entra OBO</title>
-  <desc id="desc">The client obtains a token for the logical MCP API using OAuth and PKCE. APIM and the MCP server validate that resource token. The MCP server then uses OBO to obtain a different audience token for the downstream API. App-only identity is not user OBO.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 790" role="img" aria-labelledby="title desc">
+  <title id="title">MCP authorization obtains token A; Entra OBO obtains a separate token B</title>
+  <desc id="desc">An MCP client obtains a token for the MCP API through OAuth discovery and authorization. The MCP API uses that user token as an OBO assertion to obtain another token for the downstream data API. APIM and Toolbox product support must be evaluated separately from this generic flow.</desc>
   <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
-  <style>text{font-family:Arial,sans-serif;font-size:19px;fill:#162b40}.title{font-size:28px;font-weight:700}.small{font-size:17px}.head{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.life{stroke:#a4b3c2;stroke-width:2;stroke-dasharray:7 6}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
-  <rect width="1180" height="890" fill="white"/>
-  <text x="30" y="43" class="title">MCP API authorization and downstream user delegation</text>
-  <rect x="25" y="90" width="170" height="65" rx="10" class="head"/><text x="110" y="130" text-anchor="middle">MCP client</text>
-  <rect x="250" y="90" width="180" height="65" rx="10" class="head"/><text x="340" y="130" text-anchor="middle">Entra ID</text>
-  <rect x="490" y="90" width="170" height="65" rx="10" class="head"/><text x="575" y="130" text-anchor="middle">APIM</text>
-  <rect x="730" y="90" width="170" height="65" rx="10" class="head"/><text x="815" y="130" text-anchor="middle">MCP server</text>
-  <rect x="975" y="90" width="180" height="65" rx="10" class="head"/><text x="1065" y="130" text-anchor="middle">Data API</text>
-  <path d="M110 155V765M340 155V765M575 155V765M815 155V765M1065 155V765" class="life"/>
-  <path d="M110 205H575" class="flow"/><text x="132" y="191" class="small">MCP request without an access token</text>
-  <path d="M575 260H110" class="flow"/><text x="132" y="247" class="small">401 + protected-resource metadata location</text>
-  <path d="M110 320H340" class="flow"/><text x="118" y="307" class="small">Authorization code + PKCE</text>
-  <path d="M340 380H110" class="flow"/><text x="120" y="366" class="small">Token A for the MCP API</text>
-  <path d="M110 440H575" class="flow"/><text x="132" y="426" class="small">Bearer token A: aud = logical MCP API</text>
-  <path d="M575 500H815" class="flow"/><text x="585" y="486" class="small">Validate / same resource A</text>
-  <path d="M815 562H340" class="flow"/><text x="362" y="547" class="small">OBO: user assertion A + confidential-client proof</text>
-  <path d="M340 623H815" class="flow"/><text x="362" y="608" class="small">Token B: aud = downstream data API</text>
-  <path d="M815 685H1065" class="flow"/><text x="837" y="670" class="small">Bearer token B</text>
-  <path d="M1065 742H815" class="flow"/><text x="837" y="728" class="small">User-authorized result</text>
-  <text x="30" y="814" class="small">APIM and the backend share resource A only when deliberately configured as the same protected MCP API.</text>
-  <text x="30" y="844" class="small">Different audiences need a separate token design. Never forward an unrelated token or turn app-only auth into user OBO.</text>
+  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.small{font-size:18px}.head{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.life{stroke:#a4b3c2;stroke-width:2;stroke-dasharray:7 6}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1180" height="790" fill="white"/>
+  <text x="30" y="43" class="title">MCP OAuth and Entra OBO solve different token requirements</text>
+  <rect x="30" y="90" width="190" height="65" rx="10" class="head"/><text x="125" y="130" text-anchor="middle">MCP client</text>
+  <rect x="315" y="90" width="190" height="65" rx="10" class="head"/><text x="410" y="130" text-anchor="middle">Entra ID</text>
+  <rect x="655" y="90" width="210" height="65" rx="10" class="head"/><text x="760" y="130" text-anchor="middle">Protected MCP API</text>
+  <rect x="950" y="90" width="200" height="65" rx="10" class="head"/><text x="1050" y="130" text-anchor="middle">Downstream API</text>
+  <path d="M125 155V690M410 155V690M760 155V690M1050 155V690" class="life"/>
+  <path d="M760 215H125" class="flow"/><text x="150" y="200" class="small">1. Protected-resource metadata with authorization-server URL</text>
+  <path d="M125 275H410" class="flow"/><text x="137" y="261" class="small">2. Authorization code + PKCE</text>
+  <path d="M410 335H125" class="flow"/><text x="142" y="321" class="small">3. Token A for the MCP API</text>
+  <path d="M125 400H760" class="flow"/><text x="150" y="385" class="small">4. MCP request with A; validate audience and delegated permission</text>
+  <path d="M760 470H410" class="flow"/><text x="428" y="455" class="small">5. OBO assertion A + API credentials</text>
+  <path d="M410 535H760" class="flow"/><text x="428" y="520" class="small">6. Token B for the downstream API</text>
+  <path d="M760 600H1050" class="flow"/><text x="779" y="585" class="small">7. Data request with token B</text>
+  <path d="M1050 663H760" class="flow"/><text x="790" y="648" class="small">Authorized result</text>
+  <text x="30" y="734" class="small">OBO is an Entra user-delegation flow, not a measure of complete MCP protocol support.</text>
+  <text x="30" y="763" class="small">A token for another audience, or an app-only token, cannot replace the required user assertion.</text>
 </svg>

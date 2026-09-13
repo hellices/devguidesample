@@ -1,6 +1,6 @@
 # Foundry hosted agent에서 Toolbox 사용
 
-이 문서는 [MCP 운영 아키텍처](../../../docs/guides/azure-architecture/mcp-configuration/index.md)의 hosted-agent 구성을 따라 하는 sample 안내입니다. Agent가 model과 Toolbox를 호출하는 것이며, MCP backend를 hosted agent에 옮기는 절차가 아닙니다.
+이 문서는 Toolbox를 소비하는 agent 구현을 확인할 때 사용하는 선택적 sample 안내입니다. [MCP 솔루션 가이드](../../../docs/guides/azure-architecture/mcp-configuration/index.md)는 APIM·Toolbox·IQ와 인증을 설명하며 agent 배포는 다루지 않습니다. 아래는 agent가 model과 Toolbox를 호출하는 절차이지 MCP backend를 hosted agent에 옮기는 절차가 아닙니다.
 
 ## 1. 필요한 환경
 

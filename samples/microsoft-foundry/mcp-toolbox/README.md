@@ -2,7 +2,7 @@
 
 This example publishes Microsoft Learn MCP tools through a Foundry Toolbox. It has a normal `learn-tools` service and a separate `learn-tools-search` service that demonstrates deferred discovery. It does not provision API Management, a model deployment or a new Foundry project.
 
-Use the [MCP operating architecture](../../../docs/guides/azure-architecture/mcp-configuration/index.md) to distinguish agent runtime, Toolbox discovery, APIM governance and backend hosting. This sample demonstrates tooling with Learn; it is not a comparison of customer MCP products.
+Use the [MCP solution guide](../../../docs/guides/azure-architecture/mcp-configuration/index.md) for Toolbox aggregation, IQ tools, APIM governance and documented protocol/authentication support. The guide also links the Microsoft Learn token-comparison demo. This sample uses Learn tools and is not a token-savings benchmark.
 
 ## Prerequisites
 
