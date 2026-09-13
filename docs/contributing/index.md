@@ -60,6 +60,8 @@ docs/services/<service>/<topic>/
 루트 `index.md`가 topic entry입니다. entry에는 `topic_order`를 쓰지 않습니다.
 직접 자식 문서에는 `topic_order: 1`, `topic_order: 2`처럼 1부터 시작하는
 중복 없는 연속 번호를 지정합니다. 손자 문서 구조는 허용하지 않습니다.
+`index`는 topic entry를 가리키는 예약어이므로 자식 폴더 slug로 사용할 수
+없습니다.
 
 ### topic 소유 sample
 
@@ -89,6 +91,10 @@ used_by:
 - `used_by`는 sample을 표시할 문서 slug의 중복 없는 목록입니다.
 - topic entry는 `index`, 자식 문서는 폴더 slug로 지정합니다.
 - 각 sample에는 사용·검증·정리 방법을 설명하는 `README.md`가 필요합니다.
+- sample이 있는 topic에는 entry `index.md`가 반드시 있어야 합니다.
+  자식 문서 아래에 `samples/`를 두거나 topic의 `samples/` 바로 아래에
+  파일을 두지 않습니다. sample package 내부의 하위 `samples/` 폴더는
+  해당 package의 payload로 취급합니다.
 - sample 파일은 공개 안전성 검사를 받지만 MkDocs 사이트와 검색 색인에는
   복사되지 않습니다. 문서에서는 생성되는 sample card 또는 GitHub 소스
   링크로 연결합니다.
@@ -114,6 +120,9 @@ redirect 경로는 `cases`, `guides`, `labs`, `research` 중 하나로 시작하
 기존 4단계 `index.md` 경로여야 합니다. 해당 경로에 원본 Markdown을 다시
 만들지 않습니다. 빌드가 redirect page를 생성하며 검색과 서비스/topic
 탐색에서는 제외합니다.
+이전 collection/service 색인 주소도 유지하며, 현재 소속과 이전 소속이
+겹치면 canonical 문서를 중복 없이 합칩니다. 이 호환 색인에서는 topic
+카드와 함께 해당 자식 문서로 바로 가는 링크도 제공합니다.
 
 `document_type`은 collection 호환 색인과 수명주기 요구사항을 선택하지만
 물리 경로를 결정하지 않습니다. `services/`, `tags/`, `articles/`와

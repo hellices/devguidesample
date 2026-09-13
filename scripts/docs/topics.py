@@ -75,18 +75,38 @@ def _topic_key(relative_path: PurePosixPath) -> tuple[str, str]:
     return (relative_path.parts[1], relative_path.parts[2])
 
 
-def _sample_directory_errors(topic_root: Path, docs_root: Path) -> list[str]:
-    samples_root = topic_root / "samples"
-    if not samples_root.is_dir():
+def _sample_directory_errors(
+    docs_root: Path, document_paths: set[PurePosixPath]
+) -> list[str]:
+    services_root = docs_root / "services"
+    if not services_root.is_dir():
         return []
 
     errors: list[str] = []
-    for sample_dir in sorted(path for path in samples_root.iterdir() if path.is_dir()):
-        relative = PurePosixPath(sample_dir.relative_to(docs_root).as_posix())
-        if not (sample_dir / "sample.yml").is_file():
-            errors.append(f"{relative.as_posix()}: sample.yml is required")
-        if not (sample_dir / "README.md").is_file():
-            errors.append(f"{relative.as_posix()}: README.md is required")
+    for samples_root in sorted(services_root.rglob("samples")):
+        if not samples_root.is_dir():
+            continue
+        relative = PurePosixPath(samples_root.relative_to(docs_root).as_posix())
+        # Only the first samples boundary defines ownership; later ones are payload.
+        if "samples" in relative.parts[:-1]:
+            continue
+        if len(relative.parts) != 4:
+            errors.append(f"{relative.as_posix()}: samples must be directly below the topic")
+            continue
+        entry_path = relative.parent / "index.md"
+        if entry_path not in document_paths:
+            errors.append(f"{entry_path.as_posix()}: topic entry document is missing")
+        for sample_dir in sorted(samples_root.iterdir()):
+            sample_path = PurePosixPath(sample_dir.relative_to(docs_root).as_posix())
+            if not sample_dir.is_dir():
+                errors.append(
+                    f"{sample_path.as_posix()}: sample files must belong to a sample package"
+                )
+                continue
+            if not (sample_dir / "sample.yml").is_file():
+                errors.append(f"{sample_path.as_posix()}: sample.yml is required")
+            if not (sample_dir / "README.md").is_file():
+                errors.append(f"{sample_path.as_posix()}: README.md is required")
     return errors
 
 
@@ -206,7 +226,8 @@ def build_topic_catalog(
             key=lambda document: document.relative_path.as_posix(),
         )
     )
-    errors: list[str] = []
+    canonical_paths = {document.relative_path for document in ordered_documents}
+    errors = _sample_directory_errors(root, canonical_paths)
 
     services_root = root / "services"
     if services_root.is_dir():
@@ -243,6 +264,11 @@ def build_topic_catalog(
         for member in members:
             if member.relative_path == entry_path:
                 continue
+            if member.relative_path.parts[3] == "index":
+                errors.append(
+                    f"{member.relative_path.as_posix()}: child slug 'index' is reserved for the topic entry"
+                )
+                continue
             order = member.metadata.get("topic_order")
             if isinstance(order, bool) or not isinstance(order, int) or order <= 0:
                 errors.append(
@@ -270,8 +296,6 @@ def build_topic_catalog(
             )
 
         topic_root = root / "services" / service / slug
-        errors.extend(_sample_directory_errors(topic_root, root))
-
         member_paths = [entry.relative_path, *[child.relative_path for child in ordered_children]]
         slug_to_document = {
             "index": entry.relative_path,
@@ -309,7 +333,6 @@ def build_topic_catalog(
                 sample for sample in ordered_samples if member.relative_path in sample.used_by
             )
 
-    canonical_paths = {document.relative_path for document in ordered_documents}
     redirects: dict[PurePosixPath, PurePosixPath] = {}
     for document in ordered_documents:
         redirect_paths, redirect_errors = _normalize_redirects(document)

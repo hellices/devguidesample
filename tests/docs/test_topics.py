@@ -203,6 +203,201 @@ def test_build_topic_catalog_discovers_only_canonical_documents(
     ) not in catalog.by_document
 
 
+@pytest.mark.parametrize("unrelated_topic", [False, True])
+def test_build_topic_catalog_rejects_samples_without_topic_entry(
+    tmp_path: Path, taxonomy: dict, unrelated_topic: bool
+) -> None:
+    docs_dir = tmp_path / "docs"
+    if unrelated_topic:
+        write_document(
+            docs_dir,
+            "services/azure-monitor/other-topic/index.md",
+            "Other topic",
+        )
+    write_sample(
+        docs_dir,
+        "services/azure-monitor/orphan-topic/samples/event-lab",
+        {
+            "title": "Event lab",
+            "description": "No topic owns this sample.",
+            "kind": "runnable",
+            "used_by": ["index"],
+        },
+    )
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape("services/azure-monitor/orphan-topic/index.md: topic entry document is missing"),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+@pytest.mark.parametrize("child_document", [False, True])
+def test_build_topic_catalog_rejects_samples_beneath_child(
+    tmp_path: Path, taxonomy: dict, child_document: bool
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    if child_document:
+        write_document(
+            docs_dir,
+            "services/azure-monitor/agent-topic/setup/index.md",
+            "Setup",
+            topic_order=1,
+        )
+    write_sample(
+        docs_dir,
+        "services/azure-monitor/agent-topic/setup/samples/event-lab",
+        {
+            "title": "Event lab",
+            "description": "Misplaced sample.",
+            "kind": "runnable",
+            "used_by": ["index"],
+        },
+    )
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape("services/azure-monitor/agent-topic/setup/samples: samples must be directly below the topic"),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_build_topic_catalog_rejects_loose_files_in_topic_samples(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    samples_root = docs_dir / "services/azure-monitor/agent-topic/samples"
+    samples_root.mkdir()
+    (samples_root / "loose.py").write_text("print('unowned')\n", encoding="utf-8")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape("services/azure-monitor/agent-topic/samples/loose.py: sample files must belong to a sample package"),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+@pytest.mark.parametrize("sample_slug", ["event-lab", "samples"])
+def test_build_topic_catalog_allows_samples_directories_inside_sample_payload(
+    tmp_path: Path, taxonomy: dict, sample_slug: str
+) -> None:
+    docs_dir = tmp_path / "docs"
+    entry_path = "services/azure-monitor/agent-topic/index.md"
+    write_document(docs_dir, entry_path, "Agent topic")
+    sample_dir = write_sample(
+        docs_dir,
+        f"services/azure-monitor/agent-topic/samples/{sample_slug}",
+        {
+            "title": "Event lab",
+            "description": "Contains nested example payloads.",
+            "kind": "runnable",
+            "used_by": ["index"],
+        },
+    )
+    for relative in ("samples/demo", "src/samples/demo", "samples/demo/samples/inner"):
+        payload = sample_dir / relative
+        payload.mkdir(parents=True, exist_ok=True)
+        (payload / "index.md").write_text("# Payload, not a public document\n", encoding="utf-8")
+        (payload / "sample.yml").write_text("not a sample manifest\n", encoding="utf-8")
+    (sample_dir / "samples/loose.py").write_text("print('owned payload')\n", encoding="utf-8")
+
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    assert len(catalog.documents) == 1
+    assert [sample.slug for sample in catalog.samples_by_document[PurePosixPath(entry_path)]] == [
+        sample_slug
+    ]
+
+
+@pytest.mark.parametrize(
+    ("invalid_field", "invalid_value", "expected"),
+    [
+        ("sample.yml", None, "sample.yml is required"),
+        ("README.md", None, "README.md is required"),
+        ("kind", "unsupported", "kind must be runnable or artifact"),
+        ("used_by", ["missing"], "unknown document slug: missing"),
+        ("used_by", [], "used_by must be a non-empty list"),
+        ("used_by", ["index", "index"], "used_by values must be unique"),
+    ],
+)
+def test_build_topic_catalog_validates_every_immediate_sample_package(
+    tmp_path: Path, taxonomy: dict, invalid_field: str, invalid_value: object, expected: str
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    manifest = {
+        "title": "Event lab",
+        "description": "Owned by the topic.",
+        "kind": "artifact",
+        "used_by": ["index"],
+    }
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/a-valid", manifest)
+    invalid_sample = write_sample(
+        docs_dir, "services/azure-monitor/agent-topic/samples/z-invalid", manifest
+    )
+    if invalid_field in {"sample.yml", "README.md"}:
+        (invalid_sample / invalid_field).unlink()
+    else:
+        (invalid_sample / "sample.yml").write_text(
+            yaml.safe_dump({**manifest, invalid_field: invalid_value}), encoding="utf-8"
+        )
+
+    with pytest.raises(DocumentFormatError, match=re.escape(f"samples/z-invalid: {expected}")):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_build_topic_catalog_rejects_reserved_index_child_slug(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_document(
+        docs_dir,
+        "services/azure-monitor/agent-topic/index/index.md",
+        "Reserved child",
+        topic_order=1,
+    )
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape("services/azure-monitor/agent-topic/index/index.md: child slug 'index' is reserved for the topic entry"),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_reserved_child_cannot_redirect_entry_sample_ownership(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    entry_path = PurePosixPath("services/azure-monitor/agent-topic/index.md")
+    write_document(docs_dir, entry_path.as_posix(), "Agent topic")
+    write_sample(
+        docs_dir,
+        "services/azure-monitor/agent-topic/samples/entry-lab",
+        {
+            "title": "Entry lab",
+            "description": "Owned only by the topic entry.",
+            "kind": "runnable",
+            "used_by": ["index"],
+        },
+    )
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+    assert catalog.samples_by_document[entry_path][0].used_by == (entry_path,)
+    write_document(
+        docs_dir,
+        "services/azure-monitor/agent-topic/index/index.md",
+        "Cannot take entry ownership",
+        topic_order=1,
+    )
+
+    with pytest.raises(
+        DocumentFormatError, match="child slug 'index' is reserved for the topic entry"
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
 @pytest.mark.parametrize(
     ("case", "expected"),
     [

@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.docs.content import Document, load_taxonomy
 from scripts.docs.topics import (
+    LEGACY_COLLECTIONS,
     Topic,
     TopicCatalog,
     build_topic_catalog,
@@ -57,6 +58,7 @@ _HOME_SLOTS = ("<!-- home:stats -->", "<!-- home:featured -->", "<!-- home:brows
 class TopicMatch:
     topic: Topic
     matching_count: int
+    matching_documents: tuple[Document, ...]
 
 
 def _escape(value: Any) -> str:
@@ -278,12 +280,22 @@ def _topic_card(
         classes = f"{classes} {extra_classes}"
 
     tag_html = build_tag_links(index_path, _topic_tags(topic)[:3], taxonomy)
+    member_links = ""
+    if len(index_path.parts) == 3 and index_path.parts[0] in LEGACY_COLLECTIONS:
+        member_links = "".join(
+            f"- [{_md_label(member.metadata.get('title', ''))}]({_relative_link(index_path, member)})\n"
+            for member in match.matching_documents
+            if member.relative_path != entry.relative_path
+        )
+        if member_links:
+            member_links = f"\n{member_links}"
     return (
         f'<article class="{classes}" markdown="1">\n\n'
         f'<div class="dg-doc-meta">\n{meta_spans}\n</div>\n\n'
         f'### [{_md_label(title)}]({link})\n\n'
         f'<p class="dg-doc-summary">{_escape(description)}</p>\n'
         f"{tag_html}"
+        f"{member_links}"
         f"\n</article>\n"
     )
 
@@ -318,7 +330,14 @@ def _collapse_documents(
         matched_paths.setdefault(key, set()).add(document.relative_path)
 
     topic_matches = [
-        TopicMatch(topic=catalog.topics[key], matching_count=len(paths))
+        TopicMatch(
+            topic=catalog.topics[key],
+            matching_count=len(paths),
+            matching_documents=tuple(
+                member for member in catalog.topics[key].members
+                if member.relative_path in paths
+            ),
+        )
         for key, paths in matched_paths.items()
     ]
     collapsed: list[Document | TopicMatch] = [*standalone.values(), *topic_matches]
@@ -582,10 +601,14 @@ def build_index_pages(
     """Return virtual Markdown pages keyed by their docs-relative path."""
     docs = sorted(
         _visible_documents(list(documents), catalog),
-        key=lambda item: str(item.metadata.get("title", "")).casefold(),
+        key=lambda item: (
+            str(item.metadata.get("title", "")).casefold(),
+            item.relative_path.as_posix(),
+        ),
     )
     pages: dict[PurePosixPath, str] = {}
     collections = taxonomy.get("collections", {})
+    compatibility_documents: dict[PurePosixPath, dict[PurePosixPath, Document]] = defaultdict(dict)
 
     for document_type, config in collections.items():
         matching = [doc for doc in docs if doc.metadata.get("document_type") == document_type]
@@ -593,21 +616,30 @@ def build_index_pages(
             document_type, config, matching, taxonomy, catalog=catalog
         )
         pages[index_path] = body
-        by_primary_service: dict[str, list[Document]] = defaultdict(list)
         for document in matching:
             service = _primary_service(document, catalog)
             if service:
-                by_primary_service[service].append(document)
-        for slug, service_docs in by_primary_service.items():
-            # A real section index prevents Material from promoting the first bundle.
-            service_path, service_body = _build_service_page(
-                slug,
-                service_docs,
-                taxonomy,
-                page_path=PurePosixPath(config["path"]) / slug / "index.md",
-                catalog=catalog,
-            )
-            pages[service_path] = service_body
+                service_path = PurePosixPath(config["path"]) / service / "index.md"
+                compatibility_documents[service_path][document.relative_path] = document
+
+    if catalog is not None:
+        by_path = {document.relative_path: document for document in docs}
+        for redirect_path, canonical_path in sorted(catalog.redirects.items()):
+            document = by_path.get(canonical_path)
+            if document is not None:
+                service_path = redirect_path.parent.parent / "index.md"
+                compatibility_documents[service_path][canonical_path] = document
+
+    for service_path, members in sorted(compatibility_documents.items()):
+        # Merge current and former section membership without duplicating documents.
+        service_path, service_body = _build_service_page(
+            service_path.parts[1],
+            [members[path] for path in sorted(members)],
+            taxonomy,
+            page_path=service_path,
+            catalog=catalog,
+        )
+        pages[service_path] = service_body
 
     by_service: dict[str, list[Document]] = defaultdict(list)
     for document in docs:

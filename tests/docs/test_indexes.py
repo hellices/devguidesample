@@ -16,7 +16,7 @@ from mkdocs.config import load_config
 import pytest
 import yaml
 
-from scripts.docs.content import Document
+from scripts.docs.content import Document, load_taxonomy
 from scripts.docs.generate_indexes import (
     build_home_page,
     build_index_pages,
@@ -46,11 +46,12 @@ def write_topic_document(
     topic_order: int | None = None,
     featured: bool = False,
     redirect_from: list[str] | None = None,
+    document_type: str = "guide",
 ) -> None:
     metadata: dict[str, object] = {
         "title": title,
         "description": f"{title} description",
-        "document_type": "guide",
+        "document_type": document_type,
         "services": ["azure-monitor"],
         "technologies": ["kubernetes"],
         "tags": tags,
@@ -267,6 +268,75 @@ def test_collection_service_landing_contains_only_its_own_documents(taxonomy: di
     assert "A guide" not in service_landing
     assert "First case" not in pages[PurePosixPath("cases/azure-monitor/index.md")]
     assert "First case" in pages[PurePosixPath("services/azure-monitor/index.md")]
+
+
+def test_legacy_service_indexes_include_redirected_documents_deterministically(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/current-topic/index.md",
+        "Current topic",
+        tags=[],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/moved-topic/index.md",
+        "Moved topic",
+        tags=[],
+        redirect_from=[
+            "research/azure-hdinsight/old-topic/index.md",
+            "research/azure-hdinsight/another-old-topic/index.md",
+        ],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/moved-topic/benchmark/index.md",
+        "Benchmark",
+        tags=[],
+        topic_order=1,
+        document_type="research",
+        redirect_from=[
+            "guides/azure-monitor/old-benchmark/index.md",
+            "research/azure-hdinsight/old-benchmark/index.md",
+        ],
+    )
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
+
+    legacy = pages[PurePosixPath("research/azure-hdinsight/index.md")]
+    assert legacy.count("[Moved topic](../../services/azure-monitor/moved-topic/index.md)") == 1
+    assert legacy.count("[Benchmark](../../services/azure-monitor/moved-topic/benchmark/index.md)") == 1
+    assert "SERVICES / 2 DOCUMENTS" in legacy
+    assert "Current topic" not in legacy
+    current = pages[PurePosixPath("guides/azure-monitor/index.md")]
+    assert current.count("[Current topic](../../services/azure-monitor/current-topic/index.md)") == 1
+    assert current.count("[Benchmark](../../services/azure-monitor/moved-topic/benchmark/index.md)") == 1
+    assert "SERVICES / 3 DOCUMENTS" in current
+    assert current.count('class="dg-doc-card dg-topic-card') == 1
+    assert legacy.count('class="dg-doc-card dg-topic-card') == 1
+    assert "old-benchmark" not in current
+    assert pages == build_index_pages(reversed(catalog.documents), taxonomy, catalog=catalog)
+    assert pages[PurePosixPath("guides/index.md")].count('class="dg-doc-card dg-topic-card') == 1
+    assert pages[PurePosixPath("services/azure-monitor/index.md")].count('class="dg-doc-card dg-topic-card') == 1
+
+
+def test_repository_legacy_hdinsight_index_links_to_canonical_benchmark() -> None:
+    taxonomy = load_taxonomy(ROOT / "docs-taxonomy.yml")
+    catalog = build_topic_catalog(ROOT / "docs", taxonomy)
+
+    pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
+
+    assert PurePosixPath("research/azure-hdinsight/index.md") in pages
+    legacy = pages[PurePosixPath("research/azure-hdinsight/index.md")]
+    assert "../../services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md" in legacy
+    assert "kafka-catchup-sku-fetch-benchmark/index.md" not in legacy
+    for redirect, canonical in catalog.redirects.items():
+        service_index = redirect.parent.parent / "index.md"
+        assert service_index in pages
+        assert f"../../{canonical.as_posix()}" in pages[service_index]
 
 
 def test_collection_page_reflects_real_counts_and_wrapper_classes(taxonomy: dict) -> None:
