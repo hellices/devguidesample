@@ -3,3 +3,6 @@ description: Runnable quota controllers and architecture assets for PTU balancin
 kind: runnable
 used_by:
 - index
+publish:
+  - source: ptu_architecture.png
+    target: images/ptu_architecture.png

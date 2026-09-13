@@ -18,9 +18,9 @@ technologies:
 - nodejs
 - mysql
 tags:
-- high-availability
-- performance
-- development
+- operate
+- optimize
+- build
 redirect_from:
 - guides/azure-database-for-mysql/nodejs-read-write-routing/index.md
 ---

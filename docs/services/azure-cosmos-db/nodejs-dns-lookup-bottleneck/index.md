@@ -18,9 +18,9 @@ technologies:
 - nodejs
 - cosmos-db
 tags:
+- optimize
+- diagnose
 - networking
-- performance
-- troubleshooting
 redirect_from:
 - guides/azure-cosmos-db/nodejs-dns-lookup-bottleneck/index.md
 ---

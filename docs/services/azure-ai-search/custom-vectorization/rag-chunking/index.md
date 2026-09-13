@@ -13,8 +13,9 @@ description: RAG 검색을 위한 청킹 전략과 선택 기준을 비교합니
 technologies:
 - rag
 tags:
-- architecture
-- performance
+- design
+- optimize
+- evaluate
 published_at: 2026-05-22
 topic_order: 1
 redirect_from:

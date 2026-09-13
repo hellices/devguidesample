@@ -17,8 +17,8 @@ description: Foundry Local SDK와 CLI의 제약 및 에어갭 환경 구성을 �
 technologies:
 - azure-cli
 tags:
-- deployment
-- security
+- deploy
+- secure
 - ai-agents
 redirect_from:
 - guides/microsoft-foundry/foundry-local-air-gapped/index.md

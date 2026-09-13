@@ -656,7 +656,6 @@ def test_topic_cards_collapse_multi_document_topics_across_generated_indexes(
     for path in (
         PurePosixPath("guides/index.md"),
         PurePosixPath("services/azure-monitor/index.md"),
-        PurePosixPath("articles/index.md"),
     ):
         page = pages[path]
         assert page.count('class="dg-doc-card dg-topic-card') == 1
@@ -665,12 +664,13 @@ def test_topic_cards_collapse_multi_document_topics_across_generated_indexes(
         assert "Results child" not in page
         assert "Standalone topic" in page
 
-    tag_page = pages[PurePosixPath("tags/networking.md")]
-    assert tag_page.count('class="dg-doc-card dg-topic-card') == 1
-    assert "2 / 3개 문서 일치" in tag_page
-    assert "Setup child" not in tag_page
-    assert "Results child" not in tag_page
-    assert "Standalone topic" in tag_page
+    explore = pages[PurePosixPath("explore/index.md")]
+    assert explore.count("data-explore-topic=") == 2
+    assert explore.count("data-explore-member=") == 4
+    assert "2개 주제 · 4개 문서" in explore
+    assert "Setup child" in explore
+    assert "Results child" in explore
+    assert "Standalone topic" in explore
 
     assert home.count('class="dg-doc-card dg-topic-card') == 1
     assert "3개 문서" in home
@@ -1109,13 +1109,12 @@ def test_home_page_browse_block_lists_destinations_with_real_counts(
     rendered = build_home_page(HOME_TEMPLATE, [document], taxonomy)
     browse_block = rendered.split('class="dg-browse-grid"', 1)[1]
 
-    assert browse_block.count('class="dg-browse-card') == 3
+    assert browse_block.count('class="dg-browse-card') == 2
     assert "[서비스별 보기](services/index.md)" in browse_block
-    assert "[태그별 보기](tags/index.md)" in browse_block
-    assert "[전체 글](articles/index.md)" in browse_block
-    assert "1개 문서" in browse_block
+    assert "[글 찾기](explore/index.md)" in browse_block
+    assert "1개 주제 · 1개 문서" in browse_block
     assert "1개 서비스" in browse_block
-    assert "0개 태그" in browse_block
+    assert "전체 글" not in browse_block
 
 
 def test_home_page_malformed_template_fails_explicitly() -> None:

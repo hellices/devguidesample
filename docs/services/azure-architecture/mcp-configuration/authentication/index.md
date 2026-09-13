@@ -7,7 +7,7 @@ redirect_from:
   - guides/azure-api-management/mcp-entra-private-access/index.md
 services: [azure-architecture, azure-api-management, azure-container-apps, microsoft-foundry, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python]
-tags: [ai-agents, authentication, authorization, networking, security]
+tags: [build, secure, ai-agents, identity]
 status: current
 verification_status: needs-review
 sources_checked_at: 2026-09-13

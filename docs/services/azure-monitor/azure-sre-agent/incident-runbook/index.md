@@ -17,9 +17,9 @@ description: Azure SRE Agent 이벤트 실습의 장애 대응 runbook을 제공
 technologies:
 - rest-api
 tags:
-- troubleshooting
-- monitoring
-- reliability
+- diagnose
+- operate
+- ai-agents
 topic_order: 8
 redirect_from:
 - guides/azure-monitor/sre-agent-incident-runbook/index.md

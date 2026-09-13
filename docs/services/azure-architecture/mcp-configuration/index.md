@@ -8,7 +8,7 @@ redirect_from:
   - labs/azure-api-management/mcp-rest-and-upstream/index.md
 services: [azure-architecture, azure-api-management, microsoft-foundry, microsoft-entra-id, azure-container-apps, azure-ai-search]
 technologies: [mcp, azure-cli]
-tags: [ai-agents, architecture, authentication, authorization, networking, monitoring]
+tags: [design, secure, ai-agents, identity]
 status: current
 verification_status: needs-review
 sources_checked_at: 2026-09-13

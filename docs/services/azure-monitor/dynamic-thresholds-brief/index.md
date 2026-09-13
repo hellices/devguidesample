@@ -13,8 +13,7 @@ description: Dynamic Thresholds 기능 변화와 도입 시점을 분석합니�
 technologies:
 - rest-api
 tags:
-- monitoring
-- reliability
+- operate
 published_at: 2026-08-17
 redirect_from:
 - research/azure-monitor/dynamic-thresholds-brief/index.md

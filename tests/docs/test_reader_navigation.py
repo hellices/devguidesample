@@ -27,6 +27,7 @@ def taxonomy() -> dict:
         },
         "services": {"azure-monitor": "Azure Monitor", "azure-storage": "Azure Storage"},
         "tags": {"networking": "Networking", "monitoring": "Monitoring", "latency": "Latency"},
+        "legacy_tag_redirects": {"networking": {"tag": ["networking"]}},
     }
 
 
@@ -198,7 +199,7 @@ def targets(markdown: str) -> list[str]:
     return parser.targets
 
 
-@pytest.mark.parametrize("path", ["articles/index.md", "services/azure-monitor/index.md", "tags/networking.md"])
+@pytest.mark.parametrize("path", ["services/azure-monitor/index.md", "services/azure-storage/index.md"])
 def test_reader_lists_mix_lifecycles_without_type_badges(taxonomy: dict, path: str) -> None:
     documents = [
         document("guides", "setup", "B 구성 절차", ["networking"]),
@@ -215,7 +216,7 @@ def test_reader_lists_mix_lifecycles_without_type_badges(taxonomy: dict, path: s
     assert "Azure Storage" in page
 
 
-def test_tag_overview_counts_unique_documents_and_only_used_tags(taxonomy: dict) -> None:
+def test_tag_redirects_do_not_depend_on_current_document_membership(taxonomy: dict) -> None:
     documents = [
         document("guides", "setup", "구성 절차", ["networking", "networking"]),
         document("research", "choices", "선택 근거", ["networking", "monitoring"]),
@@ -223,33 +224,30 @@ def test_tag_overview_counts_unique_documents_and_only_used_tags(taxonomy: dict)
     pages = build_index_pages(documents, taxonomy)
     overview = pages[PurePosixPath("tags/index.md")]
 
-    assert "networking.md" in targets(overview)
-    assert "monitoring.md" in targets(overview)
-    assert "latency.md" not in targets(overview)
+    assert "../explore/" in targets(overview)
     assert PurePosixPath("tags/latency.md") not in pages
-    assert "2개 문서" in overview
-    assert "1개 문서" in overview
     assert "구성 절차" not in overview
-    assert "tag:networking" in overview
-    assert "?q=" not in overview
-    assert pages[PurePosixPath("tags/networking.md")].count('class="dg-doc-card') == 2
+    assert "search:" in overview
+    assert "../../explore/?tag=networking" in targets(pages[PurePosixPath("tags/networking.md")])
+    assert build_index_pages([], taxonomy)[PurePosixPath("tags/networking.md")] == pages[PurePosixPath("tags/networking.md")]
 
 
-def test_tag_results_require_exact_membership_not_body_or_slug_prefix(taxonomy: dict) -> None:
+def test_explore_preserves_exact_membership_not_body_or_slug_prefix(taxonomy: dict) -> None:
     taxonomy["tags"]["networking-advanced"] = "Advanced networking"
     matching = document("guides", "setup", "태그 일치 문서", ["networking"])
     mentioning = document("research", "mentions", "본문에만 등장", ["monitoring"])
     prefix = document("research", "prefix", "접두사만 일치", ["networking-advanced"])
 
     page = build_index_pages([matching, mentioning, prefix], taxonomy)[
-        PurePosixPath("tags/networking.md")
+        PurePosixPath("explore/index.md")
     ]
 
     assert "태그 일치 문서" in page
-    assert "본문에만 등장" not in page
-    assert "접두사만 일치" not in page
-    assert "../guides/azure-monitor/setup/index.md" in targets(page)
-    assert "index.md" in targets(page)
+    assert 'data-tags="[&quot;networking&quot;]"' in page
+    assert 'data-tags="[&quot;networking-advanced&quot;]"' in page
+    assert 'data-tags="[&quot;monitoring&quot;]"' in page
+    assert "../guides/azure-monitor/setup/" in targets(page)
+    assert page.count("data-explore-member=") == 3
 
 
 def test_service_lists_deduplicate_repeated_service_values(taxonomy: dict) -> None:
@@ -262,14 +260,13 @@ def test_service_lists_deduplicate_repeated_service_values(taxonomy: dict) -> No
     assert pages[PurePosixPath("services/azure-storage/index.md")].count('class="dg-doc-card') == 1
 
 
-def test_card_tags_link_to_detail_pages_at_each_directory_depth(taxonomy: dict) -> None:
+def test_card_tags_link_to_explore_at_each_directory_depth(taxonomy: dict) -> None:
     matching = document("guides", "setup", "구성 절차", ["networking"])
     pages = build_index_pages([matching], taxonomy)
 
-    assert "../tags/networking.md" in targets(pages[PurePosixPath("articles/index.md")])
-    assert "../../tags/networking.md" in targets(pages[PurePosixPath("services/azure-monitor/index.md")])
-    assert "networking.md" in targets(pages[PurePosixPath("tags/networking.md")])
-    assert "../../tags/networking.md" in targets(pages[PurePosixPath("guides/azure-monitor/index.md")])
+    assert "./?tag=networking" in targets(pages[PurePosixPath("explore/index.md")])
+    assert "../../explore/index.md?tag=networking" in targets(pages[PurePosixPath("services/azure-monitor/index.md")])
+    assert "../../explore/index.md?tag=networking" in targets(pages[PurePosixPath("guides/azure-monitor/index.md")])
 
 
 def test_tag_labels_are_escaped_without_changing_slug_destinations(taxonomy: dict) -> None:
@@ -277,28 +274,28 @@ def test_tag_labels_are_escaped_without_changing_slug_destinations(taxonomy: dic
     matching = document("guides", "setup", "구성 절차", ["networking"])
     pages = build_index_pages([matching], taxonomy)
 
-    for path in ("tags/index.md", "tags/networking.md", "articles/index.md"):
+    for path in ("explore/index.md", "services/azure-monitor/index.md"):
         body = pages[PurePosixPath(path)].split("---", 2)[2]
         rendered = Markdown(extensions=["md_in_html", "attr_list"]).convert(body)
         assert "<script>" not in rendered
-        assert "networking.md" in " ".join(targets(pages[PurePosixPath(path)]))
+        assert "?tag=networking" in " ".join(targets(pages[PurePosixPath(path)]))
 
 
 def test_empty_reader_indexes_do_not_invent_tags_or_documents(taxonomy: dict) -> None:
     pages = build_index_pages([], taxonomy)
 
-    for path in ("articles/index.md", "tags/index.md"):
+    for path in ("explore/index.md",):
         page = pages[PurePosixPath(path)]
         assert "dg-empty-state" in page
         assert 'class="dg-doc-card' not in page
-    assert not any(path.parent == PurePosixPath("tags") and path.name != "index.md" for path in pages)
+    assert "0개 주제 · 0개 문서" in pages[PurePosixPath("explore/index.md")]
 
 
 def test_reader_cards_keep_real_scope_without_review_placeholders(taxonomy: dict) -> None:
     matching = document("guides", "setup", "구성 절차", ["networking"])
     matching.metadata["applies_to"] = ["공식 원문 재검토 필요", "검증용 테스트 환경"]
 
-    page = build_index_pages([matching], taxonomy)[PurePosixPath("articles/index.md")]
+    page = build_index_pages([matching], taxonomy)[PurePosixPath("services/azure-monitor/index.md")]
 
     assert "공식 원문 재검토 필요" not in page
     assert "검증용 테스트 환경" in page
@@ -311,7 +308,8 @@ def test_home_offers_browse_destinations_instead_of_lifecycles(taxonomy: dict) -
 
     page = build_home_page(template, [matching], taxonomy)
 
-    assert {"services/index.md", "tags/index.md", "articles/index.md"} <= set(targets(page))
+    assert {"services/index.md", "explore/index.md"} <= set(targets(page))
+    assert not {"tags/index.md", "articles/index.md"} & set(targets(page))
     assert "guides/index.md" not in targets(page)
     assert "research/index.md" not in targets(page)
     assert "문서 유형" not in page
@@ -319,7 +317,7 @@ def test_home_offers_browse_destinations_instead_of_lifecycles(taxonomy: dict) -
     assert "비교·분석" not in page
 
 
-def test_article_tags_use_the_same_detail_pages(tmp_path: Path, taxonomy: dict) -> None:
+def test_article_tags_use_the_same_explore_filters(tmp_path: Path, taxonomy: dict) -> None:
     (tmp_path / "docs-taxonomy.yml").write_text(yaml.safe_dump(taxonomy), encoding="utf-8")
     matching = document("guides", "setup", "구성 절차", ["networking"])
     page = SimpleNamespace(meta=matching.metadata, file=SimpleNamespace(src_uri=str(matching.relative_path)))
@@ -331,7 +329,7 @@ def test_article_tags_use_the_same_detail_pages(tmp_path: Path, taxonomy: dict) 
         None,
     )
 
-    assert "../../../tags/networking.md" in targets(rendered)
+    assert "../../../explore/index.md?tag=networking" in targets(rendered)
     assert "?q=" not in rendered
     assert "본문입니다." in rendered
 
@@ -525,6 +523,7 @@ def test_each_new_bundle_updates_all_reader_destinations(
                 "awesome-nav",
             ],
             "extra_css": [],
+            "extra_javascript": [],
         }
     )
     settings_path = tmp_path / "mkdocs.yml"
@@ -548,7 +547,7 @@ def test_each_new_bundle_updates_all_reader_destinations(
     build(load_config(str(settings_path), strict=True))
     home = ReaderPage(tmp_path / "site/index.html")
 
-    assert list(home.root_links.values()) == ["홈", "서비스별 보기", "태그별 보기", "전체 글", "기여하기"]
+    assert list(home.root_links.values()) == ["홈", "서비스별 보기", "글 찾기", "기여하기"]
     assert home.navigation_links["services/azure-monitor/"] == "Azure Monitor"
     assert home.navigation_links["services/azure-monitor/setup/"] == "B 구성 절차"
     assert home.expanded_groups == 0
@@ -562,11 +561,12 @@ def test_each_new_bundle_updates_all_reader_destinations(
     build(load_config(str(settings_path), strict=True))
 
     assert [path.read_bytes() for path in unchanged] == original_bytes
-    for destination in ("articles", "services/azure-monitor", "services/azure-storage", "tags/networking"):
+    for destination in ("services/azure-monitor", "services/azure-storage"):
         page = ReaderPage(tmp_path / "site" / destination / "index.html")
         assert [title for target, title in page.card_entries] == ["A 선택 근거", "B 구성 절차"]
-    new_tag = ReaderPage(tmp_path / "site/tags/latency/index.html")
-    assert [title for target, title in new_tag.card_entries] == ["A 선택 근거"]
+    explore = (tmp_path / "site/explore/index.html").read_text()
+    assert "2개 주제 · 2개 문서" in explore
+    assert 'data-tags="[&quot;networking&quot;, &quot;latency&quot;]"' in explore
     updated_home = ReaderPage(tmp_path / "site/index.html")
     assert updated_home.navigation_links["services/azure-monitor/choices/"] == "A 선택 근거"
     sidebar_documents = [
@@ -587,7 +587,7 @@ def test_each_new_bundle_updates_all_reader_destinations(
 
     assert [path.read_bytes() for path in unchanged] == original_bytes
     expected_titles = {"A 선택 근거", "B 구성 절차", "C 본문만 일치"}
-    for destination in ("articles", "services/azure-monitor", "services/azure-storage"):
+    for destination in ("services/azure-monitor", "services/azure-storage"):
         page = ReaderPage(tmp_path / "site" / destination / "index.html")
         assert [title for target, title in page.card_entries] == sorted(expected_titles)
 
@@ -603,16 +603,18 @@ def test_each_new_bundle_updates_all_reader_destinations(
     ]
 
     tag = ReaderPage(tmp_path / "site/tags/networking/index.html")
-    assert [title for target, title in tag.card_entries] == ["A 선택 근거", "B 구성 절차"]
-    assert tag.expanded_groups == 1
-    assert (tmp_path / "site/tags/latency/index.html").is_file()
+    assert tag.card_entries == []
+    assert tag.expanded_groups == 0
+    assert not (tmp_path / "site/tags/latency/index.html").exists()
+    redirect_html = (tmp_path / "site/tags/networking/index.html").read_text()
+    assert 'content="0; url=../../explore/?tag=networking"' in redirect_html.split("</head>")[0]
     assert (tmp_path / "site/guides/azure-monitor/index.html").is_file()
     assert (tmp_path / "site/research/index.html").is_file()
 
     article = ReaderPage(tmp_path / "site/services/azure-monitor/setup/index.html")
     article_url = "https://example.test/devguidesample/services/azure-monitor/setup/"
     assert {urljoin(article_url, target) for target in article.tag_links} == {
-        "https://example.test/devguidesample/tags/networking/"
+        "https://example.test/devguidesample/explore/?tag=networking"
     }
     assert {urljoin(article_url, target) for target in article.active_links} == {article_url}
     assert article.expanded_groups == 2
@@ -623,9 +625,5 @@ def test_each_new_bundle_updates_all_reader_destinations(
 
     search = json.loads((tmp_path / "site/search/search_index.json").read_text(encoding="utf-8"))
     locations = {entry["location"] for entry in search["docs"]}
-    assert {
-        "tags/networking/",
-        "tags/latency/",
-        "articles/",
-        "services/azure-monitor/choices/",
-    } <= locations
+    assert {"explore/", "services/azure-monitor/choices/"} <= locations
+    assert not any(location.startswith(("tags/", "articles/")) for location in locations)

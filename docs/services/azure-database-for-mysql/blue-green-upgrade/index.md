@@ -19,9 +19,8 @@ technologies:
 - mysql
 - kubernetes
 tags:
-- migration
-- high-availability
-- reliability
+- migrate
+- operate
 redirect_from:
 - guides/azure-database-for-mysql/blue-green-upgrade/index.md
 ---

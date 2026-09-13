@@ -14,7 +14,7 @@ description: 증상, 영향과 해결을 요약한 한 문장
 document_type: case
 services: [azure-kubernetes-service]
 technologies: [kubernetes]
-tags: [troubleshooting]
+tags: [diagnose]
 status: resolved
 verification_status: verified
 sources_checked_at: 2026-09-12

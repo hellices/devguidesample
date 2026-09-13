@@ -13,9 +13,9 @@ description: AKS Pod에서 관측한 파일 I/O throttling의 증상과 분석 �
 technologies:
 - kubernetes
 tags:
+- optimize
+- diagnose
 - storage
-- performance
-- troubleshooting
 occurred_at: 2025-11-05
 redirect_from:
 - cases/azure-kubernetes-service/file-io-throttling/index.md

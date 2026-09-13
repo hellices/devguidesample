@@ -17,9 +17,9 @@ description: Azure Monitor Dynamic Thresholds 경고를 SRE Agent 조사 흐름�
 technologies:
 - rest-api
 tags:
-- monitoring
+- operate
+- design
 - ai-agents
-- architecture
 topic_order: 9
 redirect_from:
 - guides/azure-monitor/sre-agent-dynamic-thresholds/index.md

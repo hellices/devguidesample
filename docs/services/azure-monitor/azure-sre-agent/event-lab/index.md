@@ -19,9 +19,9 @@ technologies:
 - bicep
 - python
 tags:
+- diagnose
+- evaluate
 - ai-agents
-- monitoring
-- troubleshooting
 topic_order: 1
 redirect_from:
 - labs/azure-monitor/sre-agent-event-lab/index.md

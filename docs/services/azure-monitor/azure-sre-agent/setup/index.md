@@ -18,9 +18,9 @@ description: 이벤트 기반 장애 분석 실습에 필요한 Azure SRE Agent�
 technologies:
 - bicep
 tags:
+- deploy
+- operate
 - ai-agents
-- deployment
-- monitoring
 topic_order: 2
 redirect_from:
 - labs/azure-monitor/sre-agent-event-lab-setup/index.md

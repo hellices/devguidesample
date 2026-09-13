@@ -13,8 +13,9 @@ description: Agent memory를 프로덕션에서 운영하고 품질을 평가하
 technologies:
 - rag
 tags:
+- operate
+- evaluate
 - ai-agents
-- reliability
 published_at: 2026-08-24
 topic_order: 5
 redirect_from:

@@ -13,9 +13,9 @@ description: AKS와 Azure NetApp Files 환경의 CPU 급증 및 파일 I/O 대�
 technologies:
 - kubernetes
 tags:
+- optimize
+- diagnose
 - storage
-- performance
-- troubleshooting
 occurred_at: 2025-11-07
 redirect_from:
 - cases/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md

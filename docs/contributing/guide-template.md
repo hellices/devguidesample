@@ -14,7 +14,7 @@ description: 목표와 적용 범위를 요약한 한 문장
 document_type: guide
 services: [azure-kubernetes-service]
 technologies: [kubernetes]
-tags: [diagnostics]
+tags: [diagnose]
 status: current
 verification_status: verified
 sources_checked_at: 2026-09-12

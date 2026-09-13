@@ -18,9 +18,9 @@ technologies:
 - kubernetes
 - azure-cli
 tags:
+- deploy
+- optimize
 - ai-agents
-- deployment
-- performance
 redirect_from:
 - guides/azure-kubernetes-service/spot-h100-kaito/index.md
 ---

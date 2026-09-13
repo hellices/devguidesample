@@ -7,7 +7,7 @@ redirect_from:
   - cases/azure-api-management/mcp-entra-validation/index.md
 services: [azure-architecture, azure-api-management, azure-container-apps, azure-kubernetes-service, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python, nodejs]
-tags: [ai-agents, authentication, authorization, deployment, networking, troubleshooting]
+tags: [deploy, diagnose, ai-agents, identity]
 status: resolved
 verification_status: needs-review
 sources_checked_at: 2026-09-13

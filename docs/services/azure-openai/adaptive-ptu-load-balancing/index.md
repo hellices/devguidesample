@@ -18,8 +18,8 @@ technologies:
 - python
 - powershell
 tags:
-- performance
-- reliability
+- optimize
+- operate
 - ai-agents
 redirect_from:
 - guides/azure-openai/adaptive-ptu-load-balancing/index.md

@@ -17,8 +17,8 @@ description: Microsoft 한국어 분석기와 표준 Lucene 분석기의 동작�
 technologies:
 - python
 tags:
-- diagnostics
-- performance
+- diagnose
+- optimize
 redirect_from:
 - guides/azure-ai-search/korean-analyzer-comparison/index.md
 ---

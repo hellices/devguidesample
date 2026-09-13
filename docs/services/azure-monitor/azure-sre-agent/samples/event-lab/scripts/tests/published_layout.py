@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from functools import cache
+from pathlib import Path, PurePosixPath
 
 
 REPO_ROOT = Path(__file__).parents[8]
@@ -39,3 +40,17 @@ DYNAMIC_THRESHOLDS = TOPIC_ROOT / "dynamic-thresholds" / "index.md"
 VALIDATION_RESULTS = TOPIC_ROOT / "validation-results" / "index.md"
 BRIEFING = TOPIC_ROOT / "index.md"
 OFFICIAL_ASSETS = LAB_ROOT / "assets" / "official"
+
+
+@cache
+def resolve_published_file(path: Path) -> Path:
+    """Resolve a virtual page asset through the repository's validated catalog."""
+    from scripts.docs.content import load_taxonomy
+    from scripts.docs.topics import build_topic_catalog
+
+    if path.is_file():
+        return path
+    catalog = build_topic_catalog(DOCS_ROOT, load_taxonomy(REPO_ROOT / "docs-taxonomy.yml"))
+    relative = PurePosixPath(path.resolve().relative_to(DOCS_ROOT).as_posix())
+    asset = catalog.published_assets.get(relative)
+    return DOCS_ROOT / asset.source if asset is not None else path

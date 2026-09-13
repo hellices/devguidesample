@@ -14,7 +14,7 @@ description: 질문, 비교 대상과 결론을 요약한 한 문장
 document_type: research
 services: [azure-ai-search]
 technologies: [rag]
-tags: [benchmarking]
+tags: [evaluate]
 status: current
 verification_status: verified
 sources_checked_at: 2026-09-12

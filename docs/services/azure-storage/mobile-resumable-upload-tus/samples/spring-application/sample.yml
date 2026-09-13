@@ -3,3 +3,6 @@ description: Runnable Spring and tus implementation with verification scripts.
 kind: runnable
 used_by:
 - index
+publish:
+  - source: architecture.png
+    target: images/architecture.png

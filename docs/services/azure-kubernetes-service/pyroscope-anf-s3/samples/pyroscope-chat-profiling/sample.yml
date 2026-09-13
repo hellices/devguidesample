@@ -3,3 +3,12 @@ description: Runnable profiling workload and deployment assets.
 kind: runnable
 used_by:
 - index
+publish:
+  - source: images/anf-create-bucket.png
+    target: images/anf-create-bucket.png
+  - source: images/anf-create-certificate.png
+    target: images/anf-create-certificate.png
+  - source: images/architecture.png
+    target: images/architecture.png
+  - source: images/pyroscope_ui.png
+    target: images/pyroscope_ui.png

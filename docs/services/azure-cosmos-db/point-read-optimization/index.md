@@ -18,8 +18,7 @@ technologies:
 - nodejs
 - cosmos-db
 tags:
-- performance
-- latency
+- optimize
 redirect_from:
 - guides/azure-cosmos-db/point-read-optimization/index.md
 ---

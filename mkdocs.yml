@@ -80,4 +80,7 @@ markdown_extensions:
 extra_css:
   - assets/stylesheets/extra.css
 
+extra_javascript:
+  - assets/javascripts/explore.js
+
 copyright: Copyright &copy; Azure Engineering Notes contributors

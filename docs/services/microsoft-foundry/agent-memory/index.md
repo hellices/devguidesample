@@ -13,8 +13,8 @@ description: AI agent memory의 분류, 아키텍처, 검색, 프레임워크와
 technologies:
 - rag
 tags:
+- design
 - ai-agents
-- architecture
 published_at: 2026-08-24
 redirect_from:
 - research/microsoft-foundry/agent-memory-overview/index.md

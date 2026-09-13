@@ -18,8 +18,8 @@ technologies:
 - kubernetes
 - python
 tags:
-- observability
-- deployment
+- operate
+- deploy
 - storage
 redirect_from:
 - guides/azure-kubernetes-service/pyroscope-anf-s3/index.md

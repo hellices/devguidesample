@@ -15,9 +15,9 @@ technologies:
 - kubernetes
 - nodejs
 tags:
-- latency
+- optimize
+- diagnose
 - networking
-- troubleshooting
 occurred_at: 2026-06-08
 redirect_from:
 - cases/azure-kubernetes-service/pod-database-query-latency/index.md

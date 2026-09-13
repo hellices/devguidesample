@@ -3,3 +3,8 @@ description: Runnable analyzer and synonym comparison scripts with sample data.
 kind: runnable
 used_by:
 - index
+publish:
+  - source: images/portal_ko_microsoft.png
+    target: images/portal_ko_microsoft.png
+  - source: images/portal_standard_lucene.png
+    target: images/portal_standard_lucene.png

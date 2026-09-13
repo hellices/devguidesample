@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import date
 from html.parser import HTMLParser
 import json
@@ -8,7 +9,7 @@ from types import SimpleNamespace
 from urllib.parse import urljoin
 
 from markdown import Markdown
-from mkdocs.structure.files import InclusionLevel
+from mkdocs.structure.files import Files, InclusionLevel
 from material.plugins.search.plugin import SearchIndex
 from mkdocs.commands.build import build
 from mkdocs.config import load_config
@@ -17,8 +18,8 @@ import pytest
 import yaml
 
 from scripts.docs import validate_search_index
-from scripts.docs.content import iter_public_documents, load_document
-from scripts.docs.generate_indexes import build_index_pages
+from scripts.docs.content import DocumentFormatError, iter_public_documents, load_document
+from scripts.docs.generate_indexes import build_index_pages, write_generated_pages
 from scripts.docs.hooks import on_files, on_page_markdown, on_post_page
 from scripts.docs.topics import build_topic_catalog
 
@@ -162,8 +163,8 @@ def make_topic_repository(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (docs / ".nav.yml").write_text(
-        "nav:\n  - Home: index.md\n  - Services: services\n  - Tags: tags\n"
-        "  - Articles: articles\n  - glob: '*'\n    ignore_no_matches: true\n",
+        "nav:\n  - Home: index.md\n  - Services: services\n  - 글 찾기: explore\n"
+        "  - glob: '*'\n    ignore_no_matches: true\n",
         encoding="utf-8",
     )
     taxonomy = {
@@ -298,8 +299,7 @@ def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
         PurePosixPath("services/azure-monitor/index.md"),
         PurePosixPath("articles/index.md"),
         PurePosixPath("tags/index.md"),
-        PurePosixPath("tags/networking.md"),
-        PurePosixPath("tags/troubleshooting.md"),
+        PurePosixPath("explore/index.md"),
     }
     guide_front_matter = pages[PurePosixPath("guides/index.md")].split("---", 2)[1]
     assert yaml.safe_load(guide_front_matter) == {
@@ -350,7 +350,7 @@ def test_topic_and_sample_styles_are_responsive_and_accessible() -> None:
     ):
         assert selector in css
 
-    mobile = css.split("@media (max-width: 760px)", 1)[1].split(
+    mobile = css.rsplit("@media (max-width: 760px)", 1)[1].split(
         "@media (max-width: 480px)", 1
     )[0]
     assert ".dg-topic-nav" in mobile
@@ -651,8 +651,8 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     )
     nav_path = docs / ".nav.yml"
     nav_path.write_text(
-        "nav:\n  - Home: index.md\n  - Services: services\n  - Tags: tags\n"
-        "  - Articles: articles\n  - glob: '*'\n    ignore_no_matches: true\n",
+        "nav:\n  - Home: index.md\n  - Services: services\n  - 글 찾기: explore\n"
+        "  - glob: '*'\n    ignore_no_matches: true\n",
         encoding="utf-8",
     )
     generator = root / "generate.py"
@@ -715,7 +715,9 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     assert navigation.links["services/aks/z-last-topic/"] == "세 번째 문서"
     assert navigation.links["services/aks/"] == "Azure Kubernetes Service"
     assert "guides/" not in navigation.links
-    assert navigation.links["articles/"] == "Articles"
+    assert "articles/" not in navigation.links
+    assert "tags/" not in navigation.links
+    assert navigation.links["explore/"] == "글 찾기"
     assert "자동 게시 확인" in (root / "site" / "guides" / "index.html").read_text(encoding="utf-8")
     assert any(
         entry["location"] == "services/aks/new-topic/"
@@ -737,6 +739,165 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     assert resolved_links["https://example.test/services/aks/"] == "Azure Kubernetes Service"
     assert resolved_links["https://example.test/services/aks/new-topic/"] == "자동 게시 확인"
     assert resolved_links["https://example.test/services/aks/z-last-topic/"] == "세 번째 문서"
+
+
+def make_published_repository(tmp_path: Path) -> tuple[Path, Path, dict[str, bytes]]:
+    root = make_topic_repository(tmp_path)
+    sample = root / "docs/services/aks/network-diagnosis/samples/event-lab"
+    payloads = {
+        "diagram.svg": b'<svg xmlns="http://www.w3.org/2000/svg"><text>asset-only-marker</text></svg>\r\n',
+        "payload.bin": bytes(range(256)),
+        "report.txt": b"\xef\xbb\xbfasset-only-marker\r\nplain text\r\n",
+        "notes.md": b"# asset-only-marker\r\n\r\nThis is an asset, not a page.\r\n",
+    }
+    manifest_path = sample / "sample.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["publish"] = []
+    for name, payload in payloads.items():
+        (sample / name).write_bytes(payload)
+        manifest["publish"].append({"source": name, "target": f"setup/images/{name}"})
+    # One canonical source can serve a second page without making a physical copy.
+    manifest["publish"].append({"source": "diagram.svg", "target": "images/diagram.svg"})
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    (sample / "unpublished.txt").write_text("unpublished-marker")
+    return root, sample, payloads
+
+
+def test_published_assets_build_byte_exact_without_sample_or_search_pages(tmp_path: Path) -> None:
+    root, sample, payloads = make_published_repository(tmp_path)
+    page = sample.parent.parent / "setup/index.md"
+    page.write_text(
+        page.read_text()
+        + "\n![Published diagram](images/diagram.svg)\n"
+        + "\n".join(f"[Download {name}](images/{name})" for name in payloads)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+    site_topic = root / "site/services/aks/network-diagnosis"
+    for name, payload in payloads.items():
+        assert (site_topic / "setup/images" / name).read_bytes() == payload
+        assert (sample / name).read_bytes() == payload
+        assert not (sample.parent.parent / "setup/images" / name).exists()
+    assert (site_topic / "images/diagram.svg").read_bytes() == payloads["diagram.svg"]
+    assert not (site_topic / "samples").exists()
+    rendered = (site_topic / "setup/index.html").read_text()
+    assert 'src="images/diagram.svg"' in rendered
+    assert 'href="images/notes.md"' in rendered
+    assert "unpublished-marker" not in rendered
+    search = json.loads((root / "site/search/search_index.json").read_text())
+    assert all(
+        "/samples/" not in entry["location"] and "/images/" not in entry["location"]
+        and "asset-only-marker" not in entry["text"] and "unpublished-marker" not in entry["text"]
+        for entry in search["docs"]
+    )
+    assert any(
+        entry["location"].startswith("services/aks/network-diagnosis/setup/")
+        and "Download diagram.svg" in entry["text"]
+        for entry in search["docs"]
+    )
+    assert validate_search_index.validate_repository(root).errors == []
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        ("report.txt", "downloads/.env.example"),
+        ("notes.md", ".notes.md"),
+        ("payload.bin", ".artifacts/payload.bin"),
+        ("notes.md", "downloads/.private/notes.md"),
+    ],
+)
+def test_hidden_publish_targets_are_rejected_before_site_generation(
+    tmp_path: Path, source: str, target: str
+) -> None:
+    root, sample, _ = make_published_repository(tmp_path)
+    manifest_path = sample / "sample.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["publish"].append({"source": source, "target": target})
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    with pytest.raises(
+        DocumentFormatError, match="publish target must not contain hidden path components"
+    ):
+        build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+
+@pytest.mark.parametrize(
+    ("source", "target"), [(".notes.md", "downloads/notes.md"), (".private/data.bin", "downloads/data.bin")]
+)
+def test_hidden_source_payloads_publish_only_to_visible_site_targets(
+    tmp_path: Path, source: str, target: str
+) -> None:
+    root, sample, _ = make_published_repository(tmp_path)
+    payload = b"# sample-only-marker\r\n\x00\xff"
+    hidden_source = sample / source
+    hidden_source.parent.mkdir(exist_ok=True)
+    hidden_source.write_bytes(payload)
+    manifest_path = sample / "sample.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["publish"].append({"source": source, "target": target})
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    (sample / ".unpublished.txt").write_bytes(b"unpublished sample")
+    (sample.parent.parent / ".unpublished.txt").write_bytes(b"unpublished page asset")
+
+    build(load_config(str(root / "mkdocs.yml"), strict=True))
+    site_topic = root / "site/services/aks/network-diagnosis"
+    assert (site_topic / target).read_bytes() == payload
+    assert hidden_source.read_bytes() == payload
+    assert not (site_topic / "samples").exists()
+    assert not (site_topic / ".unpublished.txt").exists()
+    search = json.loads((root / "site/search/search_index.json").read_text())
+    assert all(
+        target not in entry["location"] and "/samples/" not in entry["location"]
+        and "sample-only-marker" not in entry["text"]
+        for entry in search["docs"]
+    )
+
+
+@pytest.mark.parametrize("operation", ["read", "open", "write"])
+def test_published_asset_io_failures_report_source_and_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    from mkdocs_gen_files.editor import FilesEditor
+
+    root, sample, _ = make_published_repository(tmp_path)
+    source = sample / "diagram.svg"
+    target = "services/aks/network-diagnosis/setup/images/diagram.svg"
+    original_read = Path.read_bytes
+    original_open = FilesEditor.open
+
+    def read_bytes(path: Path) -> bytes:
+        if path == source:
+            raise OSError("injected read failure")
+        return original_read(path)
+
+    class BrokenWriter:
+        def write(self, content: bytes) -> None:
+            raise OSError("injected write failure")
+
+    @contextmanager
+    def open_generated(editor, path: str, mode: str = "r", **kwargs):
+        if str(path) == target and mode == "wb":
+            if operation == "open":
+                raise OSError("injected open failure")
+            yield BrokenWriter()
+        else:
+            with original_open(editor, path, mode, **kwargs) as stream:
+                yield stream
+
+    if operation == "read":
+        monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    else:
+        monkeypatch.setattr(FilesEditor, "open", open_generated)
+    config = load_config(str(root / "mkdocs.yml"))
+    with FilesEditor(Files([]), config, str(root / "generated")):
+        with pytest.raises(DocumentFormatError, match="cannot publish asset") as error:
+            write_generated_pages(root)
+    assert source.relative_to(root / "docs").as_posix() in str(error.value)
+    assert target in str(error.value)
+    assert f"injected {operation} failure" in str(error.value)
 
 
 def test_topic_packages_drive_sidebar_navigation_redirects_and_bounded_topic_links(
@@ -817,14 +978,9 @@ def test_search_gate_accepts_full_text_and_tag_entries(tmp_path: Path) -> None:
                 "Azure Kubernetes Service diagnostic workflow를 설명합니다.</p>"
             ),
             {
-                "location": "tags/networking/",
-                "title": "networking",
-                "text": "AKS 네트워크 진단",
-            },
-            {
-                "location": "tags/troubleshooting/",
-                "title": "troubleshooting",
-                "text": "AKS 네트워크 진단",
+                "location": "explore/",
+                "title": "글 찾기",
+                "text": "Networking Troubleshooting",
             },
         ],
     )
@@ -848,7 +1004,7 @@ def test_search_gate_rejects_missing_tags_and_body_text(tmp_path: Path) -> None:
     assert any("English product phrase" in error for error in result.errors)
 
 
-def test_search_gate_requires_tag_destinations_not_just_overview_anchors(tmp_path: Path) -> None:
+def test_search_gate_excludes_legacy_tags_and_requires_explore(tmp_path: Path) -> None:
     root = make_search_repository(tmp_path)
     write_search_index(
         root,
@@ -866,8 +1022,8 @@ def test_search_gate_requires_tag_destinations_not_just_overview_anchors(tmp_pat
 
     result = validate_search_index.validate_repository(root)
 
-    assert any("tag is missing: networking" in error for error in result.errors)
-    assert any("tag is missing: troubleshooting" in error for error in result.errors)
+    assert any("explore" in error for error in result.errors)
+    assert any("redirect" in error for error in result.errors)
 
 
 @pytest.mark.parametrize(
@@ -907,14 +1063,7 @@ def test_search_gate_accepts_visible_rendered_markdown(
     write_search_index(
         root,
         index.entries
-        + [
-            {
-                "location": f"tags/{tag}/",
-                "title": tag,
-                "text": page.title,
-            }
-            for tag in document.metadata["tags"]
-        ],
+        + [{"location": "explore/", "title": "글 찾기", "text": "Networking Troubleshooting"}],
     )
 
     result = validate_search_index.validate_repository(root)

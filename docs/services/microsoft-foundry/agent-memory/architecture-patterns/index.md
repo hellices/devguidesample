@@ -13,8 +13,8 @@ description: Agent memory를 저장하고 연결하는 주요 아키텍처 패�
 technologies:
 - rag
 tags:
+- design
 - ai-agents
-- architecture
 published_at: 2026-08-24
 topic_order: 2
 redirect_from:

@@ -7,7 +7,7 @@ redirect_from:
   - research/azure-api-management/mcp-authentication-options/index.md
 services: [azure-architecture, azure-api-management, azure-container-apps, azure-app-service, azure-functions, azure-kubernetes-service, microsoft-foundry, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python]
-tags: [ai-agents, architecture, authentication, authorization, networking]
+tags: [design, evaluate, ai-agents, networking]
 status: current
 verification_status: needs-review
 sources_checked_at: 2026-09-13

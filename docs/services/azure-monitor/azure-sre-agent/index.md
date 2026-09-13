@@ -17,9 +17,9 @@ description: Azure SRE Agent의 기능, 구성 요소와 운영 흐름을 설명
 technologies:
 - rest-api
 tags:
+- operate
+- diagnose
 - ai-agents
-- monitoring
-- troubleshooting
 redirect_from:
 - guides/azure-monitor/azure-sre-agent-overview/index.md
 ---

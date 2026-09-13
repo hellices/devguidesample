@@ -8,3 +8,10 @@ used_by:
 - gpu-vllm
 - bge-m3-vs-qwen3
 - a10-vs-t4
+publish:
+  - source: images/architecture.png
+    target: custom-web-api/images/architecture.png
+  - source: images/gpu_vllm_rag_architecture.png
+    target: gpu-vllm/images/gpu_vllm_rag_architecture.png
+  - source: images/indexer_vs_pushapi.png
+    target: images/indexer_vs_pushapi.png

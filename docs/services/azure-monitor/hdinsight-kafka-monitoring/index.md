@@ -14,8 +14,8 @@ technologies:
 - kafka
 - prometheus
 tags:
-- monitoring
-- observability
+- evaluate
+- operate
 published_at: 2026-07-10
 redirect_from:
 - research/azure-monitor/hdinsight-kafka-monitoring-options/index.md

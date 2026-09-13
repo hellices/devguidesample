@@ -13,8 +13,9 @@ description: 실시간 추천과 개인화 구매 경험에 agent memory를 적�
 technologies:
 - rag
 tags:
+- design
+- build
 - ai-agents
-- architecture
 published_at: 2026-08-24
 topic_order: 6
 redirect_from:

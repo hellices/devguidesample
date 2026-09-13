@@ -138,11 +138,11 @@ az resource list --subscription "$AZURE_SUBSCRIPTION_ID" \
 
 2026-09-13에 실행한 같은 구성의 배포 출력입니다. `azd up`이 provisioning, ACR remote build, service deployment까지 수행했습니다.
 
-![azd up의 실제 provisioning과 service deployment 완료 출력 발췌](assets/walkthrough/azd-deployment.png)
+![azd up의 실제 provisioning과 service deployment 완료 출력 발췌](../../validation/images/azd-deployment.png)
 
 ## 2. 로컬 MCP 서버 연결
 
-![개발 PC의 Azure·AKS stdio 연결과 GitHub 자체 인증, 익명 Learn 연결 구성](assets/walkthrough/local-upstreams.svg)
+![개발 PC의 Azure·AKS stdio 연결과 GitHub 자체 인증, 익명 Learn 연결 구성](../../hosting-reference/images/local-upstreams.svg)
 
 MCP Inspector는 한 번에 한 요청을 보내는 공식 MCP client입니다. 아래 명령은 서버에 연결해 tool 목록 또는 지정 tool의 결과를 표시합니다.
 
@@ -285,7 +285,7 @@ npx --no-install mcp-inspector --cli --config "$PRIVATE/aks.json" \
 
 다음은 실제 GitHub repository 검색, AKS pod 조회와 Learn 검색 응답의 발췌입니다. Learn의 APIM 경유 호출은 7번 단계에서 실행합니다.
 
-![GitHub repository 검색, AKS pod 조회, Learn 검색의 실제 응답 발췌](assets/walkthrough/mcp-upstreams.png)
+![GitHub repository 검색, AKS pod 조회, Learn 검색의 실제 응답 발췌](../../validation/images/mcp-upstreams.png)
 
 ## 4. Entra access token 준비
 
@@ -327,7 +327,7 @@ Token을 터미널에 출력하지 않고 curl 설정에 저장합니다. 이 �
 
 ## 5. REST API를 APIM MCP tool로 호출
 
-![Entra로 보호된 APIM이 기존 REST operation을 getInventory MCP tool로 연결하는 아키텍처](assets/walkthrough/apim-rest-tools.svg)
+![Entra로 보호된 APIM이 기존 REST operation을 getInventory MCP tool로 연결하는 아키텍처](../../hosting-reference/images/apim-rest-tools.svg)
 
 ### 5-1. 원래 REST 응답
 
@@ -404,11 +404,11 @@ mcp_json "$PRIVATE/inventory.body" | jq '.result'
 
 2026-09-13에는 REST URL과 MCP tool 모두 같은 가상 widget 3개를 반환했습니다. `authorization_present: false`로 backend에 Entra token을 전달하지 않은 것도 확인했습니다.
 
-![직접 REST 호출과 APIM getInventory MCP tool 호출의 실제 응답 비교](assets/walkthrough/apim-rest-to-mcp.png)
+![직접 REST 호출과 APIM getInventory MCP tool 호출의 실제 응답 비교](../../validation/images/apim-rest-to-mcp.png)
 
 ## 6. Azure MCP에서 OBO로 Azure 조회
 
-![Internal Container Apps의 Azure MCP가 사용자 token과 managed identity federation을 사용해 ARM OBO token을 발급받는 흐름](assets/walkthrough/container-apps-obo.svg)
+![Internal Container Apps의 Azure MCP가 사용자 token과 managed identity federation을 사용해 ARM OBO token을 발급받는 흐름](../../hosting-reference/images/container-apps-obo.svg)
 
 ### 6-1. Native Azure MCP
 
@@ -464,11 +464,11 @@ Python 연결에는 Inspector의 `protocolEra: modern`을 지정했습니다. Py
 
 다음 실제 응답에서는 native Azure MCP의 ARM 조회 결과와 Python MCP의 `exists`, `region`, `provisioning_succeeded`를 비교할 수 있습니다.
 
-![공식 Azure MCP와 Python MCP의 실제 OBO 조회 응답](assets/walkthrough/mcp-obo.png)
+![공식 Azure MCP와 Python MCP의 실제 OBO 조회 응답](../../validation/images/mcp-obo.png)
 
 ## 7. APIM을 통해 기존 Learn MCP 호출
 
-![APIM이 Entra token을 검증하고 Authorization header를 제거한 뒤 익명 Learn MCP backend에 연결하는 흐름](assets/walkthrough/apim-existing-mcp.svg)
+![APIM이 Entra token을 검증하고 Authorization header를 제거한 뒤 익명 Learn MCP backend에 연결하는 흐름](../../hosting-reference/images/apim-existing-mcp.svg)
 
 이번에는 공개 Learn URL이 아니라 APIM의 `$LEARN_MCP_URL`에 연결합니다.
 
@@ -555,7 +555,7 @@ az rest --method put --url "$AUTH_API" \
 
 2026-09-13에는 무인증·wrong audience 요청에서 401, 제외된 client에서 403을 확인했습니다. 원래 allowlist로 복구한 후에는 native Azure MCP의 도구가 다시 조회되었습니다.
 
-![401과 403 응답 및 caller allowlist 복구 후 실제 도구 목록](assets/walkthrough/mcp-authorization.png)
+![401과 403 응답 및 caller allowlist 복구 후 실제 도구 목록](../../validation/images/mcp-authorization.png)
 
 ## 9. 환경 정리
 

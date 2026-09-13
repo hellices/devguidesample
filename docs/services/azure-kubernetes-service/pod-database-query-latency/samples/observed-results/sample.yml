@@ -3,3 +3,16 @@ description: Captured diagrams and measurements from the investigated scenario.
 kind: artifact
 used_by:
 - index
+publish:
+  - source: 01_query_latency.png
+    target: images/01_query_latency.png
+  - source: 02_pod_runtime.png
+    target: images/02_pod_runtime.png
+  - source: pod_db_query_latency.png
+    target: images/pod_db_query_latency.png
+  - source: result_01.png
+    target: images/result_01.png
+  - source: result_02.png
+    target: images/result_02.png
+  - source: result_pod_runtime.png
+    target: images/result_pod_runtime.png
