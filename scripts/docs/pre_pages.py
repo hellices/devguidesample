@@ -114,6 +114,18 @@ class GitFileDisposition:
     current_paths: tuple[PurePosixPath, ...]
 
 
+@dataclass(frozen=True)
+class PreservationAuditResult:
+    baseline_file_count: int
+    baseline_markdown_count: int
+    document_count: int
+    preserved_documents: int
+    reviewed_documents: int
+    errors: tuple[str, ...]
+    warnings: tuple[str, ...]
+    details: Mapping[str, object]
+
+
 def _fields(value: object, required: set[str], label: str, optional: set[str] = frozenset()) -> dict:
     if not isinstance(value, dict):
         raise AuditFormatError(f"{label} must be a mapping")
@@ -563,3 +575,55 @@ def classify_baseline_files(
             "unreviewed deleted baseline paths: " + ", ".join(str(path) for path in sorted(unreviewed))
         )
     return tuple(classified[path] for path in paths)
+
+
+def audit_repository(
+    repo_root: Path,
+    site_dir: Path,
+    inventory_path: Path,
+    *,
+    content_only: bool = False,
+) -> PreservationAuditResult:
+    """Audit fixed Git lineage, live source preservation, and optionally built output."""
+    from scripts.docs.pre_pages_content import audit_document_content
+    from scripts.docs.pre_pages_site import inspect_built_site
+
+    errors: list[str] = []
+    details: dict[str, object] = {"content_only": content_only}
+    file_count = markdown_count = document_count = preserved = reviewed = 0
+    root = repo_root.resolve()
+    try:
+        inventory = load_inventory(inventory_path)
+        paths = baseline_paths(root, inventory)
+        file_count = len(paths)
+        markdown_count = sum(path.suffix.casefold() == ".md" for path in paths)
+        document_count = len(inventory.documents)
+        if (file_count, markdown_count, document_count) != (359, 73, 62):
+            raise AuditFormatError(
+                f"{inventory_path}: expected 359 baseline files, 73 Markdown files, and 62 documents; "
+                f"found {file_count}, {markdown_count}, and {document_count}"
+            )
+        details["baseline_commit"] = inventory.baseline_commit
+        details["pages_commit"] = inventory.pages_commit
+        details["files"] = [asdict(item) for item in classify_baseline_files(root, inventory)]
+        content = audit_document_content(root, inventory)
+        details["documents"] = [asdict(item) for item in content]
+        preserved = sum(item.status != "missing" for item in content)
+        reviewed = sum(item.status == "reviewed" for item in content)
+        for item in content:
+            for finding in item.missing:
+                errors.append(
+                    f"{item.current_path}: unreviewed missing {finding.category} "
+                    f"{finding.fingerprint} from {item.baseline_path}: {finding.excerpt}"
+                )
+        if not content_only:
+            catalog = build_topic_catalog(root / "docs", load_taxonomy(root / "docs-taxonomy.yml"))
+            site_result = inspect_built_site(root, site_dir, inventory, catalog)
+            errors.extend(site_result.errors)
+            details["site"] = site_result.details
+    except (OSError, ValueError, RuntimeError, yaml.YAMLError) as error:
+        errors.append(str(error))
+    return PreservationAuditResult(
+        file_count, markdown_count, document_count, preserved, reviewed,
+        tuple(errors), (), MappingProxyType(details),
+    )

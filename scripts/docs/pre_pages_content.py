@@ -438,6 +438,11 @@ def _html_fragment(text: str, position: int) -> tuple[int, _HtmlFragment] | None
             return end, _HtmlFragment(raw, raw, label)
     if opening and tag == "img" and not escaped:
         return end, _HtmlFragment(raw, "", "")
+    if opening and tag == "details" and not escaped and re.fullmatch(
+        r"""<details\s+markdown=(?:"1"|'1'|1)\s*>""", raw, re.IGNORECASE,
+    ):
+        # The rendering opt-in is not historical prose; keep raw HTML for link semantics.
+        return end, _HtmlFragment(raw, "<details>", "")
     wrapper = tag in _PRESENTATION_TAGS
     return end, _HtmlFragment(raw, " " if wrapper else raw, raw if escaped else "", wrapper=wrapper)
 
