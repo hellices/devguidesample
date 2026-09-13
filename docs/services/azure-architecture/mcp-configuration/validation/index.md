@@ -26,6 +26,12 @@ official_sources:
     url: https://learn.microsoft.com/azure/container-apps/authentication-entra
   - title: MCP Inspector CLI Client
     url: https://github.com/modelcontextprotocol/inspector/blob/main/clients/cli/README.md
+  - title: Secure a Model Context Protocol (MCP) server with Microsoft Entra ID
+    url: https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id
+  - title: Microsoft identity platform and OAuth 2.0 authorization code flow
+    url: https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow
+  - title: Authorization Security Considerations
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations
 occurred_at: 2026-09-13
 resolved_at: 2026-09-13
 related_guides:
@@ -160,6 +166,31 @@ APIM의 Learn MCP URL에서 세 Learn tool이 조회되었고, `microsoft_docs_s
 Client allowlist 변경 직후에는 이전 설정이 잠시 적용되었습니다. 이번 실행에서는 변경 후 60초를 기다린 요청에서 403을 확인했고, 원래 설정으로 복구한 뒤 다시 도구를 조회했습니다. 반영 시간은 환경에 따라 달라질 수 있습니다.
 
 CONNECT proxy를 사용할 때 curl의 header 파일에는 proxy의 `200 Connection Established`가 먼저 기록될 수 있습니다. 실습 명령의 `--suppress-connect-headers`는 이 응답을 제외하여 실제 MCP endpoint의 401·403을 읽도록 합니다.
+
+## OAuth 단계별 재확인
+
+2026-09-13 13:35 UTC에 기존 RG·Entra 앱을 재사용해 HTTP 요청과 Azure CLI로 확인했습니다. 리소스나 인증 설정은 변경하지 않았습니다.
+
+| 단계 | 관측 |
+|---|---|
+| APIM·Python MCP challenge | 무인증 401, `resource_metadata` 있음. PRM 200, endpoint에 맞는 `resource`와 Entra authorization server 반환 |
+| Native Azure MCP fallback | 401 header에 `resource_metadata` 없음. Root well-known은 200, `/mcp`를 붙인 metadata 경로는 401. 광고한 resource는 HTTPS server origin |
+| Entra discovery | v2 OIDC metadata 200, authorization·token·JWKS endpoint 있음. 확인한 RFC 8414 후보 두 경로는 404 |
+| PKCE 지원 선언 | OIDC 응답에 `code_challenge_methods_supported` 없음 |
+| 앱 등록 | v2 token·등록 public client 사전 승인 확인. API 앱에는 `api://...`만 있고 HTTPS MCP identifier URI는 없음 |
+| Canonical URL을 token 대상으로 요청 | Azure CLI에서 `AADSTS500011`. 기존 `api://.../Mcp.Access` scope 요청은 성공 |
+| 정상·다른 audience token | APIM initialize 200, protocol `2025-06-18`; APIM·Python에서 wrong audience 401 |
+| Python OBO 재호출 | `2026-07-28` 요청에서 `resultType: complete`, `isError: false`, RG 존재·region·provisioning 상태 반환 |
+
+**PKCE 기능과 metadata 선언은 다릅니다.** [Entra는 S256을 지원](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code)하지만, [MCP 규격](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)은 해당 선언이 없으면 client가 authorization을 진행하지 않도록 요구합니다.
+
+| 확인 완료 | 아직 완료로 볼 수 없는 것 |
+|---|---|
+| 사전 token 발급, challenge·PRM 조회, API token 검증, Python의 ARM OBO | MCP client의 discovery→authorization code+PKCE→token→호출 전체 흐름 |
+| 앱의 현재 identifier URI와 canonical URL 대상 CLI 발급 결과 | `resource`·scope를 함께 사용하는 브라우저 PKCE 교환 전체 |
+| 기존 APIM·Container Apps·Entra 환경 | 배포 대상이 없었던 Toolbox consumer 인증, token refresh 수명주기 |
+
+실행 명령은 [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md), 공개용 결과는 [auth-stages JSON](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/assets/captures/2026-09-13-auth-stages.json)에 있습니다. Raw metadata·응답·오류는 `.private/`에만 저장했습니다.
 
 ## 구성 과정에서 확인한 사항
 

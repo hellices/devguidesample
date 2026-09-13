@@ -323,6 +323,8 @@ az account get-access-token --tenant "$TENANT_ID" \
 
 Token을 터미널에 출력하지 않고 curl 설정에 저장합니다. 이 두 token의 audience는 서로 다릅니다. 발급이 거부되면 API scope, consent, Conditional Access 요구사항을 확인하고 필요한 대화형 로그인을 수행합니다.
 
+이 절은 **token을 사전 발급하는 연결 방식**입니다. MCP client의 discovery·PKCE 자동 로그인을 확인하려면 [인증 단계별 확인](authentication-checks.md)을 따릅니다.
+
 ## 5. REST API를 APIM MCP tool로 호출
 
 ![Entra로 보호된 APIM이 기존 REST operation을 getInventory MCP tool로 연결하는 아키텍처](assets/walkthrough/apim-rest-tools.svg)

@@ -1,0 +1,75 @@
+{
+  "checked_at": "2026-09-13T13:35:32Z",
+  "scope": "Read-only HTTP and Azure CLI checks against the existing MCP lab",
+  "resource_configuration_changed": false,
+  "checks": {
+    "apim_unauthenticated": {
+      "http_status": 401,
+      "www_authenticate_present": true,
+      "resource_metadata_link_present": true
+    },
+    "apim_protected_resource_metadata": {
+      "http_status": 200,
+      "resource_matches_mcp_endpoint": true,
+      "authorization_server_count": 1,
+      "scope_count": 1,
+      "bearer_methods_supported": ["header"]
+    },
+    "python_protected_resource_metadata": {
+      "unauthenticated_http_status": 401,
+      "resource_metadata_link_present": true,
+      "metadata_http_status": 200,
+      "resource_matches_mcp_endpoint": true
+    },
+    "native_azure_mcp_metadata": {
+      "unauthenticated_http_status": 401,
+      "resource_metadata_link_present": false,
+      "path_specific_metadata_http_status": 401,
+      "root_metadata_http_status": 200,
+      "advertised_resource": "HTTPS server origin, not the /mcp transport URL"
+    },
+    "entra_discovery": {
+      "oidc_http_status": 200,
+      "authorization_token_jwks_endpoints_present": true,
+      "code_challenge_methods_supported_present": false,
+      "registration_endpoint_present": false,
+      "client_id_metadata_document_supported_present": false,
+      "rfc8414_candidates_http_status": [404, 404]
+    },
+    "lab_api_registrations": {
+      "access_token_version": 2,
+      "api_guid_identifier_uri_present": true,
+      "https_mcp_identifier_uris_present": false,
+      "registered_public_client_preauthorized": true
+    },
+    "apim_with_preacquired_api_token": {
+      "http_status": 200,
+      "rpc_error": false,
+      "initialize_protocol_version": "2025-06-18"
+    },
+    "wrong_audience": {
+      "apim_http_status": 401,
+      "python_mcp_http_status": 401
+    },
+    "python_user_obo": {
+      "request_protocol_version": "2026-07-28",
+      "http_status": 200,
+      "result_type": "complete",
+      "is_error": false,
+      "resource_group_exists": true,
+      "region": "koreacentral",
+      "provisioning_succeeded": true
+    },
+    "azure_cli_canonical_url_token_request": {
+      "succeeded": false,
+      "error_code": "AADSTS500011",
+      "note": "A CLI target-resource check, not a full browser authorization-code/PKCE exchange"
+    }
+  },
+  "not_verified": [
+    "End-to-end MCP client authorization-code and PKCE login",
+    "Refresh-token lifecycle",
+    "Toolbox consumer authentication: no Foundry project or Toolbox existed in this lab group",
+    "Complete conformance to MCP protocol revision 2026-07-28"
+  ]
+}

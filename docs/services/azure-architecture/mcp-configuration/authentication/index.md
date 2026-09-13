@@ -9,7 +9,7 @@ services: [azure-architecture, azure-api-management, azure-container-apps, micro
 technologies: [mcp, azure-cli, bicep, python]
 tags: [ai-agents, authentication, authorization, networking, security]
 status: current
-verification_status: verified
+verification_status: needs-review
 sources_checked_at: 2026-09-13
 official_sources:
   - title: Create and manage a toolbox in Foundry
@@ -68,6 +68,13 @@ related_cases:
 # Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 
 전체 인증 흐름은 [Azure MCP 운영 아키텍처](../index.md)에서 MCP OAuth와 OBO를 기준으로 설명합니다. 이 문서는 자체 MCP API의 app registration·scope·client ACL을 확인할 때 사용하는 상세 참고 자료입니다. 구체적인 배포 명령은 sample에 둡니다.
+
+| 이 상세 참고의 실행 범위 | 별도 확인할 범위 |
+|---|---|
+| API scope로 token을 사전 발급해 MCP를 호출하고 OBO 수행 | MCP client의 자동 OAuth discovery·PKCE 로그인 |
+| `api://<api-client-id>` 기반 기존 실습 앱 | HTTPS canonical resource URI 정렬과 authorization-server의 PKCE metadata |
+
+추가 관측과 남은 조건은 [OAuth 단계별 재확인](../validation/index.md#oauth)에 있습니다.
 
 ## 구성 요소와 인증 흐름
 

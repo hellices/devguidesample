@@ -57,6 +57,8 @@ Use the [sample walkthrough](walkthrough.md) in order:
 
 [requests/](requests/) contains JSON-RPC request bodies, not tests. [mcp.example.json](mcp.example.json) shows VS Code MCP connections. [network/](network/) provides an optional loopback-only CONNECT tunnel for a workstation without a VPN route to the VNet.
 
+Use [authentication-checks.md](authentication-checks.md) to distinguish preacquired-token access from a complete MCP OAuth login. It includes the observed discovery, resource-registration and PKCE metadata gaps, plus the read-only OBO recheck.
+
 ## Application configuration
 
 The Python application runs `service.app:create_app` on port 8000.
