@@ -6,7 +6,7 @@ from PIL import Image
 
 
 REPO_ROOT = Path(__file__).parents[8]
-BRIEF = REPO_ROOT / "docs" / "research" / "azure-monitor" / "dynamic-thresholds-brief" / "index.md"
+BRIEF = REPO_ROOT / "docs" / "services" / "azure-monitor" / "dynamic-thresholds-brief" / "index.md"
 ASSET = BRIEF.parent / "images" / "dynamic-threshold-preview-chart.png"
 ARTICLE = "https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-dynamic-thresholds"
 RAW_MEDIA = (
@@ -15,7 +15,7 @@ RAW_MEDIA = (
 )
 OFFICIAL_ASSETS = {"dynamic-threshold-preview-chart.png"}
 # To update this digest, download RAW_MEDIA and run:
-# shasum -a 256 docs/research/azure-monitor/dynamic-thresholds-brief/images/dynamic-threshold-preview-chart.png
+# shasum -a 256 docs/services/azure-monitor/dynamic-thresholds-brief/images/dynamic-threshold-preview-chart.png
 EXPECTED_ASSET_SHA256 = "4688901b73dff95c47d6d87c6d73f774dcb613fec38b757d1a76953df098636c"
 
 

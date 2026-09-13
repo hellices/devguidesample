@@ -501,3 +501,100 @@ def test_repository_connected_topics_have_canonical_layout() -> None:
         assert [
             member.metadata.get("redirect_from") for member in topic.members
         ] == [[redirect] for redirect in topic_expected["redirects"]]
+
+
+def test_repository_uses_only_canonical_topic_packages() -> None:
+    moved_documents = {
+        ("application-development", "nodejs-file-io-cpu"):
+            "guides/application-development/nodejs-file-io-cpu/index.md",
+        ("azure-ai-search", "eventual-consistency-reindex"):
+            "cases/azure-ai-search/eventual-consistency-reindex/index.md",
+        ("azure-ai-search", "korean-analyzer-comparison"):
+            "guides/azure-ai-search/korean-analyzer-comparison/index.md",
+        ("azure-application-gateway", "sse-response-buffering"):
+            "guides/azure-application-gateway/sse-response-buffering/index.md",
+        ("azure-application-gateway", "waf-path-ip-allowlist"):
+            "guides/azure-application-gateway/waf-path-ip-allowlist/index.md",
+        ("azure-architecture", "response-time-optimization"):
+            "guides/azure-architecture/response-time-optimization/index.md",
+        ("azure-automation", "portal-cli-limitations"):
+            "guides/azure-automation/portal-cli-limitations/index.md",
+        ("azure-cosmos-db", "nodejs-client-optimization"):
+            "guides/azure-cosmos-db/nodejs-client-optimization/index.md",
+        ("azure-cosmos-db", "nodejs-dns-lookup-bottleneck"):
+            "guides/azure-cosmos-db/nodejs-dns-lookup-bottleneck/index.md",
+        ("azure-cosmos-db", "point-read-optimization"):
+            "guides/azure-cosmos-db/point-read-optimization/index.md",
+        ("azure-database-for-mysql", "blue-green-upgrade"):
+            "guides/azure-database-for-mysql/blue-green-upgrade/index.md",
+        ("azure-database-for-mysql", "nodejs-read-write-routing"):
+            "guides/azure-database-for-mysql/nodejs-read-write-routing/index.md",
+        ("azure-kubernetes-service", "file-io-throttling"):
+            "cases/azure-kubernetes-service/file-io-throttling/index.md",
+        ("azure-kubernetes-service", "netapp-files-cpu-io-wait"):
+            "cases/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md",
+        ("azure-kubernetes-service", "pod-database-query-latency"):
+            "cases/azure-kubernetes-service/pod-database-query-latency/index.md",
+        ("azure-kubernetes-service", "argocd-image-updater-acr"):
+            "guides/azure-kubernetes-service/argocd-image-updater-acr/index.md",
+        ("azure-kubernetes-service", "authorization-troubleshooting"):
+            "guides/azure-kubernetes-service/authorization-troubleshooting/index.md",
+        ("azure-kubernetes-service", "cni-overlay-nsg"):
+            "guides/azure-kubernetes-service/cni-overlay-nsg/index.md",
+        ("azure-kubernetes-service", "kaito-open-source-model"):
+            "guides/azure-kubernetes-service/kaito-open-source-model/index.md",
+        ("azure-kubernetes-service", "pod-affinity-distribution"):
+            "guides/azure-kubernetes-service/pod-affinity-distribution/index.md",
+        ("azure-kubernetes-service", "pod-scheduling-agent-pools"):
+            "guides/azure-kubernetes-service/pod-scheduling-agent-pools/index.md",
+        ("azure-kubernetes-service", "pyroscope-anf-s3"):
+            "guides/azure-kubernetes-service/pyroscope-anf-s3/index.md",
+        ("azure-kubernetes-service", "python-memory-leak-memray"):
+            "guides/azure-kubernetes-service/python-memory-leak-memray/index.md",
+        ("azure-kubernetes-service", "remote-cluster-local-development"):
+            "guides/azure-kubernetes-service/remote-cluster-local-development/index.md",
+        ("azure-kubernetes-service", "spot-h100-kaito"):
+            "guides/azure-kubernetes-service/spot-h100-kaito/index.md",
+        ("azure-kubernetes-service", "workload-identity-databricks"):
+            "guides/azure-kubernetes-service/workload-identity-databricks/index.md",
+        ("azure-load-testing", "locust-appgw-aks-private"):
+            "guides/azure-load-testing/locust-appgw-aks-private/index.md",
+        ("azure-managed-redis", "cluster-failover-recovery"):
+            "cases/azure-managed-redis/cluster-failover-recovery/index.md",
+        ("azure-monitor", "aks-private-opentelemetry"):
+            "guides/azure-monitor/aks-private-opentelemetry/index.md",
+        ("azure-monitor", "dynamic-thresholds-brief"):
+            "research/azure-monitor/dynamic-thresholds-brief/index.md",
+        ("azure-openai", "adaptive-ptu-load-balancing"):
+            "guides/azure-openai/adaptive-ptu-load-balancing/index.md",
+        ("azure-storage", "mobile-resumable-upload-tus"):
+            "guides/azure-storage/mobile-resumable-upload-tus/index.md",
+        ("microsoft-foundry", "agent-framework-2026"):
+            "research/microsoft-foundry/agent-framework-2026/index.md",
+        ("microsoft-foundry", "codex-closed-network"):
+            "guides/microsoft-foundry/codex-closed-network/index.md",
+        ("microsoft-foundry", "foundry-local-air-gapped"):
+            "guides/microsoft-foundry/foundry-local-air-gapped/index.md",
+        ("microsoft-foundry", "gpt-memory-layer"):
+            "guides/microsoft-foundry/gpt-memory-layer/index.md",
+    }
+    catalog = build_topic_catalog(
+        ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml")
+    )
+
+    assert len(catalog.documents) == 62
+    assert len(catalog.topics) == 40
+    assert not any(
+        (ROOT / "docs" / name).exists()
+        for name in ("cases", "guides", "labs", "research")
+    )
+    assert not (ROOT / "samples").exists()
+    assert all(
+        document.relative_path.parts[0] == "services"
+        for document in catalog.documents
+    )
+    assert {
+        redirect
+        for topic_key, redirect in moved_documents.items()
+        if catalog.topics[topic_key].entry.metadata.get("redirect_from") == [redirect]
+    } == set(moved_documents.values())

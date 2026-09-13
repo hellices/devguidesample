@@ -1,0 +1,5 @@
+title: Memray leak profiling
+description: Runnable Python memory-leak workload with profiling reports.
+kind: runnable
+used_by:
+- index

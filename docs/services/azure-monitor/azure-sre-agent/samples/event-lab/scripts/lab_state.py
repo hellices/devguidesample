@@ -188,7 +188,7 @@ def scenario_guide(scenario: str) -> str:
     # A remedy that cannot be acted on is not a remedy: an unmapped
     # scenario still has to say where to look.
     return SCENARIO_GUIDES.get(
-        scenario, "the matching page under docs/labs/azure-monitor/"
+        scenario, "the matching page under docs/services/azure-monitor/azure-sre-agent/"
     )
 
 
