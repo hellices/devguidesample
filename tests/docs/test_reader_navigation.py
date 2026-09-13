@@ -443,6 +443,83 @@ def test_legacy_same_slug_pages_do_not_get_canonical_topic_ui(
     assert 'class="dg-topic-nav"' not in rendered
 
 
+def test_legacy_alias_page_does_not_render_canonical_entry_sample_cards(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (tmp_path / "docs-taxonomy.yml").write_text(
+        yaml.safe_dump(taxonomy, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/agent-topic/index.md",
+        "Agent topic",
+        tags=["networking"],
+    )
+    write_topic_document(
+        docs_dir,
+        "services/azure-monitor/agent-topic/setup/index.md",
+        "Setup child",
+        tags=["networking"],
+        topic_order=1,
+    )
+    write_topic_document(
+        docs_dir,
+        "guides/azure-monitor/agent-topic/index.md",
+        "Legacy topic",
+        tags=["networking"],
+    )
+    sample_dir = docs_dir / "services" / "azure-monitor" / "agent-topic" / "samples" / "entry-lab"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.yml").write_text(
+        yaml.safe_dump(
+            {
+                "title": "Entry lab",
+                "description": "Owned by the canonical entry only.",
+                "kind": "runnable",
+                "used_by": ["index"],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    (sample_dir / "README.md").write_text("# Entry lab\n", encoding="utf-8")
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+    canonical_entry = next(
+        document
+        for document in catalog.documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/agent-topic/index.md")
+    )
+    legacy_page = document("guides", "agent-topic", "Legacy topic", ["networking"])
+
+    canonical_rendered = on_page_markdown(
+        "# Agent topic\n\n본문입니다.\n",
+        page_namespace(canonical_entry),
+        {
+            "docs_dir": str(docs_dir),
+            "repo_url": "https://github.com/example/devguidesample",
+        },
+        None,
+    )
+    legacy_rendered = on_page_markdown(
+        "# Legacy topic\n\n본문입니다.\n",
+        page_namespace(legacy_page),
+        {
+            "docs_dir": str(docs_dir),
+            "repo_url": "https://github.com/example/devguidesample",
+        },
+        None,
+    )
+
+    assert 'class="dg-sample-card"' in canonical_rendered
+    assert "Entry lab" in canonical_rendered
+    assert 'class="dg-sample-card"' not in legacy_rendered
+    assert "Entry lab" not in legacy_rendered
+
+
 class ReaderPage(HTMLParser):
     def __init__(self, path: Path) -> None:
         super().__init__()

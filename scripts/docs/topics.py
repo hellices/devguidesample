@@ -380,9 +380,7 @@ def build_topic_catalog(
             for legacy_document in legacy_group:
                 by_document[legacy_document.relative_path] = topic
                 position_by_document[legacy_document.relative_path] = 0
-                samples_by_document[legacy_document.relative_path] = samples_by_document.get(
-                    topic.entry.relative_path, ()
-                )
+                samples_by_document[legacy_document.relative_path] = ()
             continue
         topic = Topic(
             primary_service=key[0],

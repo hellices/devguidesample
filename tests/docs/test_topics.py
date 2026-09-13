@@ -151,6 +151,45 @@ def test_build_topic_catalog_discovers_canonical_topic_documents_and_samples(
     ] == ["event-lab"]
 
 
+def test_build_topic_catalog_does_not_leak_canonical_sample_ownership_to_legacy_aliases(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(
+        docs_dir,
+        "services/azure-monitor/agent-topic/index.md",
+        "Agent topic",
+    )
+    write_document(
+        docs_dir,
+        "services/azure-monitor/agent-topic/setup/index.md",
+        "Setup",
+        topic_order=1,
+    )
+    write_document(
+        docs_dir,
+        "guides/azure-monitor/agent-topic/index.md",
+        "Legacy topic",
+    )
+    write_sample(
+        docs_dir,
+        "services/azure-monitor/agent-topic/samples/entry-lab",
+        {
+            "title": "Entry lab",
+            "description": "Owned by the canonical entry only.",
+            "kind": "runnable",
+            "used_by": ["index"],
+        },
+    )
+
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    assert [sample.slug for sample in catalog.samples_by_document[PurePosixPath("services/azure-monitor/agent-topic/index.md")]] == [
+        "entry-lab"
+    ]
+    assert catalog.samples_by_document[PurePosixPath("guides/azure-monitor/agent-topic/index.md")] == ()
+
+
 @pytest.mark.parametrize(
     ("case", "expected"),
     [
