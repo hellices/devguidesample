@@ -3,12 +3,16 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError, replace
 from collections import Counter
 from hashlib import sha256
+from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
+import unicodedata
+from urllib.parse import unquote, urlsplit
 
+import markdown
 import pytest
 import yaml
 
@@ -35,6 +39,66 @@ REASON_TEMPLATE = (
 )
 REASON = REASON_TEMPLATE.format(path=CURRENT_PATH)
 _DEFAULT_REASON = object()
+
+
+class RendererOracle(HTMLParser):
+    """Test oracle: collect element semantics from the pinned renderer's HTML."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parents = []
+        self.anchor = None
+        self.links = []
+        self.images = []
+
+    def handle_starttag(self, tag, attributes):
+        blocked = any(name in {"script", "style", "code", "pre", "template", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript"} for name in self.parents)
+        attrs = {}
+        for name, value in attributes:
+            attrs.setdefault(name, value or "")
+        if not blocked and tag == "a" and "href" in attrs:
+            if self.anchor is not None:
+                target, parts = self.anchor
+                self.links.append(f"{self.normal(''.join(parts))}\n{target}")
+            self.anchor = [attrs["href"], []]
+        if not blocked and tag == "img" and "src" in attrs:
+            alt = self.normal(attrs.get("alt", ""))
+            self.images.append(f"{alt}\n{Path(unquote(urlsplit(attrs['src']).path)).name}")
+            if self.anchor is not None:
+                self.anchor[1].append(alt)
+        if tag not in {"img", "br", "hr", "input", "meta", "link", "source", "wbr"}:
+            self.parents.append(tag)
+
+    def handle_startendtag(self, tag, attributes):
+        self.handle_starttag(tag, attributes)
+        if tag in self.parents:
+            self.handle_endtag(tag)
+
+    def handle_data(self, data):
+        if self.anchor is not None and not any(tag in {"script", "style", "template", "iframe", "noembed", "noframes", "noscript"} for tag in self.parents):
+            self.anchor[1].append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None and not any(name in {"code", "pre", "script", "style", "template"} for name in self.parents):
+            target, parts = self.anchor
+            self.links.append(f"{self.normal(''.join(parts))}\n{target}")
+            self.anchor = None
+        if tag in self.parents:
+            del self.parents[len(self.parents) - 1 - self.parents[::-1].index(tag):]
+
+    @staticmethod
+    def normal(text):
+        return " ".join(unicodedata.normalize("NFKC", text).split())
+
+
+def renderer_oracle(source: str) -> RendererOracle:
+    source = unicodedata.normalize("NFKC", source.replace("\r\n", "\n").replace("\r", "\n"))
+    source = re.sub(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|$)", "", source, count=1, flags=re.DOTALL)
+    html = markdown.markdown(source, extensions=["tables", "md_in_html", "pymdownx.superfences"])
+    collector = RendererOracle()
+    collector.feed(html)
+    collector.close()
+    return collector
 
 
 def git(repo: Path, *arguments: str) -> bytes:
@@ -153,14 +217,15 @@ def test_link_evidence_resolves_full_collapsed_and_shortcut_references() -> None
 
 
 def test_link_evidence_excludes_images_comments_and_code_literals() -> None:
-    structure = extract_markdown_structure(
+    source = (
         "![Image](image.png) [![Logo](logo.svg)](https://example.com)\n\n"
         "![Reference image][asset]\n\n[asset]: image.svg\n\n"
         '<img src="image.png" alt="HTML image">\n\n'
         "`[Literal](literal.md)`\n\n```md\n[Code](code.md)\n```\n\n"
         "<!-- [Hidden](hidden.md) -->\n\n[Visible](visible.md)"
     )
-    assert structure.links == ("Visible\nvisible.md",)
+    structure = extract_markdown_structure(source)
+    assert structure.links == tuple(renderer_oracle(source).links)
 
 
 def test_link_evidence_keeps_inline_code_label_text_not_placeholder_tokens() -> None:
@@ -192,8 +257,8 @@ def test_plain_label_text_is_not_link_evidence() -> None:
     r"\<https://example.com/adapter>",
     r'\<a href="https://example.com/adapter">Adapter</a>',
 ])
-def test_escaped_link_markup_does_not_count_as_a_current_hyperlink(text: str) -> None:
-    assert extract_markdown_structure(text).links == ()
+def test_escaped_link_markup_follows_the_pinned_renderer(text: str) -> None:
+    assert extract_markdown_structure(text).links == tuple(renderer_oracle(text).links)
 
 
 def test_even_backslashes_before_a_link_do_not_escape_its_markup() -> None:
@@ -1228,7 +1293,7 @@ def test_html_anchor_text_is_not_reinterpreted_as_markdown() -> None:
     structure = extract_markdown_structure(
         '<a href="actual.md"><span>**literal**</span><code>[Text](not-a-link.md)</code></a>'
     )
-    assert structure.links == ("**literal**[Text](not-a-link.md)\nactual.md",)
+    assert structure.links == ("literal[Text](not-a-link.md)\nactual.md",)
     assert structure.images == ()
 
 
@@ -1250,11 +1315,13 @@ def test_html_anchor_and_image_attributes_keep_first_duplicate_values() -> None:
     assert structure.images == ("First\nfirst.png",)
 
 
-def test_genuine_html_image_nested_in_anchor_is_not_a_textual_link() -> None:
-    structure = extract_markdown_structure(
+def test_genuine_html_image_alt_text_labels_its_anchor() -> None:
+    source = (
         '<a href="target.md"><img src="images/actual.png" alt="Actual" data-link="[Fake](fake.md)"></a>'
     )
-    assert structure.links == ()
+    structure = extract_markdown_structure(source)
+    expected = renderer_oracle('<a href="target.md"><img src="images/actual.png" alt="Actual"></a>')
+    assert structure.links == tuple(expected.links)
     assert structure.images == ("Actual\nactual.png",)
 
 
@@ -1278,8 +1345,7 @@ def test_nested_linked_image_escape_parity(slashes: int, image: str) -> None:
     text = "[" + "\\" * slashes + image + "](target.md)\n\n[asset]: images/picture.png"
     structure = extract_markdown_structure(text)
     assert structure.images == (("Alt\npicture.png",) if slashes % 2 == 0 else ())
-    if slashes == 0:
-        assert structure.links == ()
+    assert structure.links == tuple(renderer_oracle(text).links)
 
 
 def test_escaped_image_bang_leaves_an_ordinary_link_not_an_image() -> None:
@@ -1297,12 +1363,14 @@ def test_additional_raw_html_containers_do_not_supply_evidence(tag: str) -> None
 
 
 def test_html_tag_tokens_inside_markdown_image_alt_or_destination_do_not_emit_elements() -> None:
-    structure = extract_markdown_structure(
+    source = (
         '![Outer <img alt="Fake" src="fake.png">](outer.png) '
         '[Actual](<img>)'
     )
-    assert structure.images == ("Outer\nouter.png",)
-    assert structure.links == ("Actual\nimg",)
+    structure = extract_markdown_structure(source)
+    oracle = renderer_oracle(source)
+    assert structure.images == tuple(oracle.images)
+    assert structure.links == tuple(oracle.links)
 
 
 def test_html_anchor_attributes_cannot_forge_a_closing_tag_or_child_image() -> None:
@@ -1340,3 +1408,169 @@ def test_self_closing_syntax_on_nonvoid_anchor_children_keeps_actual_rendered_te
     )
     assert structure.links == ("Actual text\nactual.md",)
     assert structure.images == ()
+
+
+@pytest.mark.parametrize("title", [
+    "", ' "valid quoted title"', " 'valid single-quoted title'", " (valid parenthesized title)",
+    " arbitrary unquoted trailing description",
+])
+@pytest.mark.parametrize("image", [False, True])
+def test_semantic_reference_definitions_match_the_pinned_renderer(title: str, image: bool) -> None:
+    marker = "!" if image else ""
+    source = f"{marker}[Capture][ref]\n\n[ref]: capture.gif{title}"
+    oracle = renderer_oracle(source)
+    structure = extract_markdown_structure(source)
+    assert structure.links == tuple(oracle.links)
+    assert structure.images == tuple(oracle.images)
+    expected_local = tuple(link.partition("\n")[0] for link in oracle.links if not urlsplit(link.partition("\n")[2]).scheme)
+    assert structure.local_link_labels == expected_local
+
+
+@pytest.mark.parametrize("source", [
+    '[A](target.md "quoted title")',
+    "[A](target.md 'single title')",
+    "[A](target.md (parenthesized title))",
+    "<https://example.com/a#b>",
+    "[![Capture](capture.gif)](details.md)",
+    '[Before ![Capture](capture.gif) after](details.md)',
+    '<a href="details.md">Before <img src="capture.gif" alt="Capture"> after</a>',
+    '<span data-link="[Fake](fake.md)">Plain</span>',
+    '<code>[Fake](fake.md) ![Fake](fake.gif)</code>',
+    '<script>[Fake](fake.md) ![Fake](fake.gif)</script>',
+    '<style>[Fake](fake.md) ![Fake](fake.gif)</style>',
+    r"\![Capture](capture.gif)",
+    "`[Fake](fake.md) ![Fake](fake.gif)`",
+    "`literal ``` ![Capture](capture.gif) tail`",
+])
+def test_semantic_elements_are_derived_from_renderer_output(source: str) -> None:
+    oracle = renderer_oracle(source)
+    structure = extract_markdown_structure(source)
+    assert structure.links == tuple(oracle.links)
+    assert structure.images == tuple(oracle.images)
+
+
+@pytest.mark.parametrize(("source", "expected"), [
+    ("`literal ``` ![Capture](capture.gif) tail`", "literal ``` ![Capture](capture.gif) tail"),
+    ("``literal ` one ``` two``", "literal ` one ``` two"),
+    ("```literal `` short ```` long```", "literal `` short ```` long"),
+    ("` line one\nline  two `", "line one line  two"),
+    ("``  padded  ``", " padded "),
+    ("`   `", "   "),
+])
+def test_source_code_spans_use_exact_delimiter_runs_and_commonmark_whitespace(source: str, expected: str) -> None:
+    structure = extract_markdown_structure(source)
+    assert structure.prose == (expected,)
+    oracle = renderer_oracle(source)
+    assert structure.images == tuple(oracle.images)
+    assert structure.links == tuple(oracle.links)
+
+
+@pytest.mark.parametrize("source", [
+    "`unmatched ![Capture](capture.gif)",
+    "``unmatched `short` ![Capture](capture.gif)",
+    "````unmatched ```short``` ![Capture](capture.gif)",
+    "````",
+])
+def test_unmatched_code_span_runs_follow_renderer_image_visibility(source: str) -> None:
+    structure = extract_markdown_structure(source)
+    oracle = renderer_oracle(source)
+    assert structure.images == tuple(oracle.images)
+    assert structure.links == tuple(oracle.links)
+
+
+def test_source_code_span_masks_pipes_until_an_exact_closer() -> None:
+    source = "`literal ```\n| A | B |\n tail`"
+    structure = extract_markdown_structure(source)
+    assert structure.title == "" and structure.headings == () and structure.tables == ()
+    assert structure.prose == ("literal ``` | A | B |  tail",)
+
+
+def test_unmatched_inline_code_does_not_cross_real_heading_or_paragraph_boundaries() -> None:
+    source = "`unmatched\n## Heading\n\n![Visible](capture.gif) tail`"
+    structure = extract_markdown_structure(source)
+    assert structure.headings == ("Heading",)
+    assert structure.images == tuple(renderer_oracle(source).images)
+
+
+def test_real_tei_malformed_reference_definition_cannot_replace_the_hyperlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "aisearch/custom_vectorization/01_custom_embedding_guide.md",
+        "docs/services/azure-ai-search/custom-vectorization/index.md",
+    )
+    destination = "https://github.com/hellices/devguidesample/tree/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/tei-adapter"
+    old = f"[tei-adapter]({destination})"
+    source = path.read_text()
+    assert source.count(old) == 1
+    changed = source.replace(old, "[tei-adapter][malformed-tei]") + f"\n\n[malformed-tei]: {destination} arbitrary unquoted description\n"
+    assert f"tei-adapter\n{destination}" not in renderer_oracle(changed).links
+    path.write_text(changed)
+    with pytest.raises(AuditFormatError, match="evidence.*links|links.*count"):
+        audit_document_content(tmp_path, inventory)
+
+
+@pytest.mark.parametrize("kind", ["image", "link", "code-span"])
+def test_real_s1_inline_parser_mutations_cannot_supply_rendered_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "monitor/sre-agent-event-lab/validation-results.md",
+        "docs/services/azure-monitor/azure-sre-agent/validation-results/index.md",
+    )
+    source = path.read_text()
+    image = "![S1 SRE Agent investigation](images/s1-investigation.gif)"
+    if kind == "image":
+        changed = source.replace(image, "![S1 SRE Agent investigation][malformed-s1]") + "\n\n[malformed-s1]: images/s1-investigation.gif arbitrary unquoted description\n"
+        assert "S1 SRE Agent investigation\ns1-investigation.gif" not in renderer_oracle(changed).images
+    elif kind == "link":
+        destination = "https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/07-conclusion.png"
+        link = f"[결론 frame]({destination})"
+        assert source.count(link) == 1
+        changed = source.replace(link, "[결론 frame][malformed-s1]") + f"\n\n[malformed-s1]: {destination} arbitrary unquoted description\n"
+        assert f"결론 frame\n{destination}" not in renderer_oracle(changed).links
+    else:
+        assert source.count(image) == 1
+        changed = source.replace(image, f"`literal ``` {image} tail`")
+        assert "S1 SRE Agent investigation\ns1-investigation.gif" not in renderer_oracle(changed).images
+    path.write_text(changed)
+    with pytest.raises(AuditFormatError, match="evidence"):
+        audit_document_content(tmp_path, inventory)
+
+
+def test_unrendered_memray_details_reference_is_not_a_historical_hyperlink_loss() -> None:
+    inventory = load_inventory(ROOT / "scripts/docs/pre_pages_inventory.yml")
+    entry = next(d for d in inventory.documents if str(d.baseline_path) == "aks/memray_leak_profiling.md")
+    baseline = git_text(ROOT, inventory.baseline_commit, entry.baseline_path)
+    current = (ROOT / "docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md").read_text()
+    for source in (baseline, current):
+        oracle = renderer_oracle(source)
+        assert not any(link.partition("\n")[0] == "Dockerfile" for link in oracle.links)
+        assert "Dockerfile" not in extract_markdown_structure(source).local_link_labels
+        assert "[Dockerfile](" in source
+    assert fingerprint("local_link_labels", "Dockerfile") not in entry.reviewed_changes["local_link_labels"]
+    payload = PurePosixPath("docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/Dockerfile")
+    assert any(ref.path == payload for group in entry.reviewed_changes.values() for change in group.values() for ref in change.evidence)
+
+
+def test_raw_html_attribute_autolinks_do_not_change_a_genuine_anchor() -> None:
+    source = '<a data-url="<https://example.com/fake>" href="actual.md">Actual</a>'
+    expected = renderer_oracle('<a href="actual.md">Actual</a>')
+    structure = extract_markdown_structure(source)
+    assert structure.links == tuple(expected.links)
+
+
+def test_malformed_reference_definition_remains_source_prose() -> None:
+    source = "[Capture][ref]\n\n[ref]: capture.gif arbitrary unquoted description"
+    structure = extract_markdown_structure(source)
+    assert structure.prose == ("[Capture][ref]", "[ref]: capture.gif arbitrary unquoted description")
+    assert structure.links == tuple(renderer_oracle(source).links)
+    assert structure.images == tuple(renderer_oracle(source).images)
+
+
+def test_table_code_span_escaped_pipe_is_unescaped_once_after_literal_restoration() -> None:
+    source = "| Command | Result |\n|---|---|\n| `ps aux \\| grep MetricsExtension` | present |"
+    structure = extract_markdown_structure(source)
+    assert structure.tables[-1] == r"ps aux \| grep MetricsExtension | present"
+    assert structure.links == tuple(renderer_oracle(source).links)
+    assert structure.images == tuple(renderer_oracle(source).images)

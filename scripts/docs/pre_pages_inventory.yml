@@ -1011,22 +1011,6 @@ documents:
               path: docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/sample.yml
               sha256: 0d354f8901fdd8b0830902a135fc3ebbcda9d41eebf595530eee92845f103d85
           link_change: replacement
-        64c7be708c8f93ffae9396110852cc8d88ffff643ac70c496405c59ca711debd:
-          missing_count: 1
-          reason: Retained label 'Dockerfile' in docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md,
-            pointing to docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/Dockerfile.
-            The current canonical source or owning-sample target was checked; this is a source-link/reader-label
-            migration, not removal of the referenced content.
-          evidence:
-            - kind: structure
-              path: docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md
-              category: links
-              fingerprint: 21b46b9ea9d0c93e23f756d199f30a1c111c1e44536fb0f83665d7a279e939ed
-              count: 1
-            - kind: file
-              path: docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/Dockerfile
-              sha256: a6f157d5d5d979095c9f0404c2f8eb7dcc4acf011092b56a9473c0d9e8df48cd
-          link_change: replacement
   - baseline_path: aks/pod_db_query_latency.md
     pages_path: cases/azure-kubernetes-service/pod-database-query-latency/index.md
     reviewed_changes: {}

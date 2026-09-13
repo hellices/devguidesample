@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from hashlib import sha256
-from html import unescape
+from html import escape, unescape
 from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
@@ -15,6 +15,9 @@ import re
 from typing import Mapping
 import unicodedata
 from urllib.parse import unquote, urlsplit
+
+import markdown
+from markdown.blockprocessors import ReferenceProcessor
 
 from scripts.docs.pre_pages import (
     AuditFormatError,
@@ -67,7 +70,7 @@ _LINK = re.compile(
 )
 _IMAGE = re.compile(r'!\[([^\[\]]*)\]\(\s*' + _DESTINATION + _LINK_END)
 _REFERENCE = re.compile(r"(!?)\[([^\[\]]+)\](?:\[([^\[\]]*)\])?")
-_DEFINITION = re.compile(r"(?m)^ {0,3}\[([^\]]+)\]:\s*" + _DESTINATION + r"[^\n]*$")
+_DEFINITION = ReferenceProcessor.RE
 _HTML_TAG = re.compile(
     r"""</?([A-Za-z][A-Za-z0-9:_-]*)(?=[\s/>])(?:"[^"]*"|'[^']*'|[^'">])*>""",
     re.DOTALL,
@@ -88,6 +91,9 @@ _WRAPPER = re.compile(
     r"</?(?:div|section|article|aside|nav|p|span|strong|em|b|i|a|ol|ul|li|br)\b[^>]*>",
     re.IGNORECASE,
 )
+_SEMANTIC_EXTENSIONS = ("tables", "md_in_html", "pymdownx.superfences")
+_VOID_TAGS = frozenset(("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"))
+_HIDDEN_TAGS = frozenset(("script", "style", "template", "iframe", "noembed", "noframes", "noscript", "title"))
 
 
 def _space(text: str) -> str:
@@ -100,25 +106,216 @@ def _escaped_match(match: re.Match) -> bool:
 
 
 @dataclass(frozen=True)
+class _CodeSpan:
+    start: int
+    end: int
+    value: str
+
+
+def _backtick_run_end(text: str, start: int) -> int:
+    end = start
+    while end < len(text) and text[end] == "`":
+        end += 1
+    return end
+
+
+def _code_span_at(text: str, start: int, limit: int | None = None) -> _CodeSpan | None:
+    if text[start:start + 1] != "`" or start and text[start - 1] == "`":
+        return None
+    prefix = text[:start]
+    if (len(prefix) - len(prefix.rstrip("\\"))) % 2:
+        return None
+    opening_end = _backtick_run_end(text, start)
+    width = opening_end - start
+    stop = len(text) if limit is None else limit
+    position = opening_end
+    while position < stop:
+        closing = text.find("`", position, stop)
+        if closing < 0:
+            return None
+        end = _backtick_run_end(text, closing)
+        if end - closing == width and end <= stop:
+            value = text[opening_end:closing].replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+            if value.startswith(" ") and value.endswith(" ") and value.strip(" "):
+                value = value[1:-1]
+            return _CodeSpan(start, end, value)
+        position = end
+    return None
+
+
+def _code_spans(text: str) -> tuple[_CodeSpan, ...]:
+    spans = []
+    position = 0
+    while position < len(text):
+        start = text.find("`", position)
+        if start < 0:
+            break
+        span = _code_span_at(text, start)
+        if span is None:
+            position = _backtick_run_end(text, start)
+        else:
+            spans.append(span)
+            position = span.end
+    return tuple(spans)
+
+
+class _RenderedSemantics(HTMLParser):
+    """Collect only rendered element semantics; Markdown grammar belongs to the renderer."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parents: list[str] = []
+        self.blocked: list[str] = []
+        self.anchor: tuple[str, list[str]] | None = None
+        self.links: list[str] = []
+        self.local_link_labels: list[str] = []
+        self.images: list[str] = []
+
+    def _finish_anchor(self) -> None:
+        if self.anchor is not None:
+            target, parts = self.anchor
+            label = _space(unicodedata.normalize("NFKC", "".join(parts)))
+            self.links.append(f"{label}\n{target}")
+            if not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
+                self.local_link_labels.append(label)
+            self.anchor = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        blocked = bool(self.blocked)
+        attributes = {}
+        for key, value in attrs:
+            attributes.setdefault(key, value or "")
+        if not blocked:
+            if tag == "a" and "href" in attributes:
+                self._finish_anchor()
+                self.anchor = (unicodedata.normalize("NFKC", attributes["href"]), [])
+            elif tag == "img" and "src" in attributes:
+                alt = _space(unicodedata.normalize("NFKC", attributes.get("alt", "")))
+                source = unicodedata.normalize("NFKC", attributes["src"])
+                self.images.append(f"{alt}\n{PurePosixPath(unquote(urlsplit(source).path)).name}")
+                if self.anchor is not None:
+                    self.anchor[1].append(alt)
+        if tag not in _VOID_TAGS:
+            self.parents.append(tag)
+        if tag in _RAW_TAGS:
+            self.blocked.append(tag)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag in _RAW_TAGS or tag == "a":
+            return
+        if tag not in _VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        if self.anchor is not None and not any(parent in _HIDDEN_TAGS for parent in self.blocked):
+            self.anchor[1].append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and not self.blocked:
+            self._finish_anchor()
+        if tag in self.blocked:
+            index = len(self.blocked) - 1 - self.blocked[::-1].index(tag)
+            del self.blocked[index:]
+        if tag in self.parents:
+            index = len(self.parents) - 1 - self.parents[::-1].index(tag)
+            del self.parents[index:]
+
+
+def _literal_markdown_characters(text: str) -> str:
+    return "".join(f"&#{ord(char)};" if char in "\\`*_{}[]!" else char for char in text)
+
+
+class _RendererHtmlBoundary(HTMLParser):
+    """Keep raw HTML literal while the pinned renderer owns all Markdown grammar."""
+
+    CDATA_CONTENT_ELEMENTS = tuple(_RAW_TAGS - {"template"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.output: list[str] = []
+        self.raw: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        original = self.get_starttag_text()
+        if any(value and any(char in value for char in "\\`*_{}[]!<>\n\r") for _, value in attrs):
+            pieces = ["<", tag]
+            for name, value in attrs:
+                pieces.append(f" {name}")
+                if value is not None:
+                    value = _literal_markdown_characters(escape(value, quote=True))
+                    value = value.replace("\n", "&#10;").replace("\r", "&#13;")
+                    pieces.append(f'="{value}"')
+            pieces.append("/>" if original.endswith("/>") else ">")
+            self.output.append("".join(pieces))
+        else:
+            self.output.append(original)
+        if tag in _RAW_TAGS:
+            self.raw.append(tag)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag in _RAW_TAGS:
+            if tag != "template":
+                self.set_cdata_mode(tag)
+        elif tag in self.raw:
+            self.raw.remove(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        self.output.append(f"</{tag}>")
+        if tag in self.raw:
+            index = len(self.raw) - 1 - self.raw[::-1].index(tag)
+            del self.raw[index:]
+
+    def handle_data(self, data: str) -> None:
+        self.output.append(_literal_markdown_characters(data) if self.raw else data)
+
+    def handle_entityref(self, name: str) -> None:
+        self.output.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        self.output.append(f"&#{name};")
+
+    def handle_comment(self, data: str) -> None:
+        self.output.append(f"<!--{data}-->")
+
+
+def _rendered_semantics(
+    text: str, html_spans: list[tuple[int, int]],
+) -> tuple[_RenderedSemantics, dict]:
+    for start, end in reversed(html_spans):
+        reader = _RendererHtmlBoundary()
+        reader.feed(text[start:end])
+        reader.close()
+        text = text[:start] + "".join(reader.output) + text[end:]
+    renderer = markdown.Markdown(
+        extensions=list(_SEMANTIC_EXTENSIONS),
+        extension_configs={"pymdownx.highlight": {"use_pygments": False}},
+    )
+    output = renderer.convert(text)
+    collector = _RenderedSemantics()
+    collector.feed(output)
+    collector.close()
+    collector._finish_anchor()
+    return collector, renderer.references
+
+
+@dataclass(frozen=True)
 class _HtmlFragment:
     raw: str
     rendered: str
     label: str
-    images: tuple[tuple[str, str], ...] = ()
-    links: tuple[tuple[str, str], ...] = ()
     wrapper: bool = False
 
 
 class _HtmlElementReader(HTMLParser):
-    """Read element semantics without interpreting any attribute or text as Markdown."""
+    """Read source prose text; semantic links/images are collected only after rendering."""
 
     CDATA_CONTENT_ELEMENTS = tuple(_RAW_TAGS - {"template"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.text: list[str] = []
-        self.images: list[tuple[str, str]] = []
-        self.href: str | None = None
         self.raw_tag: str | None = None
         self.template_depth = 0
 
@@ -132,14 +329,7 @@ class _HtmlElementReader(HTMLParser):
         if tag in _RAW_TAGS:
             self.raw_tag = tag
             return
-        values = {}
-        for name, value in attrs:
-            values.setdefault(name, value or "")
-        if tag == "a" and self.href is None:
-            self.href = values.get("href")
-        elif tag == "img":
-            self.images.append((values.get("alt", ""), values.get("src", "")))
-        elif tag in {"br", "hr", "p", "div", "li", "tr"}:
+        if tag in {"br", "hr", "p", "div", "li", "tr"}:
             self.text.append(" ")
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -215,20 +405,18 @@ def _html_fragment(text: str, position: int) -> tuple[int, _HtmlFragment] | None
             reader.close()
             label = _space("".join(reader.text))
             if tag == "a":
-                links = ((label, reader.href),) if label and reader.href is not None else ()
-                return end, _HtmlFragment(raw, f" {label} ", label, tuple(reader.images), links)
+                return end, _HtmlFragment(raw, f" {label} ", label)
             return end, _HtmlFragment(raw, raw, label)
     if opening and tag == "img" and not escaped:
-        reader = _HtmlElementReader()
-        reader.feed(raw)
-        reader.close()
-        return end, _HtmlFragment(raw, "", "", tuple(reader.images))
+        return end, _HtmlFragment(raw, "", "")
     wrapper = tag in _PRESENTATION_TAGS
     return end, _HtmlFragment(raw, " " if wrapper else raw, raw if escaped else "", wrapper=wrapper)
 
 
 def _source_line(
     text: str, position: int, html: dict[str, _HtmlFragment], prefix: str,
+    literals: dict[str, str],
+    html_spans: list[tuple[int, int]],
 ) -> tuple[str, int]:
     parts = []
     while position < len(text) and text[position] != "\n":
@@ -236,10 +424,19 @@ def _source_line(
             end = text.find("-->", position + 4)
             position = len(text) if end < 0 else end + 3
             continue
-        code = re.match(r"(`+)(.*?)\1", text[position:]) if text[position] == "`" else None
-        if code:
-            parts.append(code[0])
-            position += code.end()
+        if text[position] == "`":
+            boundary = re.search(r"\n(?:[ \t]*\n| {0,3}#{1,6}[ \t]+| {0,3}(?:`{3,}|~{3,}))", text[position:])
+            limit = position + boundary.start() if boundary else len(text)
+            span = _code_span_at(text, position, limit)
+            if span:
+                key = f"{prefix}code{len(literals)}\ue101"
+                literals[key] = span.value
+                parts.append(key)
+                position = span.end
+            else:
+                end = _backtick_run_end(text, position)
+                parts.append(text[position:end])
+                position = end
             continue
         autolink = _AUTOLINK.match(text, position)
         if autolink:
@@ -249,10 +446,13 @@ def _source_line(
         if text[position] == "<":
             fragment = _html_fragment(text, position)
             if fragment:
+                start = position
                 position, value = fragment
                 key = f"{prefix}{len(html)}\ue101"
                 html[key] = value
                 parts.append(key)
+                if not (len(text[:start]) - len(text[:start].rstrip("\\"))) % 2:
+                    html_spans.append((start, position))
                 continue
         parts.append(text[position])
         position += 1
@@ -270,6 +470,8 @@ def _unquote(line: str, depth: int) -> str | None:
 
 def _segments(
     text: str, html: dict[str, _HtmlFragment] | None = None,
+    literals: dict[str, str] | None = None,
+    html_spans: list[tuple[int, int]] | None = None,
 ) -> list[tuple[str | None, str]]:
     """Separate fences before applying any prose-only normalization."""
     segments = []
@@ -280,6 +482,8 @@ def _segments(
     indent = ""
     quote_depth = 0
     html = html if html is not None else {}
+    literals = literals if literals is not None else {}
+    html_spans = html_spans if html_spans is not None else []
     prefix = "\ue100html"
     while prefix in text:
         prefix += "x"
@@ -305,11 +509,15 @@ def _segments(
                 position = end + 1
                 continue
         opening = _FENCE_OPEN.fullmatch(line)
+        if opening and opening[3].startswith("`") and "`" in opening[4]:
+            opening = None
         if opening:
             position = end + 1
         else:
-            line, position = _source_line(text, position, html, prefix)
+            line, position = _source_line(text, position, html, prefix, literals, html_spans)
             opening = _FENCE_OPEN.fullmatch(line)
+            if opening and opening[3].startswith("`") and "`" in opening[4]:
+                opening = None
         if opening:
             segments.append((None, "\n".join(normal)))
             normal = []
@@ -328,10 +536,19 @@ def _table_cells(line: str) -> list[str]:
     line = line.strip()
     cells = []
     start = 0
-    for token in re.finditer(r"(?P<ticks>`+).*?(?P=ticks)|\\.|(?P<bar>\|)", line):
-        if token["bar"]:
-            cells.append(line[start:token.start()])
-            start = token.end()
+    spans = {span.start: span for span in _code_spans(line)}
+    position = 0
+    while position < len(line):
+        if position in spans:
+            position = spans[position].end
+            continue
+        if line[position] == "\\":
+            position += 2
+            continue
+        if line[position] == "|":
+            cells.append(line[start:position])
+            start = position + 1
+        position += 1
     cells.append(line[start:])
     if line.startswith("|") and not cells[0]:
         cells.pop(0)
@@ -352,20 +569,16 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
     while literal_prefix in text:
         literal_prefix += "x"
     html: dict[str, _HtmlFragment] = {}
-    segments = _segments(text, html)
-    definitions = {
-        _space(match[1]).casefold(): match[2].strip("<>")
-        for language, body in segments if language is None
-        for match in _DEFINITION.finditer(body)
-    }
+    source_literals: dict[str, str] = {}
+    html_spans: list[tuple[int, int]] = []
+    segments = _segments(text, html, source_literals, html_spans)
+    semantics, rendered_references = _rendered_semantics(text, html_spans)
+    definitions = {key: value[0] for key, value in rendered_references.items()}
     title = ""
     headings: list[str] = []
     prose: list[str] = []
     code: list[str] = []
     tables: list[str] = []
-    images: list[str] = []
-    local_link_labels: list[str] = []
-    links: list[str] = []
 
     def html_text(value: str, field: str) -> str:
         for token, fragment in html.items():
@@ -374,40 +587,32 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
 
     def visible(value: str) -> str:
         value = _WRAPPER.sub(" ", unescape(value))
-        value = re.sub(r"(`+)(.*?)\1", r"\2", value)
         for _ in range(2):
             value = re.sub(r"(\*\*|\*)(.+?)\1", r"\2", value)
             value = re.sub(r"(?<!\w)(__|_)(.+?)\1(?!\w)", r"\2", value)
         return _space(value)
 
     def link(label: str, target: str, image: bool) -> str:
+        # Source-only prose normalization; semantic evidence never comes from these regexes.
         markup = visible(label)
-        label = _space(html_text(markup, "label"))
-        target = unescape(html_text(target, "raw").strip("<>"))
         if image:
-            images.append(f"{label}\n{PurePosixPath(unquote(urlsplit(target).path)).name}")
             return ""
-        if label:
-            links.append(f"{label}\n{target}")
-        if label and not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
-            local_link_labels.append(label)
         return markup
 
     def inline(value: str) -> str:
         literals: dict[str, str] = {}
-        image_start, label_start, link_start = len(images), len(local_link_labels), len(links)
-
-        def protect(match: re.Match) -> str:
-            token = f"{literal_prefix}{len(literals)}\ue001"
-            literals[token] = match[2]
-            return token
 
         def restore(text: str) -> str:
             for token, literal in literals.items():
                 text = text.replace(token, literal)
+            for token, literal in source_literals.items():
+                text = text.replace(token, literal)
             return text
 
-        value = re.sub(r"(`+)(.*?)\1", protect, value)
+        for span in reversed(_code_spans(value)):
+            token = f"{literal_prefix}{len(literals)}\ue001"
+            literals[token] = span.value
+            value = value[:span.start] + token + value[span.end:]
 
         def markdown_image(match: re.Match) -> str:
             return match[0] if _escaped_match(match) else link(match[1], match[2], True)
@@ -415,7 +620,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
         def reference_image(match: re.Match) -> str:
             if not match[1] or _escaped_match(match):
                 return match[0]
-            key = _space(match[3] or match[2]).casefold()
+            key = _space(match[3] or match[2]).lower()
             return link(match[2], definitions[key], True) if key in definitions else match[0]
 
         value = _IMAGE.sub(markdown_image, value)
@@ -434,7 +639,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
             escaped = _escaped_match(match)
             if escaped and not match[1]:
                 return match[0]
-            key = _space(match[3] or match[2]).casefold()
+            key = _space(match[3] or match[2]).lower()
             if key not in definitions:
                 return match[0]
             if escaped:
@@ -443,27 +648,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
 
         value = _REFERENCE.sub(reference, value)
 
-        def autolink(match: re.Match) -> str:
-            if not _escaped_match(match):
-                link(match[1], match[1], False)
-            return match[0]
-
-        value = re.sub(r"<((?:https?://|mailto:)[^<>\s]+)>", autolink, value, flags=re.IGNORECASE)
-        for token, fragment in html.items():
-            for _ in range(value.count(token)):
-                for alt, source in fragment.images:
-                    alt = _space(unicodedata.normalize("NFKC", alt))
-                    images.append(f"{alt}\n{PurePosixPath(unquote(urlsplit(source).path)).name}")
-                for label, target in fragment.links:
-                    label = _space(unicodedata.normalize("NFKC", label))
-                    target = unicodedata.normalize("NFKC", target)
-                    links.append(f"{label}\n{target}")
-                    if not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
-                        local_link_labels.append(label)
         result = _space(html_text(visible(value), "rendered"))
-        images[image_start:] = [restore(image) for image in images[image_start:]]
-        local_link_labels[label_start:] = [restore(label) for label in local_link_labels[label_start:]]
-        links[link_start:] = [restore(value) for value in links[link_start:]]
         return restore(result)
 
     def heading(value: str, level: int) -> None:
@@ -516,7 +701,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
                 in_table = True
                 if not _separator(line):
                     tables.append(" | ".join(
-                        inline(cell.replace(r"\|", "|")).replace("\\", "\\\\").replace("|", r"\|")
+                        inline(cell).replace(r"\|", "|").replace("\\", "\\\\").replace("|", r"\|")
                         for cell in _table_cells(line)
                     ))
             elif re.fullmatch(r"(?:[-*_]\s*){3,}", line):
@@ -533,8 +718,8 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
         flush()
     return MarkdownStructure(
         title, tuple(headings), tuple(prose), tuple(code), tuple(tables),
-        tuple(images), tuple(local_link_labels),
-        tuple(links),
+        tuple(semantics.images), tuple(semantics.local_link_labels),
+        tuple(semantics.links),
     )
 
 
