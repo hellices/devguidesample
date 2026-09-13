@@ -128,10 +128,10 @@ def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
     return all(KEBAB_CASE.fullmatch(slug) for slug in slugs)
 
 
-def iter_public_documents(
+def iter_public_document_paths(
     docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
-) -> Iterable[Document]:
-    """Yield page-bundle documents from configured public collections."""
+) -> Iterable[Path]:
+    """Yield canonical and legacy public page-bundle paths."""
     root = Path(docs_dir)
     candidate_paths: list[Path] = []
 
@@ -153,6 +153,15 @@ def iter_public_documents(
                     candidate_paths.append(path)
 
     for path in sorted(candidate_paths, key=lambda item: item.relative_to(root).as_posix()):
+        yield path
+
+
+def iter_public_documents(
+    docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
+) -> Iterable[Document]:
+    """Yield page-bundle documents from configured public collections."""
+    root = Path(docs_dir)
+    for path in iter_public_document_paths(root, taxonomy, include_legacy=include_legacy):
         yield load_document(path, docs_dir=root)
 
 

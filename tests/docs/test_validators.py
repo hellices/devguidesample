@@ -234,6 +234,38 @@ def test_link_gate_reports_invalid_front_matter(tmp_path: Path) -> None:
     assert any("YAML front matter" in error for error in result.errors)
 
 
+def test_link_gate_validates_mixed_layout_pages_without_topic_samples(
+    tmp_path: Path,
+) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs" / "services" / "aks" / "network-diagnosis"
+    topic.mkdir(parents=True)
+    (topic / "index.md").write_text(
+        canonical_guide("Overview"),
+        encoding="utf-8",
+    )
+    (topic / "setup").mkdir()
+    (topic / "setup" / "index.md").write_text(
+        canonical_guide("Setup", topic_order=1)
+        + "\n[broken canonical link](missing-child.md)\n",
+        encoding="utf-8",
+    )
+    sample = topic / "samples" / "example"
+    sample.mkdir(parents=True)
+    (sample / "index.md").write_text(
+        canonical_guide("Sample") + "\n[ignored sample link](missing-sample.md)\n",
+        encoding="utf-8",
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert result.document_count == 3
+    assert result.errors == [
+        "docs/services/aks/network-diagnosis/setup/index.md: "
+        "target does not exist: missing-child.md"
+    ]
+
+
 def test_metadata_gate_reports_topic_catalog_errors_once_per_path(tmp_path: Path) -> None:
     root = make_repository(tmp_path)
     topic = root / "docs" / "services" / "aks" / "network-diagnosis"
