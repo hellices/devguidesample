@@ -529,39 +529,96 @@ head -n 1 "$PRIVATE/wrong-audience.headers"
 
 ### 8-2. Native MCP의 caller 제한
 
-App registration의 사전 승인은 caller ACL이 아닙니다. Container Apps의 `allowedApplications`가 실제로 적용되는지 확인하려면 **이 개발 환경에서만** Azure CLI client를 잠시 제외한 후 복구합니다.
+App registration의 사전 승인은 caller ACL이 아닙니다. **이 개발 환경에서만** Azure CLI client를 잠시 제외해 403을 확인합니다. 아래 블록 전체를 한 번에 실행합니다. 원본 백업은 매번 새 파일에 보관하며, 설정 변경 전에 등록한 `EXIT` trap이 성공·오류·일반적인 중단 시 복구를 시도합니다.
 
 ```bash
-APP_NAME="$(azd env get-value MCP_AZURE_APP_NAME)"
-AUTH_API="https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$RG/providers/Microsoft.App/containerApps/$APP_NAME/authConfigs/current?api-version=2025-01-01"
+(
+  set -euo pipefail
+  APP_NAME="$(azd env get-value MCP_AZURE_APP_NAME)"
+  AUTH_API="https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$RG/providers/Microsoft.App/containerApps/$APP_NAME/authConfigs/current?api-version=2025-01-01"
+  ORIGINAL="$(mktemp "$PRIVATE/native-auth-original.XXXXXX")"
+  RESTRICTED="$(mktemp "$PRIVATE/native-auth-restricted.XXXXXX")"
 
-az rest --method get --url "$AUTH_API" --headers Accept=application/json \
-  | jq '{properties}' > "$PRIVATE/native-auth-original.json"
-jq '.properties.identityProviders.azureActiveDirectory.validation.defaultAuthorizationPolicy.allowedApplications
-  |= map(select(. != "04b07795-8ddb-461a-bbee-02f9e1bf7b46"))' \
-  "$PRIVATE/native-auth-original.json" > "$PRIVATE/native-auth-restricted.json"
-az rest --method put --url "$AUTH_API" \
-  --body @"$PRIVATE/native-auth-restricted.json" --output none
+  az rest --method get --url "$AUTH_API" --headers Accept=application/json \
+    --subscription "$AZURE_SUBSCRIPTION_ID" \
+    | jq -e 'if (.properties.identityProviders.azureActiveDirectory.validation.defaultAuthorizationPolicy.allowedApplications
+      | index("04b07795-8ddb-461a-bbee-02f9e1bf7b46")) == null
+      then error("Azure CLI client must be allowed before this scenario")
+      else {properties} end' > "$ORIGINAL"
+  jq -e '.properties.identityProviders.azureActiveDirectory.validation.defaultAuthorizationPolicy.allowedApplications
+    |= map(select(. != "04b07795-8ddb-461a-bbee-02f9e1bf7b46"))
+    | if (.properties.identityProviders.azureActiveDirectory.validation.defaultAuthorizationPolicy.allowedApplications | length) > 0
+      then . else error("Keep at least one allowed client") end' \
+    "$ORIGINAL" > "$RESTRICTED"
+  printf '원본 백업: %s\n' "$ORIGINAL"
+
+  restore_native_auth() {
+    local status="$1"
+    local restore_status=0
+    trap - EXIT
+    if az rest --method put --url "$AUTH_API" \
+      --subscription "$AZURE_SUBSCRIPTION_ID" \
+      --body @"$ORIGINAL" --output none; then
+      printf '%s\n' '원래 인증 설정을 복구했습니다.'
+    else
+      restore_status=$?
+      printf '복구 실패: 검증 종료 코드=%s, 복구 종료 코드=%s, 원본=%s\n' \
+        "$status" "$restore_status" "$ORIGINAL" >&2
+    fi
+    if [[ "$status" -ne 0 ]]; then
+      exit "$status"
+    fi
+    exit "$restore_status"
+  }
+  trap 'restore_native_auth "$?"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  az rest --method put --url "$AUTH_API" \
+    --subscription "$AZURE_SUBSCRIPTION_ID" \
+    --body @"$RESTRICTED" --output none
+  read -r -p "설정 반영을 기다린 뒤 Enter를 누르세요(기존 실증에서는 약 60초): "
+  STATUS="$(curl --silent --show-error --max-time 90 \
+    --config "$PRIVATE/transport.conf" --config "$PRIVATE/azure-auth.conf" \
+    --header 'Content-Type: application/json' \
+    --header 'Accept: application/json, text/event-stream' \
+    --data-binary @requests/initialize.json \
+    --suppress-connect-headers --dump-header "$PRIVATE/client-denied.headers" \
+    --output "$PRIVATE/client-denied.body" --write-out '%{http_code}' "$AZURE_MCP_URL")"
+  printf 'HTTP %s\n' "$STATUS"
+  if [[ "$STATUS" != 403 ]]; then
+    printf '%s\n' '403이 아닙니다. 복구 후 설정 반영 상태와 응답을 확인하세요.' >&2
+    exit 1
+  fi
+)
 ```
 
-변경이 적용된 후 같은 정상 access token으로 요청합니다.
+복구 성공 메시지와 종료 상태를 확인합니다. 403이 아니라면 응답과 반영 시간을 확인한 뒤 **복구가 끝난 상태에서** 전체 블록을 다시 실행합니다. Timeout 등 검증 오류의 종료 코드는 유지하며, 복구 자체의 오류도 별도로 표시합니다.
+
+강제 종료나 네트워크 장애로 복구하지 못했다면, 같은 sample 디렉터리와 azd environment에서 아래 명령을 실행합니다. 출력해 둔 원본 백업 경로를 사용하며 기존 백업을 덮어쓰지 않습니다.
 
 ```bash
-curl --silent --show-error --max-time 90 \
-  --config "$PRIVATE/transport.conf" --config "$PRIVATE/azure-auth.conf" \
-  --header 'Content-Type: application/json' \
-  --header 'Accept: application/json, text/event-stream' \
-  --data-binary @requests/initialize.json \
-  --suppress-connect-headers --dump-header "$PRIVATE/client-denied.headers" \
-  --output "$PRIVATE/client-denied.body" "$AZURE_MCP_URL"
-head -n 1 "$PRIVATE/client-denied.headers"
-```
-
-예상 결과는 **403**입니다. 아직 200이면 설정 반영 상태를 확인하고 잠시 후 같은 요청을 반복합니다. 확인 후에는 성공·실패 여부와 관계없이 원래 설정을 복구합니다.
-
-```bash
-az rest --method put --url "$AUTH_API" \
-  --body @"$PRIVATE/native-auth-original.json" --output none
+(
+  set -euo pipefail
+  read -r -p "원본 백업 파일의 절대 경로: " ORIGINAL
+  [[ "$ORIGINAL" == /* && -s "$ORIGINAL" ]] || {
+    printf '%s\n' '원본 백업 파일의 절대 경로가 필요합니다.' >&2
+    exit 1
+  }
+  SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID)"
+  GROUP="$(azd env get-value AZURE_RESOURCE_GROUP)"
+  APP_NAME="$(azd env get-value MCP_AZURE_APP_NAME)"
+  API_CLIENT_ID="$(azd env get-value MCP_AZURE_API_CLIENT_ID)"
+  if ! jq -e --arg id "$API_CLIENT_ID" \
+    '.properties.identityProviders.azureActiveDirectory.registration.clientId == $id' \
+    "$ORIGINAL" > /dev/null; then
+    printf '%s\n' '백업과 선택한 azd environment의 API 앱이 다릅니다.' >&2
+    exit 1
+  fi
+  AUTH_API="https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$GROUP/providers/Microsoft.App/containerApps/$APP_NAME/authConfigs/current?api-version=2025-01-01"
+  az rest --method put --url "$AUTH_API" --subscription "$SUBSCRIPTION_ID" \
+    --body @"$ORIGINAL" --output none
+)
 ```
 
 6-1의 `tools/list`를 다시 실행하여 정상 연결을 확인합니다. 다른 사용자의 RBAC를 비교하려면 그 사용자의 scope consent와 Azure RBAC를 준비한 뒤 같은 tool을 호출합니다.
