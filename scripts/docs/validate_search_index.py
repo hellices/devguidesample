@@ -154,7 +154,7 @@ def validate_repository(repo_root: Path | str) -> SearchIndexResult:
         str(entry.get("location", "")) for entry in entries if isinstance(entry, dict)
     }
     for tag in sorted(used_tags):
-        if f"tags/#tag:{tag}" not in locations:
+        if f"tags/{tag}/" not in locations:
             errors.append(f"search index tag is missing: {tag}")
 
     return SearchIndexResult(len(documents), len(used_tags), errors)

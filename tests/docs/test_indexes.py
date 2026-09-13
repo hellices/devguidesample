@@ -172,7 +172,7 @@ def test_collection_service_landing_contains_only_its_own_documents(taxonomy: di
     assert "Other service case" not in service_landing
     assert "A guide" not in service_landing
     assert "First case" not in pages[PurePosixPath("cases/azure-monitor/index.md")]
-    assert "First case" in pages[PurePosixPath("services/azure-monitor.md")]
+    assert "First case" in pages[PurePosixPath("services/azure-monitor/index.md")]
 
 
 def test_collection_page_reflects_real_counts_and_wrapper_classes(taxonomy: dict) -> None:
@@ -380,7 +380,9 @@ def test_service_label_falls_back_to_slug_when_taxonomy_omits_it(taxonomy: dict)
     assert "## unlisted-service { #service-unlisted-service }" in guide_index
 
 
-def test_tags_are_capped_at_three_and_labels_fall_back_to_slug(taxonomy: dict) -> None:
+def test_tags_are_capped_at_three_and_labels_fall_back_to_slug(
+    taxonomy: dict, markdown_renderer: Markdown
+) -> None:
     document = doc(
         "guides/azure-monitor/many-tags/index.md",
         title="태그 많은 가이드",
@@ -397,9 +399,10 @@ def test_tags_are_capped_at_three_and_labels_fall_back_to_slug(taxonomy: dict) -
     pages = build_index_pages([document], taxonomy)
     guide_index = pages[PurePosixPath("guides/index.md")]
 
-    tags_block = guide_index.split('class="dg-doc-tags"')[1].split("</div>")[0]
+    rendered = render_body(markdown_renderer, guide_index)
+    tags_block = rendered.split('class="dg-doc-tags"')[1].split("</div>")[0]
     assert tags_block.count('class="dg-tag"') == 3
-    assert "unlisted-tag" not in guide_index.split('class="dg-doc-tags"')[1].split("</div>")[0]
+    assert "unlisted-tag" not in tags_block
 
 
 def test_title_and_description_punctuation_is_escaped_safely(taxonomy: dict) -> None:
@@ -479,7 +482,7 @@ def test_generated_collection_page_renders_service_groups_and_links(
 # ---------------------------------------------------------------------------
 
 
-def test_service_page_includes_documents_grouped_by_document_type(taxonomy: dict) -> None:
+def test_service_page_includes_documents_across_document_types(taxonomy: dict) -> None:
     case = doc(
         "cases/azure-kubernetes-service/case-1/index.md",
         title="AKS 사례",
@@ -505,7 +508,7 @@ def test_service_page_includes_documents_grouped_by_document_type(taxonomy: dict
     )
 
     pages = build_index_pages([case, guide], taxonomy)
-    service_page = pages[PurePosixPath("services/azure-kubernetes-service.md")]
+    service_page = pages[PurePosixPath("services/azure-kubernetes-service/index.md")]
 
     assert 'class="dg-landing dg-service"' in service_page
     assert "SERVICES / 2 DOCUMENTS" in service_page
@@ -513,18 +516,18 @@ def test_service_page_includes_documents_grouped_by_document_type(taxonomy: dict
     # services metadata, even though its primary/path service is azure-monitor.
     assert "AKS 가이드" in service_page
     assert "AKS 사례" in service_page
-    assert "## 트러블슈팅" in service_page
-    assert "## 구현 가이드" in service_page
+    assert "## 트러블슈팅" not in service_page
+    assert "## 구현 가이드" not in service_page
 
 
 def test_service_page_preserves_path_with_explicit_zero_marker_when_empty(taxonomy: dict) -> None:
     pages = build_index_pages([], taxonomy)
 
     assert set(pages) >= {
-        PurePosixPath("services/azure-kubernetes-service.md"),
-        PurePosixPath("services/azure-monitor.md"),
+        PurePosixPath("services/azure-kubernetes-service/index.md"),
+        PurePosixPath("services/azure-monitor/index.md"),
     }
-    empty_page = pages[PurePosixPath("services/azure-kubernetes-service.md")]
+    empty_page = pages[PurePosixPath("services/azure-kubernetes-service/index.md")]
     assert "SERVICES / 0 DOCUMENTS" in empty_page
     assert "dg-doc-card" not in empty_page
 
@@ -547,8 +550,8 @@ def test_services_overview_lists_every_service_with_real_counts(taxonomy: dict) 
 
     assert 'class="dg-landing dg-services"' in overview
     assert "SERVICES / 1 DOCUMENTS" in overview
-    assert "[Azure Kubernetes Service](azure-kubernetes-service.md)" in overview
-    assert "[Azure Monitor](azure-monitor.md)" in overview
+    assert "[Azure Kubernetes Service](azure-kubernetes-service/index.md)" in overview
+    assert "[Azure Monitor](azure-monitor/index.md)" in overview
     # Real counts: one document for AKS, zero (explicit) for Azure Monitor.
     assert "1개 문서" in overview
     assert "0개 문서" in overview
@@ -627,7 +630,7 @@ def test_services_overview_orders_by_descending_count_then_label(taxonomy: dict)
 
 
 HOME_TEMPLATE = """---
-title: DevGuideSample
+title: Azure Engineering Notes
 description: 홈
 ---
 
@@ -637,7 +640,7 @@ description: 홈
 
 <!-- home:featured -->
 
-<!-- home:collections -->
+<!-- home:browse -->
 """
 
 
@@ -648,7 +651,7 @@ def test_home_page_requires_all_three_slots_exactly_once() -> None:
     with pytest.raises(ValueError):
         build_home_page(
             "<!-- home:stats --><!-- home:stats -->"
-            "<!-- home:featured --><!-- home:collections -->",
+            "<!-- home:featured --><!-- home:browse -->",
             [],
             {"collections": {}},
         )
@@ -742,7 +745,7 @@ def test_home_page_falls_back_to_one_per_collection_when_nothing_featured(
 
     rendered = build_home_page(HOME_TEMPLATE, documents, taxonomy)
     featured_block = rendered.split('class="dg-feature-grid"', 1)[1].split(
-        'class="dg-collection-grid"', 1
+        'class="dg-browse-grid"', 1
     )[0]
 
     assert "사례1" in featured_block
@@ -786,10 +789,11 @@ def test_home_page_counts_are_derived_not_hardcoded(taxonomy: dict) -> None:
     stats_block = rendered.split('class="dg-stats"', 1)[1].split("</div>\n\n</div>")[0]
 
     assert "<strong>2</strong>" in stats_block  # total documents
-    assert "<strong>1</strong>" in stats_block  # 1 collection type (case) used
+    assert "<strong>0</strong>" in stats_block
+    assert "다루는 태그" in stats_block
 
 
-def test_home_page_collections_block_lists_all_collections_with_real_counts(
+def test_home_page_browse_block_lists_destinations_with_real_counts(
     taxonomy: dict,
 ) -> None:
     document = doc(
@@ -806,19 +810,22 @@ def test_home_page_collections_block_lists_all_collections_with_real_counts(
     )
 
     rendered = build_home_page(HOME_TEMPLATE, [document], taxonomy)
-    collections_block = rendered.split('class="dg-collection-grid"', 1)[1]
+    browse_block = rendered.split('class="dg-browse-grid"', 1)[1]
 
-    assert collections_block.count('class="dg-collection-card') == 4
-    assert "[구현 가이드](guides/index.md)" in collections_block
-    assert "1개 문서" in collections_block
-    assert "0개 문서" in collections_block
+    assert browse_block.count('class="dg-browse-card') == 3
+    assert "[서비스별 보기](services/index.md)" in browse_block
+    assert "[태그별 보기](tags/index.md)" in browse_block
+    assert "[전체 글](articles/index.md)" in browse_block
+    assert "1개 문서" in browse_block
+    assert "1개 서비스" in browse_block
+    assert "0개 태그" in browse_block
 
 
 def test_home_page_malformed_template_fails_explicitly() -> None:
     malformed_templates = [
         "",
-        "<!-- home:featured --><!-- home:collections -->",
-        "<!-- home:stats --><!-- home:collections -->",
+        "<!-- home:featured --><!-- home:browse -->",
+        "<!-- home:stats --><!-- home:browse -->",
         "<!-- home:stats --><!-- home:featured -->",
     ]
     for template in malformed_templates:
@@ -828,5 +835,5 @@ def test_home_page_malformed_template_fails_explicitly() -> None:
 
 def test_real_docs_index_template_has_exactly_one_of_each_slot() -> None:
     template = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
-    for slot in ("<!-- home:stats -->", "<!-- home:featured -->", "<!-- home:collections -->"):
+    for slot in ("<!-- home:stats -->", "<!-- home:featured -->", "<!-- home:browse -->"):
         assert template.count(slot) == 1
