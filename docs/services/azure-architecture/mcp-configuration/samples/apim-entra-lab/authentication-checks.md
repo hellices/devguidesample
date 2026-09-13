@@ -66,9 +66,9 @@ jq '{
 }' "$AUTH_CHECK/entra-oidc.json"
 ```
 
-Entra는 [authorization code flow에서 S256을 지원](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code)합니다. 그러나 이번 tenant의 OIDC 응답에는 `code_challenge_methods_supported`가 없었습니다.
+Entra는 [authorization code flow에서 S256을 지원](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code)하며, [MSAL Python의 interactive flow](https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens#acquire-token-interactive)는 PKCE를 자동 적용합니다. **PRM은 MCP Server/APIM이 제공하고, 이 단계에서 읽는 OIDC metadata는 Entra가 제공합니다.**
 
-[MCP `2026-07-28` 보안 요구사항](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)은 client가 이 선언을 확인하고, 없으면 authorization을 진행하지 않도록 요구합니다. 이는 **PKCE 기능 자체가 없다는 실측이 아니라, metadata 기반 확인 조건이 충족되지 않았다는 결과**입니다. 검증을 우회하거나 metadata를 임의로 보충해 성공으로 처리하지 않습니다.
+이번 OIDC 응답에는 `code_challenge_methods_supported`가 없었습니다. [MCP `2026-07-28` 보안 요구사항](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)은 client가 이 선언을 확인하도록 요구하므로 metadata 기반 자동 연결의 상호운용성 관측으로 남깁니다. **Entra PKCE의 미지원, PRM 제공 실패 또는 실제 MSAL 로그인 실패를 검증한 결과가 아닙니다.** 검증을 우회하거나 metadata를 임의로 보충하지 않습니다.
 
 ## 4. Canonical resource와 앱 등록 비교
 
@@ -90,7 +90,7 @@ az account get-access-token --tenant "$TENANT_ID" --resource "$RESOURCE" \
   2> "$AUTH_CHECK/resource-token-error.txt"
 ```
 
-이번 결과는 `AADSTS500011`입니다. 기존 `api://.../Mcp.Access` scope를 사용한 token 발급은 성공했습니다. **이 CLI 요청은 target-resource 확인이며, `resource`와 scope를 포함한 브라우저 PKCE 교환 전체를 재현한 것은 아닙니다.**
+이번 결과는 `AADSTS500011`입니다. 기존 `api://.../Mcp.Access` scope를 사용한 token 발급은 성공했습니다. **이 CLI 요청은 target-resource 확인이며, `resource`와 scope를 포함한 브라우저 PKCE 교환 전체를 재현한 것은 아닙니다.** 기존 scope로 구성한 MSAL의 Authorization Code + PKCE가 불가능하다는 의미도 아닙니다.
 
 ## 5. Token 검증과 OBO는 별도로 확인
 
@@ -106,6 +106,6 @@ az account get-access-token --tenant "$TENANT_ID" --resource "$RESOURCE" \
 
 - [비식별화한 결과](assets/captures/2026-09-13-auth-stages.json)
 - [실행 사례](../../validation/index.md#oauth)
-- 자동 OAuth 연결은 resource URI 정렬, authorization-server metadata와 실제 MCP client의 로그인 흐름을 추가로 확인해야 합니다.
+- 제품의 OAuth/PKCE 지원과 별개로, 선택한 MCP client의 resource URI 처리·metadata 자동 발견·로그인 흐름을 추가 확인합니다.
 - 이번 RG에는 Foundry project/Toolbox가 없어서 그 endpoint는 실측하지 않았습니다. 새 Foundry 리소스나 model은 배포하지 않았습니다.
 - 확인용 token 파일은 사용 후 삭제하고, 사용한 port-forward 프로세스를 종료합니다. 기존 Azure 리소스의 삭제 절차는 변경하지 않습니다.

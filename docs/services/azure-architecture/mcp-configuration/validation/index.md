@@ -30,6 +30,8 @@ official_sources:
     url: https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id
   - title: Microsoft identity platform and OAuth 2.0 authorization code flow
     url: https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow
+  - title: Acquire tokens
+    url: https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens
   - title: Authorization Security Considerations
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations
 occurred_at: 2026-09-13
@@ -182,7 +184,7 @@ CONNECT proxy를 사용할 때 curl의 header 파일에는 proxy의 `200 Connect
 | 정상·다른 audience token | APIM initialize 200, protocol `2025-06-18`; APIM·Python에서 wrong audience 401 |
 | Python OBO 재호출 | `2026-07-28` 요청에서 `resultType: complete`, `isError: false`, RG 존재·region·provisioning 상태 반환 |
 
-**PKCE 기능과 metadata 선언은 다릅니다.** [Entra는 S256을 지원](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code)하지만, [MCP 규격](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)은 해당 선언이 없으면 client가 authorization을 진행하지 않도록 요구합니다.
+**PKCE 기능과 metadata 선언은 다릅니다.** [Entra는 S256을 지원](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code)하고 [MSAL의 interactive flow는 PKCE를 자동 적용](https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens#acquire-token-interactive)합니다. 위 누락은 [MCP의 metadata 검증 규칙](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)을 적용하는 client와의 상호운용성 관측입니다. **Entra의 PKCE 미지원이나 실제 MSAL 로그인 실패를 의미하지 않습니다.** MCP PRM은 APIM/서버가, OIDC metadata는 Entra가 제공했습니다.
 
 | 확인 완료 | 아직 완료로 볼 수 없는 것 |
 |---|---|

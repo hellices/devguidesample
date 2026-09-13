@@ -1,23 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 790" role="img" aria-labelledby="title desc">
-  <title id="title">MCP authorization obtains token A; Entra OBO obtains a separate token B</title>
-  <desc id="desc">An MCP client obtains a token for the MCP API through OAuth discovery and authorization. The MCP API uses that user token as an OBO assertion to obtain another token for the downstream data API. APIM and Toolbox product support must be evaluated separately from this generic flow.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 730" role="img" aria-labelledby="title desc">
+  <title id="title">PRM at APIM and OAuth with PKCE between the client and Entra ID</title>
+  <desc id="desc">The MCP client reads protected-resource metadata from APIM, authenticates directly with Entra using authorization code and PKCE, then sends the issued access token to APIM. APIM validates the token and forwards the MCP request. Optional downstream OBO is a separate middle-tier flow.</desc>
   <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
-  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.small{font-size:18px}.head{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.life{stroke:#a4b3c2;stroke-width:2;stroke-dasharray:7 6}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
-  <rect width="1180" height="790" fill="white"/>
-  <text x="30" y="43" class="title">MCP OAuth and Entra OBO solve different token requirements</text>
-  <rect x="30" y="90" width="190" height="65" rx="10" class="head"/><text x="125" y="130" text-anchor="middle">MCP client</text>
-  <rect x="315" y="90" width="190" height="65" rx="10" class="head"/><text x="410" y="130" text-anchor="middle">Entra ID</text>
-  <rect x="655" y="90" width="210" height="65" rx="10" class="head"/><text x="760" y="130" text-anchor="middle">Protected MCP API</text>
-  <rect x="950" y="90" width="200" height="65" rx="10" class="head"/><text x="1050" y="130" text-anchor="middle">Downstream API</text>
-  <path d="M125 155V690M410 155V690M760 155V690M1050 155V690" class="life"/>
-  <path d="M760 215H125" class="flow"/><text x="150" y="200" class="small">1. Protected-resource metadata with authorization-server URL</text>
-  <path d="M125 275H410" class="flow"/><text x="137" y="261" class="small">2. Authorization code + PKCE</text>
-  <path d="M410 335H125" class="flow"/><text x="142" y="321" class="small">3. Token A for the MCP API</text>
-  <path d="M125 400H760" class="flow"/><text x="150" y="385" class="small">4. MCP request with A; validate audience and delegated permission</text>
-  <path d="M760 470H410" class="flow"/><text x="428" y="455" class="small">5. OBO assertion A + API credentials</text>
-  <path d="M410 535H760" class="flow"/><text x="428" y="520" class="small">6. Token B for the downstream API</text>
-  <path d="M760 600H1050" class="flow"/><text x="779" y="585" class="small">7. Data request with token B</text>
-  <path d="M1050 663H760" class="flow"/><text x="790" y="648" class="small">Authorized result</text>
-  <text x="30" y="734" class="small">OBO is an Entra user-delegation flow, not a measure of complete MCP protocol support.</text>
-  <text x="30" y="763" class="small">A token for another audience, or an app-only token, cannot replace the required user assertion.</text>
+  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.label{font-size:22px;font-weight:700}.small{font-size:18px}.client{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.gateway{fill:#fff7e7;stroke:#9c661c;stroke-width:3}.server{fill:#eef8f1;stroke:#327449;stroke-width:2}.identity{fill:#f3efff;stroke:#7453a6;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1180" height="730" fill="white"/>
+  <text x="30" y="44" class="title">PRM: APIM / MCP server | OAuth + PKCE: client and Entra</text>
+  <text x="30" y="80" class="small">Protected-resource discovery and user login are separate exchanges</text>
+  <rect x="30" y="175" width="280" height="200" rx="12" class="client"/>
+  <text x="170" y="222" text-anchor="middle"><tspan x="170" class="label">MCP client</tspan><tspan x="170" dy="37">Read PRM</tspan><tspan x="170" dy="35">OAuth client / MSAL</tspan><tspan x="170" dy="35" class="small">PKCE verifier + challenge</tspan></text>
+  <rect x="500" y="175" width="285" height="200" rx="12" class="gateway"/>
+  <text x="642" y="222" text-anchor="middle"><tspan x="642" class="label">API Management</tspan><tspan x="642" dy="37">PRM endpoint</tspan><tspan x="642" dy="35">JWT validation</tspan><tspan x="642" dy="35" class="small">Issuer / audience / scope</tspan></text>
+  <rect x="925" y="175" width="225" height="200" rx="12" class="server"/>
+  <text x="1037" y="226" text-anchor="middle"><tspan x="1037" class="label">MCP server</tspan><tspan x="1037" dy="41">Tool execution</tspan><tspan x="1037" dy="36" class="small">Backend authorization</tspan></text>
+  <path d="M310 210H500" class="flow"/><text x="326" y="197" class="small">1. PRM request</text>
+  <path d="M500 272H310" class="flow"/><text x="326" y="257" class="small">Issuer + scopes</text>
+  <path d="M310 341H500" class="flow"/><text x="324" y="326" class="small">3. Token + MCP</text>
+  <path d="M785 280H925" class="flow"/><text x="800" y="265" class="small">4. Forward</text>
+  <rect x="30" y="525" width="360" height="115" rx="12" class="identity"/>
+  <text x="210" y="569" text-anchor="middle"><tspan x="210" class="label">Entra ID: authorization server</tspan><tspan x="210" dy="36" class="small">Authorization and token endpoints</tspan></text>
+  <path d="M105 375V525" class="flow"/><text x="120" y="427" class="small"><tspan x="120">2. Code + PKCE</tspan></text>
+  <path d="M265 525V375" class="flow"/><text x="280" y="471" class="small">Access token</text>
+  <text x="465" y="549" class="small"><tspan x="465">Entra issues tokens; it does not serve the MCP PRM.</tspan><tspan x="465" dy="34">APIM validates access tokens; it does not perform client PKCE.</tspan><tspan x="465" dy="34">The MCP server can also serve PRM when used without APIM.</tspan></text>
+  <text x="30" y="694" class="small">OBO, when needed, is a separate exchange between the middle-tier MCP API, Entra and the downstream API.</text>
 </svg>

@@ -29,6 +29,8 @@ official_sources:
     url: https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id
   - title: Microsoft identity platform and OAuth 2.0 authorization code flow
     url: https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow
+  - title: Acquire tokens
+    url: https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens
   - title: How to integrate Azure API Management with Azure Application Insights
     url: https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights
   - title: What is Toolbox in Foundry?
@@ -101,17 +103,18 @@ related_cases:
 | **Microsoft Foundry Toolbox** | 도구 집합을 하나의 MCP endpoint로 제공, connection 인증·version·정책 관리, Tool search로 필요한 도구 검색 | [Toolbox 개요](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview), [인증](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication), [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) |
 | **Work IQ·Fabric IQ·Foundry IQ** | 각각 Microsoft 365 업무 context, Fabric의 업무 데이터·의미 모델, 기업 문서 knowledge base를 도구로 제공 | [Work IQ](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/work-iq), [Fabric IQ](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/fabric-iq), [Foundry IQ](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-foundry-iq) |
 
-### MCP HTTP auth 연결 상태
+### MCP HTTP auth는 어떻게 구성하는가
 
-**실측 = 기존 실습의 관측**, **문서 = 제품 문서의 명시 범위**입니다. 사전 token 입력, MCP client의 자동 OAuth 로그인, downstream OBO를 구분합니다.
+**OAuth + PKCE는 client와 Entra**, **PRM·JWT 검증은 MCP protected resource**의 기능입니다. PKCE로 발급받은 token도 MCP 요청에는 Bearer token으로 전달합니다.
 
-| 연결 방식 | APIM + Entra | Foundry Toolbox |
+| 인증 기능 | APIM + Entra | Foundry Toolbox |
 |---|---|---|
-| **사전 발급한 access token으로 연결** | JWT 검증 정책을 구성해 사용. **실측:** 정상 token 200, wrong audience 401 | **문서:** Foundry용 credential/token과 project 권한으로 접근 |
-| **MCP client의 자동 OAuth 로그인** | PRM을 별도로 구성. **현재 실습은 미완료:** discovery는 동작하지만 resource URI 정렬·PKCE 지원 선언 확인 조건이 남음 | Consumer endpoint의 PRM→등록→PKCE 전체 흐름은 **직접 미검증**. Backend의 `oauth2` 설정과는 다른 검사 |
+| **Authorization Code + PKCE** | **Entra 지원.** 앱 등록·redirect URI·scope를 설정하고 client/MSAL에서 로그인. APIM이 PKCE 교환을 처리하는 것은 아님 | Foundry credential을 취득하는 client 로그인 방식에 따름. Toolbox를 별도 OAuth authorization server로 취급하지 않음 |
+| **PRM 제공·자동 발견** | **MCP Server 또는 APIM이 제공.** 실습 APIM의 401 challenge → PRM 200 확인 | Consumer endpoint의 PRM 기반 자동 연결은 직접 미검증. Tool의 `oauth2` connection과 별개 |
+| **Access token 검증** | APIM JWT 검증 정책 구성. **실측:** 정상 token 200, wrong audience 401 | **문서:** Foundry용 token과 project 권한으로 접근 |
 | **Tool이 사용자 권한으로 데이터 호출** | MCP 서버에서 OBO 구현 가능. **실측:** Python MCP의 ARM OBO 성공. APIM 자체의 자동 OBO 실증은 아님 | **문서:** `oauth2`·`user-entra-token`. Work IQ Chat의 A2A 경로는 OBO 명시 |
 
-이번 실측 대상 RG에는 Foundry project/Toolbox가 없습니다. [인증 재확인 기록](validation/index.md#oauth)은 APIM·Entra·직접 호스팅한 MCP에 한정합니다.
+MSAL Python의 [`acquire_token_interactive`](https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens#acquire-token-interactive)는 PKCE를 자동 적용합니다. MCP client가 어떤 로그인 방식을 사용하는지는 별도 확인합니다. [이번 실측](validation/index.md#oauth)은 APIM·Entra·직접 호스팅한 MCP에 한정하며, 브라우저 PKCE와 Toolbox 연결은 실행하지 않았습니다.
 
 ### MCP protocol 기능
 
@@ -210,12 +213,23 @@ Microsoft Learn의 [Toolbox 개요](https://learn.microsoft.com/azure/foundry/ag
 
 ## 4. MCP authorization과 OBO를 함께 설계하기
 
+### PRM과 authorization server의 구분
+
+| 항목 | 제공·처리 주체 | 내용 |
+|---|---|---|
+| **PRM (RFC 9728)** | **MCP Server / APIM** | 보호할 `resource`, `authorization_servers`, scopes 안내 |
+| **AS metadata / OIDC discovery** | **Entra ID** | Authorization·token·JWKS endpoint 안내 |
+| **Authorization Code + PKCE** | **Client/MSAL ↔ Entra ID** | Client가 verifier/challenge를 사용하고 Entra가 code 교환 시 검증 |
+| **JWT 검증** | **APIM / MCP Server** | 발급된 access token의 issuer·audience·유효 시간·권한 검사 |
+
+v2 token을 사용하는 이 예제의 PRM은 Entra issuer를 `https://login.microsoftonline.com/<tenant-id>/v2.0`으로 안내합니다. **Entra가 MCP의 PRM을 제공하는 구조가 아닙니다.**
+
+[![MCP client가 APIM의 PRM을 읽고 Entra와 직접 OAuth 및 PKCE를 수행한 뒤 APIM에 access token을 보내는 흐름](images/mcp-oauth-obo.svg)](images/mcp-oauth-obo.svg)
+
 | 인증 구간 | 필요한 token |
 |---|---|
 | Client → MCP API | **A:** MCP API용 access token. MCP HTTP authorization의 대상 |
 | MCP API → ARM·Graph 등 | **B:** 별도 데이터 API용 token. 사용자 위임이면 Entra OBO를 사용할 수 있음 |
-
-[![MCP OAuth로 MCP API용 token A를 얻은 후 중간 API가 Entra OBO로 별도 데이터 API용 token B를 받는 흐름](images/mcp-oauth-obo.svg)](images/mcp-oauth-obo.svg)
 
 ### MCP HTTP auth에서 실제로 구성·확인할 단계
 
@@ -226,14 +240,14 @@ Microsoft Learn의 [Toolbox 개요](https://learn.microsoft.com/azure/foundry/ag
 | **① 401 challenge·PRM** | MCP endpoint: RFC 9728 metadata, `resource_metadata`, scopes | APIM 정책으로 구성. **401 challenge → PRM 200** 확인 | 전체 자동 discovery 동작 직접 미검증 |
 | **② Authorization server 발견** | Client가 PRM의 issuer를 따라 RFC 8414/OIDC metadata 조회 | **OIDC 200**, authorization·token·JWKS endpoint 확인 | 문서는 Foundry credential/token 사용을 설명. 실제 metadata는 미검증 |
 | **③ Client 등록·scope·consent** | Entra 앱 등록 + 사용할 client | 등록된 public client의 사전 승인 설정 확인. 해당 client의 대화형 로그인은 미실행 | Azure credential 방식 문서화. 사용할 MCP client의 등록·consent 경로 확인 필요 |
-| **④ PKCE/S256** | OAuth client + authorization server | Entra는 S256을 지원하지만 **이번 OIDC 응답에 `code_challenge_methods_supported` 없음** | 입력 endpoint의 PKCE 흐름 직접 미검증. Backend `oauth2` 설정과 별개 |
+| **④ PKCE/S256** | OAuth client/MSAL + Entra | **Entra 지원(문서)**. 이번에는 브라우저 code 교환을 실행하지 않음. Metadata 관측은 아래 호환성 노트 참고 | 선택한 client의 로그인 방식에 따라 확인. Backend `oauth2` 설정과 별개 |
 | **⑤ 대상 resource 정렬** | PRM `resource` ↔ Entra Application ID URI ↔ client 요청 | 앱에는 `api://...`만 등록. **HTTPS MCP URI 없음**, URL 대상 CLI token 요청은 `AADSTS500011` | `https://ai.azure.com/.default` token 사용 문서화. MCP 자동 OAuth의 URI 정렬은 미검증 |
 | **⑥ Token·권한 검사** | MCP endpoint의 issuer·audience·expiry·scope/role 검증 | **정상 token 200 / wrong audience 401** | Foundry token·project 권한 검사 문서화. 직접 미실측 |
 | **⑦ Token 갱신** | Client credential/refresh 흐름 | 수명주기 재검증은 미실행 | Consumer credential 갱신과 backend connection 갱신을 구분해야 함 |
 
-- **PKCE 기능 ≠ 지원 선언:** [Entra는 S256 지원](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow#request-an-authorization-code). 그러나 [MCP 규격](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)은 metadata에 선언이 없으면 client가 authorization을 진행하지 않도록 요구합니다.
-- **Resource 정렬:** [Entra MCP 구성 문서](https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id#step-3-set-the-application-id-uri-to-your-mcp-server-url)의 조건을 확인합니다. CLI의 URL 대상 검사는 브라우저 PKCE 전체 교환의 실증이 아닙니다.
-- **현재 판정:** 사전 token 발급·API 검증·Python OBO는 성공. **자동 OAuth는 ④·⑤의 추가 확인/구성 전까지 완료로 표시하지 않습니다.** [실행 방법과 비식별 결과](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)
+- **Resource 정렬:** [Entra MCP 구성 문서](https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id#step-3-set-the-application-id-uri-to-your-mcp-server-url)는 canonical URL을 대상 resource로 쓸 때의 URI 정렬을 설명합니다. 기존 `api://...` scope를 사용하는 MSAL의 PKCE 로그인이 불가능하다는 의미는 아닙니다.
+- **검증 범위:** Token 발급·API 검증·Python OBO 성공. **브라우저 PKCE와 특정 MCP client의 자동 연결 전체는 미실행**이며 미지원 판정이 아닙니다. [실행 방법·결과](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)
+- **Metadata 호환성 노트:** 이번 OIDC 응답에는 `code_challenge_methods_supported`가 없었습니다. [MCP의 metadata 검증 규칙](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations#authorization-code-protection)을 적용하는 client와의 상호운용성 점검 항목으로 남깁니다. **Entra의 PKCE 미지원이나 PRM 제공 실패를 뜻하지 않습니다.**
 
 ### 연결된 tool의 인증: APIM과 Toolbox 비교
 
