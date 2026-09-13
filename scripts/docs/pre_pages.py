@@ -68,6 +68,7 @@ class ReviewedChange:
     missing_count: int
     reason: str
     evidence: tuple[StructureEvidence | FileEvidence, ...]
+    link_change: str | None = None
 
 
 @dataclass(frozen=True)
@@ -156,6 +157,17 @@ def _relative_path(value: object, label: str) -> PurePosixPath:
 STRUCTURE_CATEGORIES = (
     "title", "headings", "prose", "code", "tables", "images", "local_link_labels",
 )
+EVIDENCE_CATEGORIES = (*STRUCTURE_CATEGORIES, "links")
+
+
+def validate_public_evidence_path(path: PurePosixPath, label: str) -> None:
+    if any(part.casefold() in {".git", ".superpowers"} for part in path.parts):
+        raise AuditFormatError(f"{label}: forbidden evidence path: {path}")
+    if not (
+        len(path.parts) > 2 and path.parts[:2] == ("docs", "services")
+        or path == PurePosixPath(".devcontainer/README.md")
+    ):
+        raise AuditFormatError(f"{label}: evidence path is outside the public source allowlist: {path}")
 
 
 def _positive_count(value: object, label: str) -> int:
@@ -170,15 +182,21 @@ def _sha256(value: object, label: str) -> str:
     return value
 
 
-def _review_reason(value: object, label: str) -> str:
+def _review_reason(
+    value: object, label: str, references: tuple[StructureEvidence | FileEvidence, ...],
+) -> str:
     reason = _nonempty_string(value, label)
     text = unicodedata.normalize("NFKC", reason).casefold()
+    for reference in references:
+        text = text.replace(unicodedata.normalize("NFKC", str(reference.path)).casefold(), " ")
     text = re.sub(r"(?:https?://|(?:docs|samples)/)\S+", " ", text)
     text = re.sub(
         r"\b(?:safety|reason|review(?:ed)?|approval|approved?|preservation|replacement|migration|updated?|revised?|"
         r"changed?|removed?|deleted?|retained?|preserved?|replaced?|migrated?|"
         r"needed|necessary|unnecessary|longer|anymore|during|before|after|because|content|document|documentation|"
-        r"block|material|stuff|latest|current|previous|old|new|"
+        r"block|material|stuff|latest|current|previous|old|new|evidence|references?|"
+        r"obsolete|irrelevant|therefore|nothing|significant|suitable|equivalent|"
+        r"improved?|presentation|has|have|"
         r"a|an|the|and|or|as|at|in|on|to|of|for|from|with|by|"
         r"this|that|these|those|it|its|is|was|are|were|be|been|not|no|now)\b",
         " ", text,
@@ -195,6 +213,15 @@ def _review_reason(value: object, label: str) -> str:
         raise AuditFormatError(
             f"{label} must describe concrete replacement/preservation details, not generic-only approval phrases"
         )
+    if not any(
+        re.search(
+            r"(?<![A-Za-z0-9_./%+-])" + re.escape(str(reference.path))
+            + r"(?![A-Za-z0-9_/%+-]|\.[A-Za-z0-9_.%+-])",
+            reason,
+        )
+        for reference in references
+    ):
+        raise AuditFormatError(f"{label} must name at least one exact evidence path")
     return reason
 
 
@@ -211,10 +238,11 @@ def _evidence_reference(value: object, label: str) -> StructureEvidence | FileEv
     }
     raw = _fields(value, fields, label)
     path = _relative_path(raw["path"], f"{label}.path")
+    validate_public_evidence_path(path, f"{label}.path")
     if kind == "file":
         return FileEvidence(path, _sha256(raw["sha256"], f"{label}.sha256"))
     category = raw["category"]
-    if category not in STRUCTURE_CATEGORIES:
+    if category not in EVIDENCE_CATEGORIES:
         raise AuditFormatError(f"{label}.category is not a known structure category")
     return StructureEvidence(
         path, category, _sha256(raw["fingerprint"], f"{label}.fingerprint"),
@@ -239,14 +267,18 @@ def validate_reviewed_changes(
             _sha256(fingerprint, f"{label}.{category}.fingerprint")
             entry_label = f"{label}.{category}.{fingerprint}.approval"
             if isinstance(approval, ReviewedChange):
+                change = approval
                 approval = {
-                    "missing_count": approval.missing_count,
-                    "reason": approval.reason,
-                    "evidence": approval.evidence,
+                    "missing_count": change.missing_count,
+                    "reason": change.reason,
+                    "evidence": change.evidence,
                 }
-            raw = _fields(approval, {"missing_count", "reason", "evidence"}, entry_label)
+                if change.link_change is not None:
+                    approval["link_change"] = change.link_change
+            raw = _fields(
+                approval, {"missing_count", "reason", "evidence"}, entry_label, {"link_change"},
+            )
             count = _positive_count(raw["missing_count"], f"{entry_label}.missing_count")
-            reason = _review_reason(raw["reason"], f"{entry_label}.reason")
             if not isinstance(raw["evidence"], (list, tuple)) or not raw["evidence"]:
                 raise AuditFormatError(f"{entry_label}.evidence must be a non-empty sequence")
             references = []
@@ -260,7 +292,32 @@ def validate_reviewed_changes(
                     raise AuditFormatError(f"{entry_label}: duplicate evidence reference: {reference.path}")
                 seen.add(key)
                 references.append(reference)
-            parsed[category][fingerprint] = ReviewedChange(count, reason, tuple(references))
+            references = tuple(references)
+            reason = _review_reason(raw["reason"], f"{entry_label}.reason", references)
+            link_change = raw.get("link_change")
+            if "link_change" in raw and category != "local_link_labels":
+                raise AuditFormatError(f"{entry_label}.link_change is only valid for local_link_labels")
+            if category == "local_link_labels":
+                link_change = raw.get("link_change", "replacement")
+                if link_change not in ("replacement", "redundant-self-link"):
+                    raise AuditFormatError(f"{entry_label}.link_change is unknown")
+                evidence_categories = {
+                    ref.category for ref in references if isinstance(ref, StructureEvidence)
+                }
+                if link_change == "replacement":
+                    if "links" not in evidence_categories:
+                        raise AuditFormatError(f"{entry_label}: replacement approvals require exact links evidence")
+                else:
+                    if not {"title", "headings"} <= evidence_categories or "links" in evidence_categories:
+                        raise AuditFormatError(
+                            f"{entry_label}: redundant self-link removal requires document identity/topic "
+                            "structure, not replacement links"
+                        )
+                    if not re.search(r"\bself[- ]link\b|자기.*링크|자체.*링크", reason, re.IGNORECASE) or not re.search(
+                        r"\b(?:remov\w*|omit\w*|drop\w*)\b|삭제|제거|생략", reason, re.IGNORECASE,
+                    ):
+                        raise AuditFormatError(f"{entry_label}.reason must specifically explain self-link removal")
+            parsed[category][fingerprint] = ReviewedChange(count, reason, references, link_change)
     return parsed
 
 
@@ -274,8 +331,8 @@ def load_inventory(path: Path) -> PrePagesInventory:
         {"version", "baseline_commit", "pages_commit", "rename_similarity", "documents", "dispositions"},
         str(path),
     )
-    if type(data["version"]) is not int or data["version"] != 2:
-        raise AuditFormatError("version must be 2 (evidence-bound content approvals)")
+    if type(data["version"]) is not int or data["version"] != 3:
+        raise AuditFormatError("version must be 3 (exact links and public HEAD-tracked evidence)")
     baseline = _commit_hash(data["baseline_commit"], "baseline_commit")
     pages = _commit_hash(data["pages_commit"], "pages_commit")
     similarity = data["rename_similarity"]
@@ -371,6 +428,51 @@ def git_bytes(repo_root: Path, commit: str, path: PurePosixPath) -> bytes:
 
 def git_text(repo_root: Path, commit: str, path: PurePosixPath) -> str:
     return git_bytes(repo_root, commit, path).decode("utf-8")
+
+
+def resolve_public_evidence_files(
+    repo_root: Path, paths: tuple[PurePosixPath, ...],
+) -> Mapping[PurePosixPath, Path]:
+    """Authorize HEAD-tracked public paths, but return their live working-tree files."""
+    root = repo_root.resolve()
+    tracked = {
+        PurePosixPath(path)
+        for path in _git(root, "ls-tree", "-r", "--name-only", "-z", "HEAD").decode("utf-8").split("\0")
+        if path
+    }
+    resolved = {}
+    to_check = set()
+    for reference in paths:
+        validate_public_evidence_path(reference, "evidence")
+        if reference not in tracked:
+            raise AuditFormatError(f"evidence path is not tracked at HEAD: {reference}")
+        try:
+            current = (root / reference).resolve(strict=True)
+            if not current.is_relative_to(root):
+                raise AuditFormatError(f"evidence path is outside repository: {reference}")
+            target = PurePosixPath(current.relative_to(root).as_posix())
+            validate_public_evidence_path(target, f"evidence target for {reference}")
+            if target not in tracked:
+                raise AuditFormatError(f"resolved evidence target is not tracked at HEAD: {target}")
+            if not current.is_file():
+                raise AuditFormatError(f"evidence path is not a file: {reference}")
+        except OSError as error:
+            raise AuditFormatError(f"cannot resolve current evidence {reference}: {error}") from error
+        resolved[reference] = current
+        to_check.update((reference, target))
+    if to_check:
+        result = subprocess.run(
+            ["git", "-C", str(root), "check-ignore", "--no-index", "-z", "--stdin"],
+            input="".join(f"{path}\0" for path in sorted(to_check)).encode("utf-8"),
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode not in (0, 1):
+            raise AuditFormatError(f"cannot check ignored evidence paths: {result.stderr.decode('utf-8', errors='replace')}")
+        ignored = [path for path in result.stdout.decode("utf-8").split("\0") if path]
+        if ignored:
+            raise AuditFormatError("ignored evidence paths are ineligible: " + ", ".join(ignored))
+    return MappingProxyType(resolved)
 
 
 def baseline_paths(repo_root: Path, inventory: PrePagesInventory) -> tuple[PurePosixPath, ...]:

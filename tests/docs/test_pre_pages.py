@@ -63,7 +63,7 @@ def history(tmp_path: Path) -> tuple[Path, str, str]:
 @pytest.fixture
 def manifest_data() -> dict:
     return {
-        "version": 2,
+        "version": 3,
         "baseline_commit": BASELINE,
         "pages_commit": PAGES,
         "rename_similarity": 20,
@@ -165,7 +165,7 @@ def test_inventory_requires_all_top_level_fields(
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("extra", True), ("version", 1), ("version", True),
+        ("extra", True), ("version", 1), ("version", 2), ("version", True),
         ("rename_similarity", 0), ("rename_similarity", 101),
         ("rename_similarity", "20"), ("rename_similarity", True),
         ("documents", {}), ("dispositions", []),
@@ -258,7 +258,7 @@ def test_inventory_reports_invalid_or_unsafe_yaml(tmp_path: Path, text: str) -> 
 
 @pytest.fixture
 def raw_inventory() -> str:
-    return f"""version: 2
+    return f"""version: 3
 baseline_commit: {BASELINE}
 pages_commit: {PAGES}
 rename_similarity: 20
@@ -288,7 +288,7 @@ dispositions:
 @pytest.mark.parametrize(
     ("original", "replacement", "key"),
     [
-        ("version: 2", "version: 1\nversion: 2", "version"),
+        ("version: 3", "version: 2\nversion: 3", "version"),
         (
             "  - baseline_path: old/guide.md",
             "  - baseline_path: ignored.md\n    baseline_path: old/guide.md",

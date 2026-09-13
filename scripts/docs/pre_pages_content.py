@@ -9,6 +9,7 @@ from hashlib import sha256
 from html import unescape
 import json
 from pathlib import Path, PurePosixPath
+import posixpath
 import re
 from typing import Mapping
 import unicodedata
@@ -20,8 +21,10 @@ from scripts.docs.pre_pages import (
     PrePagesInventory,
     ReviewedChange,
     STRUCTURE_CATEGORIES,
+    StructureEvidence,
     git_text,
     resolve_current_documents,
+    resolve_public_evidence_files,
     validate_reviewed_changes,
 )
 
@@ -35,6 +38,7 @@ class MarkdownStructure:
     tables: tuple[str, ...]
     images: tuple[str, ...]
     local_link_labels: tuple[str, ...]
+    links: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -64,6 +68,10 @@ _IMAGE = re.compile(r'!\[([^\[\]]*)\]\(\s*' + _DESTINATION + _LINK_END)
 _REFERENCE = re.compile(r"(!?)\[([^\[\]]+)\](?:\[([^\[\]]*)\])?")
 _DEFINITION = re.compile(r"(?m)^ {0,3}\[([^\]]+)\]:\s*" + _DESTINATION + r"[^\n]*$")
 _ATTRIBUTE = re.compile(r'''([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))''')
+_HTML_LINK = re.compile(
+    r"""<a\b((?:"[^"]*"|'[^']*'|[^'">])*)>(.*?)</a\s*>""",
+    re.IGNORECASE | re.DOTALL,
+)
 _WRAPPER = re.compile(
     r"</?(?:div|section|article|aside|nav|p|span|strong|em|b|i|a|ol|ul|li|br)\b[^>]*>",
     re.IGNORECASE,
@@ -72,6 +80,11 @@ _WRAPPER = re.compile(
 
 def _space(text: str) -> str:
     return " ".join(text.split())
+
+
+def _escaped_match(match: re.Match) -> bool:
+    prefix = match.string[:match.start()]
+    return (len(prefix) - len(prefix.rstrip("\\"))) % 2 == 1
 
 
 def _unquote(line: str, depth: int) -> str | None:
@@ -180,6 +193,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
     tables: list[str] = []
     images: list[str] = []
     local_link_labels: list[str] = []
+    links: list[str] = []
 
     def visible(value: str) -> str:
         value = _WRAPPER.sub(" ", unescape(value))
@@ -195,13 +209,15 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
         if image:
             images.append(f"{label}\n{PurePosixPath(unquote(urlsplit(target).path)).name}")
             return ""
+        if label:
+            links.append(f"{label}\n{target}")
         if label and not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
             local_link_labels.append(label)
         return label
 
     def inline(value: str) -> str:
         literals: dict[str, str] = {}
-        image_start, label_start = len(images), len(local_link_labels)
+        image_start, label_start, link_start = len(images), len(local_link_labels), len(links)
 
         def protect(match: re.Match) -> str:
             token = f"\ue000{len(literals)}\ue001"
@@ -215,26 +231,54 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
 
         value = re.sub(r"(`+)(.*?)\1", protect, value)
 
-        def html_image(match: re.Match) -> str:
-            attributes = {
+        def attributes(raw: str) -> dict[str, str]:
+            return {
                 name.lower(): double or single or bare
-                for name, double, single, bare in _ATTRIBUTE.findall(match[0])
+                for name, double, single, bare in _ATTRIBUTE.findall(raw)
             }
-            return link(attributes.get("alt", ""), attributes.get("src", ""), True)
+
+        def html_image(match: re.Match) -> str:
+            attrs = attributes(match[0])
+            return link(attrs.get("alt", ""), attrs.get("src", ""), True)
+
+        def html_link(match: re.Match) -> str:
+            if _escaped_match(match):
+                return match[0]
+            attrs = attributes(match[1])
+            label = link(match[2], attrs["href"], False) if "href" in attrs else match[2]
+            return f" {label} "
 
         value = re.sub(r"<img\b[^>]*>", html_image, value, flags=re.IGNORECASE)
         value = _IMAGE.sub(lambda match: link(match[1], match[2], True), value)
-        value = _LINK.sub(lambda match: link(match[2], match[3], bool(match[1])), value)
+        value = _HTML_LINK.sub(html_link, value)
+
+        def markdown_link(match: re.Match) -> str:
+            if _escaped_match(match):
+                return match[0]
+            return link(match[2], match[3], bool(match[1]))
+
+        value = _LINK.sub(markdown_link, value)
 
         def reference(match: re.Match) -> str:
+            if _escaped_match(match):
+                return match[0]
             key = _space(match[3] or match[2]).casefold()
             if key not in definitions:
                 return match[0]
             return link(match[2], definitions[key], bool(match[1]))
 
-        result = visible(_REFERENCE.sub(reference, value))
+        value = _REFERENCE.sub(reference, value)
+
+        def autolink(match: re.Match) -> str:
+            if not _escaped_match(match):
+                link(match[1], match[1], False)
+            return match[0]
+
+        value = re.sub(r"<((?:https?://|mailto:)[^<>\s]+)>", autolink, value, flags=re.IGNORECASE)
+        result = visible(value)
         images[image_start:] = [restore(image) for image in images[image_start:]]
         local_link_labels[label_start:] = [restore(label) for label in local_link_labels[label_start:]]
+        links[link_start:] = [restore(value) for value in links[link_start:]]
         return restore(result)
 
     def heading(value: str, level: int) -> None:
@@ -251,7 +295,9 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
             code.append(f"{language}\n{body}")
             continue
         body = re.sub(
-            r"(?m)^[ \t]*" + _WRAPPER.pattern + r"[ \t]*$", "", _DEFINITION.sub("", body),
+            r"(?m)^[ \t]*" + _WRAPPER.pattern + r"[ \t]*$",
+            lambda match: match[0] if re.match(r"\s*</?a\b", match[0], re.IGNORECASE) else "",
+            _DEFINITION.sub("", body),
             flags=re.IGNORECASE,
         )
         lines = body.split("\n")
@@ -306,6 +352,7 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
     return MarkdownStructure(
         title, tuple(headings), tuple(prose), tuple(code), tuple(tables),
         tuple(images), tuple(local_link_labels),
+        tuple(links),
     )
 
 
@@ -320,7 +367,10 @@ def _verify_current_evidence(
     baseline_path: PurePosixPath,
     reviewed_changes: Mapping[str, Mapping[str, ReviewedChange]],
 ) -> None:
-    root = repo_root.resolve()
+    files = resolve_public_evidence_files(repo_root, tuple({
+        ref.path for group in reviewed_changes.values() for approval in group.values()
+        for ref in approval.evidence
+    }))
     contents: dict[PurePosixPath, bytes] = {}
     structures: dict[PurePosixPath, MarkdownStructure] = {}
     for category, approvals in reviewed_changes.items():
@@ -329,12 +379,7 @@ def _verify_current_evidence(
                 label = f"{baseline_path}.{category}.{fingerprint}.evidence[{index}] ({reference.path})"
                 if reference.path not in contents:
                     try:
-                        path = (root / reference.path).resolve(strict=True)
-                        if not path.is_relative_to(root):
-                            raise AuditFormatError(f"{label}: evidence path is outside repository")
-                        if not path.is_file():
-                            raise AuditFormatError(f"{label}: evidence path is not a file")
-                        contents[reference.path] = path.read_bytes()
+                        contents[reference.path] = files[reference.path].read_bytes()
                     except OSError as error:
                         raise AuditFormatError(f"{label}: cannot read current evidence: {error}") from error
                 data = contents[reference.path]
@@ -358,6 +403,40 @@ def _verify_current_evidence(
                         f"{label}: evidence {reference.category} fingerprint {reference.fingerprint} "
                         f"count changed: expected {reference.count}, found {actual_count}"
                     )
+
+
+def _verify_self_link_removal(
+    baseline_path: PurePosixPath,
+    current_path: PurePosixPath,
+    baseline: MarkdownStructure,
+    current: MarkdownStructure,
+    fingerprint: str,
+    approval: ReviewedChange,
+) -> None:
+    labels = {
+        label for label in baseline.local_link_labels
+        if sha256(f"local_link_labels\0{label}".encode("utf-8")).hexdigest() == fingerprint
+    }
+    links = [value.partition("\n")[2] for value in baseline.links if value.partition("\n")[0] in labels]
+    if len(links) < approval.missing_count:
+        raise AuditFormatError(f"{baseline_path}: self-link removal has no matching baseline link evidence")
+    for target in links:
+        url = urlsplit(target)
+        if (
+            url.scheme or url.netloc or url.query or url.fragment or not url.path or url.path.startswith("/")
+            or PurePosixPath(posixpath.normpath(str(baseline_path.parent / unquote(url.path)))) != baseline_path
+        ):
+            raise AuditFormatError(f"{baseline_path}: removal is not a redundant document self-link")
+    identities = [
+        ref for ref in approval.evidence
+        if isinstance(ref, StructureEvidence) and ref.path == current_path
+        and ref.fingerprint in {
+            sha256(f"{ref.category}\0{value}".encode("utf-8")).hexdigest()
+            for value in _values(current, ref.category)
+        }
+    ]
+    if not {"title", "headings"} <= {ref.category for ref in identities}:
+        raise AuditFormatError(f"{baseline_path}: self-link removal must bind current document identity/topic structure")
 
 
 def compare_markdown(
@@ -394,6 +473,10 @@ def compare_markdown(
                 raise AuditFormatError(
                     f"{baseline_path}.{category}.{fingerprint}: missing_count changed: "
                     f"approved {approval.missing_count}, found {actual}"
+                )
+            if approval.link_change == "redundant-self-link":
+                _verify_self_link_removal(
+                    baseline_path, current_path, baseline, current, fingerprint, approval,
                 )
             approved.add((category, fingerprint))
     if approved:

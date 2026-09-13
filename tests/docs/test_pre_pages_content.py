@@ -7,6 +7,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import subprocess
 
 import pytest
 import yaml
@@ -28,10 +29,27 @@ from scripts.docs.pre_pages_content import (
 ROOT = Path(__file__).parents[2]
 BASELINE_PATH = PurePosixPath("old/guide.md")
 CURRENT_PATH = PurePosixPath("docs/services/service/topic/index.md")
-REASON = (
-    "Preserved in docs/services/service/topic/samples/evidence/README.md "
-    "under Historical commands; the canonical guide now links to that evidence."
+REASON_TEMPLATE = (
+    "The historical command parameters and execution context are preserved "
+    "in the documented replacement procedure at {path}."
 )
+REASON = REASON_TEMPLATE.format(path=CURRENT_PATH)
+_DEFAULT_REASON = object()
+
+
+def git(repo: Path, *arguments: str) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(repo), *arguments], check=True, capture_output=True,
+    ).stdout
+
+
+def track_files(repo: Path, *paths: str) -> None:
+    if not (repo / ".git").exists():
+        git(repo, "init", "-q")
+        git(repo, "config", "user.name", "Evidence Tests")
+        git(repo, "config", "user.email", "evidence@example.com")
+    git(repo, "add", "--", *paths)
+    git(repo, "-c", "commit.gpgsign=false", "commit", "-qm", "Track public evidence")
 
 
 def fingerprint(category: str, value: str) -> str:
@@ -45,17 +63,25 @@ def structure_evidence(
     return {"kind": "structure", "path": path, "category": category, "fingerprint": fingerprint(category, value), "count": count}
 
 
-def approval(reason=REASON, missing_count=1, evidence=None) -> dict:
-    return {
+def approval(reason=_DEFAULT_REASON, missing_count=1, evidence=None, link_change=None) -> dict:
+    references = [structure_evidence()] if evidence is None else evidence
+    if reason is _DEFAULT_REASON:
+        path = references[0].get("path", CURRENT_PATH) if references and isinstance(references[0], dict) else CURRENT_PATH
+        reason = REASON_TEMPLATE.format(path=path)
+    result = {
         "missing_count": missing_count, "reason": reason,
-        "evidence": [structure_evidence()] if evidence is None else evidence,
+        "evidence": references,
     }
+    if link_change is not None:
+        result["link_change"] = link_change
+    return result
 
 
 def proof_file(repo: Path, text: str = "Replacement.", path: str = str(CURRENT_PATH)) -> Path:
     file = repo / path
     file.parent.mkdir(parents=True, exist_ok=True)
     file.write_text(text, encoding="utf-8")
+    track_files(repo, path)
     return file
 
 
@@ -86,6 +112,92 @@ def test_inline_links_keep_labels_not_destinations_or_titles() -> None:
     assert first.prose == second.prose == ("공식 문서 및 예제.",)
     assert first.local_link_labels == ("예제",)
     assert second.local_link_labels == ("공식 문서",)
+
+
+def test_link_evidence_keeps_normalized_label_and_complete_explicit_destination() -> None:
+    structure = extract_markdown_structure(
+        '[  가이드 Ａ  ](<../Target/index.md?q=1&amp;lang=ko#Section> "display title")'
+    )
+    assert structure.links == ("가이드 A\n../Target/index.md?q=1&lang=ko#Section",)
+
+
+def test_link_evidence_retains_destination_differences_and_multiplicity() -> None:
+    structure = extract_markdown_structure(
+        "[Same](https://example.com/A?q=1#part) "
+        "[Same](https://example.com/A?q=1#part) "
+        "[Same](https://example.com/A?q=2#other)"
+    )
+    assert Counter(structure.links) == {
+        "Same\nhttps://example.com/A?q=1#part": 2,
+        "Same\nhttps://example.com/A?q=2#other": 1,
+    }
+    assert fingerprint("links", structure.links[0]) != fingerprint("links", structure.links[2])
+
+
+def test_links_are_current_evidence_only_not_baseline_destination_comparison() -> None:
+    before = extract_markdown_structure("[Guide](../old.md)")
+    after = extract_markdown_structure("[Guide](../new.md)")
+    assert before.links != after.links
+    assert before.prose == after.prose
+    assert compare_markdown(BASELINE_PATH, CURRENT_PATH, before, after, {}).status == "preserved"
+
+
+def test_link_evidence_resolves_full_collapsed_and_shortcut_references() -> None:
+    structure = extract_markdown_structure(
+        "[Guide][g] [More][] [Short]\n\n"
+        "[g]: ../guide.md#setup\n[More]: https://example.com/help\n[Short]: #details"
+    )
+    assert structure.links == (
+        "Guide\n../guide.md#setup", "More\nhttps://example.com/help", "Short\n#details",
+    )
+
+
+def test_link_evidence_excludes_images_comments_and_code_literals() -> None:
+    structure = extract_markdown_structure(
+        "![Image](image.png) [![Logo](logo.svg)](https://example.com)\n\n"
+        "![Reference image][asset]\n\n[asset]: image.svg\n\n"
+        '<img src="image.png" alt="HTML image">\n\n'
+        "`[Literal](literal.md)`\n\n```md\n[Code](code.md)\n```\n\n"
+        "<!-- [Hidden](hidden.md) -->\n\n[Visible](visible.md)"
+    )
+    assert structure.links == ("Visible\nvisible.md",)
+
+
+def test_link_evidence_keeps_inline_code_label_text_not_placeholder_tokens() -> None:
+    structure = extract_markdown_structure("[`A_B`](../target.md)")
+    assert structure.links == ("A_B\n../target.md",)
+
+
+@pytest.mark.parametrize("text", [
+    '<a href="../target.md?a=1&amp;b=2#part"><strong>Guide</strong></a>',
+    "<a href='../target.md?a=1&amp;b=2#part'>Guide</a>",
+    '<a href="../target.md?a=1&amp;b=2#part">\nGuide\n</a>',
+])
+def test_link_evidence_recognizes_html_anchors(text: str) -> None:
+    assert extract_markdown_structure(text).links == ("Guide\n../target.md?a=1&b=2#part",)
+
+
+def test_link_evidence_recognizes_explicit_autolinks_but_not_placeholder_tags() -> None:
+    structure = extract_markdown_structure("<https://example.com/a#b> <subscription-id>")
+    assert structure.links == ("https://example.com/a#b\nhttps://example.com/a#b",)
+
+
+def test_plain_label_text_is_not_link_evidence() -> None:
+    assert extract_markdown_structure("tei-adapter").links == ()
+
+
+@pytest.mark.parametrize("text", [
+    r"\[Adapter](https://example.com/adapter)",
+    "\\[Adapter][ref]\n\n[ref]: https://example.com/adapter",
+    r"\<https://example.com/adapter>",
+    r'\<a href="https://example.com/adapter">Adapter</a>',
+])
+def test_escaped_link_markup_does_not_count_as_a_current_hyperlink(text: str) -> None:
+    assert extract_markdown_structure(text).links == ()
+
+
+def test_even_backslashes_before_a_link_do_not_escape_its_markup() -> None:
+    assert extract_markdown_structure(r"\\[Adapter](target.md)").links == ("Adapter\ntarget.md",)
 
 
 def test_reference_links_and_images_use_definitions_not_definition_prose() -> None:
@@ -331,7 +443,7 @@ def test_a_path_alone_does_not_make_a_generic_updated_reason_specific() -> None:
 
 def test_specific_korean_preservation_reasons_are_valid(tmp_path: Path) -> None:
     reason = (
-        "docs/services/service/topic/samples/evidence/README.md의 이관 전 조사 명령 절에 "
+        "docs/services/service/topic/index.md의 이관 전 조사 명령 절에 "
         "원문을 보존하고 현재 가이드에서 그 역사적 증거로 연결한다."
     )
     proof_file(tmp_path)
@@ -342,7 +454,7 @@ def test_specific_korean_preservation_reasons_are_valid(tmp_path: Path) -> None:
 @pytest.mark.parametrize("key", ["hash", "A" * 64, "g" * 64, "a" * 63, 1])
 def test_inventory_rejects_non_sha256_exception_keys(tmp_path: Path, key: object) -> None:
     data = yaml.safe_load((ROOT / "scripts/docs/pre_pages_inventory.yml").read_text())
-    data["version"] = 2
+    data["version"] = 3
     data["documents"][0]["reviewed_changes"] = {"prose": {key: approval()}}
     path = tmp_path / "inventory.yml"
     path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
@@ -352,7 +464,7 @@ def test_inventory_rejects_non_sha256_exception_keys(tmp_path: Path, key: object
 
 def test_inventory_rejects_unknown_exception_categories(tmp_path: Path) -> None:
     data = yaml.safe_load((ROOT / "scripts/docs/pre_pages_inventory.yml").read_text())
-    data["version"] = 2
+    data["version"] = 3
     data["documents"][0]["reviewed_changes"] = {"anything": {"a" * 64: approval()}}
     path = tmp_path / "inventory.yml"
     path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
@@ -432,6 +544,7 @@ def isolated_real_document_audit(
     entry = next(doc for doc in inventory.documents if str(doc.baseline_path) == baseline)
     current_path = tmp_path / current
     shutil.copytree((ROOT / current).parent, current_path.parent)
+    track_files(tmp_path, str(current_path.parent.relative_to(tmp_path)))
     monkeypatch.setattr(
         pre_pages_content, "resolve_current_documents",
         lambda repo, manifest: {entry.baseline_path: load_document(current_path, tmp_path / "docs")},
@@ -551,7 +664,7 @@ def test_duplicate_references_are_rejected_even_if_counts_or_hashes_differ(kind:
     if kind == "structure":
         first, second = structure_evidence(), structure_evidence(count=2)
     else:
-        first = {"kind": "file", "path": "docs/evidence.bin", "sha256": "a" * 64}
+        first = {"kind": "file", "path": "docs/services/service/topic/evidence.bin", "sha256": "a" * 64}
         second = {**first, "sha256": "b" * 64}
     with pytest.raises(AuditFormatError, match="duplicate"):
         validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(evidence=[first, second])}})
@@ -598,7 +711,10 @@ def test_generic_only_reasons_cannot_hide_behind_english_or_korean_prefixes(reas
         "Nginx 프록시의 Host 헤더를 예시 도메인으로 치환하고 기존 upstream 포트와 전달 설정을 보존한다.",
     ],
 )
-def test_concrete_reasons_do_not_need_to_repeat_paths_already_bound_as_evidence(reason: str) -> None:
+def test_concrete_reasons_must_name_an_exact_evidence_path(reason: str) -> None:
+    with pytest.raises(AuditFormatError, match="reason.*path"):
+        validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(reason)}})
+    reason += f" Evidence: {CURRENT_PATH}."
     parsed = validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(reason)}})
     assert parsed["prose"][fingerprint("prose", "Removed.")].reason == reason
 
@@ -648,10 +764,13 @@ def test_evidence_occurrence_count_requires_the_exact_current_multiplicity(tmp_p
 
 @pytest.mark.parametrize("mutation", ["change", "delete"])
 def test_binary_file_evidence_requires_the_exact_current_sha256(tmp_path: Path, mutation: str) -> None:
-    path = tmp_path / "evidence.bin"
+    relative = "docs/services/service/topic/samples/evidence/payload.bin"
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
     original = b"\x00\xffhistorical capture"
     path.write_bytes(original)
-    ref = {"kind": "file", "path": "evidence.bin", "sha256": sha256(original).hexdigest()}
+    track_files(tmp_path, relative)
+    ref = {"kind": "file", "path": relative, "sha256": sha256(original).hexdigest()}
     reviewed = {"prose": {fingerprint("prose", "Removed."): approval(evidence=[ref])}}
     assert compare("Removed.", "", reviewed, repo_root=tmp_path).status == "reviewed"
     if mutation == "delete":
@@ -666,9 +785,13 @@ def test_binary_file_evidence_requires_the_exact_current_sha256(tmp_path: Path, 
 def test_evidence_cannot_escape_the_repository_through_a_symlink(tmp_path: Path, kind: str) -> None:
     outside = tmp_path.parent / f"{tmp_path.name}-outside.md"
     outside.write_text("Replacement.")
-    (tmp_path / "link.md").symlink_to(outside)
-    ref = structure_evidence(path="link.md") if kind == "structure" else {
-        "kind": "file", "path": "link.md", "sha256": sha256(outside.read_bytes()).hexdigest(),
+    relative = "docs/services/service/topic/link.md"
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    path.symlink_to(outside)
+    track_files(tmp_path, relative)
+    ref = structure_evidence(path=relative) if kind == "structure" else {
+        "kind": "file", "path": relative, "sha256": sha256(outside.read_bytes()).hexdigest(),
     }
     with pytest.raises(AuditFormatError, match="outside"):
         compare("Removed.", "", {"prose": {fingerprint("prose", "Removed."): approval(evidence=[ref])}}, repo_root=tmp_path)
@@ -700,3 +823,308 @@ def test_each_historical_sre_thread_approval_binds_its_corresponding_scenario() 
             and ref.fingerprint == fingerprint("prose", f"- Agent thread: <agent-thread-id-s{scenario}>")
             for ref in change.evidence
         )
+
+
+def test_removing_real_tei_adapter_link_markup_invalidates_its_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "aisearch/custom_vectorization/01_custom_embedding_guide.md",
+        "docs/services/azure-ai-search/custom-vectorization/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    link = (
+        "[tei-adapter](https://github.com/hellices/devguidesample/tree/main/"
+        "docs/services/azure-ai-search/custom-vectorization/samples/implementation/tei-adapter)"
+    )
+    text = path.read_text()
+    assert text.count(link) == 1
+    path.write_text(text.replace(link, "tei-adapter"))
+    assert (path.parent / "samples/implementation/tei-adapter/app.py").is_file()
+    with pytest.raises(AuditFormatError, match="evidence|links"):
+        audit_document_content(tmp_path, inventory)
+
+
+def test_ignored_baseline_snapshot_cannot_substitute_for_current_public_evidence(tmp_path: Path) -> None:
+    proof_file(tmp_path)
+    (tmp_path / ".gitignore").write_text(".superpowers/\n")
+    snapshot = tmp_path / ".superpowers/sdd/baseline.md"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text("Removed.")
+    reason = (
+        "The historical diagnostic commands are retained in .superpowers/sdd/baseline.md "
+        "as replacement evidence for the removed guide section."
+    )
+    reviewed = {"prose": {fingerprint("prose", "Removed."): approval(
+        reason, evidence=[structure_evidence("Removed.", path=".superpowers/sdd/baseline.md")],
+    )}}
+    with pytest.raises(AuditFormatError, match="public|eligible|forbidden|tracked"):
+        compare("Removed.", "", reviewed, repo_root=tmp_path)
+
+
+def test_git_metadata_cannot_be_used_as_file_evidence(tmp_path: Path) -> None:
+    proof_file(tmp_path)
+    metadata = tmp_path / ".git/HEAD"
+    ref = {"kind": "file", "path": ".git/HEAD", "sha256": sha256(metadata.read_bytes()).hexdigest()}
+    reason = (
+        "The current .git/HEAD file is preserved as replacement evidence for the removed "
+        "deployment procedure and its execution context."
+    )
+    with pytest.raises(AuditFormatError, match="public|eligible|forbidden|tracked"):
+        compare("Removed.", "", {"prose": {fingerprint("prose", "Removed."): approval(reason, evidence=[ref])}}, repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("include_path", [False, True])
+@pytest.mark.parametrize("reason", [
+    "Safety: this obsolete material is irrelevant and therefore unnecessary.",
+    "Nothing significant has changed; approved after review.",
+    "Replaced with a suitable equivalent for improved presentation.",
+])
+def test_rereview_generic_examples_are_rejected_even_with_an_exact_path(reason: str, include_path: bool) -> None:
+    if include_path:
+        reason += f" Evidence: {CURRENT_PATH}."
+    with pytest.raises(AuditFormatError, match="reason"):
+        validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(reason)}})
+
+
+@pytest.mark.parametrize("category", ["prose", "local_link_labels", "title"])
+def test_replacement_link_approvals_require_destination_bound_links_evidence(category: str) -> None:
+    change = approval(evidence=[structure_evidence("Adapter", category)])
+    with pytest.raises(AuditFormatError, match="links"):
+        validate_reviewed_changes({"local_link_labels": {fingerprint("local_link_labels", "Adapter"): change}})
+
+
+def test_links_cannot_be_used_as_a_baseline_exception_category() -> None:
+    with pytest.raises(AuditFormatError, match="category"):
+        validate_reviewed_changes({"links": {fingerprint("links", "Adapter\nold.md"): approval()}})
+
+
+@pytest.mark.parametrize("mutation", ["plain-label", "changed-destination", "changed-fragment"])
+def test_exact_current_link_evidence_invalidates_on_markup_or_destination_changes(
+    tmp_path: Path, mutation: str,
+) -> None:
+    current = "[Adapter](https://example.com/adapter#setup)"
+    path = proof_file(tmp_path, current)
+    change = approval(evidence=[structure_evidence("Adapter\nhttps://example.com/adapter#setup", "links")])
+    reviewed = {"local_link_labels": {fingerprint("local_link_labels", "Adapter"): change}}
+    assert compare("[Adapter](adapter.md)", current, reviewed, repo_root=tmp_path).status == "reviewed"
+    changed = {
+        "plain-label": "Adapter",
+        "changed-destination": "[Adapter](https://example.com/other#setup)",
+        "changed-fragment": "[Adapter](https://example.com/adapter#other)",
+    }[mutation]
+    path.write_text(changed)
+    with pytest.raises(AuditFormatError, match="evidence.*links|links.*count"):
+        compare("[Adapter](adapter.md)", changed, reviewed, repo_root=tmp_path)
+
+
+def test_link_evidence_requires_exact_current_multiplicity(tmp_path: Path) -> None:
+    current = "[Adapter](https://example.com/adapter)"
+    path = proof_file(tmp_path, current + "\n\n" + current)
+    change = approval(missing_count=2, evidence=[
+        structure_evidence("Adapter\nhttps://example.com/adapter", "links", count=2),
+    ])
+    reviewed = {"local_link_labels": {fingerprint("local_link_labels", "Adapter"): change}}
+    baseline = "[Adapter](adapter.md)\n\n[Adapter](adapter.md)"
+    assert compare(baseline, path.read_text(), reviewed, repo_root=tmp_path).status == "reviewed"
+    path.write_text(current + "\n\nAdapter")
+    with pytest.raises(AuditFormatError, match="count"):
+        compare(baseline, path.read_text(), reviewed, repo_root=tmp_path)
+
+
+def test_duplicate_link_evidence_is_rejected_even_with_different_counts() -> None:
+    first = structure_evidence("Adapter\nhttps://example.com/adapter", "links")
+    change = approval(evidence=[first, {**first, "count": 2}])
+    with pytest.raises(AuditFormatError, match="duplicate"):
+        validate_reviewed_changes({"local_link_labels": {fingerprint("local_link_labels", "Adapter"): change}})
+
+
+@pytest.mark.parametrize("count", [0, -1, True, "1"])
+def test_link_evidence_counts_must_be_positive_integers(count: object) -> None:
+    change = approval(evidence=[structure_evidence("Adapter\nhttps://example.com/adapter", "links", count=count)])
+    with pytest.raises(AuditFormatError, match="count"):
+        validate_reviewed_changes({"local_link_labels": {fingerprint("local_link_labels", "Adapter"): change}})
+
+
+def self_link_approval() -> dict:
+    return approval(
+        f"The redundant self-link to this same guide is removed; its current title and Files navigation are retained in {CURRENT_PATH}.",
+        evidence=[
+            structure_evidence("Current guide", "title"),
+            structure_evidence("Files", "headings"),
+        ],
+        link_change="redundant-self-link",
+    )
+
+
+def test_intentionally_removed_self_link_is_bound_to_current_document_identity(tmp_path: Path) -> None:
+    current = "# Current guide\n\n## Files\n\nguide.md"
+    proof_file(tmp_path, current)
+    baseline = current.replace("\nguide.md", "\n[guide.md](guide.md)")
+    reviewed = {"local_link_labels": {fingerprint("local_link_labels", "guide.md"): self_link_approval()}}
+    assert compare(baseline, current, reviewed, repo_root=tmp_path).status == "reviewed"
+
+
+@pytest.mark.parametrize("destination", ["other.md", "guide.md#files", "guide.md?view=text"])
+def test_self_link_removal_exception_cannot_approve_another_target_or_section(
+    tmp_path: Path, destination: str,
+) -> None:
+    current = "# Current guide\n\n## Files\n\nguide.md"
+    proof_file(tmp_path, current)
+    baseline = current.replace("\nguide.md", f"\n[guide.md]({destination})")
+    with pytest.raises(AuditFormatError, match="self-link"):
+        compare(baseline, current, {"local_link_labels": {
+            fingerprint("local_link_labels", "guide.md"): self_link_approval(),
+        }}, repo_root=tmp_path)
+
+
+def test_self_link_removal_cannot_bind_only_an_unrelated_document(tmp_path: Path) -> None:
+    current = "# Current guide\n\n## Files\n\nguide.md"
+    proof_file(tmp_path, current)
+    other = "docs/services/service/other/index.md"
+    proof_file(tmp_path, current, other)
+    change = self_link_approval()
+    for reference in change["evidence"]:
+        reference["path"] = other
+    change["reason"] += f" Identity evidence: {other}."
+    with pytest.raises(AuditFormatError, match="self-link.*current|current.*identity"):
+        compare(current.replace("\nguide.md", "\n[guide.md](guide.md)"), current, {
+            "local_link_labels": {fingerprint("local_link_labels", "guide.md"): change},
+        }, repo_root=tmp_path)
+
+
+def test_self_link_removal_requires_both_title_and_topic_structure() -> None:
+    change = self_link_approval()
+    change["evidence"] = change["evidence"][:1]
+    with pytest.raises(AuditFormatError, match="self-link|identity"):
+        validate_reviewed_changes({"local_link_labels": {fingerprint("local_link_labels", "guide.md"): change}})
+
+
+def test_self_link_removal_cannot_pretend_an_unrelated_replacement_hyperlink_exists() -> None:
+    change = self_link_approval()
+    change["evidence"].append(structure_evidence("Other\nother.md", "links"))
+    with pytest.raises(AuditFormatError, match="self-link"):
+        validate_reviewed_changes({"local_link_labels": {fingerprint("local_link_labels", "guide.md"): change}})
+
+
+def test_self_link_removal_requires_a_specific_removal_reason() -> None:
+    change = self_link_approval()
+    change["reason"] = f"The Nginx Host header retains the example domain and upstream port in {CURRENT_PATH}."
+    with pytest.raises(AuditFormatError, match="self-link.*reason|reason.*self-link"):
+        validate_reviewed_changes({"local_link_labels": {fingerprint("local_link_labels", "guide.md"): change}})
+
+
+@pytest.mark.parametrize("category", ["prose", "code", "tables"])
+def test_link_change_exemptions_are_invalid_on_non_link_categories(category: str) -> None:
+    with pytest.raises(AuditFormatError, match="link_change"):
+        validate_reviewed_changes({category: {fingerprint(category, "Removed."): self_link_approval()}})
+
+
+@pytest.mark.parametrize("tracked", [False, True])
+def test_ignored_public_file_is_ineligible_even_if_force_tracked_at_head(tmp_path: Path, tracked: bool) -> None:
+    proof_file(tmp_path)
+    relative = "docs/services/service/topic/ignored.md"
+    path = tmp_path / relative
+    path.write_text("Replacement.")
+    (tmp_path / ".gitignore").write_text("**/ignored.md\n")
+    if tracked:
+        git(tmp_path, "add", "-f", "--", relative)
+        git(tmp_path, "-c", "commit.gpgsign=false", "commit", "-qm", "Track ignored fixture")
+    reviewed = {"prose": {fingerprint("prose", "Removed."): approval(evidence=[structure_evidence(path=relative)])}}
+    with pytest.raises(AuditFormatError, match="ignored|HEAD"):
+        compare("Removed.", "", reviewed, repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_untracked_or_index_only_public_file_is_not_head_evidence(tmp_path: Path, staged: bool) -> None:
+    proof_file(tmp_path)
+    relative = "docs/services/service/topic/untracked.md"
+    (tmp_path / relative).write_text("Replacement.")
+    if staged:
+        git(tmp_path, "add", "--", relative)
+    reviewed = {"prose": {fingerprint("prose", "Removed."): approval(evidence=[structure_evidence(path=relative)])}}
+    with pytest.raises(AuditFormatError, match="HEAD"):
+        compare("Removed.", "", reviewed, repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("relative", [
+    "README.md", "scripts/snapshot.md", "baseline/guide.md",
+    ".devcontainer/README.md.backup", "docs/services/service/topic/.superpowers/snapshot.md",
+])
+def test_head_tracked_paths_outside_the_explicit_public_allowlist_are_ineligible(
+    tmp_path: Path, relative: str,
+) -> None:
+    proof_file(tmp_path, "Replacement.", relative)
+    with pytest.raises(AuditFormatError, match="eligible|public|forbidden"):
+        compare("Removed.", "", {"prose": {fingerprint("prose", "Removed."): approval(
+            evidence=[structure_evidence(path=relative)],
+        )}}, repo_root=tmp_path)
+
+
+def test_exact_tracked_devcontainer_readme_is_valid_and_working_tree_mutation_is_detected(tmp_path: Path) -> None:
+    relative = ".devcontainer/README.md"
+    file = proof_file(tmp_path, "Developer setup commands.", relative)
+    ref = {"kind": "file", "path": relative, "sha256": sha256(file.read_bytes()).hexdigest()}
+    reviewed = {"prose": {fingerprint("prose", "Removed."): approval(evidence=[ref])}}
+    assert compare("Removed.", "", reviewed, repo_root=tmp_path).status == "reviewed"
+    file.write_text("Developer commands deleted.")
+    with pytest.raises(AuditFormatError, match="evidence.*SHA-256"):
+        compare("Removed.", "", reviewed, repo_root=tmp_path)
+
+
+def test_public_tracked_symlink_cannot_resolve_to_a_private_snapshot(tmp_path: Path) -> None:
+    proof_file(tmp_path)
+    snapshot = tmp_path / ".superpowers/sdd/baseline.md"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text("Replacement.")
+    relative = "docs/services/service/topic/alias.md"
+    (tmp_path / relative).symlink_to(snapshot)
+    track_files(tmp_path, relative)
+    with pytest.raises(AuditFormatError, match="public|eligible|forbidden|HEAD"):
+        compare("Removed.", "", {"prose": {fingerprint("prose", "Removed."): approval(
+            evidence=[structure_evidence(path=relative)],
+        )}}, repo_root=tmp_path)
+
+
+def test_public_symlink_to_public_head_tracked_source_preserves_mutation_checks(tmp_path: Path) -> None:
+    target = proof_file(tmp_path)
+    relative = "docs/services/service/topic/alias.md"
+    (tmp_path / relative).symlink_to(target)
+    track_files(tmp_path, relative)
+    reviewed = {"prose": {fingerprint("prose", "Removed."): approval(evidence=[structure_evidence(path=relative)])}}
+    assert compare("Removed.", "", reviewed, repo_root=tmp_path).status == "reviewed"
+    target.write_text("Changed.")
+    with pytest.raises(AuditFormatError, match="evidence"):
+        compare("Removed.", "", reviewed, repo_root=tmp_path)
+
+
+def test_worktree_git_pointer_is_not_public_file_evidence(tmp_path: Path) -> None:
+    proof_file(tmp_path)
+    linked = tmp_path / "linked"
+    git(tmp_path, "worktree", "add", "-q", "--detach", str(linked))
+    metadata = linked / ".git"
+    assert metadata.is_file()
+    ref = {"kind": "file", "path": ".git", "sha256": sha256(metadata.read_bytes()).hexdigest()}
+    with pytest.raises(AuditFormatError, match="public|eligible|forbidden"):
+        compare("Removed.", "", {"prose": {fingerprint("prose", "Removed."): approval(
+            "The exact .git worktree pointer is retained as evidence for the removed deployment procedure.",
+            evidence=[ref],
+        )}}, repo_root=linked)
+
+
+@pytest.mark.parametrize("mentioned", [
+    "docs/services/service/topic/index.md.backup",
+    "docs/services/service/topic/index.md/another",
+    "docs/services/service/topic/INDEX.md",
+])
+def test_reason_must_name_an_exact_reference_not_a_prefix_or_different_case(mentioned: str) -> None:
+    reason = f"The Nginx Host header retains its example domain and upstream port in {mentioned}."
+    with pytest.raises(AuditFormatError, match="reason.*path"):
+        validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(reason)}})
+
+
+def test_devcontainer_path_itself_cannot_make_a_generic_reason_concrete() -> None:
+    reference = structure_evidence(path=".devcontainer/README.md")
+    reason = "Safety: updated and no longer needed for this content. Evidence: .devcontainer/README.md."
+    with pytest.raises(AuditFormatError, match="reason"):
+        validate_reviewed_changes({"prose": {fingerprint("prose", "Removed."): approval(reason, evidence=[reference])}})
