@@ -32,7 +32,8 @@ TEXT_SUFFIXES = {
 }
 TEXT_FILENAMES = {".env", "dockerfile"}
 TEXT_COMPOUND_SUFFIXES = (".env.example",)
-SCAN_ROOTS = ("docs",)
+SCAN_ROOTS = ("docs", "samples")
+REQUIRED_SCAN_ROOTS = ("docs",)
 UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 KNOWN_ENVIRONMENT_MARKERS = (
     "rg-rubicon",
@@ -116,7 +117,7 @@ def validate_repository(repo_root: Path | str) -> PublicSafetyResult:
     root = Path(repo_root)
     errors = [
         f"{name}: expected public content directory is missing under {root}"
-        for name in SCAN_ROOTS
+        for name in REQUIRED_SCAN_ROOTS
         if not (root / name).is_dir()
     ]
     count = 0

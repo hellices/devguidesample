@@ -76,6 +76,7 @@ def test_public_safety_accepts_placeholders_and_example_hosts(
     tmp_path: Path,
 ) -> None:
     root = make_repository(tmp_path)
+    assert not (root / "samples").exists()
     (root / "docs" / "services" / "aks" / "example" / "index.md").write_text(
         """\
 # Safe example
@@ -93,6 +94,28 @@ def test_public_safety_accepts_placeholders_and_example_hosts(
     result = validate_public_safety.validate_repository(root)
 
     assert result.errors == []
+
+
+def test_public_safety_scans_optional_top_level_samples(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    (root / "docs" / "services" / "aks" / "example" / "index.md").write_text(
+        "# Safe example\n", encoding="utf-8"
+    )
+    legacy_sample = root / "samples" / "example"
+    legacy_sample.mkdir(parents=True)
+    (legacy_sample / ".env.example").write_text(
+        "SEARCH_ENDPOINT=https://private-search-123.search.windows.net\n",
+        encoding="utf-8",
+    )
+
+    result = validate_public_safety.validate_repository(root)
+
+    assert result.file_count == 2
+    assert any(
+        "samples/example/.env.example:1:" in error
+        and "non-example Azure service hostname" in error
+        for error in result.errors
+    )
 
 
 def test_public_safety_scans_supported_text_and_detects_sensitive_values(

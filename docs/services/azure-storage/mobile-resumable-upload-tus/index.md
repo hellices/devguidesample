@@ -174,7 +174,7 @@ pip install requests
 <summary>build &amp; run</summary>
 
 ```bash
-cd azureblob/spring-resumable-upload
+cd docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application
 mvn -DskipTests package
 java -jar target/spring-resumable-upload-0.1.0.jar
 # or: mvn spring-boot:run
@@ -192,7 +192,7 @@ java -jar target/spring-resumable-upload-0.1.0.jar
 <summary>50 MB 테스트 파일 생성</summary>
 
 ```bash
-cd spring-resumable-upload/scripts
+cd docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application/scripts
 ./make-test-file.sh test-50mb.bin 50
 ```
 

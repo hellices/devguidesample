@@ -598,3 +598,23 @@ def test_repository_uses_only_canonical_topic_packages() -> None:
         for topic_key, redirect in moved_documents.items()
         if catalog.topics[topic_key].entry.metadata.get("redirect_from") == [redirect]
     } == set(moved_documents.values())
+
+
+def test_mobile_upload_commands_use_the_canonical_sample_path() -> None:
+    guide = (
+        ROOT
+        / "docs"
+        / "services"
+        / "azure-storage"
+        / "mobile-resumable-upload-tus"
+        / "index.md"
+    ).read_text(encoding="utf-8")
+    sample_path = (
+        "docs/services/azure-storage/mobile-resumable-upload-tus/"
+        "samples/spring-application"
+    )
+
+    assert f"cd {sample_path}\n" in guide
+    assert f"cd {sample_path}/scripts\n" in guide
+    assert "cd azureblob/spring-resumable-upload" not in guide
+    assert "cd spring-resumable-upload/scripts" not in guide
