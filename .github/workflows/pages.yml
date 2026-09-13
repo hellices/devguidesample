@@ -49,6 +49,9 @@ jobs:
       - name: Validate search index
         run: python scripts/docs/validate_search_index.py
 
+      - name: Audit pre-Pages content preservation
+        run: python scripts/docs/audit_pre_pages.py
+
       - name: Configure Pages
         uses: actions/configure-pages@v6
 

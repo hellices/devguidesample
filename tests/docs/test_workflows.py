@@ -72,6 +72,27 @@ def checkout_inputs_by_workflow(
     return checkout_inputs
 
 
+def ordered_steps_by_workflow(
+    workflows_dir: Path = WORKFLOWS,
+) -> dict[str, list[dict[str, object]]]:
+    ordered_steps: dict[str, list[dict[str, object]]] = {}
+    for path in sorted(workflows_dir.glob("*.yml")):
+        workflow = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(workflow, dict):
+            continue
+        jobs = workflow.get("jobs")
+        if not isinstance(jobs, dict):
+            continue
+        for job in jobs.values():
+            steps = job.get("steps")
+            if not isinstance(steps, list):
+                continue
+            ordered_steps.setdefault(path.name, []).extend(
+                step for step in steps if isinstance(step, dict)
+            )
+    return ordered_steps
+
+
 def assert_required_action_versions(workflows_dir: Path = WORKFLOWS) -> None:
     references = action_references(workflows_dir)
     for path, action, version in references:
@@ -85,6 +106,35 @@ def assert_checkout_history_contract(workflows_dir: Path = WORKFLOWS) -> None:
     assert checkout_inputs["docs-ci.yml"] == [{"fetch-depth": 0}]
     assert checkout_inputs["pages.yml"] == [{"fetch-depth": 0}]
     assert checkout_inputs["oryx-python-build-test.yml"] == [None]
+
+
+def assert_pre_pages_audit_runs_after_search_validation(
+    workflows_dir: Path = WORKFLOWS,
+) -> None:
+    ordered_steps = ordered_steps_by_workflow(workflows_dir)
+    for workflow_name in ("docs-ci.yml", "pages.yml"):
+        steps = ordered_steps[workflow_name]
+        search_positions = [
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Validate search index"
+        ]
+        assert len(search_positions) == 1, workflow_name
+        audit_position = search_positions[0] + 1
+        assert audit_position < len(steps), workflow_name
+        audit_step = steps[audit_position]
+        assert audit_step.get("name") == "Audit pre-Pages content preservation"
+        assert audit_step.get("run") == "python scripts/docs/audit_pre_pages.py"
+        assert sum(
+            step.get("run") == "python scripts/docs/audit_pre_pages.py"
+            for step in steps
+        ) == 1, workflow_name
+
+    oryx_steps = ordered_steps["oryx-python-build-test.yml"]
+    assert all(
+        step.get("run") != "python scripts/docs/audit_pre_pages.py"
+        for step in oryx_steps
+    )
 
 
 def test_quoted_uses_values_are_detected_and_rejected(tmp_path: Path) -> None:
@@ -193,3 +243,7 @@ def test_official_actions_use_required_node_24_majors() -> None:
 
 def test_historical_audit_workflows_checkout_full_history() -> None:
     assert_checkout_history_contract()
+
+
+def test_historical_audit_workflows_run_pre_pages_audit_after_search_validation() -> None:
+    assert_pre_pages_audit_runs_after_search_validation()

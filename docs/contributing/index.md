@@ -300,7 +300,15 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
+python scripts/docs/audit_pre_pages.py
 ```
+
+`audit_pre_pages.py`는 고정된 pre-Pages 기준선과 현재 built site를 함께
+대조해 과거 공개 콘텐츠와 호환 URL이 계속 보존되는지 검사합니다. 이 검사는
+`a4e6801`과 `9ace9667` commit object를 직접 읽으므로 전체 Git 이력이
+필수입니다. 로컬 clone이 얕으면 검사를 건너뛰지 말고
+`git fetch --unshallow` 또는 동등한 전체 이력 fetch를 수행한 뒤 다시
+실행합니다. CI에서는 checkout `fetch-depth: 0`으로 같은 조건을 보장합니다.
 
 생성된 `site/`과 검색 인덱스는 커밋하지 않습니다. 실패한 검증을 무시하지
 않습니다.

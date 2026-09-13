@@ -108,8 +108,11 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
+python scripts/docs/audit_pre_pages.py
 ```
 
 테스트나 검증 실패를 무시하거나 생성된 `site/` 및 검색 인덱스를 커밋하지
-않는다. sample 애플리케이션의 별도 테스트나 의존성은 해당 sample 변경
-범위에서만 실행한다.
+않는다. pre-Pages 보존 감사는 `a4e6801`, `9ace9667`가 보이는 전체 Git
+이력이 필요하므로 얕은 clone이면 `git fetch --unshallow` 뒤 다시 실행한다.
+sample 애플리케이션의 별도 테스트나 의존성은 해당 sample 변경 범위에서만
+실행한다.
