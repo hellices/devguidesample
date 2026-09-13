@@ -95,26 +95,43 @@ def load_document(path: Path | str, docs_dir: Path | str | None = None) -> Docum
     return Document(source, PurePosixPath(relative.as_posix()), metadata, body)
 
 
+def _is_canonical_document_path(relative_path: PurePosixPath) -> bool:
+    parts = relative_path.parts
+    if (
+        len(parts) not in {4, 5}
+        or parts[0] != "services"
+        or parts[-1] != "index.md"
+        or "samples" in parts
+    ):
+        return False
+    slugs = parts[1:-1]
+    return all(KEBAB_CASE.fullmatch(slug) for slug in slugs)
+
+
+def iter_public_document_paths(
+    docs_dir: Path | str, taxonomy: Mapping[str, Any]
+) -> Iterable[Path]:
+    """Yield canonical public page-bundle paths."""
+    root = Path(docs_dir)
+    candidate_paths: list[Path] = []
+
+    services_root = root / "services"
+    if services_root.is_dir():
+        for path in services_root.rglob("index.md"):
+            if _is_canonical_document_path(PurePosixPath(path.relative_to(root).as_posix())):
+                candidate_paths.append(path)
+
+    for path in sorted(candidate_paths, key=lambda item: item.relative_to(root).as_posix()):
+        yield path
+
+
 def iter_public_documents(
     docs_dir: Path | str, taxonomy: Mapping[str, Any]
 ) -> Iterable[Document]:
-    """Yield page-bundle documents from configured public collections."""
+    """Yield canonical page-bundle documents."""
     root = Path(docs_dir)
-    collection_paths = sorted(
-        {
-            config["path"]
-            for config in taxonomy.get("collections", {}).values()
-            if isinstance(config, Mapping) and isinstance(config.get("path"), str)
-        }
-    )
-    for collection_path in collection_paths:
-        collection_root = root / collection_path
-        if not collection_root.is_dir():
-            continue
-        for path in sorted(collection_root.rglob("index.md")):
-            relative = path.relative_to(root)
-            if len(relative.parts) == 4:
-                yield load_document(path, docs_dir=root)
+    for path in iter_public_document_paths(root, taxonomy):
+        yield load_document(path, docs_dir=root)
 
 
 def _is_date(value: Any) -> bool:
@@ -232,18 +249,17 @@ def validate_document(
         else None
     )
     parts = document.relative_path.parts
-    if len(parts) != 4 or parts[-1] != "index.md" or not KEBAB_CASE.fullmatch(parts[2]):
-        errors.append("public documents must use <collection>/<service>/<topic>/index.md")
+    is_canonical_path = _is_canonical_document_path(document.relative_path)
+    if not is_canonical_path:
+        errors.append(
+            "public documents must use "
+            "services/<service>/<topic>[/<child>]/index.md"
+        )
 
     if not isinstance(collection, Mapping):
         if isinstance(document_type, str):
             errors.append(f"unknown document_type: {document_type}")
     else:
-        expected_folder = collection.get("path")
-        if parts and parts[0] != expected_folder:
-            errors.append(
-                f"folder '{parts[0]}' does not match {document_type} collection '{expected_folder}'"
-            )
         status = metadata.get("status")
         if isinstance(status, str) and status not in collection.get("statuses", []):
             errors.append(f"invalid {document_type} status: {status}")

@@ -1,0 +1,5 @@
+title: Local development loop
+description: Runnable remote-cluster and local-process development example.
+kind: runnable
+used_by:
+- index

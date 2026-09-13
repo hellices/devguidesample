@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
 from scripts.docs.content import (
+    Document,
     DocumentFormatError,
     iter_public_documents,
     load_document,
@@ -57,13 +58,13 @@ def test_valid_page_bundle_satisfies_the_content_contract(
     path = copy_fixture(
         tmp_path,
         "valid-guide.md",
-        "guides/aks/network-diagnosis/index.md",
+        "services/aks/network-diagnosis/index.md",
     )
 
     document = load_document(path, docs_dir=tmp_path / "docs")
 
     assert document.relative_path.as_posix() == (
-        "guides/aks/network-diagnosis/index.md"
+        "services/aks/network-diagnosis/index.md"
     )
     assert document.metadata["sources_checked_at"] == date(2026, 9, 12)
     assert validate_document(document, taxonomy, today=date(2026, 9, 12)) == []
@@ -73,7 +74,7 @@ def test_page_bundle_requires_yaml_front_matter(tmp_path: Path) -> None:
     path = copy_fixture(
         tmp_path,
         "invalid-guide.md",
-        "guides/aks/no-front-matter/index.md",
+        "services/aks/no-front-matter/index.md",
     )
 
     with pytest.raises(DocumentFormatError, match="YAML front matter"):
@@ -86,7 +87,7 @@ def test_content_contract_rejects_invalid_path_taxonomy_and_source(
     path = copy_fixture(
         tmp_path,
         "valid-guide.md",
-        "guides/aks/Network_Diagnosis.md",
+        "services/aks/Network_Diagnosis.md",
     )
     loaded = load_document(path, docs_dir=tmp_path / "docs")
     metadata = {
@@ -106,7 +107,7 @@ def test_content_contract_rejects_invalid_path_taxonomy_and_source(
     )
 
     expected = (
-        "public documents must use <collection>/<service>/<topic>/index.md",
+        "public documents must use services/<service>/<topic>[/<child>]/index.md",
         "unknown service: unknown",
         "invalid guide status: draft",
         "sources_checked_at cannot be in the future",
@@ -123,7 +124,7 @@ def test_unverified_guide_can_leave_last_verified_empty(
     path = copy_fixture(
         tmp_path,
         "valid-guide.md",
-        "guides/aks/network-diagnosis/index.md",
+        "services/aks/network-diagnosis/index.md",
     )
     loaded = load_document(path, docs_dir=tmp_path / "docs")
     metadata = {
@@ -159,7 +160,7 @@ def test_invalid_metadata_values_return_validation_errors(
     tmp_path: Path, taxonomy: dict, field: str, value: object
 ) -> None:
     path = copy_fixture(
-        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
+        tmp_path, "valid-guide.md", "services/aks/network-diagnosis/index.md"
     )
     loaded = load_document(path, docs_dir=tmp_path / "docs")
 
@@ -172,12 +173,27 @@ def test_invalid_metadata_values_return_validation_errors(
     assert any(field in error for error in errors), errors
 
 
+def test_canonical_topic_paths_are_valid(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    path = tmp_path / "docs" / "services" / "aks" / "network-diagnosis" / "index.md"
+    path.parent.mkdir(parents=True)
+    path.write_text((FIXTURES / "valid-guide.md").read_text(encoding="utf-8"), encoding="utf-8")
+    loaded = load_document(path, docs_dir=tmp_path / "docs")
+
+    assert validate_document(
+        loaded.with_metadata({**loaded.metadata, "services": ["aks"]}),
+        taxonomy,
+        today=date(2026, 9, 12),
+    ) == []
+
+
 @pytest.mark.parametrize("featured", [True, False])
 def test_featured_is_optional_boolean(
     tmp_path: Path, taxonomy: dict, featured: bool
 ) -> None:
     path = copy_fixture(
-        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
+        tmp_path, "valid-guide.md", "services/aks/network-diagnosis/index.md"
     )
     loaded = load_document(path, docs_dir=tmp_path / "docs")
 
@@ -192,7 +208,7 @@ def test_malformed_source_url_returns_a_validation_error(
     tmp_path: Path, taxonomy: dict
 ) -> None:
     path = copy_fixture(
-        tmp_path, "valid-guide.md", "guides/aks/network-diagnosis/index.md"
+        tmp_path, "valid-guide.md", "services/aks/network-diagnosis/index.md"
     )
     loaded = load_document(path, docs_dir=tmp_path / "docs")
 

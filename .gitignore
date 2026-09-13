@@ -15,6 +15,6 @@ __pycache__/
 site/
 .worktrees/
 .superpowers/
-samples/azure-monitor/source-material/sre-agent-event-lab/evidence/
+docs/services/**/samples/**/evidence/
 /project/plans/2026-09-12-public-github-pages.md
 /project/specs/2026-09-12-public-github-pages-design.md

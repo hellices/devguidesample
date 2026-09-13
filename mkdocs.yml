@@ -7,6 +7,8 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
 use_directory_urls: true
+exclude_docs: |
+  services/**/samples/**
 
 validation:
   links:

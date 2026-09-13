@@ -1,0 +1,10 @@
+title: Custom vectorization implementation
+description: Runnable embedding adapters, benchmarks, and Kubernetes manifests.
+kind: runnable
+used_by:
+- index
+- rag-chunking
+- custom-web-api
+- gpu-vllm
+- bge-m3-vs-qwen3
+- a10-vs-t4

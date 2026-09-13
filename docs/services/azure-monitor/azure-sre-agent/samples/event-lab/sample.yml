@@ -1,0 +1,14 @@
+title: Azure SRE Agent event lab
+description: Deployable lab and evidence assets for the Azure SRE Agent scenarios.
+kind: runnable
+used_by:
+- index
+- event-lab
+- setup
+- scenario-http-500
+- scenario-latency
+- scenario-blob-permission
+- results
+- validation-results
+- incident-runbook
+- dynamic-thresholds
