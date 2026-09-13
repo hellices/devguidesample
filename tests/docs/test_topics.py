@@ -6,8 +6,15 @@ import re
 import pytest
 import yaml
 
-from scripts.docs.content import DocumentFormatError, validate_document
+from scripts.docs.content import (
+    DocumentFormatError,
+    load_taxonomy,
+    validate_document,
+)
 from scripts.docs.topics import build_topic_catalog
+
+
+ROOT = Path(__file__).parents[2]
 
 
 @pytest.fixture
@@ -401,3 +408,96 @@ def test_build_topic_catalog_preserves_all_legacy_paths_sharing_one_topic_key(
     }
     assert catalog.by_document[guide_path] == topic
     assert catalog.by_document[lab_path] == topic
+
+
+def test_repository_connected_topics_have_canonical_layout() -> None:
+    expected = {
+        ("microsoft-foundry", "agent-memory"): {
+            "slugs": [
+                "index",
+                "taxonomy",
+                "architecture-patterns",
+                "pipeline-retrieval",
+                "frameworks",
+                "production-evaluation",
+                "commerce",
+            ],
+            "redirects": [
+                "research/microsoft-foundry/agent-memory-overview/index.md",
+                "research/microsoft-foundry/agent-memory-taxonomy/index.md",
+                "research/microsoft-foundry/agent-memory-architecture-patterns/index.md",
+                "research/microsoft-foundry/agent-memory-pipeline-retrieval/index.md",
+                "research/microsoft-foundry/agent-memory-frameworks/index.md",
+                "research/microsoft-foundry/agent-memory-production-evaluation/index.md",
+                "research/microsoft-foundry/agent-memory-commerce/index.md",
+            ],
+        },
+        ("azure-monitor", "azure-sre-agent"): {
+            "slugs": [
+                "index",
+                "event-lab",
+                "setup",
+                "scenario-http-500",
+                "scenario-latency",
+                "scenario-blob-permission",
+                "results",
+                "validation-results",
+                "incident-runbook",
+                "dynamic-thresholds",
+            ],
+            "redirects": [
+                "guides/azure-monitor/azure-sre-agent-overview/index.md",
+                "labs/azure-monitor/sre-agent-event-lab/index.md",
+                "labs/azure-monitor/sre-agent-event-lab-setup/index.md",
+                "labs/azure-monitor/sre-agent-scenario-http-500/index.md",
+                "labs/azure-monitor/sre-agent-scenario-latency/index.md",
+                "labs/azure-monitor/sre-agent-scenario-blob-permission/index.md",
+                "labs/azure-monitor/sre-agent-results/index.md",
+                "research/azure-monitor/sre-agent-validation-results/index.md",
+                "guides/azure-monitor/sre-agent-incident-runbook/index.md",
+                "guides/azure-monitor/sre-agent-dynamic-thresholds/index.md",
+            ],
+        },
+        ("azure-ai-search", "custom-vectorization"): {
+            "slugs": [
+                "index",
+                "rag-chunking",
+                "custom-web-api",
+                "gpu-vllm",
+                "bge-m3-vs-qwen3",
+                "a10-vs-t4",
+            ],
+            "redirects": [
+                "guides/azure-ai-search/custom-embedding-ingestion/index.md",
+                "research/azure-ai-search/rag-chunking-strategies/index.md",
+                "guides/azure-ai-search/custom-web-api-vectorization/index.md",
+                "guides/azure-ai-search/gpu-vllm-rag/index.md",
+                "research/azure-ai-search/bge-m3-vs-qwen3-embedding/index.md",
+                "research/azure-ai-search/a10-vs-t4-embedding-benchmark/index.md",
+            ],
+        },
+        ("azure-monitor", "hdinsight-kafka-monitoring"): {
+            "slugs": ["index", "prometheus-grafana", "catch-up-benchmark"],
+            "redirects": [
+                "research/azure-monitor/hdinsight-kafka-monitoring-options/index.md",
+                "guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md",
+                "research/azure-hdinsight/kafka-catchup-sku-fetch-benchmark/index.md",
+            ],
+        },
+    }
+    catalog = build_topic_catalog(
+        ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml")
+    )
+
+    for topic_key, topic_expected in expected.items():
+        topic = catalog.topics[topic_key]
+        slugs = [
+            "index" if member == topic.entry else member.relative_path.parts[-2]
+            for member in topic.members
+        ]
+
+        assert slugs == topic_expected["slugs"]
+        assert "topic_order" not in topic.entry.metadata
+        assert [
+            member.metadata.get("redirect_from") for member in topic.members
+        ] == [[redirect] for redirect in topic_expected["redirects"]]

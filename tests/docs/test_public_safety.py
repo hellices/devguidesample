@@ -28,7 +28,7 @@ def test_git_ignores_local_state_without_hiding_shared_inputs(tmp_path: Path) ->
         "docs/guides/example/.DS_Store",
         "sim-env.json",
         "samples/example/sim-env.json",
-        "samples/azure-monitor/source-material/sre-agent-event-lab/evidence/run.json",
+        "docs/services/azure-monitor/azure-sre-agent/samples/event-lab/evidence/run.json",
         *COMPLETED_PLAN_PATHS,
     }
     shared_paths = {
