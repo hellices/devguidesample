@@ -63,7 +63,7 @@ def history(tmp_path: Path) -> tuple[Path, str, str]:
 @pytest.fixture
 def manifest_data() -> dict:
     return {
-        "version": 1,
+        "version": 2,
         "baseline_commit": BASELINE,
         "pages_commit": PAGES,
         "rename_similarity": 20,
@@ -71,7 +71,17 @@ def manifest_data() -> dict:
             {
                 "baseline_path": "old/guide.md",
                 "pages_path": "guides/service/topic/index.md",
-                "reviewed_changes": {"prose": {FINGERPRINT: CONTENT_REASON}},
+                "reviewed_changes": {"prose": {FINGERPRINT: {
+                    "missing_count": 1,
+                    "reason": CONTENT_REASON,
+                    "evidence": [{
+                        "kind": "structure",
+                        "path": "docs/services/service/topic/samples/evidence/README.md",
+                        "category": "prose",
+                        "fingerprint": "b" * 64,
+                        "count": 1,
+                    }],
+                }}},
             }
         ],
         "dispositions": {
@@ -155,7 +165,7 @@ def test_inventory_requires_all_top_level_fields(
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("extra", True), ("version", 2), ("version", True),
+        ("extra", True), ("version", 1), ("version", True),
         ("rename_similarity", 0), ("rename_similarity", 101),
         ("rename_similarity", "20"), ("rename_similarity", True),
         ("documents", {}), ("dispositions", []),
@@ -248,7 +258,7 @@ def test_inventory_reports_invalid_or_unsafe_yaml(tmp_path: Path, text: str) -> 
 
 @pytest.fixture
 def raw_inventory() -> str:
-    return f"""version: 1
+    return f"""version: 2
 baseline_commit: {BASELINE}
 pages_commit: {PAGES}
 rename_similarity: 20
@@ -257,7 +267,15 @@ documents:
     pages_path: guides/service/topic/index.md
     reviewed_changes:
       prose:
-        {FINGERPRINT}: {CONTENT_REASON}
+        {FINGERPRINT}:
+          missing_count: 1
+          reason: {CONTENT_REASON}
+          evidence:
+            - kind: structure
+              path: docs/services/service/topic/samples/evidence/README.md
+              category: prose
+              fingerprint: {'b' * 64}
+              count: 1
 dispositions:
   old/README.md:
     status: replaced-summary
@@ -270,7 +288,7 @@ dispositions:
 @pytest.mark.parametrize(
     ("original", "replacement", "key"),
     [
-        ("version: 1", "version: 2\nversion: 1", "version"),
+        ("version: 2", "version: 1\nversion: 2", "version"),
         (
             "  - baseline_path: old/guide.md",
             "  - baseline_path: ignored.md\n    baseline_path: old/guide.md",
@@ -282,8 +300,8 @@ dispositions:
             "prose",
         ),
         (
-            f"        {FINGERPRINT}: {CONTENT_REASON}",
-            f"        {FINGERPRINT}: Lost reason.\n        {FINGERPRINT}: {CONTENT_REASON}",
+            f"        {FINGERPRINT}:\n",
+            f"        {FINGERPRINT}: {{}}\n        {FINGERPRINT}:\n",
             FINGERPRINT,
         ),
         (

@@ -16,7 +16,9 @@ from urllib.parse import unquote, urlsplit
 
 from scripts.docs.pre_pages import (
     AuditFormatError,
+    FileEvidence,
     PrePagesInventory,
+    ReviewedChange,
     STRUCTURE_CATEGORIES,
     git_text,
     resolve_current_documents,
@@ -72,6 +74,15 @@ def _space(text: str) -> str:
     return " ".join(text.split())
 
 
+def _unquote(line: str, depth: int) -> str | None:
+    for _ in range(depth):
+        prefix = re.match(r"^[ \t]{0,3}>[ \t]?", line)
+        if prefix is None:
+            return None
+        line = line[prefix.end():]
+    return line
+
+
 def _segments(text: str) -> list[tuple[str | None, str]]:
     """Separate fences before applying any prose-only normalization."""
     segments = []
@@ -80,15 +91,23 @@ def _segments(text: str) -> list[tuple[str | None, str]]:
     fence = ""
     language = ""
     indent = ""
+    quote_depth = 0
     comment = False
     for line in text.split("\n"):
         if fence:
-            if re.fullmatch(r"\s*" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", line):
+            code_line = _unquote(line, quote_depth)
+            if code_line is None:
                 segments.append((language, "\n".join(code).strip("\n")))
                 fence, code = "", []
+            elif re.fullmatch(
+                r"\s*" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*", code_line,
+            ):
+                segments.append((language, "\n".join(code).strip("\n")))
+                fence, code = "", []
+                continue
             else:
-                code.append(line.removeprefix(indent).rstrip())
-            continue
+                code.append(code_line.removeprefix(indent).rstrip())
+                continue
         visible = []
         offset = 0
         while offset < len(line):
@@ -109,11 +128,12 @@ def _segments(text: str) -> list[tuple[str | None, str]]:
                 visible.append(token[0])
             offset += token.end()
         line = "".join(visible)
-        opening = re.fullmatch(r"([ \t]*)(`{3,}|~{3,})(.*)", line)
+        opening = re.fullmatch(r"((?:[ \t]{0,3}>[ \t]?)*)([ \t]*)(`{3,}|~{3,})(.*)", line)
         if opening:
             segments.append((None, "\n".join(normal)))
             normal = []
-            indent, fence, language = opening.groups()
+            quotes, indent, fence, language = opening.groups()
+            quote_depth = quotes.count(">")
             language = language.strip()
         else:
             normal.append(line)
@@ -289,49 +309,105 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
     )
 
 
+def _values(structure: MarkdownStructure, category: str) -> tuple[str, ...]:
+    if category == "title":
+        return (structure.title,) if structure.title else ()
+    return getattr(structure, category)
+
+
+def _verify_current_evidence(
+    repo_root: Path,
+    baseline_path: PurePosixPath,
+    reviewed_changes: Mapping[str, Mapping[str, ReviewedChange]],
+) -> None:
+    root = repo_root.resolve()
+    contents: dict[PurePosixPath, bytes] = {}
+    structures: dict[PurePosixPath, MarkdownStructure] = {}
+    for category, approvals in reviewed_changes.items():
+        for fingerprint, approval in approvals.items():
+            for index, reference in enumerate(approval.evidence):
+                label = f"{baseline_path}.{category}.{fingerprint}.evidence[{index}] ({reference.path})"
+                if reference.path not in contents:
+                    try:
+                        path = (root / reference.path).resolve(strict=True)
+                        if not path.is_relative_to(root):
+                            raise AuditFormatError(f"{label}: evidence path is outside repository")
+                        if not path.is_file():
+                            raise AuditFormatError(f"{label}: evidence path is not a file")
+                        contents[reference.path] = path.read_bytes()
+                    except OSError as error:
+                        raise AuditFormatError(f"{label}: cannot read current evidence: {error}") from error
+                data = contents[reference.path]
+                if isinstance(reference, FileEvidence):
+                    actual_hash = sha256(data).hexdigest()
+                    if actual_hash != reference.sha256:
+                        raise AuditFormatError(f"{label}: evidence SHA-256 changed: {actual_hash}")
+                    continue
+                if reference.path not in structures:
+                    try:
+                        structures[reference.path] = extract_markdown_structure(data.decode("utf-8"))
+                    except UnicodeError as error:
+                        raise AuditFormatError(f"{label}: structure evidence is not UTF-8: {error}") from error
+                counts = Counter(
+                    sha256(f"{reference.category}\0{value}".encode("utf-8")).hexdigest()
+                    for value in _values(structures[reference.path], reference.category)
+                )
+                actual_count = counts[reference.fingerprint]
+                if actual_count != reference.count:
+                    raise AuditFormatError(
+                        f"{label}: evidence {reference.category} fingerprint {reference.fingerprint} "
+                        f"count changed: expected {reference.count}, found {actual_count}"
+                    )
+
+
 def compare_markdown(
     baseline_path: PurePosixPath,
     current_path: PurePosixPath,
     baseline: MarkdownStructure,
     current: MarkdownStructure,
-    reviewed_changes: Mapping[str, Mapping[str, str]],
+    reviewed_changes: Mapping[str, Mapping[str, ReviewedChange]],
+    *,
+    repo_root: Path | None = None,
 ) -> DocumentPreservation:
+    """Compare source structures; approvals require repo_root for fresh evidence reads."""
     reviewed_changes = validate_reviewed_changes(reviewed_changes, f"{baseline_path}.reviewed_changes")
-    missing: list[StructureFinding] = []
-    reviewed: list[StructureFinding] = []
-    used = set()
+    raw_missing: list[StructureFinding] = []
     for category in STRUCTURE_CATEGORIES:
-        before = (baseline.title,) if category == "title" and baseline.title else (
-            () if category == "title" else getattr(baseline, category)
-        )
-        after = (current.title,) if category == "title" and current.title else (
-            () if category == "title" else getattr(current, category)
-        )
-        remaining = Counter(after)
-        for value in before:
+        remaining = Counter(_values(current, category))
+        for value in _values(baseline, category):
             if remaining[value]:
                 remaining[value] -= 1
                 continue
             fingerprint = sha256(f"{category}\0{value}".encode("utf-8")).hexdigest()
-            finding = StructureFinding(category, fingerprint, value[:160])
-            if fingerprint in reviewed_changes.get(category, {}):
-                reviewed.append(finding)
-                used.add((category, fingerprint))
-            else:
-                missing.append(finding)
-    for category, reasons in reviewed_changes.items():
-        for fingerprint in reasons:
-            if (category, fingerprint) not in used:
+            raw_missing.append(StructureFinding(category, fingerprint, value[:160]))
+    missing_counts = Counter((finding.category, finding.fingerprint) for finding in raw_missing)
+    approved = set()
+    for category, approvals in reviewed_changes.items():
+        for fingerprint, approval in approvals.items():
+            actual = missing_counts[(category, fingerprint)]
+            if not actual:
                 raise AuditFormatError(
                     f"{baseline_path}: stale reviewed_changes.{category}.{fingerprint}; "
                     "the exact baseline structure is not missing"
                 )
+            if actual != approval.missing_count:
+                raise AuditFormatError(
+                    f"{baseline_path}.{category}.{fingerprint}: missing_count changed: "
+                    f"approved {approval.missing_count}, found {actual}"
+                )
+            approved.add((category, fingerprint))
+    if approved:
+        if repo_root is None:
+            raise AuditFormatError(f"{baseline_path}: repo_root is required to verify current approval evidence")
+        _verify_current_evidence(repo_root, baseline_path, reviewed_changes)
+    missing = tuple(f for f in raw_missing if (f.category, f.fingerprint) not in approved)
+    reviewed = tuple(f for f in raw_missing if (f.category, f.fingerprint) in approved)
     before_text = "\n".join((baseline.title, *baseline.headings, *baseline.prose))
     after_text = "\n".join((current.title, *current.headings, *current.prose))
     similarity = SequenceMatcher(None, before_text, after_text, autojunk=False).ratio()
     status = "missing" if missing else "reviewed" if reviewed else "preserved"
     return DocumentPreservation(
-        baseline_path, current_path, status, similarity, tuple(missing), tuple(reviewed),
+        baseline_path, current_path, status, similarity, missing, reviewed,
     )
 
 
@@ -346,6 +422,7 @@ def audit_document_content(
             extract_markdown_structure(git_text(repo_root, inventory.baseline_commit, entry.baseline_path)),
             extract_markdown_structure(documents[entry.baseline_path].body),
             entry.reviewed_changes,
+            repo_root=repo_root,
         )
         for entry in inventory.documents
     )

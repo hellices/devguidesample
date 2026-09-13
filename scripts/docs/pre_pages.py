@@ -1,14 +1,15 @@
-"""Fixed pre-Pages inventory and Git lineage (not a content-preservation audit)."""
+"""Fixed pre-Pages inventory, reviewed-evidence schema, and Git lineage."""
 
 from __future__ import annotations
 
 from collections.abc import Hashable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import subprocess
 from types import MappingProxyType
 from typing import Mapping
+import unicodedata
 
 import yaml
 
@@ -41,18 +42,47 @@ class _InventorySafeLoader(yaml.SafeLoader):
 
 
 @dataclass(frozen=True)
+class StructureEvidence:
+    """A normalized current structure with exact (not minimum) multiplicity."""
+
+    path: PurePosixPath
+    category: str
+    fingerprint: str
+    count: int
+    kind: str = field(init=False, default="structure")
+
+
+@dataclass(frozen=True)
+class FileEvidence:
+    """Exact current file bytes, including binary artifacts."""
+
+    path: PurePosixPath
+    sha256: str
+    kind: str = field(init=False, default="file")
+
+
+@dataclass(frozen=True)
+class ReviewedChange:
+    """A bounded baseline loss justified by immutable current evidence references."""
+
+    missing_count: int
+    reason: str
+    evidence: tuple[StructureEvidence | FileEvidence, ...]
+
+
+@dataclass(frozen=True)
 class BaselineDocument:
     baseline_path: PurePosixPath
     pages_path: PurePosixPath
-    reviewed_changes: Mapping[str, Mapping[str, str]]
+    reviewed_changes: Mapping[str, Mapping[str, ReviewedChange]]
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "reviewed_changes",
             MappingProxyType({
-                category: MappingProxyType(dict(reasons))
-                for category, reasons in self.reviewed_changes.items()
+                category: MappingProxyType(dict(approvals))
+                for category, approvals in validate_reviewed_changes(self.reviewed_changes).items()
             }),
         )
 
@@ -128,44 +158,110 @@ STRUCTURE_CATEGORIES = (
 )
 
 
+def _positive_count(value: object, label: str) -> int:
+    if type(value) is not int or value <= 0:
+        raise AuditFormatError(f"{label} must be a positive integer")
+    return value
+
+
+def _sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise AuditFormatError(f"{label} must be lowercase SHA-256")
+    return value
+
+
+def _review_reason(value: object, label: str) -> str:
+    reason = _nonempty_string(value, label)
+    text = unicodedata.normalize("NFKC", reason).casefold()
+    text = re.sub(r"(?:https?://|(?:docs|samples)/)\S+", " ", text)
+    text = re.sub(
+        r"\b(?:safety|reason|review(?:ed)?|approval|approved?|preservation|replacement|migration|updated?|revised?|"
+        r"changed?|removed?|deleted?|retained?|preserved?|replaced?|migrated?|"
+        r"needed|necessary|unnecessary|longer|anymore|during|before|after|because|content|document|documentation|"
+        r"block|material|stuff|latest|current|previous|old|new|"
+        r"a|an|the|and|or|as|at|in|on|to|of|for|from|with|by|"
+        r"this|that|these|those|it|its|is|was|are|were|be|been|not|no|now)\b",
+        " ", text,
+    )
+    text = re.sub(
+        r"\b(?:안전|검토|사유|이유|보존|대체|이관|갱신|업데이트|수정|변경|삭제|제거|"
+        r"유지|불필요|필요|내용|문서|콘텐츠|최신|현재|해당|않|없|기존|이전|"
+        r"과정|일반적|쓰이지|부분|항목|정리|적절|대한|거쳐)[가-힣]*"
+        r"|\b(?:이|그|더|이상|위해|때문에)\b",
+        " ", text,
+    )
+    concrete = re.findall(r"[a-z가-힣][a-z0-9가-힣_.-]*", text)
+    if len(reason.strip()) < 40 or len(concrete) < 2 or sum(map(len, concrete)) < 12:
+        raise AuditFormatError(
+            f"{label} must describe concrete replacement/preservation details, not generic-only approval phrases"
+        )
+    return reason
+
+
+def _evidence_reference(value: object, label: str) -> StructureEvidence | FileEvidence:
+    if isinstance(value, (StructureEvidence, FileEvidence)):
+        value = {**asdict(value), "path": str(value.path)}
+    if not isinstance(value, dict):
+        raise AuditFormatError(f"{label} must be a mapping")
+    kind = value.get("kind")
+    if kind not in ("structure", "file"):
+        raise AuditFormatError(f"{label}.kind must be structure or file")
+    fields = {"kind", "path", "category", "fingerprint", "count"} if kind == "structure" else {
+        "kind", "path", "sha256",
+    }
+    raw = _fields(value, fields, label)
+    path = _relative_path(raw["path"], f"{label}.path")
+    if kind == "file":
+        return FileEvidence(path, _sha256(raw["sha256"], f"{label}.sha256"))
+    category = raw["category"]
+    if category not in STRUCTURE_CATEGORIES:
+        raise AuditFormatError(f"{label}.category is not a known structure category")
+    return StructureEvidence(
+        path, category, _sha256(raw["fingerprint"], f"{label}.fingerprint"),
+        _positive_count(raw["count"], f"{label}.count"),
+    )
+
+
 def validate_reviewed_changes(
     value: object, label: str = "reviewed_changes",
-) -> Mapping[str, Mapping[str, str]]:
-    """Validate exact source fingerprints and actionable, path-specific review reasons."""
+) -> Mapping[str, Mapping[str, ReviewedChange]]:
+    """Parse immutable approvals; current file/structure evidence is checked by the content auditor."""
     if not isinstance(value, Mapping):
         raise AuditFormatError(f"{label} must be a mapping")
-    for category, reasons in value.items():
+    parsed = {}
+    for category, approvals in value.items():
         if category not in STRUCTURE_CATEGORIES:
             raise AuditFormatError(f"{label}: unknown structure category: {category!r}")
-        if not isinstance(reasons, Mapping):
+        if not isinstance(approvals, Mapping):
             raise AuditFormatError(f"{label}.{category} must be a mapping")
-        for fingerprint, reason in reasons.items():
-            if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
-                raise AuditFormatError(f"{label}.{category}: fingerprint must be lowercase SHA-256")
-            reason_label = f"{label}.{category}.{fingerprint}.reason"
-            _nonempty_string(reason, reason_label)
-            if len(reason.strip()) < 40 or not re.search(
-                r"(?:docs|samples)/[^\s`]+"
-                r"|\bsection\s+[`\"“][^`\"”]+[`\"”]"
-                r"|\bsafety:\s+.{25,}",
-                reason,
-                re.IGNORECASE,
-            ):
-                raise AuditFormatError(
-                    f"{reason_label} must name a specific replacement path, quoted section, "
-                    "or explicit safety: transformation, not a generic approval"
-                )
-            if not re.search(
-                r"\b(?:preserv\w*|replac\w*|restor\w*|retain\w*|remain\w*|unchanged|"
-                r"redact\w*|safety|renam\w*|remov\w*|migrat\w*)\b"
-                r"|보존|대체|복원|유지|비식별|이관|치환|삭제",
-                reason,
-                re.IGNORECASE,
-            ):
-                raise AuditFormatError(
-                    f"{reason_label} must explain preservation, replacement, or safety, not just 'updated'"
-                )
-    return value
+        parsed[category] = {}
+        for fingerprint, approval in approvals.items():
+            _sha256(fingerprint, f"{label}.{category}.fingerprint")
+            entry_label = f"{label}.{category}.{fingerprint}.approval"
+            if isinstance(approval, ReviewedChange):
+                approval = {
+                    "missing_count": approval.missing_count,
+                    "reason": approval.reason,
+                    "evidence": approval.evidence,
+                }
+            raw = _fields(approval, {"missing_count", "reason", "evidence"}, entry_label)
+            count = _positive_count(raw["missing_count"], f"{entry_label}.missing_count")
+            reason = _review_reason(raw["reason"], f"{entry_label}.reason")
+            if not isinstance(raw["evidence"], (list, tuple)) or not raw["evidence"]:
+                raise AuditFormatError(f"{entry_label}.evidence must be a non-empty sequence")
+            references = []
+            seen = set()
+            for index, reference in enumerate(raw["evidence"]):
+                reference = _evidence_reference(reference, f"{entry_label}.evidence[{index}]")
+                key = (reference.kind, reference.path)
+                if isinstance(reference, StructureEvidence):
+                    key += (reference.category, reference.fingerprint)
+                if key in seen:
+                    raise AuditFormatError(f"{entry_label}: duplicate evidence reference: {reference.path}")
+                seen.add(key)
+                references.append(reference)
+            parsed[category][fingerprint] = ReviewedChange(count, reason, tuple(references))
+    return parsed
 
 
 def load_inventory(path: Path) -> PrePagesInventory:
@@ -178,8 +274,8 @@ def load_inventory(path: Path) -> PrePagesInventory:
         {"version", "baseline_commit", "pages_commit", "rename_similarity", "documents", "dispositions"},
         str(path),
     )
-    if type(data["version"]) is not int or data["version"] != 1:
-        raise AuditFormatError("version must be 1")
+    if type(data["version"]) is not int or data["version"] != 2:
+        raise AuditFormatError("version must be 2 (evidence-bound content approvals)")
     baseline = _commit_hash(data["baseline_commit"], "baseline_commit")
     pages = _commit_hash(data["pages_commit"], "pages_commit")
     similarity = data["rename_similarity"]
