@@ -33,7 +33,7 @@ related_guides:
 
 ## 구성
 
-배포와 호출 절차는 [시나리오 실습](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)에 있습니다. 이 문서는 해당 순서로 실행한 결과와 구성 시 주의할 제품 동작을 정리합니다.
+**배포와 호출을 따라 하려면 [Azure MCP 통합 가이드](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)를 사용하세요.** 필요한 구성도와 주요 결과 캡처도 그 문서에 함께 있습니다. 이 문서는 2026-09-13의 상세 실행 이력과 관측값을 보관하는 참고 자료입니다.
 
 | 항목 | 구성 |
 |---|---|

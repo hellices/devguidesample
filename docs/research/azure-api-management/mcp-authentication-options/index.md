@@ -66,7 +66,7 @@ official_sources:
 
 Azure 리소스를 사용자의 권한으로 조회하려면 Azure MCP와 Entra OBO를 사용할 수 있습니다. 기존 REST API를 MCP tool로 제공하려면 APIM의 REST-to-MCP가, 이미 운영 중인 MCP 서버 앞에 인증 정책을 적용하려면 APIM의 기존 MCP 프록시가 적합합니다.
 
-아래 비교는 **2026-09-13** 기준입니다. 실행 순서는 [azd 배포·호출 실습](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)에, Entra 설정은 [내부망 접속·인증 가이드](../../../guides/azure-api-management/mcp-entra-private-access/index.md)에 정리했습니다. App Service와 Functions는 공식 문서에 따른 대안이며, 이 실습의 배포 대상은 아닙니다.
+**처음 구성할 때는 [Azure MCP 통합 가이드](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)를 따르세요.** 구성 선택부터 azd 배포·호출·결과 확인까지 한 페이지에서 진행할 수 있습니다. 아래는 **2026-09-13** 기준의 선택 근거와 지원 범위를 정리한 참고 자료입니다. App Service와 Functions는 공식 문서에 따른 대안이며, 통합 가이드의 배포 대상은 아닙니다.
 
 ## MCP protocol과 패키지 버전
 

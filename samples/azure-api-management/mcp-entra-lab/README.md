@@ -1,6 +1,6 @@
 # Azure MCP + Entra ID walkthrough
 
-Deploy with Azure Developer CLI, then follow the [scenario guide](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md). Each scenario sends a request and explains the response.
+Start with the [Azure MCP unified guide](../../../docs/labs/azure-api-management/mcp-rest-and-upstream/index.md). It includes architecture choices, Entra authentication, azd deployment, all scenarios and actual response captures in one page. This directory contains the runnable files used by that guide.
 
 ## What is deployed
 

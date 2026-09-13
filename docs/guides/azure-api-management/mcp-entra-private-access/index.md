@@ -1,6 +1,6 @@
 ---
-title: Azure MCP의 Entra ID 인증과 내부망 접속 구성
-description: azd로 배포하는 내부 MCP에 로컬 PC를 연결하고, Entra access token과 OBO로 사용자의 Azure RBAC에 따라 도구를 실행하는 방법을 설명합니다.
+title: Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
+description: Azure MCP 통합 가이드에서 사용하는 Entra app registration, client ACL, access token과 OBO 설정을 상세히 설명합니다.
 document_type: guide
 services: [azure-api-management, azure-container-apps, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python]
@@ -58,9 +58,9 @@ related_cases:
   - ../../../cases/azure-api-management/mcp-entra-validation/index.md
 ---
 
-# Azure MCP의 Entra ID 인증과 내부망 접속 구성
+# Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 
-로컬 PC에서 Azure의 내부 MCP에 접속하고, 로그인한 사용자의 Azure 권한으로 리소스를 조회하는 구성입니다. 배포는 Azure Developer CLI(`azd`)를 사용합니다. 이 문서에서는 각 설정의 역할을 설명하고, 실제 명령은 [배포·호출 실습](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)에서 순서대로 실행합니다.
+**처음 구성할 때는 [Azure MCP 통합 가이드](../../../labs/azure-api-management/mcp-rest-and-upstream/index.md)를 따르세요.** 아키텍처, azd 배포, 호출 명령과 결과 캡처가 한 페이지에 있습니다. 이 문서는 app registration·scope·client ACL·OBO 설정을 변경하거나 인증 문제를 조사할 때 사용하는 상세 참고 자료입니다.
 
 ## 구성 요소와 인증 흐름
 

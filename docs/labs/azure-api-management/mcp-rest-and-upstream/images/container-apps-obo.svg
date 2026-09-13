@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 750" role="img" aria-labelledby="title desc">
+  <title id="title">Private Container Apps hosting Azure MCP with delegated OBO</title>
+  <desc id="desc">A developer's token for the MCP API reaches a private HTTPS ingress. Azure MCP validates it, authenticates its confidential client with managed-identity federation, and acquires a separate ARM token on behalf of the user.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;fill:#162b40;font-size:20px}.title{font-size:28px;font-weight:700}.small{font-size:18px}.box{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.identity{fill:#fff7e7;stroke:#9c661c;stroke-width:2}.backend{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}.boundary{fill:#f8fafc;stroke:#8397aa;stroke-width:2;stroke-dasharray:8 6}</style>
+  <rect width="1160" height="750" fill="white"/>
+  <text x="30" y="44" class="title">Private Azure MCP: managed identity for the server, OBO for the user</text>
+  <rect x="50" y="80" width="275" height="100" rx="12" class="box"/>
+  <text x="187" y="120" text-anchor="middle"><tspan x="187">Local developer client</tspan><tspan x="187" dy="31" class="small">Registered public client</tspan></text>
+  <rect x="30" y="230" width="735" height="420" rx="18" class="boundary"/>
+  <text x="365" y="275">Lab VNet / internal ACA</text>
+  <rect x="65" y="315" width="260" height="160" rx="12" class="box"/>
+  <text x="195" y="358" text-anchor="middle"><tspan x="195">Private HTTPS ingress</tspan><tspan x="195" dy="32" class="small">Private DNS + TLS</tspan><tspan x="195" dy="28" class="small">No public MCP ingress</tspan><tspan x="195" dy="28" class="small">ACA client-ID allowlist</tspan></text>
+  <rect x="445" y="310" width="290" height="150" rx="12" class="box"/>
+  <text x="590" y="347" text-anchor="middle"><tspan x="590">Azure MCP 2.0.5</tspan><tspan x="590" dy="31" class="small">Validate token A</tspan><tspan x="590" dy="29" class="small">UseOnBehalfOf</tspan><tspan x="590" dy="29" class="small">Read-only group tools</tspan></text>
+  <rect x="425" y="520" width="315" height="95" rx="12" class="identity"/>
+  <text x="582" y="558" text-anchor="middle"><tspan x="582">User-assigned managed ID</tspan><tspan x="582" dy="30" class="small">Federated client assertion</tspan></text>
+  <rect x="860" y="95" width="270" height="170" rx="12" class="identity"/>
+  <text x="995" y="137" text-anchor="middle"><tspan x="995">Microsoft Entra ID</tspan><tspan x="995" dy="34" class="small">MCP API app + FIC</tspan><tspan x="995" dy="29" class="small">Delegated permissions</tspan><tspan x="995" dy="29" class="small">User consent / policy</tspan></text>
+  <rect x="860" y="445" width="270" height="135" rx="12" class="backend"/>
+  <text x="995" y="488" text-anchor="middle"><tspan x="995">Azure Resource Manager</tspan><tspan x="995" dy="34" class="small">Token B: ARM audience</tspan><tspan x="995" dy="29" class="small">User's RBAC still applies</tspan></text>
+  <path d="M187 180V315" class="flow"/><text x="204" y="205" class="small">1. Token A: MCP audience</text>
+  <path d="M325 380H445" class="flow"/>
+  <path d="M735 335H790V180H860" class="flow"/><text x="480" y="210" class="small">2. User assertion + confidential-client proof</text>
+  <path d="M740 565H817V230H860" class="flow"/>
+  <path d="M995 265V365H735" class="flow"/><text x="882" y="331" class="small">3. ARM token B</text>
+  <path d="M590 460V485H860" class="flow"/><text x="629" y="512" class="small">4. Read lab resources</text>
+  <text x="35" y="690" class="small">MI/FIC authenticates the middle tier. It does not replace the calling user with an application identity.</text>
+  <text x="35" y="722" class="small">Token A is never sent to ARM. ACA-managed infrastructure is in a separate provider-managed resource group.</text>
+</svg>

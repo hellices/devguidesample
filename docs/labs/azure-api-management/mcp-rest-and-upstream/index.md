@@ -1,6 +1,6 @@
 ---
-title: azd로 배포하는 Azure MCP — APIM REST-to-MCP와 Entra OBO 실습
-description: azd로 환경을 배포한 뒤 로컬 MCP 연결, private network 접속, APIM REST 도구 호출과 Entra OBO를 순서대로 실행합니다.
+title: Azure MCP 통합 가이드 — 구성 선택부터 azd 배포와 OBO까지
+description: 아키텍처 선택, Entra 인증, azd 배포, MCP 호출 시나리오와 실제 응답 캡처를 한 문서에서 따라갑니다.
 document_type: lab
 services: [azure-api-management, azure-container-apps, azure-kubernetes-service, microsoft-entra-id]
 technologies: [mcp, azure-cli, bicep, python, nodejs]
@@ -9,6 +9,8 @@ status: verified
 verification_status: needs-review
 sources_checked_at: 2026-09-13
 official_sources:
+  - title: About MCP servers in Azure API Management
+    url: https://learn.microsoft.com/azure/api-management/mcp-server-overview
   - title: Remote builds support with Azure Container Registry
     url: https://learn.microsoft.com/azure/developer/azure-developer-cli/remote-builds
   - title: Azure Developer CLI schema reference
@@ -29,6 +31,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/container-apps/authentication-entra
   - title: MCP Inspector CLI Client
     url: https://github.com/modelcontextprotocol/inspector/blob/main/clients/cli/README.md
+  - title: MCP Python SDK
+    url: https://github.com/modelcontextprotocol/python-sdk/blob/v2.2.0/README.md
+  - title: AKS MCP v0.0.20
+    url: https://github.com/Azure/aks-mcp/releases/tag/v0.0.20
 last_verified: 2026-09-13
 review_cycle_days: 90
 estimated_time: 120m
@@ -40,11 +46,35 @@ related_guides:
   - ../../../guides/azure-api-management/mcp-entra-private-access/index.md
 ---
 
-# azd로 배포하는 Azure MCP — APIM REST-to-MCP와 Entra OBO 실습
+# Azure MCP 통합 가이드 — 구성 선택부터 azd 배포와 OBO까지
 
-Azure Developer CLI(`azd`)로 환경을 배포하고, 아래 시나리오를 순서대로 진행합니다. 각 단계에서 직접 요청을 보내고 HTTP status, MCP tool 목록, 응답 내용을 확인합니다. 테스트 코드나 자동 채점 스크립트는 사용하지 않습니다.
+Azure에서 MCP를 구성할 때 사용할 **시작 문서**입니다. 아키텍처와 인증 방식을 확인한 뒤 Azure Developer CLI(`azd`)로 배포하고, 로컬 클라이언트에서 도구를 호출하는 과정까지 이 페이지에서 진행합니다. 구성도와 실제 응답 캡처도 해당 단계에 함께 배치했습니다.
 
-## 구성과 준비
+| 진행 순서 | 이 페이지에서 확인할 내용 |
+|---|---|
+| 구성 선택과 준비 | 사용할 MCP 서버, Azure 서비스, access token과 OBO 흐름 |
+| 1. 배포 | azd environment, Entra 앱 준비, Azure 리소스와 서비스 배포 |
+| 2–4. 연결과 인증 | 로컬 MCP, private network 접속, API별 access token 발급 |
+| 5–7. 도구 호출 | APIM REST-to-MCP, Azure·Python OBO, Learn MCP 프록시 |
+| 8–9. 오류 확인과 정리 | 401/403 비교, 설정 복구, Azure·Entra 리소스 정리 |
+
+추가 조사가 필요할 때만 마지막의 참고 자료를 확인하면 됩니다. 실행 파일은 [샘플 소스](https://github.com/hellices/devguidesample/tree/main/samples/azure-api-management/mcp-entra-lab)에 있습니다.
+
+## 구성 선택과 준비
+
+### 어떤 방식을 사용할지 선택
+
+| 필요한 기능 | 사용할 구성 | 이 가이드의 시나리오 |
+|---|---|---|
+| 기존 REST API를 AI 도구로 제공 | APIM이 REST operation을 MCP tool로 노출 | 5. REST-to-MCP |
+| 기존 MCP 서버에 Entra 인증과 gateway 정책 적용 | APIM의 기존 MCP 프록시 | 7. Learn 프록시 |
+| 로그인한 사용자의 Azure 권한으로 리소스 조회 | Container Apps의 공식 Azure MCP + OBO | 6-1. Native Azure MCP |
+| 업무용 MCP tool에 사용자 OBO 구현 | Container Apps의 Python MCP 예제 | 6-2. Python MCP |
+| 로컬 개발에서 GitHub·Azure·AKS·Learn 연결 | 서버별 MCP client 설정과 자격 증명 | 2–3. 로컬 연결 |
+
+APIM의 **REST-to-MCP**와 **기존 MCP 프록시**는 다른 기능입니다. 앞의 구성은 APIM이 REST operation을 tool로 만들고, 뒤의 구성은 이미 MCP protocol을 지원하는 서버에 연결합니다. 두 방식 모두 아래에서 직접 호출합니다.
+
+### 배포할 구성
 
 | 구성 요소 | 역할 |
 |---|---|
@@ -54,7 +84,33 @@ Azure Developer CLI(`azd`)로 환경을 배포하고, 아래 시나리오를 순
 | AKS | 로컬 AKS MCP가 조회할 클러스터와 선택적 개발용 터널 |
 | ACR / private DNS | `azd` remote build와 VNet 내 이름 해석 |
 
-각 아키텍처 SVG는 [구성 비교](../../../research/azure-api-management/mcp-authentication-options/index.md)에 있습니다. 실행 파일은 [실습 소스](https://github.com/hellices/devguidesample/tree/main/samples/azure-api-management/mcp-entra-lab)에 있으며 문서는 이 페이지에서 따라갑니다.
+Azure MCP와 Python MCP는 같은 internal Container Apps 환경에 배포합니다. APIM에는 inventory용 REST-to-MCP API와 Learn용 MCP 프록시 API를 각각 만듭니다. AKS MCP binary는 Azure에 원격 서버로 올리지 않고 개발 PC에서 실행합니다.
+
+### Access token과 OBO 흐름
+
+| 연결 | 사용하는 인증 |
+|---|---|
+| 로컬 client → Python MCP / APIM | Custom MCP API용 access token, `Mcp.Access` scope |
+| 로컬 client → 공식 Azure MCP | Native Azure MCP API용 access token, `Mcp.Tools.ReadWrite` scope |
+| Azure·Python MCP → ARM | 사용자를 대신해 발급받은 ARM용 OBO access token |
+| 로컬 client → GitHub MCP | GitHub OAuth 또는 PAT |
+| Client / APIM → Learn MCP | 익명 upstream 호출 |
+
+OBO는 **MCP API용 사용자 token을 받아 ARM용 token을 별도로 발급받는 흐름**입니다. 원래 MCP token을 ARM·GitHub·Learn에 그대로 전달하지 않습니다. Native Azure MCP의 managed identity는 confidential client를 인증하는 데 사용하며, ARM에서는 OBO 사용자의 Azure RBAC가 적용됩니다.
+
+Entra 앱의 사전 승인과 caller 제한도 구분합니다. 사전 승인은 consent 설정이고, 허용할 client는 APIM 정책·Python API·Container Apps authentication에서 검사합니다. 로컬 PC에서 내부 MCP까지의 접속 경로와 private DNS는 3번 단계에서 설정합니다.
+
+### 이 가이드의 버전
+
+| 항목 | 사용하는 버전·방식 |
+|---|---|
+| MCP protocol | 날짜 기반 revision. Python 연결은 `2026-07-28`, APIM 연결은 응답으로 협상한 이전 revision 사용 |
+| Python SDK | `mcp==2.2.0` — SDK 버전이며 protocol 이름 “MCP 2.0”과 다름 |
+| 메시지 형식 | JSON-RPC `2.0` |
+| 공식 Azure MCP | `2.0.5`, read-only tool과 remote OBO |
+| AKS MCP | `0.0.20`, local stdio-only |
+
+`2026-07-28` 연결은 `server/discover`와 요청별 metadata를 사용합니다. APIM의 HTTP 호출에서는 호환되는 `initialize` 절차를 직접 실행하고, 반환된 `protocolVersion`을 다음 요청에 사용합니다.
 
 ### 필요한 도구와 권한
 
@@ -148,7 +204,13 @@ az resource list --subscription "$AZURE_SUBSCRIPTION_ID" \
 
 목록에서 APIM, Container Apps environment, Container App 2개, AKS, ACR를 확인합니다. 전체 environment 설정을 출력하는 `azd env get-values`는 credential을 포함할 수 있으므로 화면 공유 때 사용하지 않습니다.
 
+2026-09-13에 실행한 같은 구성의 배포 출력입니다. `azd up`이 provisioning, ACR remote build, service deployment까지 수행했습니다.
+
+![azd up의 실제 provisioning과 service deployment 완료 출력 발췌](images/azd-deployment.png)
+
 ## 2. 로컬 MCP 서버 연결
+
+![개발 PC의 Azure·AKS stdio 연결과 GitHub 자체 인증, 익명 Learn 연결 구성](images/local-upstreams.svg)
 
 MCP Inspector는 한 번에 한 요청을 보내는 공식 MCP client입니다. 아래 명령은 서버에 연결해 tool 목록 또는 지정 tool의 결과를 표시합니다.
 
@@ -289,6 +351,10 @@ npx --no-install mcp-inspector --cli --config "$PRIVATE/aks.json" \
 
 `mcp-tunnel` pod가 표시됩니다. VPN 경로를 선택해 pod를 만들지 않았다면 namespace·pod 목록이 다른 것은 정상입니다. 이 버전의 AKS MCP는 **local stdio-only**입니다.
 
+다음은 실제 GitHub repository 검색, AKS pod 조회와 Learn 검색 응답의 발췌입니다. Learn의 APIM 경유 호출은 7번 단계에서 실행합니다.
+
+![GitHub repository 검색, AKS pod 조회, Learn 검색의 실제 응답 발췌](images/mcp-upstreams.png)
+
 ## 4. Entra access token 준비
 
 ### 4-1. Token 없이 접근
@@ -326,6 +392,8 @@ az account get-access-token --tenant "$TENANT_ID" \
 Token을 터미널에 출력하지 않고 curl 설정에 저장합니다. 이 두 token의 audience는 서로 다릅니다. 발급이 거부되면 API scope, consent, Conditional Access 요구사항을 확인하고 필요한 대화형 로그인을 수행합니다.
 
 ## 5. REST API를 APIM MCP tool로 호출
+
+![Entra로 보호된 APIM이 기존 REST operation을 getInventory MCP tool로 연결하는 아키텍처](images/apim-rest-tools.svg)
 
 ### 5-1. 원래 REST 응답
 
@@ -400,7 +468,13 @@ mcp_json "$PRIVATE/inventory.body" | jq '.result'
 
 `isError`가 `true`가 아니고 `content`에 가상 재고가 포함되는지 봅니다. 반환된 `invocation_id`는 REST backend에서 요청마다 생성합니다. **HTTP 200과 빈 tool 목록만으로 완료한 것으로 판단하지 않습니다.**
 
+2026-09-13에는 REST URL과 MCP tool 모두 같은 가상 widget 3개를 반환했습니다. `authorization_present: false`로 backend에 Entra token을 전달하지 않은 것도 확인했습니다.
+
+![직접 REST 호출과 APIM getInventory MCP tool 호출의 실제 응답 비교](images/apim-rest-to-mcp.png)
+
 ## 6. Azure MCP에서 OBO로 Azure 조회
+
+![Internal Container Apps의 Azure MCP가 사용자 token과 managed identity federation을 사용해 ARM OBO token을 발급받는 흐름](images/container-apps-obo.svg)
 
 ### 6-1. Native Azure MCP
 
@@ -454,7 +528,13 @@ HTTPS_PROXY="$MCP_PROXY" HTTP_PROXY="$MCP_PROXY" \
 
 Python 연결에는 Inspector의 `protocolEra: modern`을 지정했습니다. Python SDK 2.2.0 server의 `2026-07-28` 요청 방식을 사용하며, APIM과 native Azure MCP에서 실행한 이전 revision의 initialize/session 절차와 구분합니다.
 
+다음 실제 응답에서는 native Azure MCP의 ARM 조회 결과와 Python MCP의 `exists`, `region`, `provisioning_succeeded`를 비교할 수 있습니다.
+
+![공식 Azure MCP와 Python MCP의 실제 OBO 조회 응답](images/mcp-obo.png)
+
 ## 7. APIM을 통해 기존 Learn MCP 호출
+
+![APIM이 Entra token을 검증하고 Authorization header를 제거한 뒤 익명 Learn MCP backend에 연결하는 흐름](images/apim-existing-mcp.svg)
 
 이번에는 공개 Learn URL이 아니라 APIM의 `$LEARN_MCP_URL`에 연결합니다.
 
@@ -539,6 +619,10 @@ az rest --method put --url "$AUTH_API" \
 
 6-1의 `tools/list`를 다시 실행하여 정상 연결을 확인합니다. 다른 사용자의 RBAC를 비교하려면 그 사용자의 scope consent와 Azure RBAC를 준비한 뒤 같은 tool을 호출합니다.
 
+2026-09-13에는 무인증·wrong audience 요청에서 401, 제외된 client에서 403을 확인했습니다. 원래 allowlist로 복구한 후에는 native Azure MCP의 도구가 다시 조회되었습니다.
+
+![401과 403 응답 및 caller allowlist 복구 후 실제 도구 목록](images/mcp-authorization.png)
+
 ## 9. 환경 정리
 
 1. `kubectl port-forward` 터미널에서 `Ctrl+C`로 터널을 종료합니다.
@@ -559,8 +643,10 @@ python3 scripts/identity.py remove --confirm "$(azd env get-value AZURE_ENV_NAME
 
 `expiresOn` tag는 자동 삭제 설정이 아닙니다. `azd down`이 실패하면 삭제 상태를 확인하고 마무리해야 비용이 멈춥니다.
 
-## 관련 문서
+## 추가 참고 자료
 
-- [Entra 인증과 OBO 구성](../../../guides/azure-api-management/mcp-entra-private-access/index.md)
-- [Azure 호스팅·MCP 옵션 비교](../../../research/azure-api-management/mcp-authentication-options/index.md)
-- [배포와 요청·응답 기록](../../../cases/azure-api-management/mcp-entra-validation/index.md)
+위 순서로 구성·배포·호출·정리까지 진행할 수 있습니다. 다음 문서는 다른 환경으로 적용하거나 상세 근거가 필요할 때 참고합니다.
+
+- [Entra 인증 상세 참고](../../../guides/azure-api-management/mcp-entra-private-access/index.md): app registration, scope, client ACL, OAuth 로그인 문제.
+- [Azure 호스팅 옵션 비교](../../../research/azure-api-management/mcp-authentication-options/index.md): App Service·Functions 대안, APIM SKU와 버전별 지원 범위.
+- [2026-09-13 실행 기록](../../../cases/azure-api-management/mcp-entra-validation/index.md): 전체 관측값, 요청·응답 발췌와 구성 시 확인한 동작.
