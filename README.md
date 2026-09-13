@@ -37,8 +37,8 @@ python -m venv .venv
 
 자세한 작성·검증 규칙은
 [공개 문서 작성 계약](docs/contributing/index.md)을 확인하세요.
-검색 인덱스 검증 다음에는 `python scripts/docs/audit_pre_pages.py`로
-과거 공개 콘텐츠와 호환 URL 보존을 확인하며, 얕은 clone이면 `a4e6801`,
-`9ace9667`가 포함되도록 전체 이력을 먼저 가져와야 합니다.
+검색 인덱스 검증 다음에는 `python scripts/docs/audit_pre_pages.py`를
+실행하며, 이 감사는 전체 Git 이력이 필요합니다. 자세한 기준과 실행 지침도
+[공개 문서 작성 계약](docs/contributing/index.md)에서 확인하세요.
 
 > 이 저장소와 Pages는 공개되어 있습니다. 고객·사용자 식별자, 구독·테넌트 ID, 비밀, 내부 URL 또는 승인되지 않은 화면 캡처를 커밋하지 마세요.

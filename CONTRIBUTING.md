@@ -42,7 +42,6 @@ python scripts/docs/validate_search_index.py
 python scripts/docs/audit_pre_pages.py
 ```
 
-이 감사는 과거 공개 콘텐츠와 호환 URL 보존을 확인합니다. `a4e6801`,
-`9ace9667`가 보이는 전체 Git 이력이 필요하므로 얕은 clone이면
-`git fetch --unshallow` 뒤 다시 실행하세요. 상세 요구사항은
+이 감사는 과거 공개 콘텐츠와 호환 URL 보존을 확인하며 전체 Git 이력이
+필요합니다. 자세한 기준과 실행 지침은
 [상세 기여 지침](docs/contributing/index.md)을 따릅니다.

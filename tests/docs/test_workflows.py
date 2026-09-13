@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -7,6 +6,7 @@ import yaml
 
 ROOT = Path(__file__).parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
+AUDIT_COMMAND = "python scripts/docs/audit_pre_pages.py"
 REQUIRED_ACTIONS = {
     "actions/checkout": "v7",
     "actions/setup-python": "v7",
@@ -20,22 +20,10 @@ def write_workflow(path: Path, body: str) -> None:
     path.write_text(body, encoding="utf-8")
 
 
-def iter_job_steps(node: object) -> Iterator[dict[str, object]]:
-    if isinstance(node, dict):
-        steps = node.get("steps")
-        if isinstance(steps, list):
-            for step in steps:
-                if isinstance(step, dict):
-                    yield step
-        for value in node.values():
-            yield from iter_job_steps(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from iter_job_steps(item)
-
-
-def workflow_steps(workflows_dir: Path = WORKFLOWS) -> list[tuple[Path, dict[str, object]]]:
-    steps = []
+def workflow_jobs(
+    workflows_dir: Path = WORKFLOWS,
+) -> dict[str, dict[str, list[dict[str, object]]]]:
+    jobs_by_workflow: dict[str, dict[str, list[dict[str, object]]]] = {}
     for path in sorted(workflows_dir.glob("*.yml")):
         workflow = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(workflow, dict):
@@ -43,15 +31,31 @@ def workflow_steps(workflows_dir: Path = WORKFLOWS) -> list[tuple[Path, dict[str
         jobs = workflow.get("jobs")
         if not isinstance(jobs, dict):
             continue
-        for job in jobs.values():
-            for step in iter_job_steps(job):
-                steps.append((path, step))
+        parsed_jobs: dict[str, list[dict[str, object]]] = {}
+        for job_name, job in jobs.items():
+            if not isinstance(job_name, str) or not isinstance(job, dict):
+                continue
+            steps = job.get("steps")
+            if not isinstance(steps, list):
+                continue
+            parsed_jobs[job_name] = [step for step in steps if isinstance(step, dict)]
+        jobs_by_workflow[path.name] = parsed_jobs
+    return jobs_by_workflow
+
+
+def workflow_steps(workflows_dir: Path = WORKFLOWS) -> list[tuple[Path, str, dict[str, object]]]:
+    steps = []
+    for path_name, jobs in workflow_jobs(workflows_dir).items():
+        path = workflows_dir / path_name
+        for job_name, job_steps in jobs.items():
+            for step in job_steps:
+                steps.append((path, job_name, step))
     return steps
 
 
 def action_references(workflows_dir: Path = WORKFLOWS) -> list[tuple[Path, str, str]]:
     references = []
-    for path, step in workflow_steps(workflows_dir):
+    for path, _, step in workflow_steps(workflows_dir):
         uses = step.get("uses")
         if isinstance(uses, str) and "@" in uses:
             owner_repo, version = uses.rsplit("@", 1)
@@ -63,7 +67,7 @@ def checkout_inputs_by_workflow(
     workflows_dir: Path = WORKFLOWS,
 ) -> dict[str, list[dict[str, object] | None]]:
     checkout_inputs: dict[str, list[dict[str, object] | None]] = {}
-    for path, step in workflow_steps(workflows_dir):
+    for path, _, step in workflow_steps(workflows_dir):
         if step.get("uses") != "actions/checkout@v7":
             continue
         with_block = step.get("with")
@@ -72,25 +76,17 @@ def checkout_inputs_by_workflow(
     return checkout_inputs
 
 
-def ordered_steps_by_workflow(
-    workflows_dir: Path = WORKFLOWS,
-) -> dict[str, list[dict[str, object]]]:
-    ordered_steps: dict[str, list[dict[str, object]]] = {}
-    for path in sorted(workflows_dir.glob("*.yml")):
-        workflow = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        if not isinstance(workflow, dict):
-            continue
-        jobs = workflow.get("jobs")
-        if not isinstance(jobs, dict):
-            continue
-        for job in jobs.values():
-            steps = job.get("steps")
-            if not isinstance(steps, list):
-                continue
-            ordered_steps.setdefault(path.name, []).extend(
-                step for step in steps if isinstance(step, dict)
-            )
-    return ordered_steps
+def count_run_command_occurrences(
+    jobs: dict[str, list[dict[str, object]]],
+    command: str,
+) -> int:
+    occurrences = 0
+    for steps in jobs.values():
+        for step in steps:
+            run = step.get("run")
+            if isinstance(run, str):
+                occurrences += run.count(command)
+    return occurrences
 
 
 def assert_required_action_versions(workflows_dir: Path = WORKFLOWS) -> None:
@@ -111,30 +107,28 @@ def assert_checkout_history_contract(workflows_dir: Path = WORKFLOWS) -> None:
 def assert_pre_pages_audit_runs_after_search_validation(
     workflows_dir: Path = WORKFLOWS,
 ) -> None:
-    ordered_steps = ordered_steps_by_workflow(workflows_dir)
-    for workflow_name in ("docs-ci.yml", "pages.yml"):
-        steps = ordered_steps[workflow_name]
+    jobs_by_workflow = workflow_jobs(workflows_dir)
+    for workflow_name, job_name in (("docs-ci.yml", "validate"), ("pages.yml", "build")):
+        jobs = jobs_by_workflow[workflow_name]
+        assert job_name in jobs, workflow_name
+        steps = jobs[job_name]
         search_positions = [
             index
             for index, step in enumerate(steps)
             if step.get("name") == "Validate search index"
+            and step.get("run") == "python scripts/docs/validate_search_index.py"
         ]
         assert len(search_positions) == 1, workflow_name
         audit_position = search_positions[0] + 1
         assert audit_position < len(steps), workflow_name
         audit_step = steps[audit_position]
         assert audit_step.get("name") == "Audit pre-Pages content preservation"
-        assert audit_step.get("run") == "python scripts/docs/audit_pre_pages.py"
-        assert sum(
-            step.get("run") == "python scripts/docs/audit_pre_pages.py"
-            for step in steps
-        ) == 1, workflow_name
+        assert audit_step.get("run") == AUDIT_COMMAND
+        assert count_run_command_occurrences(jobs, AUDIT_COMMAND) == 1, workflow_name
 
-    oryx_steps = ordered_steps["oryx-python-build-test.yml"]
-    assert all(
-        step.get("run") != "python scripts/docs/audit_pre_pages.py"
-        for step in oryx_steps
-    )
+    assert count_run_command_occurrences(
+        jobs_by_workflow["oryx-python-build-test.yml"], AUDIT_COMMAND,
+    ) == 0
 
 
 def test_quoted_uses_values_are_detected_and_rejected(tmp_path: Path) -> None:
@@ -247,3 +241,113 @@ def test_historical_audit_workflows_checkout_full_history() -> None:
 
 def test_historical_audit_workflows_run_pre_pages_audit_after_search_validation() -> None:
     assert_pre_pages_audit_runs_after_search_validation()
+
+
+def test_historical_audit_workflows_reject_cross_job_audit_placement(tmp_path: Path) -> None:
+    write_workflow(
+        tmp_path / "docs-ci.yml",
+        f"""\
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate search index
+        run: python scripts/docs/validate_search_index.py
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Audit pre-Pages content preservation
+        run: {AUDIT_COMMAND}
+""",
+    )
+    write_workflow(
+        tmp_path / "pages.yml",
+        f"""\
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate search index
+        run: python scripts/docs/validate_search_index.py
+      - name: Audit pre-Pages content preservation
+        run: {AUDIT_COMMAND}
+""",
+    )
+    write_workflow(
+        tmp_path / "oryx-python-build-test.yml",
+        """\
+jobs:
+  oryx-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+""",
+    )
+
+    with pytest.raises(AssertionError):
+        assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+def test_historical_audit_workflows_reject_embedded_second_audit_invocation(
+    tmp_path: Path,
+) -> None:
+    write_workflow(
+        tmp_path / "docs-ci.yml",
+        f"""\
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate search index
+        run: python scripts/docs/validate_search_index.py
+      - name: Audit pre-Pages content preservation
+        run: {AUDIT_COMMAND}
+      - name: Hidden duplicate
+        run: |
+          echo before
+          {AUDIT_COMMAND} && echo after
+""",
+    )
+    write_workflow(
+        tmp_path / "pages.yml",
+        f"""\
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate search index
+        run: python scripts/docs/validate_search_index.py
+      - name: Audit pre-Pages content preservation
+        run: {AUDIT_COMMAND}
+""",
+    )
+    write_workflow(
+        tmp_path / "oryx-python-build-test.yml",
+        """\
+jobs:
+  oryx-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build
+        run: echo ok
+""",
+    )
+
+    with pytest.raises(AssertionError):
+        assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+def test_root_guidance_keeps_full_history_remediation_only_in_detailed_contract() -> None:
+    for relative_path in ("AGENTS.md", "CONTRIBUTING.md", "README.md"):
+        text = (ROOT / relative_path).read_text(encoding="utf-8")
+        assert AUDIT_COMMAND in text, relative_path
+        assert "docs/contributing/index.md" in text, relative_path
+        assert "전체 Git 이력" in text, relative_path
+        assert "a4e6801" not in text, relative_path
+        assert "9ace9667" not in text, relative_path
+        assert "git fetch --unshallow" not in text, relative_path
+
+    detailed_contract = (ROOT / "docs/contributing/index.md").read_text(encoding="utf-8")
+    assert "a4e6801" in detailed_contract
+    assert "9ace9667" in detailed_contract
+    assert "git fetch --unshallow" in detailed_contract
