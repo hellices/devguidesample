@@ -57,7 +57,7 @@ def build_explore_page(
         "<noscript>JavaScript가 꺼져 있어 필터를 사용할 수 없습니다. 모든 주제와 문서 링크를 표시합니다.</noscript>",
         '<form class="dg-explore-filters" data-explore-form aria-label="글 찾기 필터">',
         '<label class="dg-explore-search" for="explore-query">제목·설명 검색</label>',
-        '<input id="explore-query" type="search" name="q" placeholder="제목 또는 설명의 단어" aria-describedby="explore-help">',
+        '<input id="explore-query" type="search" name="text" placeholder="제목 또는 설명의 단어" aria-describedby="explore-help">',
         '<p id="explore-help">여러 조건은 AND로 적용합니다. 한 문서가 선택한 모든 조건을 충족해야 합니다.</p>',
     ]
     for field, plural, label in (("service", "services", "서비스"), ("tag", "tags", "태그"), ("technology", "technologies", "기술")):

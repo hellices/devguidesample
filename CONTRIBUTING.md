@@ -12,6 +12,10 @@
 함께 표시하고 일치 문서로 바로 연결합니다. 이전 태그 주소는 문서가 아닌
 taxonomy의 `legacy_tag_redirects`에서 관리합니다.
 
+제목·설명 검색어는 반복 가능한 `text` query로 공유합니다. `q`는 Material
+전체 검색 전용이므로 글 찾기가 읽거나 오류로 처리하지 않으며, 필터 변경과
+초기화에서도 보존합니다.
+
 실행 코드, 배포 매니페스트와 결과물은
 `docs/services/<service>/<topic>/samples/<sample>/`에 `sample.yml`과
 `README.md`를 포함해 둡니다. 최상위 collection 폴더와 `samples/`에는 새

@@ -2,15 +2,16 @@
   "use strict";
 
   const fields = {tag: "tags", service: "services", technology: "technologies"};
-  const emptyFilters = () => ({tag: [], service: [], technology: [], q: []});
+  const emptyFilters = () => ({tag: [], service: [], technology: [], text: []});
   const normalize = value => value.normalize("NFKC").toLocaleLowerCase().trim();
 
   function parseQuery(query, vocabulary) {
     const filters = emptyFilters();
     const invalid = [];
     for (const [key, value] of new URLSearchParams(query)) {
-      if (key === "q") {
-        if (value.trim() && !filters.q.includes(value.trim())) filters.q.push(value.trim());
+      if (key === "q") continue; // Reserved for Material's global search.
+      if (key === "text") {
+        if (value.trim() && !filters.text.includes(value.trim())) filters.text.push(value.trim());
       } else if (Object.hasOwn(fields, key) && vocabulary[key].includes(value)) {
         if (!filters[key].includes(value)) filters[key].push(value);
       } else {
@@ -23,14 +24,15 @@
   function matchesMember(member, filters) {
     return Object.entries(fields).every(([key, field]) =>
       filters[key].every(value => member[field].includes(value))
-    ) && filters.q.every(value => normalize(member.search).includes(normalize(value)));
+    ) && filters.text.every(value => normalize(member.search).includes(normalize(value)));
   }
 
-  function queryString(filters) {
+  function queryString(filters, currentQuery = "") {
     const query = new URLSearchParams();
-    for (const key of [...Object.keys(fields), "q"]) {
+    for (const key of [...Object.keys(fields), "text"]) {
       for (const value of filters[key]) query.append(key, value);
     }
+    for (const value of new URLSearchParams(currentQuery).getAll("q")) query.append("q", value);
     return query.size ? `?${query}` : "";
   }
 
@@ -38,7 +40,7 @@
     if (root.dataset.exploreReady) return;
     root.dataset.exploreReady = "true";
     const form = root.querySelector("[data-explore-form]");
-    const search = root.querySelector('[name="q"]');
+    const search = root.querySelector('[name="text"]');
     const controls = Array.from(root.querySelectorAll('input[type="checkbox"]'));
     const count = root.querySelector("[data-explore-count]");
     const summary = root.querySelector("[data-explore-summary]");
@@ -80,10 +82,10 @@
       count.textContent = `${topicCount}개 주제 · ${documentCount}개 문서`;
       const selected = controls.filter(control => control.checked).map(control =>
         control.labels[0].textContent.trim());
-      selected.push(...filters.q.map(value => `검색: ${value}`));
+      selected.push(...filters.text.map(value => `검색: ${value}`));
       summary.textContent = selected.length ? `선택한 조건 (AND): ${selected.join(" · ")}` : "모든 주제 · 선택한 조건 없음";
       empty.hidden = documentCount !== 0;
-      const url = environment.location.pathname + queryString(filters) + environment.location.hash;
+      const url = environment.location.pathname + queryString(filters, environment.location.search) + environment.location.hash;
       environment.history.replaceState(null, "", url);
     }
 
@@ -91,8 +93,8 @@
       const parsed = parseQuery(environment.location.search, vocabulary);
       filters = parsed.filters;
       for (const control of controls) control.checked = filters[control.name].includes(control.value);
-      // Repeated q values remain separate AND terms until the reader edits text.
-      search.value = filters.q.join(" ");
+      // Repeated text values remain separate AND terms until the reader edits text.
+      search.value = filters.text.join(" ");
       alert.hidden = parsed.invalid.length === 0;
       alert.textContent = parsed.invalid.length
         ? `알 수 없는 필터를 제외했습니다: ${parsed.invalid.join(", ")}` : "";
@@ -107,7 +109,7 @@
     });
     form.addEventListener("input", event => {
       if (event.target !== search) return;
-      filters.q = search.value.trim() ? [search.value.trim()] : [];
+      filters.text = search.value.trim() ? [search.value.trim()] : [];
       update();
     });
     form.addEventListener("submit", event => event.preventDefault());

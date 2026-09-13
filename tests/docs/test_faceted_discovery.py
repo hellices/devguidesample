@@ -2,6 +2,7 @@ from collections import Counter
 from copy import deepcopy
 from html.parser import HTMLParser
 import json
+import os
 import re
 from pathlib import Path, PurePosixPath
 import shutil
@@ -12,6 +13,7 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 from markdown import Markdown
 import pytest
 import yaml
+import material
 
 from scripts.docs import content
 from scripts.docs.generate_indexes import build_home_page, build_index_pages
@@ -178,6 +180,7 @@ def test_explore_has_exact_member_data_and_one_card_per_topic(taxonomy, catalog)
     assert 'role="status"' in page and 'aria-live="polite"' in page
     assert 'role="alert"' in page
     assert 'type="search"' in page and 'type="reset"' in page
+    assert 'name="text"' in page and 'name="q"' not in page
     assert "모든 주제" in page
 
 
@@ -264,4 +267,37 @@ def test_javascript_behavior_with_available_node():
         pytest.skip("Node unavailable: parent browser verification is required")
     result = subprocess.run([node, "--test", str(ROOT / "tests/docs/explore.test.cjs")],
                             cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_generated_explore_integrates_with_material_search_cleanup(tmp_path, taxonomy, catalog):
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node unavailable: parent browser verification is required")
+    page = build_index_pages(catalog.documents, taxonomy, catalog=catalog)[PurePosixPath("explore/index.md")]
+    parser = Elements(page)
+    controls = [
+        {"name": attrs["name"], "value": attrs["value"], "label": attrs["value"]}
+        for tag, attrs in parser.elements if tag == "input" and attrs.get("type") == "checkbox"
+    ]
+    topics = []
+    for _, attrs in parser.elements:
+        if "data-explore-topic" in attrs:
+            topics.append([])
+        if "data-explore-member" in attrs:
+            topics[-1].append({field: attrs[f"data-{field}"] for field in ("tags", "services", "technologies", "search")})
+    matching = [
+        [row for row in topic if "design" in json.loads(row["tags"])
+         and all(term in row["search"].casefold() for term in ("agent", "memory"))]
+        for topic in topics
+    ]
+    expected = f"{sum(bool(topic) for topic in matching)}개 주제 · {sum(map(len, matching))}개 문서"
+    fixture_path = tmp_path / "explore-catalog.json"
+    fixture_path.write_text(json.dumps({"controls": controls, "topics": topics, "expectedCount": expected}))
+    source_map = next((Path(material.__file__).parent / "templates/assets/javascripts").glob("bundle*.js.map"))
+    result = subprocess.run(
+        [node, "--test", str(ROOT / "tests/docs/explore-material.test.cjs")],
+        cwd=ROOT, capture_output=True, text=True,
+        env={**os.environ, "MATERIAL_SOURCE_MAP": str(source_map), "EXPLORE_FIXTURE": str(fixture_path)},
+    )
     assert result.returncode == 0, result.stdout + result.stderr

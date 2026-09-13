@@ -5,19 +5,19 @@ const path = require("node:path");
 const script = path.join(__dirname, "../../docs/assets/javascripts/explore.js");
 const available = fs.existsSync(script);
 const explore = available ? require(script) : {};
-const vocabulary = {tag: ["design", "build", "operate", "identity"], service: ["one", "two"], technology: ["python", "kubernetes"]};
+const {fixture, vocabulary} = require("./explore-fixture.cjs");
 const member = {tags: ["design", "build"], services: ["one"], technologies: ["python"], search: "Agent Memory\nFast retrieval"};
 
 test("explore script is present", () => assert.ok(available, "dependency-free explore script is required"));
 test("repeated validated parameters are deduplicated, unknowns are reported", {skip: !available}, () => {
-  const {filters, invalid} = explore.parseQuery("?tag=design&tag=design&tag=build&tag=old&service=one&technology=python&technology=rust&q=Agent&q=Memory&bad=x", vocabulary);
-  assert.deepEqual(filters, {tag: ["design", "build"], service: ["one"], technology: ["python"], q: ["Agent", "Memory"]});
+  const {filters, invalid} = explore.parseQuery("?tag=design&tag=design&tag=build&tag=old&service=one&technology=python&technology=rust&text=Agent&text=Memory&bad=x", vocabulary);
+  assert.deepEqual(filters, {tag: ["design", "build"], service: ["one"], technology: ["python"], text: ["Agent", "Memory"]});
   assert.deepEqual(invalid, ["tag=old", "technology=rust", "bad=x"]);
 });
 test("all facets and text apply to the same member, never a topic union", {skip: !available}, () => {
-  const base = {tag: ["design", "build"], service: ["one"], technology: ["python"], q: ["agent", "RETRIEVAL"]};
+  const base = {tag: ["design", "build"], service: ["one"], technology: ["python"], text: ["agent", "RETRIEVAL"]};
   assert.equal(explore.matchesMember(member, base), true);
-  for (const [key, value] of [["tag", "operate"], ["service", "two"], ["technology", "kubernetes"], ["q", "absent"]]) {
+  for (const [key, value] of [["tag", "operate"], ["service", "two"], ["technology", "kubernetes"], ["text", "absent"]]) {
     assert.equal(explore.matchesMember(member, {...base, [key]: [...base[key], value]}), false);
   }
   assert.equal(explore.matchesMember({...member, tags: ["design-advanced"]}, {...base, tag: ["design"]}), false);
@@ -25,39 +25,10 @@ test("all facets and text apply to the same member, never a topic union", {skip:
   assert.equal(explore.matchesMember({...member, tags: ["build"]}, base), false);
 });
 test("URL roundtrip preserves repeated filters and text, excludes invalid values", {skip: !available}, () => {
-  const {filters} = explore.parseQuery("?tag=design&tag=old&tag=build&q=a%26b&q=%EA%B2%80%EC%83%89", vocabulary);
+  const {filters} = explore.parseQuery("?tag=design&tag=old&tag=build&text=a%26b&text=%EA%B2%80%EC%83%89", vocabulary);
   assert.deepEqual(explore.parseQuery(explore.queryString(filters), vocabulary).filters, filters);
-  assert.equal(explore.queryString({tag: [], service: [], technology: [], q: []}), "");
+  assert.equal(explore.queryString({tag: [], service: [], technology: [], text: []}), "");
 });
-
-function element(extra = {}) {
-  return {
-    hidden: false, textContent: "", value: "", checked: false, dataset: {},
-    listeners: {}, addEventListener(type, callback) { this.listeners[type] = callback; },
-    ...extra,
-  };
-}
-function fixture(query = "") {
-  const controls = Object.entries(vocabulary).flatMap(([name, values]) =>
-    values.map(value => element({name, value, labels: [{textContent: value}]})));
-  const rows = [
-    element({dataset: {tags: '["design"]', services: '["one"]', technologies: '["python"]', search: "Agent entry"}}),
-    element({dataset: {tags: '["design","build"]', services: '["one"]', technologies: '["python"]', search: "Agent Memory"}}),
-    element({dataset: {tags: '["build"]', services: '["two"]', technologies: '["kubernetes"]', search: "Other"}}),
-  ];
-  const cards = [[rows[0], rows[1]], [rows[2]]].map(members => element({
-    querySelectorAll: () => members, querySelector: () => element(),
-  }));
-  const nodes = Object.fromEntries(["form", "count", "summary", "alert", "empty"].map(key => [`[data-explore-${key}]`, element()]));
-  const search = element({name: "q"});
-  const root = element({
-    querySelector: selector => selector === '[name="q"]' ? search : nodes[selector],
-    querySelectorAll: selector => selector === 'input[type="checkbox"]' ? controls : cards,
-  });
-  const urls = [];
-  const env = {location: {search: query, pathname: "/project/explore/", hash: ""}, history: {replaceState: (_, __, url) => urls.push(url)}, addEventListener() {}};
-  return {root, env, urls, nodes, controls, rows, cards, search, form: nodes["[data-explore-form]"]};
-}
 test("mount hides nonmatching members, keeps their topic, counts and resets", {skip: !available}, () => {
   const f = fixture("?tag=design&tag=build");
   explore.mount(f.root, f.env);
@@ -83,4 +54,39 @@ test("invalid query values alert visibly and are removed from URL", {skip: !avai
   assert.match(f.nodes["[data-explore-alert]"].textContent, /tag=old/);
   assert.deepEqual(f.rows.map(row => row.hidden), [false, false, true]);
   assert.equal(f.urls.at(-1), "/project/explore/?service=one");
+});
+
+test("Material q is external: not a text filter, not invalid, preserved on rewrites", () => {
+  const query = "?q=Global&q=Search&text=Agent&tag=design&unknown=x";
+  const {filters, invalid} = explore.parseQuery(query, vocabulary);
+  assert.deepEqual(filters, {tag: ["design"], service: [], technology: [], text: ["Agent"]});
+  assert.deepEqual(invalid, ["unknown=x"]);
+  const serialized = new URLSearchParams(explore.queryString(filters, query));
+  assert.deepEqual(serialized.getAll("q"), ["Global", "Search"]);
+  assert.deepEqual(serialized.getAll("text"), ["Agent"]);
+  assert.equal(serialized.has("unknown"), false);
+});
+
+test("Explore edit, popstate, and reset preserve current external q without reviving deleted q", () => {
+  const f = fixture("?q=Global&text=Agent&text=Memory&tag=design");
+  explore.mount(f.root, f.env);
+  assert.equal(f.nodes["[data-explore-alert]"].hidden, true);
+  assert.equal(f.search.value, "Agent Memory");
+  assert.equal(f.nodes["[data-explore-count]"].textContent, "1개 주제 · 1개 문서");
+  f.search.value = "entry";
+  f.form.listeners.input({target: f.search});
+  assert.equal(f.env.location.searchParams.get("q"), "Global");
+  assert.deepEqual(f.env.location.searchParams.getAll("text"), ["entry"]);
+  assert.match(f.nodes["[data-explore-summary]"].textContent, /검색: entry/);
+  f.env.location = new URL("https://example.test/project/explore/?tag=design&text=Agent&text=Memory&q=Next#results");
+  f.listeners.popstate();
+  assert.equal(f.search.value, "Agent Memory");
+  assert.equal(f.nodes["[data-explore-count]"].textContent, "1개 주제 · 1개 문서");
+  f.form.listeners.reset({preventDefault() {}});
+  assert.equal(f.env.location.search, "?q=Next");
+  assert.equal(f.env.location.hash, "#results");
+  assert.equal(f.search.value, "");
+  f.env.location.searchParams.delete("q");
+  f.form.listeners.change();
+  assert.equal(f.env.location.search, "");
 });

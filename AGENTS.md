@@ -49,6 +49,9 @@
   canonical topic 카드로 묶고 주제 수와 문서 수를 함께 표시한다.
   여러 태그·서비스·기술·제목/설명 검색어는 같은 문서에 AND로 적용한다.
   topic 안에서 불일치 문서는 숨기고 일치 문서별 직접 링크를 제공한다.
+- 글 찾기 제목·설명 검색의 URL 매개변수는 반복 가능한 `text`다.
+  Material 전체 검색이 소유한 `q`는 글 찾기 필터나 오류로 취급하지 않고,
+  URL 갱신·초기화 시 현재 주소에 있는 값을 보존한다.
 - `/tags/`, `/articles/`는 `/explore/`로 redirect한다. 이전 태그 주소는
   taxonomy의 `legacy_tag_redirects`만으로 보존하며 문서별 legacy 태그를
   추가하지 않는다. redirect page는 메뉴와 검색에서 제외한다.
