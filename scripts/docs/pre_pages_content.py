@@ -32,6 +32,7 @@ from scripts.docs.pre_pages import (
     resolve_public_evidence_files,
     validate_reviewed_changes,
 )
+from scripts.docs.pre_pages_visibility import AuthoredContent
 
 
 @dataclass(frozen=True)
@@ -207,7 +208,7 @@ class _RenderedSemantics(HTMLParser):
         if self.anchor is not None:
             target, parts = self.anchor
             label = _space(unicodedata.normalize("NFKC", "".join(parts)))
-            self.links.append(f"{label}\n{target}")
+            self.links.append(f"{label}\n{unicodedata.normalize('NFKC', target)}")
             if not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
                 self.local_link_labels.append(label)
             self.anchor = None
@@ -220,11 +221,11 @@ class _RenderedSemantics(HTMLParser):
         if not blocked:
             if tag == "a" and "href" in attributes:
                 self._finish_anchor()
-                self.anchor = (unicodedata.normalize("NFKC", attributes["href"]), [])
+                self.anchor = (attributes["href"], [])
             elif tag == "img" and "src" in attributes:
                 alt = _space(unicodedata.normalize("NFKC", attributes.get("alt", "")))
-                source = unicodedata.normalize("NFKC", attributes["src"])
-                self.images.append(f"{alt}\n{PurePosixPath(unquote(urlsplit(source).path)).name}")
+                basename = PurePosixPath(unquote(urlsplit(attributes["src"]).path)).name
+                self.images.append(f"{alt}\n{unicodedata.normalize('NFKC', basename)}")
                 if self.anchor is not None:
                     self.anchor[1].append(alt)
         if tag not in _VOID_TAGS:
@@ -322,6 +323,11 @@ def _rendered_semantics(
         text = text[:start] + "".join(reader.output) + text[end:]
     renderer = create_semantic_renderer()
     output = renderer.convert(text)
+    authored = AuthoredContent()
+    authored.feed(output)
+    authored.close()
+    if authored.hidden:
+        raise AuditFormatError(f"persistently hidden authored content: {authored.hidden}")
     collector = _RenderedSemantics()
     collector.feed(output)
     collector.close()
@@ -597,7 +603,7 @@ def _separator(line: str) -> bool:
 
 
 def extract_markdown_structure(text: str) -> MarkdownStructure:
-    text = unicodedata.normalize("NFKC", text.replace("\r\n", "\n").replace("\r", "\n")).lstrip("\ufeff")
+    text = text.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")
     text = re.sub(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|$)", "", text, count=1, flags=re.DOTALL)
     literal_prefix = "\ue000code"
     while literal_prefix in text:
@@ -688,7 +694,10 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
     def heading(value: str, level: int) -> None:
         nonlocal title
         value = re.sub(r"\s+#+\s*$", "", value)
-        value = re.sub(r"^(?:\d+[.)]|\d+(?:\.\d+)+\.?)\s+", "", inline(value))
+        value = re.sub(
+            r"^(?:\d+[.)]|\d+(?:\.\d+)+\.?)\s+", "",
+            unicodedata.normalize("NFKC", inline(value)),
+        )
         if level == 1 and not title:
             title = value
         else:
@@ -735,7 +744,8 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
                 in_table = True
                 if not _separator(line):
                     tables.append(" | ".join(
-                        inline(cell).replace(r"\|", "|").replace("\\", "\\\\").replace("|", r"\|")
+                        unicodedata.normalize("NFKC", inline(cell).replace(r"\|", "|"))
+                        .replace("\\", "\\\\").replace("|", r"\|")
                         for cell in _table_cells(line)
                     ))
             elif re.fullmatch(r"(?:[-*_]\s*){3,}", line):
@@ -751,7 +761,10 @@ def extract_markdown_structure(text: str) -> MarkdownStructure:
                 paragraph.append(line)
         flush()
     return MarkdownStructure(
-        title, tuple(headings), tuple(prose), tuple(code), tuple(tables),
+        unicodedata.normalize("NFKC", title),
+        tuple(unicodedata.normalize("NFKC", value) for value in headings),
+        tuple(unicodedata.normalize("NFKC", value) for value in prose),
+        tuple(unicodedata.normalize("NFKC", value) for value in code), tuple(tables),
         tuple(semantics.images), tuple(semantics.local_link_labels),
         tuple(semantics.links),
     )
@@ -794,6 +807,8 @@ def _verify_current_evidence(
                         structures[reference.path] = extract_markdown_structure(data.decode("utf-8"))
                     except UnicodeError as error:
                         raise AuditFormatError(f"{label}: structure evidence is not UTF-8: {error}") from error
+                    except AuditFormatError as error:
+                        raise AuditFormatError(f"{label}: {error}") from error
                 counts = Counter(
                     sha256(f"{reference.category}\0{value}".encode("utf-8")).hexdigest()
                     for value in _values(structures[reference.path], reference.category)
@@ -899,17 +914,20 @@ def audit_document_content(
     repo_root: Path, inventory: PrePagesInventory,
 ) -> tuple[DocumentPreservation, ...]:
     documents = resolve_current_documents(repo_root, inventory)
-    return tuple(
-        compare_markdown(
-            entry.baseline_path,
-            PurePosixPath("docs") / documents[entry.baseline_path].relative_path,
-            extract_markdown_structure(git_text(repo_root, inventory.baseline_commit, entry.baseline_path)),
-            extract_markdown_structure(documents[entry.baseline_path].body),
-            entry.reviewed_changes,
-            repo_root=repo_root,
-        )
-        for entry in inventory.documents
-    )
+    results = []
+    for entry in inventory.documents:
+        document = documents[entry.baseline_path]
+        current_path = PurePosixPath("docs") / document.relative_path
+        try:
+            results.append(compare_markdown(
+                entry.baseline_path, current_path,
+                extract_markdown_structure(git_text(repo_root, inventory.baseline_commit, entry.baseline_path)),
+                extract_markdown_structure(document.body),
+                entry.reviewed_changes, repo_root=repo_root,
+            ))
+        except AuditFormatError as error:
+            raise AuditFormatError(f"{current_path}: {error}") from error
+    return tuple(results)
 
 
 def write_content_review_json(

@@ -58,11 +58,12 @@ class RendererOracle(HTMLParser):
         if not blocked and tag == "a" and "href" in attrs:
             if self.anchor is not None:
                 target, parts = self.anchor
-                self.links.append(f"{self.normal(''.join(parts))}\n{target}")
+                self.links.append(f"{self.normal(''.join(parts))}\n{unicodedata.normalize('NFKC', target)}")
             self.anchor = [attrs["href"], []]
         if not blocked and tag == "img" and "src" in attrs:
             alt = self.normal(attrs.get("alt", ""))
-            self.images.append(f"{alt}\n{Path(unquote(urlsplit(attrs['src']).path)).name}")
+            basename = unicodedata.normalize("NFKC", Path(unquote(urlsplit(attrs["src"]).path)).name)
+            self.images.append(f"{alt}\n{basename}")
             if self.anchor is not None:
                 self.anchor[1].append(alt)
         if tag not in {"img", "br", "hr", "input", "meta", "link", "source", "wbr"}:
@@ -80,7 +81,7 @@ class RendererOracle(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "a" and self.anchor is not None and not any(name in {"code", "pre", "script", "style", "template"} for name in self.parents):
             target, parts = self.anchor
-            self.links.append(f"{self.normal(''.join(parts))}\n{target}")
+            self.links.append(f"{self.normal(''.join(parts))}\n{unicodedata.normalize('NFKC', target)}")
             self.anchor = None
         if tag in self.parents:
             del self.parents[len(self.parents) - 1 - self.parents[::-1].index(tag):]
@@ -91,7 +92,7 @@ class RendererOracle(HTMLParser):
 
 
 def renderer_oracle(source: str) -> RendererOracle:
-    source = unicodedata.normalize("NFKC", source.replace("\r\n", "\n").replace("\r", "\n"))
+    source = source.replace("\r\n", "\n").replace("\r", "\n")
     source = re.sub(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|$)", "", source, count=1, flags=re.DOTALL)
     html = pre_pages_content.create_semantic_renderer().convert(source)
     collector = RendererOracle()
@@ -1658,3 +1659,167 @@ def test_safe_semantic_renderer_does_not_execute_snippet_inclusion(tmp_path: Pat
     assert "pymdownx.snippets" not in pre_pages_content.SEMANTIC_MARKDOWN_CONFIG["extensions"]
     assert renderer_oracle(source).links == []
     assert extract_markdown_structure(source).links == ()
+
+
+@pytest.mark.parametrize(("source", "category", "expected"), [
+    ("＃ Title", "title", ""),
+    ("＃＃ Heading", "headings", ()),
+    ("＃＃ Heading", "prose", ("## Heading",)),
+    ("｀｀｀text\nLiteral\n｀｀｀", "code", ()),
+    ("｀｀｀text\nLiteral\n｀｀｀", "prose", ("```text Literal ```",)),
+    ("～" * 3 + "\nLiteral\n" + "～" * 3, "code", ()),
+    ("［Guide］(guide.md)", "links", ()),
+    ("！[Capture](capture.gif)", "images", ()),
+    ("！[Capture](capture.gif)", "links", ("Capture\ncapture.gif",)),
+    ("！［Capture］(capture.gif)", "images", ()),
+    ("｜ A ｜ B ｜\n｜---｜---｜\n｜ C ｜ D ｜", "tables", ()),
+    ("Title\n＝＝＝", "title", ""),
+])
+def test_unicode_normalization_cannot_manufacture_markdown_syntax(source, category, expected) -> None:
+    structure = extract_markdown_structure(source)
+    assert getattr(structure, category) == expected
+    oracle = renderer_oracle(source)
+    assert structure.images == tuple(oracle.images)
+    assert structure.links == tuple(oracle.links)
+
+
+@pytest.mark.parametrize(("source", "category", "expected"), [
+    ("# Ｔｉｔｌｅ ①", "title", "Title 1"),
+    ("## Ｈｅａｄｉｎｇ ①", "headings", ("Heading 1",)),
+    ("**Ｔｅｘｔ ①** `ｌｉｔｅｒａｌ`", "prose", ("Text 1 literal",)),
+    ("```ｔｅｘｔ\nｃｏｄｅ ①\n```", "code", ("text\ncode 1",)),
+    ("| Ａ | Ｂ |\n|---|---|\n| Ｃ｜Ｄ | ① |", "tables", ("A | B", r"C\|D | 1")),
+    ("[Ｇｕｉｄｅ ①](guide.md)", "links", ("Guide 1\nguide.md",)),
+    ("![Ｃａｐｔｕｒｅ ①](capture.gif)", "images", ("Capture 1\ncapture.gif",)),
+    ("![Literal ！［x］](capture.gif)", "images", ("Literal ![x]\ncapture.gif",)),
+    ("｀[Ｇｕｉｄｅ](guide.md)｀", "links", ("Guide\nguide.md",)),
+])
+def test_unicode_normalization_applies_only_to_extracted_text(source, category, expected) -> None:
+    assert getattr(extract_markdown_structure(source), category) == expected
+    structure = extract_markdown_structure(source)
+    oracle = renderer_oracle(source)
+    assert structure.images == tuple(oracle.images)
+    assert structure.links == tuple(oracle.links)
+
+
+def test_real_s1_fullwidth_exclamation_invalidates_the_existing_image_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "monitor/sre-agent-event-lab/validation-results.md",
+        "docs/services/azure-monitor/azure-sre-agent/validation-results/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    image = "![S1 SRE Agent investigation](images/s1-investigation.gif)"
+    source = path.read_text()
+    assert source.count(image) == 1
+    changed = source.replace(image, "！" + image[1:])
+    assert "S1 SRE Agent investigation\ns1-investigation.gif" not in renderer_oracle(changed).images
+    path.write_text(changed)
+    with pytest.raises(AuditFormatError, match="evidence.*images|images.*count"):
+        audit_document_content(tmp_path, inventory)
+
+
+@pytest.mark.parametrize("attribute", [
+    "hidden", 'hidden="false"', 'aria-hidden="true"',
+    'style="display:none"', 'style="visibility:hidden"',
+    'style="DISPLAY: /* hidden */ none !important; display: block"',
+])
+@pytest.mark.parametrize("markdown_enabled", [False, True])
+def test_persistently_hidden_source_wrappers_reject_authored_markdown(attribute, markdown_enabled) -> None:
+    annotation = ' markdown="1"' if markdown_enabled else ""
+    source = f'<section {attribute}{annotation}>\n\n<div markdown="1">\n\n# Title\n\nAuthored prose.\n\n</div>\n\n</section>'
+    with pytest.raises(AuditFormatError, match="hidden.*authored|authored.*hidden"):
+        extract_markdown_structure(source)
+
+
+@pytest.mark.parametrize("content", [
+    "Authored prose.", "# Title", "```text\nAuthored code.\n```",
+    "| A | B |\n|---|---|\n| C | D |", "![Capture](capture.gif)",
+])
+def test_source_hidden_state_applies_to_all_authored_structures(content) -> None:
+    with pytest.raises(AuditFormatError, match="hidden.*authored|authored.*hidden"):
+        extract_markdown_structure(f'<div hidden markdown="1">\n\n{content}\n\n</div>')
+
+
+@pytest.mark.parametrize("wrapper", [
+    '<div inert markdown="1">{body}</div>',
+    '<details markdown="1"><summary>Read more</summary>{body}</details>',
+    '<div style="display:none;display:block" markdown="1">{body}</div>',
+    '<div style="visibility:hidden" markdown="1"><div style="visibility:visible" markdown="1">{body}</div></div>',
+    '<div style="--display:none;--visibility:hidden" markdown="1">{body}</div>',
+    '<div aria-hidden="false" markdown="1">{body}</div>',
+])
+def test_source_browser_visible_prose_and_openable_details_remain_evidence(wrapper) -> None:
+    source = wrapper.format(body="\n\n# Title\n\nAuthored prose.\n\n")
+    structure = extract_markdown_structure(source)
+    assert structure.title == "Title"
+    assert any("Authored prose." in text for text in structure.prose)
+
+
+def test_source_hidden_examples_in_code_and_noscript_do_not_hide_visible_prose() -> None:
+    source = (
+        '# Title\n\nAuthored prose.\n\n'
+        '`<div hidden>Literal example</div>`\n\n'
+        '<noscript><div hidden>No scripting fallback</div></noscript>'
+    )
+    assert extract_markdown_structure(source).title == "Title"
+
+
+@pytest.mark.parametrize("attribute", [
+    "hidden", 'aria-hidden="true"', 'style="display:none"', 'style="visibility:hidden"',
+])
+def test_real_foundry_local_hidden_source_body_cannot_pass_preservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, attribute: str,
+) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "aifoundry/foundry_local.md",
+        "docs/services/microsoft-foundry/foundry-local-air-gapped/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    source = path.read_text()
+    metadata, body = source.split("\n---\n", 1)
+    path.write_text(metadata + f'\n---\n\n<div {attribute} markdown="1">\n' + body + "\n</div>\n")
+    with pytest.raises(AuditFormatError, match="foundry-local-air-gapped.*hidden|hidden.*foundry-local-air-gapped"):
+        audit_document_content(tmp_path, inventory)
+
+
+def test_hidden_svg_container_cannot_supply_source_authored_text() -> None:
+    with pytest.raises(AuditFormatError, match="hidden.*authored"):
+        extract_markdown_structure('# Title\n\n<svg hidden><text>Authored diagram label.</text></svg>')
+
+
+@pytest.mark.parametrize(("source", "category", "expected"), [
+    ("| A | B |\n|---|---|\n| C＼｜D | 1 |", "tables", ("A | B", r"C\\\|D | 1")),
+    ("![Capture](images/capture？variant.gif)", "images", ("Capture\ncapture?variant.gif",)),
+    ("![Capture](images/part／capture.gif)", "images", ("Capture\npart/capture.gif",)),
+    ('<a href="ｈｔｔｐｓ：／／example.test/path">Guide</a>', "local_link_labels", ("Guide",)),
+])
+def test_unicode_cannot_manufacture_extracted_escape_or_url_syntax(source, category, expected) -> None:
+    structure = extract_markdown_structure(source)
+    assert getattr(structure, category) == expected
+    oracle = renderer_oracle(source)
+    assert structure.images == tuple(oracle.images)
+    assert structure.links == tuple(oracle.links)
+
+
+@pytest.mark.parametrize("container", ["details", "summary", "ancestor"])
+def test_closed_inert_details_cannot_supply_hidden_source_content(container) -> None:
+    source = (
+        '<details markdown="1"><summary>Cannot open</summary>\n\n'
+        '# Title\n\nAuthored prose.\n\n</details>'
+    )
+    source = f"<div inert>{source}</div>" if container == "ancestor" else source.replace(f"<{container}", f"<{container} inert")
+    with pytest.raises(AuditFormatError, match="hidden.*authored"):
+        extract_markdown_structure(source)
+
+
+@pytest.mark.parametrize("container", ["details", "summary", "ancestor"])
+def test_open_inert_details_keep_visually_visible_source_content(container) -> None:
+    source = (
+        '<details open markdown="1"><summary>Already open</summary>\n\n'
+        '# Title\n\nAuthored prose.\n\n</details>'
+    )
+    source = f"<div inert>{source}</div>" if container == "ancestor" else source.replace(f"<{container}", f"<{container} inert")
+    structure = extract_markdown_structure(source)
+    assert structure.title == "Title"

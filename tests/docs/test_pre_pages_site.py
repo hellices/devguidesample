@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 from html import escape
 import json
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import sys
@@ -13,7 +14,7 @@ import pytest
 import yaml
 
 from scripts.docs.pre_pages import (
-    BaselineDocument, PrePagesInventory, audit_repository,
+    BaselineDocument, PrePagesInventory, audit_repository, load_inventory,
 )
 from scripts.docs.pre_pages_site import inspect_built_site
 from scripts.docs.topics import build_topic_catalog
@@ -25,6 +26,11 @@ ENTRY = "services/service/topic/index.md"
 CHILD = "services/service/topic/child/index.md"
 OLD = "guides/service/old/index.md"
 OLD_CHILD = "guides/service/old-child/index.md"
+ARTICLE = (
+    '<article class="md-content__inner md-typeset">'
+    '<h1>Document</h1><p>Preserved prose.</p></article>'
+)
+FOUNDRY_HTML = "services/microsoft-foundry/foundry-local-air-gapped/index.html"
 
 
 def write(root: Path, path: str, text: str | bytes) -> Path:
@@ -34,8 +40,8 @@ def write(root: Path, path: str, text: str | bytes) -> Path:
     return target
 
 
-def html(body: str = "<h1>Document</h1>", head: str = "") -> str:
-    return f"<!doctype html><html><head>{head}</head><body><main>{body}</main></body></html>"
+def html(body: str = "", head: str = "") -> str:
+    return f"<!doctype html><html><head>{head}</head><body><main>{ARTICLE}{body}</main></body></html>"
 
 
 def source(path: str, old: str, order: int | None = None) -> str:
@@ -1164,3 +1170,253 @@ def test_search_resolver_receives_original_locations_including_fragments(site_re
     monkeypatch.setattr(_Site, "resolve", record_resolve)
     assert inspect(site_repo).errors == ()
     assert {"", "#home", search_entry(CHILD, "#heading")["location"]} <= set(received)
+
+
+@pytest.mark.parametrize("attribute", [
+    "hidden", 'hidden="false"', 'aria-hidden="true"',
+    'style="display:none"', 'style="visibility:hidden"',
+    'style="display: /* hidden */ none !important; display:block"',
+])
+@pytest.mark.parametrize("container", ["article", "main", "inner", "body-only"])
+def test_canonical_article_requires_visible_authored_content(site_repo, attribute, container):
+    root, _ = site_repo
+    content = html()
+    if container == "article":
+        content = content.replace("<article ", f"<article {attribute} ")
+    elif container == "main":
+        content = content.replace("<main>", f"<main {attribute}>")
+    elif container == "inner":
+        content = content.replace("<h1>", f'<div {attribute}><h1>').replace("</article>", "</div></article>")
+    else:
+        content = content.replace("<p>", f'<div {attribute}><p>').replace("</p>", "</p></div>")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), content)
+    error = findings(site_repo)
+    assert ENTRY.replace(".md", ".html") in error
+    assert "authored" in error and ("hidden" in error or "visible" in error)
+
+
+@pytest.mark.parametrize("replacement", [
+    '<article><h1>Document</h1><p>Preserved prose.</p></article>',
+    '<article class="md-content__inner md-typeset"><h1>Unrelated</h1><p>Preserved prose.</p></article>',
+    '<article class="md-content__inner md-typeset"><h1>Document</h1></article>',
+    '<article class="md-content__inner md-typeset"><h1>Document</h1><p>Unrelated text.</p></article>',
+    '<article class="md-content__inner md-typeset"><nav><h1>Document</h1></nav><p>Preserved prose.</p></article>',
+    '<article class="md-content__inner md-typeset"><div class="md-search"><h1>Document</h1></div><p>Preserved prose.</p></article>',
+    '<nav>' + ARTICLE + '</nav>',
+])
+def test_canonical_article_rejects_absent_or_unauthored_structure(site_repo, replacement):
+    root, _ = site_repo
+    content = html('<nav><h1>Document</h1><p>Preserved prose.</p></nav>').replace(ARTICLE, replacement, 1)
+    write(root, "site/" + ENTRY.replace(".md", ".html"), content)
+    assert "authored" in findings(site_repo)
+
+
+@pytest.mark.parametrize("replacement", [
+    ARTICLE.replace("<article ", "<article inert "),
+    ARTICLE.replace("<p>", '<details><summary>More</summary><p>').replace("</p>", "</p></details>"),
+    ARTICLE.replace("<article ", '<article style="display:none;display:block" '),
+    ARTICLE.replace("<article ", '<article style="--display:none;--visibility:hidden" '),
+    ARTICLE.replace("<p>", '<div style="visibility:hidden"><p style="visibility:visible">').replace("</p>", "</p></div>"),
+    ARTICLE + '<nav hidden><h1>Mobile navigation</h1></nav><noscript><p hidden>Fallback</p></noscript>',
+])
+def test_canonical_article_browser_visible_text_and_openable_details_are_valid(site_repo, replacement):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, replacement))
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.fixture(scope="module")
+def real_built_site(tmp_path_factory):
+    from mkdocs.commands.build import build
+    from mkdocs.config import load_config
+    from scripts.docs.content import load_taxonomy
+
+    site = tmp_path_factory.mktemp("final-review-real-build") / "site"
+    build(load_config(str(ROOT / "mkdocs.yml"), site_dir=str(site), strict=True))
+    inventory = load_inventory(ROOT / "scripts/docs/pre_pages_inventory.yml")
+    catalog = build_topic_catalog(ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml"))
+    assert inspect_built_site(ROOT, site, inventory, catalog).errors == ()
+    return site, inventory, catalog
+
+
+@pytest.mark.parametrize("attribute", [
+    "hidden", 'aria-hidden="true"', 'style="display:none"', 'style="visibility:hidden"',
+])
+@pytest.mark.parametrize("container", ["article", "body-only"])
+def test_real_foundry_local_built_article_hiding_fails(real_built_site, attribute, container):
+    site, inventory, catalog = real_built_site
+    path = site / FOUNDRY_HTML
+    original = path.read_text()
+    article = '<article class="md-content__inner md-typeset">'
+    assert original.count(article) == 1
+    if container == "article":
+        changed = original.replace(article, article.replace("<article ", f"<article {attribute} "))
+    else:
+        prefix, body = original.split(article, 1)
+        heading, rest = body.split("</h1>", 1)
+        changed = prefix + article + heading + f'</h1><div {attribute}>' + rest.replace("</article>", "</div></article>", 1)
+    try:
+        path.write_text(changed)
+        errors = inspect_built_site(ROOT, site, inventory, catalog).errors
+        assert any(FOUNDRY_HTML in error and "authored" in error for error in errors)
+    finally:
+        path.write_text(original)
+
+
+def test_authored_heading_can_restore_inherited_visibility_with_visible_children(site_repo):
+    root, _ = site_repo
+    content = html().replace(
+        "<h1>Document</h1>",
+        '<h1 style="visibility:hidden"><span style="visibility:visible">Document</span></h1>',
+    )
+    write(root, "site/" + ENTRY.replace(".md", ".html"), content)
+    assert inspect(site_repo).errors == ()
+
+
+def test_redirect_fallback_can_be_visible_through_a_visibility_override(site_repo):
+    root, _ = site_repo
+    target = "../../../services/service/topic/"
+    content = redirect(target).replace(
+        f'<a href="{target}">Moved document</a>',
+        f'<a style="visibility:hidden" href="{target}">'
+        '<span style="visibility:visible">Moved document</span></a>',
+    )
+    write(root, "site/" + OLD.replace(".md", ".html"), content)
+    assert inspect(site_repo).errors == ()
+
+
+FRONTEND_ELEMENTS = (
+    '<script src="{url}"></script>',
+    '<script type="module" src="{url}"></script>',
+    '<link rel="stylesheet" href="{url}">',
+    '<link rel="alternate stylesheet" href="{url}">',
+    '<link rel="preload" as="style" href="{url}">',
+    '<link rel="preload" as="script" href="{url}">',
+    '<link rel="modulepreload" href="{url}">',
+    '<link rel="modulepreload" as="script" href="{url}">',
+)
+
+
+@pytest.mark.parametrize("element", FRONTEND_ELEMENTS)
+def test_missing_frontend_assets_have_source_and_raw_url_diagnostics(site_repo, element):
+    root, _ = site_repo
+    raw = "assets/missing-frontend.js"
+    write(root, "site/index.html", html(head=element.format(url=raw)))
+    assert any(
+        "index.html" in error and repr(raw) in error and "missing" in error
+        for error in inspect(site_repo).errors
+    )
+
+
+@pytest.mark.parametrize("element", FRONTEND_ELEMENTS)
+@pytest.mark.parametrize("raw", [
+    "/outside/asset.js", "assets/%2e%2e/asset.js", "assets/%ZZ.js",
+    "///devguidesample/assets/asset.js",
+])
+def test_frontend_assets_use_the_strict_shared_url_resolver(site_repo, element, raw):
+    root, _ = site_repo
+    write(root, "site/index.html", html(head=element.format(url=raw)))
+    assert any(
+        "index.html" in error and repr(raw) in error and "unsafe" in error
+        for error in inspect(site_repo).errors
+    )
+
+
+@pytest.mark.parametrize("element", FRONTEND_ELEMENTS)
+def test_frontend_asset_symlinks_cannot_escape_the_site(site_repo, element):
+    root, _ = site_repo
+    outside = write(root, "outside-frontend.js", "outside site")
+    target = root / "site/linked-frontend.js"
+    target.symlink_to(outside)
+    write(root, "site/index.html", html(head=element.format(url="linked-frontend.js")))
+    assert any(
+        "index.html" in error and "linked-frontend.js" in error and "outside" in error
+        for error in inspect(site_repo).errors
+    )
+
+
+@pytest.mark.parametrize("element", FRONTEND_ELEMENTS)
+@pytest.mark.parametrize("raw", [
+    "/project/assets/valid%20frontend.js",
+    "https://example.test/project/assets/valid%20frontend.js",
+    "assets/valid%20frontend.js",
+])
+def test_frontend_asset_project_prefixes_and_encoded_paths_resolve(site_repo, element, raw):
+    root, _ = site_repo
+    write(root, "site/assets/valid frontend.js", "published frontend")
+    write(root, "site/index.html", html(head=element.format(url=raw)))
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("element", FRONTEND_ELEMENTS)
+def test_frontend_asset_empty_urls_fail_closed(site_repo, element):
+    root, _ = site_repo
+    write(root, "site/index.html", html(head=element.format(url="")))
+    assert any("index.html" in error and "empty" in error for error in inspect(site_repo).errors)
+
+
+@pytest.mark.parametrize("head", [
+    '<link rel="canonical" href="canonical-page/">',
+    '<link rel="alternate" href="another-language/">',
+    '<link rel="alternate" type="application/atom+xml" href="feed.xml">',
+    '<link rel="preload" as="image" href="unrelated-image.png">',
+    '<link rel="stylesheet" href="https://cdn.example.test/external.css">',
+    '<script src="https://cdn.example.test/external.js"></script>',
+    '<template><script src="inert.js"></script><link rel="stylesheet" href="inert.css"></template>',
+    '<noscript><link rel="stylesheet" href="no-scripting.css"></noscript>',
+])
+def test_nonfrontend_or_inactive_link_resources_are_not_required(site_repo, head):
+    root, _ = site_repo
+    write(root, "site/index.html", html(head=head))
+    assert inspect(site_repo).errors == ()
+
+
+def test_hidden_frontend_elements_are_still_fetched(site_repo):
+    root, _ = site_repo
+    write(root, "site/index.html", html(
+        '<div hidden><script src="still-fetched.js"></script>'
+        '<link rel="stylesheet" href="still-fetched.css"></div>'
+    ))
+    errors = inspect(site_repo).errors
+    for raw in ("still-fetched.js", "still-fetched.css"):
+        assert any("index.html" in error and repr(raw) in error for error in errors)
+
+
+@pytest.mark.parametrize(("element", "suffix"), [
+    ("script", "assets/javascripts/explore.js"),
+    ("stylesheet", "assets/stylesheets/extra.css"),
+])
+def test_removing_actual_explore_script_or_custom_stylesheet_fails(real_built_site, element, suffix):
+    site, inventory, catalog = real_built_site
+    source = site / "explore/index.html"
+    pattern = (
+        r'<script[^>]+src="([^"]+)"'
+        if element == "script" else r'<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"'
+    )
+    raw = next(url for url in re.findall(pattern, source.read_text()) if url.endswith(suffix))
+    asset = (source.parent / raw).resolve()
+    assert asset.is_relative_to(site) and asset.is_file()
+    original = asset.read_bytes()
+    try:
+        asset.unlink()
+        errors = inspect_built_site(ROOT, site, inventory, catalog).errors
+        assert any("explore/index.html" in error and repr(raw) in error and "missing" in error for error in errors)
+    finally:
+        asset.write_bytes(original)
+
+
+@pytest.mark.parametrize("opened", [False, True])
+@pytest.mark.parametrize("container", ["details", "summary", "ancestor"])
+def test_inert_details_body_is_visible_only_when_already_open(site_repo, opened, container):
+    root, _ = site_repo
+    attribute = " open" if opened else ""
+    article = ARTICLE.replace(
+        "<h1>", f'<details{attribute}><summary>Disclosure</summary><h1>',
+    ).replace("</article>", "</details></article>")
+    article = f"<div inert>{article}</div>" if container == "ancestor" else article.replace(f"<{container}", f"<{container} inert")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    if opened:
+        assert errors == ()
+    else:
+        assert any("authored" in error for error in errors)

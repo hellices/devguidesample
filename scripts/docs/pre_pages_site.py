@@ -17,6 +17,8 @@ from mkdocs.structure.files import File
 import yaml
 
 from scripts.docs.pre_pages import AuditFormatError, PrePagesInventory
+from scripts.docs.pre_pages_content import create_semantic_renderer
+from scripts.docs.pre_pages_visibility import AuthoredContent, Visibility
 from scripts.docs.topics import TopicCatalog
 
 
@@ -86,7 +88,7 @@ def _refresh_url(value: str) -> str | None:
 class _Page(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.stack: list[tuple[str, bool]] = []
+        self.stack: list[tuple[str, Visibility]] = []
         self.seen: Counter[str] = Counter()
         self.links: list[str] = []
         self.targets: list[tuple[str, str]] = []
@@ -95,6 +97,7 @@ class _Page(HTMLParser):
         self.errors: list[str] = []
         self.anchor: tuple[str, bool] | None = None
         self.source_lines: list[str] = []
+        self.authored = AuthoredContent(material_article=True)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
@@ -104,16 +107,7 @@ class _Page(HTMLParser):
         inert = bool(parents & _INERT)
         if "aria-hidden" in attributes and attributes["aria-hidden"] not in {"true", "false"}:
             self.errors.append(f"invalid aria-hidden attribute on <{tag}>")
-        hidden = (
-            any(hidden for _, hidden in self.stack)
-            or "hidden" in attributes
-            or "inert" in attributes
-            or (attributes.get("aria-hidden") or "").casefold() == "true"
-            or bool(re.search(
-                r"(?:display\s*:\s*none|visibility\s*:\s*hidden)",
-                attributes.get("style") or "", re.IGNORECASE,
-            ))
-        )
+        visibility = (self.stack[-1][1] if self.stack else Visibility()).descend(attributes)
         if tag in {"html", "head", "body"}:
             if (
                 tag == "html" and self.stack
@@ -125,6 +119,23 @@ class _Page(HTMLParser):
         if tag == "base":
             self.errors.append("<base> would change local URL resolution")
         if not inert:
+            resource = None
+            if tag == "script" and "src" in attributes:
+                resource = ("script src", attributes["src"] or "")
+            elif tag == "link":
+                relations = set((attributes.get("rel") or "").casefold().split())
+                destination = (attributes.get("as") or "").casefold()
+                if "stylesheet" in relations:
+                    resource = ("link stylesheet href", attributes.get("href") or "")
+                elif "preload" in relations and destination in {"style", "script"}:
+                    resource = ("link preload href", attributes.get("href") or "")
+                elif "modulepreload" in relations and destination in {"", "script", "worker", "sharedworker", "serviceworker"}:
+                    resource = ("link modulepreload href", attributes.get("href") or "")
+            if resource is not None:
+                if resource[1]:
+                    self.targets.append(resource)
+                else:
+                    self.errors.append(f"empty {resource[0]} URL")
             if tag in {"img", "source"}:
                 for attr in ("src", "srcset"):
                     if attr not in attributes:
@@ -145,9 +156,9 @@ class _Page(HTMLParser):
                     self.errors.append("nested anchor elements")
                 target = attributes["href"] or ""
                 self.targets.append(("a href", target))
-                if not hidden and not parents & _CHROME and "body" in parents:
+                if not parents & _CHROME and "body" in parents:
                     self.anchor = (target, False)
-            if tag in {"img", "svg"} and self.anchor is not None and not hidden:
+            if tag in {"img", "svg"} and self.anchor is not None and visibility.interactive:
                 self.anchor = (self.anchor[0], True)
             if tag == "link" and "canonical" in (attributes.get("rel") or "").casefold().split():
                 if "head" not in parents:
@@ -158,7 +169,7 @@ class _Page(HTMLParser):
                     self.errors.append("refresh metadata is outside <head>")
                 self.refreshes.append(attributes.get("content") or "")
         if tag not in _VOID:
-            self.stack.append((tag, hidden))
+            self.stack.append((tag, visibility))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag not in _VOID | {"svg", "math"} and not {name for name, _ in self.stack} & {"svg", "math"}:
@@ -181,7 +192,8 @@ class _Page(HTMLParser):
     def handle_data(self, data: str) -> None:
         if (
             self.anchor is not None and data.strip()
-            and not any(hidden or tag in _INERT for tag, hidden in self.stack)
+            and self.stack and self.stack[-1][1].interactive
+            and not any(tag in _INERT for tag, _ in self.stack)
         ):
             self.anchor = (self.anchor[0], True)
 
@@ -203,6 +215,8 @@ class _Page(HTMLParser):
             self.errors.append("unclosed HTML elements: " + ", ".join(tag for tag, _ in self.stack))
         if any(self.seen[tag] != 1 for tag in ("html", "head", "body")):
             self.errors.append("expected exactly one html, head, and body element")
+        self.authored.feed(text)
+        self.authored.close()
 
 
 def _contained(root: Path, path: Path, label: str) -> Path:
@@ -454,7 +468,22 @@ def inspect_built_site(
         canonical_html = site.root / canonical.with_suffix(".html")
         page = read_page(canonical_html, f"{canonical}: canonical")
         if page is not None and not page.errors:
-            counts["canonical_html"] += 1
+            authored = AuthoredContent()
+            authored.feed(create_semantic_renderer().convert(document.body))
+            authored.close()
+            expected_h1 = Counter({key: count for key, count in authored.blocks.items() if key[0] == "h1"})
+            label = canonical_html.relative_to(site.root)
+            if page.authored.articles != 1:
+                errors.append(f"{label}: expected exactly one Material authored content article")
+            elif not expected_h1 or expected_h1 - page.authored.blocks:
+                errors.append(f"{label}: canonical article lacks a visible authored H1")
+            elif page.authored.hidden:
+                errors.append(f"{label}: persistently hidden authored content: {page.authored.hidden}")
+            elif missing := authored.blocks - page.authored.blocks:
+                tag, text = next(iter(missing))
+                errors.append(f"{label}: canonical article lacks visible authored <{tag}> structure: {text[:160]}")
+            else:
+                counts["canonical_html"] += 1
         if bases[canonical_html] != 1:
             errors.append(f"{canonical}: canonical base location must appear once in search")
         else:
