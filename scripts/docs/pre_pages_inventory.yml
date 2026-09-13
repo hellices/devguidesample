@@ -1,0 +1,223 @@
+version: 1
+baseline_commit: a4e680116db1016a698e64baae9efde858a8eafa
+pages_commit: 9ace966742ff92a00fc84bcc21529af47b8661af
+rename_similarity: 20
+documents:
+  - baseline_path: aifoundry/agent_framework_2026_customer_brief.md
+    pages_path: research/microsoft-foundry/agent-framework-2026/index.md
+    reviewed_changes: {}
+  - baseline_path: aifoundry/codex_closednetwork.md
+    pages_path: guides/microsoft-foundry/codex-closed-network/index.md
+    reviewed_changes: {}
+  - baseline_path: aifoundry/foundry_local.md
+    pages_path: guides/microsoft-foundry/foundry-local-air-gapped/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch-v2/README.md
+    pages_path: guides/azure-ai-search/korean-analyzer-comparison/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/custom_vectorization/01_custom_embedding_guide.md
+    pages_path: guides/azure-ai-search/custom-embedding-ingestion/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/custom_vectorization/02_custom_vectorization.md
+    pages_path: guides/azure-ai-search/custom-web-api-vectorization/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/custom_vectorization/03_gpu_vllm_rag_guide.md
+    pages_path: guides/azure-ai-search/gpu-vllm-rag/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/custom_vectorization/ref_a10_vs_t4_embedding_benchmark.md
+    pages_path: research/azure-ai-search/a10-vs-t4-embedding-benchmark/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/custom_vectorization/ref_bge_m3_vs_qwen3_comparison.md
+    pages_path: research/azure-ai-search/bge-m3-vs-qwen3-embedding/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/custom_vectorization/ref_chunking_strategies_research.md
+    pages_path: research/azure-ai-search/rag-chunking-strategies/index.md
+    reviewed_changes: {}
+  - baseline_path: aisearch/eventual_consistency_reindex.md
+    pages_path: cases/azure-ai-search/eventual-consistency-reindex/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/affinity.md
+    pages_path: guides/azure-kubernetes-service/pod-affinity-distribution/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/agent-pool.md
+    pages_path: guides/azure-kubernetes-service/pod-scheduling-agent-pools/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/argocd_image_updater.md
+    pages_path: guides/azure-kubernetes-service/argocd-image-updater-acr/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/authorization-troubleshooting.md
+    pages_path: guides/azure-kubernetes-service/authorization-troubleshooting/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/cni-overlay-nsg.md
+    pages_path: guides/azure-kubernetes-service/cni-overlay-nsg/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/file_io_throttling.md
+    pages_path: cases/azure-kubernetes-service/file-io-throttling/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/file_io_throttling2.md
+    pages_path: cases/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/kaito_opensource_model.md
+    pages_path: guides/azure-kubernetes-service/kaito-open-source-model/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/local_dev_loop.md
+    pages_path: guides/azure-kubernetes-service/remote-cluster-local-development/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/memray_leak_profiling.md
+    pages_path: guides/azure-kubernetes-service/python-memory-leak-memray/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/pod_db_query_latency.md
+    pages_path: cases/azure-kubernetes-service/pod-database-query-latency/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/pyroscope_anf_s3_deployment.md
+    pages_path: guides/azure-kubernetes-service/pyroscope-anf-s3/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/spot_gpu_kaito_llm.md
+    pages_path: guides/azure-kubernetes-service/spot-h100-kaito/index.md
+    reviewed_changes: {}
+  - baseline_path: aks/workload_identity_databricks_keyless.md
+    pages_path: guides/azure-kubernetes-service/workload-identity-databricks/index.md
+    reviewed_changes: {}
+  - baseline_path: appgw/sse_response_buffer_disable.md
+    pages_path: guides/azure-application-gateway/sse-response-buffering/index.md
+    reviewed_changes: {}
+  - baseline_path: appgw/waf_custom_rule_ip_whitelist.md
+    pages_path: guides/azure-application-gateway/waf-path-ip-allowlist/index.md
+    reviewed_changes: {}
+  - baseline_path: architect/request_in_second.md
+    pages_path: guides/azure-architecture/response-time-optimization/index.md
+    reviewed_changes: {}
+  - baseline_path: automation/portal-cli-limitations.md
+    pages_path: guides/azure-automation/portal-cli-limitations/index.md
+    reviewed_changes: {}
+  - baseline_path: azureblob/mobile_resumable_upload_tus.md
+    pages_path: guides/azure-storage/mobile-resumable-upload-tus/index.md
+    reviewed_changes: {}
+  - baseline_path: cosmosdb/nodejs/client.md
+    pages_path: guides/azure-cosmos-db/nodejs-client-optimization/index.md
+    reviewed_changes: {}
+  - baseline_path: cosmosdb/nodejs/point_read.md
+    pages_path: guides/azure-cosmos-db/point-read-optimization/index.md
+    reviewed_changes: {}
+  - baseline_path: cosmosdb/nodejs/query_thread_with_low_core.md
+    pages_path: guides/azure-cosmos-db/nodejs-dns-lookup-bottleneck/index.md
+    reviewed_changes: {}
+  - baseline_path: develop/nodejs/fileio_issue_cpu_overhead.md
+    pages_path: guides/application-development/nodejs-file-io-cpu/index.md
+    reviewed_changes: {}
+  - baseline_path: hdinsight/kafka-catchup-sku-fetch-benchmark.md
+    pages_path: research/azure-hdinsight/kafka-catchup-sku-fetch-benchmark/index.md
+    reviewed_changes: {}
+  - baseline_path: loadtest/loadtest_locust_appgw_aks.md
+    pages_path: guides/azure-load-testing/locust-appgw-aks-private/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/01-memory-taxonomy.md
+    pages_path: research/microsoft-foundry/agent-memory-taxonomy/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/02-architecture-patterns.md
+    pages_path: research/microsoft-foundry/agent-memory-architecture-patterns/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/03-pipeline-and-retrieval.md
+    pages_path: research/microsoft-foundry/agent-memory-pipeline-retrieval/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/04-frameworks.md
+    pages_path: research/microsoft-foundry/agent-memory-frameworks/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/05-production-evaluation.md
+    pages_path: research/microsoft-foundry/agent-memory-production-evaluation/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/06-commerce-application.md
+    pages_path: research/microsoft-foundry/agent-memory-commerce/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/agent-memory/README.md
+    pages_path: research/microsoft-foundry/agent-memory-overview/index.md
+    reviewed_changes: {}
+  - baseline_path: memory/foundry-gpt-memory-v1.md
+    pages_path: guides/microsoft-foundry/gpt-memory-layer/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/azure-monitor-dynamic-thresholds-brief.md
+    pages_path: research/azure-monitor/dynamic-thresholds-brief/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/azure-sre-agent.md
+    pages_path: guides/azure-monitor/azure-sre-agent-overview/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/hdinsight-kafka-monitoring.md
+    pages_path: research/azure-monitor/hdinsight-kafka-monitoring-options/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/hdinsight-kafka-prometheus-grafana.md
+    pages_path: guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/otel-monitor-setup.md
+    pages_path: guides/azure-monitor/aks-private-opentelemetry/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/README.md
+    pages_path: labs/azure-monitor/sre-agent-event-lab/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/dynamic-thresholds.md
+    pages_path: guides/azure-monitor/sre-agent-dynamic-thresholds/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/guides/01-agent-setup.md
+    pages_path: labs/azure-monitor/sre-agent-event-lab-setup/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/guides/02-scenario-s1.md
+    pages_path: labs/azure-monitor/sre-agent-scenario-http-500/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/guides/03-scenario-s2.md
+    pages_path: labs/azure-monitor/sre-agent-scenario-latency/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/guides/04-scenario-s3.md
+    pages_path: labs/azure-monitor/sre-agent-scenario-blob-permission/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/guides/05-results.md
+    pages_path: labs/azure-monitor/sre-agent-results/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/runbooks/incident-response.md
+    pages_path: guides/azure-monitor/sre-agent-incident-runbook/index.md
+    reviewed_changes: {}
+  - baseline_path: monitor/sre-agent-event-lab/validation-results.md
+    pages_path: research/azure-monitor/sre-agent-validation-results/index.md
+    reviewed_changes: {}
+  - baseline_path: mysql/nodejs/db_upgrade_zero_downtime.md
+    pages_path: guides/azure-database-for-mysql/blue-green-upgrade/index.md
+    reviewed_changes: {}
+  - baseline_path: mysql/nodejs/read_write_routing.md
+    pages_path: guides/azure-database-for-mysql/nodejs-read-write-routing/index.md
+    reviewed_changes: {}
+  - baseline_path: ptu_lb/ptu-lb-test.md
+    pages_path: guides/azure-openai/adaptive-ptu-load-balancing/index.md
+    reviewed_changes: {}
+  - baseline_path: redis/nodejs/cluster_failover_recovery.md
+    pages_path: cases/azure-managed-redis/cluster-failover-recovery/index.md
+    reviewed_changes: {}
+dispositions:
+  .azure/deployment-plan.md:
+    status: excluded-local-state
+    current_paths: []
+    reason: Local Azure deployment planning state is intentionally not public.
+  .azure/validate-status.json:
+    status: excluded-local-state
+    current_paths: []
+    reason: Local Azure validation state is intentionally not public.
+  memory/README.md:
+    status: replaced-summary
+    current_paths:
+      - docs/services/microsoft-foundry/agent-memory/index.md
+      - docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md
+      - docs/services/microsoft-foundry/gpt-memory-layer/samples/architecture/README.md
+    reason: The service-level index was split into the canonical topic overview and owning sample documentation.
+  ptu_lb/README.md:
+    status: replaced-summary
+    current_paths:
+      - docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/README.md
+    reason: The link-only README was replaced by the owning topic sample README.
+  monitor/sre-agent-event-lab/scripts/tests/test_lab_guides.py:
+    status: replaced-test
+    current_paths:
+      - docs/services/azure-monitor/azure-sre-agent/samples/event-lab/scripts/tests/test_briefing_docs.py
+      - tests/docs/test_reader_navigation.py
+    reason: Guide-layout assertions were replaced by canonical topic, navigation, and briefing-document contracts.
+  monitor/sre-agent-event-lab/scripts/tests/test_repo_readme.py:
+    status: replaced-test
+    current_paths:
+      - docs/services/azure-monitor/azure-sre-agent/samples/event-lab/scripts/tests/test_repo_readme.py
+    reason: The repository discovery contract test moved with the sample and now targets canonical topic discovery.
