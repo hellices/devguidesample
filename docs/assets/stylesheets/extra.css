@@ -583,7 +583,8 @@ body {
   background: var(--dg-accent-soft);
 }
 
-.dg-doc-card .dg-tag {
+.dg-doc-card .dg-tag,
+.dg-doc-card .dg-topic-child-link {
   position: relative;
   z-index: 1;
 }

@@ -283,7 +283,7 @@ def _topic_card(
     member_links = ""
     if len(index_path.parts) == 3 and index_path.parts[0] in LEGACY_COLLECTIONS:
         member_links = "".join(
-            f"- [{_md_label(member.metadata.get('title', ''))}]({_relative_link(index_path, member)})\n"
+            f"- [{_md_label(member.metadata.get('title', ''))}]({_relative_link(index_path, member)}){{ .dg-topic-child-link }}\n"
             for member in match.matching_documents
             if member.relative_path != entry.relative_path
         )

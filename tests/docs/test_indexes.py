@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from datetime import date
 from html import escape
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+import re
 
 from markdown import Markdown
 from mkdocs.config import load_config
@@ -676,6 +678,60 @@ def test_topic_cards_collapse_multi_document_topics_across_generated_indexes(
     assert "Results child" not in home
     assert "Standalone topic" in home
     assert "[Topic title](services/azure-monitor/new-topic/index.md)" in home
+
+
+def test_compatibility_child_links_are_stacked_above_the_card_overlay(
+    tmp_path: Path, taxonomy: dict, markdown_renderer: Markdown
+) -> None:
+    class Anchors(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.links: list[dict[str, str | None]] = []
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "a":
+                self.links.append(dict(attrs))
+
+    documents, catalog = build_topic_fixture(tmp_path, taxonomy)
+    pages = build_index_pages(documents, taxonomy, catalog=catalog)
+    parser = Anchors()
+    parser.feed(render_body(markdown_renderer, pages[PurePosixPath("guides/azure-monitor/index.md")]))
+    children = [
+        link for link in parser.links
+        if link.get("href") in {
+            "../../services/azure-monitor/new-topic/setup/index.md",
+            "../../services/azure-monitor/new-topic/results/index.md",
+        }
+    ]
+    assert len(children) == 2
+    child_class = "dg-topic-child-link"
+    for child in children:
+        assert child_class in (child.get("class") or "").split()
+        assert child.get("tabindex", "0") == "0"
+
+    css = (ROOT / "docs/assets/stylesheets/extra.css").read_text(encoding="utf-8")
+    rules = re.findall(r"([^{}]+)\{([^{}]+)\}", css)
+    stacking = next(
+        (
+            body for selectors, body in rules
+            if f".dg-doc-card .{child_class}" in {
+                selector.strip() for selector in selectors.split(",")
+            }
+        ),
+        "",
+    )
+    assert re.search(r"position:\s*relative\s*;", stacking)
+    assert re.search(r"z-index:\s*1\s*;", stacking)
+    overlay = next(body for selectors, body in rules if "a::after" in selectors)
+    assert re.search(r"position:\s*absolute\s*;", overlay)
+    assert re.search(r"inset:\s*0\s*;", overlay)
+    overlay_level = re.search(r"z-index:\s*([^;]+);", overlay)
+    assert (
+        overlay_level is None
+        or overlay_level.group(1).strip() == "auto"
+        or int(overlay_level.group(1)) < 1
+    )
+    assert ".md-typeset a:focus-visible" in css
 
 
 def test_redirect_pages_point_to_canonical_topic_entries_and_stay_out_of_indexes(
