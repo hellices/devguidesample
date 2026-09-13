@@ -71,14 +71,14 @@ related_cases:
 
 # Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 
-전체 인증 흐름은 [Azure MCP 운영 아키텍처](../index.md)에서 MCP OAuth와 OBO를 기준으로 설명합니다. 이 문서는 자체 MCP API의 app registration·scope·client ACL을 확인할 때 사용하는 상세 참고 자료입니다. 구체적인 배포 명령은 sample에 둡니다.
+APIM 또는 직접 호스팅한 MCP API의 **Entra 앱 등록·scope·client 제한·OBO**를 구성할 때 사용하는 참고 자료입니다. 솔루션 선택은 [대표 가이드](../index.md), 실행 명령은 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)를 사용합니다.
 
-| 이 상세 참고의 실행 범위 | 별도 확인할 범위 |
-|---|---|
-| API scope로 token을 사전 발급해 MCP를 호출하고 OBO 수행 | MCP client의 자동 OAuth discovery·PKCE 로그인 |
-| `api://<api-client-id>` 기반 기존 실습 앱 | HTTPS canonical resource URI 정렬과 authorization-server의 PKCE metadata |
-
-추가 관측과 남은 조건은 [OAuth 단계별 재확인](../validation/index.md#oauth)에 있습니다.
+| 할 일 | 읽을 부분 | 완료 기준 |
+|---|---|---|
+| 내부 MCP에 접속 | 1–2장 | 필요한 권한·route·DNS·HTTPS 접속 준비 |
+| Entra 앱과 권한 구성 | 3장 | API와 client 앱, scope·consent·허용 client 설정 |
+| 보호된 도구와 OBO 호출 | 4–6장 | 정상 사용자 호출 성공, 잘못된 token·부족한 권한 거부 |
+| 로그인·호출 오류 진단 | 마지막 진단 표·[실행 사례](../validation/index.md#oauth) | 실패 지점을 network·token·scope·backend로 구분 |
 
 ## 구성 요소와 인증 흐름
 
@@ -168,7 +168,7 @@ Toolbox consumer endpoint는 자체 MCP API의 `Mcp.Access` token이 아니라 *
 
 Toolbox가 backend MCP에 연결할 때는 그 connection에 구성한 OAuth·credential·identity 설정을 사용합니다. 이 인증을 자체 MCP server의 OBO와 혼동하지 않습니다. GitHub는 GitHub 인증, Learn은 익명 호출, Azure MCP는 대상 API에 맞는 token이 필요합니다.
 
-Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결을 함께 구성합니다. 실제 설정은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)에 있습니다.
+Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결은 [공식 network 구성](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation)을 적용합니다. Toolset과 client 연결은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)을 사용합니다.
 
 ## 4. access token으로 MCP 호출
 
@@ -249,7 +249,7 @@ HTTP 호출에 access token을 직접 넣는 방법과 IDE가 로그인부터 to
 3. 등록한 client ID와 redirect URI로 로그인하고 필요한 consent를 진행합니다.
 4. MCP에 다시 연결하여 도구를 호출합니다.
 
-Scope URI는 서버가 안내하는 값을 사용합니다. Azure MCP 2.0.5의 `<CLIENT_ID>/Mcp.Tools.ReadWrite`와 Python MCP의 `api://<CLIENT_ID>/Mcp.Access`처럼 형식이 다를 수 있습니다. Conditional Access가 추가 claims를 요구하면 이를 처리하는 클라이언트에서 다시 로그인해야 합니다.
+Client ID와 redirect URI는 **client 앱 등록**에 맞추고, 요청할 scope는 **MCP API 앱 등록**에 정의된 값을 사용합니다. Client에 해당 API permission과 필요한 consent를 부여합니다. Conditional Access가 추가 claims를 요구하면 이를 처리하는 client에서 다시 로그인합니다.
 
 ## 오류별 확인 항목
 

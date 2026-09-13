@@ -1,6 +1,6 @@
 ---
 title: MCP backend 호스팅과 예제 서버 참고
-description: MCP server의 실행 환경과 예제별 인증 차이를 정리합니다. Gateway와 agent 운영 전략은 별도의 운영 아키텍처를 기준으로 합니다.
+description: 자체 MCP 서버의 실행 환경·private network와 예제 서버별 인증 조건을 비교하고, APIM SKU 선택과 배포 절차를 연결합니다.
 document_type: research
 topic_order: 2
 redirect_from:
@@ -77,9 +77,14 @@ official_sources:
 
 # MCP backend 호스팅과 예제 서버 참고
 
-이 문서는 MCP 업무 코드의 실행 환경과 sample에 사용한 서버의 구현 차이를 정리한 참고 자료입니다. MCP gateway, agent runtime, Toolbox를 서로 대체하는 호스팅 제품으로 비교하지 않습니다.
+**자체 MCP 서버의 실행 환경을 선택하거나 sample의 서버별 차이를 확인할 때** 읽는 자료입니다. 관리·도구 통합·인증의 전체 구성은 [대표 가이드](../index.md)를 사용합니다.
 
-관리·연결·인증 전략은 [Azure MCP 운영 아키텍처](../index.md)를 기준으로 합니다. 아래 내용은 **2026-09-13**에 확인한 backend 실행과 버전별 동작의 참고 자료입니다.
+| 선택할 것 | 읽을 부분 |
+|---|---|
+| 예제 서버의 실행·인증 방식 | 서버별 인증 차이와 고정 버전 조건 |
+| 자체 MCP 코드의 실행 환경 | Azure 호스팅 옵션과 구성 패턴 |
+| Private APIM의 SKU | APIM SKU 선택 |
+| 실제 배포·호출 | [Sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md) |
 
 ## MCP protocol과 패키지 버전
 
@@ -101,7 +106,7 @@ MCP의 `server/discover`는 서버 기능을 확인하는 요청입니다. OAuth
 
 ## Sample에 사용한 MCP 서버의 인증 차이
 
-다음 서버는 구성과 도구 호출을 보여주기 위한 예제 대상입니다. 고객이 선택할 운영 전략의 목록은 아닙니다.
+아래 표는 sample에서 사용하는 고정 버전과 연결 방식입니다.
 
 | MCP 서버 | 연결 방식 | 사용하는 자격 증명과 권한 |
 |---|---|---|
@@ -137,38 +142,22 @@ Learn은 익명으로 호출합니다. APIM에서 Entra 인증을 추가하더�
 | 선택지 | 적합한 상황 | 내부망 접속 | 인증·OBO 구성 |
 |---|---|---|---|
 | Container Apps | 공식 Azure MCP나 자체 MCP를 container로 운영 | Internal environment와 private DNS | 앱의 JWT 검증·Container Apps authentication, 서버의 OBO |
-| APIM | 기존 REST API를 tool로 제공하거나 기존 MCP에 정책 적용 | SKU에 따른 internal VNet 또는 private endpoint | Gateway에서 token 검사, backend 인증은 별도 설정 |
 | App Service | 기존 웹 앱 운영 방식으로 자체 MCP 배포 | Inbound private endpoint, outbound VNet integration | Easy Auth 또는 앱 middleware, 별도 OBO 구현 |
 | Functions Flex Consumption | SDK 기반 stateless MCP 호스팅 | Private endpoint와 VNet integration | Built-in auth 또는 서버 코드, 별도 OBO 구현 |
 
-로컬 PC가 private endpoint나 internal VNet의 MCP에 접속하려면 private IP까지의 VPN/ExpressRoute 경로와 DNS가 필요합니다. 그 연결 위에서 전달한 HTTP 요청을 Entra access token으로 인증합니다.
+APIM은 위 실행 환경에 둔 MCP를 관리하거나 REST operation을 MCP tool로 제공합니다. 로컬 PC의 private 접속에는 VPN/ExpressRoute 경로와 DNS를, HTTP 요청에는 Entra 인증을 구성합니다.
 
 Container Apps dynamic sessions는 별도 선택지입니다. Platform이 제공하는 Python·shell 실행 도구와 session별 격리를 사용하며, 직접 작성한 MCP 서버를 배포하는 standalone Container Apps와는 다릅니다.
 
-### Microsoft Foundry Toolbox: 도구 구성·공유·버전 관리
+### 여러 도구를 묶어 제공할 때
 
-Toolbox는 여러 MCP 서버, OpenAPI, 검색 도구 등을 **하나의 MCP-compatible endpoint**로 제공합니다. Foundry에 정의한 toolset을 Foundry Agent Service, VS Code의 MCP client, Agent Framework, LangGraph 등에서 재사용할 수 있습니다. 자체 MCP 서버를 container로 실행하는 호스팅 서비스나 APIM의 다른 이름은 아닙니다.
-
-| 기능 | 직접 호스팅한 MCP | Foundry Toolbox | APIM |
-|---|---|---|---|
-| Custom MCP server code 실행 | 호스팅 서비스에서 실행 | 외부 MCP server에 연결 | 외부 MCP server에 연결 |
-| 여러 종류의 tool 구성 공유 | 직접 구현·배포 | MCP·OpenAPI·검색 등을 toolset으로 관리 | 관리하는 API/MCP에 gateway 기능 적용 |
-| REST API의 tool 노출 | SDK로 구현하거나 App Service built-in MCP 사용 | OpenAPI tool로 포함 | Native REST-to-MCP |
-| 버전 선택 | 앱·image revision 관리 | Toolbox version과 default version | API·policy·backend 구성 관리 |
-| Backend 인증 | 서버 코드·플랫폼에서 구성 | Connection의 OAuth·credential·identity 설정 | Backend와 policy에서 구성 |
-| 내부망 | 각 호스팅 서비스의 네트워크 구성 | Foundry project의 network isolation | APIM SKU의 VNet/private endpoint 기능 |
-
-Toolbox consumer는 `https://ai.azure.com/.default` token과 Foundry project 권한을 사용합니다. Backend에는 해당 connection의 인증 방식이 적용되므로, Toolbox token을 모든 MCP 서버에 그대로 전달하는 구조로 설명하면 안 됩니다. 특히 자체 Azure MCP의 OBO는 올바른 audience·scope·client 설정과 delegated permission이 필요합니다.
-
-Consumer endpoint는 default version을 제공하고, version-specific endpoint는 새 버전 확인에 사용합니다. Tool search **preview**를 켜면 `tools/list`에서 모든 도구 대신 `tool_search`, `call_tool`이 노출될 수 있습니다.
-
-Private network는 Toolbox가 독립적으로 만드는 것이 아니라 Foundry project 설정을 따릅니다. MCP·OpenAPI의 backend traffic은 project의 delegated subnet을 사용할 수 있으며, 해당 subnet에서 backend의 route와 DNS가 연결되어야 합니다.
-
-[Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)은 공개 Learn MCP로 시작해 `azd deploy` → endpoint 확인 → 도구 호출 → version 관리 순서로 진행합니다. 기존 Container Apps/APIM 실행 캡처를 Toolbox의 결과로 재사용하지 않습니다.
+Toolbox는 MCP·OpenAPI·IQ 도구를 하나의 endpoint에 구성하고 connection 인증·version을 관리합니다. 기능과 선택 기준은 [대표 가이드의 Toolbox 장](../index.md#3-toolbox-iq-mcp-endpoint), 구성 명령은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)에 정리합니다.
 
 ### APIM 없이 REST API를 변환하는 옵션
 
-App Service built-in MCP **preview**는 이미 실행 중인 API의 OpenAPI **3.0.x** 명세를 읽고 operation을 MCP tool로 노출합니다. OpenAPI 3.1.x는 지원하지 않습니다. Foundry Toolbox의 OpenAPI tool도 REST API를 toolset에 포함할 수 있습니다. 따라서 REST-to-MCP가 필요하다는 이유만으로 APIM을 필수로 선택할 필요는 없습니다.
+App Service built-in MCP **preview**는 **Basic 이상 전용 tier**에서 기존 API의 OpenAPI **3.0.x** 명세를 읽어 operation을 MCP tool로 노출합니다. OpenAPI 3.1.x는 지원하지 않습니다. Foundry Toolbox의 OpenAPI tool도 REST API를 toolset에 포함할 수 있습니다. 따라서 REST-to-MCP가 필요하다는 이유만으로 APIM을 필수로 선택할 필요는 없습니다.
+
+## 구성 패턴과 적용 조건
 
 ### 1. Container Apps에서 Azure MCP OBO 사용
 
@@ -225,34 +214,22 @@ Flex Consumption은 private endpoint와 VNet integration을 지원하지만 lega
 
 ## azd 기반 실습 구성
 
-[샘플](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab)은 internal Container Apps와 APIM Developer를 사용합니다. `azure.yaml`의 `mcp` service는 `project: .`의 Python 앱을 `python-app` module로 배포하고, `infra/main.bicep`은 공통 Azure 리소스를 구성합니다. Image build는 `docker.remoteBuild: true`를 통해 ACR에서 수행합니다. Entra 앱 준비는 `preup` hook, managed identity와 FIC 연결은 `postprovision` hook에서 처리합니다.
-
-Preview 전에는 `python3 scripts/identity.py prepare`로 필요한 Entra 앱 ID를 준비합니다. 수동 MCP 호출에는 공식 **MCP Inspector 2.5.0 CLI**를 사용하며, 샘플의 Node.js 요구 버전은 22.19 이상입니다.
-
-실습은 다음 순서로 진행합니다.
-
-1. Azure·Entra 권한과 로컬 도구를 준비하고, 배포 preview를 확인한 뒤 `azd up`으로 환경을 배포합니다.
-2. Azure·AKS·GitHub·Learn의 로컬 MCP 연결을 각각 확인합니다.
-3. 개발 PC에서 내부 MCP hostname으로 접속하고 Entra access token을 사용합니다.
-4. APIM의 REST inventory tool을 `curl`로 호출합니다.
-5. Inspector CLI로 공식 Azure MCP와 Python MCP에 연결해 resource group을 OBO로 조회합니다.
-6. Inspector CLI로 APIM의 Learn MCP 프록시에 연결해 문서를 검색합니다.
-7. Azure 리소스와 Entra 앱 객체를 정리합니다.
-
-명령과 비용·정리 절차는 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)를 따릅니다. App Service와 Functions로 변경한다면 각 제품의 preview 범위, 네트워크 구성, 사용자별 OBO 흐름을 별도로 확인해야 합니다.
+[Sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에서 Entra 준비 → `azd` preview·배포 → 내부망 연결 → 도구·OBO 호출 → 정리를 순서대로 실행합니다. Sample은 Container Apps와 APIM Developer를 사용하며 ACR remote build로 image를 만듭니다. 도구 버전·비용·정리 명령은 해당 sample에서 확인합니다.
 
 ## APIM SKU 선택
 
-| SKU | MCP와 private network 구성 시 고려할 점 |
-|---|---|
-| Consumption | 현재 native MCP 지원 SKU 목록에 없음 |
-| Developer | Internal VNet 연결이 가능해 실습에 사용. 비운영용이며 SLA 없음 |
-| Basic / Standard classic | Inbound private endpoint를 지원하지만 private backend 연결 기능은 별도로 확인 필요 |
-| Basic v2 | MCP 지원 여부와 필요한 private networking 지원 여부를 각각 확인 |
-| Standard v2 | Inbound private endpoint와 outbound VNet integration을 함께 구성 |
-| Premium / Premium v2 | 세대별 VNet injection 지원 범위와 비용을 비교 |
+다음은 [MCP 지원 tier](https://learn.microsoft.com/azure/api-management/mcp-server-overview#availability)에서 private 구성을 선택할 때의 기준입니다.
 
-세부 기능은 [APIM 기능 비교표](https://learn.microsoft.com/azure/api-management/api-management-features)와 [VNet 구성 문서](https://learn.microsoft.com/azure/api-management/virtual-network-concepts)를 기준으로 선택합니다. 개발 PC가 내부 APIM에 접속하는 요구와 APIM이 private backend를 호출하는 요구를 모두 만족해야 합니다.
+| SKU | Private 구성 | 적용 조건 |
+|---|---|---|
+| Developer | Internal VNet injection으로 내부 client·backend 연결 | 비운영·평가용, SLA 없음 |
+| Basic / Standard classic | Inbound private endpoint | VNet injection·private backend 연결 기능은 지원하지 않음 |
+| Basic v2 | Public gateway | Inbound private endpoint·VNet 연결 기능은 지원하지 않음 |
+| Standard v2 | Inbound private endpoint + outbound VNet integration | 내부 client와 private backend 경로를 각각 구성 |
+| Premium classic | Internal/external VNet injection | 배포 모드와 network 규칙에 맞춰 연결 |
+| Premium v2 | Gateway VNet injection 또는 private endpoint·outbound integration | 선택한 networking model에 맞춰 구성 |
+
+세부 옵션은 [기능 비교표](https://learn.microsoft.com/azure/api-management/api-management-features)와 [VNet 구성 문서](https://learn.microsoft.com/azure/api-management/virtual-network-concepts)를 따릅니다. Developer portal의 “Entra integration” 항목을 API의 JWT 검증 정책 지원 여부와 혼동하지 않습니다.
 
 ## OBO에 필요한 token과 권한
 
