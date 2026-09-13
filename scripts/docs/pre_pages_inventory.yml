@@ -1,3 +1,4 @@
+# Content exceptions are exact category/SHA-256 reviews, never similarity thresholds.
 version: 1
 baseline_commit: a4e680116db1016a698e64baae9efde858a8eafa
 pages_commit: 9ace966742ff92a00fc84bcc21529af47b8661af
@@ -8,34 +9,271 @@ documents:
     reviewed_changes: {}
   - baseline_path: aifoundry/codex_closednetwork.md
     pages_path: guides/microsoft-foundry/codex-closed-network/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        118b96a5a8992998657f86c734faad1c91c60b434bf3dc872cd57ed891601410: 'In docs/services/microsoft-foundry/codex-closed-network/index.md:
+          Safety: the hosts example, Codex TOML base_url and nginx server_name/Host now consistently use example-openai.openai.azure.com
+          instead of the private endpoint hostname. Loopback addresses, ports, model and proxy configuration
+          are retained. Current prose replacement begins: ''예: Private Endpoint 도메인이 example-openai.openai.azure.com인
+          경우''.'
+      code:
+        d33ebf7645206700ee597fa0faf3667d1042274f1de382a2b3fca47be72eda91: 'In docs/services/microsoft-foundry/codex-closed-network/index.md:
+          Safety: the hosts example, Codex TOML base_url and nginx server_name/Host now consistently use example-openai.openai.azure.com
+          instead of the private endpoint hostname. Loopback addresses, ports, model and proxy configuration
+          are retained. Current code replacement begins: ''127.0.0.1  example-openai.openai.azure.com''.'
+        ce8dbbc8cd77131c31f326888caeffd8b6df484eb4b7190d44a05159984b00ca: 'In docs/services/microsoft-foundry/codex-closed-network/index.md:
+          Safety: the hosts example, Codex TOML base_url and nginx server_name/Host now consistently use example-openai.openai.azure.com
+          instead of the private endpoint hostname. Loopback addresses, ports, model and proxy configuration
+          are retained. Current code replacement begins: ''model = "gpt-5.3-codex" model_provider = "custom-provider"
+          personality = "pragmatic" model_reasoning_effort = "medium" preferred_auth_method''.'
+        2e05e66284addd0c672dbe1245bb8761cba1fcc25fbf0797c7b5f7324f7ffd1a: 'In docs/services/microsoft-foundry/codex-closed-network/index.md:
+          Safety: the hosts example, Codex TOML base_url and nginx server_name/Host now consistently use example-openai.openai.azure.com
+          instead of the private endpoint hostname. Loopback addresses, ports, model and proxy configuration
+          are retained. Current code replacement begins: ''worker_processes  1; events { worker_connections  1024;
+          } http { include       mime.types; default_type  application/octet-stream; sendfile ''.'
   - baseline_path: aifoundry/foundry_local.md
     pages_path: guides/microsoft-foundry/foundry-local-air-gapped/index.md
     reviewed_changes: {}
   - baseline_path: aisearch-v2/README.md
     pages_path: guides/azure-ai-search/korean-analyzer-comparison/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        b22a799dcc9854d4f5d04429a05a7d6422303d141148dab593bb00acce598c0e: 'In docs/services/azure-ai-search/korean-analyzer-comparison/index.md:
+          Safety: the validation/Portal/resource table and cleanup command now use rg-search-example-koreacentral
+          and search-example-koreacentral-02. The reproduction fence tells readers to prepare their own resources
+          instead of claiming they already exist. Free tier, region, dataset, analyzer outcomes and execution
+          commands remain. Current prose replacement begins: ''Azure Portal → search-example-koreacentral-02
+          → Indexes → analyzer-compare-idx → Search explorer → 우측 상단 View → JSON 으로 전환하면 JSON query edit''.'
+      code:
+        ab88d2080db1de056ee51cb84b7193aac8596fa11ef2b9c91de5c86207b85fa1: 'In docs/services/azure-ai-search/korean-analyzer-comparison/index.md:
+          Safety: the validation/Portal/resource table and cleanup command now use rg-search-example-koreacentral
+          and search-example-koreacentral-02. The reproduction fence tells readers to prepare their own resources
+          instead of claiming they already exist. Free tier, region, dataset, analyzer outcomes and execution
+          commands remain. Current code replacement begins: ''# 아래 리소스 이름은 예시입니다. 사용할 리소스 그룹과 Azure AI Search
+          서비스를 # 먼저 준비한 뒤 실제 이름으로 바꾸십시오. # .env.example 을 .env 로 복사하고 SEARCH_ADMIN_KEY 채우기 #   az sear''.'
+        2021dfc593d5f03f0377b6e0fa5a3fc2b630131c42d4c9554ed26ee72b15918c: 'In docs/services/azure-ai-search/korean-analyzer-comparison/index.md:
+          Safety: the validation/Portal/resource table and cleanup command now use rg-search-example-koreacentral
+          and search-example-koreacentral-02. The reproduction fence tells readers to prepare their own resources
+          instead of claiming they already exist. Free tier, region, dataset, analyzer outcomes and execution
+          commands remain. Current code replacement begins: ''az group delete -n rg-search-example-koreacentral
+          --yes --no-wait''.'
+      tables:
+        8f5f31717321c430bf0ba0b503369080e3d56e264ff8e5485f681a131bd1fa91: 'In docs/services/azure-ai-search/korean-analyzer-comparison/index.md:
+          Safety: the validation/Portal/resource table and cleanup command now use rg-search-example-koreacentral
+          and search-example-koreacentral-02. The reproduction fence tells readers to prepare their own resources
+          instead of claiming they already exist. Free tier, region, dataset, analyzer outcomes and execution
+          commands remain. Current tables replacement begins: ''검증 리소스 | RG rg-search-example-koreacentral
+          / AI Search search-example-koreacentral-02 (Free, koreacentral)''.'
+        6558295403a5c68b0f411a9f1628b300c862e6de77493f58d7d166ca093b0aef: 'In docs/services/azure-ai-search/korean-analyzer-comparison/index.md:
+          Safety: the validation/Portal/resource table and cleanup command now use rg-search-example-koreacentral
+          and search-example-koreacentral-02. The reproduction fence tells readers to prepare their own resources
+          instead of claiming they already exist. Free tier, region, dataset, analyzer outcomes and execution
+          commands remain. Current tables replacement begins: ''Resource Group | rg-search-example-koreacentral
+          | koreacentral''.'
+        f8f04e0dfe11f80a9e8f12212b79c433fae1cae02e2c9ff6e3260c76fb09621a: 'In docs/services/azure-ai-search/korean-analyzer-comparison/index.md:
+          Safety: the validation/Portal/resource table and cleanup command now use rg-search-example-koreacentral
+          and search-example-koreacentral-02. The reproduction fence tells readers to prepare their own resources
+          instead of claiming they already exist. Free tier, region, dataset, analyzer outcomes and execution
+          commands remain. Current tables replacement begins: ''AI Search | search-example-koreacentral-02
+          | Free tier (비용 0)''.'
   - baseline_path: aisearch/custom_vectorization/01_custom_embedding_guide.md
     pages_path: guides/azure-ai-search/custom-embedding-ingestion/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      local_link_labels:
+        b1fdc5e64b1619b40e77c551df0df2e5a43c7aea3b6b54d76990c9037d6a70ba: Retained label 'tei-adapter' in
+          docs/services/azure-ai-search/custom-vectorization/index.md, pointing to docs/services/azure-ai-search/custom-vectorization/samples/implementation/tei-adapter.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: aisearch/custom_vectorization/02_custom_vectorization.md
     pages_path: guides/azure-ai-search/custom-web-api-vectorization/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      code:
+        f6df427f69dcd0be8f4e64827e5122f0f63325e86a686ba6a10a3ebd7fb9bf3b: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''az acr build --registry
+          acrexamplekrc01 \\ --image bge-m3-embedding:latest \\ --file embedding-api/Dockerfile \\ embedding-api/''.'
+        b9c12ed1dd63a966a1bd992a0658e489a3a18b7e81bd366b438574d0cf69411c: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''# Container Apps 환경 생성
+          az containerapp env create --name cae-example-koreacentral-01 \\ --resource-group rg-example-koreacentral-01
+          --locatio''.'
+        49febf4034a25667d4f93acc9c709bf7a9f524ffe7245f598401a7fc23c07f0d: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''# FQDN 확인 az containerapp
+          show --name ca-embedding-example-01 \\ --resource-group rg-example-koreacentral-01 \\ --query properties.configurati''.'
+        2b9f9401aa63df59fb41f841a26fffb0197d39d39209f50690452830245a6365: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: "# Ingress LoadBalancer
+          IP 확인 INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \\ -o jsonpath=''{.status.loadBalancer.ing".'
+        fdf02e23afdeb9e94a114dc1ef232cfee33079c3229b26931d6fd815fdc87675: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: "# Option A (Container
+          Apps) curl -s https://ca-embedding-example-01.example.koreacentral.azurecontainerapps.io/health
+          # Option B (AKS + Let''".'
+        10245a8f6783fdcd19570715006a62fd315a59b6c0c318354764a251fa63453b: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''# AI Search MI에 Storage
+          Blob Data Reader 역할 부여 az role assignment create \\ --role "Storage Blob Data Reader" \\ --assignee-object-id
+          $(az sea''.'
+        64ce0dbb52cab5271fe47078ca1669de9db85c8a1db17efdc350aca4367c0bfc: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''# 데이터 소스 생성 (Managed
+          Identity 인증) curl -X POST "$SEARCH_URL/datasources?api-version=2024-07-01" \\ -H "Content-Type:
+          application/json" -H "ap''.'
+        79d5f6459caea12c2e123d026c847442bf0a4d68bdf0a34f16c97a5c5552e1cc: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''# Option A: Container
+          Apps FQDN # EMBED_URL="https://ca-embedding-example-01.example.koreacentral.azurecontainerapps.io"
+          # Option B: AKS Ing''.'
+        5de6394c79cd254fed3eacc0dfbd4a3d04417b639fd7368654717aaab969b5e9: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''az acr build --registry
+          acrexamplekrc01 \\ --image qwen3-embedding:latest \\ --build-arg EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
+          \\ --file em''.'
+        07b00a8de2b7a108f5379f986b72b01c7b5343a4567b817116b8ee2deef968fd: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current code replacement begins: ''az acr build --registry
+          acrexamplekrc01 \\ --image tei-adapter:latest \\ --file tei-adapter/Dockerfile \\ tei-adapter/''.'
+      tables:
+        57c1d18b6d825b1e26c74f243a4a4d2c457a5c89620ea3a1216c611756e8fa87: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current tables replacement begins: ''AI Search | search-example-koreacentral-01
+          (Standard) | 인덱스, 스킬셋, 인덱서, 벡터라이저''.'
+        f54f82d69e9c634f2418029141412f57d3ded42762a27e5933602792ef702ed4: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current tables replacement begins: ''HTTPS 엔드포인트 (A) | Container
+          Apps ca-embedding-example-01 | TLS 자동 적용, 설정 최소''.'
+        548fae7f0359388390c89d11fbc7af46deee7b3c5fa287d911af83474708b2b2: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current tables replacement begins: ''컨테이너 레지스트리 | acrexamplekrc01
+          (Basic) | Docker 이미지 저장소''.'
+        8138e4867c0d1e56f4766e528db4c4e679db336c97c993fbb39f68557ec8633c: 'In docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md:
+          Safety: the hosting/resource rows and deployment fences consistently use search-example-koreacentral-01,
+          acrexamplekrc01, stexamplekrc01, rg-example-koreacentral-01 and example Container Apps names/FQDNs.
+          The historical public ingress address became INGRESS_IP; health requests interpolate it and the
+          index/vectorizer fence now rejects an unset INGRESS_IP. Models, image tags, ports, roles and JSON
+          skill/vectorizer payloads are retained. Current tables replacement begins: ''스토리지 | stexamplekrc01
+          | Blob 컨테이너 sample-docs (샘플 문서)''.'
   - baseline_path: aisearch/custom_vectorization/03_gpu_vllm_rag_guide.md
     pages_path: guides/azure-ai-search/gpu-vllm-rag/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        3bfc033e5ddee3fa15c3a5aadcf984f4220dd4694ababff7c32c2b7c9fa385b5: 'In docs/services/azure-ai-search/custom-vectorization/gpu-vllm/index.md:
+          Safety: the index creation URL, GPU node-pool command, adapter image, actual-cluster note and Appendix
+          B environment now use example Search/AKS/ACR/resource-group names. The T4 SKU, Spot settings, model
+          configuration, sample sizes and measured results remain. Current prose replacement begins: ''실제
+          구성: aks-example-koreacentral-01 클러스터, rg-example-koreacentral-01 리소스 그룹.''.'
+        a409e1b42b8f79b1509ac578b4fe0003d60279bc2b585c86a6f1d870b37348fc: 'In docs/services/azure-ai-search/custom-vectorization/gpu-vllm/index.md:
+          Safety: the index creation URL, GPU node-pool command, adapter image, actual-cluster note and Appendix
+          B environment now use example Search/AKS/ACR/resource-group names. The T4 SKU, Spot settings, model
+          configuration, sample sizes and measured results remain. Current prose replacement begins: ''테스트
+          환경: AKS (aks-example-koreacentral-01, koreacentral), GPU 노드풀 Standard_NC16as_T4_v3 Spot × 3, AI
+          Search Standard tier. 500개 Azure Docs .m''.'
+      code:
+        9afb64263f717d27965ac4e39e77664066aeb4cfadd11cbb08aec6a5de2de39d: 'In docs/services/azure-ai-search/custom-vectorization/gpu-vllm/index.md:
+          Safety: the index creation URL, GPU node-pool command, adapter image, actual-cluster note and Appendix
+          B environment now use example Search/AKS/ACR/resource-group names. The T4 SKU, Spot settings, model
+          configuration, sample sizes and measured results remain. Current code replacement begins: ''SEARCH_URL="https://search-example-koreacentral-01.search.windows.net"
+          KEY="<search-admin-api-key>" curl -X PUT "$SEARCH_URL/indexes/prod-ch''.'
+        e5f1cb808ab09fbab50f085dbc7df5bef561320d76004392392b1f3824638ed9: 'In docs/services/azure-ai-search/custom-vectorization/gpu-vllm/index.md:
+          Safety: the index creation URL, GPU node-pool command, adapter image, actual-cluster note and Appendix
+          B environment now use example Search/AKS/ACR/resource-group names. The T4 SKU, Spot settings, model
+          configuration, sample sizes and measured results remain. Current code replacement begins: ''# GPU
+          Spot 노드풀 (T4 × 1) az aks nodepool add \\ --resource-group rg-example-koreacentral-01 \\ --cluster-name
+          aks-example-koreacentral-01 \\ --n''.'
+        c73108ad4cc1e65904f20635d16ed3afd4aedba19d2a8d593702bd955dd8e54a: 'In docs/services/azure-ai-search/custom-vectorization/gpu-vllm/index.md:
+          Safety: the index creation URL, GPU node-pool command, adapter image, actual-cluster note and Appendix
+          B environment now use example Search/AKS/ACR/resource-group names. The T4 SKU, Spot settings, model
+          configuration, sample sizes and measured results remain. Current code replacement begins: ''apiVersion:
+          apps/v1 kind: Deployment metadata: name: vllm-embedding labels: app: vllm-embedding spec: replicas:
+          1 selector: matchLabels: app''.'
   - baseline_path: aisearch/custom_vectorization/ref_a10_vs_t4_embedding_benchmark.md
     pages_path: research/azure-ai-search/a10-vs-t4-embedding-benchmark/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      local_link_labels:
+        22986ffc7d5949e14cd6fe25b45adabbf8048d43de235516d27915319b0e9eda: Retained label 'bench/' in docs/services/azure-ai-search/custom-vectorization/a10-vs-t4/index.md,
+          pointing to docs/services/azure-ai-search/custom-vectorization/samples/implementation/bench. The
+          current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        c1168e03ae9ae43f12052ccdcab60029b049f217eea89f5193f9471bda029f51: Retained label 'bench_qps_sweep.py'
+          in docs/services/azure-ai-search/custom-vectorization/a10-vs-t4/index.md, pointing to docs/services/azure-ai-search/custom-vectorization/samples/implementation/bench/bench_qps_sweep.py.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: aisearch/custom_vectorization/ref_bge_m3_vs_qwen3_comparison.md
     pages_path: research/azure-ai-search/bge-m3-vs-qwen3-embedding/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      tables:
+        a680b3767ce1c680782fc16c086d62240a2b555db34aeccf79f3d8d12151170c: 'In docs/services/azure-ai-search/custom-vectorization/bge-m3-vs-qwen3/index.md:
+          Safety: the test environment rows now use search-example-koreacentral-01 and ca-embedding-example-01/ca-qwen3-example-01.
+          Standard tier, region, index names, 1024 dimensions, HNSW settings and all quality measurements
+          are retained. Current tables replacement begins: ''AI Search | search-example-koreacentral-01 (Standard,
+          koreacentral)''.'
+        310a5ade796d7ca3f4e83217376141cb3f2a8db6365525105e9adf0805a44664: 'In docs/services/azure-ai-search/custom-vectorization/bge-m3-vs-qwen3/index.md:
+          Safety: the test environment rows now use search-example-koreacentral-01 and ca-embedding-example-01/ca-qwen3-example-01.
+          Standard tier, region, index names, 1024 dimensions, HNSW settings and all quality measurements
+          are retained. Current tables replacement begins: ''HTTPS 엔드포인트 | ca-embedding-example-01 / ca-qwen3-example-01
+          (Container Apps)''.'
   - baseline_path: aisearch/custom_vectorization/ref_chunking_strategies_research.md
     pages_path: research/azure-ai-search/rag-chunking-strategies/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        ece93a9ccdfb8c70b20dac23e21e20abb7606051856d876ff784fdcd0e4d84fa: 'In docs/services/azure-ai-search/custom-vectorization/rag-chunking/index.md:
+          The dated related-document note retains 2026-05-22 and now names the Custom Web API 벡터화 가이드 at docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md
+          instead of exposing its retired filename. Current prose replacement begins: ''작성일: 2026-05-22 |
+          관련 문서: Custom Web API 벡터화 가이드''.'
+      local_link_labels:
+        d5750f10270f9509bbb6a2003ad877365cc26a3151f031832a2f5fea0cfa4aa8: Replaced retired path label with
+          'Custom Web API 벡터화 가이드' in docs/services/azure-ai-search/custom-vectorization/rag-chunking/index.md,
+          pointing to docs/services/azure-ai-search/custom-vectorization/custom-web-api/index.md. The current
+          canonical source or owning-sample target was checked; this is a source-link/reader-label migration,
+          not removal of the referenced content.
   - baseline_path: aisearch/eventual_consistency_reindex.md
     pages_path: cases/azure-ai-search/eventual-consistency-reindex/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      local_link_labels:
+        7fabf46e6de24e286372bf664aaacd6b34e9cfb03c06588a01bf7d803d4addcf: Retained label 'repro.py' in docs/services/azure-ai-search/eventual-consistency-reindex/index.md,
+          pointing to docs/services/azure-ai-search/eventual-consistency-reindex/samples/reproduction/repro.py.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: aks/affinity.md
     pages_path: guides/azure-kubernetes-service/pod-affinity-distribution/index.md
     reviewed_changes: {}
@@ -44,7 +282,20 @@ documents:
     reviewed_changes: {}
   - baseline_path: aks/argocd_image_updater.md
     pages_path: guides/azure-kubernetes-service/argocd-image-updater-acr/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      code:
+        d6b38fb9c0ed840ead39c29f04229843b078bc8a2b54ee798c093a2fb7dc623b: 'In docs/services/azure-kubernetes-service/argocd-image-updater-acr/index.md:
+          Safety: managed-identity example outputs now use <managed-identity-client-id> and <managed-identity-principal-id>;
+          the troubleshooting imageName example uses acrexamplekrc01.azurecr.io. AcrPull assignment and the
+          incorrect-tag/correct-no-tag comparison are unchanged. Current code replacement begins: ''# 1. Managed
+          Identity 생성 az identity create \\ --name id-image-updater-acr \\ --resource-group <RG_NAME> \\ --location
+          <LOCATION> # 출력에서 client''.'
+        6933932059dfc66ed61ccef1aca0b7f81b88893b4ee82c962163db2eccb170fb: 'In docs/services/azure-kubernetes-service/argocd-image-updater-acr/index.md:
+          Safety: managed-identity example outputs now use <managed-identity-client-id> and <managed-identity-principal-id>;
+          the troubleshooting imageName example uses acrexamplekrc01.azurecr.io. AcrPull assignment and the
+          incorrect-tag/correct-no-tag comparison are unchanged. Current code replacement begins: ''imageName:
+          acrexamplekrc01.azurecr.io/test-app:1.0.0  # ❌ imageName: acrexamplekrc01.azurecr.io/test-app         #
+          ✅''.'
   - baseline_path: aks/authorization-troubleshooting.md
     pages_path: guides/azure-kubernetes-service/authorization-troubleshooting/index.md
     reviewed_changes: {}
@@ -56,28 +307,197 @@ documents:
     reviewed_changes: {}
   - baseline_path: aks/file_io_throttling2.md
     pages_path: cases/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        ca84a9ed13a0e19a9634b801fbd6dda13453618a958b0c47bd195f8cb809ab9f: 'In docs/services/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md:
+          The overview still records the earlier NFS write-latency capacity fix and the later CPU/I/O bottleneck.
+          Its filename label was replaced with 파일 I/O 스로틀링 사례 at docs/services/azure-kubernetes-service/file-io-throttling/index.md.
+          Current prose replacement begins: ''AKS 환경에서 NetApp Files를 사용하는 Node.js 애플리케이션의 트래픽 증가 시 CPU 급증과
+          File I/O 대기 현상을 분석한 사례입니다. 이전 용량 증설로 NFS write 지연 문제를 해결했으나(파일 I/O 스로틀링 사례 참조),''.'
+      local_link_labels:
+        43ee97b242ed9670643e958e64845fe3f91e0f97472db308eeebb2c7efa42dd3: Replaced retired path label with
+          '파일 I/O 스로틀링 사례' in docs/services/azure-kubernetes-service/netapp-files-cpu-io-wait/index.md, pointing
+          to docs/services/azure-kubernetes-service/file-io-throttling/index.md. The current canonical source
+          or owning-sample target was checked; this is a source-link/reader-label migration, not removal of
+          the referenced content.
   - baseline_path: aks/kaito_opensource_model.md
     pages_path: guides/azure-kubernetes-service/kaito-open-source-model/index.md
     reviewed_changes: {}
   - baseline_path: aks/local_dev_loop.md
     pages_path: guides/azure-kubernetes-service/remote-cluster-local-development/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        6c5dd3ad75a6ee04e3c182dd61ce968c821fbbec7353c7acc439ae5beffefeaf: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current prose replacement begins: ''예제
+          파일: local-development-loop/''.'
+        d370a9e4b26a6c8ecb4d0c86183f5e236bb088596a49023f09a0a742ad6b9377: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current prose replacement begins: ''-
+          Azure CLI, kubectl, AKS 클러스터 (예시: aks-example-koreacentral-01 @ rg-example-koreacentral-01)''.'
+      code:
+        3fcb2b20c46c9b60307fb03c47964aa8d4cd4d5ce8fb59e269cee8f7c2a2a9e7: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''local-development-loop/
+          ├── k8s/echo-service.yaml   # tp-demo 네임스페이스 + echo-server Deployment/Service └── local/ ├── local-server.py     #
+          트''.'
+        b54eb8ee828f85446be4829817a2bbfe800044daa18d071b396dee2a7bb2b6b0: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''az
+          aks get-credentials -g rg-example-koreacentral-01 -n aks-example-koreacentral-01 kubectl apply -f
+          docs/services/azure-kubernetes-service/''.'
+        7131334823c53fe79909967e4f42d5efa34a2708f6b6da14a3c1c59251ff5c20: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''#
+          Traffic Manager 설치 (클러스터 측, 최초 1회) telepresence helm install # 연결 (macOS: 루트 데몬 때문에 sudo 비밀번호 프롬프트가
+          뜸) telepresence connect # outbound: 로컬''.'
+        0e93bf160d5d3cfe00cd225c9b7add6e27d7c37a1a42cbe5be1267c2482083f3: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''//
+          docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop/local/mirrord.json
+          { "target": { "''.'
+        08bc7a5774277733446908b524f56ae61c877ac9c39daf00ce1e86c3483fff13: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''#
+          인바운드 steal + env/dns/fs 미러링 mirrord exec -f docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-developm''.'
+        132cad530fddd9189777ee3618042ab55e26b79199ced1e5fc140ff4b28c83bd: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''//
+          .vscode/launch.json { "name": "mirrord demo: local-server (echo-server steal)", "type": "debugpy",
+          "request": "launch", "program": "${wor''.'
+        576beb4e09447093dd5ee0e25c559a64bc8e00812f2383bde770fbd4edb8174d: 'In docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md:
+          The tree, kubectl apply/delete, Python server, mirrord config/exec and debugpy workspaceFolder paths
+          now point into docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          Safety: AKS prerequisites/get-credentials/stop use example AKS and resource-group names. Intercept
+          ports, feature configuration and cleanup operations remain. Current code replacement begins: ''#
+          Telepresence telepresence leave echo-server           # intercept 해제 (신버전: detach) telepresence
+          quit -s                     # 데몬 종료 telepr''.'
+      local_link_labels:
+        12b7cd4f2ca28c859ddfcbca8c743e0c1c0344d036a7c9c770a4af743bf45f95: Replaced retired path label with
+          'local-development-loop/' in docs/services/azure-kubernetes-service/remote-cluster-local-development/index.md,
+          pointing to docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: aks/memray_leak_profiling.md
     pages_path: guides/azure-kubernetes-service/python-memory-leak-memray/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        4445d309dc075ebf3cc910ee5b24c785f8e34227649feb2b8eba5482efb8e1d3: 'In docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md:
+          The ACR build fence now enters docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling.
+          The interactive reports remain under its reports/leak-leaks.html and reports/leak-flamegraph.html;
+          the prose now explicitly instructs downloading and opening those files locally rather than promising
+          inline HTML rendering. Current prose replacement begins: ''- 원본 HTML 파일(내려받아 브라우저에서 열기): reports/leak-leaks.html
+          · reports/leak-flamegraph.html''.'
+      code:
+        e130e9f9113da3cc95d2e270adf0589443ae2f81e3cb38a05ae4c3d142697564: 'In docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md:
+          The ACR build fence now enters docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling.
+          The interactive reports remain under its reports/leak-leaks.html and reports/leak-flamegraph.html;
+          the prose now explicitly instructs downloading and opening those files locally rather than promising
+          inline HTML rendering. Current code replacement begins: ''cd docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling
+          az acr build --registry <ACR> --image leak''.'
+      local_link_labels:
+        63298dbc04cec1489c6e9189312de05fb6810646969bde0c35a0092634fe7e7e: Retained label 'debug/Dockerfile'
+          in docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md, pointing to docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/debug/Dockerfile.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        88ce896b3271d19d7d900463556c60803f17ed606892a6fa76187d5b4f4c564b: Retained label 'reports/leak-leaks.html'
+          in docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md, pointing to docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/reports/leak-leaks.html.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        f7e6c7e8504b5d8b79baedd326e64c9dd09a3884626d55b4286a83071b6a0f64: Retained label 'reports/leak-flamegraph.html'
+          in docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md, pointing to docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/reports/leak-flamegraph.html.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        cce3bf06ad38a4d47f1debc2804da8da45849161ea38791f51ffb6227c6ae4ca: Retained label 'memray-leak-profiling/'
+          in docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md, pointing to docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        64c7be708c8f93ffae9396110852cc8d88ffff643ac70c496405c59ca711debd: Retained label 'Dockerfile' in docs/services/azure-kubernetes-service/python-memory-leak-memray/index.md,
+          pointing to docs/services/azure-kubernetes-service/python-memory-leak-memray/samples/memray-leak-profiling/Dockerfile.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: aks/pod_db_query_latency.md
     pages_path: cases/azure-kubernetes-service/pod-database-query-latency/index.md
     reviewed_changes: {}
   - baseline_path: aks/pyroscope_anf_s3_deployment.md
     pages_path: guides/azure-kubernetes-service/pyroscope-anf-s3/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      local_link_labels:
+        b5017936d6c2f031f9711c2bd2cff82f1db4c604507ef0de96f491addeca4221: Retained label 'pyroscope-chat-profiling/'
+          in docs/services/azure-kubernetes-service/pyroscope-anf-s3/index.md, pointing to docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        d66ec5f5968445f509a55315423ed577736ca1d1d54c36b44c406ae0203af3f1: Retained label 'app.py' in docs/services/azure-kubernetes-service/pyroscope-anf-s3/index.md,
+          pointing to docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/app.py.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        b974b045198c87e2e93578433fe9a3c2b3c6c76147ba84c204061456b504a306: Retained label 'deployment.yaml'
+          in docs/services/azure-kubernetes-service/pyroscope-anf-s3/index.md, pointing to docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/deployment.yaml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        a0d74fb7f5bca6aea72cd6899b42ce77135fa30bd556e326b57fbcda776ddd71: Retained label 'deploy.sh' in docs/services/azure-kubernetes-service/pyroscope-anf-s3/index.md,
+          pointing to docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/deploy.sh.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        c2af7f80d42e50d1a7508f93267aa137e51fd3d85f2de2798fe712755a74fb88: Retained label 'test.py' in docs/services/azure-kubernetes-service/pyroscope-anf-s3/index.md,
+          pointing to docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/test.py.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: aks/spot_gpu_kaito_llm.md
     pages_path: guides/azure-kubernetes-service/spot-h100-kaito/index.md
     reviewed_changes: {}
   - baseline_path: aks/workload_identity_databricks_keyless.md
     pages_path: guides/azure-kubernetes-service/workload-identity-databricks/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        5309a8209488f01ec9e373f8ba428a4ffe465b883a52f8325b6afbdb959ee275: 'In docs/services/azure-kubernetes-service/workload-identity-databricks/index.md:
+          The intro, authentication explanation, optional four-layer architecture and references retain the
+          Pod-versus-gateway token-attachment distinction. They now link the official APIM authentication-managed-identity
+          policy. The referenced apim/databricks_keyless_managed_identity.md did not exist in the fixed baseline
+          Git tree; repairing that dangling reference is not deletion of an owned guide. Current prose replacement
+          begins: ''시나리오: AKS Pod → Databricks Foundation Model API (databricks-meta-llama-3-1-8b-instruct)
+          어떤 PAT/시크릿/Databricks OAuth secret도 사용하지 않고, AKS Wor''.'
+        3fbb4c6449456a99caca004fd84f4168c84a0a3e427ec0f4fd26329558455e47: 'In docs/services/azure-kubernetes-service/workload-identity-databricks/index.md:
+          The intro, authentication explanation, optional four-layer architecture and references retain the
+          Pod-versus-gateway token-attachment distinction. They now link the official APIM authentication-managed-identity
+          policy. The referenced apim/databricks_keyless_managed_identity.md did not exist in the fixed baseline
+          Git tree; repairing that dangling reference is not deletion of an owned guide. Current prose replacement
+          begins: ''인증 모델은 APIM authentication-managed-identity 정책과 동일합니다. APIM에서는 게이트웨이가 토큰을 받아 붙여주지만, 여기서는
+          앱 코드가 같은 일을 두 줄로 합니다.''.'
+        09a9f49ee2c61e7226b2b221eb01146c338d537cb35fc26d005733e080abe893: 'In docs/services/azure-kubernetes-service/workload-identity-databricks/index.md:
+          The intro, authentication explanation, optional four-layer architecture and references retain the
+          Pod-versus-gateway token-attachment distinction. They now link the official APIM authentication-managed-identity
+          policy. The referenced apim/databricks_keyless_managed_identity.md did not exist in the fixed baseline
+          Git tree; repairing that dangling reference is not deletion of an owned guide. Current prose replacement
+          begins: ''- 필요하면 Pod 앞에 APIM(Internal VNet)을 추가해 Client → AppGW → APIM → 백엔드의 4계층 패턴을 적용할 수 있습니다.
+          이 경우 인증 부착 책임을 APIM authentication-managed-identity ''.'
+        d502456a7aabecdb82a9f73864fc5352cf8d4d9188deafcae540ca1506f95c48: 'In docs/services/azure-kubernetes-service/workload-identity-databricks/index.md:
+          The intro, authentication explanation, optional four-layer architecture and references retain the
+          Pod-versus-gateway token-attachment distinction. They now link the official APIM authentication-managed-identity
+          policy. The referenced apim/databricks_keyless_managed_identity.md did not exist in the fixed baseline
+          Git tree; repairing that dangling reference is not deletion of an owned guide. Current prose replacement
+          begins: ''- 게이트웨이 측 keyless 참고: APIM authentication-managed-identity 정책''.'
+      local_link_labels:
+        f349de5f189630a6caca82e70e49ac4e78f1cb93e6e83ec9aed097c3a577511b: In docs/services/azure-kubernetes-service/workload-identity-databricks/index.md,
+          the absent-in-baseline APIM guide reference is replaced by 'APIM authentication-managed-identity
+          정책' at https://learn.microsoft.com/azure/api-management/authentication-managed-identity-policy;
+          the same gateway-versus-Pod token responsibility explanation remains.
   - baseline_path: appgw/sse_response_buffer_disable.md
     pages_path: guides/azure-application-gateway/sse-response-buffering/index.md
     reviewed_changes: {}
@@ -89,10 +509,46 @@ documents:
     reviewed_changes: {}
   - baseline_path: automation/portal-cli-limitations.md
     pages_path: guides/azure-automation/portal-cli-limitations/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        8b131b3a5c426634400f2d55763466f20bbe442683fda9111d15a69b2fdbd061: 'In docs/services/azure-automation/portal-cli-limitations/index.md:
+          Safety: the 2026-03-08 target note retains its date but uses <automation-account-name> and rg-example-koreacentral-01
+          rather than the operator''s Automation account and resource-group names. Current prose replacement
+          begins: ''작성일: 2026-03-08 대상: Automation Account <automation-account-name> (RG: rg-example-koreacentral-01)''.'
   - baseline_path: azureblob/mobile_resumable_upload_tus.md
     pages_path: guides/azure-storage/mobile-resumable-upload-tus/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        41100ddc8ff1b9f5ec0ffc7c22adb27bd6619ef8371daa24c3cc7a0b1894b9b3: 'In docs/services/azure-storage/mobile-resumable-upload-tus/index.md:
+          The architecture source/sample labels and both build/test-file cd commands now point to docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application
+          (and its scripts subdirectory). Maven, jar, tus behavior and the 50 MB test-file command are retained.
+          Current prose replacement begins: ''편집 원본: spring-application/architecture.excalidraw''.'
+        9b0d2f32c92f7cf4cd02e6a8dbb429fc4bcd9f2d3747c5db07e5aa7877a9f8cb: 'In docs/services/azure-storage/mobile-resumable-upload-tus/index.md:
+          The architecture source/sample labels and both build/test-file cd commands now point to docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application
+          (and its scripts subdirectory). Maven, jar, tus behavior and the 50 MB test-file command are retained.
+          Current prose replacement begins: ''샘플 코드 위치: spring-application/''.'
+      code:
+        25753c58d20f9fba6bbcce5db5b44878f77b6b8a2feb80744cd858df341c8e4a: 'In docs/services/azure-storage/mobile-resumable-upload-tus/index.md:
+          The architecture source/sample labels and both build/test-file cd commands now point to docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application
+          (and its scripts subdirectory). Maven, jar, tus behavior and the 50 MB test-file command are retained.
+          Current code replacement begins: ''cd docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application
+          mvn -DskipTests package java -jar target/spring-resuma''.'
+        cf497682b5cd127d447220829e8848deb8492c10f1e8bf7e6635164dcd0e8bf0: 'In docs/services/azure-storage/mobile-resumable-upload-tus/index.md:
+          The architecture source/sample labels and both build/test-file cd commands now point to docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application
+          (and its scripts subdirectory). Maven, jar, tus behavior and the 50 MB test-file command are retained.
+          Current code replacement begins: ''cd docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application/scripts
+          ./make-test-file.sh test-50mb.bin 50''.'
+      local_link_labels:
+        5ed8f73e935ac3d1e2ccd8649c10e09062ba686fa92993b68390bf44f930bfce: Replaced retired path label with
+          'spring-application/architecture.excalidraw' in docs/services/azure-storage/mobile-resumable-upload-tus/index.md,
+          pointing to docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application/architecture.excalidraw.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        8029079ca642dbd6a81ba1d4c010793d347d31af7b12942eef74073216953c8f: Replaced retired path label with
+          'spring-application/' in docs/services/azure-storage/mobile-resumable-upload-tus/index.md, pointing
+          to docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application. The current
+          canonical source or owning-sample target was checked; this is a source-link/reader-label migration,
+          not removal of the referenced content.
   - baseline_path: cosmosdb/nodejs/client.md
     pages_path: guides/azure-cosmos-db/nodejs-client-optimization/index.md
     reviewed_changes: {}
@@ -101,13 +557,62 @@ documents:
     reviewed_changes: {}
   - baseline_path: cosmosdb/nodejs/query_thread_with_low_core.md
     pages_path: guides/azure-cosmos-db/nodejs-dns-lookup-bottleneck/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      code:
+        ffa3cac31015cbd346a0420d939ce942d2414671086d1447b0ababc6bbde0f4f: 'In docs/services/azure-cosmos-db/nodejs-dns-lookup-bottleneck/index.md:
+          Safety: the CacheableLookup/http.get example uses cosmos-example-northeurope.documents.azure.com
+          rather than the production Cosmos account hostname. The caching installation, request and response
+          logging remain. Current code replacement begins: "const http = require(''http''); const CacheableLookup
+          = require(''cacheable-lookup''); const cacheable = new CacheableLookup(); cacheable.instal".'
   - baseline_path: develop/nodejs/fileio_issue_cpu_overhead.md
     pages_path: guides/application-development/nodejs-file-io-cpu/index.md
     reviewed_changes: {}
   - baseline_path: hdinsight/kafka-catchup-sku-fetch-benchmark.md
     pages_path: research/azure-hdinsight/kafka-catchup-sku-fetch-benchmark/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        6a7e1e6343d629bc301f15d232a9cdfe9a5be928406dbe6f1a3289a272bc40e6: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md:
+          Safety: the dated 2026-07-16 cluster note, teardown note and deletion fence use hdi-example-japaneast-01
+          and rg-example-japaneast-01. The related-document bullets now name the canonical monitoring overview
+          and prometheus-grafana child. Broker SKUs/counts, fetch-size results, timestamps and teardown history
+          are retained. Current prose replacement begins: ''- Date: 2026-07-16 | Region: japaneast | Cluster:
+          hdi-example-japaneast-01 (HDInsight Kafka, broker 3)''.'
+        4068e7da34b27a234109d61cb752f3009a2cdfdc93541276f753943f6b85a9ac: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md:
+          Safety: the dated 2026-07-16 cluster note, teardown note and deletion fence use hdi-example-japaneast-01
+          and rg-example-japaneast-01. The related-document bullets now name the canonical monitoring overview
+          and prometheus-grafana child. Broker SKUs/counts, fetch-size results, timestamps and teardown history
+          are retained. Current prose replacement begins: ''- Cluster hdi-example-japaneast-01: deleted (D4·D8·D16
+          각 테스트 후 재생성/삭제).''.'
+        83dd9a22cda4f857e76f175179141b2d19ede1a412dba47e14fee6dad86b4c2e: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md:
+          Safety: the dated 2026-07-16 cluster note, teardown note and deletion fence use hdi-example-japaneast-01
+          and rg-example-japaneast-01. The related-document bullets now name the canonical monitoring overview
+          and prometheus-grafana child. Broker SKUs/counts, fetch-size results, timestamps and teardown history
+          are retained. Current prose replacement begins: ''- HDInsight Kafka 모니터링 방식 비교 — Azure Monitor·Log
+          Analytics·Ambari·진단 설정 개요.''.'
+        78f3c56debcb02da5e0b098c5b12319ed6ae8b47e0d9acbd48e46904bc7a73bf: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md:
+          Safety: the dated 2026-07-16 cluster note, teardown note and deletion fence use hdi-example-japaneast-01
+          and rg-example-japaneast-01. The related-document bullets now name the canonical monitoring overview
+          and prometheus-grafana child. Broker SKUs/counts, fetch-size results, timestamps and teardown history
+          are retained. Current prose replacement begins: ''- Prometheus + Grafana 대시보드 구성 — broker JMX·kafka-exporter(partition별
+          lag) 대시보드 구성.''.'
+      code:
+        e5a3880602f6c5d7fa163ef51ab92a8038f6fa8881fbcb752c05f17e5a977106: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md:
+          Safety: the dated 2026-07-16 cluster note, teardown note and deletion fence use hdi-example-japaneast-01
+          and rg-example-japaneast-01. The related-document bullets now name the canonical monitoring overview
+          and prometheus-grafana child. Broker SKUs/counts, fetch-size results, timestamps and teardown history
+          are retained. Current code replacement begins: ''az hdinsight delete -g rg-example-japaneast-01
+          -n hdi-example-japaneast-01 --yes # 전체 정리: az group delete -n rg-example-japaneast-01 --yes''.'
+      local_link_labels:
+        6b3c9691462574bae113e8fd71be07ec943e835a621e14bb9c459ae05d5c4df8: Replaced retired path label with
+          'HDInsight Kafka 모니터링 방식 비교' in docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md,
+          pointing to docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
+        1a367b94c351d88a8178eab696e123992e8ddec22279845c41be4c9c8d8ba89d: Replaced retired path label with
+          'Prometheus + Grafana 대시보드 구성' in docs/services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md,
+          pointing to docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: loadtest/loadtest_locust_appgw_aks.md
     pages_path: guides/azure-load-testing/locust-appgw-aks-private/index.md
     reviewed_changes: {}
@@ -131,52 +636,848 @@ documents:
     reviewed_changes: {}
   - baseline_path: memory/agent-memory/README.md
     pages_path: research/microsoft-foundry/agent-memory-overview/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      headings:
+        835522e41b3ff8bcf45c9484a90e83e402d787f26f4a75af836ed16205962cad: Restored in docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md
+          section "Historical reader map (pre-Pages)" with the complete six-row audience map; the canonical
+          목적별 빠른 경로 section links to this historical evidence.
+        a616717ab9bb843dd1e9b29a72135382fdf79033698f9646baced38daffb9241: Renamed to section "목적별 빠른 경로" in
+          docs/services/microsoft-foundry/agent-memory/index.md; the time-limited, design-first and implementation-first
+          reading paths are unchanged.
+      tables:
+        6e38615f1cdfdd39f0aea0030a93f746e1c1578c803a4b72debcacc90d244c25: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+        93c27befa80b335ea9d8d8d70ca85310dd3cb26f8007eaa75464a25f6c99454d: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+        bb310d837851c9f8194c24e845aa8165eea897ab59daaf49b7932e491fb38c51: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+        2013c3ede52cd3f5bbc066a7c88e6c3ae08e0ab49008c0a7a0c39f95085f7708: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+        1210072435224aaf485a3771382f25c40414924bee56946ae7235373bc6a64fa: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+        2965b3b159e353b6284373789503745ad90499bcd8b641e6c6fc66b39214408f: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+        b161a4f98ec2067c6e78b388a7631bb35b87ca64254f845d5246223793bd7257: Restored exact header/data row in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성"
+          beneath the historical-map disclaimer, with canonical child links. Generated topic navigation had
+          omitted these detailed reading objectives and audience assignments.
+      local_link_labels:
+        6e0523469bc57a9e724a9b332a11bec54fd18dfaebc9b1d7609bef38f3421e6a: Restored label '01. 메모리 분류 체계' in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성",
+          linking to docs/services/microsoft-foundry/agent-memory/taxonomy/index.md. The original detailed
+          audience map remains explicitly historical and is linked from the canonical guide.
+        8d4cbf9cdc1e35d919f0900882f792fa23f92052eac2647f749a6d41c54e9045: Restored label '02. 아키텍처 패턴' in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성",
+          linking to docs/services/microsoft-foundry/agent-memory/architecture-patterns/index.md. The original
+          detailed audience map remains explicitly historical and is linked from the canonical guide.
+        ac95bcf8bf57be7eb83236b143401db16a4a998d6b5e689ad646a8774e57f5c3: Restored label '04. 프레임워크 비교' in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성",
+          linking to docs/services/microsoft-foundry/agent-memory/frameworks/index.md. The original detailed
+          audience map remains explicitly historical and is linked from the canonical guide.
+        10d1e473e9ebe8c05b3c51bb0150eb66e3c7f8e4318b549c32577c2d208c4099: Restored label '05. 프로덕션과 평가' in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성",
+          linking to docs/services/microsoft-foundry/agent-memory/production-evaluation/index.md. The original
+          detailed audience map remains explicitly historical and is linked from the canonical guide.
+        ee708ebb80e2486837892f2629a6ab654c815a44e5216e406b5d9894e1044571: Retained label 'images/01-memory-taxonomy.svg'
+          in docs/services/microsoft-foundry/agent-memory/index.md, pointing to docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/01-memory-taxonomy.svg.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        11a1f30b2750cc2cacdf6a469f4db322fba63e0a01c49f097bb0003a0b7777ee: Retained label 'images/02-architecture-patterns.svg'
+          in docs/services/microsoft-foundry/agent-memory/index.md, pointing to docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/02-architecture-patterns.svg.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        db83ec5f48f147e309ada3539b4cb341f1eac05606f8e063f97c4b3528e26a5c: Retained label 'images/03-memory-pipeline.svg'
+          in docs/services/microsoft-foundry/agent-memory/index.md, pointing to docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/03-memory-pipeline.svg.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        9e5f8f51ef96fa84bc4552892a69cdfc89d8f94a5ef1a822ceabeddf02e35464: Retained label 'images/04-production-tiers.svg'
+          in docs/services/microsoft-foundry/agent-memory/index.md, pointing to docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/04-production-tiers.svg.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        fe2b3e96ca22941642e539d494b3861481ebfc8abc5a54ec0a1b5705f21b25b9: Retained label 'images/05-commerce-blueprint.svg'
+          in docs/services/microsoft-foundry/agent-memory/index.md, pointing to docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/05-commerce-blueprint.svg.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        e545fbfd8a6db9a606f96c20118846de2fb6ce95bd45a6a6c9707adb282da640: Restored label '06. 커머스 적용 설계' in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성",
+          linking to docs/services/microsoft-foundry/agent-memory/commerce/index.md. The original detailed
+          audience map remains explicitly historical and is linked from the canonical guide.
+        a63a178680757909d7b1cb6ad4e67e89420ea1882685f828f240218517493cb2: Restored label '03. 파이프라인과 검색' in
+          docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md section "문서 구성",
+          linking to docs/services/microsoft-foundry/agent-memory/pipeline-retrieval/index.md. The original
+          detailed audience map remains explicitly historical and is linked from the canonical guide.
   - baseline_path: memory/foundry-gpt-memory-v1.md
     pages_path: guides/microsoft-foundry/gpt-memory-layer/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        ec8de6ca2bb54061c8ece964f0c28859efdb393ce95b035616d56bb021e61ae3: 'In docs/services/microsoft-foundry/gpt-memory-layer/index.md:
+          Safety: the opening verification-complete assertion and dated closing assertion were replaced with
+          an explicit semantic-verification-needed notice. The historical 2026-07-22 update date and architecture
+          content remain; the current front matter is needs-review, so the old unsupported verification claim
+          must not be restored. Current prose replacement begins: ''이관된 원문입니다. 공식 Microsoft Learn 문서와의 의미
+          검증이 필요합니다.''.'
+        78dd2dad9b02afaa7f3308466ce27391076bda54ee2f32dd0e0c28e911c5a0f1: 'In docs/services/microsoft-foundry/gpt-memory-layer/index.md:
+          Safety: the opening verification-complete assertion and dated closing assertion were replaced with
+          an explicit semantic-verification-needed notice. The historical 2026-07-22 update date and architecture
+          content remain; the current front matter is needs-review, so the old unsupported verification claim
+          must not be restored. Current prose replacement begins: ''마지막 업데이트: 2026년 7월 22일 — 공식 원문 의미 검증 대기''.'
   - baseline_path: monitor/azure-monitor-dynamic-thresholds-brief.md
     pages_path: research/azure-monitor/dynamic-thresholds-brief/index.md
     reviewed_changes: {}
   - baseline_path: monitor/azure-sre-agent.md
     pages_path: guides/azure-monitor/azure-sre-agent-overview/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      local_link_labels:
+        c1ca913091c95d35a8482f0216524d86a34dd4070a62f9ca3ec7a89bef6abd81: Retained label '편집 가능한 SVG 보기' in
+          docs/services/azure-monitor/azure-sre-agent/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/sre-agent-process.svg;
+          docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/s1-three-panel.svg.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        6acfc255c5e8f3e2260323007f2f377c059f04a4cf27090d45f826a526d4d4f7: Retained label 'Issue 본문 보기' in
+          docs/services/azure-monitor/azure-sre-agent/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-github-issue.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        875bedfdbc15c549d09155e977dc244e9e99297dbf14c1ac75dee7f9ec774840: Retained label 'HTML 메일 보기' in docs/services/azure-monitor/azure-sre-agent/index.md,
+          pointing to docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-incident-summary.html.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        6d2ba3851d9f7930b9b842b58ab1c5a5124455736915e1a215b0f3aa3b10101d: Retained label 'RFC 5322 메일 파일 보기'
+          in docs/services/azure-monitor/azure-sre-agent/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-incident-summary.eml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: monitor/hdinsight-kafka-monitoring.md
     pages_path: research/azure-monitor/hdinsight-kafka-monitoring-options/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        571ffe34f1b3d57af92b1ccf0de6e92a2589f0e24650bde126c8265d737dec0e: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md:
+          The three installation/dashboard references now name Prometheus + Grafana 구성 가이드 at docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md.
+          Safety: the closing measured-environment note uses rg-example-japaneast-01 and hdi-example-japaneast-01,
+          retaining the scoped historical observation rather than making a new general product claim. Current
+          prose replacement begins: ''- 설치·대시보드 구성: Prometheus + Grafana 구성 가이드''.'
+        8867b2b135aa92de4daaf8b97edbfbca3de5f620a9d4afb56b1e01a8caade5e0: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md:
+          The three installation/dashboard references now name Prometheus + Grafana 구성 가이드 at docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md.
+          Safety: the closing measured-environment note uses rg-example-japaneast-01 and hdi-example-japaneast-01,
+          retaining the scoped historical observation rather than making a new general product claim. Current
+          prose replacement begins: ''HDInsight 기본 미제공 → 수동 설치. 둘 다 Prometheus 스크래핑 + Grafana 시각화 조합. 설치·대시보드:
+          Prometheus + Grafana 구성 가이드''.'
+        7843f6e01e3ff68bb42fbe436f2c615c652654b170f65926fe856e0cd6e2779b: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md:
+          The three installation/dashboard references now name Prometheus + Grafana 구성 가이드 at docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md.
+          Safety: the closing measured-environment note uses rg-example-japaneast-01 and hdi-example-japaneast-01,
+          retaining the scoped historical observation rather than making a new general product claim. Current
+          prose replacement begins: ''권장 목표 상태: Monitor Integration으로 노드/클러스터 baseline 확보 + 브로커/토픽 상세·JVM
+          internals·Consumer Lag은 JMX/Kafka Exporter로 관측. → 설치·대시보드: Prometheus + ''.'
+        4f6d715673a43b9318d459439569bad301fbf80e4a9736a4a160e68e4dfa2982: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md:
+          The three installation/dashboard references now name Prometheus + Grafana 구성 가이드 at docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md.
+          Safety: the closing measured-environment note uses rg-example-japaneast-01 and hdi-example-japaneast-01,
+          retaining the scoped historical observation rather than making a new general product claim. Current
+          prose replacement begins: ''이 문서는 rg-example-japaneast-01 배포(hdi-example-japaneast-01) 기준 실측 기록.
+          리소스명·IP는 환경에 맞게 치환.''.'
+      local_link_labels:
+        79baf84e4c913a8549739c6081e3a9cf1b0d9c1acc04ba9480129bd96358e6d9: Replaced retired path label with
+          'Prometheus + Grafana 구성 가이드' in docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md,
+          pointing to docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: monitor/hdinsight-kafka-prometheus-grafana.md
     pages_path: guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        bd7b9c198dc08d1410385e42f06657cf6be04bff2f73972e56064ad96f5b3b64: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md:
+          The Why reference now names the canonical monitoring overview. The dashboard image instructions
+          distinguish bundle images from original sources at docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/images.
+          Exporter rules, Prometheus configuration and Grafana dashboard source files remain in that owning
+          sample. Current prose replacement begins: ''전제: HDInsight Kafka 클러스터 + Prometheus + Grafana 기구성.
+          도구별 커버 범위·선택 근거("Why") → HDInsight Kafka 모니터링 방식 비교.''.'
+        ed4fb9a1ee16fecca8e6bcc2f346062915290e65a9f2f82f9512af21bcea8a24: 'In docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md:
+          The Why reference now names the canonical monitoring overview. The dashboard image instructions
+          distinguish bundle images from original sources at docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/images.
+          Exporter rules, Prometheus configuration and Grafana dashboard source files remain in that owning
+          sample. Current prose replacement begins: ''렌더링 이미지는 이 문서 번들의 images/ 디렉터리에 아래 파일명으로 두면 자동 표시됩니다.
+          원본 자료는 samples/monitoring-assets/images/에서 확인할 수 있습니다.''.'
+      local_link_labels:
+        9e702f459d67c67952e1ebd636ab6a69f895283b704f440bab1613f3f09c09a4: Replaced retired path label with
+          'HDInsight Kafka 모니터링 방식 비교' in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md,
+          pointing to docs/services/azure-monitor/hdinsight-kafka-monitoring/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
+        4cbc12caed5b287e12ad58a40e0bffb7faca665597ab4ee1c45211467bb82ca2: Retained label 'assets/prometheus-grafana/'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        8caa2a204eec50db21c591280d846fac7d80f202c6a829dd8b3843700d5f969f: Retained label 'jmx/kafka-rules.yml'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/jmx/kafka-rules.yml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        656c7a584417e11b56b29c13f30fb5ca9620bb81643a4e4ba550f196afd4e658: Retained label 'jmx/b0.yml.example'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/jmx/b0.yml.example.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        cc9c87015e90fe008b18f1d9853e54ba7d7b1eb21c6a9971039128ade73a1891: Retained label 'docker-compose.yml'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/docker-compose.yml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        50cb58547b9a5b500c46f975848fcb4e22aef66b2c517dc81ba944f5794afc09: Retained label 'prometheus.yml'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/prometheus.yml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        d8b0873d32bd4f22164ceaffdf91a9df0788a4195931f31b3c8c4f8aa9180b86: Retained label 'grafana/provisioning/datasources/prometheus.yml'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/provisioning/datasources/prometheus.yml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        2f9d7fc6e302cf2d64c80a3af3ad49d6363a4073da7278794d0212cdc69c2171: Retained label 'grafana/provisioning/dashboards/provider.yml'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/provisioning/dashboards/provider.yml.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        4e30c0a736648cdbf3724c22290d2ce4d6e6467ffb8ec18015360f91aa22c5b2: Retained label 'kafka-exporter-adv.json'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/dashboards/kafka-exporter-adv.json.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        e27b1fb145ebd9254aa8762cf881afc092d7a1388639715e48de4b6b0a492615: Retained label 'kafka-jmx-broker.json'
+          in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md, pointing
+          to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/dashboards/kafka-jmx-broker.json.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        9e77ace5a4ee3cf33c393827cfda9dc6a2dfa57024e91cfda8a73e5919c8c10c: Replaced retired path label with
+          'samples/monitoring-assets/images/' in docs/services/azure-monitor/hdinsight-kafka-monitoring/prometheus-grafana/index.md,
+          pointing to docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/images.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: monitor/otel-monitor-setup.md
     pages_path: guides/azure-monitor/aks-private-opentelemetry/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        c1a9ea48124d32711ff584f255753d47c4f12ffbe17ad6148c69e05e72afb1bd: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''1. 이름: ampls-example-krc-01''.'
+        5d1c0fcbfc31548179d5d0756ae3fb3974d997bf4df292a161ab641dd7c85e03: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''- MSProm-koreacentral-aks-example-koreacentral (RG: rg-example-koreacentral-01)''.'
+        8fbeff86074094523c052738ea0e6e18842511c0ea484c8d322d06c2f94f2feb: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''- azuremonitor-workspace-example-krc-01 (RG: MA_azuremonitor-workspace-example-krc-01_koreacentral_managed)''.'
+        ad04f0f2877e6e144327ec3be3e5105db452638ca45e94fdd3adc3d96c3615be: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''- 이름: pe-ampls-example-krc-01''.'
+        ee3ef39d4d43df6bf7c946a70c01af30c9f3ed941567964fc003decfa83d93a1: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''1. Prometheus DCR 선택 (예: MSProm-koreacentral-aks-example-koreacentral-01)''.'
+        f998153bb254b703c5a1fb950d62e9d8315c1952cbb5d95e5a7f9846303212f4: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''기존 VNet(vnet-example-koreacentral-01)에 연결되어 있던 모든 Private DNS Zone 링크를 PRD VNet으로 이전.''.'
+        d071edd197f1c6d03c88e8491ddb4280af4830a85448b1388e50296b6028bc31: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current prose replacement begins:
+          ''- Private Endpoint(pe-ampls-example-krc-01)는 기존 VNet의 pe-subnet에 그대로 위치''.'
+      code:
+        737daa04ea7fec43ce993922f36de08c0acfb5c59b90f06c95a6abd74b2fe37a: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current code replacement begins:
+          ''flowchart TB subgraph AKS["AKS Private Cluster"] subgraph APP_NS["Application Namespace"] APP["Application
+          Pod<br/>(OTLP SDK)"] end subgraph''.'
+        4102e9632a8cf0e48ab0caeb6f23a0402430bbb15093989dc8154244e0158a3a: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current code replacement begins:
+          ''# AKS 파드 내부에서 nslookup msprom-koreacentral-aks-example-koreacentral-ruja.koreacentral-1.metrics.ingest.monitor.azure.com
+          # → 10.2.0.6 (Priva''.'
+        1e19db832dd173940587309e96ea10d33c9bab0961486660f2a096ec2a9025b4: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current code replacement begins:
+          ''az rest --method put \\ --url "/subscriptions/<subscription-id>/resourceGroups/rg-example-koreacentral-01/providers/Microsoft.ContainerServic''.'
+        1429b56f03ae454fc3a1269d43d36e7ec78701d174e706a4b5990006273e61e0: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current code replacement begins:
+          ''az rest --method get \\ --url "/subscriptions/<subscription-id>/resourceGroups/rg-example-koreacentral-01/providers/Microsoft.ContainerServic''.'
+        c5ad99e6336f4dc7dfb1f317452800240fc429c588e2bb3f5e6b90d3e22e8b9b: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current code replacement begins:
+          ''flowchart TB VM["VM / AKS Pod<br/>(vnet-example-koreacentral-01)"] -->|"DNS Query"| RESOLVER["systemd-resolved<br/>127.0.0.53"]
+          RESOLVER -->''.'
+        4cc41bf5a9cd2b01eaefbd95bd337c47e7dbec1543ff325a21fdb7ab4eda69b3: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current code replacement begins:
+          ''# PRD VNet에 링크 추가 az network private-dns link vnet create \\ --name "link-to-prd-vnet" \\ --zone-name
+          "<zone-name>" \\ --resource-group "<zone-''.'
+      tables:
+        94c29301b4914f9b485a8db89906dd857a9196be32a5825331b49522a4b9e00c: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''AKS 클러스터 | aks-example-koreacentral-01 (Private Cluster)''.'
+        bfd684c367e972b3460eb62a456f363c6bdbc785c002e59488aebda2284ba4a5: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''리소스 그룹 | rg-example-koreacentral-01''.'
+        94c21b10dbe667b9f47b937912e7d995de72f5526d5e6c2802e25ad697f8dcce: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''PRD 리소스 그룹 | rg-example-koreacentral-prd-01''.'
+        995158c790ba9fe3ee7f8a3232d66e14a647bffa46e7b8a5c6b7f20f1c746c72: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Public IP | pip-fw-example-koreacentral-prd-01 | Standard SKU''.'
+        baacdbdcd3a0b86ce62dc3ecdaecb62c91b4f07f4f4db8154a961e75134e8286: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''VNet (기존) | vnet-example-koreacentral-01 (10.0.0.0/10)''.'
+        60afb1c68779b99db7b65dff72dde0a4b3e66377f7579ac6e2a29b0d54a644ab: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''VNet (PRD) | vnet-example-koreacentral-prd-01 (10.100.0.0/16)''.'
+        ed16ab3e60e9fb812d6e89188b1346f14bc8c49a551d0665ff6312d60e05d336: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Azure Firewall | fw-example-koreacentral-prd-01 (Private IP: 10.100.0.4)''.'
+        ddcefb2d91cc9d847a48657cdd22c75238df1e700e3957df9e7f7b0157e1ed7d: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Azure Monitor Workspace | azuremonitor-workspace-example-krc-01''.'
+        39224c38099b50425f28ad69fbe812a72684f6acb879bbbea236467626b5bc32: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Managed Grafana | grafanaworkspaceexample''.'
+        d97e332b81cde3eba71a3802133c3cee677171ad8ad226385c783f33ff0b6f84: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''privatelink.monitor.azure.com | 메트릭 수집 엔드포인트 | vnet-example-koreacentral-prd-01''.'
+        b1bdcfb814366ed3a685131abb36a7a106f8723864d4d58a2e3d693cc5e69a4c: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''privatelink.ods.opinsights.azure.com | ODS 데이터 채널 | vnet-example-koreacentral-prd-01''.'
+        fbf53873149396c6970488dc818e37574b77531268e0ddf1c868f95f451ebd1d: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''privatelink.oms.opinsights.azure.com | OMS 포털 | vnet-example-koreacentral-prd-01''.'
+        a023b598ecac63bcd02648fef1a4c89bed7d2a4f2de51f4426dae8607ce0c2f1: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''privatelink.agentsvc.azure-automation.net | 에이전트 서비스 | vnet-example-koreacentral-prd-01''.'
+        5ab80b1cde1ccc1cdc2d55d0034dda565fc8dcc1595d214c48cded114bbcb27a: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''privatelink.blob.core.windows.net | Blob 스토리지 | vnet-example-koreacentral-prd-01''.'
+        4171198b18e12970a4d725b2ed7dfac43555ace5cc0aef041dd6dc9a725f9562: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''*.privatelink.koreacentral.azmk8s.io | AKS API Server | vnet-example-koreacentral-prd-01''.'
+        f59b5f0be1612339205a66b664559cf857a99375037daf859709b6efd7cd8d73: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''privatelink.redis.azure.net | Redis Cache | vnet-example-koreacentral-prd-01''.'
+        933b1376898a2ead7b68157deb139af9a3f5101c60da5470896ae300bf07c27b: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''MSProm-koreacentral-aks-example-koreacentral-01 | rg-example-koreacentral-01 | MSProm-koreacentral-aks-example-koreacentral''.'
+        e545d145796957437bcbea7610d0e6f25f691fa2c07cbc63225a5d9e14122059: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''azuremonitor-workspace-example-krc-01 | MA_..._managed | azuremonitor-workspace-example-krc-01''.'
+        6fcf8f81ea35d9515ed12cf8a5c242e7fa802cc887e79d2aacc43416ba0db048: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''configurationAccessEndpoint | N/A | MSProm-koreacentral-aks-example-koreacentral ✅''.'
+        68b32234335d9a9ef7eadded9bfda2eb6768b72aa23e0a92979b92a546e65061: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Resource Group | rg-example-koreacentral-prd-01 | Korea Central''.'
+        791178e78ff10c8a4e214cbdbf680ece83bcfc93724ac7da171bf5ab1211ccfb: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''VNet | vnet-example-koreacentral-prd-01 | 10.100.0.0/16''.'
+        06000515a008f2a2917bb02de0e4c0f686dbaeeefd02c3bbc5973fbc07c2987a: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Azure Firewall | fw-example-koreacentral-prd-01 | Standard SKU, DNS Proxy 활성화''.'
+        e314e69e39f83a68b872625644fafa45e23c027f2feacc8c808f6c285a0b7798: 'In docs/services/azure-monitor/aks-private-opentelemetry/index.md:
+          Safety: the environment, architecture, AMPLS/DCE/DCR, DNS-zone, Firewall and VNet-link examples
+          now use the example resource namespace and <subscription-id>. Both az rest configurationAccessEndpoint
+          requests retain their methods, 2023-03-11 API version and JSON properties. DNS zones, address ranges,
+          metrics pipeline, taints and historical topology details remain. Current tables replacement begins:
+          ''Public IP | pip-fw-example-koreacentral-prd-01 | Standard SKU''.'
   - baseline_path: monitor/sre-agent-event-lab/README.md
     pages_path: labs/azure-monitor/sre-agent-event-lab/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        1c3a39700c2a8d219e620296cdc608dda909d0077f62895183cd2f5313544f14: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current prose replacement begins: ''포털에서만 할 수 있는
+          설정이 남아 있습니다. 저장소 연결, 지식 문서 업로드, Azure Monitor incident platform 연결, Review 모드 응답 계획, 역할 할당을 에이전트
+          설정이 순서대로 안내합니다.''.'
+        a2ad55106e8c2cb6f8391a41cadf665e3517675e3ff39d75ae5b57d1d1315db6: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current prose replacement begins: ''기본 실습에는 Logic
+          App bridge를 배포하지 않습니다. 제품 표준 경로는 Azure Monitor를 incident platform으로 연결하는 것이고, 예전 실측에서 쓰던 Action
+          Group + Logic App 인증 경로는 레거시 기''.'
+        2ca86442294e2f99044c23fc5623c201686c9332f032e3d1253159630704d4e1: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current prose replacement begins: ''장애를 주입하기 전에
+          정상 부하가 Application Insights까지 도달하는지 확인하고, 그 사실을 기록해야 S1이 열립니다. 텔레메트리가 없는 워크로드에 장애를 넣으면 주입한 장애와 원래부터
+          안 보이던 상태를 구별할 수 없습니다. 명령은 에이''.'
+        f0a4ebba54d5beb20034578ede022134d9baa6047ad234c0223b2ccb6d014fa4: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current prose replacement begins: ''채점 기준, 사람이
+          채워야 하는 판정, 종합 판정 해석은 결과 채점에 있습니다.''.'
+        33621ea5336f4b63bc4bffb679ec0aa3630e7dad73c975d29348530fdad07bf8: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current prose replacement begins: ''정적 임계값 대신 Dynamic
+          Threshold로 확장하는 설계는 Dynamic Thresholds 확장 설계에 정리해 두었습니다.''.'
+      code:
+        6faff368410a9e4c46cfeda44df7b9d874c51daf2930ac47df1578133c4775b1: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current code replacement begins: ''az login --use-device-code
+          azd auth login source ./docs/services/azure-monitor/azure-sre-agent/samples/event-lab/scripts/lab-env.sh''.'
+        7e2247eec243f924ffd1b30a2b412b3022389dfcbf3fba3b3cf5dc7d2f80e4c6: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current code replacement begins: ''cd docs/services/azure-monitor/azure-sre-agent/samples/event-lab''.'
+      tables:
+        ffa178128112fd99f8d40cc82f4fd9fce361fbc8e3605f534aa3a0de7f44c89c: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current tables replacement begins: ''S1 | HTTP
+          500 응답 | S1 — HTTP 500 장애''.'
+        b46d11954a35fe0afd5b627882274a683e78a850a5e724008791321d3a8aeb16: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current tables replacement begins: ''S2 | 주문 API
+          지연 | S2 — 응답 지연''.'
+        8b80f1ae4540feb17783ea900ad47f7e92cc74782a14e736d717219e45b327b6: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current tables replacement begins: ''S3 | Blob
+          읽기 권한 제거 | S3 — Blob 권한 장애''.'
+        cc08d785e8dd9c540bb261bc5c1d481559a041087bc1d7a2f317b6dcb889d762: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current tables replacement begins: ''Agent가 스레드를
+          만들지 않음 | 에이전트 설정의 incident platform·응답 계획 확인''.'
+        4c29553b4450e5b44b6e77e81286bd106bd9b811288a1cd6f78be94fc740bc5f: 'In docs/services/azure-monitor/azure-sre-agent/event-lab/index.md:
+          The login/source and cd fences now use docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Setup, baseline approval, scenario, results, troubleshooting and dynamic-threshold references now
+          use named canonical children rather than retired guide filenames. The three S1/S2/S3 faults, state
+          gates, cost warning, scoring and cleanup remain. Current tables replacement begins: ''채점이 INCOMPLETE
+          | 결과 채점의 수동 판정 절''.'
+      local_link_labels:
+        22ebccef48adf3797ef14e253543c95913b641f5e0ac0482c5ab31694b8f74a0: Retained label '.devcontainer/README.md'
+          in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to .devcontainer/README.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        44028050825bcfa642b14ff4262d4da0b9393687cf19137c36484aa09ff58e8b: Replaced retired path label with
+          '에이전트 설정' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/setup/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        9e7735ab56a3c5447d3e3fced04c1b2fe3a2992cf3180f9ca2b688e7fee0ea64: Replaced retired path label with
+          '실측 검증 결과' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/validation-results/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        721d882d49a3cd517405ccc227fe908e4a862088f67bfde974795095f05c02b1: Replaced retired path label with
+          'S1 — HTTP 500 장애' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to
+          docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md. The current canonical source
+          or owning-sample target was checked; this is a source-link/reader-label migration, not removal of
+          the referenced content.
+        5c8bc528ec7649959420de6f956d39d8fe06deebea6a99112373148f0d0e814c: Replaced retired path label with
+          'S2 — 응답 지연' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        1898c96d3ba8c474502f1860ec20522ea2883d180b44f744e7b6812908fba571: Replaced retired path label with
+          'S3 — Blob 권한 장애' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to
+          docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
+        d0352a09849221675c8996d4f85514fa1067158f15ca0a74d3747d499c347b55: Replaced retired path label with
+          '결과 채점' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/results/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        b342b4cce7c7903c2a29215e5442ef0eb9d9e5d166fbb3a3a5a1a8a280f6d399: Replaced retired path label with
+          'Dynamic Thresholds 확장 설계' in docs/services/azure-monitor/azure-sre-agent/event-lab/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/dynamic-thresholds/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
   - baseline_path: monitor/sre-agent-event-lab/dynamic-thresholds.md
     pages_path: guides/azure-monitor/sre-agent-dynamic-thresholds/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        014a10d01aa0e5fb54547492a3e2a67766e36db7efa6f0866894dba44914cdb5: 'In docs/services/azure-monitor/azure-sre-agent/dynamic-thresholds/index.md:
+          The legacy Event path note still dates the Action Group/Logic App bridge to 2026-08-12 and says
+          it is not deployed by the current lab. Its reference is now 실측 검증 결과 at docs/services/azure-monitor/azure-sre-agent/validation-results/index.md
+          rather than the retired filename. Current prose replacement begins: ''- Event path(레거시 bridge):
+          Dynamic alert → Action Group → Logic App managed identity → SRE HTTP Trigger → Review-mode investigation.
+          2026-08-''.'
+      local_link_labels:
+        9e7735ab56a3c5447d3e3fced04c1b2fe3a2992cf3180f9ca2b688e7fee0ea64: Replaced retired path label with
+          '실측 검증 결과' in docs/services/azure-monitor/azure-sre-agent/dynamic-thresholds/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/validation-results/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
   - baseline_path: monitor/sre-agent-event-lab/guides/01-agent-setup.md
     pages_path: labs/azure-monitor/sre-agent-event-lab-setup/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        24d42fb71e135de7ab48b81149ddb9e357fbe50028dd7fe668cb587d4725e108: 'In docs/services/azure-monitor/azure-sre-agent/setup/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          The Knowledge files row names the canonical incident-runbook and the next-step link names scenario-http-500.
+          The required roles, Review mode and baseline/setup state acknowledgements remain. Current prose
+          replacement begins: ''첫 장애를 주입합니다: S1 — HTTP 500 장애''.'
+      code:
+        b052995a546e9e1f9ae8a5ab4d9dfd8f2dcbfb5e46c85107831eee8f5cb45f8e: 'In docs/services/azure-monitor/azure-sre-agent/setup/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          The Knowledge files row names the canonical incident-runbook and the next-step link names scenario-http-500.
+          The required roles, Review mode and baseline/setup state acknowledgements remain. Current code replacement
+          begins: ''cd docs/services/azure-monitor/azure-sre-agent/samples/event-lab source ./scripts/lab-env.sh''.'
+      tables:
+        3753279e936bb5b6e363f980fdbdec9b249ca829952b0bfff6a972580d0c6f1e: 'In docs/services/azure-monitor/azure-sre-agent/setup/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          The Knowledge files row names the canonical incident-runbook and the next-step link names scenario-http-500.
+          The required roles, Review mode and baseline/setup state acknowledgements remain. Current tables
+          replacement begins: ''Knowledge files | 인시던트 대응 런북 | 조사 순서와 금지 사항을 팀 규칙으로 강제합니다''.'
+      local_link_labels:
+        673435c83fe369747f909ad329e995ff4aab440b39b30b0967fb7c937a670950: Replaced retired path label with
+          '인시던트 대응 런북' in docs/services/azure-monitor/azure-sre-agent/setup/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/incident-runbook/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        1c3dbf23991386b472cb4d1276a30837f5c72ce8a85a554953faff7c54e156d3: Replaced retired path label with
+          'S1 — HTTP 500 장애' in docs/services/azure-monitor/azure-sre-agent/setup/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: monitor/sre-agent-event-lab/guides/02-scenario-s1.md
     pages_path: labs/azure-monitor/sre-agent-scenario-http-500/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        d0949831998e46a635c7028c64235af4300314bbe05fe974936b14e693d013d7: 'In docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Start-condition and missing-thread advice point to setup, scoring points to results, and the next
+          step points to scenario-latency using reader-facing labels. HTTP 500 injection, state gates, capture
+          statuses and recovery commands remain. Current prose replacement begins: ''- 에이전트 설정을 마쳤고 evidence/state.json에
+          baseline_passed와 agent_setup_acknowledged가 기록되어 있습니다.''.'
+        7a6cc00434bf3af476835bccced55cbbde8de49ad9c89040d54cbf91981667f1: 'In docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Start-condition and missing-thread advice point to setup, scoring points to results, and the next
+          step points to scenario-latency using reader-facing labels. HTTP 500 injection, state gates, capture
+          statuses and recovery commands remain. Current prose replacement begins: ''성공은 conclusion 하나뿐입니다.
+          부분 성공은 결론이 나왔지만 내용이 얕은 경우이며, 이때도 상태는 conclusion이고 점수는 결과 채점에서 갈립니다. 빈 성공 화면을 만들지 않고 누락 상태와 마지막 확인
+          시각을 그대로 그림에 남깁니다.''.'
+        602ac0a5e1349c2f535a8ead51ad2cc1a399a7531214aca08c336408060609d1: 'In docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Start-condition and missing-thread advice point to setup, scoring points to results, and the next
+          step points to scenario-latency using reader-facing labels. HTTP 500 injection, state gates, capture
+          statuses and recovery commands remain. Current prose replacement begins: ''thread-not-created가 나오면
+          에이전트 설정의 incident platform과 응답 계획부터 다시 확인합니다.''.'
+        aeb020ec3047ebb43cecf025f3d2e755d82055561281b915692982956fbe9079: 'In docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Start-condition and missing-thread advice point to setup, scoring points to results, and the next
+          step points to scenario-latency using reader-facing labels. HTTP 500 injection, state gates, capture
+          statuses and recovery commands remain. Current prose replacement begins: ''지연 장애로 넘어갑니다: S2 — 응답
+          지연''.'
+      code:
+        b052995a546e9e1f9ae8a5ab4d9dfd8f2dcbfb5e46c85107831eee8f5cb45f8e: 'In docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Start-condition and missing-thread advice point to setup, scoring points to results, and the next
+          step points to scenario-latency using reader-facing labels. HTTP 500 injection, state gates, capture
+          statuses and recovery commands remain. Current code replacement begins: ''cd docs/services/azure-monitor/azure-sre-agent/samples/event-lab
+          source ./scripts/lab-env.sh''.'
+      local_link_labels:
+        220ab3d6bd9f5bcf6b432aee6496d3d33dfc04f52e3166900819d49d0a33660f: Replaced retired path label with
+          '에이전트 설정' in docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md, pointing to
+          docs/services/azure-monitor/azure-sre-agent/setup/index.md. The current canonical source or owning-sample
+          target was checked; this is a source-link/reader-label migration, not removal of the referenced
+          content.
+        642002bebe57cfb2d5d3168236cb52f8f261354812320f7c408f833079661570: Replaced retired path label with
+          '결과 채점' in docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/results/index.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        2c64e239550534f5e89f6403e8338cac2756d397dfbbce90d29af73440d01992: Replaced retired path label with
+          'S2 — 응답 지연' in docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
   - baseline_path: monitor/sre-agent-event-lab/guides/03-scenario-s2.md
     pages_path: labs/azure-monitor/sre-agent-scenario-latency/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        e4464baf5ec71e4bcbb043edc8a52d8e98d3fa260afffda990816f88c81a3ed7: 'In docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          The prerequisites and next-step prose now name scenario-http-500 and scenario-blob-permission. S1
+          recovery requirements, latency fault, conclusion capture gate and recovery commands remain. Current
+          prose replacement begins: ''- S1 — HTTP 500 장애의 S1이 복구되고 캡처가 conclusion으로 끝났습니다.''.'
+        c0da5ea550501e006069b2ce322ed03f38ad31fbe447ba4559cbda587b4162a3: 'In docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          The prerequisites and next-step prose now name scenario-http-500 and scenario-blob-permission. S1
+          recovery requirements, latency fault, conclusion capture gate and recovery commands remain. Current
+          prose replacement begins: ''권한 장애로 넘어갑니다: S3 — Blob 권한 장애''.'
+      code:
+        b052995a546e9e1f9ae8a5ab4d9dfd8f2dcbfb5e46c85107831eee8f5cb45f8e: 'In docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          The prerequisites and next-step prose now name scenario-http-500 and scenario-blob-permission. S1
+          recovery requirements, latency fault, conclusion capture gate and recovery commands remain. Current
+          code replacement begins: ''cd docs/services/azure-monitor/azure-sre-agent/samples/event-lab source
+          ./scripts/lab-env.sh''.'
+      local_link_labels:
+        1c3dbf23991386b472cb4d1276a30837f5c72ce8a85a554953faff7c54e156d3: Replaced retired path label with
+          'S1 — HTTP 500 장애' in docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/scenario-http-500/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
+        7d81587b0c8906bf8afea33f1abca69106523b68c0d0cd96c1371902e466f702: Replaced retired path label with
+          'S3 — Blob 권한 장애' in docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
   - baseline_path: monitor/sre-agent-event-lab/guides/04-scenario-s3.md
     pages_path: labs/azure-monitor/sre-agent-scenario-blob-permission/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        3980a12d12b3d02cd5d1d39a9dbb621bb87a8e5719bb8496cf084a074b1cbe22: 'In docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Prerequisite and next-step prose now name scenario-latency and results. Blob-role removal, S2 recovery/capture
+          gates and least-privilege restoration evidence remain. Current prose replacement begins: ''- S2
+          — 응답 지연의 S2가 복구되고 캡처가 conclusion으로 끝났습니다.''.'
+        8ffa7b1113e65afce2b1049c2ae54853457120e34024b5e7358d7a96eb991c68: 'In docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Prerequisite and next-step prose now name scenario-latency and results. Blob-role removal, S2 recovery/capture
+          gates and least-privilege restoration evidence remain. Current prose replacement begins: ''수집한 근거를
+          채점합니다: 결과 채점''.'
+      code:
+        b052995a546e9e1f9ae8a5ab4d9dfd8f2dcbfb5e46c85107831eee8f5cb45f8e: 'In docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md:
+          The environment fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab.
+          Prerequisite and next-step prose now name scenario-latency and results. Blob-role removal, S2 recovery/capture
+          gates and least-privilege restoration evidence remain. Current code replacement begins: ''cd docs/services/azure-monitor/azure-sre-agent/samples/event-lab
+          source ./scripts/lab-env.sh''.'
+      local_link_labels:
+        2c64e239550534f5e89f6403e8338cac2756d397dfbbce90d29af73440d01992: Replaced retired path label with
+          'S2 — 응답 지연' in docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/scenario-latency/index.md. The current canonical
+          source or owning-sample target was checked; this is a source-link/reader-label migration, not removal
+          of the referenced content.
+        642002bebe57cfb2d5d3168236cb52f8f261354812320f7c408f833079661570: Replaced retired path label with
+          '결과 채점' in docs/services/azure-monitor/azure-sre-agent/scenario-blob-permission/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/results/index.md. The current canonical source or
+          owning-sample target was checked; this is a source-link/reader-label migration, not removal of the
+          referenced content.
   - baseline_path: monitor/sre-agent-event-lab/guides/05-results.md
     pages_path: labs/azure-monitor/sre-agent-results/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      code:
+        67a6a1cd3fa2470fa487d0030975e2dcc8399fe8015dc21d9d02e112b6c00afe: 'In docs/services/azure-monitor/azure-sre-agent/results/index.md:
+          The scoring fence now enters docs/services/azure-monitor/azure-sre-agent/samples/event-lab before
+          invoking the unchanged app/.venv/bin/python scripts/score.py --evidence-root evidence command. Current
+          code replacement begins: ''cd docs/services/azure-monitor/azure-sre-agent/samples/event-lab app/.venv/bin/python
+          scripts/score.py --evidence-root evidence''.'
   - baseline_path: monitor/sre-agent-event-lab/runbooks/incident-response.md
     pages_path: guides/azure-monitor/sre-agent-incident-runbook/index.md
     reviewed_changes: {}
   - baseline_path: monitor/sre-agent-event-lab/validation-results.md
     pages_path: research/azure-monitor/sre-agent-validation-results/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        8271d6dbca2ffc2138a6910a441d84bf389105cd37f8657345b5645f9a8e918b: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current prose replacement
+          begins: ''제품 개요와 실사용 패턴은 Azure SRE Agent 소개 자료를 먼저 참고한다. 이 문서는 S1/S2/S3 시나리오에서 측정한 수치, timeline,
+          evidence, 한계를 정리한다. 기록 시점 주의. 아래 결과는 azd 재구성 이전에 손으로 ''.'
+        59eaa5e71ada1c5c2e7aa1c3f44779c0e9ced379a85d4255c9a6e91abdc1c509: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current prose replacement
+          begins: ''- Agent thread: <agent-thread-id-s1>''.'
+        67c696e31c3eb32ecb73a7dff7650b346e0edbb471b2b6db308e7a5430673a3d: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current prose replacement
+          begins: ''- Agent thread: <agent-thread-id-s1>''.'
+        a147e49be39803c15924b5b1afa506dfcfd9db543e37dfc5f984aebf685aa96a: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current prose replacement
+          begins: ''- Agent thread: <agent-thread-id-s2>''.'
+        8ad3fbef8612b932686e896eb20f5dbf33be2927c10d9f67dd72440f9359b068: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current prose replacement
+          begins: ''후속 보정: vnet workload의 OTEL_SERVICE_NAME을 sre-event-lab-example로 변경하고 alert/evidence query도
+          이 deployment-unique 값으로 제한했다. 변경 후 새 role name으로 ''.'
+      tables:
+        909ff96fff1da5b1cecb3b0a52c0e9d9d9a28c7ac806be0b82f2a20a78b52dce: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current tables replacement
+          begins: ''Log Analytics | law-sre-event-lab-example | ✅''.'
+        c019548adf1e89b3b9d0738c57fbb330eb8bc67f3e8616347a1ae7a28c3b0627: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current tables replacement
+          begins: ''Application Insights | appi-sre-event-lab-example | ✅''.'
+        009b1f97083a84aea95449b9595f90dc667b4d8de5276bcba9a0bba4daf6c550: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current tables replacement
+          begins: ''Storage | stexample00000000, Blob private endpoint | ✅''.'
+        d7fd4a1cb28109a4524750adffd0bebe2ece8457de6d9df13dd49556d4134d11: 'In docs/services/azure-monitor/azure-sre-agent/validation-results/index.md:
+          Safety: the 2026-08-12 historical results retain the manual-lab/legacy-bridge warning, measured
+          outcomes and recovery limitation while replacing resource suffixes and thread GUIDs with example
+          names and <agent-thread-id-s1/s2/s3>. The deployment-unique OTEL_SERVICE_NAME example is sre-event-lab-example.
+          Current execution instructions are explicitly linked to event-lab/index.md. Current tables replacement
+          begins: ''Agent | sre-devguidesample-example | ✅ Running''.'
+      images:
+        98692385d5dc253eebe2615d8858b1f470fc703c18faa1171834eca38339fe49: Preserved byte-for-byte in docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/investigation.gif
+          (SHA-256 3b130e64f7566503dd1a2706ccbf46bd9d9eeef2bc555e2cb57dcc6a42f72025); sample.yml publishes
+          it as validation-results/images/s1-investigation.gif to distinguish the three same-basename scenario
+          captures. Alt text is unchanged.
+        94f1c44330f916dca1ce2dde914e40fcb8959302e54ab2d3bd90937cf15090bf: Preserved byte-for-byte in docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/investigation.gif
+          (SHA-256 4ff453aa973f9be400790974afe506d7b6628c81cbc6f69eaef5e4a9e28f0510); sample.yml publishes
+          it as validation-results/images/s2-investigation.gif to distinguish the three same-basename scenario
+          captures. Alt text is unchanged.
+        eb3e116af988c0bcb102a06972938519582b7f650db0897994ff117767ae0957: Preserved byte-for-byte in docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/investigation.gif
+          (SHA-256 5102eda3c2346968ea0deeae2e7cec434a864994f7ae869b377c12fc948a9eb5); sample.yml publishes
+          it as validation-results/images/s3-investigation.gif to distinguish the three same-basename scenario
+          captures. Alt text is unchanged.
+      local_link_labels:
+        fabd7a655161bce48b915396b69df3bf2d77130e4bb0f5f9bbe4c626f890932a: Replaced retired path label with
+          '현재 실습 문서' in docs/services/azure-monitor/azure-sre-agent/validation-results/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/event-lab/index.md. The current canonical source
+          or owning-sample target was checked; this is a source-link/reader-label migration, not removal of
+          the referenced content.
+        176e60b305e09e5517119889b188d142890ad06562a56bee19e69327bc4f1709: Replaced retired path label with
+          '현재 실습 문서' in docs/services/azure-monitor/azure-sre-agent/validation-results/index.md, pointing
+          to docs/services/azure-monitor/azure-sre-agent/event-lab/index.md. The current canonical source
+          or owning-sample target was checked; this is a source-link/reader-label migration, not removal of
+          the referenced content.
+        4e4283a27c18d5d6aeb2633f6000f9c32ebd13743bcadb62eec08c3451132d55: Retained label '결론 frame' in docs/services/azure-monitor/azure-sre-agent/validation-results/index.md,
+          pointing to docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/07-conclusion.png;
+          docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/07-conclusion.png;
+          docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/07-conclusion.png.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        22267b2e1c53a41a357f022e22cd0b554d3413718ed88f6db4c317745ed9ac17: Retained label '실제 event timeline'
+          in docs/services/azure-monitor/azure-sre-agent/validation-results/index.md, pointing to docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/timeline.md;
+          docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/timeline.md; docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/timeline.md.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        3efcbd689fedb88f8a060668e0f285de17f2e95ad652571306c7deda71ede7b1: Retained label 'Mermaid sequence
+          source' in docs/services/azure-monitor/azure-sre-agent/validation-results/index.md, pointing to
+          docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/timeline.mmd; docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/timeline.mmd;
+          docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/timeline.mmd. The
+          current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: mysql/nodejs/db_upgrade_zero_downtime.md
     pages_path: guides/azure-database-for-mysql/blue-green-upgrade/index.md
     reviewed_changes: {}
@@ -185,10 +1486,49 @@ documents:
     reviewed_changes: {}
   - baseline_path: ptu_lb/ptu-lb-test.md
     pages_path: guides/azure-openai/adaptive-ptu-load-balancing/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      prose:
+        fe5088d17216c7a31ebc8e6a922bc8fb7daaf1b8f7f863e6f428a52d1bfc4092: 'In docs/services/azure-openai/adaptive-ptu-load-balancing/index.md:
+          The redundant 메인 문서: ptu-lb-test.md self-link was removed from 파일 구성; the same guide is this canonical
+          document. The editable diagram, renderer, Python controller, dependencies and optional PowerShell
+          implementation remain in docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks.
+          Current prose replacement begins: ''- 런북 잡이 워커에서 Completed로 종료''.'
+      local_link_labels:
+        782c9f35e32cc1974dd512db107e29fca6fdf72fa3b9a230282acd141f20784c: In docs/services/azure-openai/adaptive-ptu-load-balancing/index.md,
+          section "파일 구성" drops only the redundant link to this same guide; its title, problem statement and
+          content are retained at the canonical path.
+        d8340c1aaa9e95e871d626647970820cd4d84b2ebd67c0908548b3af1d912f75: Retained label 'ptu_architecture.excalidraw'
+          in docs/services/azure-openai/adaptive-ptu-load-balancing/index.md, pointing to docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/ptu_architecture.excalidraw.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        3780ddb85f0f2468a666925639ce03196d37651ae07198d5f07178660b4cb73a: Retained label 'ptu_architecture.png'
+          in docs/services/azure-openai/adaptive-ptu-load-balancing/index.md, pointing to docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/ptu_architecture.png.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        a44631d85720594c37c72f21f5d6086dd8e36ef4aa4df5d6ef8084402a49354b: Retained label 'render_excalidraw.py'
+          in docs/services/azure-openai/adaptive-ptu-load-balancing/index.md, pointing to docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/render_excalidraw.py.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        7ee017639b4fc20bb4aa51df646d0915fee435c7d2b1fb7422ac484d9d035c99: Retained label 'runbooks/adaptive_tpm_quota_controller.py'
+          in docs/services/azure-openai/adaptive-ptu-load-balancing/index.md, pointing to docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/adaptive_tpm_quota_controller.py.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        59e441dc4125b74571fdfbbe9d389c5f81a03e3b76542f71a4b770af7cbab02d: Retained label 'runbooks/requirements.txt'
+          in docs/services/azure-openai/adaptive-ptu-load-balancing/index.md, pointing to docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/requirements.txt.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
+        83d324c4a28e9157567e4fd24234bcd1f42e9974ac6778197bb506e0a84deda3: Retained label 'runbooks/optional_adaptive_tpm_quota_controller.ps1'
+          in docs/services/azure-openai/adaptive-ptu-load-balancing/index.md, pointing to docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/optional_adaptive_tpm_quota_controller.ps1.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
   - baseline_path: redis/nodejs/cluster_failover_recovery.md
     pages_path: cases/azure-managed-redis/cluster-failover-recovery/index.md
-    reviewed_changes: {}
+    reviewed_changes:
+      local_link_labels:
+        1b08bfef216eff6b14e0ccca69a06c7914498e7563355de0e674d34ee3cc9b7b: Retained label 'cluster_example/'
+          in docs/services/azure-managed-redis/cluster-failover-recovery/index.md, pointing to docs/services/azure-managed-redis/cluster-failover-recovery/samples/nodejs-cluster/cluster_example.
+          The current canonical source or owning-sample target was checked; this is a source-link/reader-label
+          migration, not removal of the referenced content.
 dispositions:
   .azure/deployment-plan.md:
     status: excluded-local-state

@@ -26,6 +26,8 @@ ROOT = Path(__file__).parents[2]
 BASELINE = "a4e680116db1016a698e64baae9efde858a8eafa"
 PAGES = "9ace966742ff92a00fc84bcc21529af47b8661af"
 MANIFEST = ROOT / "scripts/docs/pre_pages_inventory.yml"
+FINGERPRINT = "a" * 64
+CONTENT_REASON = "Preserved in docs/services/service/topic/samples/evidence/README.md under Historical commands."
 
 
 def git(repo: Path, *arguments: str) -> bytes:
@@ -69,7 +71,7 @@ def manifest_data() -> dict:
             {
                 "baseline_path": "old/guide.md",
                 "pages_path": "guides/service/topic/index.md",
-                "reviewed_changes": {"prose": {"fingerprint": "Preserved in sample README."}},
+                "reviewed_changes": {"prose": {FINGERPRINT: CONTENT_REASON}},
             }
         ],
         "dispositions": {
@@ -123,7 +125,7 @@ def test_inventory_loads_deeply_immutable_models(tmp_path: Path, manifest_data: 
     with pytest.raises(TypeError):
         inventory.dispositions[PurePosixPath("other.md")] = disposition
     with pytest.raises(TypeError):
-        document.reviewed_changes["prose"]["fingerprint"] = "changed"
+        document.reviewed_changes["prose"][FINGERPRINT] = "changed"
     with pytest.raises(TypeError):
         document.reviewed_changes["headings"] = {}
 
@@ -255,7 +257,7 @@ documents:
     pages_path: guides/service/topic/index.md
     reviewed_changes:
       prose:
-        fingerprint: Preserved in the sample README.
+        {FINGERPRINT}: {CONTENT_REASON}
 dispositions:
   old/README.md:
     status: replaced-summary
@@ -280,9 +282,9 @@ dispositions:
             "prose",
         ),
         (
-            "        fingerprint: Preserved in the sample README.",
-            "        fingerprint: Lost reason.\n        fingerprint: Preserved in the sample README.",
-            "fingerprint",
+            f"        {FINGERPRINT}: {CONTENT_REASON}",
+            f"        {FINGERPRINT}: Lost reason.\n        {FINGERPRINT}: {CONTENT_REASON}",
+            FINGERPRINT,
         ),
         (
             "  old/README.md:\n",

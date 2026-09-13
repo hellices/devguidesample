@@ -123,16 +123,48 @@ def _relative_path(value: object, label: str) -> PurePosixPath:
     return path
 
 
-def _reviewed_changes(value: object, label: str) -> Mapping[str, Mapping[str, str]]:
-    if not isinstance(value, dict):
+STRUCTURE_CATEGORIES = (
+    "title", "headings", "prose", "code", "tables", "images", "local_link_labels",
+)
+
+
+def validate_reviewed_changes(
+    value: object, label: str = "reviewed_changes",
+) -> Mapping[str, Mapping[str, str]]:
+    """Validate exact source fingerprints and actionable, path-specific review reasons."""
+    if not isinstance(value, Mapping):
         raise AuditFormatError(f"{label} must be a mapping")
     for category, reasons in value.items():
-        _nonempty_string(category, label)
-        if not isinstance(reasons, dict):
+        if category not in STRUCTURE_CATEGORIES:
+            raise AuditFormatError(f"{label}: unknown structure category: {category!r}")
+        if not isinstance(reasons, Mapping):
             raise AuditFormatError(f"{label}.{category} must be a mapping")
         for fingerprint, reason in reasons.items():
-            _nonempty_string(fingerprint, label)
-            _nonempty_string(reason, label)
+            if not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+                raise AuditFormatError(f"{label}.{category}: fingerprint must be lowercase SHA-256")
+            reason_label = f"{label}.{category}.{fingerprint}.reason"
+            _nonempty_string(reason, reason_label)
+            if len(reason.strip()) < 40 or not re.search(
+                r"(?:docs|samples)/[^\s`]+"
+                r"|\bsection\s+[`\"“][^`\"”]+[`\"”]"
+                r"|\bsafety:\s+.{25,}",
+                reason,
+                re.IGNORECASE,
+            ):
+                raise AuditFormatError(
+                    f"{reason_label} must name a specific replacement path, quoted section, "
+                    "or explicit safety: transformation, not a generic approval"
+                )
+            if not re.search(
+                r"\b(?:preserv\w*|replac\w*|restor\w*|retain\w*|remain\w*|unchanged|"
+                r"redact\w*|safety|renam\w*|remov\w*|migrat\w*)\b"
+                r"|보존|대체|복원|유지|비식별|이관|치환|삭제",
+                reason,
+                re.IGNORECASE,
+            ):
+                raise AuditFormatError(
+                    f"{reason_label} must explain preservation, replacement, or safety, not just 'updated'"
+                )
     return value
 
 
@@ -170,7 +202,9 @@ def load_inventory(path: Path) -> PrePagesInventory:
             paths[field] = value
         documents.append(BaselineDocument(
             **paths,
-            reviewed_changes=_reviewed_changes(raw.get("reviewed_changes", {}), f"{label}.reviewed_changes"),
+            reviewed_changes=validate_reviewed_changes(
+                raw.get("reviewed_changes", {}), f"{label}.reviewed_changes",
+            ),
         ))
 
     if not isinstance(data["dispositions"], dict):
