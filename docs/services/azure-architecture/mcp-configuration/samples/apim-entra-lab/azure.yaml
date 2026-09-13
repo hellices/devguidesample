@@ -1,0 +1,26 @@
+name: mcp-entra-lab
+requiredVersions:
+  azd: ">=1.29.0"
+infra:
+  provider: bicep
+  path: infra
+  module: main
+services:
+  mcp:
+    project: .
+    language: python
+    host: containerapp
+    module: python-app
+    docker:
+      path: Dockerfile
+      context: .
+      remoteBuild: true
+hooks:
+  preup:
+    shell: sh
+    run: python3 scripts/identity.py prepare
+    continueOnError: false
+  postprovision:
+    shell: sh
+    run: python3 scripts/identity.py federate
+    continueOnError: false

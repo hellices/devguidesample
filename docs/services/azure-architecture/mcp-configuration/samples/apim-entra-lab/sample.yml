@@ -1,0 +1,8 @@
+title: APIM and Entra MCP lab
+description: Native azd deployment and manual MCP, REST wrapping, OBO and authorization scenarios.
+kind: runnable
+used_by:
+  - index
+  - authentication
+  - hosting-reference
+  - validation

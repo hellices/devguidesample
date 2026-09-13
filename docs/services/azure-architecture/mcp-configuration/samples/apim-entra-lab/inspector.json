@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "azure": {
+      "type": "stdio",
+      "command": "./node_modules/.bin/azmcp",
+      "args": ["server", "start", "--mode", "all", "--read-only", "--namespace", "group"],
+      "env": {
+        "AZURE_MCP_COLLECT_TELEMETRY": "false",
+        "AZURE_TOKEN_CREDENTIALS": "AzureCliCredential"
+      }
+    },
+    "learn": {
+      "url": "https://learn.microsoft.com/api/mcp",
+      "type": "streamable-http"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "${AZURE_LOCATION}" },
+    "suffix": { "value": "${AZURE_ENV_NAME}" },
+    "environmentId": { "value": "${AZURE_CONTAINER_APPS_ENVIRONMENT_ID}" },
+    "environmentDomain": { "value": "${MCP_ENVIRONMENT_DOMAIN}" },
+    "appIdentityId": { "value": "${MCP_APP_IDENTITY_ID}" },
+    "registryHost": { "value": "${AZURE_CONTAINER_REGISTRY_ENDPOINT}" },
+    "pythonImage": { "value": "${SERVICE_MCP_IMAGE_NAME}" },
+    "tenantId": { "value": "${AZURE_TENANT_ID}" },
+    "customApiClientId": { "value": "${MCP_CUSTOM_API_CLIENT_ID}" },
+    "customApiClientSecret": { "value": "${MCP_CUSTOM_API_CLIENT_SECRET}" },
+    "allowedClientIds": { "value": "${MCP_ALLOWED_CLIENT_IDS}" }
+  }
+}

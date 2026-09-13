@@ -1,0 +1,31 @@
+<policies>
+  <inbound>
+    <choose>
+      <when condition="@(context.Api.Id != &quot;mcp-metadata&quot;)">
+        <validate-azure-ad-token id="mcp-jwt" tenant-id="__TENANT_ID__" header-name="Authorization" failed-validation-httpcode="401">
+          <client-application-ids>__CLIENT_APPLICATIONS__</client-application-ids>
+          <audiences><audience>__API_CLIENT_ID__</audience></audiences>
+          <required-claims>
+            <claim name="scp" match="all" separator=" "><value>Mcp.Access</value></claim>
+          </required-claims>
+        </validate-azure-ad-token>
+      </when>
+    </choose>
+  </inbound>
+  <backend><forward-request timeout="120" buffer-response="false" /></backend>
+  <outbound />
+  <on-error>
+    <choose>
+      <when condition="@(context.LastError.PolicyId == &quot;mcp-jwt&quot;)">
+        <return-response>
+          <set-status code="401" reason="Unauthorized" />
+          <set-header name="WWW-Authenticate" exists-action="override">
+            <value>@(context.Api.Id == "lab-rest" ? "Bearer scope=\"__SCOPE__\"" : "Bearer resource_metadata=\"__GATEWAY_URL__/oauth-metadata/" + (context.Api.Id == "learn-mcp" ? "learn/mcp" : "rest-tools/mcp") + "\", scope=\"__SCOPE__\"")</value>
+          </set-header>
+          <set-header name="Content-Type" exists-action="override"><value>application/json</value></set-header>
+          <set-body>{"error":"invalid_token"}</set-body>
+        </return-response>
+      </when>
+    </choose>
+  </on-error>
+</policies>

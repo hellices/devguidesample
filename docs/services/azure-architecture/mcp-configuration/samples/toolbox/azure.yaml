@@ -1,0 +1,21 @@
+name: mcp-toolbox
+requiredVersions:
+  azd: ">=1.29.0"
+services:
+  learn-tools:
+    host: azure.ai.toolbox
+    description: Shared read-only Microsoft Learn documentation tools
+    tools:
+      - type: mcp
+        server_label: microsoft_learn
+        server_url: https://learn.microsoft.com/api/mcp
+        require_approval: never
+  learn-tools-search:
+    host: azure.ai.toolbox
+    description: Microsoft Learn tools discovered through Toolbox Tool search
+    tools:
+      - type: mcp
+        server_label: microsoft_learn
+        server_url: https://learn.microsoft.com/api/mcp
+        require_approval: never
+      - type: toolbox_search

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 715" role="img" aria-labelledby="title desc">
+  <title id="title">Functions Flex Consumption MCP reference alternative</title>
+  <desc id="desc">A reference architecture not deployed in this lab. Functions Flex Consumption can provide private networking. The self-hosted SDK MCP path is public preview and stateless Streamable HTTP; Entra and OBO must still be configured.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;fill:#162b40;font-size:20px}.title{font-size:28px;font-weight:700}.small{font-size:18px}.box{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.identity{fill:#fff7e7;stroke:#9c661c;stroke-width:2}.backend{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}.boundary{fill:#f8fafc;stroke:#8397aa;stroke-width:2;stroke-dasharray:8 6}</style>
+  <rect width="1160" height="715" fill="white"/>
+  <text x="30" y="44" class="title">Functions Flex alternative: transport, authentication and delegation</text>
+  <text x="30" y="82" class="small">Reference design — not deployed in this execution; self-hosted SDK path is public preview</text>
+  <rect x="310" y="160" width="500" height="445" rx="18" class="boundary"/>
+  <text x="330" y="198">Flex Consumption private networking</text>
+  <rect x="30" y="280" width="225" height="125" rx="12" class="box"/>
+  <text x="142" y="322" text-anchor="middle"><tspan x="142">Local MCP client</tspan><tspan x="142" dy="32" class="small">Private route / DNS</tspan><tspan x="142" dy="28" class="small">Entra user token</tspan></text>
+  <rect x="350" y="245" width="420" height="170" rx="12" class="box"/>
+  <text x="560" y="284" text-anchor="middle"><tspan x="560">Azure Functions Flex Consumption</tspan><tspan x="560" dy="32" class="small">Private endpoint + authentication</tspan><tspan x="560" dy="30" class="small">Stateless Streamable HTTP server</tspan><tspan x="560" dy="30" class="small">Supported SDK / custom-handler model</tspan></text>
+  <rect x="350" y="480" width="420" height="90" rx="12" class="box"/>
+  <text x="560" y="517" text-anchor="middle"><tspan x="560">Explicit token acquisition + VNet egress</tspan><tspan x="560" dy="30" class="small">User OBO where required</tspan></text>
+  <rect x="875" y="125" width="255" height="120" rx="12" class="identity"/>
+  <text x="1002" y="168" text-anchor="middle"><tspan x="1002">Microsoft Entra ID</tspan><tspan x="1002" dy="33" class="small">API / client registration</tspan><tspan x="1002" dy="28" class="small">Consent and token policy</tspan></text>
+  <rect x="875" y="440" width="255" height="140" rx="12" class="backend"/>
+  <text x="1002" y="483" text-anchor="middle"><tspan x="1002">Downstream APIs</tspan><tspan x="1002" dy="34" class="small">Separate audiences</tspan><tspan x="1002" dy="29" class="small">User / workload roles</tspan></text>
+  <path d="M255 342H350" class="flow"/>
+  <path d="M770 280H825V185H875" class="flow"/>
+  <path d="M560 415V480" class="flow"/>
+  <path d="M770 525H825V510H875" class="flow"/>
+  <text x="35" y="649" class="small">A function key is not Entra user delegation. Workload identity is not automatically OBO.</text>
+  <text x="35" y="681" class="small">Do not apply Flex networking capabilities to legacy Consumption or assume every MCP transport is supported.</text>
+</svg>

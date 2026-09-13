@@ -1,0 +1,7 @@
+title: Foundry Toolbox and Tool search
+description: Manual Toolbox configuration and discovery scenarios with documented verification limits.
+kind: runnable
+used_by:
+  - index
+  - authentication
+  - hosting-reference

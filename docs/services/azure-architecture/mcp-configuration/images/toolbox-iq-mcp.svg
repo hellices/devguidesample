@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 710" role="img" aria-labelledby="title desc">
+  <title id="title">Microsoft Foundry Toolbox exposes IQ and MCP tools through one MCP endpoint</title>
+  <desc id="desc">A client connects to one Toolbox MCP endpoint. Toolbox manages tool definitions, connection credentials, versions and search. It invokes Work IQ through the selected MCP or A2A connection, Fabric IQ item MCP endpoints, a Foundry IQ knowledge-base MCP endpoint, and other MCP servers.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.label{font-size:22px;font-weight:700}.small{font-size:18px}.client{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.focus{fill:#f3efff;stroke:#7453a6;stroke-width:3}.tool{fill:#eef8f1;stroke:#327449;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1180" height="710" fill="white"/>
+  <text x="30" y="44" class="title">2. Microsoft Foundry Toolbox</text>
+  <text x="30" y="78" class="small">One MCP endpoint for a curated toolset; downstream protocols and identities remain connection-specific</text>
+  <rect x="30" y="285" width="235" height="145" rx="12" class="client"/>
+  <text x="147" y="333" text-anchor="middle"><tspan x="147" class="label">MCP clients</tspan><tspan x="147" dy="36">IDE / applications</tspan><tspan x="147" dy="31" class="small">Any compatible runtime</tspan></text>
+  <rect x="430" y="210" width="315" height="300" rx="14" class="focus"/>
+  <text x="587" y="254" text-anchor="middle"><tspan x="587" class="label">Foundry Toolbox</tspan><tspan x="587" dy="36">One MCP endpoint</tspan><tspan x="587" dy="49">Curated tools / versions</tspan><tspan x="587" dy="36">Connection authentication</tspan><tspan x="587" dy="36">Policies / observability</tspan><tspan x="587" dy="36">Tool search</tspan></text>
+  <path d="M265 357H430" class="flow"/><text x="291" y="340" class="small">Discover / call</text>
+  <rect x="915" y="120" width="235" height="105" rx="12" class="tool"/>
+  <text x="1032" y="159" text-anchor="middle"><tspan x="1032" class="label">Work IQ</tspan><tspan x="1032" dy="31" class="small">Microsoft 365</tspan></text>
+  <rect x="915" y="255" width="235" height="105" rx="12" class="tool"/>
+  <text x="1032" y="294" text-anchor="middle"><tspan x="1032" class="label">Fabric IQ</tspan><tspan x="1032" dy="31" class="small">Fabric data and semantics</tspan></text>
+  <rect x="915" y="390" width="235" height="105" rx="12" class="tool"/>
+  <text x="1032" y="429" text-anchor="middle"><tspan x="1032" class="label">Foundry IQ</tspan><tspan x="1032" dy="31" class="small">Search knowledge base</tspan></text>
+  <rect x="915" y="525" width="235" height="105" rx="12" class="tool"/>
+  <text x="1032" y="564" text-anchor="middle"><tspan x="1032" class="label">Other MCP servers</tspan><tspan x="1032" dy="31" class="small">Internal / partner tools</tspan></text>
+  <path d="M745 268H812V172H915" class="flow"/><text x="815" y="155" class="small">MCP / A2A</text>
+  <path d="M745 328H845V307H915" class="flow"/><text x="848" y="289" class="small">MCP</text>
+  <path d="M745 388H845V442H915" class="flow"/><text x="848" y="426" class="small">MCP</text>
+  <path d="M745 448H812V577H915" class="flow"/><text x="848" y="560" class="small">MCP</text>
+  <text x="30" y="673" class="small">APIM is not required to aggregate this toolset. Add a gateway only where its policy and routing requirements apply.</text>
+</svg>

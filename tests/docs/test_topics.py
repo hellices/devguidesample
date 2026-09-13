@@ -1065,8 +1065,8 @@ def test_repository_uses_only_canonical_topic_packages() -> None:
         ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml")
     )
 
-    assert len(catalog.documents) == 62
-    assert len(catalog.topics) == 40
+    assert len(catalog.documents) == 66
+    assert len(catalog.topics) == 41
     assert not any(
         (ROOT / "docs" / name).exists()
         for name in ("cases", "guides", "labs", "research")

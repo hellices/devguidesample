@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 730" role="img" aria-labelledby="title desc">
+  <title id="title">PRM at APIM and OAuth with PKCE between the client and Entra ID</title>
+  <desc id="desc">The MCP client reads protected-resource metadata from APIM, authenticates directly with Entra using authorization code and PKCE, then sends the issued access token to APIM. APIM validates the token and forwards the MCP request. Optional downstream OBO is a separate middle-tier flow.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#34536f"/></marker></defs>
+  <style>text{font-family:Arial,sans-serif;font-size:20px;fill:#162b40}.title{font-size:28px;font-weight:700}.label{font-size:22px;font-weight:700}.small{font-size:18px}.client{fill:#edf5ff;stroke:#2565a4;stroke-width:2}.gateway{fill:#fff7e7;stroke:#9c661c;stroke-width:3}.server{fill:#eef8f1;stroke:#327449;stroke-width:2}.identity{fill:#f3efff;stroke:#7453a6;stroke-width:2}.flow{fill:none;stroke:#34536f;stroke-width:2.5;marker-end:url(#arrow)}</style>
+  <rect width="1180" height="730" fill="white"/>
+  <text x="30" y="44" class="title">PRM: APIM / MCP server | OAuth + PKCE: client and Entra</text>
+  <text x="30" y="80" class="small">Protected-resource discovery and user login are separate exchanges</text>
+  <rect x="30" y="175" width="280" height="200" rx="12" class="client"/>
+  <text x="170" y="222" text-anchor="middle"><tspan x="170" class="label">MCP client</tspan><tspan x="170" dy="37">Read PRM</tspan><tspan x="170" dy="35">OAuth client / MSAL</tspan><tspan x="170" dy="35" class="small">PKCE verifier + challenge</tspan></text>
+  <rect x="500" y="175" width="285" height="200" rx="12" class="gateway"/>
+  <text x="642" y="222" text-anchor="middle"><tspan x="642" class="label">API Management</tspan><tspan x="642" dy="37">PRM endpoint</tspan><tspan x="642" dy="35">JWT validation</tspan><tspan x="642" dy="35" class="small">Issuer / audience / scope</tspan></text>
+  <rect x="925" y="175" width="225" height="200" rx="12" class="server"/>
+  <text x="1037" y="226" text-anchor="middle"><tspan x="1037" class="label">MCP server</tspan><tspan x="1037" dy="41">Tool execution</tspan><tspan x="1037" dy="36" class="small">Backend authorization</tspan></text>
+  <path d="M310 210H500" class="flow"/><text x="326" y="197" class="small">1. PRM request</text>
+  <path d="M500 272H310" class="flow"/><text x="326" y="257" class="small">Issuer + scopes</text>
+  <path d="M310 341H500" class="flow"/><text x="324" y="326" class="small">3. Token + MCP</text>
+  <path d="M785 280H925" class="flow"/><text x="800" y="265" class="small">4. Forward</text>
+  <rect x="30" y="525" width="360" height="115" rx="12" class="identity"/>
+  <text x="210" y="569" text-anchor="middle"><tspan x="210" class="label">Entra ID: authorization server</tspan><tspan x="210" dy="36" class="small">Authorization and token endpoints</tspan></text>
+  <path d="M105 375V525" class="flow"/><text x="120" y="427" class="small"><tspan x="120">2. Code + PKCE</tspan></text>
+  <path d="M265 525V375" class="flow"/><text x="280" y="471" class="small">Access token</text>
+  <text x="465" y="549" class="small"><tspan x="465">Entra issues tokens; it does not serve the MCP PRM.</tspan><tspan x="465" dy="34">APIM validates access tokens; it does not perform client PKCE.</tspan><tspan x="465" dy="34">The MCP server can also serve PRM when used without APIM.</tspan></text>
+  <text x="30" y="694" class="small">OBO, when needed, is a separate exchange between the middle-tier MCP API, Entra and the downstream API.</text>
+</svg>
