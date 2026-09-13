@@ -11,7 +11,7 @@ technologies: [mcp, azure-cli]
 tags: [design, secure, ai-agents, identity]
 status: current
 verification_status: verified
-sources_checked_at: 2026-09-14
+sources_checked_at: 2026-09-13
 official_sources:
   - title: AI gateway in Azure API Management
     url: https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities
@@ -85,7 +85,7 @@ official_sources:
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration
   - title: Authorization Security Considerations
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations
-last_verified: 2026-09-14
+last_verified: 2026-09-13
 review_cycle_days: 90
 applies_to:
   - Azure API Management MCP endpoints
