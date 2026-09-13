@@ -1,6 +1,7 @@
 .azure/
 .venv/
 .private/
+evidence/
 node_modules/
 __pycache__/
 *.py[cod]

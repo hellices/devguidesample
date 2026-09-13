@@ -58,4 +58,3 @@ BRIEFING = (
     DOCS_ROOT / "guides" / "azure-monitor" / "azure-sre-agent-overview" / "index.md"
 )
 OFFICIAL_ASSETS = LAB_ROOT / "assets" / "official"
-DEPLOYMENT_PLAN = REPO_ROOT / ".azure" / "deployment-plan.md"

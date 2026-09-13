@@ -1,6 +1,6 @@
 {
   "recorded_at": "2026-09-13T04:29:17Z",
-  "note": "Actual azd/Inspector/curl output excerpts. Environment identifiers, tokens and resource IDs omitted.",
+  "note": "Public excerpts of actual azd/Inspector/curl output. Environment identifiers, tokens and resource IDs omitted.",
   "deployment": {
     "command": "azd up",
     "output": [

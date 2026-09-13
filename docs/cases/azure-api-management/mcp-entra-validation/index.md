@@ -66,7 +66,7 @@ azd up
 
 ![azd up으로 새 환경의 provisioning과 service deployment가 완료된 실제 CLI 출력 발췌](images/azd-deployment.png)
 
-아래 캡처는 실행한 CLI와 MCP 응답에서 필요한 부분을 발췌해 표시한 것입니다. Credential, tenant·subscription ID, 환경 hostname과 resource ID는 제외했습니다. [요청·응답 발췌 JSON](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/evidence/2026-09-13-scenarios.json)에도 같은 내용을 보관했습니다.
+아래 캡처는 실행한 CLI와 MCP 응답에서 필요한 부분을 발췌해 표시한 것입니다. Credential, tenant·subscription ID, 환경 hostname과 resource ID는 제외했습니다. [공개용 요청·응답 발췌 JSON](https://github.com/hellices/devguidesample/blob/main/samples/azure-api-management/mcp-entra-lab/assets/captures/2026-09-13-responses.json)에도 같은 내용을 보관했습니다. 원본 실행 로그와 로컬 상태는 공개 자료에 포함하지 않습니다.
 
 ## 로컬 MCP 연결
 
