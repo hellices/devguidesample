@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 
+from mkdocs.structure.files import File
 import pytest
 import yaml
 
@@ -809,7 +810,7 @@ def publish_markdown_download(site_repo, name="raw.md"):
 
 @pytest.mark.parametrize("name,alias", [
     ("raw.md", "raw/index.html"), ("raw.md", "raw.html"),
-    ("index.md", "index.html"), ("index.md", "index/index.html"),
+    ("index.md", "index.html"),
 ])
 def test_review_published_markdown_generated_html_aliases_are_forbidden(site_repo, name, alias):
     root, _ = site_repo
@@ -871,4 +872,186 @@ def test_review_plain_raw_markdown_download_is_still_published_unchanged(site_re
     write(root, "site/" + ENTRY.replace(".md", ".html"), html(
         '<a href="downloads/raw.md" download>Raw Markdown</a>',
     ))
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("raw", [
+    "images//../index.html", "images///../index.html",
+    "images/%2f/../index.html", "images%2f/../index.html",
+    "images/%2F/../index.html", "images%2F%2F../index.html",
+    "/project/services/service/topic/images//../index.html",
+    "//example.test/project/services/service/topic//index.html",
+    "//example.test/project/services/service/topic/%2findex.html",
+    "images/%2e/../index.html",
+])
+def test_rereview_repeated_or_encoded_slashes_fail_before_url_normalization(site_repo, raw):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<img src="{raw}">'))
+    assert "unsafe" in findings(site_repo)
+
+
+@pytest.mark.parametrize("suffix", [
+    "images//../index.html", "images/%2f/../index.html",
+    "images%2f/../index.html", "/index.html",
+])
+def test_rereview_search_rejects_repeated_slash_aliases(site_repo, suffix):
+    root, _ = site_repo
+    location = "services/service/topic/" + suffix
+    write(root, "site/search/search_index.json", json.dumps({
+        "docs": [dict(search_entry(ENTRY), location=location), search_entry(CHILD)],
+    }))
+    assert "unsafe" in findings(site_repo)
+
+
+@pytest.mark.parametrize("page,target", [
+    ("services/service/index.html", "topic/images//../index.html"),
+    ("explore/index.html", "../services/service/topic/images%2f/../index.html"),
+])
+def test_rereview_navigation_cannot_use_repeated_slash_aliases(site_repo, page, target):
+    root, _ = site_repo
+    write(root, "site/" + page, html(f'<a href="{target}">Topic</a>'))
+    error = findings(site_repo)
+    assert "unsafe" in error
+    assert "not linked" in error
+
+
+@pytest.mark.parametrize("raw", [
+    "https://example.test/project/images/ok.png",
+    "//example.test/project/images/ok.png",
+    "/project/images/ok.png",
+    "../../../images/ok.png",
+    "data:image/png;base64,AA//BB",
+])
+def test_rereview_normal_scheme_separators_are_not_path_slashes(site_repo, raw):
+    root, _ = site_repo
+    write(root, "site/images/ok.png", b"image")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<img src="{raw}">'))
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("raw", [
+    "https://%68ellices.github.io/devguidesample/not-present.png",
+    "//%68ellices.github.io/devguidesample/not-present.png",
+    "https://hellices%2egithub.io/devguidesample/not-present.png",
+    "https://hellices.github.io:%34%34%33/devguidesample/not-present.png",
+    "https://reader@hellices.github.io/devguidesample/images/ok.png",
+    "https://@external.test/not-present.png",
+    "https://reader%40example@external.test/not-present.png",
+    "https://hellices.github.io:bad/devguidesample/not-present.png",
+    "https://hellices.github.io:99999/devguidesample/not-present.png",
+    "https://hellices.github.io:-1/devguidesample/not-present.png",
+    "https://hellices.github.io:/devguidesample/images/ok.png",
+    "https://hellices.github.io:４４３/devguidesample/not-present.png",
+    "https://ℎellices.github.io/devguidesample/not-present.png",
+    "https://hellices。github.io/devguidesample/not-present.png",
+    "https://hellices..github.io/devguidesample/not-present.png",
+    "https://hellices.github.io./devguidesample/not-present.png",
+    "https://external.\tinvalid/not-present.png",
+    "https://[::1]garbage/not-present.png",
+    "https://[fe80::1%25eth0]/not-present.png",
+    "https://127.1/not-present.png",
+    "https://2130706433/not-present.png",
+    "https://0x7f000001/not-present.png",
+    "https://127.000.000.001/not-present.png",
+    "https:images/ok.png",
+    "https:///hellices.github.io/devguidesample/not-present.png",
+])
+def test_rereview_unsupported_authorities_fail_before_external_classification(site_repo, raw):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    write(root, "site/images/ok.png", b"image")
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<img src="{raw}">'))
+    assert "unsafe" in findings(site_repo)
+
+
+@pytest.mark.parametrize("authority", [
+    "hellices.github.io", "HELLICES.GITHUB.IO", "hellices.github.io:443",
+])
+def test_rereview_ordinary_canonical_authority_stays_local(site_repo, authority):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://hellices.github.io/devguidesample/\n")
+    raw = f"https://{authority}/devguidesample/images/ok.png"
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(f'<img src="{raw}">'))
+    assert "missing rendered" in findings(site_repo)
+    write(root, "site/images/ok.png", b"image")
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("authority", [
+    "external.example:443", "xn--bcher-kva.example", "127.0.0.1:8080", "[2001:db8::1]",
+])
+def test_rereview_supported_external_authorities_remain_ignored(site_repo, authority):
+    root, _ = site_repo
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html(
+        f'<img src="https://{authority}/not-present.png">',
+    ))
+    assert inspect(site_repo).errors == ()
+
+
+def test_rereview_encoded_site_authority_is_invalid_configuration(site_repo):
+    root, _ = site_repo
+    write(root, "mkdocs.yml", "site_url: https://%68ellices.github.io/devguidesample/\n")
+    assert "site configuration" in findings(site_repo)
+
+
+MKDOCS_MARKDOWN_NAMES = [
+    "raw.md", "raw.markdown", "raw.mdown", "raw.mkdn", "raw.mkd",
+    "README.md", "README.markdown", "README.mdown", "README.mkdn", "README.mkd",
+    "readme.md", "Readme.md", "index.md", "INDEX.md", "한 글.markdown",
+]
+
+
+@pytest.mark.parametrize("name", MKDOCS_MARKDOWN_NAMES)
+@pytest.mark.parametrize("directory_urls", [True, False])
+@pytest.mark.parametrize("channel", ["built", "search"])
+def test_rereview_published_page_aliases_follow_installed_mkdocs(site_repo, name, directory_urls, channel):
+    root, _ = site_repo
+    raw_file = publish_markdown_download(site_repo, name)
+    original = raw_file.read_bytes()
+    source = "services/service/topic/downloads/" + name
+    generated = File(source, str(root / "docs"), str(root / "site"), directory_urls)
+    assert generated.is_documentation_page()
+    if channel == "built":
+        write(root, "site/" + generated.dest_uri, html("Generated sample page"))
+        assert "built HTML alias" in findings(site_repo)
+    else:
+        index = root / "site/search/search_index.json"
+        data = json.loads(index.read_text())
+        data["docs"].append({"location": generated.url, "title": "Sample", "text": "Sample source"})
+        index.write_text(json.dumps(data))
+        assert "published Markdown search alias" in findings(site_repo)
+    assert raw_file.read_bytes() == original
+
+
+@pytest.mark.parametrize("name", [
+    "raw.MD", "raw.MARKDOWN", "raw.Mdown", "raw.MKDN", "raw.MKD", "README.MD",
+])
+def test_rereview_mkdocs_non_markdown_case_is_a_static_file(site_repo, name):
+    root, _ = site_repo
+    raw_file = publish_markdown_download(site_repo, name)
+    source = "services/service/topic/downloads/" + name
+    file = File(source, str(root / "docs"), str(root / "site"), True)
+    assert not file.is_documentation_page()
+    assert file.dest_uri == source
+    unrelated = str(PurePosixPath(source).with_suffix(".html"))
+    write(root, "site/" + unrelated, html("Independent content, not a generated sample page"))
+    index = root / "site/search/search_index.json"
+    data = json.loads(index.read_text())
+    data["docs"].append({"location": unrelated, "title": "Independent", "text": "Unrelated content"})
+    index.write_text(json.dumps(data))
+    assert raw_file.is_file()
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("name", MKDOCS_MARKDOWN_NAMES)
+def test_rereview_all_mkdocs_markdown_extensions_allow_plain_raw_publication(site_repo, name):
+    raw = publish_markdown_download(site_repo, name)
+    assert raw.read_bytes() == b"# Sample\n"
+    assert inspect(site_repo).errors == ()
+
+
+def test_rereview_index_md_has_no_invented_index_subdirectory_alias(site_repo):
+    root, _ = site_repo
+    publish_markdown_download(site_repo, "index.md")
+    write(root, "site/services/service/topic/downloads/index/index.html", html("Independent page"))
     assert inspect(site_repo).errors == ()

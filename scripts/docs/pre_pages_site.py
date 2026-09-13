@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from ipaddress import IPv4Address, IPv6Address
 import json
 import math
 from pathlib import Path, PurePosixPath
@@ -12,6 +13,7 @@ import re
 from typing import Mapping
 from urllib.parse import quote, unquote, urljoin, urlsplit, urlunsplit
 
+from mkdocs.structure.files import File
 import yaml
 
 from scripts.docs.pre_pages import AuditFormatError, PrePagesInventory
@@ -225,8 +227,30 @@ class _Site:
 
     @staticmethod
     def _origin(url) -> tuple[str, str | None, int | None]:
+        host = None
+        if url.netloc:
+            if not url.netloc.isascii() or "%" in url.netloc or "@" in url.netloc:
+                raise ValueError("encoded, Unicode, or userinfo authorities are unsupported")
+            if url.netloc.startswith("["):
+                authority = re.fullmatch(r"\[([^\]]+)\](?::([0-9]+))?", url.netloc)
+                if authority is None:
+                    raise ValueError("malformed IPv6 authority or port")
+                host = str(IPv6Address(authority[1]))
+            else:
+                authority = re.fullmatch(r"([A-Za-z0-9.-]+)(?::([0-9]+))?", url.netloc)
+                if authority is None:
+                    raise ValueError("malformed authority or port")
+                host = authority[1].lower()
+                if len(host) > 253 or any(
+                    not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                    for label in host.split(".")
+                ):
+                    raise ValueError("unsupported hostname spelling")
+                last_label = host.rsplit(".", 1)[-1]
+                if last_label.isdigit() or re.fullmatch(r"0x[0-9a-f]+", last_label):
+                    host = str(IPv4Address(host))
         port = url.port if url.port is not None else {"http": 80, "https": 443}.get(url.scheme)
-        return url.scheme, url.hostname, port
+        return url.scheme, host, port
 
     def resolve(self, html_path: Path, raw: str) -> Path | None:
         try:
@@ -235,8 +259,24 @@ class _Site:
             url = urlsplit(raw)
             if url.scheme == "file":
                 raise ValueError("local file URLs are not published web targets")
+            if url.scheme in {"http", "https"} and not url.netloc:
+                raise ValueError("absolute HTTP(S) URLs require an explicit authority")
+            if (url.netloc or url.scheme in {"http", "https"}) and re.search(r"[\x00-\x1f\x7f]", raw):
+                raise ValueError("control characters in web URLs are unsupported")
             if not url.path and not url.scheme and not url.netloc:
                 return None
+            if not (url.scheme or url.netloc) or self._origin(
+                url._replace(scheme=url.scheme or self.site_url.scheme),
+            ) == self.origin:
+                if re.search(r"%(?![0-9a-fA-F]{2})", url.path):
+                    raise ValueError("malformed percent encoding")
+                if "//" in unquote(url.path, errors="strict"):
+                    raise ValueError("repeated path slashes are ambiguous before URL normalization")
+                for segment in url.path.split("/"):
+                    if segment not in {".", ".."} and any(
+                        decoded in {".", ".."} for decoded in unquote(segment, errors="strict").split("/")
+                    ):
+                        raise ValueError("encoded dot segments are not published paths")
             document_url = urljoin(self.base, quote(html_path.relative_to(self.root).as_posix()))
             resolved_url = urlsplit(urljoin(document_url, raw))
             if self._origin(resolved_url) != self.origin:
@@ -336,9 +376,14 @@ def inspect_built_site(
     published_paths = {site.root / path for path in published_targets}
     markdown_aliases: dict[Path, PurePosixPath] = {}
     for published in sorted(published_targets):
-        if published.suffix.casefold() != ".md":
-            continue
-        for alias in (published.with_suffix(".html"), published.with_suffix("") / "index.html"):
+        files = (
+            File(published.as_posix(), str(docs_root), str(site.root), directory_urls)
+            for directory_urls in (True, False)
+        )
+        aliases = {
+            PurePosixPath(file.dest_uri) for file in files if file.is_documentation_page()
+        }
+        for alias in sorted(aliases):
             path = site.root / alias
             markdown_aliases[path] = published
             try:
