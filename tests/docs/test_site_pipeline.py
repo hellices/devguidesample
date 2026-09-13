@@ -810,10 +810,31 @@ def test_published_assets_build_byte_exact_without_sample_or_search_pages(tmp_pa
         ("notes.md", "downloads/.private/notes.md"),
     ],
 )
-def test_hidden_published_assets_build_byte_exact_without_exposing_sample_sources(
+def test_hidden_publish_targets_are_rejected_before_site_generation(
     tmp_path: Path, source: str, target: str
 ) -> None:
-    root, sample, payloads = make_published_repository(tmp_path)
+    root, sample, _ = make_published_repository(tmp_path)
+    manifest_path = sample / "sample.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["publish"].append({"source": source, "target": target})
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    with pytest.raises(
+        DocumentFormatError, match="publish target must not contain hidden path components"
+    ):
+        build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+
+@pytest.mark.parametrize(
+    ("source", "target"), [(".notes.md", "downloads/notes.md"), (".private/data.bin", "downloads/data.bin")]
+)
+def test_hidden_source_payloads_publish_only_to_visible_site_targets(
+    tmp_path: Path, source: str, target: str
+) -> None:
+    root, sample, _ = make_published_repository(tmp_path)
+    payload = b"# sample-only-marker\r\n\x00\xff"
+    hidden_source = sample / source
+    hidden_source.parent.mkdir(exist_ok=True)
+    hidden_source.write_bytes(payload)
     manifest_path = sample / "sample.yml"
     manifest = yaml.safe_load(manifest_path.read_text())
     manifest["publish"].append({"source": source, "target": target})
@@ -822,18 +843,15 @@ def test_hidden_published_assets_build_byte_exact_without_exposing_sample_source
     (sample.parent.parent / ".unpublished.txt").write_bytes(b"unpublished page asset")
 
     build(load_config(str(root / "mkdocs.yml"), strict=True))
-
     site_topic = root / "site/services/aks/network-diagnosis"
-    published = site_topic / target
-    assert published.is_file(), f"declared hidden target was excluded: {target}"
-    assert published.read_bytes() == payloads[source]
-    assert (sample / source).read_bytes() == payloads[source]
+    assert (site_topic / target).read_bytes() == payload
+    assert hidden_source.read_bytes() == payload
     assert not (site_topic / "samples").exists()
     assert not (site_topic / ".unpublished.txt").exists()
     search = json.loads((root / "site/search/search_index.json").read_text())
     assert all(
         target not in entry["location"] and "/samples/" not in entry["location"]
-        and "asset-only-marker" not in entry["text"]
+        and "sample-only-marker" not in entry["text"]
         for entry in search["docs"]
     )
 

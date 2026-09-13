@@ -228,6 +228,44 @@ def test_catalog_rejects_missing_or_non_file_publish_sources(
         build_topic_catalog(tmp_path, taxonomy)
 
 
+@pytest.mark.parametrize(
+    "target",
+    [
+        ".notes.md",
+        "downloads/.env.example",
+        ".artifacts/diagram.svg",
+        "downloads/.private/diagram.svg",
+        "./images/diagram.svg",
+        "images/./diagram.svg",
+    ],
+)
+def test_catalog_rejects_hidden_publish_target_components(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    with pytest.raises(
+        DocumentFormatError, match="publish target must not contain hidden path components"
+    ) as error:
+        build_topic_catalog(tmp_path, taxonomy)
+    assert target in str(error.value)
+    assert "services/azure-monitor/agent-topic/samples/event-lab" in str(error.value)
+
+
+@pytest.mark.parametrize("source", [".diagram.svg", ".private/diagram.svg"])
+def test_catalog_allows_hidden_source_payloads_for_visible_publish_targets(
+    tmp_path: Path, taxonomy: dict, source: str
+) -> None:
+    sample_dir = published_sample(tmp_path, [{"source": source, "target": "images/diagram.svg"}])
+    hidden = sample_dir / source
+    hidden.parent.mkdir(exist_ok=True)
+    hidden.write_bytes(b"<svg>source payload</svg>")
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+    target = PurePosixPath("services/azure-monitor/agent-topic/images/diagram.svg")
+    assert catalog.published_assets[target].source == PurePosixPath(
+        hidden.relative_to(tmp_path).as_posix()
+    )
+
+
 @pytest.mark.parametrize("target", ["samples/image.svg", "setup/samples/image.svg"])
 def test_catalog_rejects_publish_targets_under_samples(
     tmp_path: Path, taxonomy: dict, target: str

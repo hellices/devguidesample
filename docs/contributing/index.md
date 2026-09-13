@@ -111,8 +111,10 @@ publish:
   Markdown 파일도 독립 문서나 검색 항목이 아닌 다운로드 자산으로 유지합니다.
   `downloads/index.md` 같은 원본 자산은 해당 파일 경로로 직접 링크합니다.
   `downloads/`처럼 문서 디렉터리로 줄여 쓰면 다운로드 자산을 가리키지 않습니다.
-  명시한 target은 숨김 파일이나 숨김 폴더 아래의 파일도 게시하지만,
-  선언하지 않은 숨김 파일과 sample 원본 폴더는 계속 제외합니다.
+  공개 target의 경로 구성 요소는 어느 깊이에서도 `.`으로 시작할 수 없습니다.
+  [Pages artifact 패키징](https://github.com/actions/upload-pages-artifact/blob/v4/action.yml)이
+  숨김 파일과 숨김 디렉터리를 제외하므로, 이런 target은 빌드 전에 거부합니다.
+  sample 원본 payload 내부의 숨김 파일은 허용하며 원본 폴더는 계속 게시에서 제외합니다.
   페이지 본문과 링크 텍스트는 기존처럼 검색됩니다. `used_by`는 sample card의
   표시 위치만 결정하며 `publish`와 독립적입니다.
 - `publish`는 생략하거나 빈 목록으로 둘 수 있습니다. 각 항목의 `source`와

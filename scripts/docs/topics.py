@@ -187,6 +187,11 @@ def _published_assets(
                     f"{relative}: publish {field} must be a relative path without '..' or backslashes: {raw}"
                 )
                 continue
+            if field == "target" and any(component.startswith(".") for component in raw.split("/")):
+                errors.append(
+                    f"{relative}: publish target must not contain hidden path components: {raw}"
+                )
+                continue
             paths[field] = path
         if len(paths) != 2:
             continue
