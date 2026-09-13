@@ -25,6 +25,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/api-management/credentials-overview
   - title: Validate Microsoft Entra token
     url: https://learn.microsoft.com/azure/api-management/validate-azure-ad-token-policy
+  - title: Validate JWT
+    url: https://learn.microsoft.com/azure/api-management/validate-jwt-policy
+  - title: Access token claims reference
+    url: https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference
   - title: Secure a Model Context Protocol (MCP) server with Microsoft Entra ID
     url: https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id
   - title: Microsoft identity platform and OAuth 2.0 authorization code flow
@@ -223,6 +227,18 @@ Microsoft Learn의 [Toolbox 개요](https://learn.microsoft.com/azure/foundry/ag
 | **JWT 검증** | **APIM / MCP Server** | 발급된 access token의 issuer·audience·유효 시간·권한 검사 |
 
 v2 token을 사용하는 이 예제의 PRM은 Entra issuer를 `https://login.microsoftonline.com/<tenant-id>/v2.0`으로 안내합니다. **Entra가 MCP의 PRM을 제공하는 구조가 아닙니다.**
+
+### 설정 순서: API 앱과 client 앱
+
+| 설정 | 적용할 값·위치 |
+|---|---|
+| **MCP API 앱 등록** | API의 Application ID URI와 delegated scope 정의. 이 실습은 `api://<api-app-client-id>/Mcp.Access`와 v2 access token 사용 |
+| **MCP client 등록·구성** | 사용할 client ID·redirect URI를 client의 지원 방식에 맞춰 설정. API의 delegated permission과 필요한 consent 부여 |
+| **APIM PRM 제공** | 보호 resource·Entra issuer·scope 안내. Metadata 요청은 token 없이 조회되도록 구성 |
+| **APIM JWT·scope 검증** | API audience와 필요한 scope 검사. `required-claims`는 [JWT 검증 정책 내부](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)에 배치 |
+| **MCP 요청 전달** | 검증 후 backend로 전달. 같은 protected resource의 token 전달과 별도 backend용 credential 사용을 구분 |
+
+**두 앱의 ID를 혼동하지 않습니다.** [v2 token 기준](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims)으로 `aud`는 **MCP API 앱 ID**, `azp`는 **호출 client 앱 ID**, `scp`는 **허용 scope 이름**입니다. `api://.../Mcp.Access` 전체 문자열을 `aud`나 `scp`에 그대로 넣지 않습니다.
 
 [![MCP client가 APIM의 PRM을 읽고 Entra와 직접 OAuth 및 PKCE를 수행한 뒤 APIM에 access token을 보내는 흐름](images/mcp-oauth-obo.svg)](images/mcp-oauth-obo.svg)
 

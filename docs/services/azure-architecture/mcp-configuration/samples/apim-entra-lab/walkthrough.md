@@ -242,11 +242,24 @@ kubectl apply -f network/tunnel.yaml
 kubectl -n mcp-lab wait --for=condition=Ready pod/mcp-tunnel --timeout=180s
 ```
 
-별도 터미널에서 같은 kubeconfig로 터널을 유지합니다.
+원래 터미널에서 실습 kubeconfig의 절대 경로를 출력해 복사합니다.
 
 ```bash
-kubectl --kubeconfig "$KUBECONFIG" -n mcp-lab port-forward \
-  --address 127.0.0.1 pod/mcp-tunnel 18080:8080
+printf '%s\n' "${KUBECONFIG:?3번 단계에서 실습 kubeconfig를 먼저 준비하세요}"
+```
+
+새 터미널은 원래 터미널의 환경 변수를 상속하지 않습니다. **복사한 경로를 새 터미널에서 입력**한 뒤 터널을 유지합니다. 빈 값·상대 경로·존재하지 않는 파일이면 실행하지 않습니다.
+
+```bash
+read -r -p "실습 kubeconfig의 절대 경로: " KUBECONFIG
+if [[ "$KUBECONFIG" == /* && -f "$KUBECONFIG" ]]; then
+  export KUBECONFIG
+  kubectl --kubeconfig "$KUBECONFIG" -n mcp-lab port-forward \
+    --address 127.0.0.1 pod/mcp-tunnel 18080:8080
+else
+  printf '%s\n' '존재하는 실습 kubeconfig 파일의 절대 경로를 입력하세요.' >&2
+  false
+fi
 ```
 
 원래 터미널에서 curl에 사용할 proxy를 지정합니다.

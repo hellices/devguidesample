@@ -36,6 +36,10 @@ official_sources:
     url: https://learn.microsoft.com/graph/api/resources/preauthorizedapplication?view=graph-rest-1.0
   - title: Validate Microsoft Entra token
     url: https://learn.microsoft.com/azure/api-management/validate-azure-ad-token-policy
+  - title: Validate JWT
+    url: https://learn.microsoft.com/azure/api-management/validate-jwt-policy
+  - title: Access token claims reference
+    url: https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference
   - title: Secure access to MCP servers in API Management
     url: https://learn.microsoft.com/azure/api-management/secure-mcp-servers
   - title: Authenticate with managed identity
@@ -129,6 +133,15 @@ Container Apps의 internal 환경에서 앱 ingress `external: true`는 **같은
 
 API 앱 등록의 `api.requestedAccessTokenVersion`은 `2`로 설정합니다. v2 access token의 **`aud`는 호출 대상 API의 client ID(GUID)**입니다. 로컬 클라이언트의 client ID나 scope URI와는 다른 값입니다.
 
+| 값 | 의미 |
+|---|---|
+| OAuth 요청의 `client_id` | Token을 요청하는 **client 앱** |
+| v2 token의 `aud` | Token을 받을 **MCP API 앱**의 client ID |
+| v2 token의 `azp` | Token을 사용하는 **client 앱**의 client ID |
+| `scp` | `Mcp.Access` 같은 permission 이름. 전체 scope URI가 아님 |
+
+[공개 claim 정의](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims)를 기준으로 비교합니다. v1 token에서는 `aud`가 resource URI일 수도 있으므로 v1·v2의 값과 issuer를 섞지 않습니다.
+
 Azure MCP의 `--read-only`는 제공할 도구를 제한하는 옵션입니다. 이를 사용해도 incoming scope는 `Mcp.Tools.ReadWrite`입니다. 실제 Azure 리소스 접근은 사용자의 RBAC에도 제한됩니다.
 
 ### 로컬 클라이언트와 consent
@@ -175,6 +188,13 @@ MCP API는 도구 실행이나 OBO 교환 전에 access token을 검사합니다
 App-only token에도 서비스 주체의 `oid`가 들어갈 수 있습니다. `oid`가 있다는 이유만으로 사용자 token으로 처리하지 않고 delegated scope와 사용자 권한을 확인합니다. JWT 내용을 decode하는 것만으로는 서명 검사가 수행되지 않습니다.
 
 APIM에서는 `validate-azure-ad-token`의 `audiences`, `client-application-ids`, `required-claims`로 대상 API, 허용 client, scope를 검사할 수 있습니다. 배포에 사용하는 실제 정책은 [sample의 APIM 구성](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/infra/apim.bicep)에 있습니다.
+
+| 정책 확인 | 기준 |
+|---|---|
+| PRM 경로 | Token 없이 metadata를 조회할 수 있도록 보호된 tool 경로와 구분 |
+| Scope 검사 | `required-claims`는 `validate-azure-ad-token` 또는 [`validate-jwt`](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)의 자식 요소. 독립적인 inbound 정책이 아님 |
+| 여러 scope | `scp`의 공백 구분 값에서 필요한 scope를 검사하도록 `separator=" "`와 match 조건 설정 |
+| 인증 실패 | 보호된 MCP 요청의 401 challenge에서 PRM 위치 안내 |
 
 실습에서는 access token 없이 접속한 경우와 정상 token으로 접속한 경우를 차례로 비교합니다. `tools/list`와 `tools/call` 모두 인증 정책의 적용 대상입니다. 이전 MCP revision의 `initialize` 요청을 사용하는 클라이언트도 같은 정책을 적용받습니다.
 
