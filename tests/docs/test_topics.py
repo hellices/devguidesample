@@ -316,3 +316,49 @@ def test_validate_document_rejects_canonical_service_paths_absent_from_taxonomy(
     errors = validate_document(document, taxonomy)
 
     assert "unknown service: unknown-service" in errors
+
+
+def test_build_topic_catalog_preserves_all_legacy_paths_sharing_one_topic_key(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    docs_dir = tmp_path / "docs"
+    taxonomy["collections"]["lab"] = {
+        "path": "labs",
+        "statuses": ["verified"],
+        "required_fields": [
+            "last_verified",
+            "review_cycle_days",
+            "estimated_time",
+            "cost",
+            "cleanup_required",
+        ],
+    }
+    guide = write_document(
+        docs_dir,
+        "guides/azure-monitor/agent-topic/index.md",
+        "Guide legacy topic",
+    )
+    lab = write_document(
+        docs_dir,
+        "labs/azure-monitor/agent-topic/index.md",
+        "Lab legacy topic",
+    )
+    lab.write_text(
+        guide.read_text(encoding="utf-8").replace("document_type: guide", "document_type: lab"),
+        encoding="utf-8",
+    )
+
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    guide_path = PurePosixPath("guides/azure-monitor/agent-topic/index.md")
+    lab_path = PurePosixPath("labs/azure-monitor/agent-topic/index.md")
+    topic = catalog.topics[("azure-monitor", "agent-topic")]
+
+    assert guide.relative_to(docs_dir).as_posix() in {
+        document.relative_path.as_posix() for document in catalog.documents
+    }
+    assert lab.relative_to(docs_dir).as_posix() in {
+        document.relative_path.as_posix() for document in catalog.documents
+    }
+    assert catalog.by_document[guide_path] == topic
+    assert catalog.by_document[lab_path] == topic

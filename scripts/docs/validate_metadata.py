@@ -54,7 +54,6 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
     errors: list[str] = []
     documents = []
     count = 0
-    parse_failed = False
     for path in _candidate_paths(docs_dir, taxonomy):
         relative = path.relative_to(root).as_posix()
         count += 1
@@ -62,18 +61,16 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
             document = load_document(path, docs_dir=docs_dir)
         except DocumentFormatError as error:
             errors.append(str(error))
-            parse_failed = True
             continue
         documents.append(document)
         errors.extend(
             f"{relative}: {message}"
             for message in validate_document(document, taxonomy, today=today)
         )
-    if not parse_failed:
-        try:
-            build_topic_catalog(docs_dir, taxonomy)
-        except DocumentFormatError as error:
-            errors.extend(_topic_catalog_errors(error))
+    try:
+        build_topic_catalog(docs_dir, taxonomy, documents=documents)
+    except DocumentFormatError as error:
+        errors.extend(_topic_catalog_errors(error))
     return ValidationResult(count, errors)
 
 

@@ -219,10 +219,14 @@ def _build_sample_asset(
 
 
 def build_topic_catalog(
-    docs_dir: Path | str, taxonomy: Mapping[str, Any], include_legacy: bool = True
+    docs_dir: Path | str,
+    taxonomy: Mapping[str, Any],
+    include_legacy: bool = True,
+    documents: Iterable[Document] | None = None,
 ) -> TopicCatalog:
     root = Path(docs_dir)
-    documents = tuple(iter_topic_documents(root, taxonomy, include_legacy=include_legacy))
+    if documents is None:
+        documents = iter_topic_documents(root, taxonomy, include_legacy=include_legacy)
     ordered_documents = tuple(
         sorted(documents, key=lambda document: document.relative_path.as_posix())
     )
@@ -257,11 +261,13 @@ def build_topic_catalog(
     position_by_document: dict[PurePosixPath, int] = {}
     samples_by_document: dict[PurePosixPath, tuple[SampleAsset, ...]] = {}
 
-    legacy_by_key = {
-        (document.relative_path.parts[1], document.relative_path.parts[2]): document
-        for document in legacy_documents
-        if _is_legacy_document_path(document.relative_path, collection_paths)
-    }
+    legacy_by_key: dict[tuple[str, str], list[Document]] = {}
+    for document in legacy_documents:
+        if _is_legacy_document_path(document.relative_path, collection_paths):
+            legacy_by_key.setdefault(
+                (document.relative_path.parts[1], document.relative_path.parts[2]),
+                [],
+            ).append(document)
 
     for key in sorted(grouped):
         service, slug = key
@@ -366,22 +372,30 @@ def build_topic_catalog(
         raise DocumentFormatError("invalid topic catalog:\n" + "\n".join(errors))
 
     for key in sorted(legacy_by_key):
+        legacy_group = tuple(
+            sorted(legacy_by_key[key], key=lambda document: document.relative_path.as_posix())
+        )
         if key in topics:
-            legacy_document = legacy_by_key[key]
-            by_document[legacy_document.relative_path] = topics[key]
+            topic = topics[key]
+            for legacy_document in legacy_group:
+                by_document[legacy_document.relative_path] = topic
+                position_by_document[legacy_document.relative_path] = 0
+                samples_by_document[legacy_document.relative_path] = samples_by_document.get(
+                    topic.entry.relative_path, ()
+                )
             continue
-        legacy_document = legacy_by_key[key]
         topic = Topic(
             primary_service=key[0],
             slug=key[1],
-            entry=legacy_document,
-            members=(legacy_document,),
+            entry=legacy_group[0],
+            members=legacy_group,
             samples=(),
         )
         topics[key] = topic
-        by_document[legacy_document.relative_path] = topic
-        position_by_document[legacy_document.relative_path] = 0
-        samples_by_document[legacy_document.relative_path] = ()
+        for position, legacy_document in enumerate(legacy_group):
+            by_document[legacy_document.relative_path] = topic
+            position_by_document[legacy_document.relative_path] = position
+            samples_by_document[legacy_document.relative_path] = ()
 
     for redirect_path, canonical_path in redirects.items():
         topic = by_document.get(canonical_path)

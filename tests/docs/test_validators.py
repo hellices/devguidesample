@@ -257,3 +257,40 @@ def test_metadata_gate_reports_topic_catalog_errors_once_per_path(tmp_path: Path
     ]
     assert len(matching) == 1
     assert "topic_order must be a positive integer" in matching[0]
+
+
+def test_metadata_gate_keeps_topic_validation_when_another_document_has_invalid_yaml(
+    tmp_path: Path,
+) -> None:
+    root = make_repository(tmp_path)
+    bad = root / "docs" / "guides" / "aks" / "broken" / "index.md"
+    bad.parent.mkdir(parents=True)
+    bad.write_text("---\ntitle: [broken\n---\n", encoding="utf-8")
+
+    topic = root / "docs" / "services" / "aks" / "network-diagnosis"
+    topic.mkdir(parents=True)
+    (topic / "index.md").write_text(canonical_guide("Overview"), encoding="utf-8")
+    (topic / "setup").mkdir()
+    (topic / "setup" / "index.md").write_text(
+        canonical_guide("Setup"),
+        encoding="utf-8",
+    )
+    (topic / "samples" / "broken-sample").mkdir(parents=True)
+    (topic / "samples" / "broken-sample" / "sample.yml").write_text(
+        "title: Broken sample\ndescription: Missing readme\nkind: runnable\nused_by: [setup]\n",
+        encoding="utf-8",
+    )
+
+    result = validate_metadata.validate_repository(root, today=date(2026, 9, 12))
+
+    assert any("broken/index.md: invalid YAML front matter" in error for error in result.errors)
+    assert any(
+        "services/aks/network-diagnosis/setup/index.md: topic_order must be a positive integer"
+        in error
+        for error in result.errors
+    )
+    assert any(
+        "services/aks/network-diagnosis/samples/broken-sample: README.md is required"
+        in error
+        for error in result.errors
+    )
