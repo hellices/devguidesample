@@ -244,6 +244,84 @@ def test_inventory_reports_invalid_or_unsafe_yaml(tmp_path: Path, text: str) -> 
         load_inventory(path)
 
 
+@pytest.fixture
+def raw_inventory() -> str:
+    return f"""version: 1
+baseline_commit: {BASELINE}
+pages_commit: {PAGES}
+rename_similarity: 20
+documents:
+  - baseline_path: old/guide.md
+    pages_path: guides/service/topic/index.md
+    reviewed_changes:
+      prose:
+        fingerprint: Preserved in the sample README.
+dispositions:
+  old/README.md:
+    status: replaced-summary
+    current_paths:
+      - docs/services/service/topic/index.md
+    reason: Replaced by the canonical overview.
+"""
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement", "key"),
+    [
+        ("version: 1", "version: 2\nversion: 1", "version"),
+        (
+            "  - baseline_path: old/guide.md",
+            "  - baseline_path: ignored.md\n    baseline_path: old/guide.md",
+            "baseline_path",
+        ),
+        (
+            "      prose:\n",
+            "      prose: {}\n      prose:\n",
+            "prose",
+        ),
+        (
+            "        fingerprint: Preserved in the sample README.",
+            "        fingerprint: Lost reason.\n        fingerprint: Preserved in the sample README.",
+            "fingerprint",
+        ),
+        (
+            "  old/README.md:\n",
+            "  old/README.md:\n    status: invalid\n  old/README.md:\n",
+            "old/README.md",
+        ),
+        (
+            "    status: replaced-summary",
+            "    status: invalid\n    status: replaced-summary",
+            "status",
+        ),
+    ],
+)
+def test_inventory_rejects_raw_duplicate_mapping_keys_at_every_level(
+    tmp_path: Path, raw_inventory: str, original: str, replacement: str, key: str
+) -> None:
+    path = tmp_path / "duplicate-mapping.yml"
+    assert original in raw_inventory
+    path.write_text(raw_inventory.replace(original, replacement), encoding="utf-8")
+    with pytest.raises(AuditFormatError, match="duplicate") as error:
+        load_inventory(path)
+    assert str(path) in str(error.value)
+    assert key in str(error.value)
+
+
+@pytest.mark.parametrize("status", ["replaced-summary", "replaced-test"])
+def test_inventory_rejects_raw_duplicate_current_paths(
+    tmp_path: Path, raw_inventory: str, status: str
+) -> None:
+    path = tmp_path / "duplicate-current-paths.yml"
+    current = "      - docs/services/service/topic/index.md\n"
+    text = raw_inventory.replace("status: replaced-summary", f"status: {status}")
+    path.write_text(text.replace(current, current + current), encoding="utf-8")
+    with pytest.raises(AuditFormatError, match="duplicate.*current_paths") as error:
+        load_inventory(path)
+    assert "old/README.md" in str(error.value)
+    assert "docs/services/service/topic/index.md" in str(error.value)
+
+
 def test_git_readers_preserve_text_and_binary(history: tuple[Path, str, str]) -> None:
     repo, baseline, _ = history
     assert git_text(repo, baseline, PurePosixPath("한글 문서.md")) == "첫 문장\r\n둘째 문장\n"
@@ -626,3 +704,49 @@ def test_real_repository_accounts_for_359_files_73_markdown_and_62_documents() -
     assert {item.baseline_path for item in classified} == set(paths)
     assert {item.status for item in classified} <= {"unchanged", "modified", "renamed", "reviewed"}
     assert Counter(item.status for item in classified)["reviewed"] == 6
+
+
+def shallow_clone_with_anchors(
+    tmp_path: Path, repo: Path, inventory: PrePagesInventory, depth: int
+) -> Path:
+    shallow = tmp_path / "shallow-with-anchors"
+    git(tmp_path, "clone", "-q", f"--depth={depth}", repo.as_uri(), str(shallow))
+    assert git(shallow, "rev-parse", "--is-shallow-repository").strip() == b"true"
+    assert int(git(shallow, "rev-list", "--count", "HEAD")) == depth
+    assert int(git(repo, "rev-list", "--count", "HEAD")) > depth
+    for anchor in (inventory.baseline_commit, inventory.pages_commit):
+        assert git(shallow, "cat-file", "-t", anchor).strip() == b"commit"
+    return shallow
+
+
+@pytest.mark.parametrize("name", ["git_bytes", "git_text", "baseline_paths", "classify_baseline_files"])
+def test_git_apis_reject_shallow_boundary_even_with_both_anchors_present(
+    tmp_path: Path, file_history: tuple[Path, PrePagesInventory], name: str
+) -> None:
+    repo, inventory = file_history
+    shallow = shallow_clone_with_anchors(tmp_path, repo, inventory, depth=2)
+    with pytest.raises(AuditFormatError, match="(?i)shallow") as error:
+        if name in {"git_bytes", "git_text"}:
+            lineage_api(name)(shallow, inventory.baseline_commit, PurePosixPath("한글 문서.md"))
+        else:
+            lineage_api(name)(shallow, inventory)
+    message = str(error.value)
+    assert inventory.baseline_commit in message
+    if name not in {"git_bytes", "git_text"}:
+        assert inventory.pages_commit in message
+    assert "fetch" in message.lower()
+    assert "full history" in message.lower()
+
+
+def test_document_resolution_rejects_shallow_boundary_with_both_anchors_present(
+    tmp_path: Path, document_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = document_history
+    shallow = shallow_clone_with_anchors(tmp_path, repo, inventory, depth=3)
+    with pytest.raises(AuditFormatError, match="(?i)shallow") as error:
+        lineage_api("resolve_current_documents")(shallow, inventory)
+    message = str(error.value)
+    assert inventory.baseline_commit in message
+    assert inventory.pages_commit in message
+    assert "fetch" in message.lower()
+    assert "full history" in message.lower()

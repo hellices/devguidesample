@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
@@ -17,6 +18,26 @@ from scripts.docs.topics import build_topic_catalog
 
 class AuditFormatError(ValueError):
     """Raised when the inventory or its Git lineage cannot be validated."""
+
+
+class _InventorySafeLoader(yaml.SafeLoader):
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        self.flatten_mapping(node)
+        keys = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, Hashable):
+                raise yaml.constructor.ConstructorError(
+                    "while constructing an inventory mapping", node.start_mark,
+                    "found unhashable key", key_node.start_mark,
+                )
+            if key in keys:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing an inventory mapping", node.start_mark,
+                    f"duplicate mapping key: {key!r}", key_node.start_mark,
+                )
+            keys.add(key)
+        return super().construct_mapping(node, deep=deep)
 
 
 @dataclass(frozen=True)
@@ -117,7 +138,7 @@ def _reviewed_changes(value: object, label: str) -> Mapping[str, Mapping[str, st
 
 def load_inventory(path: Path) -> PrePagesInventory:
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_InventorySafeLoader)
     except (OSError, UnicodeError, yaml.YAMLError) as error:
         raise AuditFormatError(f"{path}: cannot read inventory: {error}") from error
     data = _fields(
@@ -173,6 +194,11 @@ def load_inventory(path: Path) -> PrePagesInventory:
                 f"{label}.current_paths must be empty only for excluded-local-state"
             )
         paths = tuple(_relative_path(item, f"{label}.current_paths") for item in current)
+        seen_paths = set()
+        for current_path in paths:
+            if current_path in seen_paths:
+                raise AuditFormatError(f"{label}: duplicate current_paths entry: {current_path}")
+            seen_paths.add(current_path)
         dispositions[baseline_path] = ReviewedDisposition(status, paths, reason)
     return PrePagesInventory(baseline, pages, similarity, tuple(documents), dispositions)
 
@@ -194,8 +220,17 @@ def _git(repo_root: Path, *arguments: str) -> bytes:
 
 def _require_commit(repo_root: Path, commit: str) -> None:
     _commit_hash(commit, "commit")
+    _require_full_history(repo_root, commit)
     if _git(repo_root, "cat-file", "-t", commit).strip() != b"commit":
         raise AuditFormatError(f"{commit}: expected a Git commit object")
+
+
+def _require_full_history(repo_root: Path, *commits: str) -> None:
+    if _git(repo_root, "rev-parse", "--is-shallow-repository").strip() == b"true":
+        raise AuditFormatError(
+            f"Shallow Git repository cannot audit required commits: {', '.join(commits)}. "
+            "Fetch full history before auditing (git fetch --unshallow; checkout fetch-depth: 0)."
+        )
 
 
 def git_bytes(repo_root: Path, commit: str, path: PurePosixPath) -> bytes:
@@ -209,6 +244,7 @@ def git_text(repo_root: Path, commit: str, path: PurePosixPath) -> str:
 
 
 def baseline_paths(repo_root: Path, inventory: PrePagesInventory) -> tuple[PurePosixPath, ...]:
+    _require_full_history(repo_root, inventory.baseline_commit, inventory.pages_commit)
     _require_commit(repo_root, inventory.baseline_commit)
     output = _git(repo_root, "ls-tree", "-r", "--name-only", "-z", inventory.baseline_commit)
     return tuple(PurePosixPath(path) for path in output.decode("utf-8").split("\0") if path)
@@ -217,6 +253,7 @@ def baseline_paths(repo_root: Path, inventory: PrePagesInventory) -> tuple[PureP
 def resolve_current_documents(
     repo_root: Path, inventory: PrePagesInventory
 ) -> Mapping[PurePosixPath, Document]:
+    _require_full_history(repo_root, inventory.baseline_commit, inventory.pages_commit)
     if len(inventory.documents) != 62:
         raise AuditFormatError(f"Expected 62 inventory documents, found {len(inventory.documents)}")
     try:
