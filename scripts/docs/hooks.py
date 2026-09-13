@@ -55,6 +55,7 @@ def on_files(files: Any, config: Mapping[str, Any]) -> Any:
         if isinstance(src_uri, str) and "/samples/" in src_uri:
             file.inclusion = InclusionLevel.EXCLUDED
         elif catalog is not None and PurePosixPath(src_uri) in catalog.published_assets:
+            file.inclusion = InclusionLevel.INCLUDED
             if file.is_documentation_page():
                 published = _PublishedAssetFile(
                     src_uri, file.src_dir, file.dest_dir, file.use_directory_urls,

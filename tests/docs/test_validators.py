@@ -270,6 +270,49 @@ def test_link_gate_rejects_invalid_publish_declarations(tmp_path: Path) -> None:
     assert any("publish source must be an existing file" in error for error in result.errors)
 
 
+@pytest.mark.parametrize("existing_directory", [False, True])
+@pytest.mark.parametrize(
+    "download",
+    [
+        "downloads/",
+        "downloads/?download=1#notes",
+        "/services/aks/network-diagnosis/downloads/",
+        "downloads%2F",
+        "downloads/index.md/",
+    ],
+)
+def test_link_gate_requires_explicit_raw_asset_paths_instead_of_directory_shorthand(
+    tmp_path: Path, existing_directory: bool, download: str
+) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs/services/aks/network-diagnosis"
+    sample = topic / "samples/example"
+    sample.mkdir(parents=True)
+    (sample / "README.md").write_text("# Sample\n")
+    (sample / "notes.md").write_text("# Downloadable notes\n")
+    (sample / "sample.yml").write_text(
+        "title: Sample\ndescription: Example\nkind: artifact\nused_by: [index]\n"
+        "publish:\n  - source: notes.md\n    target: downloads/index.md\n"
+    )
+    if existing_directory:
+        (topic / "downloads").mkdir()
+    (topic / "setup").mkdir()
+    (topic / "setup/index.md").write_text(canonical_guide("Setup", topic_order=1))
+    (topic / "index.md").write_text(
+        VALID_GUIDE
+        + "\n[Explicit raw download](downloads/index.md)\n"
+        + "[Encoded raw download](downloads/%69ndex.md?download=1#notes)\n"
+        + "[Canonical child](setup/)\n[Canonical child without slash](setup)\n"
+        + f"[Invalid shorthand]({download})\n"
+    )
+
+    result = validate_links.validate_repository(root)
+
+    assert result.errors == [
+        f"docs/services/aks/network-diagnosis/index.md: target does not exist: {download}"
+    ]
+
+
 @pytest.mark.parametrize(
     "snippet",
     [

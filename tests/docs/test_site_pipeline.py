@@ -800,6 +800,43 @@ def test_published_assets_build_byte_exact_without_sample_or_search_pages(tmp_pa
     assert validate_search_index.validate_repository(root).errors == []
 
 
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        ("report.txt", "downloads/.env.example"),
+        ("notes.md", ".notes.md"),
+        ("payload.bin", ".artifacts/payload.bin"),
+        ("notes.md", "downloads/.private/notes.md"),
+    ],
+)
+def test_hidden_published_assets_build_byte_exact_without_exposing_sample_sources(
+    tmp_path: Path, source: str, target: str
+) -> None:
+    root, sample, payloads = make_published_repository(tmp_path)
+    manifest_path = sample / "sample.yml"
+    manifest = yaml.safe_load(manifest_path.read_text())
+    manifest["publish"].append({"source": source, "target": target})
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    (sample / ".unpublished.txt").write_bytes(b"unpublished sample")
+    (sample.parent.parent / ".unpublished.txt").write_bytes(b"unpublished page asset")
+
+    build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+    site_topic = root / "site/services/aks/network-diagnosis"
+    published = site_topic / target
+    assert published.is_file(), f"declared hidden target was excluded: {target}"
+    assert published.read_bytes() == payloads[source]
+    assert (sample / source).read_bytes() == payloads[source]
+    assert not (site_topic / "samples").exists()
+    assert not (site_topic / ".unpublished.txt").exists()
+    search = json.loads((root / "site/search/search_index.json").read_text())
+    assert all(
+        target not in entry["location"] and "/samples/" not in entry["location"]
+        and "asset-only-marker" not in entry["text"]
+        for entry in search["docs"]
+    )
+
+
 @pytest.mark.parametrize("operation", ["read", "open", "write"])
 def test_published_asset_io_failures_report_source_and_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str

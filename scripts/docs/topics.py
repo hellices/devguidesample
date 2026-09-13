@@ -152,6 +152,10 @@ def _normalize_redirects(document: Document) -> tuple[list[PurePosixPath], list[
     return paths, errors
 
 
+def _paths_overlap(left: PurePosixPath, right: PurePosixPath) -> bool:
+    return left.is_relative_to(right) or right.is_relative_to(left)
+
+
 def _published_assets(
     manifest: Mapping[str, Any],
     sample_dir: Path,
@@ -166,6 +170,7 @@ def _published_assets(
     assets: list[PublishedAsset] = []
     errors: list[str] = []
     canonical_paths = set(document_paths)
+    canonical_paths.update(path.with_suffix(".html") for path in tuple(canonical_paths))
     for mapping in publish:
         if not isinstance(mapping, Mapping):
             errors.append(f"{relative}: publish entries must be mappings")
@@ -206,16 +211,17 @@ def _published_assets(
         if "samples" in paths["target"].parts:
             errors.append(f"{relative}: publish target must not be under samples: {paths['target']}")
             continue
-        document_target = (
-            target_relative.with_suffix(".md")
-            if target_relative.suffix == ".html"
-            else target_relative
-        )
-        if document_target in canonical_paths:
+        if any(_paths_overlap(target_relative, path) for path in canonical_paths):
             errors.append(f"{relative}: publish target collides with a canonical document: {target_relative}")
             continue
         if target.exists() or target.is_symlink():
             errors.append(f"{relative}: publish target already exists: {target_relative}")
+            continue
+        if any(
+            not parent.is_dir() and (parent.exists() or parent.is_symlink())
+            for parent in target.parents
+        ):
+            errors.append(f"{relative}: publish target conflicts with an existing ancestor file: {target_relative}")
             continue
         assets.append(PublishedAsset(source=relative / paths["source"], target=target_relative))
     return tuple(assets), errors
@@ -398,9 +404,9 @@ def build_topic_catalog(
                 if sample is not None:
                     samples.append(sample)
                     for asset in sample.publish:
-                        if asset.target in published_assets:
+                        if any(_paths_overlap(asset.target, target) for target in published_assets):
                             errors.append(
-                                f"{sample.relative_path}: publish target is already owned: {asset.target}"
+                                f"{sample.relative_path}: publish target is already owned or overlaps another target: {asset.target}"
                             )
                         else:
                             published_assets[asset.target] = asset

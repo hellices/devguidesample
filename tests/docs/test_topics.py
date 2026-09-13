@@ -253,6 +253,81 @@ def test_catalog_rejects_duplicate_publish_target_ownership(
         build_topic_catalog(tmp_path, taxonomy)
 
 
+@pytest.mark.parametrize("descendant_first", [False, True])
+@pytest.mark.parametrize("other_sample", [False, True])
+def test_catalog_rejects_overlapping_publish_targets(
+    tmp_path: Path, taxonomy: dict, descendant_first: bool, other_sample: bool
+) -> None:
+    mappings = [
+        {"source": "diagram.svg", "target": "downloads/archive"},
+        {"source": "diagram.svg", "target": "downloads/archive/diagram.svg"},
+    ]
+    if descendant_first:
+        mappings.reverse()
+    sample_dir = published_sample(tmp_path, mappings[:1] if other_sample else mappings)
+    if other_sample:
+        manifest = yaml.safe_load((sample_dir / "sample.yml").read_text())
+        manifest["publish"] = mappings[1:]
+        second = write_sample(
+            tmp_path, "services/azure-monitor/agent-topic/samples/other-lab", manifest
+        )
+        (second / "diagram.svg").write_bytes(b"another diagram")
+
+    with pytest.raises(DocumentFormatError, match="publish target.*(owned|overlap|conflict)"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["index.html/diagram.svg", "setup/index.html/diagram.svg", "index.md/diagram.svg", "setup"],
+)
+def test_catalog_rejects_publish_targets_overlapping_canonical_paths(
+    tmp_path: Path, taxonomy: dict, target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    write_document(
+        tmp_path, "services/azure-monitor/agent-topic/setup/index.md", "Setup", topic_order=1
+    )
+    with pytest.raises(DocumentFormatError, match="publish target.*(collid|exist)"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize(
+    ("physical_path", "directory", "target"),
+    [
+        ("downloads/archive", False, "downloads/archive/diagram.svg"),
+        ("downloads/archive/diagram.svg", False, "downloads/archive"),
+        ("downloads/archive/nested", True, "downloads/archive"),
+        ("downloads/archive", True, "downloads/archive"),
+    ],
+)
+def test_catalog_rejects_publish_targets_conflicting_with_physical_paths(
+    tmp_path: Path, taxonomy: dict, physical_path: str, directory: bool, target: str
+) -> None:
+    sample_dir = published_sample(tmp_path, [{"source": "diagram.svg", "target": target}])
+    physical = sample_dir.parent.parent / physical_path
+    physical.parent.mkdir(parents=True)
+    if directory:
+        physical.mkdir()
+    else:
+        physical.write_bytes(b"physical asset")
+    with pytest.raises(DocumentFormatError, match="publish target.*(collid|exist|conflict)"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+def test_catalog_allows_existing_parent_directories_and_similarly_named_targets(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    mappings = [
+        {"source": "diagram.svg", "target": "downloads/archive.svg"},
+        {"source": "diagram.svg", "target": "downloads/archive.svg-backup/diagram.svg"},
+    ]
+    sample_dir = published_sample(tmp_path, mappings)
+    (sample_dir.parent.parent / "downloads").mkdir()
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+    assert len(catalog.published_assets) == 2
+
+
 @pytest.mark.parametrize("target", ["index.md", "setup/index.md", "index.html", "setup/index.html"])
 def test_catalog_rejects_publish_targets_colliding_with_canonical_documents(
     tmp_path: Path, taxonomy: dict, target: str

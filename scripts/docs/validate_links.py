@@ -50,7 +50,9 @@ class _LinkParser(HTMLParser):
             self.links.append(_RenderedLink(target, alt_text))
 
 
-def _resolve_target(page: Path, docs_dir: Path, raw_target: str) -> Path | None:
+def _resolve_target(
+    page: Path, docs_dir: Path, raw_target: str, *, directory_shorthand: bool = True
+) -> Path | None:
     target = raw_target.removeprefix("<").removesuffix(">")
     if target.startswith("#"):
         return None
@@ -62,6 +64,8 @@ def _resolve_target(page: Path, docs_dir: Path, raw_target: str) -> Path | None:
         return None
     resolved = (docs_dir / path_text.lstrip("/")) if path_text.startswith("/") else (page.parent / path_text)
     resolved = resolved.resolve()
+    if not directory_shorthand:
+        return None if path_text.endswith("/") else resolved
     if resolved.is_dir() or path_text.endswith("/"):
         return resolved / "index.md"
     if not resolved.suffix:
@@ -99,8 +103,12 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
             if link.alt_text is not None and not link.alt_text:
                 errors.append(f"{relative}: image alt text is required")
             target = _resolve_target(page, docs_dir, link.target)
-            if target is not None and not target.exists() and target not in published_targets:
-                errors.append(f"{relative}: target does not exist: {link.target}")
+            if target is not None and not target.exists():
+                asset_target = _resolve_target(
+                    page, docs_dir, link.target, directory_shorthand=False
+                )
+                if asset_target not in published_targets:
+                    errors.append(f"{relative}: target does not exist: {link.target}")
     return ValidationResult(count, errors)
 
 
