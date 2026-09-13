@@ -1,6 +1,6 @@
 ---
-title: Azure MCP 구성 — APIM·Toolbox·IQ와 사용자 인증
-description: APIM과 Foundry Toolbox의 핵심 기능과 공식 MCP 지원 범위를 비교하고, IQ 도구 통합·토큰 절감·OAuth와 OBO를 실행 예제에 연결합니다.
+title: Azure MCP 구성 — APIM·Toolbox·IQ의 활용과 선택 기준
+description: 공통 정책 관리에는 APIM, 도구 집합 공유에는 Toolbox, 기업 데이터 연결에는 IQ를 사용하는 이유와 조합 기준을 설명합니다.
 document_type: guide
 redirect_from:
   - guides/azure-architecture/mcp-configuration/index.md
@@ -11,8 +11,10 @@ technologies: [mcp, azure-cli]
 tags: [design, secure, ai-agents, identity]
 status: current
 verification_status: verified
-sources_checked_at: 2026-09-13
+sources_checked_at: 2026-09-14
 official_sources:
+  - title: AI gateway in Azure API Management
+    url: https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities
   - title: About MCP servers in Azure API Management
     url: https://learn.microsoft.com/azure/api-management/mcp-server-overview
   - title: Expose and govern an existing MCP server
@@ -25,20 +27,16 @@ official_sources:
     url: https://learn.microsoft.com/azure/api-management/credentials-overview
   - title: Validate Microsoft Entra token
     url: https://learn.microsoft.com/azure/api-management/validate-azure-ad-token-policy
-  - title: Validate JWT
-    url: https://learn.microsoft.com/azure/api-management/validate-jwt-policy
-  - title: Access token claims reference
-    url: https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference
   - title: Secure a Model Context Protocol (MCP) server with Microsoft Entra ID
     url: https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id
   - title: Microsoft identity platform and OAuth 2.0 authorization code flow
     url: https://learn.microsoft.com/entra/identity-platform/v2-oauth2-auth-code-flow
-  - title: Acquire tokens
-    url: https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens
   - title: How to integrate Azure API Management with Azure Application Insights
     url: https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights
   - title: Feature-based comparison of the Azure API Management tiers
     url: https://learn.microsoft.com/azure/api-management/api-management-features
+  - title: Use a virtual network to secure inbound or outbound traffic for Azure API Management
+    url: https://learn.microsoft.com/azure/api-management/virtual-network-concepts
   - title: What is Toolbox in Foundry?
     url: https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview
   - title: Create and manage a toolbox in Foundry
@@ -87,7 +85,7 @@ official_sources:
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration
   - title: Authorization Security Considerations
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations
-last_verified: 2026-09-13
+last_verified: 2026-09-14
 review_cycle_days: 90
 applies_to:
   - Azure API Management MCP endpoints
@@ -97,44 +95,51 @@ related_cases:
   - validation/index.md
 ---
 
-# Azure MCP 구성 — APIM·Toolbox·IQ와 사용자 인증
+# Azure MCP 구성 — APIM·Toolbox·IQ의 활용과 선택 기준
 
-**APIM은 MCP/API의 공통 접근 정책**, **Toolbox는 IQ를 포함한 도구 집합과 단일 MCP endpoint**를 제공합니다.
+**Azure API Management(APIM)**는 여러 API와 MCP 서버에 공통 접근 정책을 적용하는 API 관리 서비스입니다. 개발 도구가 사용할 endpoint를 제공하고 인증·인가, 호출 제한, backend routing과 요청 기록을 중앙에서 관리합니다.
 
-## 이 문서의 범위와 읽는 순서
+**Microsoft Foundry Toolbox**는 MCP·REST API·IQ 도구를 업무에 필요한 toolset으로 묶어 **하나의 MCP endpoint**로 제공하는 서비스입니다. 도구별 connection 인증, version, 검색과 정책을 관리하므로 여러 client가 같은 도구 집합을 재사용할 수 있습니다.
+
+## 소개하는 서비스
+
+| 서비스 | 사용하는 이유 | 핵심 기능 | 공식 문서 |
+|---|---|---|---|
+| **APIM / AI gateway** | 여러 팀의 API·MCP에 조직 공통 운영 정책을 적용 | 인증·인가, 호출 제한, routing, 요청 기록, REST-to-MCP | [AI gateway](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities), [MCP 연결](https://learn.microsoft.com/azure/api-management/expose-existing-mcp-server) |
+| **Foundry Toolbox** | Client마다 반복하는 도구 연결·인증·변경 관리를 줄이고 도구 집합 공유 | 단일 MCP endpoint, connection, version, Tool search, 정책·관측 | [Toolbox 개요](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview), [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) |
+| **Work IQ·Fabric IQ·Foundry IQ** | AI가 조직의 업무 context와 데이터·지식을 활용 | Microsoft 365, Fabric 의미 모델, 기업 문서 knowledge base 연결 | [Work IQ](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/work-iq), [Fabric IQ](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/fabric-iq), [Foundry IQ](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-foundry-iq) |
+
+### 이 문서의 범위와 읽는 순서
 
 대상은 **HTTP 기반 MCP tool의 제공·호출, Entra 인증, 사용자 위임과 내부망 접속**입니다. `tools/list`와 `tools/call`을 중심으로 설명합니다.
 
 | 목적 | 읽을 곳 | 결정하거나 완성할 것 |
 |---|---|---|
-| 솔루션 선택 | 아래 서비스 표 → 1–3장 → [6장](#6) | APIM 관리, Toolbox 통합 또는 두 서비스 조합 선택 |
-| 인증 구성 | [4장](#4-mcp-authorization-obo) → [인증 상세](authentication/index.md) | 앱·scope·PRM·JWT 정책과 사용자/서비스 권한 설정 |
+| 솔루션 선택 | 서비스 표 → 1–3장 → [6장](#6) | APIM 관리, Toolbox 통합 또는 두 서비스 조합 선택 |
+| 접근·권한 설계 | [4장](#4) → [인증 상세](authentication/index.md) | 누가 접속하고 누구의 권한으로 도구를 실행할지 결정 |
 | 자체 MCP 서버 배포 | [5장](#5-mcp) → [호스팅 참고](hosting-reference/index.md) | 실행 환경·private network·배포 방식 선택 |
 | 명령 실행과 결과 비교 | [7장](#7) → sample·[실행 사례](validation/index.md) | 배포·도구 호출·인가 확인·리소스 정리 |
 
-SDK나 gateway의 wire 동작을 구현·진단할 때는 Appendix를 읽습니다. 제품 전체의 MCP 적합성 인증이나 모든 protocol primitive의 비교는 이 가이드의 범위가 아닙니다.
-
-## 소개하는 서비스
-
-| 서비스 | 핵심 기능 | 공식 문서 |
-|---|---|---|
-| **Azure API Management / AI gateway** | Remote MCP에 인증·인가·트래픽 정책 적용, REST operation을 MCP tool로 제공, 요청 telemetry와 backend credential 관리 | [기존 MCP 연결](https://learn.microsoft.com/azure/api-management/expose-existing-mcp-server), [REST-to-MCP](https://learn.microsoft.com/azure/api-management/export-rest-mcp-server), [인증](https://learn.microsoft.com/azure/api-management/secure-mcp-servers) |
-| **Microsoft Foundry Toolbox** | 도구 집합을 하나의 MCP endpoint로 제공, connection 인증·version·정책 관리, Tool search로 필요한 도구 검색 | [Toolbox 개요](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview), [인증](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication), [Tool search](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) |
-| **Work IQ·Fabric IQ·Foundry IQ** | 각각 Microsoft 365 업무 context, Fabric의 업무 데이터·의미 모델, 기업 문서 knowledge base를 도구로 제공 | [Work IQ](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/work-iq), [Fabric IQ](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/fabric-iq), [Foundry IQ](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-foundry-iq) |
-
-### 인증 지원 요약
-
-| 인증 대상 | APIM 구성 | Toolbox 구성 |
-|---|---|---|
-| **공유 endpoint 접근** | Entra token 검증 정책과 MCP PRM 제공. Issuer·audience·scope·허용 client 검사 | Foundry용 credential/token과 project 권한으로 consumer endpoint 접근 |
-| **사용자 권한의 backend 호출** | Credential manager의 attended OAuth connection 또는 MCP API의 Entra OBO 구현 | `oauth2` connection, 지원 서비스의 `user-entra-token` |
-| **서비스 권한의 backend 호출** | Managed identity 정책 또는 서비스용 credential connection | `project-managed-identity`, `agentic-identity`, `custom-keys` |
-
-**Authorization Code + PKCE는 client와 Entra 사이에서 수행**합니다. MSAL Python의 [`acquire_token_interactive`](https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens#acquire-token-interactive)는 PKCE를 자동 적용합니다. PRM 제공과 JWT 검증은 APIM/MCP Server에 구성합니다.
+SDK나 gateway의 wire 동작을 구현·진단할 때는 Appendix를 읽습니다.
 
 ## 1. APIM / AI gateway로 MCP 접근 관리
 
-개발 도구는 APIM MCP 주소로 접속합니다. APIM이 사내·타사 backend별 인증·트래픽 정책을 적용합니다.
+APIM은 client와 backend 사이에서 요청을 처리하는 **API gateway와 관리 기능**을 제공합니다. 여러 팀이 운영하는 API·MCP 서버를 등록하고, 인증·접근 제어·호출 제한·routing 정책을 공통 방식으로 적용할 수 있습니다.
+
+[AI gateway](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities)는 이 APIM gateway를 AI 모델·MCP 도구·agent API에 활용하는 기능입니다. 이 문서에서는 **MCP에 대한 조직 공통 정책과 기존 API의 도구화**에 집중합니다.
+
+### MCP 운영에서 제공하는 기능
+
+| 기능 | 활용 상황 |
+|---|---|
+| **공유 MCP 접점** | 개발 도구와 애플리케이션에 승인된 gateway 주소 제공 |
+| **인증·인가 정책** | Entra token과 scope·허용 client를 검사해 업무별 접근 통제 |
+| **호출 제한·routing** | 사용자·애플리케이션별 사용량을 관리하고 요청을 지정한 backend로 전달 |
+| **사내·타사 서비스 연결** | Azure뿐 아니라 호환되는 외부 MCP에 backend별 인증과 정책 적용 |
+| **REST-to-MCP** | 운영 중인 REST operation을 MCP tool로 제공 |
+| **운영 관측** | 요청·응답 상태, latency, 정책 차단과 correlation 정보를 수집 |
+
+기존 API 관리 체계를 MCP까지 확장하거나, 여러 팀의 도구 접근을 같은 정책으로 운영하려는 경우에 적합합니다.
 
 [![MCP client가 중앙의 APIM으로 요청하고 APIM이 사내 MCP·타사 MCP·REST API로 전달하는 단순한 요청 흐름](images/mcp-reference-architecture.svg)](images/mcp-reference-architecture.svg)
 
@@ -143,21 +148,15 @@ SDK나 gateway의 wire 동작을 구현·진단할 때는 Appendix를 읽습니�
 - **기존 MCP:** APIM에 remote MCP endpoint를 연결하고 정책을 적용합니다.
 - **기존 REST API:** 선택한 REST operation을 MCP tool로 제공합니다. 별도 MCP 업무 서버 코드를 작성하지 않고 기존 API를 도구로 사용할 수 있습니다.
 
-**APIM의 여러 API 관리 ≠ 모든 도구의 자동 단일 catalog 통합**입니다. 도구 집합 통합은 Toolbox 장에서 다룹니다.
+APIM에서는 API/MCP별 endpoint와 정책을 관리합니다. 업무용 도구 집합을 하나의 consumer endpoint로 구성하는 방법은 Toolbox 장에서 설명합니다.
 
-### 사용자별 접근과 감사 기록
+### 운영 정책을 한곳에 모으는 이유
 
-| 확인할 것 | 적용 기준 |
-|---|---|
-| 호출 주체 | [`validate-azure-ad-token`](https://learn.microsoft.com/azure/api-management/validate-azure-ad-token-policy)으로 검증한 identity·scope/role 사용. 임의의 사용자 header는 신원 증거가 아님 |
-| 최종 사용자 | App-only token만으로 최종 사용자를 식별할 수 없음 |
-| 실행 증거 | Gateway HTTP 로그와 tool 실행 결과를 correlation ID로 연결 |
-| 보관·보호 | 수집 누락·보관 기간·접근 통제 설계. Token·민감 payload 원문 저장 금지 |
-| Telemetry와 감사 | [Application Insights는 감사 시스템이 아님](https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights#performance-implications-and-log-sampling). Sampling 로그만으로 전수 감사를 보장하지 않음 |
+Client별로 인증과 호출 제한을 반복 구현하는 대신 gateway에서 운영 기준을 적용하고, 요청 기록을 backend 로그와 연결해 장애·접근 문제를 추적할 수 있습니다. 감사가 필요하면 수집·보관·접근 통제까지 설계합니다. [Application Insights의 성능 telemetry만으로 전수 감사를 보장하지는 않습니다](https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights#performance-implications-and-log-sampling).
 
 ## 2. IQ 도구와 MCP는 어떻게 연결되는가
 
-IQ는 **업무 데이터·지식을 제공하는 서비스**이며, MCP는 연결 방식입니다.
+IQ는 **업무 데이터·지식을 제공하는 서비스**이며, MCP는 연결 방식입니다. AI의 답변에 사내 문서, Microsoft 365 업무 이력, Fabric의 지표·의미 모델이 필요할 때 해당 IQ를 연결합니다. 데이터 서비스가 관리하는 context와 권한을 활용하면서 필요한 기능을 도구로 사용할 수 있습니다.
 
 | IQ | 제공하는 기능 | MCP·Toolbox 연결 |
 |---|---|---|
@@ -174,24 +173,28 @@ IQ는 **업무 데이터·지식을 제공하는 서비스**이며, MCP는 연�
 
 ## 3. Toolbox로 IQ와 MCP를 하나의 endpoint에 구성
 
-Client는 **하나의 Toolbox MCP endpoint**를 사용하고, Toolbox가 connection별 인증·도구 version·정책을 관리합니다. Foundry 밖의 MCP-compatible client도 사용할 수 있습니다.
+**Toolbox는 Microsoft Foundry에서 도구 집합을 만들고 공유하는 관리형 서비스**입니다. 여러 MCP 서버·OpenAPI·IQ 도구를 선택해 하나의 toolset으로 구성하고, client에는 하나의 MCP endpoint를 제공합니다.
+
+예를 들어 기업 문서 검색, 업무 REST API, Microsoft 365 도구를 사용하는 assistant를 만들 때 각 client에 서버 주소와 인증 로직을 반복해서 구성하는 대신 Toolbox에 connection을 관리할 수 있습니다. 같은 toolset을 여러 애플리케이션에서 재사용하며, Foundry 밖의 MCP-compatible client에서도 연결할 수 있습니다.
+
+### Toolbox의 핵심 기능
+
+| 기능 | 제공하는 내용 |
+|---|---|
+| **도구 구성·공유** | 필요한 MCP·OpenAPI·IQ 도구를 선택해 업무별 toolset으로 제공 |
+| **단일 MCP endpoint** | Client가 도구별 endpoint 대신 Toolbox를 통해 목록을 조회하고 호출 |
+| **Connection 인증** | 도구별 사용자 OAuth, 서비스 identity, key와 token lifecycle 관리 |
+| **Version 관리** | 도구 집합의 새 version을 확인하고 default version으로 전환 |
+| **Tool search** | 요청에 관련된 도구 정의를 검색해 model context에 필요한 도구만 제공 |
+| **정책·관측** | Toolset의 인증·인가, guardrail과 observability를 중앙에서 관리 |
 
 [![하나의 Toolbox MCP endpoint가 Work IQ·Fabric IQ·Foundry IQ 및 사내·타사 MCP 도구에 연결하며 downstream protocol은 MCP 또는 A2A로 구분되는 구성](images/toolbox-iq-mcp.svg)](images/toolbox-iq-mcp.svg)
 
-핵심 기능은 [Build·Discover·Consume·Govern](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview)입니다.
-
-- **도구 구성과 공유:** 업무에 필요한 도구를 모아 여러 client가 재사용합니다.
-- **Connection 인증:** 도구에 맞는 OAuth·사용자 token·서비스 identity·key를 구성합니다.
-- **Version과 정책:** 도구 집합을 version으로 관리하고 인증·인가·guardrail·관측 설정을 적용합니다.
-- **Tool search:** 큰 도구 집합에서 해당 요청에 필요한 tool definition을 찾습니다.
+Microsoft Learn은 이 기능을 [Build·Discover·Consume·Govern](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview)으로 설명합니다. 도구 통합과 인증·version 관리를 먼저 구성하고, 도구가 많아지면 Tool search로 탐색을 최적화할 수 있습니다.
 
 ### Tool search와 토큰 절감 데모
 
-| 동작 | 내용 |
-|---|---|
-| 검색 | `tool_search`가 이름·description·parameter metadata를 BM25로 검색 |
-| 실행 | `call_tool`로 선택한 도구 호출 |
-| 초기 노출 | Pin·auto-pin 도구가 추가될 수 있어 항상 두 개만 노출되는 것은 아님 |
+도구가 늘어날수록 모든 도구 정의를 매번 model context에 넣는 부담이 커집니다. **Tool search는 필요한 도구를 찾아 정의를 제공**하고, 자주 쓰는 도구는 pin·auto-pin으로 노출해 검색 부담을 줄입니다.
 
 Microsoft Learn의 [Toolbox 개요](https://learn.microsoft.com/azure/foundry/agents/concepts/toolbox-overview)에 삽입된 **[Toolboxes in Microsoft Foundry 영상](https://www.youtube.com/watch?v=7bBvmifVMew)**에서 이 차이를 보여줍니다.
 
@@ -211,65 +214,17 @@ Microsoft Learn의 [Toolbox 개요](https://learn.microsoft.com/azure/foundry/ag
 - 같은 model·도구·질문 조건에서 업무 완료까지의 input/output tokens, cache, 검색 횟수, latency·재시도를 비교합니다.
 - 설정: [Tool search 공식 문서](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) · [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)
 
-## 4. MCP authorization과 OBO를 함께 설계하기
+## 4. 접근과 사용자 권한을 통제하는 이유
 
-### PRM과 authorization server의 구분
+MCP 도구는 실제 업무 데이터와 API를 사용합니다. **누가 MCP에 접속할 수 있는지**와 **도구가 누구의 권한으로 실행되는지**를 나눠 설계합니다.
 
-| 항목 | 제공·처리 주체 | 내용 |
+| 통제 지점 | 필요한 이유 | 사용하는 기능 |
 |---|---|---|
-| **PRM (RFC 9728)** | **MCP Server / APIM** | 보호할 `resource`, `authorization_servers`, scopes 안내 |
-| **AS metadata / OIDC discovery** | **Entra ID** | Authorization·token·JWKS endpoint 안내 |
-| **Authorization Code + PKCE** | **Client/MSAL ↔ Entra ID** | Client가 verifier/challenge를 사용하고 Entra가 code 교환 시 검증 |
-| **JWT 검증** | **APIM / MCP Server** | 발급된 access token의 issuer·audience·유효 시간·권한 검사 |
+| **APIM의 MCP 접점** | 승인된 사용자·client만 업무 도구에 접근 | Entra 로그인, PRM 제공, JWT·scope 정책 |
+| **Toolbox의 connection** | 여러 client가 도구별 인증을 반복 구현하지 않고 재사용 | 사용자 OAuth, 서비스 identity, credential·token lifecycle 관리 |
+| **데이터 API 접근** | 사용자가 원래 가진 데이터 권한을 도구 호출에도 적용 | 사용자 위임이 필요한 중간 MCP API의 Entra OBO 또는 지원되는 사용자 connection |
 
-v2 token을 사용하는 이 예제의 PRM은 Entra issuer를 `https://login.microsoftonline.com/<tenant-id>/v2.0`으로 안내합니다. **Entra가 MCP의 PRM을 제공하는 구조가 아닙니다.**
-
-### 설정 순서: API 앱과 client 앱
-
-| 설정 | 적용할 값·위치 |
-|---|---|
-| **MCP API 앱 등록** | API의 Application ID URI와 delegated scope 정의. 이 실습은 `api://<api-app-client-id>/Mcp.Access`와 v2 access token 사용 |
-| **MCP client 등록·구성** | 사용할 client ID·redirect URI를 client의 지원 방식에 맞춰 설정. API의 delegated permission과 필요한 consent 부여 |
-| **APIM PRM 제공** | 보호 resource·Entra issuer·scope 안내. Metadata 요청은 token 없이 조회되도록 구성 |
-| **APIM JWT·scope 검증** | API audience와 필요한 scope 검사. `required-claims`는 [JWT 검증 정책 내부](https://learn.microsoft.com/azure/api-management/validate-jwt-policy)에 배치 |
-| **MCP 요청 전달** | 검증 후 backend로 전달. 같은 protected resource의 token 전달과 별도 backend용 credential 사용을 구분 |
-
-**두 앱의 ID를 혼동하지 않습니다.** [v2 token 기준](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference#payload-claims)으로 `aud`는 **MCP API 앱 ID**, `azp`는 **호출 client 앱 ID**, `scp`는 **허용 scope 이름**입니다. `api://.../Mcp.Access` 전체 문자열을 `aud`나 `scp`에 그대로 넣지 않습니다.
-
-[![MCP client가 APIM의 PRM을 읽고 Entra와 직접 OAuth 및 PKCE를 수행한 뒤 APIM에 access token을 보내는 흐름](images/mcp-oauth-obo.svg)](images/mcp-oauth-obo.svg)
-
-| 인증 구간 | 필요한 token |
-|---|---|
-| Client → MCP API | **A:** MCP API용 access token. MCP HTTP authorization의 대상 |
-| MCP API → ARM·Graph 등 | **B:** 별도 데이터 API용 token. 사용자 위임이면 Entra OBO를 사용할 수 있음 |
-
-### 인증 구성의 완료 기준
-
-사용할 연결 방식에 해당하는 행을 확인합니다. APIM의 PRM/OAuth 구성과 Toolbox의 Foundry credential 연결을 동일한 설정으로 취급하지 않습니다.
-
-| 대상 | 설정·확인할 것 | 완료 기준 |
-|---|---|---|
-| **APIM/MCP의 PRM** | Resource·Entra issuer·scope와 challenge URL | PRM은 token 없이 조회되고, 보호된 tool 요청은 token이 없으면 거부됨 |
-| **Entra client 로그인** | Client ID·redirect URI·scope·consent, Authorization Code + PKCE | 선택한 client가 API용 token을 취득하고 MCP에 연결 |
-| **Resource·token 검증** | [Resource URI 정렬](https://learn.microsoft.com/entra/agent-id/secure-mcp-server-with-entra-id#step-3-set-the-application-id-uri-to-your-mcp-server-url), issuer·audience·유효 시간·권한 | 올바른 token은 허용하고 다른 audience·부족한 권한은 거부 |
-| **Toolbox 연결** | Foundry credential·project 권한·tool connection | 기대한 tool 목록이 보이고 선택한 도구 호출이 성공 |
-| **사용자 위임 도구** | Connection의 사용자 OAuth 또는 MCP API의 OBO·downstream 권한 | 원본 서비스가 사용자에게 허용한 데이터·작업 범위로 실행 |
-| **실제 도구 실행** | `tools/list` → `tools/call`과 반환 결과 | HTTP status뿐 아니라 MCP의 error·`isError`와 업무 결과 확인 |
-
-배포별 응답과 문제 진단 절차는 [인증 확인 sample](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)과 [실행 사례](validation/index.md#oauth)에 있습니다.
-
-### 연결된 tool의 인증: APIM과 Toolbox 비교
-
-| 데이터 호출 방식 | APIM | Toolbox |
-|---|---|---|
-| 공유·서비스 credential | Credential manager의 unattended connection 또는 backend 인증 정책 | `custom-keys`, `project-managed-identity`, `agentic-identity` |
-| 사용자별 OAuth connection | [Attended(user-delegated) connection](https://learn.microsoft.com/azure/api-management/credentials-overview#attended-user-delegated-scenario)으로 사용자 credential 관리·갱신·주입 | [`oauth2`](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication)로 사용자 authorization·token lifecycle 관리 |
-| 대상 서비스용 사용자 Entra token | 선택한 backend 인증/위임 구현에 따라 구성 | 지원 서비스의 `user-entra-token` |
-| **Entra OBO** | MCP API가 사용자 token을 assertion으로 제출해 downstream API용 token 취득 | [Work IQ Chat A2A 경로](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/work-iq#how-it-works)에서 OBO 사용. 일반 도구는 해당 connection의 인증 방식 적용 |
-
-- 같은 논리적 MCP resource 내부 전달: token 검증과 [내부 구간 기밀성](https://www.rfc-editor.org/rfc/rfc6750.html#section-5.2) 유지.
-- 다른 데이터 API 호출: [그 API용 별도 token](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations) 사용. 사용자 OBO에 app-only token을 넣지 않음.
-- 사용자 OAuth를 공유/service credential로 조용히 바꾸지 않으며, Toolbox와 gateway가 서로 token을 덮어쓰지 않도록 소유 위치를 정함.
+**OAuth + PKCE는 client와 Entra**, **PRM·token 검증은 APIM/MCP Server**에 적용합니다. 앱 등록·claim·정책·완료 기준은 [인증 상세](authentication/index.md), 실제 명령과 결과는 [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)와 [실행 사례](validation/index.md#oauth)에서 설명합니다.
 
 ## 5. MCP 서버를 준비하는 방법
 
@@ -286,13 +241,14 @@ v2 token을 사용하는 이 예제의 PRM은 Entra issuer를 `https://login.mic
 
 **설계 제안**이며 제품 지원 판정과 구분합니다.
 
-| 요구사항 | 우선 검토 | 추가 확인 |
+| 요구사항 | 우선 검토 | 선택하는 이유 |
 |---|---|---|
-| 여러 MCP·IQ를 한 주소로 제공 | Toolbox 단독 | Connection 인증·version·필요 도구 지원 |
-| 여러 팀과 기존 API의 공통 통제 | APIM | 승인 endpoint, 호출 제한, 감사 이벤트 정책 |
-| 두 서비스 병행 | Custom MCP connection의 대상으로 APIM endpoint 구성 | 실제 호출 URL·인증 주체·정책 적용 경로를 명시 |
-| 사용자별 데이터 권한 | 실제 identity·audience·consent 확인 | OBO와 MCP 자동 OAuth를 각각 검증 |
-| 내부망 접근 | Client→entry와 entry→backend를 각각 점검 | Route·DNS·접근 제어와 [도구별 network 지원](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation) |
+| 여러 MCP·IQ를 한 주소로 제공 | Toolbox 단독 | 도구 연결·인증·version을 한곳에서 관리 |
+| 여러 팀과 기존 API의 공통 통제 | APIM | 승인 endpoint와 운영 정책을 MCP에도 공통 적용 |
+| 조직의 업무 데이터·지식 활용 | 필요한 IQ 도구 + Toolbox | 데이터별 context를 도구로 연결하고 재사용 |
+| 도구 공유와 조직 공통 정책이 모두 필요 | Toolbox의 custom MCP connection에 APIM endpoint 연결 | Client의 도구 통합과 API 운영 정책을 함께 적용 |
+
+**도구를 묶는 요구만 있다면 Toolbox부터**, **기존 API까지 같은 운영 기준으로 관리하려면 APIM을 함께 검토**합니다. 내부망 구성은 [APIM](https://learn.microsoft.com/azure/api-management/virtual-network-concepts)과 [Toolbox](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation)의 network 조건에 맞춥니다.
 
 ### 적용 시 명시적인 제약
 

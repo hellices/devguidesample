@@ -14,6 +14,10 @@ sources_checked_at: 2026-09-13
 official_sources:
   - title: Create and manage a toolbox in Foundry
     url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
+  - title: How toolbox authentication works in Microsoft Foundry
+    url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication
+  - title: Acquire tokens
+    url: https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens
   - title: Network isolation for a toolbox in Microsoft Foundry
     url: https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation
   - title: Azure Developer CLI reference
@@ -82,14 +86,16 @@ APIM 또는 직접 호스팅한 MCP API의 **Entra 앱 등록·scope·client 제
 
 ## 구성 요소와 인증 흐름
 
-| 구성 요소 | 역할 |
+| 인증 요소 | 제공·처리 주체 |
 |---|---|
-| 로컬 MCP 클라이언트 | 사용자 로그인 후 호출할 MCP API의 access token을 받음 |
-| Microsoft Entra ID | 클라이언트와 API의 앱 등록, scope, consent, access token 발급 |
-| API Management | Entra access token을 검사하고 REST inventory를 MCP tool로 제공하거나 Learn MCP를 프록시 |
-| Python MCP | `Mcp.Access` scope를 검사하고 inventory 조회, resource group OBO 조회, Learn 도구 제공 |
-| 공식 Azure MCP | `Mcp.Tools.ReadWrite` scope를 검사하고 OBO로 Azure 서비스 호출 |
-| Azure Resource Manager(ARM) | OBO로 발급된 access token과 사용자의 Azure RBAC에 따라 리소스 접근 허용 |
+| PRM (RFC 9728) | MCP Server/APIM이 보호 resource·authorization server·scope 안내 |
+| AS metadata / OIDC discovery | Entra ID가 authorization·token·JWKS endpoint 안내 |
+| Authorization Code + PKCE | Client/MSAL과 Entra ID 사이에서 수행. MSAL interactive flow가 PKCE 처리 |
+| JWT·권한 검사 | APIM/MCP Server가 issuer·audience·유효 시간·scope/role 검사 |
+
+[![Client가 APIM의 PRM을 읽고 Entra와 OAuth 및 PKCE를 수행한 뒤 token으로 MCP를 호출하는 인증 흐름](../images/mcp-oauth-obo.svg)](../images/mcp-oauth-obo.svg)
+
+v2 token을 사용하는 이 구성의 Entra issuer는 `https://login.microsoftonline.com/<tenant-id>/v2.0`입니다. PRM은 MCP Server/APIM이 제공하며, MSAL Python의 [`acquire_token_interactive`](https://learn.microsoft.com/entra/msal/python/getting-started/acquiring-tokens#acquire-token-interactive)는 PKCE를 자동 적용합니다.
 
 Python MCP와 공식 Azure MCP는 internal Container Apps 환경에서 실행합니다. APIM의 REST-to-MCP와 기존 MCP 프록시는 서로 다른 API이며, Python MCP의 OBO 도구 호출과도 별도 경로입니다. 구성도와 호스팅 대안은 [MCP 인증·호스팅 비교](../hosting-reference/index.md)에 있습니다.
 
@@ -168,6 +174,15 @@ Toolbox consumer endpoint는 자체 MCP API의 `Mcp.Access` token이 아니라 *
 
 Toolbox가 backend MCP에 연결할 때는 그 connection에 구성한 OAuth·credential·identity 설정을 사용합니다. 이 인증을 자체 MCP server의 OBO와 혼동하지 않습니다. GitHub는 GitHub 인증, Learn은 익명 호출, Azure MCP는 대상 API에 맞는 token이 필요합니다.
 
+| Connection 방식 | 사용하는 권한 |
+|---|---|
+| `oauth2` | OAuth authorization을 완료한 사용자의 credential |
+| `user-entra-token` | 이를 지원하는 Microsoft 서비스용 사용자 Entra token |
+| `project-managed-identity` / `agentic-identity` | Project 또는 agent의 서비스 권한 |
+| `custom-keys` / `none` | 저장된 key/header 또는 익명 호출 |
+
+Toolbox에서 관리하는 사용자 token을 뒤의 gateway가 서비스 token으로 덮어쓰지 않도록 credential 소유 위치를 정합니다. [인증 방식별 동작](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication)에 맞춰 사용자·서비스 권한을 선택합니다.
+
 Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결은 [공식 network 구성](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation)을 적용합니다. Toolset과 client 연결은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)을 사용합니다.
 
 ## 4. access token으로 MCP 호출
@@ -239,6 +254,19 @@ APIM에서는 다음 두 경로를 따로 사용합니다.
 실습에서 REST inventory를 직접 조회한 뒤 같은 데이터를 MCP tool로 조회합니다. Learn 경로에서는 도구 목록을 읽고 문서 검색 도구를 호출합니다. 업무용 REST API로 교체할 때는 그 API에 필요한 인증을 별도로 설정합니다.
 
 GitHub MCP를 추가하는 경우에도 GitHub OAuth 또는 PAT가 필요합니다. APIM [credential manager](https://learn.microsoft.com/azure/api-management/credentials-how-to-user-delegated)는 GitHub 같은 외부 서비스의 OAuth 연결을 관리하는 기능이며, Entra access token을 GitHub token으로 바꾸는 OBO 기능은 아닙니다.
+
+## 인증 구성의 완료 기준
+
+| 대상 | 확인할 것 | 완료 기준 |
+|---|---|---|
+| PRM | Resource·Entra issuer·scope와 challenge URL | Metadata는 token 없이 조회되고 보호된 tool은 무인증 요청을 거부 |
+| Client 로그인 | Client ID·redirect URI·scope·consent, Authorization Code + PKCE | 선택한 client가 API용 token을 취득하고 MCP에 연결 |
+| Token·권한 | Issuer·audience·유효 시간·scope/role | 정상 token 허용, 잘못된 audience·부족한 권한 거부 |
+| Toolbox | Foundry credential·project 권한·tool connection | 기대한 도구 목록과 선택한 도구 호출 확인 |
+| 사용자 위임 | 사용자 connection 또는 OBO와 downstream 권한 | 원본 서비스의 사용자 권한 범위로 실행 |
+| 도구 결과 | HTTP 응답과 MCP error·`isError`·업무 결과 | 목록 조회뿐 아니라 실제 도구 결과까지 확인 |
+
+단계별 명령과 관측값은 [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)와 [실행 사례](../validation/index.md#oauth)에 있습니다.
 
 ## IDE에서 OAuth 로그인이 이어지지 않을 때
 
