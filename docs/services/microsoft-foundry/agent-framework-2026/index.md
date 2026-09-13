@@ -14,8 +14,8 @@ technologies:
 - python
 - go
 tags:
+- design
 - ai-agents
-- architecture
 published_at: 2026-08-17
 redirect_from:
 - research/microsoft-foundry/agent-framework-2026/index.md

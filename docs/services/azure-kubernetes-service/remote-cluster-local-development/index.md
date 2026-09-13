@@ -18,7 +18,7 @@ technologies:
 - kubernetes
 - python
 tags:
-- development
+- build
 - networking
 redirect_from:
 - guides/azure-kubernetes-service/remote-cluster-local-development/index.md

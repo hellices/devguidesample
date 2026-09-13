@@ -17,8 +17,8 @@ description: 폐쇄망에서 Codex와 Microsoft Foundry를 연동할 때 필요�
 technologies:
 - rest-api
 tags:
+- secure
 - networking
-- security
 - ai-agents
 redirect_from:
 - guides/microsoft-foundry/codex-closed-network/index.md

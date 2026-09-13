@@ -19,9 +19,8 @@ technologies:
 - prometheus
 - grafana
 tags:
-- monitoring
-- observability
-- deployment
+- deploy
+- operate
 topic_order: 1
 redirect_from:
 - guides/azure-monitor/hdinsight-kafka-prometheus-grafana/index.md

@@ -2,8 +2,7 @@
 nav:
   - 홈: index.md
   - 서비스별 보기: services
-  - 태그별 보기: tags
-  - 전체 글: articles
+  - 글 찾기: explore
   - 기여하기: contributing
   - glob: "*"
     ignore_no_matches: true

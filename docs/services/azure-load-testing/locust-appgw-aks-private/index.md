@@ -18,9 +18,9 @@ technologies:
 - python
 - kubernetes
 tags:
-- benchmarking
+- evaluate
+- optimize
 - networking
-- performance
 redirect_from:
 - guides/azure-load-testing/locust-appgw-aks-private/index.md
 ---

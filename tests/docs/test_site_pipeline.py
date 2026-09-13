@@ -163,8 +163,8 @@ def make_topic_repository(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (docs / ".nav.yml").write_text(
-        "nav:\n  - Home: index.md\n  - Services: services\n  - Tags: tags\n"
-        "  - Articles: articles\n  - glob: '*'\n    ignore_no_matches: true\n",
+        "nav:\n  - Home: index.md\n  - Services: services\n  - 글 찾기: explore\n"
+        "  - glob: '*'\n    ignore_no_matches: true\n",
         encoding="utf-8",
     )
     taxonomy = {
@@ -299,8 +299,7 @@ def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
         PurePosixPath("services/azure-monitor/index.md"),
         PurePosixPath("articles/index.md"),
         PurePosixPath("tags/index.md"),
-        PurePosixPath("tags/networking.md"),
-        PurePosixPath("tags/troubleshooting.md"),
+        PurePosixPath("explore/index.md"),
     }
     guide_front_matter = pages[PurePosixPath("guides/index.md")].split("---", 2)[1]
     assert yaml.safe_load(guide_front_matter) == {
@@ -351,7 +350,7 @@ def test_topic_and_sample_styles_are_responsive_and_accessible() -> None:
     ):
         assert selector in css
 
-    mobile = css.split("@media (max-width: 760px)", 1)[1].split(
+    mobile = css.rsplit("@media (max-width: 760px)", 1)[1].split(
         "@media (max-width: 480px)", 1
     )[0]
     assert ".dg-topic-nav" in mobile
@@ -652,8 +651,8 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     )
     nav_path = docs / ".nav.yml"
     nav_path.write_text(
-        "nav:\n  - Home: index.md\n  - Services: services\n  - Tags: tags\n"
-        "  - Articles: articles\n  - glob: '*'\n    ignore_no_matches: true\n",
+        "nav:\n  - Home: index.md\n  - Services: services\n  - 글 찾기: explore\n"
+        "  - glob: '*'\n    ignore_no_matches: true\n",
         encoding="utf-8",
     )
     generator = root / "generate.py"
@@ -716,7 +715,9 @@ def test_new_bundle_updates_navigation_and_search_without_config_edits(
     assert navigation.links["services/aks/z-last-topic/"] == "세 번째 문서"
     assert navigation.links["services/aks/"] == "Azure Kubernetes Service"
     assert "guides/" not in navigation.links
-    assert navigation.links["articles/"] == "Articles"
+    assert "articles/" not in navigation.links
+    assert "tags/" not in navigation.links
+    assert navigation.links["explore/"] == "글 찾기"
     assert "자동 게시 확인" in (root / "site" / "guides" / "index.html").read_text(encoding="utf-8")
     assert any(
         entry["location"] == "services/aks/new-topic/"
@@ -959,14 +960,9 @@ def test_search_gate_accepts_full_text_and_tag_entries(tmp_path: Path) -> None:
                 "Azure Kubernetes Service diagnostic workflow를 설명합니다.</p>"
             ),
             {
-                "location": "tags/networking/",
-                "title": "networking",
-                "text": "AKS 네트워크 진단",
-            },
-            {
-                "location": "tags/troubleshooting/",
-                "title": "troubleshooting",
-                "text": "AKS 네트워크 진단",
+                "location": "explore/",
+                "title": "글 찾기",
+                "text": "Networking Troubleshooting",
             },
         ],
     )
@@ -990,7 +986,7 @@ def test_search_gate_rejects_missing_tags_and_body_text(tmp_path: Path) -> None:
     assert any("English product phrase" in error for error in result.errors)
 
 
-def test_search_gate_requires_tag_destinations_not_just_overview_anchors(tmp_path: Path) -> None:
+def test_search_gate_excludes_legacy_tags_and_requires_explore(tmp_path: Path) -> None:
     root = make_search_repository(tmp_path)
     write_search_index(
         root,
@@ -1008,8 +1004,8 @@ def test_search_gate_requires_tag_destinations_not_just_overview_anchors(tmp_pat
 
     result = validate_search_index.validate_repository(root)
 
-    assert any("tag is missing: networking" in error for error in result.errors)
-    assert any("tag is missing: troubleshooting" in error for error in result.errors)
+    assert any("explore" in error for error in result.errors)
+    assert any("redirect" in error for error in result.errors)
 
 
 @pytest.mark.parametrize(
@@ -1049,14 +1045,7 @@ def test_search_gate_accepts_visible_rendered_markdown(
     write_search_index(
         root,
         index.entries
-        + [
-            {
-                "location": f"tags/{tag}/",
-                "title": tag,
-                "text": page.title,
-            }
-            for tag in document.metadata["tags"]
-        ],
+        + [{"location": "explore/", "title": "글 찾기", "text": "Networking Troubleshooting"}],
     )
 
     result = validate_search_index.validate_repository(root)

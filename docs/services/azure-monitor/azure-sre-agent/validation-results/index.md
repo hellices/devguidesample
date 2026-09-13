@@ -13,9 +13,9 @@ description: 세 가지 장애 시나리오에서 관측한 Azure SRE Agent 동�
 technologies:
 - python
 tags:
+- evaluate
+- operate
 - ai-agents
-- monitoring
-- diagnostics
 published_at: 2026-08-15
 topic_order: 7
 redirect_from:

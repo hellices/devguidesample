@@ -17,6 +17,9 @@
   사용하고, 그 밖의 제품은 공식 프로젝트·제품명을 kebab-case로 사용한다.
 - 새 서비스, 기술 또는 태그가 필요할 때만 `docs-taxonomy.yml`을 함께
   수정한다.
+- 태그는 taxonomy의 `tag_groups`에 속한 통제 값 1–4개만 사용한다.
+  목적 태그를 주제 태그보다 앞에 두고 중복·미사용 태그를 남기지 않는다.
+  Kubernetes 같은 기술은 `technologies`로 표현한다.
 - 개별 문서를 추가하기 위해 `mkdocs.yml`, `docs/.nav.yml`, README 또는
   수동 문서 목록을 수정하지 않는다.
 
@@ -35,15 +38,20 @@
 
 ## Publishing automation
 
-- 메뉴 트리, 서비스별·태그별·전체 글 목록, 검색 인덱스, collection 호환
+- 메뉴 트리, 서비스별 보기·글 찾기, 검색 인덱스, collection 호환
   색인과 이전 URL redirect page는 빌드 시 자동 생성한다.
-- 대메뉴는 `홈`, `서비스별 보기`, `태그별 보기`, `전체 글`, `기여하기`다.
+- 대메뉴는 `홈`, `서비스별 보기`, `글 찾기`, `기여하기`다.
   서비스 branch 아래에는 canonical topic entry와 순서가 있는 자식 문서만
   배치한다. redirect page와 collection 호환 색인은 이 branch에 넣지 않는다.
 - 서비스 목록은 front matter의 `services` 전체를 반영한다. 사이드바에는
   경로의 대표 서비스 아래 원본 topic을 한 번만 배치한다.
-- 태그 링크는 정확히 일치하는 태그별 목록으로 연결한다. 전체 글에는 각
-  canonical 문서를 한 번만 표시한다.
+- 태그 링크는 `/explore/?tag=<slug>`로 연결한다. 글 찾기는 모든 주제를
+  canonical topic 카드로 묶고 주제 수와 문서 수를 함께 표시한다.
+  여러 태그·서비스·기술·제목/설명 검색어는 같은 문서에 AND로 적용한다.
+  topic 안에서 불일치 문서는 숨기고 일치 문서별 직접 링크를 제공한다.
+- `/tags/`, `/articles/`는 `/explore/`로 redirect한다. 이전 태그 주소는
+  taxonomy의 `legacy_tag_redirects`만으로 보존하며 문서별 legacy 태그를
+  추가하지 않는다. redirect page는 메뉴와 검색에서 제외한다.
 - 홈 대표 글은 topic entry의 `featured: true`로 지정한다. 생성기에 특정
   문서·서비스·태그 경로나 제목 목록을 하드코딩하지 않는다.
 - sample 파일은 public-safety 검사 대상이지만 MkDocs 사이트와 검색

@@ -14,8 +14,8 @@ description: HDInsight Kafka broker SKU와 consumer fetch size에 따른 catch-u
 technologies:
 - kafka
 tags:
-- benchmarking
-- performance
+- evaluate
+- optimize
 published_at: 2026-07-31
 topic_order: 2
 redirect_from:

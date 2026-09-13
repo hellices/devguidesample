@@ -5,6 +5,13 @@
 `document_type`은 `case`, `guide`, `lab`, `research` 중 문서의 수명주기에
 맞게 선택하지만 물리 폴더에는 사용하지 않습니다.
 
+`tags`에는 taxonomy의 목적·주제 통제 태그를 1–4개 지정하고 목적을 먼저
+배치합니다. 중복 태그나 기술을 대신하는 태그는 추가하지 않습니다.
+글 찾기는 모든 주제를 묶어 보여 주며 선택한 태그·서비스·기술·제목/설명
+조건을 모두 충족하는 문서만 각 topic에 표시합니다. 주제 수와 문서 수를
+함께 표시하고 일치 문서로 바로 연결합니다. 이전 태그 주소는 문서가 아닌
+taxonomy의 `legacy_tag_redirects`에서 관리합니다.
+
 실행 코드, 배포 매니페스트와 결과물은
 `docs/services/<service>/<topic>/samples/<sample>/`에 `sample.yml`과
 `README.md`를 포함해 둡니다. 최상위 collection 폴더와 `samples/`에는 새

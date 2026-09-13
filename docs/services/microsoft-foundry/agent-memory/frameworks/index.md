@@ -13,8 +13,8 @@ description: Agent memory 구현을 위한 프레임워크와 관리형 플랫�
 technologies:
 - rag
 tags:
+- evaluate
 - ai-agents
-- architecture
 published_at: 2026-08-24
 topic_order: 4
 redirect_from:

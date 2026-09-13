@@ -18,9 +18,9 @@ description: 응답 지연을 주입하고 SRE Agent의 원인 분석을 확인�
 technologies:
 - python
 tags:
+- optimize
+- operate
 - ai-agents
-- latency
-- monitoring
 topic_order: 4
 redirect_from:
 - labs/azure-monitor/sre-agent-scenario-latency/index.md

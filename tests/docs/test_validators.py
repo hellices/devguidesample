@@ -75,6 +75,7 @@ def make_repository(tmp_path: Path) -> Path:
         "services": {"aks": "Azure Kubernetes Service"},
         "technologies": {"kubernetes": "Kubernetes"},
         "tags": {"networking": "Networking"},
+        "tag_groups": {"subject": {"label": "주제", "tags": ["networking"]}},
         "verification_statuses": ["verified", "needs-review"],
         "required_source_host": "learn.microsoft.com",
         "official_source_hosts": ["learn.microsoft.com", "kubernetes.io"],
@@ -113,6 +114,26 @@ def test_validation_gates_accept_a_publishable_repository(tmp_path: Path) -> Non
 
     assert all(result.document_count == 1 for result in results)
     assert all(result.errors == [] for result in results)
+
+
+@pytest.mark.parametrize("tags", [None, 123])
+def test_metadata_gate_reports_malformed_tags_without_crashing(tmp_path: Path, tags) -> None:
+    root = make_repository(tmp_path)
+    path = root / "docs/services/aks/network-diagnosis/index.md"
+    path.write_text(path.read_text().replace("tags: [networking]", f"tags: {yaml.safe_dump(tags).splitlines()[0]}"))
+    result = validate_metadata.validate_repository(root)
+    assert any("tags must be" in error for error in result.errors)
+
+
+def test_metadata_gate_rejects_unused_and_ungrouped_tags(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    path = root / "docs-taxonomy.yml"
+    taxonomy = yaml.safe_load(path.read_text())
+    taxonomy["tags"]["unused"] = "Unused"
+    path.write_text(yaml.safe_dump(taxonomy))
+    errors = validate_metadata.validate_repository(root).errors
+    assert any("missing tag: unused" in error for error in errors)
+    assert any("unused tag: unused" in error for error in errors)
 
 
 def test_metadata_gate_rejects_non_bundle_markdown_below_services(tmp_path: Path) -> None:

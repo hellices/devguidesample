@@ -14,8 +14,9 @@ featured: true
 technologies:
 - rag
 tags:
+- build
+- optimize
 - ai-agents
-- architecture
 published_at: 2026-08-24
 topic_order: 3
 redirect_from:

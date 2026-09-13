@@ -19,8 +19,8 @@ technologies:
 - rest-api
 - rag
 tags:
-- deployment
-- architecture
+- build
+- deploy
 topic_order: 2
 redirect_from:
 - guides/azure-ai-search/custom-web-api-vectorization/index.md

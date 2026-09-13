@@ -17,8 +17,7 @@ description: AKS agent pool, label, taint와 affinity를 이용한 스케줄링 
 technologies:
 - kubernetes
 tags:
-- kubernetes
-- deployment
+- deploy
 redirect_from:
 - guides/azure-kubernetes-service/pod-scheduling-agent-pools/index.md
 ---

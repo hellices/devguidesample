@@ -17,8 +17,8 @@ description: Server-Sent Events 통신을 위해 Application Gateway 응답 버�
 technologies:
 - rest-api
 tags:
+- optimize
 - networking
-- performance
 redirect_from:
 - guides/azure-application-gateway/sse-response-buffering/index.md
 ---

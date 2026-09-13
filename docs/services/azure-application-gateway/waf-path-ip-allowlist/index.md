@@ -17,7 +17,7 @@ description: Application Gateway WAF custom rule로 특정 경로의 IP 허용 �
 technologies:
 - rest-api
 tags:
-- security
+- secure
 - networking
 redirect_from:
 - guides/azure-application-gateway/waf-path-ip-allowlist/index.md

@@ -18,6 +18,7 @@ from scripts.docs.content import (
     load_document,
     load_taxonomy,
     validate_document,
+    validate_taxonomy,
 )
 from scripts.docs.topics import build_topic_catalog, iter_topic_documents
 
@@ -53,7 +54,9 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
     root = Path(repo_root)
     docs_dir = root / "docs"
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
-    errors: list[str] = []
+    errors: list[str] = [
+        f"docs-taxonomy.yml: {error}" for error in validate_taxonomy(taxonomy)
+    ]
     authoring_paths = list(_authoring_markdown_paths(docs_dir, taxonomy))
     try:
         canonical_documents = list(iter_topic_documents(docs_dir, taxonomy))
@@ -84,6 +87,14 @@ def validate_repository(repo_root: Path | str, today: date | None = None) -> Val
         build_topic_catalog(docs_dir, taxonomy, documents=documents)
     except DocumentFormatError as error:
         errors.extend(_topic_catalog_errors(error))
+    used_tags = {
+        tag for document in documents
+        if isinstance(document.metadata.get("tags"), list)
+        for tag in document.metadata.get("tags", [])
+        if isinstance(tag, str)
+    }
+    for tag in sorted(set(taxonomy.get("tags", {})) - used_tags):
+        errors.append(f"docs-taxonomy.yml: unused tag: {tag}")
     return ValidationResult(count, errors)
 
 

@@ -14,7 +14,7 @@ description: 배포하고 확인할 동작을 요약한 한 문장
 document_type: lab
 services: [azure-monitor]
 technologies: [bicep]
-tags: [deployment, monitoring]
+tags: [deploy, operate]
 status: verified
 verification_status: verified
 sources_checked_at: 2026-09-12

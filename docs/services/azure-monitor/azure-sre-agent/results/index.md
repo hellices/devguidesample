@@ -18,9 +18,9 @@ description: 이벤트 기반 장애 분석 실습의 결과를 읽고 채점합
 technologies:
 - python
 tags:
+- evaluate
+- diagnose
 - ai-agents
-- monitoring
-- diagnostics
 topic_order: 6
 redirect_from:
 - labs/azure-monitor/sre-agent-results/index.md

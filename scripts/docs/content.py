@@ -57,6 +57,59 @@ def load_taxonomy(path: Path | str) -> dict[str, Any]:
     return data
 
 
+def validate_taxonomy(taxonomy: Mapping[str, Any]) -> list[str]:
+    """Require a disjoint, complete tag grouping and valid legacy filter targets."""
+    errors: list[str] = []
+    tags = taxonomy.get("tags", {})
+    groups = taxonomy.get("tag_groups")
+    if not isinstance(groups, Mapping) or not groups:
+        return ["tag_groups must be a non-empty mapping"]
+    seen: set[str] = set()
+    for slug, group in groups.items():
+        if not isinstance(group, Mapping):
+            errors.append(f"tag_groups.{slug} must be a mapping")
+            continue
+        if not isinstance(group.get("label"), str) or not group["label"].strip():
+            errors.append(f"tag_groups.{slug}.label must be a non-empty string")
+        values = group.get("tags")
+        if not isinstance(values, list) or not values or not all(isinstance(v, str) for v in values):
+            errors.append(f"tag_groups.{slug}.tags must be a non-empty list of strings")
+            continue
+        for tag in values:
+            if tag not in tags:
+                errors.append(f"tag_groups.{slug}: unknown tag: {tag}")
+            if tag in seen:
+                errors.append(f"tag_groups.{slug}: duplicate tag: {tag}")
+            seen.add(tag)
+    for tag in sorted(set(tags) - seen):
+        errors.append(f"tag_groups: missing tag: {tag}")
+
+    redirects = taxonomy.get("legacy_tag_redirects", {})
+    if not isinstance(redirects, Mapping):
+        errors.append("legacy_tag_redirects must be a mapping")
+        return errors
+    fields = {"tag": "tags", "service": "services", "technology": "technologies"}
+    for slug, filters in redirects.items():
+        if not isinstance(slug, str) or not KEBAB_CASE.fullmatch(slug) or slug == "index":
+            errors.append(f"legacy_tag_redirects: invalid slug: {slug}")
+        if not isinstance(filters, Mapping) or not filters:
+            errors.append(f"legacy_tag_redirects.{slug} must be a non-empty mapping")
+            continue
+        for field, values in filters.items():
+            if field not in fields:
+                errors.append(f"legacy_tag_redirects.{slug}: unknown filter: {field}")
+                continue
+            if not isinstance(values, list) or not values or not all(isinstance(v, str) for v in values):
+                errors.append(f"legacy_tag_redirects.{slug}.{field} must be a non-empty list of strings")
+                continue
+            if len(values) != len(set(values)):
+                errors.append(f"legacy_tag_redirects.{slug}.{field}: duplicate values")
+            for value in values:
+                if value not in taxonomy.get(fields[field], {}):
+                    errors.append(f"legacy_tag_redirects.{slug}: unknown {field}: {value}")
+    return errors
+
+
 def _infer_docs_dir(path: Path) -> Path:
     for parent in (path.parent, *path.parents):
         if parent.name == "docs":
@@ -283,6 +336,25 @@ def validate_document(
     _validate_string_list(metadata, "services", services, "service", errors)
     _validate_string_list(metadata, "technologies", technologies, "technology", errors)
     _validate_string_list(metadata, "tags", tags, "tag", errors)
+    tag_values = metadata.get("tags")
+    if isinstance(tag_values, list):
+        if not 1 <= len(tag_values) <= 4:
+            errors.append("tags must contain 1-4 tags")
+        if all(isinstance(tag, str) for tag in tag_values):
+            if len(tag_values) != len(set(tag_values)):
+                errors.append("tags must not contain duplicates")
+            groups = taxonomy.get("tag_groups", {})
+            if isinstance(groups, Mapping):
+                ranks = {
+                    tag: rank
+                    for rank, name in enumerate(("goal", "subject"))
+                    for group in [groups.get(name)]
+                    if isinstance(group, Mapping) and isinstance(group.get("tags"), list)
+                    for tag in group["tags"] if isinstance(tag, str)
+                }
+                order = [ranks[tag] for tag in tag_values if tag in ranks]
+                if order != sorted(order):
+                    errors.append("tags must keep goal tags before subject tags")
 
     if len(parts) >= 2 and isinstance(metadata.get("services"), list):
         service_folder = parts[1]

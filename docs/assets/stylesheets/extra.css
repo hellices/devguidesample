@@ -32,6 +32,163 @@
   --md-code-fg-color: #24354c;
 }
 
+.dg-explore [hidden] {
+  display: none !important;
+}
+
+.dg-explore-filters {
+  padding: 1rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.5rem;
+  background: var(--dg-surface);
+}
+
+.dg-explore-filters fieldset {
+  min-width: 0;
+  margin: 0.8rem 0;
+  padding: 0.6rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.35rem;
+}
+
+.dg-explore-filters legend,
+.dg-explore-search {
+  font-weight: 700;
+}
+
+.dg-explore input[type="search"] {
+  display: block;
+  width: 100%;
+  min-height: 2.2rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.3rem;
+  color: var(--dg-text);
+  background: var(--dg-bg);
+}
+
+.dg-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.dg-filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.dg-filter-option:has(input:checked) {
+  border-color: var(--dg-accent);
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+}
+
+.dg-filter-option input {
+  flex-shrink: 0;
+  accent-color: var(--dg-accent);
+}
+
+.dg-explore-reset {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--dg-accent);
+  border-radius: 0.3rem;
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+  cursor: pointer;
+}
+
+.dg-explore input:focus-visible,
+.dg-explore button:focus-visible,
+.dg-filter-option:has(input:focus-visible) {
+  outline: 2px solid var(--dg-accent);
+  outline-offset: 3px;
+}
+
+.dg-explore-status,
+.dg-explore [role="alert"] {
+  margin-block: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.dg-explore [role="alert"] {
+  padding: 0.6rem;
+  border-inline-start: 3px solid var(--dg-accent);
+  background: var(--dg-accent-soft);
+}
+
+.dg-explore-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.dg-explore-topic {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.5rem;
+  background: var(--dg-surface);
+  overflow-wrap: anywhere;
+}
+
+.md-typeset .dg-explore-topic h2 {
+  margin-top: 0;
+}
+
+.md-typeset .dg-explore-members {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .dg-explore-member {
+  margin: 0;
+  padding-block: 0.7rem;
+  border-top: 1px solid var(--dg-border);
+}
+
+.md-typeset .dg-explore-member h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .dg-explore-results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dg-explore-filters,
+  .dg-explore-topic {
+    padding: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dg-filter-options {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dg-explore-reset {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dg-filter-option {
+    transition: none;
+  }
+}
+
 [data-md-color-scheme="slate"] {
   --dg-bg: #111720;
   --dg-surface: #18212d;
@@ -693,7 +850,6 @@ body {
 
 .dg-collection--research .dg-doc-grid,
 .dg-service-grid,
-.dg-browse-grid,
 .dg-tag-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

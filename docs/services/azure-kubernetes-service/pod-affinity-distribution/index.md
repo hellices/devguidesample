@@ -17,8 +17,7 @@ description: AKS에서 Pod affinity와 anti-affinity로 워크로드를 분산�
 technologies:
 - kubernetes
 tags:
-- kubernetes
-- reliability
+- operate
 redirect_from:
 - guides/azure-kubernetes-service/pod-affinity-distribution/index.md
 ---

@@ -17,8 +17,8 @@ description: AKS에서 KAITO를 이용해 오픈소스 언어 모델을 배포�
 technologies:
 - kubernetes
 tags:
+- deploy
 - ai-agents
-- deployment
 redirect_from:
 - guides/azure-kubernetes-service/kaito-open-source-model/index.md
 ---

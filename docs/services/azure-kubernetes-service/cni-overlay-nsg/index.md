@@ -17,8 +17,8 @@ description: AKS CNI Overlay를 사용할 때 NSG 규칙과 트래픽 경로의 
 technologies:
 - kubernetes
 tags:
+- secure
 - networking
-- security
 redirect_from:
 - guides/azure-kubernetes-service/cni-overlay-nsg/index.md
 ---

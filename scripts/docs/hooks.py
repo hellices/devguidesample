@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.docs.content import load_taxonomy
 from scripts.docs.generate_indexes import build_tag_links
+from scripts.docs.explore import filter_redirect_targets
 from scripts.docs.topics import TopicCatalog, build_topic_catalog, iter_topic_documents
 
 
@@ -266,6 +267,11 @@ def on_nav(nav: Navigation, config: Mapping[str, Any], files: Any) -> Navigation
         direct_pages = [child for child in children if isinstance(child, Page)]
         if any(page.file.src_uri in collection_indexes for page in direct_pages):
             continue
+        if any(
+            page.file.src_uri.startswith(("tags/", "articles/"))
+            for page in direct_pages
+        ):
+            continue
         if isinstance(item, Section) and any(
             page.file.src_uri == "services/index.md" for page in direct_pages
         ):
@@ -383,11 +389,15 @@ def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
         return output
 
     redirect_path = PurePosixPath(src_uri)
+    taxonomy = load_taxonomy(Path(config["docs_dir"]).parent / "docs-taxonomy.yml")
+    destination = filter_redirect_targets(taxonomy).get(redirect_path)
     canonical_path = catalog.redirects.get(redirect_path)
-    if canonical_path is None:
+    if destination is None and canonical_path is not None:
+        destination = _redirect_target(redirect_path, canonical_path)
+    if destination is None:
         return output
 
-    target = escape(_redirect_target(redirect_path, canonical_path), quote=True)
+    target = escape(destination, quote=True)
     output = re.sub(
         r'<link rel="canonical" href="[^"]*"\s*/?>',
         f'<link rel="canonical" href="{target}">',

@@ -17,9 +17,9 @@ description: Node.js 서버의 파일 I/O로 인한 CPU 오버헤드를 분석�
 technologies:
 - nodejs
 tags:
-- performance
-- diagnostics
-- development
+- optimize
+- diagnose
+- build
 redirect_from:
 - guides/application-development/nodejs-file-io-cpu/index.md
 ---

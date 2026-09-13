@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 import posixpath
 import sys
 from typing import Any, Iterable, Mapping, Sequence
+from urllib.parse import urlencode
 
 import yaml
 
@@ -17,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.docs.content import Document, DocumentFormatError, load_taxonomy
+from scripts.docs.explore import build_explore_page, build_filter_redirect_pages, count_label, topic_groups
 from scripts.docs.topics import (
     LEGACY_COLLECTIONS,
     Topic,
@@ -113,7 +115,8 @@ def build_tag_links(
     tags = taxonomy.get("tags", {})
     links = []
     for tag in dict.fromkeys(tag_values):
-        target = posixpath.relpath(f"tags/{tag}.md", start=index_path.parent.as_posix())
+        target = posixpath.relpath("explore/index.md", start=index_path.parent.as_posix())
+        target += "?" + urlencode({"tag": tag})
         links.append(f"[{_md_label(_label_for(tags, tag))}]({target}){{ .dg-tag }}")
     if not links:
         return ""
@@ -429,7 +432,7 @@ def _build_collection_page(
     body = _front_matter(title, description)
     body += f'<div class="dg-landing dg-collection dg-collection--{document_type}" markdown="1">\n\n'
     body += _page_heading(eyebrow_prefix, len(matching), title, description)
-    body += "\n"
+    body += f'<p class="dg-card-count">{count_label(matching, catalog)}</p>\n\n'
 
     if not matching:
         body += _empty_state("아직 등록된 문서가 없습니다.")
@@ -473,7 +476,9 @@ def _build_service_page(
     body = _front_matter(label, description)
     body += '<div class="dg-landing dg-service" markdown="1">\n\n'
     body += _page_heading(_SERVICES_EYEBROW, len(matching), label, description)
-    body += "\n"
+    body += f'<p class="dg-card-count">{count_label(matching, catalog)}</p>\n\n'
+    explore_link = posixpath.relpath("explore/index.md", start=page_path.parent.as_posix())
+    body += f'[글 찾기에서 조건 더하기]({explore_link}?{urlencode({"service": slug})}){{ .dg-text-link }}\n\n'
 
     body += _document_grid(page_path, matching, taxonomy, catalog=catalog)
     body += "</div>\n"
@@ -483,7 +488,8 @@ def _build_service_page(
 def _build_services_overview_page(
     by_service: Mapping[str, list[Document]],
     taxonomy: Mapping[str, Any],
-    total_documents: int,
+    documents: list[Document],
+    catalog: TopicCatalog | None,
 ) -> tuple[PurePosixPath, str]:
     services_path = PurePosixPath("services/index.md")
     services = taxonomy.get("services", {})
@@ -492,8 +498,8 @@ def _build_services_overview_page(
 
     body = _front_matter(title, description)
     body += '<div class="dg-landing dg-services" markdown="1">\n\n'
-    body += _page_heading(_SERVICES_EYEBROW, total_documents, title, description)
-    body += "\n"
+    body += _page_heading(_SERVICES_EYEBROW, len(documents), title, description)
+    body += f'<p class="dg-card-count">{count_label(documents, catalog)}</p>\n\n'
 
     if not services:
         available_slugs = sorted(by_service)
@@ -520,76 +526,12 @@ def _build_services_overview_page(
             matching = by_service.get(slug, [])
             body += '<article class="dg-service-card" markdown="1">\n\n'
             body += f"## [{_md_label(label)}]({slug}/index.md)\n\n"
-            body += f'<p>{_escape(f"{len(matching)}개 문서")}</p>\n'
+            body += f'<p>{count_label(matching, catalog)}</p>\n'
             body += "\n</article>\n\n"
         body += "</div>\n\n"
 
     body += "</div>\n"
     return services_path, body
-
-
-def _build_tag_pages(
-    documents: list[Document],
-    taxonomy: Mapping[str, Any],
-    *,
-    catalog: TopicCatalog | None = None,
-) -> dict[PurePosixPath, str]:
-    by_tag: dict[str, list[Document]] = defaultdict(list)
-    for document in documents:
-        for tag in _metadata_values(document, "tags"):
-            by_tag[tag].append(document)
-
-    tags = taxonomy.get("tags", {})
-    ordered_tags = sorted(by_tag, key=lambda tag: (_label_for(tags, tag).casefold(), tag))
-    title = "태그별 보기"
-    description = "태그를 선택하면 같은 주제를 다룬 글을 볼 수 있습니다."
-    overview = _front_matter(title, description)
-    overview += '<div class="dg-landing dg-tags" markdown="1">\n\n'
-    overview += _page_heading("TAGS", len(documents), title, description)
-    overview += "\n"
-    pages: dict[PurePosixPath, str] = {}
-    if not ordered_tags:
-        overview += _empty_state("아직 사용 중인 태그가 없습니다.")
-    else:
-        overview += '<div class="dg-tag-grid" markdown="1">\n\n'
-        for tag in ordered_tags:
-            label = _label_for(tags, tag)
-            matching = by_tag[tag]
-            overview += '<article class="dg-tag-card" markdown="1">\n\n'
-            overview += f"## [{_md_label(label)}]({tag}.md) {{ #tag:{tag} }}\n\n"
-            overview += f"<p>{len(matching)}개 문서</p>\n\n</article>\n\n"
-
-            page_path = PurePosixPath(f"tags/{tag}.md")
-            tag_description = f"{label} 태그가 붙은 글을 제목순으로 모았습니다."
-            body = _front_matter(label, tag_description)
-            body += '<div class="dg-landing dg-tag-results" markdown="1">\n\n'
-            body += _page_heading("TAG", len(matching), label, tag_description)
-            body += '\n[모든 태그](index.md){ .dg-text-link }\n\n'
-            body += _document_grid(page_path, matching, taxonomy, catalog=catalog)
-            body += "</div>\n"
-            pages[page_path] = body
-        overview += "</div>\n"
-    overview += "</div>\n"
-    pages[PurePosixPath("tags/index.md")] = overview
-    return pages
-
-
-def _build_articles_page(
-    documents: list[Document],
-    taxonomy: Mapping[str, Any],
-    *,
-    catalog: TopicCatalog | None = None,
-) -> tuple[PurePosixPath, str]:
-    page_path = PurePosixPath("articles/index.md")
-    title = "전체 글"
-    description = "설계·구현·운영 기록을 제목순으로 살펴보세요. 서비스와 태그로도 찾아볼 수 있습니다."
-    body = _front_matter(title, description)
-    body += '<div class="dg-landing dg-articles" markdown="1">\n\n'
-    body += _page_heading("ARTICLES", len(documents), title, description)
-    body += '\n[서비스별 보기](../services/index.md){ .dg-text-link } · [태그별 보기](../tags/index.md){ .dg-text-link }\n\n'
-    body += _document_grid(page_path, documents, taxonomy, catalog=catalog)
-    body += "</div>\n"
-    return page_path, body
 
 
 def build_index_pages(
@@ -656,11 +598,10 @@ def build_index_pages(
         )
         pages[page_path] = page_body
 
-    services_path, services_body = _build_services_overview_page(by_service, taxonomy, len(docs))
+    services_path, services_body = _build_services_overview_page(by_service, taxonomy, docs, catalog)
     pages[services_path] = services_body
-    pages.update(_build_tag_pages(docs, taxonomy, catalog=catalog))
-    articles_path, articles_body = _build_articles_page(docs, taxonomy, catalog=catalog)
-    pages[articles_path] = articles_body
+    pages[PurePosixPath("explore/index.md")] = build_explore_page(docs, taxonomy, catalog)
+    pages.update(build_filter_redirect_pages(taxonomy))
     return pages
 
 
@@ -719,7 +660,7 @@ def _feature_card(
     return _doc_card(index_path, document, taxonomy, extra_classes="dg-feature-card")
 
 
-def _build_home_stats(documents: list[Document]) -> str:
+def _build_home_stats(documents: list[Document], catalog: TopicCatalog | None) -> str:
     total = len(documents)
     used_services: set[str] = set()
     for document in documents:
@@ -729,6 +670,7 @@ def _build_home_stats(documents: list[Document]) -> str:
     used_tags = {tag for document in documents for tag in _metadata_values(document, "tags")}
 
     stats = [
+        (len(topic_groups(documents, catalog)), "모든 주제"),
         (total, "전체 문서"),
         (len(used_services), "다루는 서비스"),
         (len(used_tags), "다루는 태그"),
@@ -763,13 +705,11 @@ def _build_home_featured(
     return body
 
 
-def _build_home_browse(documents: list[Document]) -> str:
+def _build_home_browse(documents: list[Document], catalog: TopicCatalog | None) -> str:
     used_services = {service for document in documents for service in _metadata_values(document, "services")}
-    used_tags = {tag for document in documents for tag in _metadata_values(document, "tags")}
     destinations = (
         ("services", "SERVICES", "서비스별 보기", "사용 중인 서비스의 설계·구현·운영 기록을 함께 읽습니다.", f"{len(used_services)}개 서비스"),
-        ("tags", "TAGS", "태그별 보기", "관심 있는 주제를 선택해 같은 태그가 붙은 글을 모아 봅니다.", f"{len(used_tags)}개 태그"),
-        ("articles", "ARTICLES", "전체 글", "모든 기록을 제목순으로 살펴봅니다.", f"{len(documents)}개 문서"),
+        ("explore", "EXPLORE", "글 찾기", "모든 주제에서 서비스·목적·주제·기술과 제목·설명으로 좁혀 봅니다. 선택한 조건을 모두 갖춘 문서로 바로 이동합니다.", count_label(documents, catalog)),
     )
     body = '<div class="dg-browse-grid" markdown="1">\n\n'
     for path, eyebrow, title, description, count in destinations:
@@ -832,14 +772,14 @@ def build_home_page(
     )
 
     rendered = template
-    rendered = rendered.replace("<!-- home:stats -->", _build_home_stats(docs), 1)
+    rendered = rendered.replace("<!-- home:stats -->", _build_home_stats(docs, catalog), 1)
     rendered = rendered.replace(
         "<!-- home:featured -->",
         _build_home_featured(docs, taxonomy, catalog=catalog),
         1,
     )
     rendered = rendered.replace(
-        "<!-- home:browse -->", _build_home_browse(docs), 1
+        "<!-- home:browse -->", _build_home_browse(docs, catalog), 1
     )
     return rendered
 
