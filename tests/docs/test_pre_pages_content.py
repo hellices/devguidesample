@@ -579,7 +579,7 @@ def test_json_review_is_deterministic_and_preserves_unicode_and_findings(tmp_pat
     assert "한글".encode() in original
 
 
-def test_real_repository_has_62_documents_and_no_unreviewed_content_losses() -> None:
+def test_real_repository_preserves_the_62_baseline_documents_with_current_growth() -> None:
     inventory = load_inventory(ROOT / "scripts/docs/pre_pages_inventory.yml")
     results = audit_document_content(ROOT, inventory)
     assert len(results) == 62
@@ -1903,3 +1903,70 @@ def test_authored_svg_presentation_hiding_is_not_visible_source(attribute) -> No
 def test_inline_svg_visibility_overrides_the_presentation_attribute() -> None:
     source = '<svg><text visibility="hidden" style="visibility:visible">Authored diagram label</text></svg>'
     assert extract_markdown_structure(source).prose
+
+
+@pytest.mark.parametrize("wrapper", [
+    '<svg aria-hidden="true" style="display:none"><foreignObject>{content}</foreignObject></svg>',
+    '<svg aria-hidden="true"><foreignObject>{content}</foreignObject></svg>',
+    '<svg role="presentation"><foreignObject>{content}</foreignObject></svg>',
+    '<svg class="md-icon"><foreignObject>{content}</foreignObject></svg>',
+    '<svg><defs><foreignObject>{content}</foreignObject></defs></svg>',
+    '<svg><g aria-hidden="true"><foreignObject>{content}</foreignObject></g></svg>',
+])
+def test_excluded_svg_cannot_supply_semantic_link_or_image_evidence(wrapper) -> None:
+    content = '<a href="guide.md"><img alt="Capture" src="capture.gif"></a>'
+    structure = extract_markdown_structure(wrapper.format(content=content))
+    assert structure.images == ()
+    assert structure.links == structure.local_link_labels == ()
+
+
+@pytest.mark.parametrize("image", [
+    "![Capture](capture.gif)",
+    '<img alt="Capture" src="capture.gif">',
+    '<svg width="300" height="200"><foreignObject width="300" height="200"><img alt="Capture" src="capture.gif"></foreignObject></svg>',
+])
+def test_visible_images_still_supply_exact_evidence_beside_excluded_svg(image) -> None:
+    hidden = (
+        '<svg aria-hidden="true" style="display:none"><foreignObject>'
+        '<img alt="Capture" src="capture.gif"></foreignObject></svg>'
+    )
+    assert extract_markdown_structure(hidden + "\n\n" + image).images == ("Capture\ncapture.gif",)
+
+
+def test_excluded_svg_alt_text_cannot_forge_the_surrounding_link_label() -> None:
+    source = (
+        '<a href="guide.md">Visible'
+        '<svg aria-hidden="true" style="display:none"><foreignObject>'
+        '<img alt="Hidden" src="capture.gif"></foreignObject></svg></a>'
+    )
+    structure = extract_markdown_structure(source)
+    assert structure.links == ("Visible\nguide.md",)
+    assert structure.images == ()
+
+
+def test_semantic_link_can_use_a_visible_descendant_of_a_hidden_visibility_anchor() -> None:
+    source = '<a style="visibility:hidden" href="guide.md"><span style="visibility:visible">Guide</span></a>'
+    assert extract_markdown_structure(source).links == ("Guide\nguide.md",)
+
+
+def test_semantic_link_cannot_use_only_an_inert_descendant_as_evidence() -> None:
+    assert extract_markdown_structure('<a href="guide.md"><span inert>Guide</span></a>').links == ()
+
+
+def test_real_s1_hidden_svg_image_cannot_satisfy_its_preservation_approval(tmp_path, monkeypatch) -> None:
+    inventory, path = isolated_real_document_audit(
+        tmp_path, monkeypatch, "monitor/sre-agent-event-lab/validation-results.md",
+        "docs/services/azure-monitor/azure-sre-agent/validation-results/index.md",
+    )
+    assert not audit_document_content(tmp_path, inventory)[0].missing
+    source = path.read_text()
+    image = "![S1 SRE Agent investigation](images/s1-investigation.gif)"
+    assert source.count(image) == 1
+    hidden = (
+        '<svg aria-hidden="true" style="display:none"><foreignObject>'
+        '<img alt="S1 SRE Agent investigation" src="images/s1-investigation.gif">'
+        '</foreignObject></svg>'
+    )
+    path.write_text(source.replace(image, hidden))
+    with pytest.raises(AuditFormatError, match="evidence.*images|images.*count"):
+        audit_document_content(tmp_path, inventory)

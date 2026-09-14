@@ -304,7 +304,25 @@ python scripts/docs/audit_pre_pages.py
 ```
 
 `audit_pre_pages.py`는 고정된 pre-Pages 기준선과 현재 built site를 함께
-대조해 과거 공개 콘텐츠와 호환 URL이 계속 보존되는지 검사합니다. 이 검사는
+대조해 과거 공개 콘텐츠와 호환 URL이 계속 보존되는지 검사합니다.
+보존 inventory는 `a4e6801` 시점의 **기준선 문서 62개**를 현재 canonical
+문서에 일대일로 연결합니다. 신규 문서는 이 기준선 inventory에 추가하지
+않으며, 현재 문서 수가 늘어났다는 이유로 감사가 실패하지 않습니다.
+과거 구조 비교와 JSON의 `document_count`·`details.documents`는 이 62개만
+대상으로 합니다. `current_document_count`는 현재 카탈로그에서 계산합니다.
+
+전체 감사는 기준선 밖의 신규 문서까지 포함해 현재 canonical 문서 **전체**의
+본문 가시성, 검색, 서비스별 주제 진입점, 글 찾기 연결과 로컬 자산을 검사합니다.
+각 문서가 선언한 모든 `redirect_from`도 확인하며, inventory에 기록된
+기준선 Pages 경로 62개는 계속 필수입니다. 현재 문서가 66개인 경우의 성공
+출력은 다음과 같습니다. 현재 문서 수는 고정된 제한이 아닙니다.
+
+```text
+Audited 359 baseline files and 73 Markdown files: 62/62 baseline documents mapped and preserved; 66 current documents searchable and visible; declared redirects and local assets verified.
+```
+
+`--content-only`는 기준선 구조 보존만 검사하며 built site를 확인했다고
+표현하지 않습니다. 이 검사는
 `a4e6801`과 `9ace9667` commit object를 직접 읽으므로 전체 Git 이력이
 필수입니다. 로컬 clone이 얕으면 검사를 건너뛰지 말고
 `git fetch --unshallow` 또는 동등한 전체 이력 fetch를 수행한 뒤 다시

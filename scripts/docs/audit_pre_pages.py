@@ -1,4 +1,4 @@
-"""Audit preservation and visibility of the fixed pre-Pages public corpus."""
+"""Audit fixed pre-Pages preservation and visibility of the current canonical corpus."""
 
 from __future__ import annotations
 
@@ -71,12 +71,13 @@ def main(argv: list[str] | None = None) -> int:
     summary = (
         f"Audited {result.baseline_file_count} baseline files and "
         f"{result.baseline_markdown_count} Markdown files: "
-        f"{result.preserved_documents}/{result.document_count} public documents "
+        f"{result.preserved_documents}/{result.document_count} baseline documents mapped and preserved"
     )
     print(summary + (
-        "mapped and preserved (content-only; built site not inspected)."
+        f" (content-only; {result.current_document_count} current documents; built site not inspected)."
         if args.content_only else
-        "mapped, preserved, redirected, searchable, and visible."
+        f"; {result.current_document_count} current documents searchable and visible; "
+        "declared redirects and local assets verified."
     ))
     return 0
 

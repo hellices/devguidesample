@@ -322,6 +322,7 @@ def inspect_built_site(
         "canonical_html", "redirects", "searchable_documents", "service_topics",
         "explore_documents", "published_assets", "rendered_local_targets", "html_pages",
     ), 0)
+    counts["current_document_count"] = len(catalog.documents)
     try:
         config_path = repo_root / "mkdocs.yml"
         config = yaml.safe_load(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
@@ -431,6 +432,7 @@ def inspect_built_site(
     explore_path = site.root / "explore/index.html"
     explore_links = links(explore_path, "Explore index")
     by_path = {document.relative_path: document for document in catalog.documents}
+    mapped = set()
     for entry in inventory.documents:
         canonical = catalog.redirects.get(entry.pages_path)
         document = by_path.get(canonical)
@@ -440,6 +442,22 @@ def inspect_built_site(
         declarations = document.metadata.get("redirect_from")
         if not isinstance(declarations, list) or declarations.count(str(entry.pages_path)) != 1:
             errors.append(f"{canonical}: {entry.pages_path} must occur exactly once in redirect_from")
+        if canonical in mapped:
+            errors.append(f"{canonical}: baseline mapping uses a current document more than once")
+        mapped.add(canonical)
+
+    for document in catalog.documents:
+        canonical = document.relative_path
+        declarations = document.metadata.get("redirect_from", [])
+        if not isinstance(declarations, list):
+            errors.append(f"{canonical}: redirect_from must be a list")
+        else:
+            for raw in declarations:
+                if (
+                    not isinstance(raw, str) or raw != PurePosixPath(raw).as_posix()
+                    or catalog.redirects.get(PurePosixPath(raw)) != canonical
+                ):
+                    errors.append(f"{canonical}: invalid or unmapped redirect_from declaration {raw!r}")
         source_path = docs_root / canonical
         try:
             if not _contained(docs_root, source_path, "canonical source").is_file():
@@ -478,10 +496,16 @@ def inspect_built_site(
         else:
             counts["explore_documents"] += 1
 
-        redirect_path = site.root / entry.pages_path.with_suffix(".html")
+    for pages_path, canonical in catalog.redirects.items():
+        document = by_path.get(canonical)
+        declarations = document.metadata.get("redirect_from", []) if document is not None else []
+        if not isinstance(declarations, list) or declarations.count(str(pages_path)) != 1:
+            errors.append(f"{canonical}: {pages_path} must occur exactly once in redirect_from")
+        canonical_html = site.root / canonical.with_suffix(".html")
+        redirect_path = site.root / pages_path.with_suffix(".html")
         if redirect_path in search_locations:
-            errors.append(f"{entry.pages_path}: redirect location is present in search")
-        redirect_page = read_page(redirect_path, f"{entry.pages_path}: redirect")
+            errors.append(f"{pages_path}: redirect location is present in search")
+        redirect_page = read_page(redirect_path, f"{pages_path}: redirect")
         if redirect_page is None:
             continue
         before = len(errors)
@@ -496,12 +520,12 @@ def inspect_built_site(
         if len(redirect_page.canonicals) != 1 or redirect_target(
             redirect_page.canonicals[0],
         ) != canonical_html:
-            errors.append(f"{entry.pages_path}: redirect canonical target does not match {canonical}")
+            errors.append(f"{pages_path}: redirect canonical target does not match {canonical}")
         refresh = _refresh_url(redirect_page.refreshes[0]) if len(redirect_page.refreshes) == 1 else None
         if refresh is None or redirect_target(refresh) != canonical_html:
-            errors.append(f"{entry.pages_path}: redirect refresh target does not match {canonical}")
+            errors.append(f"{pages_path}: redirect refresh target does not match {canonical}")
         if canonical_html not in links(redirect_path, "redirect fallback"):
-            errors.append(f"{entry.pages_path}: redirect fallback link does not match {canonical}")
+            errors.append(f"{pages_path}: redirect fallback link does not match {canonical}")
         if before == len(errors) and not redirect_page.errors:
             counts["redirects"] += 1
 

@@ -116,9 +116,12 @@ class GitFileDisposition:
 
 @dataclass(frozen=True)
 class PreservationAuditResult:
+    """Fixed-baseline preservation and dynamically discovered current coverage."""
+
     baseline_file_count: int
     baseline_markdown_count: int
     document_count: int
+    current_document_count: int
     preserved_documents: int
     reviewed_documents: int
     errors: tuple[str, ...]
@@ -505,10 +508,6 @@ def resolve_current_documents(
         catalog = build_topic_catalog(repo_root / "docs", taxonomy)
     except (DocumentFormatError, OSError, yaml.YAMLError) as error:
         raise AuditFormatError(f"Cannot resolve current documents: {error}") from error
-    if len(catalog.documents) != 62:
-        raise AuditFormatError(
-            f"Expected 62 current public documents, found {len(catalog.documents)}"
-        )
     by_path = {document.relative_path: document for document in catalog.documents}
     resolved: dict[PurePosixPath, Document] = {}
     used: set[PurePosixPath] = set()
@@ -524,8 +523,6 @@ def resolve_current_documents(
             raise AuditFormatError(f"duplicate baseline_path: {document.baseline_path}")
         resolved[document.baseline_path] = by_path[canonical]
         used.add(canonical)
-    if used != set(by_path):
-        raise AuditFormatError("Every current public document must be used once")
     return MappingProxyType(resolved)
 
 
@@ -590,7 +587,7 @@ def audit_repository(
 
     errors: list[str] = []
     details: dict[str, object] = {"content_only": content_only}
-    file_count = markdown_count = document_count = preserved = reviewed = 0
+    file_count = markdown_count = document_count = current_document_count = preserved = reviewed = 0
     root = repo_root.resolve()
     try:
         inventory = load_inventory(inventory_path)
@@ -605,6 +602,9 @@ def audit_repository(
             )
         details["baseline_commit"] = inventory.baseline_commit
         details["pages_commit"] = inventory.pages_commit
+        catalog = build_topic_catalog(root / "docs", load_taxonomy(root / "docs-taxonomy.yml"))
+        current_document_count = len(catalog.documents)
+        details["current_document_count"] = current_document_count
         details["files"] = [asdict(item) for item in classify_baseline_files(root, inventory)]
         content = audit_document_content(root, inventory)
         details["documents"] = [asdict(item) for item in content]
@@ -617,13 +617,12 @@ def audit_repository(
                     f"{finding.fingerprint} from {item.baseline_path}: {finding.excerpt}"
                 )
         if not content_only:
-            catalog = build_topic_catalog(root / "docs", load_taxonomy(root / "docs-taxonomy.yml"))
             site_result = inspect_built_site(root, site_dir, inventory, catalog)
             errors.extend(site_result.errors)
             details["site"] = site_result.details
     except (OSError, ValueError, RuntimeError, yaml.YAMLError) as error:
         errors.append(str(error))
     return PreservationAuditResult(
-        file_count, markdown_count, document_count, preserved, reviewed,
+        file_count, markdown_count, document_count, current_document_count, preserved, reviewed,
         tuple(errors), (), MappingProxyType(details),
     )

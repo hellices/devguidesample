@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 from html import escape
 import json
 from pathlib import Path, PurePosixPath
+import posixpath
 import re
 import shutil
 import subprocess
@@ -513,6 +514,7 @@ def test_repository_audit_consumes_real_inventory_history_and_content(historical
     assert result.errors == ()
     assert (result.baseline_file_count, result.baseline_markdown_count) == (359, 73)
     assert (result.document_count, result.preserved_documents, result.reviewed_documents) == (62, 62, 0)
+    assert getattr(result, "current_document_count", None) == 62
     with pytest.raises(FrozenInstanceError):
         result.document_count = 1
 
@@ -526,8 +528,9 @@ def test_cli_success_writes_atomic_json_and_exact_summary(historical_repo):
     ], capture_output=True, text=True)
     assert command.returncode == 0, command.stdout + command.stderr
     assert command.stdout.strip() == (
-        "Audited 359 baseline files and 73 Markdown files: 62/62 public documents "
-        "mapped, preserved, redirected, searchable, and visible."
+        "Audited 359 baseline files and 73 Markdown files: 62/62 baseline documents "
+        "mapped and preserved; 62 current documents searchable and visible; "
+        "declared redirects and local assets verified."
     )
     assert json.loads(output.read_text())["errors"] == []
     assert not list(historical_repo.glob(".*.tmp"))
@@ -582,7 +585,7 @@ def test_json_replace_failure_retains_the_previous_report(historical_repo, tmp_p
     from scripts.docs.pre_pages import PreservationAuditResult
 
     path = write(tmp_path, "report.json", "previous report")
-    result = PreservationAuditResult(359, 73, 62, 62, 0, (), (), {})
+    result = PreservationAuditResult(359, 73, 62, 62, 62, 0, (), (), {})
 
     def fail_replace(source, destination):
         assert source.parent == destination.parent
@@ -600,7 +603,7 @@ def test_cli_emits_one_path_specific_line_per_finding(monkeypatch, capsys):
     from scripts.docs.pre_pages import PreservationAuditResult
 
     result = PreservationAuditResult(
-        359, 73, 62, 61, 0, ("docs/services/service/topic/index.md: lost code: first\nsecond",), (), {},
+        359, 73, 62, 62, 61, 0, ("docs/services/service/topic/index.md: lost code: first\nsecond",), (), {},
     )
     monkeypatch.setattr(audit_pre_pages, "audit_repository", lambda *args, **kwargs: result)
     assert audit_pre_pages.main([]) == 1
@@ -1556,3 +1559,178 @@ def test_unresolved_source_css_becomes_a_canonical_path_finding(site_repo):
     document = root / "docs" / ENTRY
     document.write_text(document.read_text() + '\n<div style="display:var(--visibility)">Authored text.</div>\n')
     assert any(ENTRY in error and "inline CSS" in error for error in inspect(site_repo).errors)
+
+
+def add_current_document(root, path="services/service/extra/index.md", redirects=(), order=None):
+    metadata = {"title": "Document", "document_type": "guide", "services": ["service"]}
+    if redirects:
+        metadata["redirect_from"] = list(redirects)
+    if order is not None:
+        metadata["topic_order"] = order
+    write(root / "docs", path, "---\n" + yaml.safe_dump(metadata) + "---\n\n# Document\n\nCurrent-only prose.\n")
+    write(root / "site", path.replace(".md", ".html"), html().replace("Preserved prose.", "Current-only prose."))
+    topic = PurePosixPath(path).parts[2]
+    service = root / "site/services/service/index.html"
+    service.write_text(service.read_text().replace("</main>", f'<a href="{topic}/">Current topic</a></main>'))
+    explore = root / "site/explore/index.html"
+    explore.write_text(explore.read_text().replace(
+        "</main>", f'<a href="../{PurePosixPath(path).parent}/">Current member</a></main>',
+    ))
+    search = root / "site/search/search_index.json"
+    data = json.loads(search.read_text())
+    data["docs"].append(search_entry(path))
+    search.write_text(json.dumps(data))
+    for old in redirects:
+        target = posixpath.relpath(str(PurePosixPath(path).parent), str(PurePosixPath(old).parent)) + "/"
+        write(root / "site", old.replace(".md", ".html"), redirect(target))
+    return path
+
+
+@pytest.mark.parametrize("extra_count", [1, 4])
+@pytest.mark.parametrize("content_only", [False, True])
+def test_repository_reports_baseline_and_dynamic_current_counts(historical_repo, tmp_path, extra_count, content_only):
+    root = tmp_path / "repo"
+    shutil.copytree(historical_repo, root)
+    for index in range(extra_count):
+        add_current_document(root, f"services/service/new-{index}/index.md")
+    result = audit_repository(
+        root, root / "site", root / "scripts/docs/pre_pages_inventory.yml", content_only=content_only,
+    )
+    assert result.errors == ()
+    assert result.document_count == result.preserved_documents == 62
+    assert getattr(result, "current_document_count", None) == 62 + extra_count
+    assert result.details.get("current_document_count") == 62 + extra_count
+    assert len(result.details["documents"]) == 62
+    assert not any("new-" in str(document["current_path"]) for document in result.details["documents"])
+    if not content_only:
+        for key in ("canonical_html", "searchable_documents", "explore_documents"):
+            assert result.details["site"][key] == 62 + extra_count
+
+
+@pytest.mark.parametrize("content_only", [False, True])
+def test_cli_distinguishes_baseline_preservation_from_growing_current_coverage(historical_repo, tmp_path, content_only):
+    root = tmp_path / "repo"
+    shutil.copytree(historical_repo, root)
+    add_current_document(root)
+    output = root / "current-audit.json"
+    command = [
+        sys.executable, str(CLI), "--repo-root", str(root), "--json-output", str(output),
+    ]
+    if content_only:
+        command += ["--content-only", "--site-dir", "not-built"]
+    run = subprocess.run(command, capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "62/62 baseline documents mapped and preserved" in run.stdout
+    assert "63 current documents" in run.stdout
+    data = json.loads(output.read_text())
+    assert data["document_count"] == 62
+    assert data.get("current_document_count") == data["details"].get("current_document_count") == 63
+    assert len(data["details"]["documents"]) == 62
+    if content_only:
+        assert "built site not inspected" in run.stdout and "searchable" not in run.stdout
+    else:
+        assert "63 current documents searchable and visible" in run.stdout
+
+
+def test_extra_current_documents_are_all_counted_without_inventory_entries(site_repo):
+    root, inventory = site_repo
+    add_current_document(root)
+    result = inspect(site_repo)
+    assert result.errors == ()
+    assert len(inventory.documents) == 2
+    assert result.details.get("current_document_count") == 3
+    assert result.details["canonical_html"] == result.details["searchable_documents"] == result.details["explore_documents"] == 3
+
+
+@pytest.mark.parametrize("mutation", ["hidden", "search", "explore", "omitted"])
+def test_extra_current_child_cannot_be_hidden_or_omitted_from_built_coverage(site_repo, mutation):
+    root, _ = site_repo
+    extra = add_current_document(root, "services/service/topic/extra/index.md", order=2)
+    assert inspect(site_repo).errors == ()
+    page = root / "site" / extra.replace(".md", ".html")
+    if mutation == "hidden":
+        page.write_text(page.read_text().replace("<article ", "<article hidden "))
+    if mutation in {"search", "omitted"}:
+        search = root / "site/search/search_index.json"
+        data = json.loads(search.read_text())
+        data["docs"] = [entry for entry in data["docs"] if entry["location"] != search_entry(extra)["location"]]
+        search.write_text(json.dumps(data))
+    if mutation in {"explore", "omitted"}:
+        explore = root / "site/explore/index.html"
+        explore.write_text(explore.read_text().replace(
+            f'<a href="../{PurePosixPath(extra).parent}/">Current member</a>', "",
+        ))
+    if mutation == "omitted":
+        page.unlink()
+    errors = inspect(site_repo).errors
+    assert any("services/service/topic/extra/" in error for error in errors)
+    if mutation == "hidden":
+        assert any("authored" in error for error in errors)
+    elif mutation == "omitted":
+        assert any("canonical" in error and "missing" in error for error in errors)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "canonical", "refresh", "fallback", "search"])
+def test_every_extra_current_document_redirect_is_verified(site_repo, mutation):
+    root, _ = site_repo
+    old = "research/service/extra-v2/index.md"
+    extra = add_current_document(root, redirects=("guides/service/extra-v1/index.md", old))
+    assert inspect(site_repo).errors == ()
+    page = root / "site" / old.replace(".md", ".html")
+    if mutation == "missing":
+        page.unlink()
+    elif mutation == "canonical":
+        page.write_text(re.sub(r'rel="canonical" href="[^"]+"', 'rel="canonical" href="../wrong/"', page.read_text()))
+    elif mutation == "refresh":
+        page.write_text(page.read_text().replace("0; url=", "1; url="))
+    elif mutation == "fallback":
+        page.write_text(re.sub(r'<a href="[^"]+">Moved document</a>', "<span>Moved document</span>", page.read_text()))
+    else:
+        search = root / "site/search/search_index.json"
+        data = json.loads(search.read_text())
+        data["docs"].append(search_entry(old, "#moved"))
+        search.write_text(json.dumps(data))
+    assert any(old.removesuffix(".md") in error and "redirect" in error for error in inspect(site_repo).errors)
+
+
+def test_all_redirect_aliases_of_baseline_members_are_verified(site_repo):
+    root, _ = site_repo
+    old = "research/service/also-old/index.md"
+    document = root / "docs" / ENTRY
+    document.write_text(document.read_text().replace(f"- {OLD}\n", f"- {OLD}\n- {old}\n"))
+    write(root / "site", old.replace(".md", ".html"), redirect("../../../services/service/topic/"))
+    result = inspect(site_repo)
+    assert result.errors == ()
+    assert result.details["redirects"] == 3
+    (root / "site" / old.replace(".md", ".html")).unlink()
+    assert any(old.removesuffix(".md") in error and "redirect" in error for error in inspect(site_repo).errors)
+
+
+@pytest.mark.parametrize("element", [
+    '<script src="missing-extra.js"></script>',
+    '<link rel="stylesheet" href="missing-extra.css">',
+    '<img src="missing-extra.png">',
+])
+def test_extra_current_pages_keep_frontend_and_asset_validation(site_repo, element):
+    root, _ = site_repo
+    extra = add_current_document(root)
+    page = root / "site" / extra.replace(".md", ".html")
+    page.write_text(page.read_text().replace("</main>", element + "</main>"))
+    assert any(extra.replace(".md", ".html") in error and "missing-extra" in error for error in inspect(site_repo).errors)
+
+
+def test_real_s1_hidden_svg_artifact_cannot_supply_visible_image_evidence(real_built_site):
+    site, inventory, catalog = real_built_site
+    relative = "services/azure-monitor/azure-sre-agent/validation-results/index.html"
+    path = site / relative
+    original = path.read_text()
+    images = [image for image in re.findall(r"<img\b[^>]*>", original) if "s1-investigation.gif" in image]
+    assert len(images) == 1 and "S1 SRE Agent investigation" in images[0]
+    hidden = '<svg aria-hidden="true" style="display:none"><foreignObject>' + images[0] + "</foreignObject></svg>"
+    try:
+        path.write_text(original.replace(images[0], hidden))
+        errors = inspect_built_site(ROOT, site, inventory, catalog).errors
+        assert any(relative in error and "authored" in error for error in errors)
+        assert not any("missing rendered" in error and "s1-investigation.gif" in error for error in errors)
+    finally:
+        path.write_text(original)

@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from scripts.docs import pre_pages
+from scripts.docs.content import load_taxonomy
 from scripts.docs.pre_pages import (
     AuditFormatError,
     BaselineDocument,
@@ -20,6 +21,7 @@ from scripts.docs.pre_pages import (
     git_text,
     load_inventory,
 )
+from scripts.docs.topics import build_topic_catalog
 
 
 ROOT = Path(__file__).parents[2]
@@ -645,20 +647,29 @@ def test_resolution_requires_exactly_62_inventory_documents(
         lineage_api("resolve_current_documents")(repo, replace(inventory, documents=documents))
 
 
-@pytest.mark.parametrize("count", [61, 63])
-def test_resolution_requires_exactly_62_current_public_documents(
-    document_history: tuple[Path, PrePagesInventory], count: int
+def test_resolution_rejects_a_missing_baseline_current_document(
+    document_history: tuple[Path, PrePagesInventory],
 ) -> None:
     repo, inventory = document_history
-    path = repo / "docs/services/service/topic-00/index.md"
-    if count == 61:
-        path.unlink()
-    else:
-        extra = repo / "docs/services/service/extra/index.md"
-        extra.parent.mkdir()
-        extra.write_text("---\ntitle: Extra\n---\n# Extra\n")
-    with pytest.raises(AuditFormatError, match="62 current public documents"):
+    (repo / "docs/services/service/topic-00/index.md").unlink()
+    with pytest.raises(AuditFormatError, match="guides/service/topic-00/index.md"):
         lineage_api("resolve_current_documents")(repo, inventory)
+
+
+@pytest.mark.parametrize("extra_count", [1, 4, 7])
+def test_resolution_allows_extra_current_documents_without_expanding_the_baseline(
+    document_history: tuple[Path, PrePagesInventory], extra_count: int,
+) -> None:
+    repo, inventory = document_history
+    for index in range(extra_count):
+        extra = repo / f"docs/services/service/extra-{index}/index.md"
+        extra.parent.mkdir(parents=True)
+        extra.write_text("---\ntitle: Extra\n---\n# Extra\n")
+    resolved = lineage_api("resolve_current_documents")(repo, inventory)
+    assert len(resolved) == len(inventory.documents) == 62
+    assert set(resolved) == {document.baseline_path for document in inventory.documents}
+    assert len({document.relative_path for document in resolved.values()}) == 62
+    assert not any("extra-" in str(document.relative_path) for document in resolved.values())
 
 
 def test_resolution_rejects_missing_initial_pages_redirect(
@@ -713,14 +724,17 @@ def test_resolution_requires_initial_pages_blobs(document_history: tuple[Path, P
     assert "docs/guides/service/topic-00/index.md" in str(error.value)
 
 
-def test_real_repository_accounts_for_359_files_73_markdown_and_62_documents() -> None:
+def test_real_repository_maps_62_baseline_documents_without_limiting_current_growth() -> None:
     inventory = load_inventory(MANIFEST)
     paths = lineage_api("baseline_paths")(ROOT, inventory)
     classified = lineage_api("classify_baseline_files")(ROOT, inventory)
     resolved = lineage_api("resolve_current_documents")(ROOT, inventory)
+    catalog = build_topic_catalog(ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml"))
     assert len(paths) == len(classified) == 359
     assert sum(path.suffix == ".md" for path in paths) == 73
     assert len(resolved) == len({doc.relative_path for doc in resolved.values()}) == 62
+    assert len(catalog.documents) >= len(resolved)
+    assert {doc.relative_path for doc in resolved.values()} <= {doc.relative_path for doc in catalog.documents}
     assert {item.baseline_path for item in classified} == set(paths)
     assert {item.status for item in classified} <= {"unchanged", "modified", "renamed", "reviewed"}
     assert Counter(item.status for item in classified)["reviewed"] == 6

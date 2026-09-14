@@ -59,6 +59,22 @@ class _Element:
     children: list[_Element | str] = field(default_factory=list)
     visibility: Visibility = field(default_factory=Visibility)
     svg: bool = False
+    evidence_visible: bool = False
+    evidence_text_visible: bool = False
+    evidence_interactive: bool = False
+
+
+@dataclass(frozen=True)
+class SemanticEvidence:
+    links: tuple[tuple[str, str], ...]
+    images: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _SemanticEvent:
+    kind: str
+    element: _Element | None
+    text: str = ""
 
 
 class AuthoredContent(HTMLParser):
@@ -69,6 +85,7 @@ class AuthoredContent(HTMLParser):
         self.material_article = material_article
         self.root = _Element("", {})
         self.stack = [self.root]
+        self.semantic_events: list[_SemanticEvent] = []
         self.articles = 0
         self.blocks: Counter[tuple[str, str]] = Counter()
         self.links: list[str] = []
@@ -83,20 +100,30 @@ class AuthoredContent(HTMLParser):
         for name, value in attrs:
             attributes.setdefault(name, value)
         element = _Element(tag, attributes)
+        parent = self.stack[-1]
+        element.svg = tag == "svg" or parent.svg and parent.tag != "foreignobject"
         self.stack[-1].children.append(element)
+        self.semantic_events.append(_SemanticEvent("start", element))
         if tag not in _VOID:
             self.stack.append(element)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
-        if tag not in _VOID:
+        # HTML ignores a non-void element's slash; foreign elements can self-close.
+        if tag not in _VOID and (
+            self.stack[-1].svg or any(parent.tag == "math" for parent in self.stack)
+        ):
             self.handle_endtag(tag)
+        elif tag in self.CDATA_CONTENT_ELEMENTS:
+            self.set_cdata_mode(tag)
 
     def handle_data(self, data: str) -> None:
         self.stack[-1].children.append(data)
+        self.semantic_events.append(_SemanticEvent("data", self.stack[-1], data))
 
     def handle_endtag(self, tag: str) -> None:
         index = next((i for i in range(len(self.stack) - 1, 0, -1) if self.stack[i].tag == tag), None)
+        self.semantic_events.append(_SemanticEvent("end", self.stack[index] if index is not None else None, tag))
         if index is None:
             return
         del self.stack[index:]
@@ -158,6 +185,9 @@ class AuthoredContent(HTMLParser):
         readable_text = authored and (not element.svg or svg_text)
         visible = not blocked and not state.hidden
         interactive = in_body and not link_excluded and not blocked and state.interactive
+        element.evidence_visible = authored and visible
+        element.evidence_text_visible = readable_text and visible
+        evidence_hit = authored and not blocked and state.interactive and tag in {"img", "svg"}
         parts: list[str] = []
         hit = interactive and tag in {"img", "svg"}
         if tag == "img" and authored:
@@ -187,6 +217,8 @@ class AuthoredContent(HTMLParser):
                         self.hidden = self.hidden or value[:160]
                 if interactive and not child_blocked and child.strip():
                     hit = True
+                if readable_text and not child_blocked and state.interactive and child.strip():
+                    evidence_hit = True
             else:
                 text, child_hit = self._collect(
                     child, active=active, authored_excluded=authored_excluded,
@@ -196,6 +228,7 @@ class AuthoredContent(HTMLParser):
                 )
                 parts.append(text)
                 hit |= child_hit
+                evidence_hit |= child.evidence_interactive
         text = "".join(parts)
         if authored and (value := self.normalize(text)):
             if tag in _BLOCKS:
@@ -204,6 +237,7 @@ class AuthoredContent(HTMLParser):
                 self.blocks[("svg-text", value)] += 1
         if tag == "a" and "href" in attributes and in_body and not link_excluded and hit:
             self.links.append(attributes["href"] or "")
+        element.evidence_interactive = evidence_hit
         return text, hit
 
     def close(self) -> None:
@@ -214,3 +248,45 @@ class AuthoredContent(HTMLParser):
         self.links.clear()
         self.hidden = None
         self._collect(self.root, active=not self.material_article)
+
+    def semantic_evidence(self, raw_tags: frozenset[str], hidden_tags: frozenset[str]) -> SemanticEvidence:
+        """Keep raw destinations and labels; use the already-finalized inclusion state."""
+        links: list[tuple[str, str]] = []
+        images: list[tuple[str, str]] = []
+        raw: list[str] = []
+        anchor: tuple[_Element, str, list[str]] | None = None
+
+        def finish_anchor() -> None:
+            nonlocal anchor
+            if anchor is not None:
+                links.append(("".join(anchor[2]), anchor[1]))
+                anchor = None
+
+        # Raw/code boundaries remain lexical even when the renderer splits paragraphs.
+        for event in self.semantic_events:
+            element = event.element
+            if event.kind == "start":
+                assert element is not None
+                if not raw:
+                    if element.tag == "a" and "href" in element.attributes and element.evidence_interactive:
+                        finish_anchor()
+                        anchor = (element, element.attributes["href"] or "", [])
+                    elif element.tag == "img" and "src" in element.attributes and element.evidence_visible:
+                        alt = element.attributes.get("alt") or ""
+                        images.append((alt, element.attributes["src"] or ""))
+                        if anchor is not None:
+                            anchor[2].append(alt)
+                if element.tag in raw_tags:
+                    raw.append(element.tag)
+            elif event.kind == "data":
+                if anchor is not None and element is not None and element.evidence_text_visible and not set(raw) & hidden_tags:
+                    anchor[2].append(event.text)
+            else:
+                tag = event.text
+                if tag == "a" and not raw and anchor is not None and (element is None or element is anchor[0]):
+                    finish_anchor()
+                if tag in raw:
+                    index = len(raw) - 1 - raw[::-1].index(tag)
+                    del raw[index:]
+        finish_anchor()
+        return SemanticEvidence(tuple(links), tuple(images))

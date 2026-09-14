@@ -114,7 +114,6 @@ SEMANTIC_MARKDOWN_EXCLUSIONS = MappingProxyType({
     "toc": "Generated TOC/permalink navigation is not authored evidence; source headings are compared separately.",
     "pymdownx.snippets": "File inclusion has side effects; no snippet directives occur in the audited source corpus.",
 })
-_VOID_TAGS = frozenset(("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"))
 _HIDDEN_TAGS = frozenset(("script", "style", "template", "iframe", "noembed", "noframes", "noscript", "title"))
 
 
@@ -192,67 +191,11 @@ def _code_spans(text: str) -> tuple[_CodeSpan, ...]:
     return tuple(spans)
 
 
-class _RenderedSemantics(HTMLParser):
-    """Collect only rendered element semantics; Markdown grammar belongs to the renderer."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.parents: list[str] = []
-        self.blocked: list[str] = []
-        self.anchor: tuple[str, list[str]] | None = None
-        self.links: list[str] = []
-        self.local_link_labels: list[str] = []
-        self.images: list[str] = []
-
-    def _finish_anchor(self) -> None:
-        if self.anchor is not None:
-            target, parts = self.anchor
-            label = _space(unicodedata.normalize("NFKC", "".join(parts)))
-            self.links.append(f"{label}\n{unicodedata.normalize('NFKC', target)}")
-            if not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
-                self.local_link_labels.append(label)
-            self.anchor = None
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        blocked = bool(self.blocked)
-        attributes = {}
-        for key, value in attrs:
-            attributes.setdefault(key, value or "")
-        if not blocked:
-            if tag == "a" and "href" in attributes:
-                self._finish_anchor()
-                self.anchor = (attributes["href"], [])
-            elif tag == "img" and "src" in attributes:
-                alt = _space(unicodedata.normalize("NFKC", attributes.get("alt", "")))
-                basename = PurePosixPath(unquote(urlsplit(attributes["src"]).path)).name
-                self.images.append(f"{alt}\n{unicodedata.normalize('NFKC', basename)}")
-                if self.anchor is not None:
-                    self.anchor[1].append(alt)
-        if tag not in _VOID_TAGS:
-            self.parents.append(tag)
-        if tag in _RAW_TAGS:
-            self.blocked.append(tag)
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.handle_starttag(tag, attrs)
-        if tag in _RAW_TAGS or tag == "a":
-            return
-        if tag not in _VOID_TAGS:
-            self.handle_endtag(tag)
-
-    def handle_data(self, data: str) -> None:
-        if self.anchor is not None and not any(parent in _HIDDEN_TAGS for parent in self.blocked):
-            self.anchor[1].append(data)
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "a" and not self.blocked:
-            self._finish_anchor()
-        if tag in self.blocked:
-            index = len(self.blocked) - 1 - self.blocked[::-1].index(tag)
-            del self.blocked[index:]
-        if tag in self.parents:
-            index = len(self.parents) - 1 - self.parents[::-1].index(tag)
-            del self.parents[index:]
+@dataclass(frozen=True)
+class _RenderedSemantics:
+    links: tuple[str, ...]
+    local_link_labels: tuple[str, ...]
+    images: tuple[str, ...]
 
 
 def _literal_markdown_characters(text: str) -> str:
@@ -328,11 +271,18 @@ def _rendered_semantics(
     authored.close()
     if authored.hidden:
         raise AuditFormatError(f"persistently hidden authored content: {authored.hidden}")
-    collector = _RenderedSemantics()
-    collector.feed(output)
-    collector.close()
-    collector._finish_anchor()
-    return collector, renderer.references
+    evidence = authored.semantic_evidence(_RAW_TAGS, _HIDDEN_TAGS)
+    links, local_labels, images = [], [], []
+    for label, target in evidence.links:
+        label = _space(unicodedata.normalize("NFKC", label))
+        links.append(f"{label}\n{unicodedata.normalize('NFKC', target)}")
+        if not re.match(r"^(?:[a-z][\w+.-]*:|//)", target, re.IGNORECASE):
+            local_labels.append(label)
+    for alt, source in evidence.images:
+        alt = _space(unicodedata.normalize("NFKC", alt))
+        basename = PurePosixPath(unquote(urlsplit(source).path)).name
+        images.append(f"{alt}\n{unicodedata.normalize('NFKC', basename)}")
+    return _RenderedSemantics(tuple(links), tuple(local_labels), tuple(images)), renderer.references
 
 
 @dataclass(frozen=True)
