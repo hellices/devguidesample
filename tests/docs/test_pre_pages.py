@@ -421,7 +421,7 @@ def test_fixed_manifest_matches_all_62_initial_pages_renames() -> None:
     assert inventory.pages_commit == PAGES
     assert inventory.rename_similarity == 20
     output = git(
-        ROOT, "diff", "--find-renames=30%", "--name-status", "-z", BASELINE, PAGES, "--", "*.md"
+        ROOT, "diff", f"--find-renames={inventory.rename_similarity}%", "--name-status", "-z", BASELINE, PAGES, "--"
     ).decode().split("\0")
     expected = set()
     index = 0
@@ -953,6 +953,110 @@ def test_real_manifest_replacements_are_head_tracked_unignored_regular_sources()
     )
     assert ignored.returncode == 1 and not ignored.stdout
     assert len([item for item in pre_pages.classify_baseline_files(ROOT, inventory) if item.status == "reviewed"]) == 6
+
+
+def test_initial_lineage_rejects_swapped_existing_pages_blobs(document_history):
+    repo, inventory = document_history
+    first, second, *rest = inventory.documents
+    swapped = replace(inventory, documents=(
+        replace(first, pages_path=second.pages_path),
+        replace(second, pages_path=first.pages_path),
+        *rest,
+    ))
+    with pytest.raises(AuditFormatError, match="rename") as error:
+        pre_pages.resolve_current_documents(repo, swapped)
+    assert str(first.baseline_path) in str(error.value)
+    assert "docs/" + str(second.pages_path) in str(error.value)
+
+
+def test_initial_lineage_rejects_unrelated_existing_baseline_blob(document_history):
+    repo, inventory = document_history
+    changed = replace(inventory, documents=(
+        replace(inventory.documents[0], baseline_path=PurePosixPath("binary.bin")),
+        *inventory.documents[1:],
+    ))
+    with pytest.raises(AuditFormatError, match="rename") as error:
+        pre_pages.resolve_current_documents(repo, changed)
+    assert "binary.bin" in str(error.value)
+
+
+def test_initial_lineage_rejects_a_copied_pages_blob_without_a_rename(document_history):
+    repo, inventory = document_history
+    document = inventory.documents[0]
+    blob = git(repo, "rev-parse", f"{inventory.baseline_commit}:{document.baseline_path}").decode().strip()
+    git(repo, "read-tree", inventory.pages_commit)
+    try:
+        git(repo, "update-index", "--add", "--cacheinfo", f"100644,{blob},{document.baseline_path}")
+        tree = git(repo, "write-tree").decode().strip()
+        copied_pages = git(
+            repo, "commit-tree", tree, "-p", inventory.baseline_commit, "-m", "Copy rather than rename",
+        ).decode().strip()
+    finally:
+        git(repo, "read-tree", "HEAD")
+    assert git_bytes(repo, copied_pages, document.baseline_path)
+    assert git_bytes(repo, copied_pages, PurePosixPath("docs") / document.pages_path)
+    with pytest.raises(AuditFormatError, match="rename"):
+        pre_pages.resolve_current_documents(repo, replace(inventory, pages_commit=copied_pages))
+
+
+@pytest.mark.parametrize("similarity", [20, 100])
+def test_initial_lineage_uses_the_configured_rename_threshold(document_history, monkeypatch, similarity):
+    repo, inventory = document_history
+    calls = []
+    original = pre_pages._git
+
+    def record(root, *arguments):
+        if arguments[0] == "diff":
+            calls.append(arguments)
+        return original(root, *arguments)
+
+    monkeypatch.setattr(pre_pages, "_git", record)
+    assert len(pre_pages.resolve_current_documents(repo, replace(inventory, rename_similarity=similarity))) == 62
+    assert calls == [(
+        "diff", f"--find-renames={similarity}%", "--name-status", "-z",
+        inventory.baseline_commit, inventory.pages_commit, "--",
+    )]
+
+
+def test_initial_lineage_nul_parser_preserves_literal_tabs_newlines_and_unicode():
+    parser = lineage_api("_parse_name_status_z")
+    source = "old\t\n한글.md"
+    target = "docs/renamed\t\n한글.md"
+    assert parser(f"R087\0{source}\0{target}\0A\0new.md\0D\0gone.md\0M\0edit.md\0T\0type.md\0".encode()) == (
+        ("R087", PurePosixPath(source), PurePosixPath(target)),
+        ("A", PurePosixPath("new.md"), None),
+        ("D", PurePosixPath("gone.md"), None),
+        ("M", PurePosixPath("edit.md"), None),
+        ("T", PurePosixPath("type.md"), None),
+    )
+    assert parser(b"") == ()
+
+
+@pytest.mark.parametrize("payload", [
+    b"R100\0old.md\0",
+    b"R100\0old.md\0new.md",
+    b"R100\0\0new.md\0",
+    b"R100\0old.md\0\0",
+    b"R\0old.md\0new.md\0",
+    b"R101\0old.md\0new.md\0",
+    b"R-1\0old.md\0new.md\0",
+    b"Rxx\0old.md\0new.md\0",
+    b"U\0path.md\0",
+    b"Z\0path.md\0",
+    b"C100\0old.md\0copy.md\0",
+    b"M\0path.md\0garbage\0",
+    b"M\0path.md\0\0",
+    b"A\0\0",
+    b"A\0../outside.md\0",
+    b"\xff\0path.md\0",
+    b"R100\0old.md\0new.md\0R100\0old.md\0other.md\0",
+    b"R100\0one.md\0new.md\0R100\0two.md\0new.md\0",
+    b"R100\0old.md\0new.md\0A\0new.md\0",
+])
+def test_initial_lineage_nul_parser_fails_closed_on_malformed_records(payload):
+    parser = lineage_api("_parse_name_status_z")
+    with pytest.raises(AuditFormatError):
+        parser(payload)
 
 
 def shallow_clone_with_anchors(

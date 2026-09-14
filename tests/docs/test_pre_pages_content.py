@@ -1970,3 +1970,36 @@ def test_real_s1_hidden_svg_image_cannot_satisfy_its_preservation_approval(tmp_p
     path.write_text(source.replace(image, hidden))
     with pytest.raises(AuditFormatError, match="evidence.*images|images.*count"):
         audit_document_content(tmp_path, inventory)
+
+
+@pytest.mark.parametrize("prefix", ["", "<div><summary>Not a direct summary</summary></div>"])
+def test_closed_details_without_authored_summary_cannot_supply_source_evidence(prefix):
+    with pytest.raises(AuditFormatError, match="hidden.*authored"):
+        extract_markdown_structure(
+            f'<details markdown="1">{prefix}\n\n# Title\n\nAuthored prose.\n\n</details>'
+        )
+
+
+def test_already_open_details_without_summary_keep_visible_source_evidence():
+    assert extract_markdown_structure(
+        '<details open markdown="1">\n\n# Title\n\nAuthored prose.\n\n</details>'
+    ).title == "Title"
+
+
+def test_source_late_first_summary_element_is_openable():
+    structure = extract_markdown_structure(
+        '<details markdown="1"><p>before</p><summary>Late</summary>\n\n# Title\n\nAuthored prose.\n\n</details>'
+    )
+    assert structure.title == "Title"
+
+
+@pytest.mark.parametrize("html", [
+    "<p hidden><p>public",
+    "<p hidden><div>public</div>",
+    "<ul><li hidden><li>public</ul>",
+    "<dl><dt hidden><dd>public</dl>",
+    "<table><tbody><tr><td hidden><td>public</table>",
+    '<select multiple><option hidden><option>public</select>',
+])
+def test_source_optional_end_tags_do_not_extend_hidden_ancestors(html):
+    assert extract_markdown_structure(html).prose

@@ -9,6 +9,7 @@ import unicodedata
 
 from scripts.docs.pre_pages import AuditFormatError
 from scripts.docs.pre_pages_css import inline_visibility, presentation_visibility
+from scripts.docs.pre_pages_html import implied_end_on_end, implied_end_on_start, open_p_in_scope
 
 _VOID = frozenset((
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
@@ -96,6 +97,11 @@ class AuthoredContent(HTMLParser):
         return " ".join(unicodedata.normalize("NFKC", text).split())
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        parent = self.stack[-1]
+        if not parent.svg or parent.tag == "foreignobject":
+            index = implied_end_on_start([element.tag for element in self.stack], tag)
+            if index is not None:
+                del self.stack[index:]
         attributes = {}
         for name, value in attrs:
             attributes.setdefault(name, value)
@@ -122,6 +128,13 @@ class AuthoredContent(HTMLParser):
         self.semantic_events.append(_SemanticEvent("data", self.stack[-1], data))
 
     def handle_endtag(self, tag: str) -> None:
+        names = [element.tag for element in self.stack]
+        if tag == "p" and not open_p_in_scope(names):
+            self.semantic_events.append(_SemanticEvent("end", None, tag))
+            return
+        implied = implied_end_on_end(names, tag)
+        if implied is not None:
+            del self.stack[implied:]
         index = next((i for i in range(len(self.stack) - 1, 0, -1) if self.stack[i].tag == tag), None)
         self.semantic_events.append(_SemanticEvent("end", self.stack[index] if index is not None else None, tag))
         if index is None:
@@ -205,7 +218,7 @@ class AuthoredContent(HTMLParser):
             if isinstance(child, _Element) and child.tag == "summary"
         ), None) if tag == "details" else None
         closed_body = tag == "details" and "open" not in attributes and not (
-            self._summary_hit(summary) if summary else state.interactive
+            self._summary_hit(summary) if summary else False
         )
         for child in element.children:
             child_blocked = blocked or closed_body and child is not summary

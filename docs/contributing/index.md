@@ -308,6 +308,9 @@ python scripts/docs/audit_pre_pages.py
 보존 inventory는 `a4e6801` 시점의 **기준선 문서 62개**를 현재 canonical
 문서에 일대일로 연결합니다. 신규 문서는 이 기준선 inventory에 추가하지
 않으며, 현재 문서 수가 늘어났다는 이유로 감사가 실패하지 않습니다.
+각 연결은 `rename_similarity`로 계산한 기준선 → 최초 Pages commit의
+실제 Git `R` 기록과 원본·대상 경로가 일치해야 합니다. 양쪽 파일이
+존재한다는 사실만으로는 이관 계보를 인정하지 않습니다.
 과거 구조 비교와 JSON의 `document_count`·`details.documents`는 이 62개만
 대상으로 합니다. `current_document_count`는 현재 카탈로그에서 계산합니다.
 검토된 disposition은 Git에서 실제로 삭제된 기준선 경로에만 적용합니다.
@@ -315,6 +318,10 @@ python scripts/docs/audit_pre_pages.py
 `tests/docs/**`의 일반 소스 파일이어야 합니다. 추적되지 않은 파일, ignore된
 파일, 생성 결과물과 심볼릭 링크는 대체 근거로 사용할 수 없습니다.
 빈 `current_paths`는 삭제된 로컬 상태를 제외할 때만 허용합니다.
+가시성 감사는 닫힌 `<details>`의 본문에 대해 작성된 직접 자식
+`<summary>`를 요구합니다. 브라우저의 기본 컨트롤에만 의존하는 본문은
+보수적으로 제외하지만, 다른 요소 뒤에 오는 첫 `<summary>` 요소는
+브라우저 동작에 따라 인정합니다. 이미 `open`인 본문은 별도로 취급합니다.
 
 전체 감사는 기준선 밖의 신규 문서까지 포함해 현재 canonical 문서 **전체**의
 본문 가시성, 검색, 서비스별 주제 진입점, 글 찾기 연결과 로컬 자산을 검사합니다.

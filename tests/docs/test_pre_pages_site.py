@@ -385,7 +385,7 @@ def test_unreferenced_symlink_directory_cannot_escape_the_site(site_repo):
     "", "<html><head></head><body><img src='broken",
     html('<img src="x.png" src="y.png">'),
     html("<picture><source srcset='image.png invalid'></picture>"),
-    html("<div><p>unclosed</div>"),
+    html("<div><span>unclosed</div>"),
     html("", '<base href="https://external.test/">'),
     html("<div aria-hidden>Invalid boolean aria value</div>"),
     "<html><body><head></head><h1>Wrong structure</h1></body></html>",
@@ -469,8 +469,9 @@ def historical_repo(tmp_path_factory):
         baseline = f"old/doc-{i}.md"
         old = f"guides/service/topic-{i}/index.md"
         canonical = f"services/service/topic-{i}/index.md"
-        write(root, baseline, "# Document\n\nPreserved prose.\n")
-        entries.append((baseline, old, canonical))
+        marker = f"\n<!-- Historical identity {i}: " + (f"document-{i} " * 12) + "-->\n"
+        write(root, baseline, "# Document\n\nPreserved prose.\n" + marker)
+        entries.append((baseline, old, canonical, marker))
     for i in range(11):
         write(root, f"notes/{i}.md", "Unchanged ancillary Markdown\n")
     for i in range(286):
@@ -478,13 +479,14 @@ def historical_repo(tmp_path_factory):
     git(root, "add", ".")
     git(root, "-c", "commit.gpgsign=false", "commit", "-qm", "Baseline")
     baseline_commit = git(root, "rev-parse", "HEAD")
-    for baseline, old, canonical in entries:
-        write(root, "docs/" + old, source(canonical, old))
+    for baseline, old, canonical, marker in entries:
+        write(root, "docs/" + old, source(canonical, old) + marker)
+        (root / baseline).unlink()
     git(root, "add", ".")
     git(root, "-c", "commit.gpgsign=false", "commit", "-qm", "Pages")
     pages_commit = git(root, "rev-parse", "HEAD")
-    for baseline, old, canonical in entries:
-        write(root, "docs/" + canonical, source(canonical, old))
+    for baseline, old, canonical, marker in entries:
+        write(root, "docs/" + canonical, source(canonical, old) + marker)
         write(root, "site/" + canonical.replace(".md", ".html"), html())
         write(root, "site/" + old.replace(".md", ".html"),
               redirect("../../../" + str(PurePosixPath(canonical).parent) + "/"))
@@ -496,12 +498,12 @@ def historical_repo(tmp_path_factory):
         f'<a href="../services/service/topic-{i}/">Topic</a>' for i in range(62)
     )))
     write(root, "site/search/search_index.json", json.dumps({
-        "docs": [search_entry(canonical) for _, _, canonical in entries],
+        "docs": [search_entry(canonical) for _, _, canonical, _ in entries],
     }))
     write(root, "scripts/docs/pre_pages_inventory.yml", yaml.safe_dump({
         "version": 3, "baseline_commit": baseline_commit, "pages_commit": pages_commit,
         "rename_similarity": 20, "dispositions": {},
-        "documents": [{"baseline_path": b, "pages_path": p} for b, p, _ in entries],
+        "documents": [{"baseline_path": b, "pages_path": p} for b, p, _, _ in entries],
     }))
     git(root, "add", ".")
     git(root, "-c", "commit.gpgsign=false", "commit", "-qm", "Current")
@@ -1785,3 +1787,67 @@ def test_html_entity_decoding_for_scheme_checks_happens_only_once(site_repo):
     write(root, "site/&", "Literal local URL before its fragment")
     write(root, "site/index.html", html('<a href="&amp;#x6a;avascript:fixture">Literal reference</a>'))
     assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("opened", [False, True])
+def test_built_details_without_authored_summary_only_count_when_open(site_repo, opened):
+    root, _ = site_repo
+    article = ARTICLE.replace("<h1>", f'<details{" open" if opened else ""}><h1>').replace(
+        "</article>", "</details></article>",
+    )
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    assert errors == () if opened else any("authored" in error for error in errors)
+
+
+@pytest.mark.parametrize("channel", ["service", "explore", "redirect"])
+@pytest.mark.parametrize("late_summary", [False, True])
+def test_generated_page_disclosures_require_a_summary_but_allow_a_late_one(site_repo, channel, late_summary):
+    root, _ = site_repo
+    summary = "<p>before</p><summary>Late</summary>" if late_summary else ""
+    if channel == "service":
+        path, target = "services/service/index.html", "topic/"
+        body = f'<details>{summary}<a href="{target}">Topic</a></details>'
+        content = html(body)
+    elif channel == "explore":
+        path, target = "explore/index.html", "../services/service/topic/"
+        body = f'<details>{summary}<a href="{target}">Topic</a></details>'
+        content = html(body + '<a href="../services/service/topic/child/">Child</a>')
+    else:
+        path, target = OLD.replace(".md", ".html"), "../../../services/service/topic/"
+        anchor = f'<a href="{target}">Moved document</a>'
+        content = redirect(target).replace(anchor, f"<details>{summary}{anchor}</details>")
+    write(root, "site/" + path, content)
+    errors = inspect(site_repo).errors
+    if late_summary:
+        assert errors == ()
+    else:
+        assert any("not linked" in error or "fallback" in error for error in errors)
+
+
+def test_summaryless_details_still_validate_fetched_assets(site_repo):
+    root, _ = site_repo
+    write(root, "site/index.html", html('<details><img src="missing-summaryless.png"></details>'))
+    assert any("index.html" in error and "missing-summaryless.png" in error for error in inspect(site_repo).errors)
+
+
+IMPLIED_END_ORACLE = json.loads((ROOT / "tests/docs/fixtures/pre_pages_implied_end_chromium.json").read_text())
+
+
+@pytest.mark.parametrize("case", IMPLIED_END_ORACLE["cases"], ids=lambda case: case["id"])
+def test_built_optional_end_tags_match_chromium_visibility(site_repo, case):
+    from scripts.docs.pre_pages_content import create_semantic_renderer
+
+    root, _ = site_repo
+    source_path = root / "docs" / ENTRY
+    metadata = source_path.read_text().split("\n---\n", 1)[0]
+    body = "# Document\n\n" + case["html"]
+    source_path.write_text(metadata + "\n---\n\n" + body)
+    rendered = create_semantic_renderer().convert(body)
+    article = '<article class="md-content__inner md-typeset">' + rendered + "</article>"
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    if case["visible"]:
+        assert errors == ()
+    else:
+        assert any("authored" in error for error in errors)

@@ -18,6 +18,7 @@ import yaml
 
 from scripts.docs.pre_pages import AuditFormatError, PrePagesInventory
 from scripts.docs.pre_pages_content import create_semantic_renderer
+from scripts.docs.pre_pages_html import implied_end_on_end, implied_end_on_start, open_p_in_scope
 from scripts.docs.pre_pages_visibility import AuthoredContent
 from scripts.docs.topics import TopicCatalog
 
@@ -100,6 +101,11 @@ class _Page(HTMLParser):
         self.authored = AuthoredContent(material_article=True)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        foreign = next((name for name in reversed(self.stack) if name in {"svg", "math", "foreignobject"}), None)
+        if foreign not in {"svg", "math"}:
+            implied = implied_end_on_start(self.stack, tag)
+            if implied is not None:
+                del self.stack[implied:]
         attributes = dict(attrs)
         if len(attributes) != len(attrs):
             self.errors.append(f"duplicate attributes on <{tag}>")
@@ -174,6 +180,11 @@ class _Page(HTMLParser):
             self.handle_endtag(tag)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "p" and not open_p_in_scope(self.stack):
+            return
+        implied = implied_end_on_end(self.stack, tag)
+        if implied is not None:
+            del self.stack[implied:]
         if not self.stack or self.stack[-1] != tag:
             self.errors.append(f"unmatched closing </{tag}>")
         else:

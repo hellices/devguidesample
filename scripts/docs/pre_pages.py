@@ -498,12 +498,58 @@ def baseline_paths(repo_root: Path, inventory: PrePagesInventory) -> tuple[PureP
     return tuple(PurePosixPath(path) for path in output.decode("utf-8").split("\0") if path)
 
 
+def _parse_name_status_z(data: bytes) -> tuple[tuple[str, PurePosixPath, PurePosixPath | None], ...]:
+    if not data:
+        return ()
+    if not data.endswith(b"\0"):
+        raise AuditFormatError("Truncated Git name-status output: missing final NUL")
+    try:
+        fields = data.decode("utf-8").split("\0")[:-1]
+    except UnicodeError as error:
+        raise AuditFormatError("Git name-status output is not UTF-8") from error
+    records = []
+    before, after = set(), set()
+    position = 0
+    while position < len(fields):
+        status = fields[position]
+        rename = re.fullmatch(r"R([0-9]{1,3})", status)
+        if status not in {"A", "M", "D", "T"} and not (rename and int(rename[1]) <= 100):
+            raise AuditFormatError(f"Unexpected Git name-status record: {status!r}")
+        width = 3 if rename else 2
+        if position + width > len(fields):
+            raise AuditFormatError(f"Truncated Git name-status record: {status}")
+        source = _relative_path(fields[position + 1], "Git name-status source")
+        target = _relative_path(fields[position + 2], "Git rename target") if rename else None
+        if status != "A":
+            if source in before:
+                raise AuditFormatError(f"Duplicate Git name-status source: {source}")
+            before.add(source)
+        if status != "D":
+            destination = target if rename else source
+            if destination in after:
+                raise AuditFormatError(f"Duplicate Git name-status target: {destination}")
+            after.add(destination)
+        records.append((status, source, target))
+        position += width
+    return tuple(records)
+
+
 def resolve_current_documents(
     repo_root: Path, inventory: PrePagesInventory
 ) -> Mapping[PurePosixPath, Document]:
     _require_full_history(repo_root, inventory.baseline_commit, inventory.pages_commit)
     if len(inventory.documents) != 62:
         raise AuditFormatError(f"Expected 62 inventory documents, found {len(inventory.documents)}")
+    _require_commit(repo_root, inventory.baseline_commit)
+    _require_commit(repo_root, inventory.pages_commit)
+    initial_changes = _parse_name_status_z(_git(
+        repo_root, "diff", f"--find-renames={inventory.rename_similarity}%",
+        "--name-status", "-z", inventory.baseline_commit, inventory.pages_commit, "--",
+    ))
+    initial_renames = {
+        source: target for status, source, target in initial_changes
+        if status.startswith("R") and int(status[1:]) >= inventory.rename_similarity
+    }
     try:
         taxonomy = load_taxonomy(repo_root / "docs-taxonomy.yml")
         catalog = build_topic_catalog(repo_root / "docs", taxonomy)
@@ -514,7 +560,14 @@ def resolve_current_documents(
     used: set[PurePosixPath] = set()
     for document in inventory.documents:
         git_bytes(repo_root, inventory.baseline_commit, document.baseline_path)
-        git_bytes(repo_root, inventory.pages_commit, PurePosixPath("docs") / document.pages_path)
+        pages_path = PurePosixPath("docs") / document.pages_path
+        git_bytes(repo_root, inventory.pages_commit, pages_path)
+        if initial_renames.get(document.baseline_path) != pages_path:
+            raise AuditFormatError(
+                f"{document.baseline_path}: initial rename lineage from {inventory.baseline_commit} "
+                f"to {inventory.pages_commit} at {inventory.rename_similarity}% must be R to {pages_path}; "
+                f"observed {initial_renames.get(document.baseline_path)}"
+            )
         canonical = catalog.redirects.get(document.pages_path)
         if canonical is None:
             raise AuditFormatError(f"{document.pages_path}: missing initial Pages redirect_from")
@@ -595,14 +648,8 @@ def classify_baseline_files(
         repo_root, "diff", f"--find-renames={inventory.rename_similarity}%",
         "--name-status", "-z", inventory.baseline_commit, "HEAD", "--",
     )
-    fields = iter(output.decode("utf-8").split("\0")[:-1])
     deleted = set()
-    for status in fields:
-        try:
-            source = PurePosixPath(next(fields))
-            target = PurePosixPath(next(fields)) if status.startswith("R") else source
-        except StopIteration as error:
-            raise AuditFormatError("Truncated Git name-status output") from error
+    for status, source, target in _parse_name_status_z(output):
         if status == "A":
             continue
         if source not in classified:
@@ -612,6 +659,7 @@ def classify_baseline_files(
         elif status in {"M", "T"}:
             classified[source] = GitFileDisposition(source, "modified", (source,))
         elif status.startswith("R"):
+            assert target is not None
             classified[source] = GitFileDisposition(source, "renamed", (target,))
         else:
             raise AuditFormatError(f"{source}: unsupported Git status {status}")
