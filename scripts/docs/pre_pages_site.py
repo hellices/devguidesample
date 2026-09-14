@@ -34,6 +34,8 @@ _VOID = frozenset((
 ))
 _INERT = frozenset(("script", "style", "template", "noscript"))
 _HTML_WHITESPACE = " \t\n\f\r"
+_URL_C0_SPACE = "".join(chr(codepoint) for codepoint in range(0x21))
+_URL_REMOVED_CONTROLS = str.maketrans("", "", "\t\n\r")
 
 
 def _valid_srcset_descriptor(value: str) -> bool:
@@ -253,9 +255,12 @@ class _Site:
                 raise ValueError("ambiguous leading slashes must be rejected before URL parsing")
             if "\\" in raw or re.match(r"^[\x00-\x20]*[A-Za-z][:|]", raw):
                 raise ValueError("Windows drive or backslash syntax is not a web URL")
+            # HTML attributes are already entity-decoded; do not decode them again.
+            scheme_spelling = raw.strip(_URL_C0_SPACE).translate(_URL_REMOVED_CONTROLS)
+            scheme = re.match(r"^([A-Za-z][A-Za-z0-9+.-]*):", scheme_spelling)
+            if scheme is not None and scheme[1].lower() in {"javascript", "vbscript", "file"}:
+                raise ValueError(f"unsafe URL scheme {scheme[1].lower()!r}")
             url = urlsplit(raw)
-            if url.scheme == "file":
-                raise ValueError("local file URLs are not published web targets")
             if url.scheme in {"http", "https"} and not url.netloc:
                 raise ValueError("absolute HTTP(S) URLs require an explicit authority")
             if (url.netloc or url.scheme in {"http", "https"}) and re.search(r"[\x00-\x1f\x7f]", raw):

@@ -6,6 +6,7 @@ from collections.abc import Hashable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
+import stat
 import subprocess
 from types import MappingProxyType
 from typing import Mapping
@@ -526,6 +527,62 @@ def resolve_current_documents(
     return MappingProxyType(resolved)
 
 
+def _validate_disposition_replacements(repo_root: Path, inventory: PrePagesInventory) -> None:
+    replacements = [
+        (baseline, current)
+        for baseline, disposition in inventory.dispositions.items()
+        for current in disposition.current_paths
+    ]
+    if not replacements:
+        return
+    root = repo_root.resolve()
+    tracked = {}
+    for record in _git(root, "ls-tree", "-r", "-z", "HEAD").decode("utf-8").split("\0"):
+        if record:
+            metadata, _, name = record.partition("\t")
+            mode, kind, _ = metadata.split()
+            tracked[PurePosixPath(name)] = (mode, kind)
+    owners = {}
+    for baseline, reference in replacements:
+        label = f"{baseline}: reviewed replacement {reference}"
+        reference = _relative_path(str(reference), label)
+        if len(reference.parts) < 3 or reference.parts[:2] not in {("docs", "services"), ("tests", "docs")}:
+            raise AuditFormatError(f"{label}: outside allowed roots docs/services/** and tests/docs/**")
+        if any(part.casefold() in {
+            ".git", ".superpowers", "site", "__pycache__", ".pytest_cache", "node_modules", ".venv",
+        } for part in reference.parts):
+            raise AuditFormatError(f"{label}: generated or private paths are ineligible")
+        if reference not in tracked:
+            raise AuditFormatError(f"{label}: not tracked at HEAD")
+        if tracked[reference] not in {("100644", "blob"), ("100755", "blob")}:
+            raise AuditFormatError(f"{label}: not a regular file at HEAD (mode {tracked[reference][0]})")
+        try:
+            current = root
+            for part in reference.parts:
+                current /= part
+                mode = current.lstat().st_mode
+                if stat.S_ISLNK(mode):
+                    raise AuditFormatError(f"{label}: symlink components are ineligible")
+            if not stat.S_ISREG(mode):
+                raise AuditFormatError(f"{label}: current path is not a regular file")
+            if not current.resolve(strict=True).is_relative_to(root):
+                raise AuditFormatError(f"{label}: current path escapes the repository")
+        except (OSError, RuntimeError) as error:
+            raise AuditFormatError(f"{label}: cannot resolve current file: {error}") from error
+        owners.setdefault(reference, baseline)
+    ignored = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "--no-index", "-z", "--stdin"],
+        input="".join(f"{path}\0" for path in sorted(owners)).encode("utf-8"),
+        capture_output=True, check=False,
+    )
+    if ignored.returncode not in (0, 1):
+        raise AuditFormatError(f"cannot check ignored replacement paths: {ignored.stderr.decode('utf-8', errors='replace')}")
+    for value in ignored.stdout.decode("utf-8").split("\0"):
+        if value:
+            reference = PurePosixPath(value)
+            raise AuditFormatError(f"{owners[reference]}: reviewed replacement {reference}: ignored paths are ineligible")
+
+
 def classify_baseline_files(
     repo_root: Path, inventory: PrePagesInventory
 ) -> tuple[GitFileDisposition, ...]:
@@ -567,9 +624,10 @@ def classify_baseline_files(
                 f"{path}: reviewed disposition requires a deleted baseline path; "
                 f"Git status is {classified[path].status}"
             )
-        for current in disposition.current_paths:
-            if not (repo_root / current).is_file():
-                raise AuditFormatError(f"{path}: reviewed current path does not exist: {current}")
+        if (disposition.status == "excluded-local-state") != (not disposition.current_paths):
+            raise AuditFormatError(f"{path}: current_paths must be empty only for excluded-local-state")
+    _validate_disposition_replacements(repo_root, inventory)
+    for path, disposition in inventory.dispositions.items():
         classified[path] = GitFileDisposition(path, "reviewed", disposition.current_paths)
     unreviewed = deleted - inventory.dispositions.keys()
     if unreviewed:

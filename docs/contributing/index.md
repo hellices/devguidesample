@@ -310,6 +310,11 @@ python scripts/docs/audit_pre_pages.py
 않으며, 현재 문서 수가 늘어났다는 이유로 감사가 실패하지 않습니다.
 과거 구조 비교와 JSON의 `document_count`·`details.documents`는 이 62개만
 대상으로 합니다. `current_document_count`는 현재 카탈로그에서 계산합니다.
+검토된 disposition은 Git에서 실제로 삭제된 기준선 경로에만 적용합니다.
+비어 있지 않은 `current_paths`는 `HEAD`에 저장된 `docs/services/**` 또는
+`tests/docs/**`의 일반 소스 파일이어야 합니다. 추적되지 않은 파일, ignore된
+파일, 생성 결과물과 심볼릭 링크는 대체 근거로 사용할 수 없습니다.
+빈 `current_paths`는 삭제된 로컬 상태를 제외할 때만 허용합니다.
 
 전체 감사는 기준선 밖의 신규 문서까지 포함해 현재 canonical 문서 **전체**의
 본문 가시성, 검색, 서비스별 주제 진입점, 글 찾기 연결과 로컬 자산을 검사합니다.

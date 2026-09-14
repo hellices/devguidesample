@@ -1734,3 +1734,54 @@ def test_real_s1_hidden_svg_artifact_cannot_supply_visible_image_evidence(real_b
         assert not any("missing rendered" in error and "s1-investigation.gif" in error for error in errors)
     finally:
         path.write_text(original)
+
+
+@pytest.mark.parametrize("raw", [
+    "javascript:void(0)", "JaVaScRiPt:void(0)", "java\tscript:void(0)",
+    "java\nscript:void(0)", "\x1f \tJAVASCRIPT:void(0)\r",
+    "jav&#x61;script&#58;void(0)", "java&Tab;script&colon;void(0)",
+    "&#x20;&#x09;JaVaScRiPt&#58;void(0)",
+    "vbscript:code", "VbScRiPt:code", "vb&#x0a;script:code",
+    "file:///example.txt", "FiLe:///example.txt", "fi&NewLine;le:///example.txt",
+])
+@pytest.mark.parametrize("element", [
+    '<a href="{raw}">Unsafe link</a>',
+    '<img src="{raw}">',
+    '<script src="{raw}"></script>',
+    '<link rel="stylesheet" href="{raw}">',
+    '<link rel="modulepreload" href="{raw}">',
+])
+def test_executable_and_local_url_schemes_fail_before_external_classification(site_repo, raw, element):
+    root, _ = site_repo
+    write(root, "site/index.html", html(element.format(raw=raw)))
+    errors = inspect(site_repo).errors
+    assert any("index.html" in error and "unsafe URL" in error and "scheme" in error for error in errors)
+
+
+@pytest.mark.parametrize("raw", [
+    "javascript:void(0)", "JaVaScRiPt:void(0)", "java\tscript:void(0)",
+    "vbscript:code", "VBScript:code", "file:///example.txt", "fi\rle:///example.txt",
+])
+def test_unsafe_scheme_search_locations_are_rejected_with_index_path(site_repo, raw):
+    root, _ = site_repo
+    entries = [search_entry(ENTRY), search_entry(CHILD), {"location": raw, "title": "Unsafe", "text": "Unsafe"}]
+    write(root, "site/search/search_index.json", json.dumps({"docs": entries}))
+    assert any("search/search_index.json" in error and repr(raw) in error for error in inspect(site_repo).errors)
+
+
+@pytest.mark.parametrize("raw", [
+    "data:image/png;base64,AAAA", "DATA:image/png;base64,AAAA",
+    "mailto:reader@example.test", "MAILTO:reader@example.test",
+    "https://external.test/asset.png", "HTTP://external.test/asset.png",
+])
+def test_explicitly_allowed_nonlocal_url_schemes_remain_ignored(site_repo, raw):
+    root, _ = site_repo
+    write(root, "site/index.html", html(f'<a href="{raw}">Allowed</a><img src="{raw}">'))
+    assert inspect(site_repo).errors == ()
+
+
+def test_html_entity_decoding_for_scheme_checks_happens_only_once(site_repo):
+    root, _ = site_repo
+    write(root, "site/&", "Literal local URL before its fragment")
+    write(root, "site/index.html", html('<a href="&amp;#x6a;avascript:fixture">Literal reference</a>'))
+    assert inspect(site_repo).errors == ()

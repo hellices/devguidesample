@@ -28,6 +28,7 @@ ROOT = Path(__file__).parents[2]
 BASELINE = "a4e680116db1016a698e64baae9efde858a8eafa"
 PAGES = "9ace966742ff92a00fc84bcc21529af47b8661af"
 MANIFEST = ROOT / "scripts/docs/pre_pages_inventory.yml"
+REPLACEMENT = PurePosixPath("docs/services/service/topic/replacement.md")
 FINGERPRINT = "a" * 64
 CONTENT_REASON = "Preserved in docs/services/service/topic/samples/evidence/README.md under Historical commands."
 
@@ -512,14 +513,15 @@ def file_history(history: tuple[Path, str, str]) -> tuple[Path, PrePagesInventor
     (repo / "한글 문서.md").write_text("수정된 문장\n")
     (repo / "-literal ; $(touch injected)\tfile.md").rename(repo / "renamed\t\n한글.md")
     (repo / "added.md").unlink()
-    (repo / "replacement.md").write_text("Canonical replacement overview.\n")
+    (repo / REPLACEMENT).parent.mkdir(parents=True)
+    (repo / REPLACEMENT).write_text("Canonical replacement overview.\n")
     (repo / "new-only.md").write_text("Not a baseline file.\n")
     pages = commit(repo, "Current")
     return repo, small_inventory(
         baseline, pages,
         {
             PurePosixPath("added.md"): ReviewedDisposition(
-                "replaced-summary", (PurePosixPath("replacement.md"),), "Canonical replacement overview.",
+                "replaced-summary", (REPLACEMENT,), "Canonical replacement overview.",
             )
         },
     )
@@ -537,7 +539,7 @@ def test_classification_covers_unchanged_modified_renamed_and_reviewed_files(
         PurePosixPath("-literal ; $(touch injected)\tfile.md"): (
             "renamed", (PurePosixPath("renamed\t\n한글.md"),),
         ),
-        PurePosixPath("added.md"): ("reviewed", (PurePosixPath("replacement.md"),)),
+        PurePosixPath("added.md"): ("reviewed", (REPLACEMENT,)),
     }
     assert len(actual) == 4
 
@@ -569,7 +571,7 @@ def test_classification_rejects_reviewed_dispositions_for_nondeleted_paths(
     if git_status == "type-changed":
         source = PurePosixPath("binary.bin")
         (repo / source).unlink()
-        (repo / source).symlink_to("replacement.md")
+        (repo / source).symlink_to(REPLACEMENT)
         commit(repo, "Change baseline file type")
         assert git(repo, "diff", "--name-status", inventory.baseline_commit, "HEAD", "--", str(source)) == (
             b"T\tbinary.bin\n"
@@ -618,7 +620,7 @@ def test_real_manifest_reviewed_dispositions_are_exactly_the_six_git_deletions()
 
 def test_classification_rejects_missing_replacement_path(file_history: tuple[Path, PrePagesInventory]) -> None:
     repo, inventory = file_history
-    (repo / "replacement.md").unlink()
+    (repo / REPLACEMENT).unlink()
     with pytest.raises(AuditFormatError, match="replacement.md"):
         lineage_api("classify_baseline_files")(repo, inventory)
 
@@ -794,6 +796,163 @@ def test_real_repository_maps_62_baseline_documents_without_limiting_current_gro
     assert {item.baseline_path for item in classified} == set(paths)
     assert {item.status for item in classified} <= {"unchanged", "modified", "renamed", "reviewed"}
     assert Counter(item.status for item in classified)["reviewed"] == 6
+
+
+def disposition_with_replacement(inventory, replacement):
+    return replace(inventory, dispositions={
+        PurePosixPath("added.md"): ReviewedDisposition(
+            "replaced-summary", (PurePosixPath(replacement),), "Canonical replacement overview.",
+        ),
+    })
+
+
+@pytest.mark.parametrize("name", [
+    "site/replacement.md", ".superpowers/replacement.md", ".git/config",
+    "README.md", ".devcontainer/README.md", "scripts/docs/replacement.py",
+    "tests/other/replacement.py", "docs/contributing/replacement.md",
+])
+def test_reviewed_replacement_rejects_paths_outside_explicit_source_roots(file_history, name):
+    repo, inventory = file_history
+    path = repo / name
+    if name != ".git/config":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Tracked but not an allowed replacement.\n")
+        git(repo, "add", "-f", "--", name)
+        commit(repo, "Track forbidden replacement")
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert name in str(error.value) and "added.md" in str(error.value)
+
+
+@pytest.mark.parametrize("state", ["untracked", "staged-only", "ignored", "missing", "directory"])
+def test_reviewed_replacement_requires_a_head_tracked_live_regular_file(file_history, state):
+    repo, inventory = file_history
+    name = "docs/services/service/topic/candidate.md"
+    path = repo / name
+    path.write_text("Candidate source.\n")
+    if state == "staged-only":
+        git(repo, "add", "--", name)
+    elif state in {"ignored", "missing", "directory"}:
+        if state == "ignored":
+            (repo / ".gitignore").write_text(name + "\n")
+            git(repo, "add", "-f", "--", name)
+        commit(repo, "Track candidate replacement")
+        if state == "missing":
+            path.unlink()
+        elif state == "directory":
+            path.unlink()
+            path.mkdir()
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert name in str(error.value)
+
+
+@pytest.mark.parametrize("name", [
+    "docs/services/service/topic/site/generated.html",
+    "tests/docs/__pycache__/generated.pyc",
+    "docs/services/service/topic/samples/example/evidence/result.md",
+    "tests/docs/.superpowers/result.md",
+])
+def test_force_tracked_generated_replacements_are_ineligible(file_history, name):
+    repo, inventory = file_history
+    (repo / ".gitignore").write_text((ROOT / ".gitignore").read_text())
+    path = repo / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Generated output is not replacement source.\n")
+    git(repo, "add", "-f", "--", name)
+    commit(repo, "Force track generated output")
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert name in str(error.value)
+
+
+@pytest.mark.parametrize("kind", ["head-link", "head-link-live-file", "live-link", "parent-link", "outside-link"])
+def test_reviewed_replacements_reject_all_symlinks_including_contained_links(file_history, kind):
+    repo, inventory = file_history
+    name = PurePosixPath("docs/services/service/topic/candidate.md")
+    path = repo / name
+    if kind in {"head-link", "head-link-live-file", "outside-link"}:
+        if kind == "outside-link":
+            target = repo.parent / "outside-source.md"
+            target.write_text("Outside source.\n")
+        else:
+            target = Path("replacement.md")
+        path.symlink_to(target)
+        commit(repo, "Track symlink replacement")
+        if kind == "head-link-live-file":
+            path.unlink()
+            path.write_text("A live regular file cannot replace a HEAD symlink.\n")
+    elif kind == "live-link":
+        path.write_text("Tracked regular source.\n")
+        commit(repo, "Track regular candidate")
+        path.unlink()
+        path.symlink_to("replacement.md")
+    else:
+        name = REPLACEMENT
+        mirror = repo / "docs/services/service/mirror"
+        mirror.mkdir()
+        (mirror / "replacement.md").write_text("Tracked mirror source.\n")
+        commit(repo, "Track mirror source")
+        parent = (repo / name).parent
+        parent.rename(repo / "saved-topic")
+        parent.symlink_to("mirror", target_is_directory=True)
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert str(name) in str(error.value)
+
+
+def test_reviewed_replacement_allows_head_tracked_docs_tests(file_history):
+    repo, inventory = file_history
+    name = "tests/docs/test_replacement.py"
+    path = repo / name
+    path.parent.mkdir(parents=True)
+    path.write_text("def test_replacement():\n    assert True\n")
+    commit(repo, "Track replacement test")
+    results = pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert next(item for item in results if str(item.baseline_path) == "added.md").current_paths == (PurePosixPath(name),)
+
+
+def test_empty_replacement_is_not_a_local_state_disposition(file_history):
+    repo, inventory = file_history
+    invalid = replace(inventory, dispositions={
+        PurePosixPath("added.md"): ReviewedDisposition("replaced-summary", (), "Missing source is not local state."),
+    })
+    with pytest.raises(AuditFormatError, match="current_paths"):
+        pre_pages.classify_baseline_files(repo, invalid)
+
+
+@pytest.mark.parametrize("name", ["README.md", "scripts/docs/pre_pages.py", "docs/contributing/index.md"])
+def test_real_manifest_cannot_add_arbitrary_tracked_disposition_evidence(name):
+    inventory = load_inventory(MANIFEST)
+    baseline = PurePosixPath("memory/README.md")
+    original = inventory.dispositions[baseline]
+    changed = replace(inventory, dispositions={
+        **inventory.dispositions,
+        baseline: replace(original, current_paths=(*original.current_paths, PurePosixPath(name))),
+    })
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(ROOT, changed)
+    assert str(baseline) in str(error.value) and name in str(error.value)
+
+
+def test_real_manifest_replacements_are_head_tracked_unignored_regular_sources():
+    inventory = load_inventory(MANIFEST)
+    replacements = {
+        path for disposition in inventory.dispositions.values() for path in disposition.current_paths
+    }
+    assert len(replacements) == 7
+    for path in replacements:
+        assert path.parts[:2] in {("docs", "services"), ("tests", "docs")}
+        entry = git(ROOT, "ls-tree", "HEAD", "--", str(path)).decode()
+        assert entry.startswith(("100644 blob ", "100755 blob "))
+        assert (ROOT / path).is_file()
+        assert not any((ROOT / Path(*path.parts[:index])).is_symlink() for index in range(1, len(path.parts) + 1))
+    ignored = subprocess.run(
+        ["git", "-C", str(ROOT), "check-ignore", "--no-index", "--", *(str(path) for path in sorted(replacements))],
+        capture_output=True, text=True,
+    )
+    assert ignored.returncode == 1 and not ignored.stdout
+    assert len([item for item in pre_pages.classify_baseline_files(ROOT, inventory) if item.status == "reviewed"]) == 6
 
 
 def shallow_clone_with_anchors(
