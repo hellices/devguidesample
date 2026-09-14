@@ -290,8 +290,14 @@ body {
   display: none;
 }
 
+@media (max-width: 1219px) {
+  .md-header .dg-sidebar-toggle {
+    display: none !important;
+  }
+}
+
 @media (min-width: 1220px) {
-  .dg-sidebar-toggle {
+  .md-header .dg-sidebar-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
