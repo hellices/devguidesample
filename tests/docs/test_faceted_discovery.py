@@ -261,11 +261,12 @@ def test_service_discovery_reports_topics_and_documents(taxonomy, catalog):
         assert "개 주제 · " in pages[PurePosixPath(path)]
 
 
-def test_javascript_behavior_with_available_node():
+@pytest.mark.parametrize("script_name", ("explore.test.cjs", "sidebar-toggle.test.cjs"))
+def test_javascript_behavior_with_available_node(script_name):
     node = shutil.which("node")
     if not node:
         pytest.skip("Node unavailable: parent browser verification is required")
-    result = subprocess.run([node, "--test", str(ROOT / "tests/docs/explore.test.cjs")],
+    result = subprocess.run([node, "--test", str(ROOT / "tests/docs" / script_name)],
                             cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
