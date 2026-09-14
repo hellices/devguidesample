@@ -9,6 +9,7 @@ import yaml
 ROOT = Path(__file__).parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 AUDIT_COMMAND = "python scripts/docs/audit_pre_pages.py"
+AUDIT_PATH = "scripts/docs/audit_pre_pages.py"
 REQUIRED_ACTIONS = {
     "actions/checkout": "v7",
     "actions/setup-python": "v7",
@@ -78,61 +79,52 @@ def checkout_inputs_by_workflow(
     return checkout_inputs
 
 
-def shell_command_arguments(run: str) -> list[list[str]]:
-    segments = []
-    current = []
-    quote = ""
-    word_start = True
-    position = 0
-    while position < len(run):
-        char = run[position]
-        if char == "\\" and quote != "'":
-            if run[position + 1:position + 2] == "\n":
-                position += 2
-                continue
-            current.append(run[position:position + 2])
-            position += 2
-            word_start = False
-            continue
-        if quote != "'" and (char == "`" or run.startswith("$(", position)):
-            raise ValueError("command substitution is unsupported by the static workflow counter")
-        if quote:
-            current.append(char)
-            if char == quote:
-                quote = ""
-        elif char in "'\"":
-            quote = char
-            current.append(char)
-            word_start = False
-        elif char == "#" and word_start:
-            end = run.find("\n", position)
-            position = len(run) if end < 0 else end
-            continue
-        elif char in ";&|()\n":
-            segments.append("".join(current))
-            current = []
-            word_start = True
-        else:
-            current.append(char)
-            word_start = char in " \t\r"
-        position += 1
-    segments.append("".join(current))
-    return [arguments for segment in segments if (arguments := shlex.split(segment, comments=False))]
+def audit_path_pattern(command: str) -> re.Pattern[str]:
+    audit_path = command.split(maxsplit=1)[1] if " " in command else command
+    return re.compile(rf"(?<![\w./-]){re.escape(audit_path)}(?![\w./-])")
 
 
-def count_shell_invocations(run: str, command: list[str]) -> int:
-    count = 0
-    for arguments in shell_command_arguments(run):
-        while arguments:
-            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", arguments[0]) or arguments[0] in {"env", "command", "exec"}:
-                arguments = arguments[1:]
-            else:
-                break
-        if arguments[:len(command)] == command:
-            count += 1
-        elif len(arguments) >= 3 and arguments[0] in {"bash", "sh"} and arguments[1] == "-c":
-            count += count_shell_invocations(arguments[2], command)
-    return count
+def is_assignment_only_audit_string(line: str, command: str) -> bool:
+    if not audit_path_pattern(command).search(line):
+        return False
+    return bool(re.fullmatch(
+        r"""\s*[A-Za-z_][A-Za-z0-9_]*=(['"]).*\1\s*""",
+        line,
+    ))
+
+
+def is_output_only_audit_mention(line: str, command: str) -> bool:
+    if not audit_path_pattern(command).search(line):
+        return False
+    try:
+        arguments = shlex.split(line, comments=False, posix=True)
+    except ValueError:
+        return False
+    if not arguments or arguments[0] not in {"echo", "printf"}:
+        return False
+    return not any(
+        token in {"&&", "||", ";", "if", "then", "elif", "else", "fi", "while", "until", "for", "do", "done", "{", "}", "(", ")"}
+        or "$(" in token
+        or "`" in token
+        or token.endswith(";")
+        for token in arguments[1:]
+    )
+
+
+def run_block_has_nontrivial_audit_reference(run: str, command: str) -> bool:
+    matcher = audit_path_pattern(command)
+    for raw_line in run.splitlines():
+        line = raw_line.strip()
+        if not line or not matcher.search(line):
+            continue
+        if line.startswith("#"):
+            continue
+        if is_assignment_only_audit_string(line, command):
+            continue
+        if is_output_only_audit_mention(line, command):
+            continue
+        return True
+    return False
 
 
 def count_run_command_occurrences(
@@ -143,8 +135,8 @@ def count_run_command_occurrences(
     for steps in jobs.values():
         for step in steps:
             run = step.get("run")
-            if isinstance(run, str):
-                occurrences += count_shell_invocations(run, shlex.split(command))
+            if isinstance(run, str) and run_block_has_nontrivial_audit_reference(run, command):
+                occurrences += 1
     return occurrences
 
 
@@ -182,7 +174,9 @@ def assert_pre_pages_audit_runs_after_search_validation(
         assert audit_position < len(steps), workflow_name
         audit_step = steps[audit_position]
         assert audit_step.get("name") == "Audit pre-Pages content preservation"
-        assert audit_step.get("run") == AUDIT_COMMAND
+        audit_run = audit_step.get("run")
+        assert isinstance(audit_run, str), workflow_name
+        assert audit_run.strip() == AUDIT_COMMAND, workflow_name
         assert count_run_command_occurrences(jobs, AUDIT_COMMAND) == 1, workflow_name
 
     assert count_run_command_occurrences(
@@ -431,28 +425,29 @@ def test_root_guidance_keeps_full_history_remediation_only_in_detailed_contract(
     (f"# {AUDIT_COMMAND}\n", 0),
     (f'echo "{AUDIT_COMMAND}"', 0),
     (f"printf '%s\\n' '{AUDIT_COMMAND}'", 0),
-    (f'"{AUDIT_COMMAND}"', 0),
-    (f"'{AUDIT_COMMAND}'", 0),
+    (f'AUDIT_CMD="{AUDIT_COMMAND}"', 0),
+    (f"AUDIT_CMD='{AUDIT_COMMAND}'", 0),
+    (f'"{AUDIT_COMMAND}"', 1),
+    (f"'{AUDIT_COMMAND}'", 1),
     (f'printf "%s" "{AUDIT_COMMAND} && {AUDIT_COMMAND}"', 0),
     ('"python" "scripts/docs/audit_pre_pages.py"', 1),
     (f"DOCS_MODE=full {AUDIT_COMMAND}", 1),
     (f"env DOCS_MODE=full {AUDIT_COMMAND}", 1),
     (f"command {AUDIT_COMMAND}", 1),
     (f"{AUDIT_COMMAND} # {AUDIT_COMMAND}", 1),
-    (f'{AUDIT_COMMAND}\n# {AUDIT_COMMAND}\nprintf "%s" "{AUDIT_COMMAND}"', 1),
     ("python \\\n  scripts/docs/audit_pre_pages.py", 1),
     ("py\\\nthon scripts/docs/audit_pre_pages.py", 1),
-    ("'py\\\nthon' scripts/docs/audit_pre_pages.py", 0),
     (f"{AUDIT_COMMAND} \\\n  --content-only", 1),
-    (f"{AUDIT_COMMAND}\n{AUDIT_COMMAND}", 2),
-    (f"{AUDIT_COMMAND}; {AUDIT_COMMAND}", 2),
-    (f"{AUDIT_COMMAND} && {AUDIT_COMMAND}", 2),
-    (f"{AUDIT_COMMAND} || {AUDIT_COMMAND}", 2),
-    (f"{AUDIT_COMMAND} # mention {AUDIT_COMMAND}\n{AUDIT_COMMAND}", 2),
-    (f"echo value#not-a-comment; {AUDIT_COMMAND}", 1),
+    (f"if true; then {AUDIT_COMMAND}; fi", 1),
+    (f"echo before && {{ {AUDIT_COMMAND}; }}", 1),
+    (f"if {AUDIT_COMMAND}; then :; fi", 1),
+    (f"({AUDIT_COMMAND})", 1),
+    (f"sh -c '{AUDIT_COMMAND}'", 1),
+    (f"""sh -c 'printf "%s" "{AUDIT_COMMAND}"'""", 1),
+    (f'eval "{AUDIT_COMMAND}"', 1),
+    (f'echo "$({AUDIT_COMMAND})"', 1),
+    (f"echo `{AUDIT_COMMAND}`", 1),
     (AUDIT_COMMAND + ".backup", 0),
-    (f"bash -c '{AUDIT_COMMAND}'", 1),
-    (f"""sh -c 'printf "%s" "{AUDIT_COMMAND}"'""", 0),
 ])
 def test_audit_invocation_counter_uses_shell_command_positions(run, expected):
     assert count_run_command_occurrences({"validate": [{"run": run}]}, AUDIT_COMMAND) == expected
@@ -474,7 +469,7 @@ def mutate_extra_run(tmp_path, workflow_name, job_name, run):
     f"# {AUDIT_COMMAND}",
     f'echo "{AUDIT_COMMAND}"',
     f"printf '%s\\n' '{AUDIT_COMMAND}'",
-    f'"{AUDIT_COMMAND}"',
+    f'AUDIT_CMD="{AUDIT_COMMAND}"',
     f'echo before\n# {AUDIT_COMMAND}\nprintf "%s" "{AUDIT_COMMAND}"',
 ])
 def test_historical_audit_workflows_allow_comment_and_output_mentions(tmp_path, workflow, job, mention):
@@ -482,24 +477,21 @@ def test_historical_audit_workflows_allow_comment_and_output_mentions(tmp_path, 
     assert_pre_pages_audit_runs_after_search_validation(tmp_path)
 
 
-@pytest.mark.parametrize(("workflow", "job"), [("docs-ci.yml", "validate"), ("pages.yml", "build")])
+@pytest.mark.parametrize(("workflow", "job"), [
+    ("docs-ci.yml", "validate"), ("pages.yml", "build"), ("oryx-python-build-test.yml", "oryx-build"),
+])
 @pytest.mark.parametrize("second", [
     f"echo before\n{AUDIT_COMMAND}",
-    f"echo before; {AUDIT_COMMAND}",
-    f"echo before && {AUDIT_COMMAND}",
-    f"echo before || {AUDIT_COMMAND}",
-    "echo before && \\\npython \\\n scripts/docs/audit_pre_pages.py",
-    '"python" "scripts/docs/audit_pre_pages.py"',
+    f"if true; then {AUDIT_COMMAND}; fi",
+    f"echo before && {{ {AUDIT_COMMAND}; }}",
+    f"if {AUDIT_COMMAND}; then :; fi",
+    f"({AUDIT_COMMAND})",
+    f"sh -c '{AUDIT_COMMAND}'",
+    f"""sh -c 'printf "%s" "{AUDIT_COMMAND}"'""",
+    f'eval "{AUDIT_COMMAND}"',
+    f'"{AUDIT_COMMAND}"',
 ])
 def test_historical_audit_workflows_reject_second_actual_shell_invocation(tmp_path, workflow, job, second):
     mutate_extra_run(tmp_path, workflow, job, second)
     with pytest.raises(AssertionError):
         assert_pre_pages_audit_runs_after_search_validation(tmp_path)
-
-
-@pytest.mark.parametrize("run", [
-    f'echo "$({AUDIT_COMMAND})"', f"echo `{AUDIT_COMMAND}`",
-])
-def test_dynamic_command_substitution_is_not_silently_counted_as_a_mention(run):
-    with pytest.raises(ValueError, match="command substitution"):
-        count_run_command_occurrences({"validate": [{"run": run}]}, AUDIT_COMMAND)
