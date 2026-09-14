@@ -1,6 +1,5 @@
 from pathlib import Path
 import re
-import shlex
 
 import pytest
 import yaml
@@ -10,6 +9,9 @@ ROOT = Path(__file__).parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 AUDIT_COMMAND = "python scripts/docs/audit_pre_pages.py"
 AUDIT_PATH = "scripts/docs/audit_pre_pages.py"
+AUDIT_REFERENCE = re.compile(
+    rf"(?<![\w./-])(?:\./)?{re.escape(AUDIT_PATH)}(?![\w./-])"
+)
 REQUIRED_ACTIONS = {
     "actions/checkout": "v7",
     "actions/setup-python": "v7",
@@ -79,65 +81,20 @@ def checkout_inputs_by_workflow(
     return checkout_inputs
 
 
-def audit_path_pattern(command: str) -> re.Pattern[str]:
-    audit_path = command.split(maxsplit=1)[1] if " " in command else command
-    return re.compile(rf"(?<![\w./-]){re.escape(audit_path)}(?![\w./-])")
+def has_literal_audit_reference(run: str) -> bool:
+    return bool(AUDIT_REFERENCE.search(run))
 
 
-def is_assignment_only_audit_string(line: str, command: str) -> bool:
-    if not audit_path_pattern(command).search(line):
-        return False
-    return bool(re.fullmatch(
-        r"""\s*[A-Za-z_][A-Za-z0-9_]*=(['"]).*\1\s*""",
-        line,
-    ))
-
-
-def is_output_only_audit_mention(line: str, command: str) -> bool:
-    if not audit_path_pattern(command).search(line):
-        return False
-    try:
-        arguments = shlex.split(line, comments=False, posix=True)
-    except ValueError:
-        return False
-    if not arguments or arguments[0] not in {"echo", "printf"}:
-        return False
-    return not any(
-        token in {"&&", "||", ";", "if", "then", "elif", "else", "fi", "while", "until", "for", "do", "done", "{", "}", "(", ")"}
-        or "$(" in token
-        or "`" in token
-        or token.endswith(";")
-        for token in arguments[1:]
-    )
-
-
-def run_block_has_nontrivial_audit_reference(run: str, command: str) -> bool:
-    matcher = audit_path_pattern(command)
-    for raw_line in run.splitlines():
-        line = raw_line.strip()
-        if not line or not matcher.search(line):
-            continue
-        if line.startswith("#"):
-            continue
-        if is_assignment_only_audit_string(line, command):
-            continue
-        if is_output_only_audit_mention(line, command):
-            continue
-        return True
-    return False
-
-
-def count_run_command_occurrences(
+def count_run_blocks_with_audit_reference(
     jobs: dict[str, list[dict[str, object]]],
-    command: str,
 ) -> int:
-    occurrences = 0
+    references = 0
     for steps in jobs.values():
         for step in steps:
             run = step.get("run")
-            if isinstance(run, str) and run_block_has_nontrivial_audit_reference(run, command):
-                occurrences += 1
-    return occurrences
+            if isinstance(run, str) and has_literal_audit_reference(run):
+                references += 1
+    return references
 
 
 def assert_required_action_versions(workflows_dir: Path = WORKFLOWS) -> None:
@@ -177,10 +134,10 @@ def assert_pre_pages_audit_runs_after_search_validation(
         audit_run = audit_step.get("run")
         assert isinstance(audit_run, str), workflow_name
         assert audit_run.strip() == AUDIT_COMMAND, workflow_name
-        assert count_run_command_occurrences(jobs, AUDIT_COMMAND) == 1, workflow_name
+        assert count_run_blocks_with_audit_reference(jobs) == 1, workflow_name
 
-    assert count_run_command_occurrences(
-        jobs_by_workflow["oryx-python-build-test.yml"], AUDIT_COMMAND,
+    assert count_run_blocks_with_audit_reference(
+        jobs_by_workflow["oryx-python-build-test.yml"],
     ) == 0
 
 
@@ -422,35 +379,24 @@ def test_root_guidance_keeps_full_history_remediation_only_in_detailed_contract(
 
 @pytest.mark.parametrize(("run", "expected"), [
     (AUDIT_COMMAND, 1),
-    (f"# {AUDIT_COMMAND}\n", 0),
-    (f'echo "{AUDIT_COMMAND}"', 0),
-    (f"printf '%s\\n' '{AUDIT_COMMAND}'", 0),
-    (f'AUDIT_CMD="{AUDIT_COMMAND}"', 0),
-    (f"AUDIT_CMD='{AUDIT_COMMAND}'", 0),
-    (f'"{AUDIT_COMMAND}"', 1),
-    (f"'{AUDIT_COMMAND}'", 1),
-    (f'printf "%s" "{AUDIT_COMMAND} && {AUDIT_COMMAND}"', 0),
-    ('"python" "scripts/docs/audit_pre_pages.py"', 1),
-    (f"DOCS_MODE=full {AUDIT_COMMAND}", 1),
-    (f"env DOCS_MODE=full {AUDIT_COMMAND}", 1),
-    (f"command {AUDIT_COMMAND}", 1),
-    (f"{AUDIT_COMMAND} # {AUDIT_COMMAND}", 1),
-    ("python \\\n  scripts/docs/audit_pre_pages.py", 1),
-    ("py\\\nthon scripts/docs/audit_pre_pages.py", 1),
-    (f"{AUDIT_COMMAND} \\\n  --content-only", 1),
-    (f"if true; then {AUDIT_COMMAND}; fi", 1),
-    (f"echo before && {{ {AUDIT_COMMAND}; }}", 1),
-    (f"if {AUDIT_COMMAND}; then :; fi", 1),
-    (f"({AUDIT_COMMAND})", 1),
-    (f"sh -c '{AUDIT_COMMAND}'", 1),
-    (f"""sh -c 'printf "%s" "{AUDIT_COMMAND}"'""", 1),
-    (f'eval "{AUDIT_COMMAND}"', 1),
-    (f'echo "$({AUDIT_COMMAND})"', 1),
+    ("python ./scripts/docs/audit_pre_pages.py", 1),
+    (f"# {AUDIT_PATH}\n", 1),
+    (f'printf "%s\\n" "{AUDIT_PATH}"', 1),
+    (f'AUDIT_RESULT="$(python {AUDIT_PATH})"', 1),
+    (f"echo before;python {AUDIT_PATH}", 1),
+    (f"if true; then python {AUDIT_PATH}; fi", 1),
+    (f"echo before && {{ python {AUDIT_PATH}; }}", 1),
+    (f"if python {AUDIT_PATH}; then :; fi", 1),
+    (f"(python {AUDIT_PATH})", 1),
+    (f"sh -c 'python {AUDIT_PATH}'", 1),
     (f"echo `{AUDIT_COMMAND}`", 1),
-    (AUDIT_COMMAND + ".backup", 0),
+    (f'echo "$({AUDIT_COMMAND})"', 1),
+    (f"echo {AUDIT_PATH}.backup", 0),
+    (f"echo {AUDIT_PATH}c", 0),
+    (f"echo ./scripts/docs/audit_pre_pages.py.backup", 0),
 ])
-def test_audit_invocation_counter_uses_shell_command_positions(run, expected):
-    assert count_run_command_occurrences({"validate": [{"run": run}]}, AUDIT_COMMAND) == expected
+def test_literal_audit_reference_matcher_respects_boundaries(run, expected):
+    assert int(has_literal_audit_reference(run)) == expected
 
 
 def mutate_extra_run(tmp_path, workflow_name, job_name, run):
@@ -465,33 +411,64 @@ def mutate_extra_run(tmp_path, workflow_name, job_name, run):
 @pytest.mark.parametrize(("workflow", "job"), [
     ("docs-ci.yml", "validate"), ("pages.yml", "build"), ("oryx-python-build-test.yml", "oryx-build"),
 ])
-@pytest.mark.parametrize("mention", [
-    f"# {AUDIT_COMMAND}",
-    f'echo "{AUDIT_COMMAND}"',
-    f"printf '%s\\n' '{AUDIT_COMMAND}'",
-    f'AUDIT_CMD="{AUDIT_COMMAND}"',
-    f'echo before\n# {AUDIT_COMMAND}\nprintf "%s" "{AUDIT_COMMAND}"',
-])
-def test_historical_audit_workflows_allow_comment_and_output_mentions(tmp_path, workflow, job, mention):
-    mutate_extra_run(tmp_path, workflow, job, mention)
-    assert_pre_pages_audit_runs_after_search_validation(tmp_path)
-
-
-@pytest.mark.parametrize(("workflow", "job"), [
-    ("docs-ci.yml", "validate"), ("pages.yml", "build"), ("oryx-python-build-test.yml", "oryx-build"),
-])
 @pytest.mark.parametrize("second", [
-    f"echo before\n{AUDIT_COMMAND}",
-    f"if true; then {AUDIT_COMMAND}; fi",
-    f"echo before && {{ {AUDIT_COMMAND}; }}",
-    f"if {AUDIT_COMMAND}; then :; fi",
-    f"({AUDIT_COMMAND})",
-    f"sh -c '{AUDIT_COMMAND}'",
-    f"""sh -c 'printf "%s" "{AUDIT_COMMAND}"'""",
-    f'eval "{AUDIT_COMMAND}"',
-    f'"{AUDIT_COMMAND}"',
+    f"# {AUDIT_PATH}",
+    f'printf "%s\\n" "{AUDIT_PATH}"',
+    f'AUDIT_RESULT="$(python {AUDIT_PATH})"',
+    f"echo before;python {AUDIT_PATH}",
+    f"if true; then python {AUDIT_PATH}; fi",
+    f"echo before && {{ python {AUDIT_PATH}; }}",
+    f"if python {AUDIT_PATH}; then :; fi",
+    f"(python {AUDIT_PATH})",
+    f"sh -c 'python {AUDIT_PATH}'",
+    f"echo `{AUDIT_COMMAND}`",
+    f'echo "$({AUDIT_COMMAND})"',
 ])
-def test_historical_audit_workflows_reject_second_actual_shell_invocation(tmp_path, workflow, job, second):
+def test_historical_audit_workflows_reject_extra_literal_audit_references(tmp_path, workflow, job, second):
     mutate_extra_run(tmp_path, workflow, job, second)
     with pytest.raises(AssertionError):
         assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+@pytest.mark.parametrize("suffix", [
+    f"echo {AUDIT_PATH}.backup",
+    f"echo {AUDIT_PATH}c",
+    f"echo ./scripts/docs/audit_pre_pages.py.backup",
+])
+def test_historical_audit_workflows_ignore_suffix_nonmatches(tmp_path, suffix):
+    mutate_extra_run(tmp_path, "docs-ci.yml", "validate", suffix)
+    assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+@pytest.mark.parametrize(("workflow_name", "job_name"), [
+    ("docs-ci.yml", "validate"),
+    ("pages.yml", "build"),
+])
+def test_historical_audit_workflows_reject_dot_slash_dedicated_step(tmp_path, workflow_name, job_name):
+    for path in WORKFLOWS.glob("*.yml"):
+        write_workflow(tmp_path / path.name, path.read_text())
+    path = tmp_path / workflow_name
+    data = yaml.safe_load(path.read_text())
+    for step in data["jobs"][job_name]["steps"]:
+        if step.get("name") == "Audit pre-Pages content preservation":
+            step["run"] = "python ./scripts/docs/audit_pre_pages.py"
+            break
+    write_workflow(path, yaml.safe_dump(data))
+
+    with pytest.raises(AssertionError):
+        assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+def test_run_block_reference_counter_counts_blocks_not_mentions() -> None:
+    jobs = {
+        "validate": [
+            {"run": AUDIT_COMMAND},
+            {"run": f"# {AUDIT_PATH}\nprintf '%s\\n' '{AUDIT_PATH}'"},
+            {"run": f"python ./{AUDIT_PATH}"},
+        ],
+        "other": [
+            {"run": f"echo {AUDIT_PATH}.backup"},
+        ],
+    }
+
+    assert count_run_blocks_with_audit_reference(jobs) == 3
