@@ -91,8 +91,9 @@ test("mountSidebarToggle inserts a button and applies stored collapsed state", (
   assert.equal(mounted, fixture.button);
   assert.equal(fixture.inserted.length, 1);
   assert.equal(fixture.root.dataset.dgSidebarCollapsed, "true");
-  assert.equal(fixture.button.attributes["aria-pressed"], "true");
-  assert.equal(fixture.button.attributes["aria-label"], "왼쪽 메뉴 펼치기");
+  assert.equal(fixture.button.attributes["aria-expanded"], "false");
+  assert.equal(fixture.button.attributes["aria-label"], "왼쪽 메뉴");
+  assert.equal(fixture.button.attributes["aria-pressed"], undefined);
   assert.equal(fixture.root.dataset.dgSidebarToggleReady, "true");
 });
 
@@ -101,10 +102,27 @@ test("button click toggles collapsed state and persists to storage", () => {
   toggle.mountSidebarToggle(fixture.documentRef, fixture.windowRef);
   fixture.buttonListeners.click();
   assert.equal(fixture.root.dataset.dgSidebarCollapsed, "true");
+  assert.equal(fixture.button.attributes["aria-expanded"], "false");
   assert.equal(fixture.localStorage.value, "true");
   fixture.buttonListeners.click();
   assert.equal(fixture.root.dataset.dgSidebarCollapsed, "false");
+  assert.equal(fixture.button.attributes["aria-expanded"], "true");
   assert.equal(fixture.localStorage.value, "false");
+});
+
+test("blocked localStorage still mounts without persistence", () => {
+  const fixture = createFixture("true");
+  Object.defineProperty(fixture.windowRef, "localStorage", {
+    get() {
+      throw new Error("storage blocked");
+    },
+  });
+  const mounted = toggle.mountSidebarToggle(fixture.documentRef, fixture.windowRef);
+  assert.equal(mounted, fixture.button);
+  assert.equal(fixture.inserted.length, 1);
+  assert.equal(fixture.root.dataset.dgSidebarCollapsed, "false");
+  fixture.buttonListeners.click();
+  assert.equal(fixture.root.dataset.dgSidebarCollapsed, "true");
 });
 
 test("media change back to desktop re-syncs persisted state", () => {
