@@ -112,8 +112,8 @@ publish:
   `downloads/index.md` 같은 원본 자산은 해당 파일 경로로 직접 링크합니다.
   `downloads/`처럼 문서 디렉터리로 줄여 쓰면 다운로드 자산을 가리키지 않습니다.
   공개 target의 경로 구성 요소는 어느 깊이에서도 `.`으로 시작할 수 없습니다.
-  [Pages artifact 패키징](https://github.com/actions/upload-pages-artifact/blob/v4/action.yml)이
-  숨김 파일과 숨김 디렉터리를 제외하므로, 이런 target은 빌드 전에 거부합니다.
+  [Pages artifact 패키징](https://github.com/actions/upload-pages-artifact/blob/v5/action.yml)이
+  기본적으로 숨김 파일과 숨김 디렉터리를 제외하므로, 이런 target은 빌드 전에 거부합니다.
   sample 원본 payload 내부의 숨김 파일은 허용하며 원본 폴더는 계속 게시에서 제외합니다.
   페이지 본문과 링크 텍스트는 기존처럼 검색됩니다. `used_by`는 sample card의
   표시 위치만 결정하며 `publish`와 독립적입니다.
@@ -300,7 +300,49 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
+python scripts/docs/audit_pre_pages.py
 ```
+
+`audit_pre_pages.py`는 고정된 pre-Pages 기준선과 현재 built site를 함께
+대조해 과거 공개 콘텐츠와 호환 URL이 계속 보존되는지 검사합니다.
+보존 inventory는 `a4e6801` 시점의 **기준선 문서 62개**를 현재 canonical
+문서에 일대일로 연결합니다. 신규 문서는 이 기준선 inventory에 추가하지
+않으며, 현재 문서 수가 늘어났다는 이유로 감사가 실패하지 않습니다.
+각 연결은 `rename_similarity`로 계산한 기준선 → 최초 Pages commit의
+실제 Git `R` 기록과 원본·대상 경로가 일치해야 합니다. 양쪽 파일이
+존재한다는 사실만으로는 이관 계보를 인정하지 않습니다.
+과거 구조 비교와 JSON의 `document_count`·`details.documents`는 이 62개만
+대상으로 합니다. `current_document_count`는 현재 카탈로그에서 계산합니다.
+검토된 disposition은 Git에서 실제로 삭제된 기준선 경로에만 적용합니다.
+비어 있지 않은 `current_paths`는 `HEAD`에 저장된 `docs/services/**` 또는
+`tests/docs/**`의 일반 소스 파일이어야 합니다. 추적되지 않은 파일, ignore된
+파일, 생성 결과물과 심볼릭 링크는 대체 근거로 사용할 수 없습니다.
+빈 `current_paths`는 삭제된 로컬 상태를 제외할 때만 허용합니다.
+가시성 감사는 닫힌 `<details>`를 첫 직접 자식 `<summary>` 또는 브라우저의
+기본 컨트롤로 펼칠 수 있는지 검사합니다. 작성된 summary가 없어도
+컨트롤이 보이고 상호작용 가능하면 본문을 인정합니다. 상속된 `inert`,
+`hidden`, `display:none`, `aria-hidden` 등의 접근 제한은 계속 반영합니다.
+다른 요소 뒤에 오는 첫 `<summary>`도 인정하며, 이미 `open`인 본문은
+별도로 가시성을 확인합니다.
+
+전체 감사는 기준선 밖의 신규 문서까지 포함해 현재 canonical 문서 **전체**의
+본문 가시성, 검색, 서비스별 주제 진입점, 글 찾기 연결과 로컬 자산을 검사합니다.
+각 문서가 선언한 모든 `redirect_from`도 확인하며, inventory에 기록된
+기준선 Pages 경로 62개는 계속 필수입니다. 현재 문서가 66개인 경우의 성공
+출력은 다음과 같습니다. 현재 문서 수는 고정된 제한이 아닙니다.
+
+```text
+Audited 359 baseline files and 73 Markdown files: 62/62 baseline documents mapped and preserved; 66 current documents searchable and visible; declared redirects and local assets verified.
+```
+
+`--content-only`는 기준선 구조 보존만 검사하며 built site를 확인했다고
+표현하지 않습니다. 이 검사는
+`a4e6801`과 `9ace9667` commit object를 직접 읽으므로 전체 Git 이력이
+필수입니다. 로컬 clone이 얕으면 검사를 건너뛰지 말고
+`git fetch --unshallow` 또는 동등한 전체 이력 fetch를 수행한 뒤 다시
+실행합니다. CI에서는 checkout `fetch-depth: 0`으로 같은 조건을 보장합니다.
+필수 감사 step과 이를 포함한 validate/build job에는 실행을 건너뛸 수 있는
+`if`를 두지 않으며, `continue-on-error`로 감사 실패를 무시하지 않습니다.
 
 생성된 `site/`과 검색 인덱스는 커밋하지 않습니다. 실패한 검증을 무시하지
 않습니다.

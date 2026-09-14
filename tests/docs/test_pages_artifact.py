@@ -13,7 +13,7 @@ ROOT = Path(__file__).parents[2]
 
 
 def pages_artifact_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
-    # GNU tar's --exclude=".[^/]*" in upload-pages-artifact@v4, at every depth.
+    # GNU tar's --exclude=".[^/]*" in upload-pages-artifact@v5, at every depth.
     # Checking components also works on hosts whose BSD tar glob rules differ.
     if any(component.startswith(".") for component in PurePosixPath(member.name).parts):
         return None
@@ -23,7 +23,7 @@ def pages_artifact_filter(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
 def test_current_published_assets_survive_pages_artifact_hidden_exclusion(tmp_path: Path) -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/pages.yml").read_text())
     assert any(
-        step.get("uses") == "actions/upload-pages-artifact@v4"
+        step.get("uses") == "actions/upload-pages-artifact@v5"
         for step in workflow["jobs"]["build"]["steps"]
     )
     catalog = build_topic_catalog(ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml"))

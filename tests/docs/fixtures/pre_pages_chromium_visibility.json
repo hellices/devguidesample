@@ -1,0 +1,44 @@
+{
+  "captured_at": "2026-09-14",
+  "engine": "Chromium 148.0.7778.280 / Electron 42.10.0",
+  "method": "Computed CSS on authored H1 elements; real Playwright pointer clicks on summary descendants at a 1200x900 viewport. aria-hidden remains an accessibility exclusion even when pointer activation succeeds.",
+  "css": [
+    {"id": "comment-value", "style": "display:none;display:blo/**/ck", "display": "none", "visibility": "visible", "audit": "unsupported"},
+    {"id": "comment-property", "style": "display:none;dis/**/play:block", "display": "none", "visibility": "visible", "audit": "unsupported"},
+    {"id": "quoted-semicolon", "style": "display:none;--note:\";display:block;\"", "display": "none", "visibility": "visible", "audit": "hidden"},
+    {"id": "quoted-semicolon-control", "style": "--note:\";display:none;\";display:block", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "escaped-display", "style": "d\\69 splay:n\\6f ne", "display": "none", "visibility": "visible", "audit": "hidden"},
+    {"id": "escaped-visible", "style": "display:none;display:bl\\6f ck", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "escaped-visibility", "style": "visibility:h\\69 dden", "display": "block", "visibility": "hidden", "audit": "hidden"},
+    {"id": "important-first", "style": "display:none!important;display:block", "display": "none", "visibility": "visible", "audit": "hidden"},
+    {"id": "important-last", "style": "display:none;display:block ! IMPORTANT", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "comment-priority", "style": "display:none;display:block !/**/important", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "ordinary", "style": "color:rgb(1, 2, 3);margin:0;display:block", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "current-center", "style": "text-align: center;", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "current-right", "style": "text-align: right;", "display": "block", "visibility": "visible", "audit": "visible"},
+    {"id": "string-comment", "style": "display:none;--note:\"/*;display:block;*/\"", "display": "none", "visibility": "visible", "audit": "hidden"},
+    {"id": "escaped-semicolon", "style": "display:none;--note:foo\\;display:block", "display": "none", "visibility": "visible", "audit": "hidden"},
+    {"id": "custom-value", "style": "--display:none;display:var(--display)", "display": "none", "visibility": "visible", "audit": "unsupported"}
+  ],
+  "unresolved_css": [
+    "display:none;--note:\"unterminated",
+    "display:none;--note:(;display:block",
+    "display:none;--note:);display:block",
+    "display:none;/*unterminated",
+    "d\\\nisplay:none",
+    "visibility:visible;all:inherit",
+    "visibility:revert-layer",
+    "display:var(--display)"
+  ],
+  "disclosures": [
+    {"id": "ordinary", "summary": "", "child": "", "tag": "span", "ancestor": "", "browser_open": true, "audit_open": true},
+    {"id": "restored-text", "summary": "style=\"visibility:hidden\"", "child": "style=\"visibility:visible\"", "tag": "span", "ancestor": "", "browser_open": true, "audit_open": true},
+    {"id": "restored-focusable", "summary": "style=\"visibility:hidden\"", "child": "style=\"visibility:visible\" tabindex=\"0\"", "tag": "span", "ancestor": "", "browser_open": true, "audit_open": true},
+    {"id": "inert-summary", "summary": "inert style=\"visibility:hidden\"", "child": "style=\"visibility:visible\"", "tag": "span", "ancestor": "", "browser_open": false, "audit_open": false},
+    {"id": "none-summary", "summary": "style=\"display:none;visibility:hidden\"", "child": "style=\"display:block;visibility:visible\"", "tag": "span", "ancestor": "", "browser_open": false, "audit_open": false},
+    {"id": "hidden-summary", "summary": "hidden style=\"visibility:hidden\"", "child": "style=\"visibility:visible\"", "tag": "span", "ancestor": "", "browser_open": false, "audit_open": false},
+    {"id": "aria-summary", "summary": "aria-hidden=\"true\" style=\"visibility:hidden\"", "child": "aria-hidden=\"false\" style=\"visibility:visible\"", "tag": "span", "ancestor": "", "browser_open": true, "audit_open": false},
+    {"id": "inert-ancestor", "summary": "style=\"visibility:hidden\"", "child": "style=\"visibility:visible\"", "tag": "span", "ancestor": "inert", "browser_open": false, "audit_open": false},
+    {"id": "restored-button", "summary": "style=\"visibility:hidden\"", "child": "style=\"visibility:visible\"", "tag": "button", "ancestor": "", "browser_open": false, "audit_open": false}
+  ]
+}

@@ -1,0 +1,739 @@
+"""Fixed pre-Pages inventory, reviewed-evidence schema, and Git lineage."""
+
+from __future__ import annotations
+
+from collections.abc import Hashable
+from dataclasses import asdict, dataclass, field
+from pathlib import Path, PurePosixPath, PureWindowsPath
+import re
+import stat
+import subprocess
+from types import MappingProxyType
+from typing import Mapping
+import unicodedata
+
+import yaml
+
+from scripts.docs.content import Document, DocumentFormatError, load_taxonomy
+from scripts.docs.topics import build_topic_catalog
+
+
+class AuditFormatError(ValueError):
+    """Raised when the inventory or its Git lineage cannot be validated."""
+
+
+class _InventorySafeLoader(yaml.SafeLoader):
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        self.flatten_mapping(node)
+        keys = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, Hashable):
+                raise yaml.constructor.ConstructorError(
+                    "while constructing an inventory mapping", node.start_mark,
+                    "found unhashable key", key_node.start_mark,
+                )
+            if key in keys:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing an inventory mapping", node.start_mark,
+                    f"duplicate mapping key: {key!r}", key_node.start_mark,
+                )
+            keys.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+@dataclass(frozen=True)
+class StructureEvidence:
+    """A normalized current structure with exact (not minimum) multiplicity."""
+
+    path: PurePosixPath
+    category: str
+    fingerprint: str
+    count: int
+    kind: str = field(init=False, default="structure")
+
+
+@dataclass(frozen=True)
+class FileEvidence:
+    """Exact current file bytes, including binary artifacts."""
+
+    path: PurePosixPath
+    sha256: str
+    kind: str = field(init=False, default="file")
+
+
+@dataclass(frozen=True)
+class ReviewedChange:
+    """A bounded baseline loss justified by immutable current evidence references."""
+
+    missing_count: int
+    reason: str
+    evidence: tuple[StructureEvidence | FileEvidence, ...]
+    link_change: str | None = None
+
+
+@dataclass(frozen=True)
+class BaselineDocument:
+    baseline_path: PurePosixPath
+    pages_path: PurePosixPath
+    reviewed_changes: Mapping[str, Mapping[str, ReviewedChange]]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "reviewed_changes",
+            MappingProxyType({
+                category: MappingProxyType(dict(approvals))
+                for category, approvals in validate_reviewed_changes(self.reviewed_changes).items()
+            }),
+        )
+
+
+@dataclass(frozen=True)
+class ReviewedDisposition:
+    status: str
+    current_paths: tuple[PurePosixPath, ...]
+    reason: str
+
+
+@dataclass(frozen=True)
+class PrePagesInventory:
+    baseline_commit: str
+    pages_commit: str
+    rename_similarity: int
+    documents: tuple[BaselineDocument, ...]
+    dispositions: Mapping[PurePosixPath, ReviewedDisposition]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "dispositions", MappingProxyType(dict(self.dispositions)))
+
+
+@dataclass(frozen=True)
+class GitFileDisposition:
+    baseline_path: PurePosixPath
+    status: str
+    current_paths: tuple[PurePosixPath, ...]
+
+
+@dataclass(frozen=True)
+class PreservationAuditResult:
+    """Fixed-baseline preservation and dynamically discovered current coverage."""
+
+    baseline_file_count: int
+    baseline_markdown_count: int
+    document_count: int
+    current_document_count: int
+    preserved_documents: int
+    reviewed_documents: int
+    errors: tuple[str, ...]
+    warnings: tuple[str, ...]
+    details: Mapping[str, object]
+
+
+def _fields(value: object, required: set[str], label: str, optional: set[str] = frozenset()) -> dict:
+    if not isinstance(value, dict):
+        raise AuditFormatError(f"{label} must be a mapping")
+    missing = required - value.keys()
+    extra = value.keys() - required - optional
+    if missing or extra:
+        raise AuditFormatError(
+            f"{label}: missing fields {sorted(missing)}; unexpected fields {sorted(extra, key=str)}"
+        )
+    return value
+
+
+def _nonempty_string(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise AuditFormatError(f"{label} must be a non-empty string")
+    return value
+
+
+def _commit_hash(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise AuditFormatError(f"{label} must be a full lowercase 40-character commit hash: {value!r}")
+    return value
+
+
+def _relative_path(value: object, label: str) -> PurePosixPath:
+    raw = _nonempty_string(value, label)
+    path = PurePosixPath(raw)
+    if (
+        path.is_absolute()
+        or PureWindowsPath(raw).drive
+        or "\\" in raw
+        or "\0" in raw
+        or ".." in path.parts
+        or raw != path.as_posix()
+        or not path.parts
+    ):
+        raise AuditFormatError(f"{label} must be a normalized repository-relative POSIX path: {raw!r}")
+    return path
+
+
+STRUCTURE_CATEGORIES = (
+    "title", "headings", "prose", "code", "tables", "images", "local_link_labels",
+)
+EVIDENCE_CATEGORIES = (*STRUCTURE_CATEGORIES, "links")
+
+
+def validate_public_evidence_path(path: PurePosixPath, label: str) -> None:
+    if any(part.casefold() in {".git", ".superpowers"} for part in path.parts):
+        raise AuditFormatError(f"{label}: forbidden evidence path: {path}")
+    if not (
+        len(path.parts) > 2 and path.parts[:2] == ("docs", "services")
+        or path == PurePosixPath(".devcontainer/README.md")
+    ):
+        raise AuditFormatError(f"{label}: evidence path is outside the public source allowlist: {path}")
+
+
+def _positive_count(value: object, label: str) -> int:
+    if type(value) is not int or value <= 0:
+        raise AuditFormatError(f"{label} must be a positive integer")
+    return value
+
+
+def _sha256(value: object, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise AuditFormatError(f"{label} must be lowercase SHA-256")
+    return value
+
+
+def _review_reason(
+    value: object, label: str, references: tuple[StructureEvidence | FileEvidence, ...],
+) -> str:
+    reason = _nonempty_string(value, label)
+    text = unicodedata.normalize("NFKC", reason).casefold()
+    for reference in references:
+        text = text.replace(unicodedata.normalize("NFKC", str(reference.path)).casefold(), " ")
+    text = re.sub(r"(?:https?://|(?:docs|samples)/)\S+", " ", text)
+    text = re.sub(
+        r"\b(?:safety|reason|review(?:ed)?|approval|approved?|preservation|replacement|migration|updated?|revised?|"
+        r"changed?|removed?|deleted?|retained?|preserved?|replaced?|migrated?|"
+        r"needed|necessary|unnecessary|longer|anymore|during|before|after|because|content|document|documentation|"
+        r"block|material|stuff|latest|current|previous|old|new|evidence|references?|"
+        r"obsolete|irrelevant|therefore|nothing|significant|suitable|equivalent|"
+        r"improved?|presentation|has|have|"
+        r"a|an|the|and|or|as|at|in|on|to|of|for|from|with|by|"
+        r"this|that|these|those|it|its|is|was|are|were|be|been|not|no|now)\b",
+        " ", text,
+    )
+    text = re.sub(
+        r"\b(?:안전|검토|사유|이유|보존|대체|이관|갱신|업데이트|수정|변경|삭제|제거|"
+        r"유지|불필요|필요|내용|문서|콘텐츠|최신|현재|해당|않|없|기존|이전|"
+        r"과정|일반적|쓰이지|부분|항목|정리|적절|대한|거쳐)[가-힣]*"
+        r"|\b(?:이|그|더|이상|위해|때문에)\b",
+        " ", text,
+    )
+    concrete = re.findall(r"[a-z가-힣][a-z0-9가-힣_.-]*", text)
+    if len(reason.strip()) < 40 or len(concrete) < 2 or sum(map(len, concrete)) < 12:
+        raise AuditFormatError(
+            f"{label} must describe concrete replacement/preservation details, not generic-only approval phrases"
+        )
+    if not any(
+        re.search(
+            r"(?<![A-Za-z0-9_./%+-])" + re.escape(str(reference.path))
+            + r"(?![A-Za-z0-9_/%+-]|\.[A-Za-z0-9_.%+-])",
+            reason,
+        )
+        for reference in references
+    ):
+        raise AuditFormatError(f"{label} must name at least one exact evidence path")
+    return reason
+
+
+def _evidence_reference(value: object, label: str) -> StructureEvidence | FileEvidence:
+    if isinstance(value, (StructureEvidence, FileEvidence)):
+        value = {**asdict(value), "path": str(value.path)}
+    if not isinstance(value, dict):
+        raise AuditFormatError(f"{label} must be a mapping")
+    kind = value.get("kind")
+    if kind not in ("structure", "file"):
+        raise AuditFormatError(f"{label}.kind must be structure or file")
+    fields = {"kind", "path", "category", "fingerprint", "count"} if kind == "structure" else {
+        "kind", "path", "sha256",
+    }
+    raw = _fields(value, fields, label)
+    path = _relative_path(raw["path"], f"{label}.path")
+    validate_public_evidence_path(path, f"{label}.path")
+    if kind == "file":
+        return FileEvidence(path, _sha256(raw["sha256"], f"{label}.sha256"))
+    category = raw["category"]
+    if category not in EVIDENCE_CATEGORIES:
+        raise AuditFormatError(f"{label}.category is not a known structure category")
+    return StructureEvidence(
+        path, category, _sha256(raw["fingerprint"], f"{label}.fingerprint"),
+        _positive_count(raw["count"], f"{label}.count"),
+    )
+
+
+def validate_reviewed_changes(
+    value: object, label: str = "reviewed_changes",
+) -> Mapping[str, Mapping[str, ReviewedChange]]:
+    """Parse immutable approvals; current file/structure evidence is checked by the content auditor."""
+    if not isinstance(value, Mapping):
+        raise AuditFormatError(f"{label} must be a mapping")
+    parsed = {}
+    for category, approvals in value.items():
+        if category not in STRUCTURE_CATEGORIES:
+            raise AuditFormatError(f"{label}: unknown structure category: {category!r}")
+        if not isinstance(approvals, Mapping):
+            raise AuditFormatError(f"{label}.{category} must be a mapping")
+        parsed[category] = {}
+        for fingerprint, approval in approvals.items():
+            _sha256(fingerprint, f"{label}.{category}.fingerprint")
+            entry_label = f"{label}.{category}.{fingerprint}.approval"
+            if isinstance(approval, ReviewedChange):
+                change = approval
+                approval = {
+                    "missing_count": change.missing_count,
+                    "reason": change.reason,
+                    "evidence": change.evidence,
+                }
+                if change.link_change is not None:
+                    approval["link_change"] = change.link_change
+            raw = _fields(
+                approval, {"missing_count", "reason", "evidence"}, entry_label, {"link_change"},
+            )
+            count = _positive_count(raw["missing_count"], f"{entry_label}.missing_count")
+            if not isinstance(raw["evidence"], (list, tuple)) or not raw["evidence"]:
+                raise AuditFormatError(f"{entry_label}.evidence must be a non-empty sequence")
+            references = []
+            seen = set()
+            for index, reference in enumerate(raw["evidence"]):
+                reference = _evidence_reference(reference, f"{entry_label}.evidence[{index}]")
+                key = (reference.kind, reference.path)
+                if isinstance(reference, StructureEvidence):
+                    key += (reference.category, reference.fingerprint)
+                if key in seen:
+                    raise AuditFormatError(f"{entry_label}: duplicate evidence reference: {reference.path}")
+                seen.add(key)
+                references.append(reference)
+            references = tuple(references)
+            reason = _review_reason(raw["reason"], f"{entry_label}.reason", references)
+            link_change = raw.get("link_change")
+            if "link_change" in raw and category != "local_link_labels":
+                raise AuditFormatError(f"{entry_label}.link_change is only valid for local_link_labels")
+            if category == "local_link_labels":
+                link_change = raw.get("link_change", "replacement")
+                if link_change not in ("replacement", "redundant-self-link"):
+                    raise AuditFormatError(f"{entry_label}.link_change is unknown")
+                evidence_categories = {
+                    ref.category for ref in references if isinstance(ref, StructureEvidence)
+                }
+                if link_change == "replacement":
+                    if "links" not in evidence_categories:
+                        raise AuditFormatError(f"{entry_label}: replacement approvals require exact links evidence")
+                else:
+                    if not {"title", "headings"} <= evidence_categories or "links" in evidence_categories:
+                        raise AuditFormatError(
+                            f"{entry_label}: redundant self-link removal requires document identity/topic "
+                            "structure, not replacement links"
+                        )
+                    if not re.search(r"\bself[- ]link\b|자기.*링크|자체.*링크", reason, re.IGNORECASE) or not re.search(
+                        r"\b(?:remov\w*|omit\w*|drop\w*)\b|삭제|제거|생략", reason, re.IGNORECASE,
+                    ):
+                        raise AuditFormatError(f"{entry_label}.reason must specifically explain self-link removal")
+            parsed[category][fingerprint] = ReviewedChange(count, reason, references, link_change)
+    return parsed
+
+
+def load_inventory(path: Path) -> PrePagesInventory:
+    try:
+        data = yaml.load(path.read_text(encoding="utf-8"), Loader=_InventorySafeLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        raise AuditFormatError(f"{path}: cannot read inventory: {error}") from error
+    data = _fields(
+        data,
+        {"version", "baseline_commit", "pages_commit", "rename_similarity", "documents", "dispositions"},
+        str(path),
+    )
+    if type(data["version"]) is not int or data["version"] != 3:
+        raise AuditFormatError("version must be 3 (exact links and public HEAD-tracked evidence)")
+    baseline = _commit_hash(data["baseline_commit"], "baseline_commit")
+    pages = _commit_hash(data["pages_commit"], "pages_commit")
+    similarity = data["rename_similarity"]
+    if type(similarity) is not int or not 1 <= similarity <= 100:
+        raise AuditFormatError("rename_similarity must be an integer between 1 and 100")
+    if not isinstance(data["documents"], list):
+        raise AuditFormatError("documents must be a list")
+
+    documents: list[BaselineDocument] = []
+    seen: dict[str, set[PurePosixPath]] = {"baseline_path": set(), "pages_path": set()}
+    for index, raw in enumerate(data["documents"]):
+        label = f"documents[{index}]"
+        raw = _fields(raw, {"baseline_path", "pages_path"}, label, {"reviewed_changes"})
+        paths = {}
+        for field in seen:
+            value = _relative_path(raw[field], f"{label}.{field}")
+            if value in seen[field]:
+                raise AuditFormatError(f"{label}: duplicate {field}: {value}")
+            seen[field].add(value)
+            paths[field] = value
+        documents.append(BaselineDocument(
+            **paths,
+            reviewed_changes=validate_reviewed_changes(
+                raw.get("reviewed_changes", {}), f"{label}.reviewed_changes",
+            ),
+        ))
+
+    if not isinstance(data["dispositions"], dict):
+        raise AuditFormatError("dispositions must be a mapping")
+    dispositions = {}
+    for raw_path, raw in data["dispositions"].items():
+        baseline_path = _relative_path(raw_path, "dispositions path")
+        label = f"dispositions.{raw_path}"
+        raw = _fields(raw, {"status", "current_paths", "reason"}, label)
+        status = raw["status"]
+        if not isinstance(status, str) or status not in {
+            "excluded-local-state", "replaced-summary", "replaced-test",
+        }:
+            raise AuditFormatError(f"{label}.status is not a reviewed disposition status")
+        reason = _nonempty_string(raw["reason"], f"{label}.reason")
+        current = raw["current_paths"]
+        if not isinstance(current, list):
+            raise AuditFormatError(f"{label}.current_paths must be a list")
+        if (status == "excluded-local-state") != (not current):
+            raise AuditFormatError(
+                f"{label}.current_paths must be empty only for excluded-local-state"
+            )
+        paths = tuple(_relative_path(item, f"{label}.current_paths") for item in current)
+        seen_paths = set()
+        for current_path in paths:
+            if current_path in seen_paths:
+                raise AuditFormatError(f"{label}: duplicate current_paths entry: {current_path}")
+            seen_paths.add(current_path)
+        dispositions[baseline_path] = ReviewedDisposition(status, paths, reason)
+    return PrePagesInventory(baseline, pages, similarity, tuple(documents), dispositions)
+
+
+def _git(repo_root: Path, *arguments: str) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), *arguments],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise AuditFormatError(
+            f"Git {' '.join(arguments)} failed: {detail}. "
+            "Ensure the exact commit is available with full history (fetch-depth: 0)."
+        )
+    return result.stdout
+
+
+def _require_commit(repo_root: Path, commit: str) -> None:
+    _commit_hash(commit, "commit")
+    _require_full_history(repo_root, commit)
+    if _git(repo_root, "cat-file", "-t", commit).strip() != b"commit":
+        raise AuditFormatError(f"{commit}: expected a Git commit object")
+
+
+def _require_full_history(repo_root: Path, *commits: str) -> None:
+    if _git(repo_root, "rev-parse", "--is-shallow-repository").strip() == b"true":
+        raise AuditFormatError(
+            f"Shallow Git repository cannot audit required commits: {', '.join(commits)}. "
+            "Fetch full history before auditing (git fetch --unshallow; checkout fetch-depth: 0)."
+        )
+
+
+def git_bytes(repo_root: Path, commit: str, path: PurePosixPath) -> bytes:
+    _require_commit(repo_root, commit)
+    path = _relative_path(path.as_posix(), "Git path")
+    return _git(repo_root, "cat-file", "blob", f"{commit}:{path.as_posix()}")
+
+
+def git_text(repo_root: Path, commit: str, path: PurePosixPath) -> str:
+    return git_bytes(repo_root, commit, path).decode("utf-8")
+
+
+def resolve_public_evidence_files(
+    repo_root: Path, paths: tuple[PurePosixPath, ...],
+) -> Mapping[PurePosixPath, Path]:
+    """Authorize HEAD-tracked public paths, but return their live working-tree files."""
+    root = repo_root.resolve()
+    tracked = {
+        PurePosixPath(path)
+        for path in _git(root, "ls-tree", "-r", "--name-only", "-z", "HEAD").decode("utf-8").split("\0")
+        if path
+    }
+    resolved = {}
+    to_check = set()
+    for reference in paths:
+        validate_public_evidence_path(reference, "evidence")
+        if reference not in tracked:
+            raise AuditFormatError(f"evidence path is not tracked at HEAD: {reference}")
+        try:
+            current = (root / reference).resolve(strict=True)
+            if not current.is_relative_to(root):
+                raise AuditFormatError(f"evidence path is outside repository: {reference}")
+            target = PurePosixPath(current.relative_to(root).as_posix())
+            validate_public_evidence_path(target, f"evidence target for {reference}")
+            if target not in tracked:
+                raise AuditFormatError(f"resolved evidence target is not tracked at HEAD: {target}")
+            if not current.is_file():
+                raise AuditFormatError(f"evidence path is not a file: {reference}")
+        except OSError as error:
+            raise AuditFormatError(f"cannot resolve current evidence {reference}: {error}") from error
+        resolved[reference] = current
+        to_check.update((reference, target))
+    if to_check:
+        result = subprocess.run(
+            ["git", "-C", str(root), "check-ignore", "--no-index", "-z", "--stdin"],
+            input="".join(f"{path}\0" for path in sorted(to_check)).encode("utf-8"),
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode not in (0, 1):
+            raise AuditFormatError(f"cannot check ignored evidence paths: {result.stderr.decode('utf-8', errors='replace')}")
+        ignored = [path for path in result.stdout.decode("utf-8").split("\0") if path]
+        if ignored:
+            raise AuditFormatError("ignored evidence paths are ineligible: " + ", ".join(ignored))
+    return MappingProxyType(resolved)
+
+
+def baseline_paths(repo_root: Path, inventory: PrePagesInventory) -> tuple[PurePosixPath, ...]:
+    _require_full_history(repo_root, inventory.baseline_commit, inventory.pages_commit)
+    _require_commit(repo_root, inventory.baseline_commit)
+    output = _git(repo_root, "ls-tree", "-r", "--name-only", "-z", inventory.baseline_commit)
+    return tuple(PurePosixPath(path) for path in output.decode("utf-8").split("\0") if path)
+
+
+def _parse_name_status_z(data: bytes) -> tuple[tuple[str, PurePosixPath, PurePosixPath | None], ...]:
+    if not data:
+        return ()
+    if not data.endswith(b"\0"):
+        raise AuditFormatError("Truncated Git name-status output: missing final NUL")
+    try:
+        fields = data.decode("utf-8").split("\0")[:-1]
+    except UnicodeError as error:
+        raise AuditFormatError("Git name-status output is not UTF-8") from error
+    records = []
+    before, after = set(), set()
+    position = 0
+    while position < len(fields):
+        status = fields[position]
+        rename = re.fullmatch(r"R([0-9]{1,3})", status)
+        if status not in {"A", "M", "D", "T"} and not (rename and int(rename[1]) <= 100):
+            raise AuditFormatError(f"Unexpected Git name-status record: {status!r}")
+        width = 3 if rename else 2
+        if position + width > len(fields):
+            raise AuditFormatError(f"Truncated Git name-status record: {status}")
+        source = _relative_path(fields[position + 1], "Git name-status source")
+        target = _relative_path(fields[position + 2], "Git rename target") if rename else None
+        if status != "A":
+            if source in before:
+                raise AuditFormatError(f"Duplicate Git name-status source: {source}")
+            before.add(source)
+        if status != "D":
+            destination = target if rename else source
+            if destination in after:
+                raise AuditFormatError(f"Duplicate Git name-status target: {destination}")
+            after.add(destination)
+        records.append((status, source, target))
+        position += width
+    return tuple(records)
+
+
+def resolve_current_documents(
+    repo_root: Path, inventory: PrePagesInventory
+) -> Mapping[PurePosixPath, Document]:
+    _require_full_history(repo_root, inventory.baseline_commit, inventory.pages_commit)
+    if len(inventory.documents) != 62:
+        raise AuditFormatError(f"Expected 62 inventory documents, found {len(inventory.documents)}")
+    _require_commit(repo_root, inventory.baseline_commit)
+    _require_commit(repo_root, inventory.pages_commit)
+    initial_changes = _parse_name_status_z(_git(
+        repo_root, "diff", f"--find-renames={inventory.rename_similarity}%",
+        "--name-status", "-z", inventory.baseline_commit, inventory.pages_commit, "--",
+    ))
+    initial_renames = {
+        source: target for status, source, target in initial_changes
+        if status.startswith("R") and int(status[1:]) >= inventory.rename_similarity
+    }
+    try:
+        taxonomy = load_taxonomy(repo_root / "docs-taxonomy.yml")
+        catalog = build_topic_catalog(repo_root / "docs", taxonomy)
+    except (DocumentFormatError, OSError, yaml.YAMLError) as error:
+        raise AuditFormatError(f"Cannot resolve current documents: {error}") from error
+    by_path = {document.relative_path: document for document in catalog.documents}
+    resolved: dict[PurePosixPath, Document] = {}
+    used: set[PurePosixPath] = set()
+    for document in inventory.documents:
+        git_bytes(repo_root, inventory.baseline_commit, document.baseline_path)
+        pages_path = PurePosixPath("docs") / document.pages_path
+        git_bytes(repo_root, inventory.pages_commit, pages_path)
+        if initial_renames.get(document.baseline_path) != pages_path:
+            raise AuditFormatError(
+                f"{document.baseline_path}: initial rename lineage from {inventory.baseline_commit} "
+                f"to {inventory.pages_commit} at {inventory.rename_similarity}% must be R to {pages_path}; "
+                f"observed {initial_renames.get(document.baseline_path)}"
+            )
+        canonical = catalog.redirects.get(document.pages_path)
+        if canonical is None:
+            raise AuditFormatError(f"{document.pages_path}: missing initial Pages redirect_from")
+        if canonical in used:
+            raise AuditFormatError(f"{canonical}: current public document used more than once")
+        if document.baseline_path in resolved:
+            raise AuditFormatError(f"duplicate baseline_path: {document.baseline_path}")
+        resolved[document.baseline_path] = by_path[canonical]
+        used.add(canonical)
+    return MappingProxyType(resolved)
+
+
+def _validate_disposition_replacements(repo_root: Path, inventory: PrePagesInventory) -> None:
+    replacements = [
+        (baseline, current)
+        for baseline, disposition in inventory.dispositions.items()
+        for current in disposition.current_paths
+    ]
+    if not replacements:
+        return
+    root = repo_root.resolve()
+    tracked = {}
+    for record in _git(root, "ls-tree", "-r", "-z", "HEAD").decode("utf-8").split("\0"):
+        if record:
+            metadata, _, name = record.partition("\t")
+            mode, kind, _ = metadata.split()
+            tracked[PurePosixPath(name)] = (mode, kind)
+    owners = {}
+    for baseline, reference in replacements:
+        label = f"{baseline}: reviewed replacement {reference}"
+        reference = _relative_path(str(reference), label)
+        if len(reference.parts) < 3 or reference.parts[:2] not in {("docs", "services"), ("tests", "docs")}:
+            raise AuditFormatError(f"{label}: outside allowed roots docs/services/** and tests/docs/**")
+        if any(part.casefold() in {
+            ".git", ".superpowers", "site", "__pycache__", ".pytest_cache", "node_modules", ".venv",
+        } for part in reference.parts):
+            raise AuditFormatError(f"{label}: generated or private paths are ineligible")
+        if reference not in tracked:
+            raise AuditFormatError(f"{label}: not tracked at HEAD")
+        if tracked[reference] not in {("100644", "blob"), ("100755", "blob")}:
+            raise AuditFormatError(f"{label}: not a regular file at HEAD (mode {tracked[reference][0]})")
+        try:
+            current = root
+            for part in reference.parts:
+                current /= part
+                mode = current.lstat().st_mode
+                if stat.S_ISLNK(mode):
+                    raise AuditFormatError(f"{label}: symlink components are ineligible")
+            if not stat.S_ISREG(mode):
+                raise AuditFormatError(f"{label}: current path is not a regular file")
+            if not current.resolve(strict=True).is_relative_to(root):
+                raise AuditFormatError(f"{label}: current path escapes the repository")
+        except (OSError, RuntimeError) as error:
+            raise AuditFormatError(f"{label}: cannot resolve current file: {error}") from error
+        owners.setdefault(reference, baseline)
+    ignored = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "--no-index", "-z", "--stdin"],
+        input="".join(f"{path}\0" for path in sorted(owners)).encode("utf-8"),
+        capture_output=True, check=False,
+    )
+    if ignored.returncode not in (0, 1):
+        raise AuditFormatError(f"cannot check ignored replacement paths: {ignored.stderr.decode('utf-8', errors='replace')}")
+    for value in ignored.stdout.decode("utf-8").split("\0"):
+        if value:
+            reference = PurePosixPath(value)
+            raise AuditFormatError(f"{owners[reference]}: reviewed replacement {reference}: ignored paths are ineligible")
+
+
+def classify_baseline_files(
+    repo_root: Path, inventory: PrePagesInventory
+) -> tuple[GitFileDisposition, ...]:
+    paths = baseline_paths(repo_root, inventory)
+    classified = {
+        path: GitFileDisposition(path, "unchanged", (path,))
+        for path in paths
+    }
+    output = _git(
+        repo_root, "diff", f"--find-renames={inventory.rename_similarity}%",
+        "--name-status", "-z", inventory.baseline_commit, "HEAD", "--",
+    )
+    deleted = set()
+    for status, source, target in _parse_name_status_z(output):
+        if status == "A":
+            continue
+        if source not in classified:
+            raise AuditFormatError(f"Git diff path is not in baseline: {source}")
+        if status == "D":
+            deleted.add(source)
+        elif status in {"M", "T"}:
+            classified[source] = GitFileDisposition(source, "modified", (source,))
+        elif status.startswith("R"):
+            assert target is not None
+            classified[source] = GitFileDisposition(source, "renamed", (target,))
+        else:
+            raise AuditFormatError(f"{source}: unsupported Git status {status}")
+
+    for path, disposition in inventory.dispositions.items():
+        if path not in classified:
+            raise AuditFormatError(f"Reviewed disposition is not in baseline: {path}")
+        if path not in deleted:
+            raise AuditFormatError(
+                f"{path}: reviewed disposition requires a deleted baseline path; "
+                f"Git status is {classified[path].status}"
+            )
+        if (disposition.status == "excluded-local-state") != (not disposition.current_paths):
+            raise AuditFormatError(f"{path}: current_paths must be empty only for excluded-local-state")
+    _validate_disposition_replacements(repo_root, inventory)
+    for path, disposition in inventory.dispositions.items():
+        classified[path] = GitFileDisposition(path, "reviewed", disposition.current_paths)
+    unreviewed = deleted - inventory.dispositions.keys()
+    if unreviewed:
+        raise AuditFormatError(
+            "unreviewed deleted baseline paths: " + ", ".join(str(path) for path in sorted(unreviewed))
+        )
+    return tuple(classified[path] for path in paths)
+
+
+def audit_repository(
+    repo_root: Path,
+    site_dir: Path,
+    inventory_path: Path,
+    *,
+    content_only: bool = False,
+) -> PreservationAuditResult:
+    """Audit fixed Git lineage, live source preservation, and optionally built output."""
+    from scripts.docs.pre_pages_content import audit_document_content
+    from scripts.docs.pre_pages_site import inspect_built_site
+
+    errors: list[str] = []
+    details: dict[str, object] = {"content_only": content_only}
+    file_count = markdown_count = document_count = current_document_count = preserved = reviewed = 0
+    root = repo_root.resolve()
+    try:
+        inventory = load_inventory(inventory_path)
+        paths = baseline_paths(root, inventory)
+        file_count = len(paths)
+        markdown_count = sum(path.suffix.casefold() == ".md" for path in paths)
+        document_count = len(inventory.documents)
+        if (file_count, markdown_count, document_count) != (359, 73, 62):
+            raise AuditFormatError(
+                f"{inventory_path}: expected 359 baseline files, 73 Markdown files, and 62 documents; "
+                f"found {file_count}, {markdown_count}, and {document_count}"
+            )
+        details["baseline_commit"] = inventory.baseline_commit
+        details["pages_commit"] = inventory.pages_commit
+        catalog = build_topic_catalog(root / "docs", load_taxonomy(root / "docs-taxonomy.yml"))
+        current_document_count = len(catalog.documents)
+        details["current_document_count"] = current_document_count
+        details["files"] = [asdict(item) for item in classify_baseline_files(root, inventory)]
+        content = audit_document_content(root, inventory)
+        details["documents"] = [asdict(item) for item in content]
+        preserved = sum(item.status != "missing" for item in content)
+        reviewed = sum(item.status == "reviewed" for item in content)
+        for item in content:
+            for finding in item.missing:
+                errors.append(
+                    f"{item.current_path}: unreviewed missing {finding.category} "
+                    f"{finding.fingerprint} from {item.baseline_path}: {finding.excerpt}"
+                )
+        if not content_only:
+            site_result = inspect_built_site(root, site_dir, inventory, catalog)
+            errors.extend(site_result.errors)
+            details["site"] = site_result.details
+    except (OSError, ValueError, RuntimeError, yaml.YAMLError) as error:
+        errors.append(str(error))
+    return PreservationAuditResult(
+        file_count, markdown_count, document_count, current_document_count, preserved, reviewed,
+        tuple(errors), (), MappingProxyType(details),
+    )

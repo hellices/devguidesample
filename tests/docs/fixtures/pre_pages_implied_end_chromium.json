@@ -1,0 +1,40 @@
+{
+  "engine": "HeadlessChrome/153.0.0.0",
+  "mode": "CSS1Compat",
+  "captured_at": "2026-09-14",
+  "method": "Native Chromium DOM parsing and checkVisibility; authored details controls activated through the first direct summary element's click(). Summaryless default-legend pointer behavior is also recorded.",
+  "cases": [
+    {"id": "p-p", "html": "<p id=\"hidden\" hidden><p id=\"public\">public", "parent": "main", "visible": true},
+    {"id": "p-div", "html": "<p id=\"hidden\" hidden><div id=\"public\">public</div>", "parent": "main", "visible": true},
+    {"id": "p-heading", "html": "<p id=\"hidden\" hidden><h1 id=\"public\">public</h1>", "parent": "main", "visible": true},
+    {"id": "p-list", "html": "<p id=\"hidden\" hidden><ul><li id=\"public\">public</ul>", "parent": "ul", "visible": true},
+    {"id": "li-li", "html": "<ul><li id=\"hidden\" hidden><li id=\"public\">public</ul>", "parent": "ul", "visible": true},
+    {"id": "nested-li", "html": "<ul><li id=\"hidden\" hidden><ul><li id=\"public\">public</ul></ul>", "parent": "ul", "visible": false},
+    {"id": "dt-dd", "html": "<dl><dt id=\"hidden\" hidden><dd id=\"public\">public</dl>", "parent": "dl", "visible": true},
+    {"id": "dd-dt", "html": "<dl><dd id=\"hidden\" hidden><dt id=\"public\">public</dl>", "parent": "dl", "visible": true},
+    {"id": "td-td", "html": "<table><tbody><tr><td id=\"hidden\" hidden><td id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "th-td", "html": "<table><thead><tr><th id=\"hidden\" hidden><td id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "td-th", "html": "<table><tbody><tr><td id=\"hidden\" hidden><th id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "tr-tr", "html": "<table><tbody><tr id=\"hidden\" hidden><td></td><tr><td id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "thead-tbody", "html": "<table><thead id=\"hidden\" hidden><tr><th></th><tbody><tr><td id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "tbody-tfoot", "html": "<table><tbody id=\"hidden\" hidden><tr><td></td><tfoot><tr><td id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "tfoot-tbody", "html": "<table><tfoot id=\"hidden\" hidden><tr><td></td><tbody><tr><td id=\"public\">public</table>", "parent": "tr", "visible": true},
+    {"id": "nested-table", "html": "<table><tbody id=\"hidden\" hidden><tr><td><table><tbody><tr><td id=\"public\">public</table></table>", "parent": "tr", "visible": false},
+    {"id": "option-option", "html": "<select multiple size=\"3\"><option id=\"hidden\" hidden><option id=\"public\">public</select>", "parent": "select", "visible": true},
+    {"id": "optgroup-optgroup", "html": "<select multiple size=\"3\"><optgroup id=\"hidden\" hidden><option></option><optgroup label=\"Public\"><option id=\"public\">public</select>", "parent": "optgroup", "visible": true},
+    {"id": "hidden-optgroup", "html": "<select multiple size=\"3\"><optgroup id=\"hidden\" hidden><option></option><option id=\"public\">public</select>", "parent": "optgroup", "visible": false}
+  ],
+  "late_summary": {
+    "html": "<details id=\"d\"><p>before</p><summary>Late</summary><p id=\"public\">after</p></details>",
+    "first_element": "p",
+    "summary_present": true,
+    "before": false,
+    "after_programmatic_click": true,
+    "after_pointer_click": true
+  },
+  "summaryless_policy": {
+    "native_fallback_pointer_open": true,
+    "audit_open": true,
+    "reason": "A visible/interactable native default legend is an effective disclosure control."
+  }
+}

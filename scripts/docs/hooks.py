@@ -10,6 +10,7 @@ import re
 import sys
 from typing import Any, Mapping
 
+from jinja2 import ChoiceLoader, DictLoader
 from mkdocs.structure.files import File, InclusionLevel
 from mkdocs.structure import StructureItem
 from mkdocs.structure.nav import Navigation, Section
@@ -374,6 +375,25 @@ def on_page_markdown(markdown: str, page: Any, config: Mapping[str, Any], files:
             + "\n</ul>\n</details>\n"
         )
     return markdown
+
+
+def on_env(env: Any, config: Mapping[str, Any], files: Any) -> Any:
+    """Keep Material's sharing anchor without its executable placeholder URL."""
+    theme = config.get("theme", {})
+    if theme.get("name") != "material" or "search.share" not in theme.get("features", []):
+        return env
+    template = "partials/search.html"
+    source, _, _ = env.loader.get_source(env, template)
+    safe_source = re.sub(
+        r'<a\b[^>]*data-md-component="search-share"[^>]*>',
+        lambda match: match[0].replace('href="javascript:void(0)"', 'href="#"'),
+        source,
+    )
+    if safe_source != source:
+        env.loader = ChoiceLoader([DictLoader({template: safe_source}), env.loader])
+        if env.cache is not None:
+            env.cache.clear()
+    return env
 
 
 def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:

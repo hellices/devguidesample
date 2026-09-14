@@ -108,8 +108,10 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
+python scripts/docs/audit_pre_pages.py
 ```
 
 테스트나 검증 실패를 무시하거나 생성된 `site/` 및 검색 인덱스를 커밋하지
-않는다. sample 애플리케이션의 별도 테스트나 의존성은 해당 sample 변경
-범위에서만 실행한다.
+않는다. `python scripts/docs/audit_pre_pages.py`는 전체 Git 이력이
+필요하며 자세한 기준과 실행 지침은 `docs/contributing/index.md`를 따른다.
+sample 애플리케이션의 별도 테스트나 의존성은 해당 sample 변경 범위에서만 실행한다.

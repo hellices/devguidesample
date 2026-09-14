@@ -53,6 +53,10 @@ redirect_from:
 
 ## 목적별 빠른 경로
 
+이관 전 문서별 상세 읽기 목표와 대상 독자는
+[원문 독자 지도](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md#historical-reader-map-pre-pages)에
+역사적 기록으로 보존한다.
+
 **시간이 없다면** → [06. 커머스 적용 설계](commerce/index.md) 만 읽는다. 나머지 문서의 결론이 여기 수렴한다.
 
 **설계를 시작한다면**

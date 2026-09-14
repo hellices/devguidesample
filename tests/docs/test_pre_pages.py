@@ -1,0 +1,1105 @@
+from __future__ import annotations
+
+from collections import Counter
+from dataclasses import FrozenInstanceError, replace
+from pathlib import Path, PurePosixPath
+import re
+import subprocess
+
+import pytest
+import yaml
+
+from scripts.docs import pre_pages
+from scripts.docs.content import load_taxonomy
+from scripts.docs.pre_pages import (
+    AuditFormatError,
+    BaselineDocument,
+    GitFileDisposition,
+    PrePagesInventory,
+    ReviewedDisposition,
+    git_bytes,
+    git_text,
+    load_inventory,
+)
+from scripts.docs.topics import build_topic_catalog
+
+
+ROOT = Path(__file__).parents[2]
+BASELINE = "a4e680116db1016a698e64baae9efde858a8eafa"
+PAGES = "9ace966742ff92a00fc84bcc21529af47b8661af"
+MANIFEST = ROOT / "scripts/docs/pre_pages_inventory.yml"
+REPLACEMENT = PurePosixPath("docs/services/service/topic/replacement.md")
+FINGERPRINT = "a" * 64
+CONTENT_REASON = "Preserved in docs/services/service/topic/samples/evidence/README.md under Historical commands."
+
+
+def git(repo: Path, *arguments: str) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(repo), *arguments],
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
+def commit(repo: Path, message: str) -> str:
+    git(repo, "add", "--all")
+    git(repo, "-c", "commit.gpgsign=false", "commit", "-qm", message)
+    return git(repo, "rev-parse", "HEAD").decode().strip()
+
+
+@pytest.fixture
+def history(tmp_path: Path) -> tuple[Path, str, str]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    git(repo, "config", "user.name", "Inventory Tests")
+    git(repo, "config", "user.email", "inventory@example.com")
+    (repo / "한글 문서.md").write_bytes("첫 문장\r\n둘째 문장\n".encode())
+    (repo / "binary.bin").write_bytes(b"\x00\xff\r\n\x80")
+    (repo / "-literal ; $(touch injected)\tfile.md").write_text("literal\n")
+    baseline = commit(repo, "Baseline")
+    (repo / "added.md").write_text("New file\n")
+    pages = commit(repo, "Pages")
+    return repo, baseline, pages
+
+
+@pytest.fixture
+def manifest_data() -> dict:
+    return {
+        "version": 3,
+        "baseline_commit": BASELINE,
+        "pages_commit": PAGES,
+        "rename_similarity": 20,
+        "documents": [
+            {
+                "baseline_path": "old/guide.md",
+                "pages_path": "guides/service/topic/index.md",
+                "reviewed_changes": {"prose": {FINGERPRINT: {
+                    "missing_count": 1,
+                    "reason": CONTENT_REASON,
+                    "evidence": [{
+                        "kind": "structure",
+                        "path": "docs/services/service/topic/samples/evidence/README.md",
+                        "category": "prose",
+                        "fingerprint": "b" * 64,
+                        "count": 1,
+                    }],
+                }}},
+            }
+        ],
+        "dispositions": {
+            ".azure/state.json": {
+                "status": "excluded-local-state",
+                "current_paths": [],
+                "reason": "Local state is intentionally not public.",
+            },
+            "old/README.md": {
+                "status": "replaced-summary",
+                "current_paths": ["docs/services/service/topic/index.md"],
+                "reason": "Replaced by the canonical topic overview.",
+            },
+            "old/test.py": {
+                "status": "replaced-test",
+                "current_paths": ["tests/docs/test_topics.py"],
+                "reason": "Replaced by topic contract assertions.",
+            },
+        },
+    }
+
+
+def load_data(tmp_path: Path, data: object) -> PrePagesInventory:
+    path = tmp_path / "inventory.yml"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    return load_inventory(path)
+
+
+def test_inventory_loads_deeply_immutable_models(tmp_path: Path, manifest_data: dict) -> None:
+    inventory = load_data(tmp_path, manifest_data)
+    assert isinstance(inventory, PrePagesInventory)
+    assert inventory.baseline_commit == BASELINE
+    assert inventory.pages_commit == PAGES
+    assert inventory.rename_similarity == 20
+    document = inventory.documents[0]
+    assert isinstance(document, BaselineDocument)
+    assert document.baseline_path == PurePosixPath("old/guide.md")
+    assert document.pages_path == PurePosixPath("guides/service/topic/index.md")
+    disposition = inventory.dispositions[PurePosixPath("old/README.md")]
+    assert isinstance(disposition, ReviewedDisposition)
+    assert disposition.current_paths == (PurePosixPath("docs/services/service/topic/index.md"),)
+    file = GitFileDisposition(document.baseline_path, "unchanged", (document.baseline_path,))
+    for model, field, value in (
+        (inventory, "rename_similarity", 100),
+        (document, "baseline_path", PurePosixPath("other.md")),
+        (disposition, "reason", "changed"),
+        (file, "status", "modified"),
+    ):
+        with pytest.raises(FrozenInstanceError):
+            setattr(model, field, value)
+    with pytest.raises(TypeError):
+        inventory.dispositions[PurePosixPath("other.md")] = disposition
+    with pytest.raises(TypeError):
+        document.reviewed_changes["prose"][FINGERPRINT] = "changed"
+    with pytest.raises(TypeError):
+        document.reviewed_changes["headings"] = {}
+
+
+@pytest.mark.parametrize("field", ["baseline_commit", "pages_commit"])
+@pytest.mark.parametrize("value", [None, "", "a4e6801", "A" * 40, "g" * 40, "a" * 39, 123])
+def test_inventory_requires_full_lowercase_commit_hashes(
+    tmp_path: Path, manifest_data: dict, field: str, value: object
+) -> None:
+    manifest_data[field] = value
+    with pytest.raises(AuditFormatError, match=field):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["version", "baseline_commit", "pages_commit", "rename_similarity", "documents", "dispositions"],
+)
+def test_inventory_requires_all_top_level_fields(
+    tmp_path: Path, manifest_data: dict, field: str
+) -> None:
+    del manifest_data[field]
+    with pytest.raises(AuditFormatError, match=field):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("extra", True), ("version", 1), ("version", 2), ("version", True),
+        ("rename_similarity", 0), ("rename_similarity", 101),
+        ("rename_similarity", "20"), ("rename_similarity", True),
+        ("documents", {}), ("dispositions", []),
+    ],
+)
+def test_inventory_rejects_invalid_schema(
+    tmp_path: Path, manifest_data: dict, field: str, value: object
+) -> None:
+    manifest_data[field] = value
+    with pytest.raises(AuditFormatError, match=field):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize("field", ["baseline_path", "pages_path"])
+def test_inventory_rejects_duplicate_document_paths(
+    tmp_path: Path, manifest_data: dict, field: str
+) -> None:
+    duplicate = {
+        "baseline_path": "another.md",
+        "pages_path": "guides/service/another/index.md",
+    }
+    duplicate[field] = manifest_data["documents"][0][field]
+    manifest_data["documents"].append(duplicate)
+    with pytest.raises(AuditFormatError, match=f"duplicate {field}"):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize("value", ["", "/root.md", "../secret.md", "a/../b.md", "a\\b.md", "C:/a.md", "a\0b.md"])
+@pytest.mark.parametrize("field", ["baseline_path", "pages_path"])
+def test_inventory_rejects_unsafe_paths(
+    tmp_path: Path, manifest_data: dict, field: str, value: str
+) -> None:
+    manifest_data["documents"][0][field] = value
+    with pytest.raises(AuditFormatError, match=field):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("status", "deleted"), ("status", None), ("reason", ""),
+        ("reason", None), ("current_paths", []), ("current_paths", "target.md"),
+        ("current_paths", ["/outside.md"]),
+    ],
+)
+def test_inventory_rejects_invalid_reviewed_dispositions(
+    tmp_path: Path, manifest_data: dict, field: str, value: object
+) -> None:
+    manifest_data["dispositions"]["old/README.md"][field] = value
+    with pytest.raises(AuditFormatError, match=field):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize("field", ["status", "current_paths", "reason"])
+def test_inventory_requires_disposition_fields(
+    tmp_path: Path, manifest_data: dict, field: str
+) -> None:
+    del manifest_data["dispositions"]["old/README.md"][field]
+    with pytest.raises(AuditFormatError, match=field):
+        load_data(tmp_path, manifest_data)
+
+
+def test_excluded_local_state_cannot_have_replacements(tmp_path: Path, manifest_data: dict) -> None:
+    manifest_data["dispositions"][".azure/state.json"]["current_paths"] = ["public.md"]
+    with pytest.raises(AuditFormatError, match="current_paths"):
+        load_data(tmp_path, manifest_data)
+
+
+@pytest.mark.parametrize("value", [[], {"prose": []}, {"prose": {"fingerprint": ""}}])
+def test_reviewed_changes_require_nested_reason_mappings(
+    tmp_path: Path, manifest_data: dict, value: object
+) -> None:
+    manifest_data["documents"][0]["reviewed_changes"] = value
+    with pytest.raises(AuditFormatError, match="reviewed_changes"):
+        load_data(tmp_path, manifest_data)
+
+
+def test_reviewed_changes_default_to_empty(tmp_path: Path, manifest_data: dict) -> None:
+    del manifest_data["documents"][0]["reviewed_changes"]
+    assert load_data(tmp_path, manifest_data).documents[0].reviewed_changes == {}
+
+
+@pytest.mark.parametrize("text", ["[]", "version: [", "!!python/object/apply:os.system ['false']"])
+def test_inventory_reports_invalid_or_unsafe_yaml(tmp_path: Path, text: str) -> None:
+    path = tmp_path / "invalid.yml"
+    path.write_text(text)
+    with pytest.raises(AuditFormatError):
+        load_inventory(path)
+
+
+@pytest.fixture
+def raw_inventory() -> str:
+    return f"""version: 3
+baseline_commit: {BASELINE}
+pages_commit: {PAGES}
+rename_similarity: 20
+documents:
+  - baseline_path: old/guide.md
+    pages_path: guides/service/topic/index.md
+    reviewed_changes:
+      prose:
+        {FINGERPRINT}:
+          missing_count: 1
+          reason: {CONTENT_REASON}
+          evidence:
+            - kind: structure
+              path: docs/services/service/topic/samples/evidence/README.md
+              category: prose
+              fingerprint: {'b' * 64}
+              count: 1
+dispositions:
+  old/README.md:
+    status: replaced-summary
+    current_paths:
+      - docs/services/service/topic/index.md
+    reason: Replaced by the canonical overview.
+"""
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement", "key"),
+    [
+        ("version: 3", "version: 2\nversion: 3", "version"),
+        (
+            "  - baseline_path: old/guide.md",
+            "  - baseline_path: ignored.md\n    baseline_path: old/guide.md",
+            "baseline_path",
+        ),
+        (
+            "      prose:\n",
+            "      prose: {}\n      prose:\n",
+            "prose",
+        ),
+        (
+            f"        {FINGERPRINT}:\n",
+            f"        {FINGERPRINT}: {{}}\n        {FINGERPRINT}:\n",
+            FINGERPRINT,
+        ),
+        (
+            "  old/README.md:\n",
+            "  old/README.md:\n    status: invalid\n  old/README.md:\n",
+            "old/README.md",
+        ),
+        (
+            "    status: replaced-summary",
+            "    status: invalid\n    status: replaced-summary",
+            "status",
+        ),
+    ],
+)
+def test_inventory_rejects_raw_duplicate_mapping_keys_at_every_level(
+    tmp_path: Path, raw_inventory: str, original: str, replacement: str, key: str
+) -> None:
+    path = tmp_path / "duplicate-mapping.yml"
+    assert original in raw_inventory
+    path.write_text(raw_inventory.replace(original, replacement), encoding="utf-8")
+    with pytest.raises(AuditFormatError, match="duplicate") as error:
+        load_inventory(path)
+    assert str(path) in str(error.value)
+    assert key in str(error.value)
+
+
+@pytest.mark.parametrize("status", ["replaced-summary", "replaced-test"])
+def test_inventory_rejects_raw_duplicate_current_paths(
+    tmp_path: Path, raw_inventory: str, status: str
+) -> None:
+    path = tmp_path / "duplicate-current-paths.yml"
+    current = "      - docs/services/service/topic/index.md\n"
+    text = raw_inventory.replace("status: replaced-summary", f"status: {status}")
+    path.write_text(text.replace(current, current + current), encoding="utf-8")
+    with pytest.raises(AuditFormatError, match="duplicate.*current_paths") as error:
+        load_inventory(path)
+    assert "old/README.md" in str(error.value)
+    assert "docs/services/service/topic/index.md" in str(error.value)
+
+
+def test_git_readers_preserve_text_and_binary(history: tuple[Path, str, str]) -> None:
+    repo, baseline, _ = history
+    assert git_text(repo, baseline, PurePosixPath("한글 문서.md")) == "첫 문장\r\n둘째 문장\n"
+    assert git_bytes(repo, baseline, PurePosixPath("binary.bin")) == b"\x00\xff\r\n\x80"
+
+
+def test_git_reader_treats_shell_metacharacters_literally(
+    history: tuple[Path, str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, baseline, _ = history
+    run = subprocess.run
+    calls = []
+
+    def checked_run(arguments, **kwargs):
+        assert isinstance(arguments, list)
+        assert kwargs.get("shell", False) is False
+        calls.append(arguments)
+        return run(arguments, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", checked_run)
+    path = PurePosixPath("-literal ; $(touch injected)\tfile.md")
+    assert git_text(repo, baseline, path) == "literal\n"
+    assert any(f"{baseline}:{path.as_posix()}" in arguments for arguments in calls)
+    assert not (repo / "injected").exists()
+
+
+@pytest.mark.parametrize("reader", [git_text, git_bytes])
+def test_missing_commit_error_includes_exact_hash(
+    history: tuple[Path, str, str], reader
+) -> None:
+    repo, _, _ = history
+    missing = "0" * 40
+    with pytest.raises(AuditFormatError, match=missing):
+        reader(repo, missing, PurePosixPath("binary.bin"))
+
+
+def test_shallow_history_error_names_missing_commit(
+    history: tuple[Path, str, str], tmp_path: Path
+) -> None:
+    repo, baseline, _ = history
+    shallow = tmp_path / "shallow"
+    git(tmp_path, "clone", "-q", "--depth=1", repo.as_uri(), str(shallow))
+    with pytest.raises(AuditFormatError, match=baseline) as error:
+        git_bytes(shallow, baseline, PurePosixPath("binary.bin"))
+    assert "history" in str(error.value).lower()
+
+
+def test_missing_blob_error_names_commit_and_path(history: tuple[Path, str, str]) -> None:
+    repo, baseline, _ = history
+    with pytest.raises(AuditFormatError, match=baseline) as error:
+        git_bytes(repo, baseline, PurePosixPath("missing.md"))
+    assert "missing.md" in str(error.value)
+
+
+@pytest.mark.parametrize("object_kind", ["tag", "tree", "blob"])
+def test_git_readers_require_commit_objects_not_other_full_hashes(
+    history: tuple[Path, str, str], object_kind: str
+) -> None:
+    repo, baseline, _ = history
+    if object_kind == "tag":
+        git(repo, "-c", "tag.gpgsign=false", "tag", "-a", "snapshot", "-m", "Snapshot", baseline)
+        object_hash = git(repo, "rev-parse", "snapshot").decode().strip()
+    else:
+        revision = f"{baseline}^{{tree}}" if object_kind == "tree" else f"{baseline}:binary.bin"
+        object_hash = git(repo, "rev-parse", revision).decode().strip()
+    with pytest.raises(AuditFormatError, match=object_hash):
+        git_bytes(repo, object_hash, PurePosixPath("binary.bin"))
+
+
+def test_fixed_manifest_matches_all_62_initial_pages_renames() -> None:
+    assert MANIFEST.is_file(), "The fixed pre-Pages manifest must exist"
+    inventory = load_inventory(MANIFEST)
+    assert inventory.baseline_commit == BASELINE
+    assert inventory.pages_commit == PAGES
+    assert inventory.rename_similarity == 20
+    output = git(
+        ROOT, "diff", f"--find-renames={inventory.rename_similarity}%", "--name-status", "-z", BASELINE, PAGES, "--"
+    ).decode().split("\0")
+    expected = set()
+    index = 0
+    while index < len(output) - 1:
+        status, source = output[index:index + 2]
+        index += 2
+        if status.startswith("R"):
+            target = output[index]
+            index += 1
+            if re.fullmatch(r"docs/(cases|guides|labs|research)/[^/]+/[^/]+/index\.md", target):
+                expected.add((PurePosixPath(source), PurePosixPath(target.removeprefix("docs/"))))
+    actual = {(doc.baseline_path, doc.pages_path) for doc in inventory.documents}
+    assert len(expected) == len(inventory.documents) == len(actual) == 62
+    assert actual == expected
+
+
+def test_fixed_manifest_has_only_the_six_exact_reviewed_dispositions() -> None:
+    assert MANIFEST.is_file(), "The fixed pre-Pages manifest must exist"
+    expected = {
+        ".azure/deployment-plan.md": (
+            "excluded-local-state", (),
+            "Local Azure deployment planning state is intentionally not public.",
+        ),
+        ".azure/validate-status.json": (
+            "excluded-local-state", (),
+            "Local Azure validation state is intentionally not public.",
+        ),
+        "memory/README.md": (
+            "replaced-summary",
+            (
+                "docs/services/microsoft-foundry/agent-memory/index.md",
+                "docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md",
+                "docs/services/microsoft-foundry/gpt-memory-layer/samples/architecture/README.md",
+            ),
+            "The service-level index was split into the canonical topic overview and owning sample documentation.",
+        ),
+        "ptu_lb/README.md": (
+            "replaced-summary",
+            ("docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/README.md",),
+            "The link-only README was replaced by the owning topic sample README.",
+        ),
+        "monitor/sre-agent-event-lab/scripts/tests/test_lab_guides.py": (
+            "replaced-test",
+            (
+                "docs/services/azure-monitor/azure-sre-agent/samples/event-lab/scripts/tests/test_briefing_docs.py",
+                "tests/docs/test_reader_navigation.py",
+            ),
+            "Guide-layout assertions were replaced by canonical topic, navigation, and briefing-document contracts.",
+        ),
+        "monitor/sre-agent-event-lab/scripts/tests/test_repo_readme.py": (
+            "replaced-test",
+            ("docs/services/azure-monitor/azure-sre-agent/samples/event-lab/scripts/tests/test_repo_readme.py",),
+            "The repository discovery contract test moved with the sample and now targets canonical topic discovery.",
+        ),
+    }
+    actual = {
+        path.as_posix(): (
+            value.status, tuple(item.as_posix() for item in value.current_paths), value.reason,
+        )
+        for path, value in load_inventory(MANIFEST).dispositions.items()
+    }
+    assert actual == expected
+
+
+def lineage_api(name: str):
+    assert hasattr(pre_pages, name), f"The {name} lineage API must exist"
+    return getattr(pre_pages, name)
+
+
+def small_inventory(baseline: str, pages: str, dispositions: dict | None = None) -> PrePagesInventory:
+    return PrePagesInventory(baseline, pages, 20, (), dispositions or {})
+
+
+def test_baseline_paths_include_every_file_and_preserve_literal_names(
+    history: tuple[Path, str, str]
+) -> None:
+    repo, baseline, pages = history
+    paths = lineage_api("baseline_paths")(repo, small_inventory(baseline, pages))
+    assert isinstance(paths, tuple)
+    assert set(paths) == {
+        PurePosixPath("한글 문서.md"), PurePosixPath("binary.bin"),
+        PurePosixPath("-literal ; $(touch injected)\tfile.md"),
+    }
+
+
+@pytest.fixture
+def file_history(history: tuple[Path, str, str]) -> tuple[Path, PrePagesInventory]:
+    repo, _, baseline = history
+    (repo / "한글 문서.md").write_text("수정된 문장\n")
+    (repo / "-literal ; $(touch injected)\tfile.md").rename(repo / "renamed\t\n한글.md")
+    (repo / "added.md").unlink()
+    (repo / REPLACEMENT).parent.mkdir(parents=True)
+    (repo / REPLACEMENT).write_text("Canonical replacement overview.\n")
+    (repo / "new-only.md").write_text("Not a baseline file.\n")
+    pages = commit(repo, "Current")
+    return repo, small_inventory(
+        baseline, pages,
+        {
+            PurePosixPath("added.md"): ReviewedDisposition(
+                "replaced-summary", (REPLACEMENT,), "Canonical replacement overview.",
+            )
+        },
+    )
+
+
+def test_classification_covers_unchanged_modified_renamed_and_reviewed_files(
+    file_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = file_history
+    actual = lineage_api("classify_baseline_files")(repo, inventory)
+    assert isinstance(actual, tuple)
+    assert {item.baseline_path: (item.status, item.current_paths) for item in actual} == {
+        PurePosixPath("binary.bin"): ("unchanged", (PurePosixPath("binary.bin"),)),
+        PurePosixPath("한글 문서.md"): ("modified", (PurePosixPath("한글 문서.md"),)),
+        PurePosixPath("-literal ; $(touch injected)\tfile.md"): (
+            "renamed", (PurePosixPath("renamed\t\n한글.md"),),
+        ),
+        PurePosixPath("added.md"): ("reviewed", (REPLACEMENT,)),
+    }
+    assert len(actual) == 4
+
+
+def test_classification_rejects_unreviewed_deletion(file_history: tuple[Path, PrePagesInventory]) -> None:
+    repo, inventory = file_history
+    with pytest.raises(AuditFormatError, match="unreviewed.*added.md"):
+        lineage_api("classify_baseline_files")(repo, replace(inventory, dispositions={}))
+
+
+def test_classification_rejects_disposition_outside_baseline(
+    file_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = file_history
+    dispositions = dict(inventory.dispositions)
+    dispositions[PurePosixPath("not-in-baseline.md")] = ReviewedDisposition(
+        "excluded-local-state", (), "Local state.",
+    )
+    with pytest.raises(AuditFormatError, match="not-in-baseline.md"):
+        lineage_api("classify_baseline_files")(repo, replace(inventory, dispositions=dispositions))
+
+
+@pytest.mark.parametrize("git_status", ["unchanged", "modified", "type-changed", "renamed"])
+@pytest.mark.parametrize("disposition_status", ["excluded-local-state", "replaced-summary", "replaced-test"])
+def test_classification_rejects_reviewed_dispositions_for_nondeleted_paths(
+    file_history: tuple[Path, PrePagesInventory], git_status: str, disposition_status: str
+) -> None:
+    repo, inventory = file_history
+    if git_status == "type-changed":
+        source = PurePosixPath("binary.bin")
+        (repo / source).unlink()
+        (repo / source).symlink_to(REPLACEMENT)
+        commit(repo, "Change baseline file type")
+        assert git(repo, "diff", "--name-status", inventory.baseline_commit, "HEAD", "--", str(source)) == (
+            b"T\tbinary.bin\n"
+        )
+    else:
+        source = PurePosixPath({
+            "unchanged": "binary.bin",
+            "modified": "한글 문서.md",
+            "renamed": "-literal ; $(touch injected)\tfile.md",
+        }[git_status])
+    target = PurePosixPath("renamed\t\n한글.md") if git_status == "renamed" else source
+    dispositions = {
+        **inventory.dispositions,
+        source: ReviewedDisposition(
+            disposition_status,
+            () if disposition_status == "excluded-local-state" else (target,),
+            "A disposition must not hide Git's status for a surviving baseline file.",
+        ),
+    }
+    with pytest.raises(AuditFormatError, match="requires a deleted baseline path") as error:
+        lineage_api("classify_baseline_files")(repo, replace(inventory, dispositions=dispositions))
+    assert source.as_posix() in str(error.value)
+    expected_status = "modified" if git_status == "type-changed" else git_status
+    assert f"Git status is {expected_status}" in str(error.value)
+
+
+def test_real_manifest_reviewed_dispositions_are_exactly_the_six_git_deletions() -> None:
+    inventory = load_inventory(MANIFEST)
+    deleted = {
+        PurePosixPath(path)
+        for path in git(
+            ROOT, "diff", f"--find-renames={inventory.rename_similarity}%",
+            "--diff-filter=D", "--name-only", "-z", inventory.baseline_commit, "HEAD", "--",
+        ).decode("utf-8").split("\0")
+        if path
+    }
+    assert len(deleted) == len(inventory.dispositions) == 6
+    assert deleted == set(inventory.dispositions)
+    reviewed = {
+        item.baseline_path
+        for item in lineage_api("classify_baseline_files")(ROOT, inventory)
+        if item.status == "reviewed"
+    }
+    assert reviewed == deleted
+
+
+def test_classification_rejects_missing_replacement_path(file_history: tuple[Path, PrePagesInventory]) -> None:
+    repo, inventory = file_history
+    (repo / REPLACEMENT).unlink()
+    with pytest.raises(AuditFormatError, match="replacement.md"):
+        lineage_api("classify_baseline_files")(repo, inventory)
+
+
+def test_classification_accepts_reviewed_local_state_exclusion(
+    file_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = file_history
+    inventory = replace(
+        inventory,
+        dispositions={
+            PurePosixPath("added.md"): ReviewedDisposition(
+                "excluded-local-state", (), "Local state is intentionally not public.",
+            )
+        },
+    )
+    result = lineage_api("classify_baseline_files")(repo, inventory)
+    assert next(item for item in result if item.baseline_path == PurePosixPath("added.md")) == (
+        GitFileDisposition(PurePosixPath("added.md"), "reviewed", ())
+    )
+
+
+@pytest.fixture
+def document_history(history: tuple[Path, str, str]) -> tuple[Path, PrePagesInventory]:
+    repo, _, _ = history
+    documents = tuple(
+        BaselineDocument(
+            PurePosixPath(f"old/topic-{index:02}.md"),
+            PurePosixPath(f"guides/service/topic-{index:02}/index.md"),
+            {},
+        )
+        for index in range(62)
+    )
+    for document in documents:
+        path = repo / document.baseline_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# {path.stem}\n")
+    baseline = commit(repo, "Historical documents")
+    for document in documents:
+        target = repo / "docs" / document.pages_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        (repo / document.baseline_path).rename(target)
+    pages = commit(repo, "Initial Pages documents")
+    for document in documents:
+        source = repo / "docs" / document.pages_path
+        target = repo / "docs/services/service" / document.pages_path.parent.name / "index.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            "---\ntitle: Canonical topic\nredirect_from:\n"
+            f"  - {document.pages_path}\n---\n{source.read_text()}"
+        )
+        source.unlink()
+    (repo / "docs-taxonomy.yml").write_text("{}\n")
+    commit(repo, "Canonical topics")
+    return repo, PrePagesInventory(baseline, pages, 20, documents, {})
+
+
+def test_current_documents_resolve_one_to_one_from_initial_pages_redirects(
+    document_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = document_history
+    resolved = lineage_api("resolve_current_documents")(repo, inventory)
+    assert len(resolved) == 62
+    assert set(resolved) == {item.baseline_path for item in inventory.documents}
+    assert len({item.relative_path for item in resolved.values()}) == 62
+    for original in inventory.documents:
+        assert resolved[original.baseline_path].relative_path == (
+            PurePosixPath("services/service") / original.pages_path.parent.name / "index.md"
+        )
+
+
+@pytest.mark.parametrize("count", [61, 63])
+def test_resolution_requires_exactly_62_inventory_documents(
+    document_history: tuple[Path, PrePagesInventory], count: int
+) -> None:
+    repo, inventory = document_history
+    documents = (
+        inventory.documents[:61] if count == 61
+        else inventory.documents + (inventory.documents[0],)
+    )
+    with pytest.raises(AuditFormatError, match="62 inventory documents"):
+        lineage_api("resolve_current_documents")(repo, replace(inventory, documents=documents))
+
+
+def test_resolution_rejects_a_missing_baseline_current_document(
+    document_history: tuple[Path, PrePagesInventory],
+) -> None:
+    repo, inventory = document_history
+    (repo / "docs/services/service/topic-00/index.md").unlink()
+    with pytest.raises(AuditFormatError, match="guides/service/topic-00/index.md"):
+        lineage_api("resolve_current_documents")(repo, inventory)
+
+
+@pytest.mark.parametrize("extra_count", [1, 4, 7])
+def test_resolution_allows_extra_current_documents_without_expanding_the_baseline(
+    document_history: tuple[Path, PrePagesInventory], extra_count: int,
+) -> None:
+    repo, inventory = document_history
+    for index in range(extra_count):
+        extra = repo / f"docs/services/service/extra-{index}/index.md"
+        extra.parent.mkdir(parents=True)
+        extra.write_text("---\ntitle: Extra\n---\n# Extra\n")
+    resolved = lineage_api("resolve_current_documents")(repo, inventory)
+    assert len(resolved) == len(inventory.documents) == 62
+    assert set(resolved) == {document.baseline_path for document in inventory.documents}
+    assert len({document.relative_path for document in resolved.values()}) == 62
+    assert not any("extra-" in str(document.relative_path) for document in resolved.values())
+
+
+def test_resolution_rejects_missing_initial_pages_redirect(
+    document_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = document_history
+    path = repo / "docs/services/service/topic-00/index.md"
+    path.write_text("---\ntitle: Missing redirect\n---\n")
+    with pytest.raises(AuditFormatError, match="guides/service/topic-00/index.md"):
+        lineage_api("resolve_current_documents")(repo, inventory)
+
+
+def test_resolution_rejects_duplicate_redirect_ownership(
+    document_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = document_history
+    path = repo / "docs/services/service/topic-01/index.md"
+    path.write_text(path.read_text().replace("guides/service/topic-01/", "guides/service/topic-00/"))
+    with pytest.raises(AuditFormatError, match="redirect_from.*already used"):
+        lineage_api("resolve_current_documents")(repo, inventory)
+
+
+def test_resolution_rejects_two_baseline_documents_using_one_current_document(
+    document_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = document_history
+    first = repo / "docs/services/service/topic-00/index.md"
+    first.write_text(first.read_text().replace(
+        "redirect_from:\n", "redirect_from:\n  - guides/service/topic-01/index.md\n",
+    ))
+    second = repo / "docs/services/service/topic-01/index.md"
+    second.write_text("---\ntitle: Unused\n---\n")
+    with pytest.raises(AuditFormatError, match="used more than once"):
+        lineage_api("resolve_current_documents")(repo, inventory)
+
+
+def test_resolution_requires_baseline_blobs(document_history: tuple[Path, PrePagesInventory]) -> None:
+    repo, inventory = document_history
+    documents = (
+        replace(inventory.documents[0], baseline_path=PurePosixPath("missing.md")),
+        *inventory.documents[1:],
+    )
+    with pytest.raises(AuditFormatError, match=inventory.baseline_commit) as error:
+        lineage_api("resolve_current_documents")(repo, replace(inventory, documents=documents))
+    assert "missing.md" in str(error.value)
+
+
+def test_resolution_requires_initial_pages_blobs(document_history: tuple[Path, PrePagesInventory]) -> None:
+    repo, inventory = document_history
+    with pytest.raises(AuditFormatError, match=inventory.baseline_commit) as error:
+        lineage_api("resolve_current_documents")(repo, replace(inventory, pages_commit=inventory.baseline_commit))
+    assert "docs/guides/service/topic-00/index.md" in str(error.value)
+
+
+def test_real_repository_maps_62_baseline_documents_without_limiting_current_growth() -> None:
+    inventory = load_inventory(MANIFEST)
+    paths = lineage_api("baseline_paths")(ROOT, inventory)
+    classified = lineage_api("classify_baseline_files")(ROOT, inventory)
+    resolved = lineage_api("resolve_current_documents")(ROOT, inventory)
+    catalog = build_topic_catalog(ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml"))
+    assert len(paths) == len(classified) == 359
+    assert sum(path.suffix == ".md" for path in paths) == 73
+    assert len(resolved) == len({doc.relative_path for doc in resolved.values()}) == 62
+    assert len(catalog.documents) >= len(resolved)
+    assert {doc.relative_path for doc in resolved.values()} <= {doc.relative_path for doc in catalog.documents}
+    assert {item.baseline_path for item in classified} == set(paths)
+    assert {item.status for item in classified} <= {"unchanged", "modified", "renamed", "reviewed"}
+    assert Counter(item.status for item in classified)["reviewed"] == 6
+
+
+def disposition_with_replacement(inventory, replacement):
+    return replace(inventory, dispositions={
+        PurePosixPath("added.md"): ReviewedDisposition(
+            "replaced-summary", (PurePosixPath(replacement),), "Canonical replacement overview.",
+        ),
+    })
+
+
+@pytest.mark.parametrize("name", [
+    "site/replacement.md", ".superpowers/replacement.md", ".git/config",
+    "README.md", ".devcontainer/README.md", "scripts/docs/replacement.py",
+    "tests/other/replacement.py", "docs/contributing/replacement.md",
+])
+def test_reviewed_replacement_rejects_paths_outside_explicit_source_roots(file_history, name):
+    repo, inventory = file_history
+    path = repo / name
+    if name != ".git/config":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Tracked but not an allowed replacement.\n")
+        git(repo, "add", "-f", "--", name)
+        commit(repo, "Track forbidden replacement")
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert name in str(error.value) and "added.md" in str(error.value)
+
+
+@pytest.mark.parametrize("state", ["untracked", "staged-only", "ignored", "missing", "directory"])
+def test_reviewed_replacement_requires_a_head_tracked_live_regular_file(file_history, state):
+    repo, inventory = file_history
+    name = "docs/services/service/topic/candidate.md"
+    path = repo / name
+    path.write_text("Candidate source.\n")
+    if state == "staged-only":
+        git(repo, "add", "--", name)
+    elif state in {"ignored", "missing", "directory"}:
+        if state == "ignored":
+            (repo / ".gitignore").write_text(name + "\n")
+            git(repo, "add", "-f", "--", name)
+        commit(repo, "Track candidate replacement")
+        if state == "missing":
+            path.unlink()
+        elif state == "directory":
+            path.unlink()
+            path.mkdir()
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert name in str(error.value)
+
+
+@pytest.mark.parametrize("name", [
+    "docs/services/service/topic/site/generated.html",
+    "tests/docs/__pycache__/generated.pyc",
+    "docs/services/service/topic/samples/example/evidence/result.md",
+    "tests/docs/.superpowers/result.md",
+])
+def test_force_tracked_generated_replacements_are_ineligible(file_history, name):
+    repo, inventory = file_history
+    (repo / ".gitignore").write_text((ROOT / ".gitignore").read_text())
+    path = repo / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Generated output is not replacement source.\n")
+    git(repo, "add", "-f", "--", name)
+    commit(repo, "Force track generated output")
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert name in str(error.value)
+
+
+@pytest.mark.parametrize("kind", ["head-link", "head-link-live-file", "live-link", "parent-link", "outside-link"])
+def test_reviewed_replacements_reject_all_symlinks_including_contained_links(file_history, kind):
+    repo, inventory = file_history
+    name = PurePosixPath("docs/services/service/topic/candidate.md")
+    path = repo / name
+    if kind in {"head-link", "head-link-live-file", "outside-link"}:
+        if kind == "outside-link":
+            target = repo.parent / "outside-source.md"
+            target.write_text("Outside source.\n")
+        else:
+            target = Path("replacement.md")
+        path.symlink_to(target)
+        commit(repo, "Track symlink replacement")
+        if kind == "head-link-live-file":
+            path.unlink()
+            path.write_text("A live regular file cannot replace a HEAD symlink.\n")
+    elif kind == "live-link":
+        path.write_text("Tracked regular source.\n")
+        commit(repo, "Track regular candidate")
+        path.unlink()
+        path.symlink_to("replacement.md")
+    else:
+        name = REPLACEMENT
+        mirror = repo / "docs/services/service/mirror"
+        mirror.mkdir()
+        (mirror / "replacement.md").write_text("Tracked mirror source.\n")
+        commit(repo, "Track mirror source")
+        parent = (repo / name).parent
+        parent.rename(repo / "saved-topic")
+        parent.symlink_to("mirror", target_is_directory=True)
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert str(name) in str(error.value)
+
+
+def test_reviewed_replacement_allows_head_tracked_docs_tests(file_history):
+    repo, inventory = file_history
+    name = "tests/docs/test_replacement.py"
+    path = repo / name
+    path.parent.mkdir(parents=True)
+    path.write_text("def test_replacement():\n    assert True\n")
+    commit(repo, "Track replacement test")
+    results = pre_pages.classify_baseline_files(repo, disposition_with_replacement(inventory, name))
+    assert next(item for item in results if str(item.baseline_path) == "added.md").current_paths == (PurePosixPath(name),)
+
+
+def test_empty_replacement_is_not_a_local_state_disposition(file_history):
+    repo, inventory = file_history
+    invalid = replace(inventory, dispositions={
+        PurePosixPath("added.md"): ReviewedDisposition("replaced-summary", (), "Missing source is not local state."),
+    })
+    with pytest.raises(AuditFormatError, match="current_paths"):
+        pre_pages.classify_baseline_files(repo, invalid)
+
+
+@pytest.mark.parametrize("name", ["README.md", "scripts/docs/pre_pages.py", "docs/contributing/index.md"])
+def test_real_manifest_cannot_add_arbitrary_tracked_disposition_evidence(name):
+    inventory = load_inventory(MANIFEST)
+    baseline = PurePosixPath("memory/README.md")
+    original = inventory.dispositions[baseline]
+    changed = replace(inventory, dispositions={
+        **inventory.dispositions,
+        baseline: replace(original, current_paths=(*original.current_paths, PurePosixPath(name))),
+    })
+    with pytest.raises(AuditFormatError) as error:
+        pre_pages.classify_baseline_files(ROOT, changed)
+    assert str(baseline) in str(error.value) and name in str(error.value)
+
+
+def test_real_manifest_replacements_are_head_tracked_unignored_regular_sources():
+    inventory = load_inventory(MANIFEST)
+    replacements = {
+        path for disposition in inventory.dispositions.values() for path in disposition.current_paths
+    }
+    assert len(replacements) == 7
+    for path in replacements:
+        assert path.parts[:2] in {("docs", "services"), ("tests", "docs")}
+        entry = git(ROOT, "ls-tree", "HEAD", "--", str(path)).decode()
+        assert entry.startswith(("100644 blob ", "100755 blob "))
+        assert (ROOT / path).is_file()
+        assert not any((ROOT / Path(*path.parts[:index])).is_symlink() for index in range(1, len(path.parts) + 1))
+    ignored = subprocess.run(
+        ["git", "-C", str(ROOT), "check-ignore", "--no-index", "--", *(str(path) for path in sorted(replacements))],
+        capture_output=True, text=True,
+    )
+    assert ignored.returncode == 1 and not ignored.stdout
+    assert len([item for item in pre_pages.classify_baseline_files(ROOT, inventory) if item.status == "reviewed"]) == 6
+
+
+def test_initial_lineage_rejects_swapped_existing_pages_blobs(document_history):
+    repo, inventory = document_history
+    first, second, *rest = inventory.documents
+    swapped = replace(inventory, documents=(
+        replace(first, pages_path=second.pages_path),
+        replace(second, pages_path=first.pages_path),
+        *rest,
+    ))
+    with pytest.raises(AuditFormatError, match="rename") as error:
+        pre_pages.resolve_current_documents(repo, swapped)
+    assert str(first.baseline_path) in str(error.value)
+    assert "docs/" + str(second.pages_path) in str(error.value)
+
+
+def test_initial_lineage_rejects_unrelated_existing_baseline_blob(document_history):
+    repo, inventory = document_history
+    changed = replace(inventory, documents=(
+        replace(inventory.documents[0], baseline_path=PurePosixPath("binary.bin")),
+        *inventory.documents[1:],
+    ))
+    with pytest.raises(AuditFormatError, match="rename") as error:
+        pre_pages.resolve_current_documents(repo, changed)
+    assert "binary.bin" in str(error.value)
+
+
+def test_initial_lineage_rejects_a_copied_pages_blob_without_a_rename(document_history):
+    repo, inventory = document_history
+    document = inventory.documents[0]
+    blob = git(repo, "rev-parse", f"{inventory.baseline_commit}:{document.baseline_path}").decode().strip()
+    git(repo, "read-tree", inventory.pages_commit)
+    try:
+        git(repo, "update-index", "--add", "--cacheinfo", f"100644,{blob},{document.baseline_path}")
+        tree = git(repo, "write-tree").decode().strip()
+        copied_pages = git(
+            repo, "commit-tree", tree, "-p", inventory.baseline_commit, "-m", "Copy rather than rename",
+        ).decode().strip()
+    finally:
+        git(repo, "read-tree", "HEAD")
+    assert git_bytes(repo, copied_pages, document.baseline_path)
+    assert git_bytes(repo, copied_pages, PurePosixPath("docs") / document.pages_path)
+    with pytest.raises(AuditFormatError, match="rename"):
+        pre_pages.resolve_current_documents(repo, replace(inventory, pages_commit=copied_pages))
+
+
+@pytest.mark.parametrize("similarity", [20, 100])
+def test_initial_lineage_uses_the_configured_rename_threshold(document_history, monkeypatch, similarity):
+    repo, inventory = document_history
+    calls = []
+    original = pre_pages._git
+
+    def record(root, *arguments):
+        if arguments[0] == "diff":
+            calls.append(arguments)
+        return original(root, *arguments)
+
+    monkeypatch.setattr(pre_pages, "_git", record)
+    assert len(pre_pages.resolve_current_documents(repo, replace(inventory, rename_similarity=similarity))) == 62
+    assert calls == [(
+        "diff", f"--find-renames={similarity}%", "--name-status", "-z",
+        inventory.baseline_commit, inventory.pages_commit, "--",
+    )]
+
+
+def test_initial_lineage_nul_parser_preserves_literal_tabs_newlines_and_unicode():
+    parser = lineage_api("_parse_name_status_z")
+    source = "old\t\n한글.md"
+    target = "docs/renamed\t\n한글.md"
+    assert parser(f"R087\0{source}\0{target}\0A\0new.md\0D\0gone.md\0M\0edit.md\0T\0type.md\0".encode()) == (
+        ("R087", PurePosixPath(source), PurePosixPath(target)),
+        ("A", PurePosixPath("new.md"), None),
+        ("D", PurePosixPath("gone.md"), None),
+        ("M", PurePosixPath("edit.md"), None),
+        ("T", PurePosixPath("type.md"), None),
+    )
+    assert parser(b"") == ()
+
+
+@pytest.mark.parametrize("payload", [
+    b"R100\0old.md\0",
+    b"R100\0old.md\0new.md",
+    b"R100\0\0new.md\0",
+    b"R100\0old.md\0\0",
+    b"R\0old.md\0new.md\0",
+    b"R101\0old.md\0new.md\0",
+    b"R-1\0old.md\0new.md\0",
+    b"Rxx\0old.md\0new.md\0",
+    b"U\0path.md\0",
+    b"Z\0path.md\0",
+    b"C100\0old.md\0copy.md\0",
+    b"M\0path.md\0garbage\0",
+    b"M\0path.md\0\0",
+    b"A\0\0",
+    b"A\0../outside.md\0",
+    b"\xff\0path.md\0",
+    b"R100\0old.md\0new.md\0R100\0old.md\0other.md\0",
+    b"R100\0one.md\0new.md\0R100\0two.md\0new.md\0",
+    b"R100\0old.md\0new.md\0A\0new.md\0",
+])
+def test_initial_lineage_nul_parser_fails_closed_on_malformed_records(payload):
+    parser = lineage_api("_parse_name_status_z")
+    with pytest.raises(AuditFormatError):
+        parser(payload)
+
+
+def shallow_clone_with_anchors(
+    tmp_path: Path, repo: Path, inventory: PrePagesInventory, depth: int
+) -> Path:
+    shallow = tmp_path / "shallow-with-anchors"
+    git(tmp_path, "clone", "-q", f"--depth={depth}", repo.as_uri(), str(shallow))
+    assert git(shallow, "rev-parse", "--is-shallow-repository").strip() == b"true"
+    assert int(git(shallow, "rev-list", "--count", "HEAD")) == depth
+    assert int(git(repo, "rev-list", "--count", "HEAD")) > depth
+    for anchor in (inventory.baseline_commit, inventory.pages_commit):
+        assert git(shallow, "cat-file", "-t", anchor).strip() == b"commit"
+    return shallow
+
+
+@pytest.mark.parametrize("name", ["git_bytes", "git_text", "baseline_paths", "classify_baseline_files"])
+def test_git_apis_reject_shallow_boundary_even_with_both_anchors_present(
+    tmp_path: Path, file_history: tuple[Path, PrePagesInventory], name: str
+) -> None:
+    repo, inventory = file_history
+    shallow = shallow_clone_with_anchors(tmp_path, repo, inventory, depth=2)
+    with pytest.raises(AuditFormatError, match="(?i)shallow") as error:
+        if name in {"git_bytes", "git_text"}:
+            lineage_api(name)(shallow, inventory.baseline_commit, PurePosixPath("한글 문서.md"))
+        else:
+            lineage_api(name)(shallow, inventory)
+    message = str(error.value)
+    assert inventory.baseline_commit in message
+    if name not in {"git_bytes", "git_text"}:
+        assert inventory.pages_commit in message
+    assert "fetch" in message.lower()
+    assert "full history" in message.lower()
+
+
+def test_document_resolution_rejects_shallow_boundary_with_both_anchors_present(
+    tmp_path: Path, document_history: tuple[Path, PrePagesInventory]
+) -> None:
+    repo, inventory = document_history
+    shallow = shallow_clone_with_anchors(tmp_path, repo, inventory, depth=3)
+    with pytest.raises(AuditFormatError, match="(?i)shallow") as error:
+        lineage_api("resolve_current_documents")(shallow, inventory)
+    message = str(error.value)
+    assert inventory.baseline_commit in message
+    assert inventory.pages_commit in message
+    assert "fetch" in message.lower()
+    assert "full history" in message.lower()

@@ -21,6 +21,38 @@ const materialBootstrap = block.replace('searchParams.get("q")!', 'searchParams.
 const catalog = process.env.EXPLORE_FIXTURE ? JSON.parse(fs.readFileSync(process.env.EXPLORE_FIXTURE, "utf8")) : undefined;
 const expected = catalog?.expectedCount || "1개 주제 · 1개 문서";
 
+test("Material search sharing retains anchor behavior without an executable initializer", () => {
+  if (!process.env.MATERIAL_SOURCE_MAP) {
+    const html = fs.readFileSync(path.join(__dirname, "../../site/index.html"), "utf8");
+    const anchorTag = html.match(/<a\b[^>]*data-md-component="search-share"[^>]*>/)?.[0];
+    assert.ok(anchorTag, "search sharing remains enabled as an anchor");
+    assert.equal(anchorTag.match(/\bhref="([^"]*)"/)?.[1], "#");
+    assert.match(anchorTag, /data-clipboard/);
+  }
+
+  const index = map.sources.findIndex(name => name.endsWith("/components/search/share/index.ts"));
+  assert.ok(index >= 0);
+  const shareSource = map.sourcesContent[index];
+  const update = shareSource.split("push$.subscribe(({ url }) => {")[1]?.split("\n  })")[0];
+  assert.ok(update?.includes("el.href"), "review the installed share handler if its contract changes");
+  const attributes = {};
+  let href = "https://example.test/project/#";
+  const el = {
+    get href() { return href; },
+    set href(value) { href = new URL(value, href).href; },
+    setAttribute(name, value) { attributes[name] = value; },
+  };
+  const url = new URL("https://example.test/project/?q=Guide");
+  vm.runInNewContext(update, {el, url});
+  assert.equal(el.href, url.href);
+  assert.equal(attributes["data-clipboard-text"], "https://example.test/project/#");
+  const prevent = shareSource.match(/\.subscribe\((ev => ev\.preventDefault\(\))\)/)?.[1];
+  assert.ok(prevent, "search sharing must prevent fragment navigation");
+  let prevented = false;
+  vm.runInNewContext(`(${prevent})`)({preventDefault() { prevented = true; }});
+  assert.equal(prevented, true);
+});
+
 function material(f) {
   let onClose = () => {};
   const state = {open: false, focusCount: 0, value: ""};

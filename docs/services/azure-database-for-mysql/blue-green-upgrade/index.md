@@ -323,7 +323,7 @@ mysql -h <new-db> -e "
 
 > **Phase 5 (재배포) 불필요** — `DB_HOST=primary.db.<prefix>.internal` 은 CNAME 교체 후에도 동일.
 
-<details>
+<details markdown="1">
 <summary>Rollback 절차 보기</summary>
 
 > Rollback 가능 조건: new-db에 write가 발생하지 않은 시점(= super_read_only ON 오류로만 발생). new-db에 이미 데이터가 작성된 경우는 데이터 동기화 후 교체해야 하며, 데이터 팀 개입이 필요합니다.
@@ -351,7 +351,7 @@ mysql -h <old-db> -e "SET GLOBAL super_read_only = OFF;"
 
 ## 시뮬레이션 (`simulation/`)
 
-<details>
+<details markdown="1">
 <summary>시뮬레이션 구성, 설계 결정, 실행 순서 보기</summary>
 
 ### 목적
@@ -622,7 +622,7 @@ LIMIT 1;
 
 → **사전에 new-db에서 전체 쿼리 regression test 수행 필수**
 
-<details>
+<details markdown="1">
 <summary>5. Rollback 절차</summary>
 
 커트오버 후 문제 발생 시 아래 순서로 원복합니다.
