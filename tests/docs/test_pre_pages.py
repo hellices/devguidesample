@@ -560,6 +560,62 @@ def test_classification_rejects_disposition_outside_baseline(
         lineage_api("classify_baseline_files")(repo, replace(inventory, dispositions=dispositions))
 
 
+@pytest.mark.parametrize("git_status", ["unchanged", "modified", "type-changed", "renamed"])
+@pytest.mark.parametrize("disposition_status", ["excluded-local-state", "replaced-summary", "replaced-test"])
+def test_classification_rejects_reviewed_dispositions_for_nondeleted_paths(
+    file_history: tuple[Path, PrePagesInventory], git_status: str, disposition_status: str
+) -> None:
+    repo, inventory = file_history
+    if git_status == "type-changed":
+        source = PurePosixPath("binary.bin")
+        (repo / source).unlink()
+        (repo / source).symlink_to("replacement.md")
+        commit(repo, "Change baseline file type")
+        assert git(repo, "diff", "--name-status", inventory.baseline_commit, "HEAD", "--", str(source)) == (
+            b"T\tbinary.bin\n"
+        )
+    else:
+        source = PurePosixPath({
+            "unchanged": "binary.bin",
+            "modified": "한글 문서.md",
+            "renamed": "-literal ; $(touch injected)\tfile.md",
+        }[git_status])
+    target = PurePosixPath("renamed\t\n한글.md") if git_status == "renamed" else source
+    dispositions = {
+        **inventory.dispositions,
+        source: ReviewedDisposition(
+            disposition_status,
+            () if disposition_status == "excluded-local-state" else (target,),
+            "A disposition must not hide Git's status for a surviving baseline file.",
+        ),
+    }
+    with pytest.raises(AuditFormatError, match="requires a deleted baseline path") as error:
+        lineage_api("classify_baseline_files")(repo, replace(inventory, dispositions=dispositions))
+    assert source.as_posix() in str(error.value)
+    expected_status = "modified" if git_status == "type-changed" else git_status
+    assert f"Git status is {expected_status}" in str(error.value)
+
+
+def test_real_manifest_reviewed_dispositions_are_exactly_the_six_git_deletions() -> None:
+    inventory = load_inventory(MANIFEST)
+    deleted = {
+        PurePosixPath(path)
+        for path in git(
+            ROOT, "diff", f"--find-renames={inventory.rename_similarity}%",
+            "--diff-filter=D", "--name-only", "-z", inventory.baseline_commit, "HEAD", "--",
+        ).decode("utf-8").split("\0")
+        if path
+    }
+    assert len(deleted) == len(inventory.dispositions) == 6
+    assert deleted == set(inventory.dispositions)
+    reviewed = {
+        item.baseline_path
+        for item in lineage_api("classify_baseline_files")(ROOT, inventory)
+        if item.status == "reviewed"
+    }
+    assert reviewed == deleted
+
+
 def test_classification_rejects_missing_replacement_path(file_history: tuple[Path, PrePagesInventory]) -> None:
     repo, inventory = file_history
     (repo / "replacement.md").unlink()

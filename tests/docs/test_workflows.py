@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 import pytest
 import yaml
@@ -233,6 +234,20 @@ jobs:
 
 def test_official_actions_use_required_node_24_majors() -> None:
     assert_required_action_versions()
+
+
+def test_contributing_pages_artifact_reference_matches_workflow_version() -> None:
+    action = "actions/upload-pages-artifact"
+    workflow_versions = {
+        version for _, referenced_action, version in action_references()
+        if referenced_action == action
+    }
+    contributing = (ROOT / "docs/contributing/index.md").read_text(encoding="utf-8")
+    documented_versions = set(re.findall(
+        rf"https://github\.com/{re.escape(action)}/blob/([^/]+)/action\.yml",
+        contributing,
+    ))
+    assert documented_versions == workflow_versions == {REQUIRED_ACTIONS[action]}
 
 
 def test_historical_audit_workflows_checkout_full_history() -> None:

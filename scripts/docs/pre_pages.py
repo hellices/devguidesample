@@ -562,6 +562,11 @@ def classify_baseline_files(
     for path, disposition in inventory.dispositions.items():
         if path not in classified:
             raise AuditFormatError(f"Reviewed disposition is not in baseline: {path}")
+        if path not in deleted:
+            raise AuditFormatError(
+                f"{path}: reviewed disposition requires a deleted baseline path; "
+                f"Git status is {classified[path].status}"
+            )
         for current in disposition.current_paths:
             if not (repo_root / current).is_file():
                 raise AuditFormatError(f"{path}: reviewed current path does not exist: {current}")
