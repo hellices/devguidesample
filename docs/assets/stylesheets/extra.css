@@ -286,7 +286,31 @@ body {
   box-shadow: inset 2px 0 var(--dg-accent);
 }
 
+.dg-sidebar-toggle {
+  display: none;
+}
+
 @media (min-width: 1220px) {
+  .dg-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dg-sidebar-toggle svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: currentColor;
+  }
+
+  [data-dg-sidebar-collapsed="true"] .md-sidebar--primary {
+    display: none;
+  }
+
+  [data-dg-sidebar-collapsed="true"] .dg-sidebar-toggle {
+    color: var(--dg-accent);
+  }
+
   .md-nav--primary .md-nav[data-md-level="1"],
   .md-nav--primary .md-nav[data-md-level="2"] {
     border-left: 1px solid var(--dg-border);
