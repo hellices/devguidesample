@@ -1,6 +1,7 @@
 """Bounded HTML implied-end rules shared by source and built-page readers."""
 
 from collections.abc import Sequence
+from html.parser import HTMLParser
 
 from scripts.docs.pre_pages import AuditFormatError
 
@@ -26,6 +27,41 @@ _END_CHILDREN = {
     "select": {"option", "optgroup"},
     "optgroup": {"option"},
 }
+_TABLE_ALLOWED = _TABLE_CONTENT - {"p"} | {"caption", "colgroup", "col", "script", "style", "template"}
+
+
+class AuditHTMLParser(HTMLParser):
+    """Pin parent-page raw/RCDATA rules, including ignored non-void slashes."""
+
+    CDATA_CONTENT_ELEMENTS = ("script", "style", "xmp", "iframe", "noembed", "noframes")
+    RCDATA_CONTENT_ELEMENTS = ("textarea", "title")
+
+    def __init__(self, *, convert_charrefs: bool = True) -> None:
+        super().__init__(convert_charrefs=convert_charrefs)
+        self.scripting = True
+
+    def enter_raw_content(self, tag: str) -> bool:
+        if tag in self.CDATA_CONTENT_ELEMENTS or tag in {"plaintext", "noscript"}:
+            self.set_cdata_mode(tag, escapable=False)
+            return True
+        if tag in self.RCDATA_CONTENT_ELEMENTS:
+            self.set_cdata_mode(tag, escapable=True)
+            return True
+        return False
+
+
+def table_foster_context(stack: Sequence[str]) -> bool:
+    for tag in reversed(stack):
+        if tag in {"td", "th", "caption", "template", "script", "style", "svg", "math", "foreignobject"}:
+            return False
+        if tag in {"table", "tr"} | _TABLE_GROUPS:
+            return True
+    return False
+
+
+def validate_table_text(stack: Sequence[str], text: str) -> None:
+    if text.strip(" \t\n\r\f") and table_foster_context(stack):
+        raise AuditFormatError("unsupported table foster-parenting text")
 
 
 def _in_scope(stack: Sequence[str], targets: set[str] | frozenset[str], boundaries: set[str] | frozenset[str]) -> int | None:
@@ -42,6 +78,8 @@ def open_p_in_scope(stack: Sequence[str]) -> bool:
 
 
 def implied_end_on_start(stack: Sequence[str], tag: str) -> int | None:
+    if table_foster_context(stack) and tag not in _TABLE_ALLOWED:
+        raise AuditFormatError(f"unsupported table foster-parenting flow content: <{tag}>")
     index = None
     if tag in _TABLE_CONTENT - {"p"}:
         table = _in_scope(stack, {"table"}, {"template", "svg", "math"})

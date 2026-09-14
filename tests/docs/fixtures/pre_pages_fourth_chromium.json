@@ -1,0 +1,49 @@
+{
+  "engine": "HeadlessChrome/153.0.0.0",
+  "captured_at": "2026-09-14",
+  "base_url": "http://127.0.0.1:54663/",
+  "srcset": [
+    {
+      "id": "combined",
+      "value": "images/a.png,b.png",
+      "candidates": ["images/a.png,b.png"],
+      "requested": ["http://127.0.0.1:54663/images/a.png,b.png"],
+      "current_src": "http://127.0.0.1:54663/images/a.png,b.png",
+      "natural_width": 1
+    },
+    {
+      "id": "spaced",
+      "value": "images/a.png, images/b.png",
+      "candidates": ["images/a.png", "images/b.png"],
+      "requested": ["http://127.0.0.1:54663/images/a.png"],
+      "current_src": "http://127.0.0.1:54663/images/a.png",
+      "natural_width": 1
+    },
+    {
+      "id": "density",
+      "value": "images/a.png 1x, images/b.png 2x",
+      "candidates": ["images/a.png", "images/b.png"],
+      "requested": [],
+      "current_src": "http://127.0.0.1:54663/images/a.png",
+      "natural_width": 1,
+      "note": "The previously loaded a.png was reused."
+    }
+  ],
+  "css": [
+    {"id": "inherit", "style": "visibility:inherit", "visibility": "hidden", "visible": false},
+    {"id": "unset", "style": "visibility:unset", "visibility": "hidden", "visible": false},
+    {"id": "visible", "style": "visibility:visible", "visibility": "visible", "visible": true},
+    {"id": "initial", "style": "visibility:initial", "visibility": "visible", "visible": true},
+    {"id": "important-inherit", "style": "visibility:visible;visibility:inherit!important", "visibility": "hidden", "visible": false},
+    {"id": "important-first", "style": "visibility:inherit!important;visibility:visible", "visibility": "hidden", "visible": false},
+    {"id": "important-visible", "style": "visibility:inherit;visibility:visible!important", "visibility": "visible", "visible": true}
+  ],
+  "raw": {
+    "textarea": {"fake_elements": false, "after_closing": true},
+    "xmp": {"fake_elements": false, "after_closing": true},
+    "iframe": {"fake_elements": false, "after_closing": true},
+    "noembed": {"fake_elements": false, "after_closing": true},
+    "noframes": {"fake_elements": false, "after_closing": true},
+    "plaintext": {"fake_elements": false, "after_closing": false}
+  }
+}

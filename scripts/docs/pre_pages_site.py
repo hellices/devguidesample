@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from html.parser import HTMLParser
 from ipaddress import IPv4Address, IPv6Address
 import json
 import math
@@ -18,7 +17,9 @@ import yaml
 
 from scripts.docs.pre_pages import AuditFormatError, PrePagesInventory
 from scripts.docs.pre_pages_content import create_semantic_renderer
-from scripts.docs.pre_pages_html import implied_end_on_end, implied_end_on_start, open_p_in_scope
+from scripts.docs.pre_pages_html import (
+    AuditHTMLParser, implied_end_on_end, implied_end_on_start, open_p_in_scope, validate_table_text,
+)
 from scripts.docs.pre_pages_visibility import AuthoredContent
 from scripts.docs.topics import TopicCatalog
 
@@ -33,7 +34,7 @@ _VOID = frozenset((
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
     "meta", "param", "source", "track", "wbr",
 ))
-_INERT = frozenset(("script", "style", "template", "noscript"))
+_INERT = frozenset(("script", "style", "template", "noscript", "iframe", "noembed", "noframes"))
 _HTML_WHITESPACE = " \t\n\f\r"
 _URL_C0_SPACE = "".join(chr(codepoint) for codepoint in range(0x21))
 _URL_REMOVED_CONTROLS = str.maketrans("", "", "\t\n\r")
@@ -51,7 +52,7 @@ def _valid_srcset_descriptor(value: str) -> bool:
 
 
 def _srcset(value: str) -> list[str]:
-    """Read URL tokens without splitting embedded commas in data URLs."""
+    """Read whole URL tokens; a comma without ASCII whitespace stays in the URL."""
     urls = []
     remaining = value.strip(_HTML_WHITESPACE)
     if not remaining:
@@ -87,7 +88,7 @@ def _refresh_url(value: str) -> str | None:
     return next(group for group in match.groups() if group is not None) if match else None
 
 
-class _Page(HTMLParser):
+class _Page(AuditHTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.stack: list[str] = []
@@ -127,6 +128,8 @@ class _Page(HTMLParser):
             resource = None
             if tag == "script" and "src" in attributes:
                 resource = ("script src", attributes["src"] or "")
+            elif tag == "iframe" and attributes.get("src"):
+                resource = ("iframe src", attributes["src"])
             elif tag == "link":
                 relations = set((attributes.get("rel") or "").casefold().split())
                 destination = (attributes.get("as") or "").casefold()
@@ -176,8 +179,15 @@ class _Page(HTMLParser):
         if tag not in _VOID | {"svg", "math"} and not set(self.stack) & {"svg", "math"}:
             self.errors.append(f"self-closing non-void HTML element <{tag}/>")
         self.handle_starttag(tag, attrs)
+        foreign = next((name for name in reversed(self.stack) if name in {"svg", "math", "foreignobject"}), None)
+        if foreign not in {"svg", "math"} and self.enter_raw_content(tag):
+            return
         if tag not in _VOID:
             self.handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        if self.cdata_elem is None:
+            validate_table_text(self.stack, data)
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "p" and not open_p_in_scope(self.stack):

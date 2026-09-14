@@ -1851,3 +1851,79 @@ def test_built_optional_end_tags_match_chromium_visibility(site_repo, case):
         assert errors == ()
     else:
         assert any("authored" in error for error in errors)
+
+
+@pytest.mark.parametrize("body", [
+    "<table hidden><p>text</p></table>",
+    "<table><tbody><div>text</div></tbody></table>",
+    "<table><tbody><tr>text</tr></tbody></table>",
+    "<table>&nbsp;</table>",
+])
+def test_built_table_foster_ambiguity_reports_the_source_path(site_repo, body):
+    root, _ = site_repo
+    write(root, "site/index.html", html(body))
+    assert any("index.html" in error and "foster" in error for error in inspect(site_repo).errors)
+
+
+@pytest.mark.parametrize("tag", ["textarea", "xmp", "iframe", "noembed", "noframes"])
+def test_parent_page_ignores_raw_fallback_assets_but_checks_following_content(site_repo, tag):
+    root, _ = site_repo
+    write(root, "site/real.png", b"real")
+    body = f'<{tag}><img src="fake.png"><a href="fake.html">Fake</a></{tag}><img src="real.png">'
+    write(root, "site/index.html", html(body))
+    assert inspect(site_repo).errors == ()
+    (root / "site/real.png").unlink()
+    errors = findings(site_repo)
+    assert "real.png" in errors and "fake.png" not in errors and "fake.html" not in errors
+
+
+def test_iframe_src_is_checked_without_parsing_its_fallback(site_repo):
+    root, _ = site_repo
+    write(root, "site/index.html", html('<iframe src="missing-frame.html"><img src="fake.png"></iframe>'))
+    errors = findings(site_repo)
+    assert "missing-frame.html" in errors and "fake.png" not in errors
+
+
+@pytest.mark.parametrize("slash", ["", "/"])
+def test_plaintext_to_eof_never_promotes_parent_page_targets(site_repo, slash):
+    from scripts.docs.pre_pages_site import _Page
+
+    reader = _Page()
+    reader.finish(html(f'<plaintext{slash}>Literal</plaintext><img src="fake.png"><a href="fake.html">Fake</a>'))
+    assert not any(raw in {"fake.png", "fake.html"} for _, raw in reader.targets)
+    assert reader.errors
+
+
+FOURTH_ORACLE = json.loads((ROOT / "tests/docs/fixtures/pre_pages_fourth_chromium.json").read_text())
+
+
+@pytest.mark.parametrize("case", FOURTH_ORACLE["srcset"], ids=lambda case: case["id"])
+def test_srcset_url_tokens_match_the_permanent_chromium_oracle(case):
+    from scripts.docs.pre_pages_site import _srcset
+
+    assert _srcset(case["value"]) == case["candidates"]
+    if case["id"] == "combined":
+        assert case["requested"] == [case["current_src"]]
+        assert case["current_src"] == FOURTH_ORACLE["base_url"] + "images/a.png,b.png"
+        assert case["natural_width"] == 1
+
+
+def test_comma_without_ascii_whitespace_requires_the_combined_local_asset(site_repo):
+    root, _ = site_repo
+    write(root, "site/images/a.png", b"a")
+    write(root, "site/images/b.png", b"b")
+    write(root, "site/index.html", html('<img srcset="images/a.png,b.png">'))
+    assert "images/a.png,b.png" in findings(site_repo)
+    write(root, "site/images/a.png,b.png", b"combined")
+    assert inspect(site_repo).errors == ()
+
+
+@pytest.mark.parametrize("case", FOURTH_ORACLE["css"], ids=lambda case: case["id"])
+def test_built_visibility_inherit_unset_and_restore_controls(site_repo, case):
+    root, _ = site_repo
+    article = ARTICLE.replace(
+        "<h1>Document</h1>", f'<h1 style="visibility:hidden!important"><span style="{case["style"]}">Document</span></h1>',
+    )
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    assert errors == () if case["visible"] else any("authored" in error for error in errors)

@@ -2003,3 +2003,24 @@ def test_source_late_first_summary_element_is_openable():
 ])
 def test_source_optional_end_tags_do_not_extend_hidden_ancestors(html):
     assert extract_markdown_structure(html).prose
+
+
+@pytest.mark.parametrize("source", [
+    "<table hidden><p>text</p></table>",
+    "<table><tbody><div>text</div></tbody></table>",
+    "<table><tbody><tr>text</tr></tbody></table>",
+])
+def test_source_table_foster_ambiguity_is_an_explicit_error(source):
+    with pytest.raises(AuditFormatError, match="foster"):
+        extract_markdown_structure(source)
+
+
+@pytest.mark.parametrize("tag", ["textarea", "xmp", "iframe", "noembed", "noframes", "plaintext"])
+def test_source_raw_container_trailing_markup_cannot_be_promoted(tag):
+    source = (
+        f'<{tag}/><a href="fake.md">Fake</a><img src="fake.png" alt="Fake"></{tag}>'
+        '<a href="after.md">After</a>'
+    )
+    structure = extract_markdown_structure(source)
+    assert structure.images == ()
+    assert structure.links == (() if tag == "plaintext" else ("After\nafter.md",))

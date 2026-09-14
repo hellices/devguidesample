@@ -4,18 +4,19 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from html.parser import HTMLParser
 import unicodedata
 
 from scripts.docs.pre_pages import AuditFormatError
 from scripts.docs.pre_pages_css import inline_visibility, presentation_visibility
-from scripts.docs.pre_pages_html import implied_end_on_end, implied_end_on_start, open_p_in_scope
+from scripts.docs.pre_pages_html import (
+    AuditHTMLParser, implied_end_on_end, implied_end_on_start, open_p_in_scope, validate_table_text,
+)
 
 _VOID = frozenset((
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
     "meta", "param", "source", "track", "wbr",
 ))
-_NONCONTENT = frozenset(("head", "script", "style", "template", "noscript", "title"))
+_NONCONTENT = frozenset(("head", "script", "style", "template", "noscript", "title", "iframe", "noembed", "noframes"))
 _CHROME = frozenset(("nav", "header", "footer", "aside"))
 _CHROME_CLASSES = frozenset((
     "headerlink", "md-nav", "md-sidebar", "md-search", "md-content__button", "linenos",
@@ -37,9 +38,14 @@ class Visibility:
         style = presentation_visibility(attributes) if svg else {}
         style.update(inline_visibility(attributes.get("style") or ""))
         visibility = style.get("visibility")
+        visibility_hidden = self.visibility_hidden
+        if visibility in {"hidden", "collapse"}:
+            visibility_hidden = True
+        elif visibility in {"visible", "initial"}:
+            visibility_hidden = False
         return Visibility(
             self.display_hidden or "hidden" in attributes or style.get("display") == "none",
-            visibility in {"hidden", "collapse"} if visibility in {"visible", "hidden", "collapse", "initial"} else self.visibility_hidden,
+            visibility_hidden,
             self.aria_hidden or (attributes.get("aria-hidden") or "").casefold() == "true",
             self.inert or "inert" in attributes,
         )
@@ -78,7 +84,7 @@ class _SemanticEvent:
     text: str = ""
 
 
-class AuthoredContent(HTMLParser):
+class AuthoredContent(AuditHTMLParser):
     """Resolve the complete tree before collecting authored blocks or reachable links."""
 
     def __init__(self, *, material_article: bool = False) -> None:
@@ -120,10 +126,12 @@ class AuthoredContent(HTMLParser):
             self.stack[-1].svg or any(parent.tag == "math" for parent in self.stack)
         ):
             self.handle_endtag(tag)
-        elif tag in self.CDATA_CONTENT_ELEMENTS:
-            self.set_cdata_mode(tag)
+        else:
+            self.enter_raw_content(tag)
 
     def handle_data(self, data: str) -> None:
+        if self.cdata_elem is None:
+            validate_table_text([element.tag for element in self.stack], data)
         self.stack[-1].children.append(data)
         self.semantic_events.append(_SemanticEvent("data", self.stack[-1], data))
 
