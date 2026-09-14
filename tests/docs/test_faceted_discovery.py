@@ -160,11 +160,11 @@ def test_explore_has_exact_member_data_and_one_card_per_topic(taxonomy, catalog)
     assert PurePosixPath("explore/index.md") in pages
     page = pages[PurePosixPath("explore/index.md")]
     assert yaml.safe_load(page.split("---", 2)[1])["title"] == "글 찾기"
-    assert "41개 주제 · 66개 문서" in page
+    assert f"{len(catalog.topics)}개 주제 · {len(catalog.documents)}개 문서" in page
     parser = Elements(page)
-    assert len(parser.select("data-explore-topic")) == len(catalog.topics) == 41
+    assert len(parser.select("data-explore-topic")) == len(catalog.topics)
     members = parser.select("data-explore-member")
-    assert len(members) == len(catalog.documents) == 66
+    assert len(members) == len(catalog.documents)
     by_path = {row["data-explore-member"]: row for row in members}
     for doc in catalog.documents:
         row = by_path[doc.relative_path.as_posix()]
@@ -230,7 +230,7 @@ def test_home_navigation_and_article_chips_use_explore(taxonomy, catalog):
     nav = yaml.safe_load((ROOT / "docs/.nav.yml").read_text())["nav"]
     assert [next(iter(item)) for item in nav if "glob" not in item] == ["홈", "서비스별 보기", "글 찾기", "기여하기"]
     home = build_home_page((ROOT / "docs/index.md").read_text(), catalog.documents, taxonomy, catalog=catalog)
-    assert "41개 주제 · 66개 문서" in home
+    assert f"{len(catalog.topics)}개 주제 · {len(catalog.documents)}개 문서" in home
     assert "전체 글" not in home and "태그별 보기" not in home
     assert "(explore/index.md)" in home
     doc = catalog.documents[0]
@@ -253,7 +253,7 @@ def test_explore_assets_are_configured_and_accessible():
 
 def test_service_discovery_reports_topics_and_documents(taxonomy, catalog):
     pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
-    assert "41개 주제 · 66개 문서" in pages[PurePosixPath("services/index.md")]
+    assert f"{len(catalog.topics)}개 주제 · {len(catalog.documents)}개 문서" in pages[PurePosixPath("services/index.md")]
     documents = [doc for doc in catalog.documents if "azure-monitor" in doc.metadata["services"]]
     topics = {catalog.by_document[doc.relative_path].entry.relative_path for doc in documents}
     assert f"{len(topics)}개 주제 · {len(documents)}개 문서" in pages[PurePosixPath("services/azure-monitor/index.md")]
