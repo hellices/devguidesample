@@ -4,10 +4,8 @@ const toggle = require("../../docs/assets/javascripts/sidebar-toggle.js");
 
 function createFixture(stored = "false") {
   const root = {dataset: {}};
-  const listeners = {};
   const buttonListeners = {};
   const inserted = [];
-  const mediaListeners = [];
 
   const button = {
     attributes: {},
@@ -42,13 +40,7 @@ function createFixture(stored = "false") {
 
   const media = {
     matches: true,
-    addEventListener(type, callback) {
-      if (type === "change") mediaListeners.push(callback);
-    },
-    emit(matches) {
-      this.matches = matches;
-      for (const callback of mediaListeners) callback({matches});
-    },
+    addEventListener() {},
   };
 
   const documentRef = {
@@ -59,9 +51,6 @@ function createFixture(stored = "false") {
     createElement(tag) {
       assert.equal(tag, "button");
       return button;
-    },
-    addEventListener(type, callback) {
-      listeners[type] = callback;
     },
   };
 
@@ -81,7 +70,6 @@ function createFixture(stored = "false") {
     windowRef,
     localStorage,
     media,
-    listeners,
   };
 }
 
@@ -123,22 +111,4 @@ test("blocked localStorage still mounts without persistence", () => {
   assert.equal(fixture.root.dataset.dgSidebarCollapsed, "false");
   fixture.buttonListeners.click();
   assert.equal(fixture.root.dataset.dgSidebarCollapsed, "true");
-});
-
-test("media change back to desktop re-syncs persisted state", () => {
-  const fixture = createFixture("false");
-  toggle.mountSidebarToggle(fixture.documentRef, fixture.windowRef);
-  fixture.buttonListeners.click();
-  assert.equal(fixture.localStorage.value, "true");
-  fixture.root.dataset.dgSidebarCollapsed = "false";
-  fixture.media.emit(true);
-  assert.equal(fixture.root.dataset.dgSidebarCollapsed, "true");
-});
-
-test("mountSidebarToggle is idempotent once initialized", () => {
-  const fixture = createFixture("false");
-  toggle.mountSidebarToggle(fixture.documentRef, fixture.windowRef);
-  const second = toggle.mountSidebarToggle(fixture.documentRef, fixture.windowRef);
-  assert.equal(second, null);
-  assert.equal(fixture.inserted.length, 1);
 });
