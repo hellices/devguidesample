@@ -318,10 +318,12 @@ python scripts/docs/audit_pre_pages.py
 `tests/docs/**`의 일반 소스 파일이어야 합니다. 추적되지 않은 파일, ignore된
 파일, 생성 결과물과 심볼릭 링크는 대체 근거로 사용할 수 없습니다.
 빈 `current_paths`는 삭제된 로컬 상태를 제외할 때만 허용합니다.
-가시성 감사는 닫힌 `<details>`의 본문에 대해 작성된 직접 자식
-`<summary>`를 요구합니다. 브라우저의 기본 컨트롤에만 의존하는 본문은
-보수적으로 제외하지만, 다른 요소 뒤에 오는 첫 `<summary>` 요소는
-브라우저 동작에 따라 인정합니다. 이미 `open`인 본문은 별도로 취급합니다.
+가시성 감사는 닫힌 `<details>`를 첫 직접 자식 `<summary>` 또는 브라우저의
+기본 컨트롤로 펼칠 수 있는지 검사합니다. 작성된 summary가 없어도
+컨트롤이 보이고 상호작용 가능하면 본문을 인정합니다. 상속된 `inert`,
+`hidden`, `display:none`, `aria-hidden` 등의 접근 제한은 계속 반영합니다.
+다른 요소 뒤에 오는 첫 `<summary>`도 인정하며, 이미 `open`인 본문은
+별도로 가시성을 확인합니다.
 
 전체 감사는 기준선 밖의 신규 문서까지 포함해 현재 canonical 문서 **전체**의
 본문 가시성, 검색, 서비스별 주제 진입점, 글 찾기 연결과 로컬 자산을 검사합니다.
@@ -339,6 +341,8 @@ Audited 359 baseline files and 73 Markdown files: 62/62 baseline documents mappe
 필수입니다. 로컬 clone이 얕으면 검사를 건너뛰지 말고
 `git fetch --unshallow` 또는 동등한 전체 이력 fetch를 수행한 뒤 다시
 실행합니다. CI에서는 checkout `fetch-depth: 0`으로 같은 조건을 보장합니다.
+필수 감사 step과 이를 포함한 validate/build job에는 실행을 건너뛸 수 있는
+`if`를 두지 않으며, `continue-on-error`로 감사 실패를 무시하지 않습니다.
 
 생성된 `site/`과 검색 인덱스는 커밋하지 않습니다. 실패한 검증을 무시하지
 않습니다.

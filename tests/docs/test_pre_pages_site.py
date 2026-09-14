@@ -1790,19 +1790,19 @@ def test_html_entity_decoding_for_scheme_checks_happens_only_once(site_repo):
 
 
 @pytest.mark.parametrize("opened", [False, True])
-def test_built_details_without_authored_summary_only_count_when_open(site_repo, opened):
+def test_built_summaryless_details_are_accessible_closed_or_open(site_repo, opened):
     root, _ = site_repo
     article = ARTICLE.replace("<h1>", f'<details{" open" if opened else ""}><h1>').replace(
         "</article>", "</details></article>",
     )
     write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
     errors = inspect(site_repo).errors
-    assert errors == () if opened else any("authored" in error for error in errors)
+    assert errors == ()
 
 
 @pytest.mark.parametrize("channel", ["service", "explore", "redirect"])
 @pytest.mark.parametrize("late_summary", [False, True])
-def test_generated_page_disclosures_require_a_summary_but_allow_a_late_one(site_repo, channel, late_summary):
+def test_generated_page_disclosures_allow_default_or_late_summary(site_repo, channel, late_summary):
     root, _ = site_repo
     summary = "<p>before</p><summary>Late</summary>" if late_summary else ""
     if channel == "service":
@@ -1819,10 +1819,7 @@ def test_generated_page_disclosures_require_a_summary_but_allow_a_late_one(site_
         content = redirect(target).replace(anchor, f"<details>{summary}{anchor}</details>")
     write(root, "site/" + path, content)
     errors = inspect(site_repo).errors
-    if late_summary:
-        assert errors == ()
-    else:
-        assert any("not linked" in error or "fallback" in error for error in errors)
+    assert errors == ()
 
 
 def test_summaryless_details_still_validate_fetched_assets(site_repo):
@@ -1927,3 +1924,45 @@ def test_built_visibility_inherit_unset_and_restore_controls(site_repo, case):
     write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
     errors = inspect(site_repo).errors
     assert errors == () if case["visible"] else any("authored" in error for error in errors)
+
+
+DEFAULT_SUMMARY_ORACLE = json.loads((ROOT / "tests/docs/fixtures/pre_pages_default_summary_chromium.json").read_text())
+
+
+@pytest.mark.parametrize("case", DEFAULT_SUMMARY_ORACLE["cases"], ids=lambda case: case["id"])
+def test_native_summaryless_built_article_inherits_blockers(site_repo, case):
+    root, _ = site_repo
+    article = ARTICLE.replace("<h1>", f'<div {case["ancestor"]}><details><h1>').replace(
+        "</article>", "</details></div></article>",
+    )
+    write(root, "site/" + ENTRY.replace(".md", ".html"), html().replace(ARTICLE, article))
+    errors = inspect(site_repo).errors
+    assert errors == () if case["audit_open"] else any("authored" in error for error in errors)
+
+
+@pytest.mark.parametrize("case", DEFAULT_SUMMARY_ORACLE["cases"], ids=lambda case: case["id"])
+@pytest.mark.parametrize("channel", ["service", "explore", "redirect"])
+def test_native_summaryless_reachability_inherits_blockers(site_repo, case, channel):
+    root, _ = site_repo
+
+    def wrapped(anchor):
+        return f'<div {case["ancestor"]}><details>{anchor}</details></div>'
+
+    if channel == "service":
+        path = "services/service/index.html"
+        content = html(wrapped('<a href="topic/">Topic</a>'))
+    elif channel == "explore":
+        path = "explore/index.html"
+        content = html(wrapped('<a href="../services/service/topic/">Topic</a>') +
+                       '<a href="../services/service/topic/child/">Child</a>')
+    else:
+        path = OLD.replace(".md", ".html")
+        target = "../../../services/service/topic/"
+        anchor = f'<a href="{target}">Moved document</a>'
+        content = redirect(target).replace(anchor, wrapped(anchor))
+    write(root, "site/" + path, content)
+    errors = inspect(site_repo).errors
+    if case["audit_open"]:
+        assert errors == ()
+    else:
+        assert any("not linked" in error or "fallback" in error for error in errors)

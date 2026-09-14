@@ -1,0 +1,14 @@
+{
+  "engine": "HeadlessChrome/153.0.0.0",
+  "captured_at": "2026-09-14",
+  "viewport": [1200, 900],
+  "method": "Trusted CDP pointer click on the native default details legend; no authored summary exists. ARIA exclusion is an audit accessibility rule, not a pointer-event blocker.",
+  "cases": [
+    {"id": "default", "ancestor": "", "authored_summary": false, "pointer_open": true, "body_visible": true, "audit_open": true},
+    {"id": "inert", "ancestor": "inert", "authored_summary": false, "pointer_open": false, "body_visible": false, "audit_open": false},
+    {"id": "hidden", "ancestor": "hidden", "authored_summary": false, "pointer_open": false, "body_visible": false, "audit_open": false},
+    {"id": "display-none", "ancestor": "style=\"display:none\"", "authored_summary": false, "pointer_open": false, "body_visible": false, "audit_open": false},
+    {"id": "aria-hidden", "ancestor": "aria-hidden=\"true\"", "authored_summary": false, "pointer_open": true, "body_visible": true, "audit_open": false},
+    {"id": "visibility-hidden", "ancestor": "style=\"visibility:hidden\"", "authored_summary": false, "pointer_open": false, "body_visible": false, "audit_open": false}
+  ]
+}

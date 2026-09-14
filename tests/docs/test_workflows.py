@@ -119,6 +119,9 @@ def assert_pre_pages_audit_runs_after_search_validation(
     for workflow_name, job_name in (("docs-ci.yml", "validate"), ("pages.yml", "build")):
         jobs = jobs_by_workflow[workflow_name]
         assert job_name in jobs, workflow_name
+        job_definition = yaml.safe_load((workflows_dir / workflow_name).read_text())["jobs"][job_name]
+        assert "if" not in job_definition, (workflow_name, job_name, "conditional audit job")
+        assert job_definition.get("continue-on-error", False) is False, (workflow_name, job_name, "audit job must fail")
         steps = jobs[job_name]
         search_positions = [
             index
@@ -131,6 +134,8 @@ def assert_pre_pages_audit_runs_after_search_validation(
         assert audit_position < len(steps), workflow_name
         audit_step = steps[audit_position]
         assert audit_step.get("name") == "Audit pre-Pages content preservation"
+        assert "if" not in audit_step, (workflow_name, "conditional audit step")
+        assert audit_step.get("continue-on-error", False) is False, (workflow_name, "audit step must fail")
         audit_run = audit_step.get("run")
         assert isinstance(audit_run, str), workflow_name
         assert audit_run.strip() == AUDIT_COMMAND, workflow_name
@@ -139,6 +144,46 @@ def assert_pre_pages_audit_runs_after_search_validation(
     assert count_run_blocks_with_audit_reference(
         jobs_by_workflow["oryx-python-build-test.yml"],
     ) == 0
+
+
+def mutate_audit_gate(tmp_path, workflow_name, job_name, scope, field, value):
+    for path in WORKFLOWS.glob("*.yml"):
+        write_workflow(tmp_path / path.name, path.read_text())
+    path = tmp_path / workflow_name
+    data = yaml.safe_load(path.read_text())
+    job = data["jobs"][job_name]
+    target = job if scope == "job" else next(
+        step for step in job["steps"] if step.get("name") == "Audit pre-Pages content preservation"
+    )
+    target[field] = value
+    write_workflow(path, yaml.safe_dump(data))
+
+
+@pytest.mark.parametrize(("workflow", "job"), [("docs-ci.yml", "validate"), ("pages.yml", "build")])
+@pytest.mark.parametrize("scope", ["step", "job"])
+@pytest.mark.parametrize("condition", [
+    False, True, None, "${{ false }}", "${{ github.ref == 'refs/heads/main' }}", "always()",
+])
+def test_mandatory_audit_gate_rejects_every_if_key(tmp_path, workflow, job, scope, condition):
+    mutate_audit_gate(tmp_path, workflow, job, scope, "if", condition)
+    with pytest.raises(AssertionError):
+        assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+@pytest.mark.parametrize(("workflow", "job"), [("docs-ci.yml", "validate"), ("pages.yml", "build")])
+@pytest.mark.parametrize("scope", ["step", "job"])
+@pytest.mark.parametrize("continuation", [True, "true", "${{ true }}", "${{ github.event_name == 'push' }}", None])
+def test_mandatory_audit_gate_rejects_failure_suppression(tmp_path, workflow, job, scope, continuation):
+    mutate_audit_gate(tmp_path, workflow, job, scope, "continue-on-error", continuation)
+    with pytest.raises(AssertionError):
+        assert_pre_pages_audit_runs_after_search_validation(tmp_path)
+
+
+@pytest.mark.parametrize(("workflow", "job"), [("docs-ci.yml", "validate"), ("pages.yml", "build")])
+@pytest.mark.parametrize("scope", ["step", "job"])
+def test_mandatory_audit_gate_allows_explicit_false_continuation(tmp_path, workflow, job, scope):
+    mutate_audit_gate(tmp_path, workflow, job, scope, "continue-on-error", False)
+    assert_pre_pages_audit_runs_after_search_validation(tmp_path)
 
 
 def test_quoted_uses_values_are_detected_and_rejected(tmp_path: Path) -> None:

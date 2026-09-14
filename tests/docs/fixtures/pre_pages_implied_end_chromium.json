@@ -2,7 +2,7 @@
   "engine": "HeadlessChrome/153.0.0.0",
   "mode": "CSS1Compat",
   "captured_at": "2026-09-14",
-  "method": "Native Chromium DOM parsing and checkVisibility; details activated through the first direct summary element's click(). No-summary audit policy requires an authored control, not an assumed UA fallback.",
+  "method": "Native Chromium DOM parsing and checkVisibility; authored details controls activated through the first direct summary element's click(). Summaryless default-legend pointer behavior is also recorded.",
   "cases": [
     {"id": "p-p", "html": "<p id=\"hidden\" hidden><p id=\"public\">public", "parent": "main", "visible": true},
     {"id": "p-div", "html": "<p id=\"hidden\" hidden><div id=\"public\">public</div>", "parent": "main", "visible": true},
@@ -34,7 +34,7 @@
   },
   "summaryless_policy": {
     "native_fallback_pointer_open": true,
-    "audit_open": false,
-    "reason": "The audit requires an authored direct summary instead of relying on a user-agent fallback."
+    "audit_open": true,
+    "reason": "A visible/interactable native default legend is an effective disclosure control."
   }
 }

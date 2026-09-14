@@ -1973,11 +1973,10 @@ def test_real_s1_hidden_svg_image_cannot_satisfy_its_preservation_approval(tmp_p
 
 
 @pytest.mark.parametrize("prefix", ["", "<div><summary>Not a direct summary</summary></div>"])
-def test_closed_details_without_authored_summary_cannot_supply_source_evidence(prefix):
-    with pytest.raises(AuditFormatError, match="hidden.*authored"):
-        extract_markdown_structure(
-            f'<details markdown="1">{prefix}\n\n# Title\n\nAuthored prose.\n\n</details>'
-        )
+def test_closed_details_without_authored_summary_use_the_native_control(prefix):
+    assert extract_markdown_structure(
+        f'<details markdown="1">{prefix}\n\n# Title\n\nAuthored prose.\n\n</details>'
+    ).title == "Title"
 
 
 def test_already_open_details_without_summary_keep_visible_source_evidence():
@@ -2024,3 +2023,27 @@ def test_source_raw_container_trailing_markup_cannot_be_promoted(tag):
     structure = extract_markdown_structure(source)
     assert structure.images == ()
     assert structure.links == (() if tag == "plaintext" else ("After\nafter.md",))
+
+
+DEFAULT_SUMMARY_ORACLE = json.loads((ROOT / "tests/docs/fixtures/pre_pages_default_summary_chromium.json").read_text())
+
+
+@pytest.mark.parametrize("case", DEFAULT_SUMMARY_ORACLE["cases"], ids=lambda case: case["id"])
+def test_native_summaryless_source_visibility_inherits_blockers(case):
+    source = (
+        f'<div {case["ancestor"]} markdown="1"><details markdown="1">\n\n'
+        '# Title\n\n[Visible link](guide.md)\n\n</details></div>'
+    )
+    if case["audit_open"]:
+        structure = extract_markdown_structure(source)
+        assert structure.title == "Title" and structure.links == ("Visible link\nguide.md",)
+    else:
+        with pytest.raises(AuditFormatError, match="hidden.*authored"):
+            extract_markdown_structure(source)
+
+
+def test_open_summaryless_inert_source_remains_visually_visible():
+    structure = extract_markdown_structure(
+        '<div inert markdown="1"><details open markdown="1">\n\n# Title\n\nVisible prose.\n\n</details></div>'
+    )
+    assert structure.title == "Title"

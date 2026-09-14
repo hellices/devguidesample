@@ -226,7 +226,7 @@ class AuthoredContent(AuditHTMLParser):
             if isinstance(child, _Element) and child.tag == "summary"
         ), None) if tag == "details" else None
         closed_body = tag == "details" and "open" not in attributes and not (
-            self._summary_hit(summary) if summary else False
+            self._summary_hit(summary) if summary else state.interactive
         )
         for child in element.children:
             child_blocked = blocked or closed_body and child is not summary
