@@ -34,6 +34,7 @@ services:
   azure-automation: Azure Automation
   azure-container-apps: Azure Container Apps
   azure-cosmos-db: Azure Cosmos DB
+  azure-cost-management-and-billing: Cost Management + Billing
   azure-database-for-mysql: Azure Database for MySQL
   azure-functions: Azure Functions
   azure-hdinsight: Azure HDInsight
@@ -48,6 +49,7 @@ services:
 
 technologies:
   azure-cli: Azure CLI
+  azure-rbac: Azure RBAC
   bicep: Bicep
   cosmos-db: Azure Cosmos DB
   docker: Docker
