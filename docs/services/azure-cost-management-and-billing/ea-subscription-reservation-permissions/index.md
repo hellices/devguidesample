@@ -6,10 +6,10 @@ services: [azure-cost-management-and-billing, microsoft-entra-id]
 technologies: [azure-rbac]
 tags: [operate, secure, identity]
 status: current
-verification_status: verified
+verification_status: needs-review
 sources_checked_at: 2026-09-14
 official_sources:
-  - title: Manage Azure Enterprise Agreement roles
+  - title: Understand admin roles for Enterprise Agreements in Azure
     url: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-ea-roles
   - title: Understand and work with scopes
     url: https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/understand-work-scopes
@@ -21,7 +21,7 @@ official_sources:
     url: https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/prepare-buy-reservation
   - title: Save costs with Azure Reserved VM Instances
     url: https://learn.microsoft.com/en-us/azure/virtual-machines/prepay-reserved-vm-instances
-  - title: Permissions to view and manage Azure reservations
+  - title: View reservations in the Azure portal and PowerShell
     url: https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/view-reservations
   - title: Manage Reservations for Azure resources
     url: https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/manage-reserved-vm-instance
@@ -31,7 +31,7 @@ official_sources:
     url: https://learn.microsoft.com/en-us/azure/role-based-access-control/rbac-and-directory-admin-roles
   - title: Grant RBAC access to Azure reservations by using PowerShell
     url: https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/manage-reservations-rbac-powershell
-last_verified: 2026-09-14
+last_verified: null
 review_cycle_days: 30
 applies_to: [Azure Enterprise Agreement, Azure portal, Azure Reserved VM Instances]
 ---
@@ -53,7 +53,7 @@ applies_to: [Azure Enterprise Agreement, Azure portal, Azure Reserved VM Instanc
 
 - **Enterprise / Enrollment**: EA 청구 계정입니다. Portal에서는 **Billing account**로 표시합니다.
 - **Department**: 부서별로 계정을 묶는 선택 사항입니다.
-- **Account / Enrollment account**: 계정마다 **Account Owner 한 명**이 있으며, 그 아래에 구독을 만듭니다.
+- **Account / Enrollment account**: 계정마다 **하나 이상의 Account Owner**가 있으며, 그 아래에 구독을 만듭니다.
 - **Subscription**: VM·Storage 같은 Azure 리소스를 사용하는 구독입니다.
 
 즉, **EA 청구 계정 → 부서(선택) → 계정 → 구독**의 관계입니다.
@@ -64,7 +64,7 @@ applies_to: [Azure Enterprise Agreement, Azure portal, Azure Reserved VM Instanc
 | 역할 | 하는 일 | 누가 부여하는가 |
 |---|---|---|
 | **Enterprise Administrator — EA 관리자** | EA 계정·관리자를 관리하고, 활성 계정 아래에 구독 생성 | 기존 EA 관리자. 최초 관리자는 EA 개설 시 설정 |
-| **Department Administrator — 부서 관리자** | 자기 부서의 계정과 Account Owner 관리. 이 역할만으로 구독을 생성하지는 못함 | EA 관리자 또는 해당 부서의 기존 부서 관리자 |
+| **Department Administrator — 부서 관리자** | 자기 부서의 계정과 Account Owner 관리. 이 역할만으로 구독을 생성하지는 못함 | 기존 EA 관리자 |
 | **Account Owner — 계정 소유자** | 자기 계정 아래에 구독 생성 | EA 관리자 또는 해당 부서의 부서 관리자 |
 | **Owner — 구독 소유자** | 해당 구독의 리소스 운영과 역할 부여 | 구독 생성 시 지정. 이후에는 기존 구독 Owner 또는 해당 구독의 권한 관리자 |
 
@@ -110,8 +110,8 @@ Azure portal의 **Reservations**는 이러한 Azure 예약을 구매·조회·�
 구매·변경 시에는 다음 조건도 구분합니다.
 
 - **구매 역할과 EA 구매 정책은 별도**입니다. 일반 구매자의 **Reserved Instances** 정책은 EA 관리자가 설정합니다.
-  EA 관리자도 구매하려면 적격 구독의 built-in Owner 또는 Reservation Purchaser가 필요합니다.
-  관리자 역할 조합에 따른 정책 예외는 [EA 역할 표의 각주 6][ea-roles]을 따릅니다. ([구매 조건][buy-reservation])
+  이 정책이 활성화되어 있으면 EA 관리자도 구매하려면 적격 구독의 built-in Owner 또는 Reservation Purchaser가 필요합니다.
+  **정책이 비활성화된 경우에는 EA 관리자만 구매할 수 있습니다.** ([구매 조건][buy-reservation])
 - **Shared에서 특정 구독으로 할인 범위를 바꿀 때는 대상 구독의 Owner도 필요**합니다.
   위 표의 일반 설정 변경을 교환·환불·갱신의 모든 조건으로 확대하지 않습니다. ([예약 변경 조건][manage-reservation])
 
@@ -126,9 +126,9 @@ Azure portal의 **Reservations**는 이러한 Azure 예약을 구매·조회·�
 공식 Portal 절차에서는 **Global Administrator가 User Access Administrator로 접근 권한을 승격한 뒤**
 **Reservations → Role assignment**에서 이 역할을 부여합니다.
 EA 관리자는 **EA 계약 범위**, 이 예약 역할은 **테넌트 범위**를 대상으로 한다는 차이가 있습니다.
-([테넌트 예약 역할과 부여 절차][tenant-reservation-roles], [EA 청구 범위][billing-scopes])
+([테넌트 예약 역할과 부여 절차][reservation-access], [EA 청구 범위][billing-scopes])
 
-**정리하면, RI 구매 권한은 구독 Owner에게, 구매한 RI의 관리 권한은 예약 주문 Owner 또는 EA 관리자에게 요청합니다.**
+**정리하면, RI 구매 권한은 구독 Owner 또는 Reservation Purchaser에게, 구매한 RI의 관리 권한은 예약 주문 Owner 또는 EA 관리자에게 요청합니다.**
 테넌트 전체 예약 관리자를 지정하는 경우에만 위의 테넌트 권한 부여 경로를 따로 확인하면 됩니다.
 
 [ea-roles]: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-ea-roles
@@ -141,6 +141,5 @@ EA 관리자는 **EA 계약 범위**, 이 예약 역할은 **테넌트 범위**�
 [manage-reservation]: https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/manage-reserved-vm-instance
 [assign-role]: https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal
 [azure-roles]: https://learn.microsoft.com/en-us/azure/role-based-access-control/rbac-and-directory-admin-roles
-[tenant-reservation-roles]: https://learn.microsoft.com/en-us/azure/cost-management-billing/reservations/manage-reservations-rbac-powershell
 [ea-image]: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/media/understand-ea-roles/ea-hierarchies.png
 [docs-license]: https://github.com/MicrosoftDocs/azure-docs/blob/main/LICENSE
