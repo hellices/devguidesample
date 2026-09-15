@@ -1,0 +1,262 @@
+{
+  "checked_at_utc": "2026-09-15T13:50:21.305516+00:00",
+  "scope": "Actual disposable Azure AKS + Application Gateway for Containers, not the earlier local mobile-network simulation",
+  "conclusion": "HTTP/2 accepted; strict HTTP/3 produced no HTTP response on this configured AGFC frontend from either tested network",
+  "region": "koreacentral",
+  "aks_version": "1.35",
+  "alb_controller_version": "1.10.30",
+  "topology": "Client -> AGFC HTTPS/443 -> AKS HTTP echo service; no separate Application Gateway",
+  "sni": "probe.example.test",
+  "same_destination_ip_for_all_agfc_protocol_probes": true,
+  "certificate_validation_enabled": true,
+  "gateway_and_route_programmed": true,
+  "subnet_filtering": {
+    "delegations": [
+      "Microsoft.ServiceNetworking/trafficControllers"
+    ],
+    "nsgAttached": false,
+    "routeTableAttached": false
+  },
+  "trial_totals": {
+    "strict_h2_successes": 7,
+    "strict_h2_attempts": 7,
+    "strict_h3_successes": 0,
+    "strict_h3_attempts": 7
+  },
+  "trials": [
+    {
+      "source": "local-macos",
+      "client": "curl-8.22.0-ngtcp2",
+      "attempt": 1,
+      "requested_protocol": "h2",
+      "http_version": "2",
+      "status": "200",
+      "exit": 0,
+      "seconds": 0.603332,
+      "tls_verify": 0
+    },
+    {
+      "source": "azure-aks-pod",
+      "client": "quic-go-0.62.0",
+      "attempt": 1,
+      "requested_protocol": "h2",
+      "http_version": "HTTP/2.0",
+      "http_status": 200,
+      "alpn": "h2",
+      "tls": "TLS 1.3",
+      "alt_svc": "",
+      "body": "agfc-http3-probe\n",
+      "seconds": 0.13002377
+    },
+    {
+      "source": "local-macos",
+      "client": "curl-8.22.0-ngtcp2",
+      "attempt": 1,
+      "requested_protocol": "h3",
+      "http_version": "0",
+      "status": "000",
+      "exit": 28,
+      "seconds": 8.00145,
+      "tls_verify": 1
+    },
+    {
+      "source": "azure-aks-pod",
+      "client": "quic-go-0.62.0",
+      "attempt": 1,
+      "requested_protocol": "h3",
+      "http_version": "",
+      "http_status": 0,
+      "alpn": "",
+      "tls": "",
+      "alt_svc": "",
+      "body": "",
+      "seconds": 8.000638948,
+      "error": "Get \"https://probe.example.test/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+    },
+    {
+      "source": "local-macos",
+      "client": "curl-8.22.0-ngtcp2",
+      "attempt": 2,
+      "requested_protocol": "h2",
+      "http_version": "2",
+      "status": "200",
+      "exit": 0,
+      "seconds": 0.646205,
+      "tls_verify": 0
+    },
+    {
+      "source": "azure-aks-pod",
+      "client": "quic-go-0.62.0",
+      "attempt": 2,
+      "requested_protocol": "h2",
+      "http_version": "HTTP/2.0",
+      "http_status": 200,
+      "alpn": "h2",
+      "tls": "TLS 1.3",
+      "alt_svc": "",
+      "body": "agfc-http3-probe\n",
+      "seconds": 0.126402094
+    },
+    {
+      "source": "local-macos",
+      "client": "curl-8.22.0-ngtcp2",
+      "attempt": 2,
+      "requested_protocol": "h3",
+      "http_version": "0",
+      "status": "000",
+      "exit": 28,
+      "seconds": 8.001046,
+      "tls_verify": 1
+    },
+    {
+      "source": "azure-aks-pod",
+      "client": "quic-go-0.62.0",
+      "attempt": 2,
+      "requested_protocol": "h3",
+      "http_version": "",
+      "http_status": 0,
+      "alpn": "",
+      "tls": "",
+      "alt_svc": "",
+      "body": "",
+      "seconds": 8.000913953,
+      "error": "Get \"https://probe.example.test/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+    },
+    {
+      "source": "local-macos",
+      "client": "curl-8.22.0-ngtcp2",
+      "attempt": 3,
+      "requested_protocol": "h2",
+      "http_version": "2",
+      "status": "200",
+      "exit": 0,
+      "seconds": 0.62395,
+      "tls_verify": 0
+    },
+    {
+      "source": "azure-aks-pod",
+      "client": "quic-go-0.62.0",
+      "attempt": 3,
+      "requested_protocol": "h2",
+      "http_version": "HTTP/2.0",
+      "http_status": 200,
+      "alpn": "h2",
+      "tls": "TLS 1.3",
+      "alt_svc": "",
+      "body": "agfc-http3-probe\n",
+      "seconds": 0.129878205
+    },
+    {
+      "source": "local-macos",
+      "client": "curl-8.22.0-ngtcp2",
+      "attempt": 3,
+      "requested_protocol": "h3",
+      "http_version": "0",
+      "status": "000",
+      "exit": 28,
+      "seconds": 8.001606,
+      "tls_verify": 1
+    },
+    {
+      "source": "azure-aks-pod",
+      "client": "quic-go-0.62.0",
+      "attempt": 3,
+      "requested_protocol": "h3",
+      "http_version": "",
+      "http_status": 0,
+      "alpn": "",
+      "tls": "",
+      "alt_svc": "",
+      "body": "",
+      "seconds": 8.000398991,
+      "error": "Get \"https://probe.example.test/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+    },
+    {
+      "source": "local-macos",
+      "client": "quic-go-0.62.0",
+      "attempt": 1,
+      "requested_protocol": "h2",
+      "http_version": "HTTP/2.0",
+      "http_status": 200,
+      "alpn": "h2",
+      "tls": "TLS 1.3",
+      "alt_svc": "",
+      "body": "agfc-http3-probe\n",
+      "seconds": 0.765737416
+    },
+    {
+      "source": "local-macos",
+      "client": "quic-go-0.62.0",
+      "attempt": 1,
+      "requested_protocol": "h3",
+      "http_version": "",
+      "http_status": 0,
+      "alpn": "",
+      "tls": "",
+      "alt_svc": "",
+      "body": "",
+      "seconds": 8.001475375,
+      "error": "Get \"https://probe.example.test/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"
+    }
+  ],
+  "additional_15_second_strict_h3_probe": {
+    "http_version": "0",
+    "status": "000",
+    "exit": 28,
+    "seconds": 15.002221,
+    "tls_verify": 1
+  },
+  "external_http3_controls_after_probes": [
+    {
+      "source": "local",
+      "target": "https://www.google.com/generate_204",
+      "requested_protocol": "h3",
+      "http_version": "HTTP/3.0",
+      "http_status": 204,
+      "alpn": "h3",
+      "tls": "TLS 1.3",
+      "alt_svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "body": "",
+      "seconds": 0.139722334
+    },
+    {
+      "source": "azure",
+      "target": "https://www.google.com/generate_204",
+      "requested_protocol": "h3",
+      "http_version": "HTTP/3.0",
+      "http_status": 204,
+      "alpn": "h3",
+      "tls": "TLS 1.3",
+      "alt_svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+      "body": "",
+      "seconds": 0.140216604
+    }
+  ],
+  "curl_http3_fallback_allowed": {
+    "http_version": "2",
+    "status": "200",
+    "exit": 0,
+    "seconds": 1.686332,
+    "tls_verify": 0
+  },
+  "final_http2_liveness": {
+    "http_version": "2",
+    "status": "200",
+    "exit": 0,
+    "tls_verify": 0
+  },
+  "limitations": [
+    "A timeout is not an explicit server-side protocol rejection packet.",
+    "This verifies observed behavior of this region, listener configuration, and date, not all private previews or future versions.",
+    "The same-source successful HTTP/3 controls and second Azure source reduce the likelihood of a general local UDP/client issue; an AGFC-specific managed datapath restriction cannot be distinguished from no HTTP/3 listener using client timeouts alone.",
+    "No mobile-device performance measurement was performed in this check.",
+    "Official-source MCP was unavailable during this check; setup articles were read directly, but this is runtime evidence, not a newly MCP-verified product support statement.",
+    "A nonzero curl TLS verification field on a connection timeout is not evidence of a certificate rejection; the HTTP/3 connection did not produce a completed verified HTTP response."
+  ],
+  "cleanup": {
+    "temporary_cloud_resources_deleted": true,
+    "main_and_node_resource_groups_absent": true,
+    "verified_at_utc": "2026-09-15T14:04:03.982261+00:00",
+    "existing_aks_and_agfc_not_modified": true
+  }
+}

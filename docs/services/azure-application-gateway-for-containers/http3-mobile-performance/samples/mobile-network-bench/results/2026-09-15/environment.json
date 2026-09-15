@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "run_started_at_utc": "2026-09-15T11:11:56Z",
+  "scope": "local Linux netem control, not AKS, AGFC, a mobile device, or a carrier network",
+  "requested_aks_agfc_http3_benchmark_performed": false,
+  "new_azure_resources_created": false,
+  "runtime": {
+    "virtualization": "dedicated Colima VZ VM on macOS",
+    "architecture": "aarch64",
+    "configured_vcpus": 2,
+    "configured_memory_gib": 2,
+    "docker_reported_memory_bytes": 2053578752,
+    "linux_kernel": "6.8.0-117-generic",
+    "docker": "29.5.2",
+    "go_builder": "1.26.5",
+    "quic_go": "0.62.0",
+    "golang_x_net": "0.56.0",
+    "observed_client_tcp_congestion_control": "cubic",
+    "iproute2": "6.17.0",
+    "ethtool": "6.15",
+    "image": "sha256:b9c5a0e399185fec112a9ee05c114e403a456f07ac78618f6d542e72ac906eba"
+  },
+  "method": {
+    "pairs_per_profile_and_workload": 30,
+    "protocols": ["h2", "h3"],
+    "profiles": ["unshaped", "mobile-clean", "mobile-loss"],
+    "http2_first_on_odd_pairs": true,
+    "per_request_timeout_seconds": 20,
+    "tls": "TLS 1.3",
+    "certificate_validation": true,
+    "http_compression": false,
+    "tls_session_resumption": false,
+    "server_accepts_0rtt": false,
+    "external_dns_or_alt_svc_discovery_included": false,
+    "percentile_method": "nearest-rank, ceil(p*n), successful trials only",
+    "cold": {"requests": 1, "bytes_per_response": 1024, "new_connection": true},
+    "warm": {
+      "requests": 16,
+      "bytes_per_response": 16384,
+      "concurrent": true,
+      "unmeasured_warmup_requests": 1,
+      "unmeasured_warmup_bytes": 1024,
+      "new_connection_before_warmup": true,
+      "same_connection_as_warmup": true
+    }
+  },
+  "verified_counts": {
+    "measured_trials": 360,
+    "successful_trials": 360,
+    "failed_trials": 0,
+    "measured_requests": 3060,
+    "successful_measured_requests": 3060,
+    "unmeasured_workload_warmup_requests": 180,
+    "distinct_measured_connection_ids": 360
+  },
+  "network": {
+    "topology": "client - internal network - forwarding router - internal network - same server",
+    "containers": 3,
+    "host_ports_published": false,
+    "impairment_location": "both router egress interfaces, not the application sender",
+    "shaped_profile_delay_ms_per_direction": 40,
+    "shaped_profile_rate_mbit_per_second_per_direction": 10,
+    "mobile_loss_probability_per_direction": 0.01,
+    "mobile_loss_seed_to_client": 20260915,
+    "mobile_loss_seed_to_server": 20260916,
+    "mobile_loss_observed_drops_to_client": 129,
+    "mobile_loss_observed_drops_to_server": 108,
+    "counter_scope": "profile's HTTP/2 and HTTP/3 traffic, ICMP checks, and connection-close packets",
+    "segmentation_offloads_disabled": true,
+    "raw_configuration_and_checks": "network.json"
+  },
+  "sha256": {
+    "trials.jsonl": "169684f477458a9ea9c6df61fe2fcf035b0d0222fc4bb6b82f440bd26d1dd3eb",
+    "summary.json": "eb6064cac6c2cc7ed891dc9a34d6489c280d908034bb3e8fe91e2d2847b23caa"
+  },
+  "not_measured": [
+    "AKS or AGFC latency",
+    "physical mobile devices or carrier networks",
+    "browser first visits and Alt-Svc discovery",
+    "individual stream head-of-line blocking",
+    "connection migration or Wi-Fi/cellular handover",
+    "TLS resumption or 0-RTT",
+    "battery, CPU, rendering, database time, or large-file throughput"
+  ]
+}
