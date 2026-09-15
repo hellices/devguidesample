@@ -139,6 +139,11 @@ func TestInvalidBenchmarkOptions(t *testing.T) {
 		{"--url", "http://server:8443"},
 		{"--url", "https://user:password@server:8443"},
 		{"--url", "https://server:8443/?token=test"},
+		{"--url", "https://server:8443?"},
+		{"--url", "https://server:8443/?"},
+		{"--url", "https://server:8443#"},
+		{"--url", "https://server:8443/#"},
+		{"--url", "https://server:8443/%2F"},
 		{"--url", "https://server:8443/not-the-benchmark"},
 		{"--profile", ""},
 		{"unexpected-positional-argument"},
@@ -149,6 +154,26 @@ func TestInvalidBenchmarkOptions(t *testing.T) {
 	}
 	if _, err := parseBenchOptions([]string{"--samples", "1", "--profile", "smoke"}); err != nil {
 		t.Fatalf("valid options failed: %v", err)
+	}
+}
+
+func TestBenchmarkOriginNormalization(t *testing.T) {
+	for _, origin := range []string{
+		"https://server",
+		"https://server:8443",
+		"https://[::1]:8443",
+	} {
+		for _, input := range []string{origin, origin + "/"} {
+			t.Run(input, func(t *testing.T) {
+				options, err := parseBenchOptions([]string{"--url", input})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if options.origin != origin {
+					t.Fatalf("origin = %q, want %q", options.origin, origin)
+				}
+			})
+		}
 	}
 }
 

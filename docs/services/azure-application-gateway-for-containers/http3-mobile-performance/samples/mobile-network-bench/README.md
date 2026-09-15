@@ -9,8 +9,11 @@ cannot be inferred from this control experiment.
 
 ## Requirements
 
-- Docker with Linux containers and permission to add `NET_ADMIN` to the two
-  isolated test containers.
+- Docker with Linux containers and permission to add `NET_ADMIN` to all three
+  isolated containers: client, server, and forwarding router.
+- Permission to set `net.ipv4.ping_group_range=0 0` in the client's network
+  namespace. The image runs the client with GID 0; this permits its ICMP
+  datagram sockets without granting `NET_RAW`.
 - Go 1.26 for running the native sample tests (the container builder uses 1.26.5).
 - Bash.
 
@@ -55,11 +58,18 @@ published host ports. Both protocols use the same hostname, destination port
 8443, route, certificate, TLS 1.3 policy, and response bytes. Static host
 resolution avoids external DNS traffic.
 
-| Profile | Router delay per direction | Rate per direction | Random packet loss per direction |
+| Profile | Router delay per direction | Configured rate cap per direction | Random packet loss per direction |
 |---|---:|---:|---:|
 | `unshaped` | none added | no configured limit | none added |
 | `mobile-clean` | 40 ms | 10 Mbit/s | 0% |
 | `mobile-loss` | 40 ms | 10 Mbit/s | 1% |
+
+All profiles retain a `netem` qdisc with a **10,000-packet queue limit per
+router egress interface**. `unshaped` means no added delay, rate cap, or
+random loss; it is not a no-qdisc or unlimited-queue control. Keeping the
+same qdisc and queue limit avoids changing the queue implementation between
+profiles. The archived unshaped run had zero additional qdisc drops, but
+this does not establish that queueing or scheduling had no effect.
 
 The two shaped profiles target **80 ms additional round-trip delay**, not
 40 ms RTT. The loss setting is 1% independently in **each direction**, not
@@ -163,7 +173,8 @@ resources in that case. Do not use a global Docker prune on a shared host.
 
 Certificates are generated solely for the experiment, trusted explicitly by
 the client, and deleted with the temporary volume. Containers receive only
-`NET_ADMIN`, not host networking or privileged mode. No Azure/Kubernetes
+`NET_ADMIN`, not `NET_RAW`, host networking, or privileged mode. The ping
+socket setting is scoped to the client container, not the host. No Azure/Kubernetes
 credentials, cloud deployment, or changes to the host's interfaces and
 default Docker/Kubernetes contexts are required.
 

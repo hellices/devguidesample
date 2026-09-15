@@ -45,10 +45,12 @@ func parseBenchOptions(args []string) (benchOptions, error) {
 	if flags.NArg() != 0 || o.samples < 1 || o.samples > 100 || o.timeout <= 0 || o.timeout > 60*time.Second || strings.TrimSpace(o.profile) == "" {
 		return o, fmt.Errorf("invalid arguments: require 1..100 samples, timeout in (0s,60s], and a profile label")
 	}
-	if u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+	if u.Scheme != "https" || u.Hostname() == "" || u.User != nil ||
+		u.ForceQuery || u.RawQuery != "" || strings.Contains(o.origin, "#") ||
+		(u.Path != "" && u.Path != "/") {
 		return o, fmt.Errorf("url must be an HTTPS origin without credentials, path, query, or fragment")
 	}
-	o.origin = strings.TrimRight(o.origin, "/")
+	o.origin = (&url.URL{Scheme: u.Scheme, Host: u.Host}).String()
 	return o, nil
 }
 

@@ -98,6 +98,7 @@ router_client_ip="$(container_ip "$router" "$client_net")"
 router_server_ip="$(container_ip "$router" "$server_net")"
 docker run --detach --name "$client" --network "$client_net" \
     --cap-drop ALL --cap-add NET_ADMIN --read-only \
+    --sysctl 'net.ipv4.ping_group_range=0 0' \
     --security-opt no-new-privileges --add-host "server:$server_ip" \
     --volume "$certs:/certs:ro" --entrypoint sleep "$image" 86400 >/dev/null
 containers+=("$client")
@@ -110,6 +111,7 @@ for name in "$client" "$server" "$router"; do
 done
 docker exec "$router" ethtool -K eth1 tso off gso off gro off tx-udp-segmentation off
 docker exec "$client" sysctl net.ipv4.tcp_congestion_control >>"$out/environment.txt"
+docker exec "$client" sysctl net.ipv4.ping_group_range >>"$out/environment.txt"
 docker exec "$router" tc -V >>"$out/environment.txt"
 docker exec "$router" ethtool --version >>"$out/environment.txt"
 docker exec "$client" apk list --installed >"$out/packages.txt"
