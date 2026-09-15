@@ -1065,8 +1065,14 @@ def test_repository_uses_only_canonical_topic_packages() -> None:
         ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml")
     )
 
-    assert len(catalog.documents) == 66
-    assert len(catalog.topics) == 41
+    canonical_paths = {
+        PurePosixPath(path.relative_to(ROOT / "docs").as_posix())
+        for path in (ROOT / "docs" / "services").rglob("index.md")
+        if "samples" not in path.relative_to(ROOT / "docs").parts
+    }
+    assert {document.relative_path for document in catalog.documents} == canonical_paths
+    assert len(catalog.documents) == len(canonical_paths)
+    assert set(catalog.topics) == {path.parts[1:3] for path in canonical_paths}
     assert not any(
         (ROOT / "docs" / name).exists()
         for name in ("cases", "guides", "labs", "research")

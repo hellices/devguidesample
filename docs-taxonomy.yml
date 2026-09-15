@@ -27,6 +27,7 @@ collections:
 services:
   application-development: Application Development
   azure-application-gateway: Azure Application Gateway
+  azure-application-gateway-for-containers: Azure Application Gateway for Containers
   azure-ai-search: Azure AI Search
   azure-api-management: Azure API Management
   azure-app-service: Azure App Service
@@ -36,6 +37,7 @@ services:
   azure-cosmos-db: Azure Cosmos DB
   azure-database-for-mysql: Azure Database for MySQL
   azure-functions: Azure Functions
+  azure-front-door: Azure Front Door
   azure-hdinsight: Azure HDInsight
   azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
@@ -126,3 +128,4 @@ official_source_hosts:
   - modelcontextprotocol.io
   - py.sdk.modelcontextprotocol.io
   - prices.azure.com
+  - www.rfc-editor.org

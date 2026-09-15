@@ -1,0 +1,5 @@
+title: HTTP/2 and HTTP/3 mobile-network control
+description: Isolated transport measurements with Linux netem; not an AKS or AGFC benchmark.
+kind: runnable
+used_by:
+  - index
