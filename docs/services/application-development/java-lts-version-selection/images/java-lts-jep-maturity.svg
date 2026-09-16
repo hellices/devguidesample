@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 780" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="java-lts-jep-title java-lts-jep-desc">
+    <title id="java-lts-jep-title">Java LTS별 핵심 JEP 성숙도</title>
+    <desc id="java-lts-jep-desc">Java 8, 17, 21, 25에서 언어, 동시성, 런타임 핵심 JEP가 final, preview, incubator, product opt-in 중 어느 단계에 있는지 보여 주는 두 줄 타임라인.</desc>
+    <defs>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;display=swap');
+                .sans { font-family: 'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+        .serif { font-family: 'Instrument Serif', 'Noto Serif KR', serif; }
+        .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+        .release { font-size: 28px; font-weight: 600; fill: #2d3142; }
+        .year { font-size: 9px; font-weight: 500; letter-spacing: 0.16em; fill: #7a8399; }
+        .track { font-size: 14px; font-weight: 600; fill: #2d3142; }
+        .track-sub { font-size: 8px; font-weight: 500; letter-spacing: 0.14em; fill: #7a8399; }
+        .jep { font-size: 9px; font-weight: 600; letter-spacing: 0.10em; fill: #4f5d75; }
+        .name { font-size: 14px; font-weight: 600; fill: #2d3142; }
+        .status { font-size: 8.5px; font-weight: 500; fill: #4f5d75; }
+        .legend { font-size: 8.5px; fill: #4f5d75; }
+      </style>
+      <marker id="java-lts-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+      </marker>
+    </defs>
+
+    <rect width="1280" height="780" fill="#f5f5f5"/>
+
+    <text x="40" y="36" class="mono track-sub">JAVA LTS · JEP MATURITY MAP</text>
+    <text x="40" y="72" class="serif" font-size="28" fill="#2d3142">Java LTS별 핵심 JEP 성숙도</text>
+    <text x="40" y="96" class="sans" font-size="12" fill="#4f5d75">카드의 연도는 기능 계보의 단계이며, 비-LTS release에서 final이 된 경우도 함께 표시합니다.</text>
+
+    <line x1="330" y1="112" x2="330" y2="700" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8" stroke-dasharray="4,4"/>
+    <line x1="640" y1="112" x2="640" y2="700" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8" stroke-dasharray="4,4"/>
+    <line x1="950" y1="112" x2="950" y2="700" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8" stroke-dasharray="4,4"/>
+
+    <text x="185" y="130" class="sans release" text-anchor="middle">Java 8</text>
+    <text x="185" y="148" class="mono year" text-anchor="middle">2014 · JSR 337</text>
+    <text x="495" y="130" class="sans release" text-anchor="middle">Java 17</text>
+    <text x="495" y="148" class="mono year" text-anchor="middle">2021 · JSR 390</text>
+    <text x="805" y="130" class="sans release" text-anchor="middle">Java 21</text>
+    <text x="805" y="148" class="mono year" text-anchor="middle">2023 · JSR 396</text>
+    <text x="1115" y="130" class="sans release" text-anchor="middle">Java 25</text>
+    <text x="1115" y="148" class="mono year" text-anchor="middle">2025 · JSR 400</text>
+
+    <text x="40" y="188" class="sans track">언어 · 동시성</text>
+    <text x="40" y="204" class="mono track-sub">LAMBDA · AMBER · LOOM · PANAMA</text>
+    <line x1="40" y1="216" x2="1240" y2="216" stroke="#4f5d75" stroke-opacity="0.30" stroke-width="1"/>
+
+    <path d="M 625 258 H 665" fill="none" stroke="#eb6c36" stroke-width="1.5" marker-end="url(#java-lts-arrow-accent)"/>
+
+    <rect x="55" y="230" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="55" y="230" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="71" y="251" class="mono jep">JEP 126</text>
+    <text x="71" y="273" class="sans name">Lambdas + default methods</text>
+    <text x="71" y="289" class="mono status">JDK 8 · FINAL</text>
+
+    <rect x="55" y="310" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="55" y="310" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="71" y="331" class="mono jep">JEP 107</text>
+    <text x="71" y="353" class="sans name">Streams / bulk operations</text>
+    <text x="71" y="369" class="mono status">JDK 8 · FINAL</text>
+
+    <rect x="365" y="230" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="365" y="230" width="260" height="70" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+    <text x="381" y="251" class="mono jep">JEP 406</text>
+    <text x="381" y="273" class="sans name">Pattern matching for switch</text>
+    <text x="381" y="289" class="mono status">JDK 17 · PREVIEW ROUND 1</text>
+
+    <rect x="365" y="310" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="365" y="310" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="381" y="331" class="mono jep">JEP 409</text>
+    <text x="381" y="353" class="sans name">Sealed classes</text>
+    <text x="381" y="369" class="mono status">PREVIEW 15–16 → FINAL 17</text>
+
+    <rect x="665" y="230" width="280" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="665" y="230" width="280" height="70" rx="6" fill="#ffffff" stroke="#eb6c36" stroke-width="1.5"/>
+    <text x="681" y="251" class="mono jep" fill="#eb6c36">JEP 441</text>
+    <text x="681" y="273" class="sans name">Pattern matching for switch</text>
+    <text x="681" y="289" class="mono status">PREVIEW 17–20 → FINAL 21</text>
+
+    <rect x="675" y="310" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="675" y="310" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="691" y="331" class="mono jep">JEP 444</text>
+    <text x="691" y="353" class="sans name">Virtual threads</text>
+    <text x="691" y="369" class="mono status">PREVIEW 19–20 → FINAL 21</text>
+
+    <rect x="985" y="230" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="985" y="230" width="260" height="70" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+    <text x="1001" y="251" class="mono jep">JEP 505</text>
+    <text x="1001" y="273" class="sans name">Structured concurrency</text>
+    <text x="1001" y="289" class="mono status">INCUBATOR 19–20 · PREVIEW 21–25</text>
+
+    <rect x="985" y="310" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="985" y="310" width="260" height="70" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+    <text x="1001" y="331" class="mono jep">JEP 508</text>
+    <text x="1001" y="353" class="sans name">Vector API</text>
+    <text x="1001" y="369" class="mono status">INCUBATOR 16–25 · ROUND 10</text>
+
+    <text x="40" y="418" class="sans track">런타임 · 플랫폼</text>
+    <text x="40" y="434" class="mono track-sub">GC · PANAMA · LEYDEN · LILLIPUT</text>
+    <line x1="40" y1="446" x2="1240" y2="446" stroke="#4f5d75" stroke-opacity="0.30" stroke-width="1"/>
+
+    <rect x="675" y="462" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="675" y="462" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="691" y="483" class="mono jep">JEP 439</text>
+    <text x="691" y="505" class="sans name">Generational ZGC</text>
+    <text x="691" y="521" class="mono status">JDK 21 · PRODUCT · OPT-IN</text>
+
+    <rect x="985" y="462" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="985" y="462" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="1001" y="483" class="mono jep">JEP 454</text>
+    <text x="1001" y="505" class="sans name">Foreign Function &amp; Memory</text>
+    <text x="1001" y="521" class="mono status">I14–18 · P19–21 · FINAL 22</text>
+
+    <rect x="985" y="540" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="985" y="540" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="1001" y="561" class="mono jep">JEP 483</text>
+    <text x="1001" y="583" class="sans name">AOT class cache</text>
+    <text x="1001" y="599" class="mono status">PRODUCT 24 · OPT-IN</text>
+
+    <rect x="985" y="618" width="260" height="70" rx="6" fill="#f5f5f5"/>
+    <rect x="985" y="618" width="260" height="70" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="1001" y="639" class="mono jep">JEP 519</text>
+    <text x="1001" y="661" class="sans name">Compact object headers</text>
+    <text x="1001" y="677" class="mono status">EXPERIMENTAL 24 → PRODUCT 25 · OPT-IN</text>
+
+    <line x1="40" y1="710" x2="1240" y2="710" stroke="#2d3142" stroke-opacity="0.10" stroke-width="0.8"/>
+    <text x="40" y="732" class="mono track-sub">LEGEND</text>
+
+    <rect x="116" y="722" width="28" height="16" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <text x="152" y="734" class="sans legend">FINAL / PRODUCT</text>
+
+    <rect x="282" y="722" width="28" height="16" rx="2" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+    <text x="318" y="734" class="sans legend">PREVIEW / INCUBATOR</text>
+
+    <text x="500" y="734" class="mono legend">I</text>
+    <text x="514" y="734" class="sans legend">INCUBATOR</text>
+    <text x="598" y="734" class="mono legend">P</text>
+    <text x="612" y="734" class="sans legend">PREVIEW</text>
+
+    <line x1="716" y1="730" x2="752" y2="730" stroke="#eb6c36" stroke-width="1.5" marker-end="url(#java-lts-arrow-accent)"/>
+    <text x="764" y="734" class="sans legend">같은 기능의 preview → final 계보</text>
+
+    <text x="40" y="766" class="sans legend">PRODUCT는 HotSpot/JDK 구현 상태이며 기본 활성화를 뜻하지 않습니다. OPT-IN은 별도 flag 또는 cache workflow가 필요합니다.</text>
+  </svg>
