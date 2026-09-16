@@ -121,6 +121,7 @@ verification_statuses: [verified, needs-review]
 required_source_host: learn.microsoft.com
 official_source_hosts:
   - learn.microsoft.com
+  - openjdk.org
   - kubernetes.io
   - www.cncf.io
   - cncf.io
