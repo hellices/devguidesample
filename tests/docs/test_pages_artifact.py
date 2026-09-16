@@ -1,3 +1,4 @@
+import json
 from pathlib import Path, PurePosixPath
 import tarfile
 
@@ -30,6 +31,15 @@ def test_current_published_assets_survive_pages_artifact_hidden_exclusion(tmp_pa
     assert catalog.published_assets
     site = tmp_path / "site"
     build(load_config(str(ROOT / "mkdocs.yml"), site_dir=str(site), strict=True))
+
+    assert not (site / "superpowers").exists()
+    search = json.loads(
+        (site / "search" / "search_index.json").read_text(encoding="utf-8")
+    )
+    assert not any(
+        entry["location"].startswith("superpowers/")
+        for entry in search["docs"]
+    )
 
     hidden_controls = [
         ".artifact-control",

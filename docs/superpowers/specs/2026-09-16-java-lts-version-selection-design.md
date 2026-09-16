@@ -22,6 +22,8 @@
 - 기존 taxonomy 값으로 충분하므로 새 서비스, 기술, 태그는 추가하지 않는다.
   공식 OpenJDK 원문을 기록할 수 있도록 출처 host allowlist에
   `openjdk.org`만 추가한다.
+- `docs/superpowers/`의 내부 설계·계획 문서는 MkDocs page, navigation과
+  search index에서 제외한다.
 
 ## 대상 독자와 전제
 

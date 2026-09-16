@@ -36,10 +36,14 @@ official_sources:
   url: https://openjdk.org/jeps/491
 - title: JEP 483 - Ahead-of-Time Class Loading and Linking
   url: https://openjdk.org/jeps/483
+- title: JEP 515 - Ahead-of-Time Method Profiling
+  url: https://openjdk.org/jeps/515
 - title: JEP 506 - Scoped Values
   url: https://openjdk.org/jeps/506
 - title: JEP 519 - Compact Object Headers
   url: https://openjdk.org/jeps/519
+- title: JEP 521 - Generational Shenandoah
+  url: https://openjdk.org/jeps/521
 document_type: guide
 status: current
 verification_status: verified
@@ -109,9 +113,9 @@ binary와 container image를 사용한다고 설명한다. 이는 Microsoft 배�
 | 버전 | 언어와 표준 API | 동시성·JVM·운영 변화 | 적용 관점 |
 |---|---|---|---|
 | **Java 8** | lambda와 method reference, interface default method, Stream, `Optional`, `java.time` | `CompletableFuture`, PermGen을 대체한 Metaspace | 함수형 collection 처리와 비동기 조합의 출발점이지만 이후 10년 이상의 런타임·진단 개선은 포함하지 않는다. |
-| **Java 17**<br>(9~17 누적) | module system, `var`, 표준 HTTP Client, switch expression, text block, record, `instanceof` pattern matching, sealed class | JDK 9부터 G1이 기본 GC, JDK 15부터 ZGC가 production 기능, helpful `NullPointerException`, elastic Metaspace, JDK internal의 강한 캡슐화 | Java 8 코드와 라이브러리의 internal API·제거 모듈 의존성을 정리하면서 데이터 모델을 간결하게 만들 수 있다. |
+| **Java 17**<br>(9~17 누적) | module system, `var`, 표준 HTTP Client, switch expression, text block, record, `instanceof` pattern matching, sealed class | JDK 9부터 HotSpot server-class 구성은 G1이 기본 GC, JDK 15부터 ZGC가 production 기능, helpful `NullPointerException`, elastic Metaspace, JDK internal의 강한 캡슐화 | Java 8 코드와 라이브러리의 internal API·제거 모듈 의존성을 정리하면서 데이터 모델을 간결하게 만들 수 있다. |
 | **Java 21**<br>(18~21 누적) | record pattern, pattern matching for `switch`, sequenced collection, 기본 charset UTF-8 | virtual thread, generational ZGC 도입, 동적 agent loading 경고 | blocking I/O 서비스의 thread-per-request 모델을 유지하면서 동시성 규모를 키울 수 있다. |
-| **Java 25**<br>(22~25 누적) | unnamed variable/pattern, FFM API, Class-File API, Stream Gatherer, Scoped Value, module import, flexible constructor body | virtual thread pinning 완화, AOT cache와 profiling, compact object header, generational Shenandoah, JFR 개선, Security Manager 비활성화, 32-bit x86 port 제거 | 새 기능뿐 아니라 agent, JNI, 보안 설정, architecture와 관측 도구의 변경도 함께 검증해야 한다. |
+| **Java 25**<br>(22~25 누적) | unnamed variable/pattern, FFM API, Class-File API, Stream Gatherer, Scoped Value, module import, flexible constructor body | virtual thread pinning 완화, AOT cache와 profiling, compact object header, opt-in generational Shenandoah, JFR 개선, Security Manager 비활성화, 32-bit x86 port 제거 | 새 기능뿐 아니라 agent, JNI, 보안 설정, architecture와 관측 도구의 변경도 함께 검증해야 한다. |
 
 ### Java 25에서도 안정 기능이 아닌 항목
 
@@ -120,6 +124,11 @@ encoding은 preview, primitive type pattern은 third preview, Vector API는
 tenth incubator다. JFR CPU-time profiling도 experimental 기능이다. 이런
 기능은 `--enable-preview` 또는 별도 option이 필요한 실험 경로에서 검토하고
 운영 기본 구현 패턴으로 삼지 않는다.
+
+Generational Shenandoah는 JDK 25에서 experimental 단계를 벗어난 product
+기능이지만 기본 mode가 아니다. 사용하려면
+`-XX:+UseShenandoahGC -XX:ShenandoahGCMode=generational`을 지정해야 하며,
+Shenandoah의 기본은 single-generation mode다.
 
 또한 Java 21에 generational ZGC가 도입됐다고 해서 당시 기본 GC가 ZGC로
 바뀐 것은 아니다. JDK 21에서는 ZGC를 선택하고 generational mode를 별도로
@@ -166,7 +175,7 @@ reflection, JNI, virtual thread 사용 library와 제거 예정 API를 중심으
 | JIT와 runtime 최적화 | 장기 실행 처리량, code generation, platform별 실행 효율 개선 가능성 | framework와 workload가 달라도 같은 향상률 |
 | G1·ZGC·Shenandoah 개선 | pause, allocation stall, heap 회수와 memory overhead 개선 가능성 | 모든 heap 크기에서 ZGC가 G1보다 높은 처리량 |
 | virtual thread | blocking I/O가 많은 서비스에서 적은 platform thread로 더 많은 동시 작업 처리 | CPU-bound 계산 가속, 개별 요청 latency 감소, downstream 용량 증가 |
-| AOT class loading·linking과 profiling | 반복되는 시작 경로의 startup과 warm-up 단축 가능성 | native image와 같은 실행 모델, training 없이 자동 적용 |
+| AOT class loading·linking과 method profiling | 반복되는 시작 경로의 startup과 warm-up 단축 가능성 | native image와 같은 실행 모델, training 없이 자동 적용 |
 | compact object header | 객체가 많은 workload에서 heap footprint와 cache locality 개선 가능성 | 기본 활성화 또는 모든 객체 구성에서 같은 효과 |
 | JFR와 진단 개선 | 병목과 회귀를 더 낮은 비용으로 관찰해 튜닝 시간을 줄일 가능성 | 관측 기능 자체에 의한 application 처리량 증가 |
 
@@ -180,6 +189,12 @@ platform thread에 pinning되는 경우가 대부분 제거됐다. 이는 Java 2
 기존 library와 함께 virtual thread를 적용하기 쉬워지는 변화지만, native
 code 호출 같은 남은 pinning 원인과 외부 시스템의 동시성 한도까지 없애지는
 않는다.
+
+JDK 24의 AOT class loading·linking은 training run에서 얻은 class 상태를
+cache에 저장해 startup을 줄이는 기능이다. JDK 25의 AOT method profiling은
+같은 cache에 실행 profile을 더해 JIT warm-up을 앞당긴다. 두 기능 모두
+production 경로를 대표하는 training이 필요하며 native-image compile로
+바뀌는 것은 아니다.
 
 ## 업그레이드는 호환성과 현대화를 분리한다
 
@@ -273,7 +288,9 @@ virtual thread 자체를 pool로 재사용하지 않는다. 작업마다 virtual
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 
 final class DownstreamCalls {
@@ -291,29 +308,46 @@ final class DownstreamCalls {
     }
 
     static List<String> fetchAll(List<Callable<String>> requests)
-            throws Exception {
+            throws InterruptedException, ExecutionException {
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var futures = requests.stream()
                     .map(request -> executor.submit(() -> fetch(request)))
                     .toList();
 
-            var results = new ArrayList<String>(futures.size());
-            for (var future : futures) {
-                results.add(future.get());
+            try {
+                var results = new ArrayList<String>(futures.size());
+                for (var future : futures) {
+                    results.add(future.get());
+                }
+                return List.copyOf(results);
+            } catch (InterruptedException error) {
+                cancelAll(futures);
+                Thread.currentThread().interrupt();
+                throw error;
+            } catch (ExecutionException error) {
+                cancelAll(futures);
+                throw error;
             }
-            return List.copyOf(results);
         }
+    }
+
+    private static void cancelAll(List<? extends Future<?>> futures) {
+        futures.forEach(future -> future.cancel(true));
     }
 }
 ```
 
-CPU-bound 작업의 병렬도는 CPU core 수를 기준으로 제한한다. virtual thread
-수를 늘려도 CPU core와 downstream connection 수는 늘어나지 않는다.
+각 `Callable`이 사용하는 HTTP·database client에도 connect·request·read
+deadline을 설정해야 한다. `cancel(true)`는 interrupt에 협조하는 작업만
+중단할 수 있으므로 client timeout을 대신하지 않는다. CPU-bound 작업의
+병렬도는 CPU core 수를 기준으로 제한한다. virtual thread 수를 늘려도 CPU
+core와 downstream connection 수는 늘어나지 않는다.
 
-### Java 25에서는 불변 request context에 Scoped Value를 검토한다
+### Java 25에서는 같은 thread의 불변 context에 Scoped Value를 검토한다
 
-Scoped Value는 Java 25에서 final이 됐다. child thread로 읽기 전용 context를
-전달해야 할 때 mutable `ThreadLocal`보다 명확한 lifetime을 제공한다.
+Scoped Value는 Java 25에서 final이 됐다. 한 thread의 호출 경로에서 읽기
+전용 context를 전달할 때 mutable `ThreadLocal`보다 명확한 lifetime을
+제공한다.
 
 ```java
 final class RequestContext {
@@ -334,7 +368,10 @@ final class RequestContext {
 
 framework가 tracing·security context 전파 방식을 이미 제공한다면 그
 lifecycle을 우선한다. 같은 context를 framework API와 Scoped Value에
-중복 저장하지 않는다.
+중복 저장하지 않는다. 일반 `Thread`나 executor에 제출한 작업은 binding을
+자동 상속하지 않는다. Child task 상속은 JDK 25에서도 preview인 Structured
+Concurrency의 `StructuredTaskScope`로 생성한 task에 한정되므로, 이 문서의
+운영 기본 패턴에는 포함하지 않는다.
 
 ## 성능 검증 체크리스트
 
@@ -386,6 +423,8 @@ JVM option을 함께 되돌린다.
   ZGC](https://openjdk.org/jeps/439), [virtual thread pinning
   개선](https://openjdk.org/jeps/491)
 - [Ahead-of-Time Class Loading &
-  Linking](https://openjdk.org/jeps/483), [Scoped
+  Linking](https://openjdk.org/jeps/483), [Ahead-of-Time Method
+  Profiling](https://openjdk.org/jeps/515), [Scoped
   Values](https://openjdk.org/jeps/506), [Compact Object
-  Headers](https://openjdk.org/jeps/519)
+  Headers](https://openjdk.org/jeps/519), [Generational
+  Shenandoah](https://openjdk.org/jeps/521)

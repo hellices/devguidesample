@@ -19,6 +19,8 @@
 - Recommend only final features in production modernization examples.
 - Add no sample project, rendered image, manual navigation entry, README entry, or hard-coded catalog entry.
 - Do not add a new service, technology, or tag.
+- Keep `docs/superpowers/**` available as internal design history but exclude it
+  from MkDocs pages, navigation, and the search index.
 - Use `2026-09-16` for `sources_checked_at` and `last_verified` only after all material claims have been checked against the listed official sources.
 - Use `python3.13` for local validation because CI uses Python 3.13, while
   `/usr/bin/python3` is Python 3.9 and cannot evaluate the repository's PEP 604
@@ -31,10 +33,14 @@
 
 - Modify `docs-taxonomy.yml`
   - Allow `openjdk.org` as an official source host so Java feature claims can cite their canonical upstream documentation.
+- Modify `mkdocs.yml`
+  - Exclude internal `superpowers/**` design and plan artifacts from publication.
 - Create `docs/services/application-development/java-lts-version-selection/index.md`
   - Own all version comparisons, decision guidance, performance caveats, migration stages, code patterns, and verification guidance.
-- Do not modify tests.
-  - Existing metadata, source, topic, link, search-index, public-safety, and pre-Pages tests automatically discover canonical documents.
+- Modify `tests/docs/test_pages_artifact.py`
+  - Assert that internal `superpowers/**` artifacts do not enter the built site or search index.
+- Modify `tests/docs/test_site_pipeline.py`
+  - Lock the intended MkDocs exclusion rules.
 
 ### Task 1: Publish the source-backed Java LTS guide
 
@@ -73,8 +79,10 @@ Read the complete contents of these official sources before drafting:
 | `https://openjdk.org/jeps/439` | Generational ZGC goals and trade-offs in JDK 21. |
 | `https://openjdk.org/jeps/491` | JDK 24 removes nearly all `synchronized`-related virtual-thread pinning cases. |
 | `https://openjdk.org/jeps/483` | Opt-in AOT class loading and linking in JDK 24 targets startup and warm-up time. |
+| `https://openjdk.org/jeps/515` | AOT method profiles in JDK 25 target JIT warm-up time. |
 | `https://openjdk.org/jeps/506` | Scoped values are final in JDK 25 and are intended for immutable context sharing. |
 | `https://openjdk.org/jeps/519` | Compact object headers become a product feature in JDK 25 but are not enabled by default. |
+| `https://openjdk.org/jeps/521` | Generational Shenandoah becomes a product feature in JDK 25 but remains opt-in. |
 
 Do not generalize the Microsoft support dates to other vendors. Do not repeat
 the workload-specific percentages shown in JEP 483 or JEP 519 as universal
@@ -124,10 +132,14 @@ official_sources:
   url: https://openjdk.org/jeps/491
 - title: JEP 483 - Ahead-of-Time Class Loading and Linking
   url: https://openjdk.org/jeps/483
+- title: JEP 515 - Ahead-of-Time Method Profiling
+  url: https://openjdk.org/jeps/515
 - title: JEP 506 - Scoped Values
   url: https://openjdk.org/jeps/506
 - title: JEP 519 - Compact Object Headers
   url: https://openjdk.org/jeps/519
+- title: JEP 521 - Generational Shenandoah
+  url: https://openjdk.org/jeps/521
 document_type: guide
 status: current
 verification_status: verified
@@ -180,11 +192,13 @@ that require deliberate enablement:
 | 8 | lambda/method references, Stream, default methods, `Optional`, `java.time`, `CompletableFuture` | Metaspace replaces PermGen |
 | 17 | module system, `var`, standard HTTP Client, switch expressions, text blocks, records, pattern matching for `instanceof`, sealed classes | G1 default since 9, production ZGC since 15, helpful NPEs, strong encapsulation of JDK internals |
 | 21 | virtual threads, record patterns, pattern matching for `switch`, sequenced collections, UTF-8 by default | Generational ZGC; dynamic agent loading warning |
-| 25 | unnamed variables/patterns, FFM API, Class-File API, Stream Gatherers, Scoped Values, module imports, flexible constructor bodies | improved virtual-thread `synchronized` behavior, AOT cache/tooling, compact object headers, Generational Shenandoah, richer JFR; Security Manager disabled and 32-bit x86 removed |
+| 25 | unnamed variables/patterns, FFM API, Class-File API, Stream Gatherers, Scoped Values, module imports, flexible constructor bodies | improved virtual-thread `synchronized` behavior, AOT cache/tooling, compact object headers, opt-in Generational Shenandoah, richer JFR; Security Manager disabled and 32-bit x86 removed |
 
 Add a separate note that Structured Concurrency, Stable Values, primitive
 patterns, PEM encodings, and the Vector API are not final in JDK 25. Do not
-recommend them as the default production migration pattern.
+recommend them as the default production migration pattern. State separately
+that Generational Shenandoah and compact object headers are product features
+but are not enabled by default.
 
 Explain performance through mechanisms rather than promises:
 
@@ -238,59 +252,102 @@ record Approved(String approvalId) implements PaymentResult {}
 
 record Declined(String reason) implements PaymentResult {}
 
-static String message(PaymentResult result) {
-    return switch (result) {
-        case Approved(var approvalId) -> "approved: " + approvalId;
-        case Declined(var reason) -> "declined: " + reason;
-    };
+final class PaymentMessages {
+    private PaymentMessages() {}
+
+    static String message(PaymentResult result) {
+        return switch (result) {
+            case Approved(var approvalId) -> "approved: " + approvalId;
+            case Declined(var reason) -> "declined: " + reason;
+        };
+    }
 }
 ```
 
 Virtual-thread fan-out with an explicit downstream limit:
 
 ```java
-private static final Semaphore DOWNSTREAM_LIMIT = new Semaphore(100);
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 
-static String fetch(Callable<String> request) throws Exception {
-    DOWNSTREAM_LIMIT.acquire();
-    try {
-        return request.call();
-    } finally {
-        DOWNSTREAM_LIMIT.release();
-    }
-}
+final class DownstreamCalls {
+    private static final Semaphore DOWNSTREAM_LIMIT = new Semaphore(100);
 
-static List<String> fetchAll(List<Callable<String>> requests)
-        throws Exception {
-    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-        var futures = requests.stream()
-                .map(request -> executor.submit(() -> fetch(request)))
-                .toList();
+    private DownstreamCalls() {}
 
-        var results = new ArrayList<String>(futures.size());
-        for (var future : futures) {
-            results.add(future.get());
+    static String fetch(Callable<String> request) throws Exception {
+        DOWNSTREAM_LIMIT.acquire();
+        try {
+            return request.call();
+        } finally {
+            DOWNSTREAM_LIMIT.release();
         }
-        return List.copyOf(results);
+    }
+
+    static List<String> fetchAll(List<Callable<String>> requests)
+            throws InterruptedException, ExecutionException {
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = requests.stream()
+                    .map(request -> executor.submit(() -> fetch(request)))
+                    .toList();
+
+            try {
+                var results = new ArrayList<String>(futures.size());
+                for (var future : futures) {
+                    results.add(future.get());
+                }
+                return List.copyOf(results);
+            } catch (InterruptedException error) {
+                cancelAll(futures);
+                Thread.currentThread().interrupt();
+                throw error;
+            } catch (ExecutionException error) {
+                cancelAll(futures);
+                throw error;
+            }
+        }
+    }
+
+    private static void cancelAll(List<? extends Future<?>> futures) {
+        futures.forEach(future -> future.cancel(true));
     }
 }
 ```
 
 Explain that a connection pool, rate limiter, semaphore, or downstream quota
 still controls real concurrency. Do not pool virtual threads themselves.
+Require client-level connect, request, and read deadlines because interruption
+and future cancellation do not replace I/O timeouts.
 
 JDK 25 scoped value for immutable request context:
 
 ```java
-private static final ScopedValue<String> TRACE_ID = ScopedValue.newInstance();
+final class RequestContext {
+    private static final ScopedValue<String> TRACE_ID =
+            ScopedValue.newInstance();
 
-static void handle(String traceId, Runnable action) {
-    ScopedValue.where(TRACE_ID, traceId).run(action);
+    private RequestContext() {}
+
+    static void handle(String traceId, Runnable action) {
+        ScopedValue.where(TRACE_ID, traceId).run(action);
+    }
+
+    static String traceId() {
+        return TRACE_ID.get();
+    }
 }
 ```
 
 State that framework-provided context propagation should remain authoritative
-when it already defines the request context lifecycle.
+when it already defines the request context lifecycle. Scope the stable example
+to callees on the same thread. State that ordinary threads and executor tasks
+do not inherit bindings, while inheritance through `StructuredTaskScope`
+depends on Structured Concurrency, which remains preview in JDK 25.
 
 End with a measurement matrix requiring the same application artifact, traffic,
 data set, CPU/memory limits, warm-up policy, framework and dependency versions,
@@ -330,7 +387,46 @@ official_source_hosts:
   - www.rfc-editor.org
 ```
 
-- [ ] **Step 5: Run targeted document-contract tests**
+- [ ] **Step 5: Write a failing publication-boundary test**
+
+In `tests/docs/test_pages_artifact.py`, after the real-site build, assert:
+
+```python
+assert not (site / "superpowers").exists()
+search = json.loads(
+    (site / "search" / "search_index.json").read_text(encoding="utf-8")
+)
+assert not any(
+    entry["location"].startswith("superpowers/")
+    for entry in search["docs"]
+)
+```
+
+Run:
+
+```bash
+python3.13 -m pytest \
+  tests/docs/test_pages_artifact.py::test_current_published_assets_survive_pages_artifact_hidden_exclusion \
+  -q
+```
+
+Expected: FAIL because `site/superpowers/` exists before the exclusion is added.
+
+- [ ] **Step 6: Exclude internal planning artifacts**
+
+Append `superpowers/**` to `exclude_docs` in `mkdocs.yml`. Update
+`test_mkdocs_keeps_navigation_and_search_metadata_driven` to expect:
+
+```python
+assert config["exclude_docs"].splitlines() == [
+    "services/**/samples/**",
+    "superpowers/**",
+]
+```
+
+Run the failing test and the config contract test together. Expected: both pass.
+
+- [ ] **Step 7: Run targeted document-contract tests**
 
 Run:
 
@@ -346,7 +442,7 @@ Expected: every validator exits 0 and all selected tests pass. If a command
 fails, use `superpowers:systematic-debugging` before changing the document or
 validator.
 
-- [ ] **Step 6: Review the rendered-content contract**
+- [ ] **Step 8: Review the rendered-content contract**
 
 Check:
 
@@ -365,10 +461,12 @@ Expected:
 - no claim that all vendors share Microsoft's support dates;
 - no secret, customer identifier, internal host, or private endpoint.
 
-- [ ] **Step 7: Commit the guide**
+- [ ] **Step 9: Commit the guide and publication boundary**
 
 ```bash
-git add docs-taxonomy.yml docs/services/application-development/java-lts-version-selection/index.md
+git add docs-taxonomy.yml mkdocs.yml \
+  docs/services/application-development/java-lts-version-selection/index.md \
+  tests/docs/test_pages_artifact.py tests/docs/test_site_pipeline.py
 git commit -m "docs(java): LTS 버전 선택과 현대화 가이드 추가" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```

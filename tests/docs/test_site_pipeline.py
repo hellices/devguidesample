@@ -331,7 +331,10 @@ def test_mkdocs_keeps_navigation_and_search_metadata_driven() -> None:
         if isinstance(plugin, dict) and "search" in plugin
     )
     assert search["lang"] == ["ko", "en"]
-    assert config["exclude_docs"].strip() == "services/**/samples/**"
+    assert config["exclude_docs"].splitlines() == [
+        "services/**/samples/**",
+        "superpowers/**",
+    ]
 
 
 def test_topic_and_sample_styles_are_responsive_and_accessible() -> None:
