@@ -97,8 +97,8 @@ official_sources:
 document_type: guide
 status: current
 verification_status: verified
-sources_checked_at: 2026-09-17
-last_verified: 2026-09-17
+sources_checked_at: 2026-09-16
+last_verified: 2026-09-16
 review_cycle_days: 180
 applies_to:
 - Java SE 8, 17, 21, 25
@@ -132,7 +132,7 @@ LTS와 EOS는 Java 버전 자체의 공통 속성이 아니라 JDK 배포판의 
 | **21** | Microsoft Build of OpenJDK LTS | **2028년 9월** | Microsoft 지원 수명주기 안에서 최신 분기 업데이트를 유지해야 한다. |
 | **25** | Microsoft Build of OpenJDK LTS | **2030년 9월** | Microsoft 지원 수명주기 안에서 최신 분기 업데이트를 유지해야 한다. |
 
-이 날짜는 2026-09-17에 확인한 **최초 종료 목표**이며 Microsoft가 연장할
+이 날짜는 2026-09-16에 확인한 **최초 종료 목표**이며 Microsoft가 연장할
 수 있다. 다른 공급자의 같은 Java 버전은 종료 일정, 지원 운영체제와
 상용 지원 조건이 다를 수 있다.
 
