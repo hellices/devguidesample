@@ -20,6 +20,8 @@
 - 태그: `evaluate`, `migrate`, `optimize`
 - sample과 이미지는 추가하지 않는다.
 - 기존 taxonomy 값으로 충분하므로 새 서비스, 기술, 태그는 추가하지 않는다.
+  공식 OpenJDK 원문을 기록할 수 있도록 출처 host allowlist에
+  `openjdk.org`만 추가한다.
 
 ## 대상 독자와 전제
 
@@ -128,7 +130,7 @@ GC와 테스트 데이터를 기록한다. 운영 반영은 canary 또는 점진
 - 언어와 JVM 기능은 OpenJDK JEP 원문과 JDK 릴리스 자료를 우선한다.
 - LTS 지원 기간은 특정 공급자의 공식 지원 정책으로 한정해 표현한다.
 - 저장소의 현재 출처 검증 계약을 만족하도록 Microsoft Learn의 Java
-  지원 자료를 포함하고, OpenJDK의 공식 GitHub JEP 원문을 함께 사용한다.
+  지원 자료를 포함하고, `openjdk.org`의 canonical JEP 원문을 함께 사용한다.
 - 실제로 전문을 확인한 문서만 `official_sources`에 기록한다.
 - 중요한 기능 상태와 적용 범위를 모두 확인한 경우에만
   `verification_status: verified`로 표시한다. 확인이 불완전하면
