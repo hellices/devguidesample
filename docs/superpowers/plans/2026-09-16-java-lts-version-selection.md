@@ -20,7 +20,9 @@
 - Add no sample project, rendered image, manual navigation entry, README entry, or hard-coded catalog entry.
 - Do not add a new service, technology, or tag.
 - Use `2026-09-16` for `sources_checked_at` and `last_verified` only after all material claims have been checked against the listed official sources.
-- Use `python3` for local validation because this worktree has `/usr/bin/python3` but no `python` executable.
+- Use `python3.13` for local validation because CI uses Python 3.13, while
+  `/usr/bin/python3` is Python 3.9 and cannot evaluate the repository's PEP 604
+  type annotations during test collection.
 - Do not commit generated `site/` output.
 
 ---
@@ -302,7 +304,7 @@ flags.
 Run:
 
 ```bash
-python3 scripts/docs/validate_sources.py
+python3.13 scripts/docs/validate_sources.py
 ```
 
 Expected: FAIL and report `official source host is not allowed: openjdk.org`
@@ -333,11 +335,11 @@ official_source_hosts:
 Run:
 
 ```bash
-python3 scripts/docs/validate_metadata.py
-python3 scripts/docs/validate_sources.py
-python3 scripts/docs/validate_links.py
-python3 scripts/docs/validate_public_safety.py
-python3 -m pytest tests/docs/test_content.py tests/docs/test_topics.py -q
+python3.13 scripts/docs/validate_metadata.py
+python3.13 scripts/docs/validate_sources.py
+python3.13 scripts/docs/validate_links.py
+python3.13 scripts/docs/validate_public_safety.py
+python3.13 -m pytest tests/docs/test_content.py tests/docs/test_topics.py -q
 ```
 
 Expected: every validator exits 0 and all selected tests pass. If a command
@@ -388,7 +390,7 @@ git commit -m "docs(java): LTS 버전 선택과 현대화 가이드 추가" \
 Run:
 
 ```bash
-python3 -m pytest tests/docs -q
+python3.13 -m pytest tests/docs -q
 ```
 
 Expected: all tests pass.
@@ -398,13 +400,13 @@ Expected: all tests pass.
 Run:
 
 ```bash
-python3 scripts/docs/validate_metadata.py
-python3 scripts/docs/validate_sources.py
-python3 scripts/docs/validate_links.py
-python3 scripts/docs/validate_public_safety.py
+python3.13 scripts/docs/validate_metadata.py
+python3.13 scripts/docs/validate_sources.py
+python3.13 scripts/docs/validate_links.py
+python3.13 scripts/docs/validate_public_safety.py
 mkdocs build --strict
-python3 scripts/docs/validate_search_index.py
-python3 scripts/docs/audit_pre_pages.py
+python3.13 scripts/docs/validate_search_index.py
+python3.13 scripts/docs/audit_pre_pages.py
 ```
 
 Expected: every command exits 0. `mkdocs build --strict` creates the canonical
