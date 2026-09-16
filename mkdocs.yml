@@ -9,7 +9,6 @@ site_dir: site
 use_directory_urls: true
 exclude_docs: |
   services/**/samples/**
-  superpowers/**
 
 validation:
   links:
