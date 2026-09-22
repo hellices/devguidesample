@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 770" role="img" aria-labelledby="title desc">
+  <title id="title">AG-UI, A2UI, and MCP Apps have different responsibilities</title>
+  <desc id="desc">An application can use AG-UI events to connect to an agent. A2UI descriptions are data rendered by an approved native component catalog. MCP Apps instead associate MCP tools with UI resources rendered in a host-controlled iframe. These are composable, optional routes rather than a universal mandatory stack.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .heading { font-size: 30px; font-weight: 700; }
+      .label { font-size: 23px; font-weight: 600; }
+      .body { font-size: 19px; }
+      .small { font-size: 17px; fill: #42526e; }
+      .arrow { fill: none; stroke: #506784; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10" fill="#506784"/></marker>
+  </defs>
+  <rect width="1200" height="770" rx="16" fill="#f5f7fb"/>
+  <text x="40" y="52" class="heading">Choose contracts by responsibility</text>
+  <text x="40" y="86" class="body">CopilotKit is an implementation stack. The protocols are not interchangeable products.</text>
+  <rect x="40" y="120" width="470" height="148" rx="12" fill="#e9efff" stroke="#3957a5"/>
+  <text x="64" y="160" class="label">Application / CopilotKit frontend</text>
+  <text x="64" y="195" class="body">Chat, client state, UI components</text>
+  <text x="64" y="231" class="small">Host capabilities and backend adapters still matter</text>
+  <rect x="790" y="120" width="370" height="148" rx="12" fill="#e9efff" stroke="#3957a5"/>
+  <text x="814" y="160" class="label">Agent runtime</text>
+  <text x="814" y="195" class="body">Models, tools, orchestration</text>
+  <text x="814" y="231" class="small">Application-owned permissions</text>
+  <path d="M525 172 H775" class="arrow"/>
+  <path d="M775 225 H525" class="arrow"/>
+  <text x="650" y="154" text-anchor="middle" class="label">AG-UI</text>
+  <text x="650" y="205" text-anchor="middle" class="small">Events / state / tools</text>
+  <rect x="40" y="305" width="1120" height="167" rx="12" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="64" y="345" class="label">Route A: declarative UI</text>
+  <text x="64" y="383" class="body">Agent or application</text>
+  <text x="64" y="416" class="small">Creates UI descriptions</text>
+  <path d="M295 387 H410" class="arrow"/>
+  <text x="445" y="383" class="label">A2UI messages</text>
+  <text x="445" y="416" class="small">UI + data contract</text>
+  <path d="M665 387 H780" class="arrow"/>
+  <text x="810" y="383" class="body">Native renderer + catalog</text>
+  <text x="810" y="416" class="small">Client-owned components</text>
+  <text x="64" y="451" class="small">Transport integration is separate; using A2UI does not by itself require AG-UI or MCP.</text>
+  <rect x="40" y="500" width="1120" height="167" rx="12" fill="#fff2df" stroke="#a96612"/>
+  <text x="64" y="540" class="label">Route B: embedded tool UI</text>
+  <text x="64" y="578" class="body">MCP tool + UI resource</text>
+  <text x="64" y="611" class="small">Server-provided HTML app</text>
+  <path d="M315 582 H410" class="arrow"/>
+  <text x="445" y="578" class="label">MCP Apps host</text>
+  <text x="445" y="611" class="small">Bridge + policy + resources</text>
+  <path d="M665 582 H780" class="arrow"/>
+  <text x="810" y="578" class="body">Sandboxed iframe UI</text>
+  <text x="810" y="611" class="small">Tool calls through the host</text>
+  <text x="64" y="646" class="small">Host support is required. A developer-authored app is not evidence of runtime code generation.</text>
+  <text x="40" y="709" class="body">Adopt only the contracts needed for the experience; both routes can coexist.</text>
+  <text x="40" y="741" class="small">Original conceptual diagram; not a deployment diagram or a claim of automatic renderer compatibility.</text>
+</svg>

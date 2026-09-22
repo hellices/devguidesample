@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 790" role="img" aria-labelledby="title desc">
+  <title id="title">Recommended separation of UI proposal and business execution</title>
+  <desc id="desc">Client UI options include controlled components, an A2UI renderer, and optional isolated MCP Apps. An orchestration layer proposes interfaces and calls read tools. A separate application-owned action gateway authorizes and validates side effects before accessing systems of record. Observability and compatibility tests cover all layers. This is an analytical reference architecture, not a measured implementation.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .heading { font-size: 30px; font-weight: 700; }
+      .label { font-size: 23px; font-weight: 600; }
+      .body { font-size: 19px; }
+      .small { font-size: 17px; fill: #42526e; }
+      .arrow { fill: none; stroke: #506784; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10" fill="#506784"/></marker>
+  </defs>
+  <rect width="1200" height="790" rx="16" fill="#f5f7fb"/>
+  <text x="40" y="52" class="heading">Generate the experience; govern the business action</text>
+  <text x="40" y="88" class="body">Recommended architecture for evaluation, not a verified production deployment</text>
+  <rect x="40" y="122" width="820" height="144" rx="12" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="64" y="159" class="label">Application frontend</text>
+  <rect x="64" y="182" width="230" height="57" rx="7" fill="white"/>
+  <text x="179" y="217" class="body" text-anchor="middle">Controlled components</text>
+  <rect x="310" y="182" width="230" height="57" rx="7" fill="white"/>
+  <text x="425" y="217" class="body" text-anchor="middle">A2UI renderer</text>
+  <rect x="556" y="182" width="280" height="57" rx="7" fill="white"/>
+  <text x="696" y="217" class="body" text-anchor="middle">Optional isolated MCP Apps</text>
+  <path d="M230 280 V332" class="arrow"/>
+  <text x="249" y="314" class="small">Agent events</text>
+  <path d="M662 280 V332" class="arrow"/>
+  <text x="681" y="314" class="small">Explicit actions</text>
+  <rect x="40" y="350" width="389" height="163" rx="12" fill="#e9efff" stroke="#3957a5"/>
+  <text x="64" y="391" class="label">Agent orchestration</text>
+  <text x="64" y="427" class="body">Model + read tools + UI proposals</text>
+  <text x="64" y="462" class="small">Capability-aware generation</text>
+  <text x="64" y="490" class="small">Model is not the authority for writes</text>
+  <rect x="471" y="350" width="389" height="163" rx="12" fill="#fff2df" stroke="#a96612"/>
+  <text x="495" y="391" class="label">Application action gateway</text>
+  <text x="495" y="427" class="body">Identity + policy + schema checks</text>
+  <text x="495" y="462" class="small">Confirmation and idempotency</text>
+  <text x="495" y="490" class="small">Enforced for agent and direct calls</text>
+  <path d="M437 453 H461" class="arrow"/>
+  <path d="M234 527 V581" class="arrow"/>
+  <text x="252" y="561" class="small">Read path</text>
+  <path d="M665 527 V581" class="arrow"/>
+  <text x="683" y="561" class="small">Authorized execution</text>
+  <rect x="40" y="597" width="820" height="104" rx="12" fill="white" stroke="#506784"/>
+  <text x="64" y="637" class="label">Domain services / systems of record</text>
+  <text x="64" y="673" class="body">Products, availability, orders, support cases; authoritative business state</text>
+  <rect x="900" y="122" width="260" height="579" rx="12" fill="#eef1f6" stroke="#506784"/>
+  <text x="924" y="165" class="label">Cross-cutting checks</text>
+  <text x="924" y="219" class="body">Contract versions</text>
+  <text x="924" y="263" class="body">Renderer parity</text>
+  <text x="924" y="307" class="body">Trace correlation</text>
+  <text x="924" y="351" class="body">Sensitive-data limits</text>
+  <text x="924" y="395" class="body">Accessibility</text>
+  <text x="924" y="439" class="body">Latency and cost</text>
+  <text x="924" y="483" class="body">Failure recovery</text>
+  <text x="924" y="527" class="body">Task completion</text>
+  <text x="924" y="571" class="body">Audit and replay</text>
+  <text x="924" y="633" class="small">A protocol is not</text>
+  <text x="924" y="660" class="small">an authorization system.</text>
+  <text x="40" y="747" class="body">Keep a stable fallback UI. Expand generative freedom only when measured user value justifies it.</text>
+  <text x="40" y="778" class="small">Original design recommendation; transport, runtime, and business-service choices remain replaceable.</text>
+</svg>

@@ -1,0 +1,138 @@
+THIRD-PARTY IMAGE ATTRIBUTION
+Retrieved and reviewed: 2026-09-21
+Screen captures added and reviewed: 2026-09-22
+
+The following original images are reproduced without modification. Local file
+renaming and proportional display sizing do not change their content.
+These individual assets retain the licenses stated below. Their licenses do
+not replace the license of unrelated repository content. Names and logos in
+the originals are used for source identification, not endorsement.
+
+C1: ../images/copilotkit-controlled-original.png
+Title: Controlled Generative UI example
+Author/project: CopilotKit. Copyright (c) Atai Barkai.
+Source revision: cddbf0cc085475ea4836a6241e51ba76799adc20
+Source: https://github.com/CopilotKit/CopilotKit/blob/cddbf0cc085475ea4836a6241e51ba76799adc20/examples/showcases/generative-ui/assets/static-generative-ui-example.png
+License: MIT; full notice in copilotkit-MIT.txt.
+SHA-256: a1774f0a02c7a0f4e8eb40b6cb9be5065d0e8b7a13d4f98fa30019bbe2b44b38
+Git LFS payload downloaded, not the pointer file.
+
+C2: ../images/copilotkit-declarative-original.png
+Title: Declarative Generative UI overview
+Author/project: CopilotKit. Copyright (c) Atai Barkai.
+Source revision: cddbf0cc085475ea4836a6241e51ba76799adc20
+Source: https://github.com/CopilotKit/CopilotKit/blob/cddbf0cc085475ea4836a6241e51ba76799adc20/examples/showcases/generative-ui/assets/declarative-generative-ui-overview.png
+License: MIT; full notice in copilotkit-MIT.txt.
+SHA-256: a1285492c95a79b754db617c57d6918d9857e983d38f4b787eae65fb3fd6bf2c
+Git LFS payload downloaded, not the pointer file.
+
+P1: ../images/ag-ui-overview-original.png
+Title: AG-UI Overview
+Author/project: AG-UI Protocol contributors. Copyright (c) 2025.
+Source revision: f08ccf853497914ef70a5f0197af45bb74915bc2
+Source: https://github.com/ag-ui-protocol/ag-ui/blob/f08ccf853497914ef70a5f0197af45bb74915bc2/docs/images/ag-ui-overview-with-partners.png
+Context: https://docs.ag-ui.com/introduction
+License: MIT; full notice in ag-ui-MIT.txt.
+
+G1: ../images/google-generative-ui-system-original.svg
+Title: High Level Method Overview / System Diagram
+Authors: Yaniv Leviathan, Dani Valevski, Matan Kalman, Danny Lumen,
+Eyal Segalis, Eyal Molad, Shlomi Pasternak, Vishnu Natchu, Valerie Nygaard,
+Srinivasan (Cheenu) Venkatachary, James Manyika, Yossi Matias; Google Research.
+Source: https://generativeui.github.io/static/images/sys_diagram_dotted.svg
+Context and license declaration: https://generativeui.github.io/
+License: Creative Commons Attribution-ShareAlike 4.0 International.
+License URL: https://creativecommons.org/licenses/by-sa/4.0/
+Full legal code: google-CC-BY-SA-4.0.txt
+SHA-256: ea495ecffb50c5cd26705d7b3eff1cd63671cd086c9573db2abae8f2b06402bd
+This is the website-published SVG, not a reproduction of the complete PDF.
+No changes made. The asset remains available under CC BY-SA 4.0.
+
+A1: ../images/a2ui-end-to-end-original.png
+Title: The End-to-End Data Flow
+Author/project: A2UI project contributors.
+Source revision: 2d2a714dafd22590e705c32a47cd5390ab96fdc5
+Source: https://github.com/a2ui-project/a2ui/blob/2d2a714dafd22590e705c32a47cd5390ab96fdc5/docs/public/assets/end-to-end-data-flow.png
+Context: https://a2ui.org/concepts/data-flow/
+License: Apache License 2.0; upstream license copy in a2ui-Apache-2.0.txt.
+SHA-256: a960d0dce8a0af633adec75941589967ab65432e82152afc9e76ad76c83c95e8
+Version note: Original graphic uses v0.8-era surfaceUpdate, dataModelUpdate,
+beginRendering and userAction names. See the adjacent document's v0.9.1
+mapping before using it as implementation guidance.
+
+Licensing boundaries
+-------------------
+CopilotKit marketing-site images are not presumed to inherit the software
+repository license. C1 and C2 are files in the licensed GitHub repository.
+The Google website's license is not presumed to license the entire paper.
+No PDF, unrelated generated demo artwork, or complete third-party article is
+redistributed here. Original analytical SVGs elsewhere in this topic are
+separately authored diagrams, not altered copies of these source figures.
+
+Screen captures (quotation for commentary)
+-----------------------------------------
+The following assets are screen captures of publicly reachable product,
+demo and research pages. They are included to describe and critique the
+claims and interfaces those pages present. Copyright stays with each owner;
+inclusion is not a license grant, an endorsement, or a compatibility
+certification. No credentials, personal data, customer identifiers or
+private screens appear in them. Browser chrome showing a local profile was
+cropped out before publication.
+
+S1: ../images/gemini-dynamic-view-screencast.gif
+Title: Generative UI in dynamic view - Van Gogh gallery example
+Author/project: Google. Copyright (c) Google.
+Source page: https://blog.google/products/gemini/gemini-3-gemini-app/
+Source asset: Dynamic_View_Van_Gogh_1920x1080_1.mp4 (Google blog video)
+Captured: 2026-09-22
+Processing: re-encoded to GIF at 8 fps and 680 px width from a 17.8 s,
+1424x888 recording. Frames are not otherwise altered; no frames added.
+Notice retained from the original: "Sequences shortened and screen images
+simulated. Check responses. Compatibility and availability varies. 18+."
+License: no open license. Used as a short quotation for commentary.
+
+S2: ../images/ag-ui-dojo-backend-tool-rendering-screenshot.png
+Title: AG-UI Interactive Dojo - Backend Tool Rendering demo
+Author/project: AG-UI Protocol contributors and demo authors.
+Source: https://dojo.ag-ui.com/langgraph/feature/backend_tool_rendering
+Captured: 2026-09-22
+Processing: cropped to remove browser chrome and the local browser profile
+indicator. No content changes inside the application area.
+License: public demo screen, no separate license grant located. Used as a
+quotation for commentary on the Controlled pattern.
+
+S3: ../images/copilotkit-product-overview-screenshot.png
+Title: "Any frontend. Any agent." product overview
+Author/project: CopilotKit. Copyright (c) CopilotKit.
+Source: https://www.copilotkit.ai/product
+Captured: 2026-09-22
+Processing: proportional downscale to 1400 px width. No content changes.
+License: marketing-site content, no open license. Vendor product and
+ecosystem logos identify the claim under discussion, not an endorsement.
+
+S4: ../images/demo-generative-ui.mp4
+Title: "Generative UI Specs" demo application walkthrough
+Author/project: demo application built with CopilotKit; author not stated on
+screen. No public distribution URL for this recording was confirmed.
+Captured: 2026-09-22
+Processing: re-encoded to 1280 px width, 30 fps, audio removed, from a 33.5 s
+3680x2160 60 fps recording. No frames added, removed or reordered.
+Content note: the demo compares Static GenUI, MCP Apps and A2UI in one app.
+All on-screen records are example data (example.com addresses, 555 phone
+numbers, explicitly fictional place names).
+License: no license grant located. Retained because it documents the three
+approaches this topic compares; remove on request of the author.
+
+Materials reviewed but not redistributed
+----------------------------------------
+"AG-UI and A2UI Explained" (CopilotKit, Google Docs PDF export) was read to
+summarize the vendor's own framing of AG-UI, A2UI, Open-JSON-UI and MCP-UI.
+The PDF itself is not committed. Its substantive claims were located in
+public documentation and are cited from there instead:
+https://docs.ag-ui.com/concepts/generative-ui-specs and
+https://www.copilotkit.ai/ag-ui-and-a2ui. Remaining claims were cross-checked
+against a2ui.org, docs.copilotkit.ai and modelcontextprotocol.io.
+The source recordings behind S1 and S4 are not committed at original size;
+only the reduced GIF and the re-encoded MP4 are published. A capture of the
+generativeui.github.io method overview was dropped because the same figure is
+already included as the CC BY-SA licensed original SVG (G1).

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 690" role="img" aria-labelledby="title desc">
+  <title id="title">Three Generative UI patterns and two independent control choices</title>
+  <desc id="desc">Controlled UI selects developer-owned components. Declarative UI describes a composition rendered from an approved catalog. Open-ended UI supplies HTML or code in an isolated surface. In all three patterns, the developer or the model can decide when to display the UI. These are options, not maturity levels.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .heading { font-size: 30px; font-weight: 700; }
+      .label { font-size: 23px; font-weight: 600; }
+      .body { font-size: 19px; }
+      .small { font-size: 17px; fill: #42526e; }
+      .arrow { fill: none; stroke: #506784; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10" fill="#506784"/></marker>
+  </defs>
+  <rect width="1200" height="690" rx="16" fill="#f5f7fb"/>
+  <text x="40" y="52" class="heading">What can change in the interface?</text>
+  <text x="40" y="86" class="body">A spectrum of representation freedom, not a mandatory upgrade path</text>
+  <rect x="40" y="122" width="1120" height="136" rx="12" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="64" y="160" class="label">Controlled</text>
+  <text x="64" y="191" class="body">Developer-owned UI</text>
+  <text x="64" y="224" class="small">Stable forms and product cards</text>
+  <rect x="390" y="146" width="260" height="86" rx="8" fill="white"/>
+  <text x="412" y="180" class="body">Select component</text>
+  <text x="412" y="210" class="small">+ typed arguments</text>
+  <path d="M665 189 H750" class="arrow"/>
+  <rect x="770" y="146" width="360" height="86" rx="8" fill="white"/>
+  <text x="792" y="180" class="body">Render existing component</text>
+  <text x="792" y="210" class="small">Layout controlled by the app</text>
+  <rect x="40" y="276" width="1120" height="136" rx="12" fill="#e9efff" stroke="#3957a5"/>
+  <text x="64" y="314" class="label">Declarative</text>
+  <text x="64" y="345" class="body">Catalog-based composition</text>
+  <text x="64" y="378" class="small">Example: A2UI descriptions</text>
+  <rect x="390" y="300" width="260" height="86" rx="8" fill="white"/>
+  <text x="412" y="334" class="body">Describe UI + data</text>
+  <text x="412" y="364" class="small">Schema + catalog contract</text>
+  <path d="M665 343 H750" class="arrow"/>
+  <rect x="770" y="300" width="360" height="86" rx="8" fill="white"/>
+  <text x="792" y="334" class="body">Validate and render natively</text>
+  <text x="792" y="364" class="small">Client implements the catalog</text>
+  <rect x="40" y="430" width="1120" height="136" rx="12" fill="#fff2df" stroke="#a96612"/>
+  <text x="64" y="468" class="label">Open-ended</text>
+  <text x="64" y="499" class="body">HTML / code surface</text>
+  <text x="64" y="532" class="small">Authored or model-generated</text>
+  <rect x="390" y="454" width="260" height="86" rx="8" fill="white"/>
+  <text x="412" y="488" class="body">Provide rich content</text>
+  <text x="412" y="518" class="small">Flexible HTML / code</text>
+  <path d="M665 497 H750" class="arrow"/>
+  <rect x="770" y="454" width="360" height="86" rx="8" fill="white"/>
+  <text x="792" y="488" class="body">Render in an isolated surface</text>
+  <text x="792" y="518" class="small">Host policy and execution controls</text>
+  <text x="40" y="612" class="label">Independent question: who decides when to display it?</text>
+  <text x="40" y="646" class="body">Deterministic application logic OR model selection can be used in any pattern.</text>
+  <text x="40" y="674" class="small">Original synthesis of CopilotKit's taxonomy. MCP Apps do not require model-generated HTML.</text>
+</svg>
