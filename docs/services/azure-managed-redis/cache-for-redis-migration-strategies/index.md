@@ -66,3 +66,4 @@ applies_to: [Azure Cache for Redis Basic/Standard/Premium에서 Azure Managed Re
 - [Microsoft Learn: AMR import 동작과 RDB 호환성](https://learn.microsoft.com/azure/redis/how-to-import-export-data)
 - [RIOT-X: live 모드의 정합성 제한](https://redis.github.io/riotx/replication/modes.html)
 - [RIOT-X: 버전 차이 시 `--struct` 방식](https://redis.github.io/riotx/replication/types.html)
+- [실측: RIOT-X 초기 복사와 live 모드](../riotx-migration-poc/index.md)
