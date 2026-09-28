@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">A2UI end-to-end interaction and responsibility boundaries</title>
+  <desc id="desc">The client advertises supported UI capabilities. An agent or service produces a declarative UI description and data, delivered through a chosen transport. The client validates and maps catalog components to its native renderer. User actions return to the service for validation and business execution, followed by further UI updates. Rendering a UI is not authorization to execute a business action.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .heading { font-size: 30px; font-weight: 700; }
+      .label { font-size: 23px; font-weight: 600; }
+      .body { font-size: 19px; }
+      .small { font-size: 17px; fill: #42526e; }
+      .arrow { fill: none; stroke: #506784; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10" fill="#506784"/></marker>
+  </defs>
+  <rect width="1200" height="720" rx="16" fill="#f5f7fb"/>
+  <text x="40" y="52" class="heading">A2UI: UI descriptions cross the boundary, not arbitrary code</text>
+  <text x="40" y="88" class="body">Agree on specification version, catalog, renderer capabilities, and transport integration.</text>
+  <rect x="40" y="126" width="350" height="440" rx="12" fill="#e9efff" stroke="#3957a5"/>
+  <text x="64" y="168" class="label">Agent / application service</text>
+  <text x="64" y="210" class="body">Receives request + capabilities</text>
+  <text x="64" y="246" class="body">Produces UI + data messages</text>
+  <text x="64" y="282" class="small">Model-generated or deterministic</text>
+  <rect x="64" y="382" width="300" height="152" rx="8" fill="white"/>
+  <text x="85" y="418" class="body">Action handler</text>
+  <text x="85" y="452" class="small">Validate identity and arguments</text>
+  <text x="85" y="482" class="small">Execute allowed business action</text>
+  <text x="85" y="512" class="small">Produce authoritative result</text>
+  <rect x="790" y="126" width="370" height="440" rx="12" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="814" y="168" class="label">Client / native renderer</text>
+  <text x="814" y="210" class="body">Validate message + catalog</text>
+  <text x="814" y="246" class="body">Bind data to approved widgets</text>
+  <text x="814" y="282" class="small">Client owns styling and behavior</text>
+  <rect x="814" y="382" width="322" height="152" rx="8" fill="white"/>
+  <text x="836" y="418" class="body">User interaction</text>
+  <text x="836" y="452" class="small">Button, form, selection</text>
+  <text x="836" y="482" class="small">Create action event + context</text>
+  <text x="836" y="512" class="small">Show pending / error / result</text>
+  <path d="M775 196 H408" class="arrow"/>
+  <text x="595" y="180" text-anchor="middle" class="small">1. Request + supported capabilities</text>
+  <path d="M405 312 H775" class="arrow"/>
+  <text x="595" y="297" text-anchor="middle" class="small">2. Surface / components / data</text>
+  <text x="595" y="340" text-anchor="middle" class="small">Chosen transport carries messages</text>
+  <path d="M775 433 H408" class="arrow"/>
+  <text x="595" y="418" text-anchor="middle" class="small">3. User action + context</text>
+  <path d="M405 529 H775" class="arrow"/>
+  <text x="595" y="514" text-anchor="middle" class="small">4. Updated UI / data / error</text>
+  <rect x="40" y="596" width="1120" height="91" rx="10" fill="white" stroke="#bac6d6"/>
+  <text x="64" y="632" class="body">Native rendering is not automatic portability: each target needs compatible catalog implementations.</text>
+  <text x="64" y="665" class="small">Conceptual flow. See the document's version table for exact wire message names and status.</text>
+</svg>

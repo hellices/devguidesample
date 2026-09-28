@@ -121,6 +121,13 @@ verification_statuses: [verified, needs-review]
 required_source_host: learn.microsoft.com
 official_source_hosts:
   - learn.microsoft.com
+  - www.copilotkit.ai
+  - docs.copilotkit.ai
+  - docs.ag-ui.com
+  - dojo.ag-ui.com
+  - a2ui.org
+  - generativeui.github.io
+  - blog.google
   - openjdk.org
   - kubernetes.io
   - www.cncf.io

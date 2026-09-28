@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Separate the first natural-language request from later UI tool calls</title>
+  <desc id="desc">The first request can use a model to choose an MCP tool and display its associated UI resource. Later button clicks can call an allowed tool through the host without a new model inference. Python is a possible server implementation language, not an MCP requirement or natural-language parser.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .heading { font-size: 30px; font-weight: 700; }
+      .label { font-size: 23px; font-weight: 600; }
+      .body { font-size: 19px; }
+      .small { font-size: 17px; fill: #42526e; }
+      .arrow { fill: none; stroke: #506784; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L9 5 L0 10" fill="#506784"/></marker>
+  </defs>
+  <rect width="1200" height="700" rx="16" fill="#f5f7fb"/>
+  <text x="40" y="52" class="heading">Where is model inference actually needed?</text>
+  <text x="40" y="89" class="body">MCP transports structured calls. It does not understand natural language by itself.</text>
+  <text x="40" y="141" class="label">A. Initial conversation: model-assisted selection</text>
+  <rect x="40" y="167" width="232" height="102" rx="10" fill="#e9efff" stroke="#3957a5"/>
+  <text x="60" y="206" class="body">Natural-language query</text>
+  <text x="60" y="240" class="small">"Compare these products"</text>
+  <path d="M281 218 H330" class="arrow"/>
+  <rect x="344" y="167" width="225" height="102" rx="10" fill="#e9efff" stroke="#3957a5"/>
+  <text x="366" y="206" class="body">Agent + model</text>
+  <text x="366" y="240" class="small">Select tool + arguments</text>
+  <path d="M578 218 H624" class="arrow"/>
+  <rect x="638" y="167" width="228" height="102" rx="10" fill="#e9efff" stroke="#3957a5"/>
+  <text x="660" y="206" class="body">MCP host / server</text>
+  <text x="660" y="240" class="small">Tool + UI resource</text>
+  <path d="M875 218 H921" class="arrow"/>
+  <rect x="936" y="167" width="224" height="102" rx="10" fill="#e9efff" stroke="#3957a5"/>
+  <text x="958" y="206" class="body">Embedded app</text>
+  <text x="958" y="240" class="small">Host renders iframe</text>
+  <text x="40" y="324" class="label">B. Later interaction: explicit UI action, no new inference required</text>
+  <rect x="40" y="353" width="280" height="118" rx="10" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="64" y="394" class="body">App button or filter</text>
+  <text x="64" y="428" class="small">Typed action + arguments</text>
+  <path d="M333 410 H439" class="arrow"/>
+  <rect x="455" y="353" width="280" height="118" rx="10" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="479" y="394" class="body">Host bridge</text>
+  <text x="479" y="428" class="small">Policy / tool visibility checks</text>
+  <path d="M748 410 H853" class="arrow"/>
+  <rect x="869" y="353" width="291" height="118" rx="10" fill="#e5f2ee" stroke="#087f5b"/>
+  <text x="893" y="394" class="body">MCP server tool</text>
+  <text x="893" y="428" class="small">Python or another language</text>
+  <path d="M1008 484 V529 H180 V484" class="arrow"/>
+  <text x="600" y="520" text-anchor="middle" class="small">Structured result returns through the host; UI updates</text>
+  <rect x="40" y="566" width="1120" height="94" rx="10" fill="white" stroke="#bac6d6"/>
+  <text x="64" y="602" class="body">Optional model-context updates are separate from deciding each UI action.</text>
+  <text x="64" y="635" class="small">Skipping inference does not skip authorization, validation, confirmation, or audit logging.</text>
+</svg>
