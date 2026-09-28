@@ -49,6 +49,16 @@ applies_to: [Azure Cache for Redis Basic/Standard/Premium에서 Azure Managed Re
 
 > **RDB의 시간 함정:** 전송량이 30 GB이고 실제 속도가 20 MB/s라면 *전송만* 약 25분. export·import·검증·전환 시간이 추가됨. 중단 허용 시간이 이 전체보다 짧다면 RDB 단독은 선택지에서 제외.
 
+## RIOT-X란?
+
+[RIOT-X](https://redis.io/docs/latest/integrate/riot/)는 **Redis 공식 문서에 소개된 데이터 입출력 CLI**. Redis 간 키 복사뿐 아니라 파일·데이터베이스와의 데이터 이동도 지원. [Redis 조직의 배포 저장소](https://github.com/redis/riotx-dist)와 [사용 문서](https://redis.github.io/riotx/)는 별도.
+
+- **기본 복사:** 원본 키를 스캔하고 값을 읽어 대상에 기록.
+- **`--mode live`:** 초기 복사와 함께 keyspace notifications로 변경된 키를 추적. 알림 유실 가능성 때문에 무손실 복제 아님.
+- **`--struct`:** Redis 버전 간 DUMP 형식이 호환되지 않을 때 데이터 구조별 명령으로 이전. [Microsoft의 AMR 이전 예시](https://techcommunity.microsoft.com/blog/azure-managed-redis/data-migration-with-riot-x-for-azure-managed-redis/4404672)에서도 권장.
+
+**구분:** RIOT-X는 데이터 복사 도구. Azure의 [AMR migration scripts](https://github.com/AzureManagedRedis/amr-migration-scripts)는 데이터가 아닌 접속 대상 전환 도구.
+
 ## 참고
 
 - [Microsoft Learn: 이전 옵션과 도구 제한](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-options)
