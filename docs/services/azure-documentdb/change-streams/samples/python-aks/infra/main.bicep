@@ -19,8 +19,8 @@ param adminUserName string = 'csadmin'
 @description('DocumentDB administrator password, from the DOCDB_ADMIN_PASSWORD azd environment value.')
 param adminPassword string
 
-@description('AKS node count.')
-param nodeCount int = 2
+@description('AKS node count. The measurements in the topic used four nodes.')
+param nodeCount int = 4
 
 resource group 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-${environmentName}'

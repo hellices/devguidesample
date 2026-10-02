@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sys
 from collections import Counter, defaultdict
 
@@ -47,7 +48,7 @@ def main() -> None:
 
     sink = os.getenv("SINK") or SINK_COLLECTION
     events = list(db[sink].find(
-        {"doc_id": {"$regex": f"^{run_id}:"}},
+        {"doc_id": {"$regex": f"^{re.escape(run_id)}:"}},
         {"doc_id": 1, "op": 1, "recv_ns": 1, "pod": 1, "has_full_document": 1,
          "has_update_description": 1, "deliveries": 1, "lag_ms": 1},
     ))

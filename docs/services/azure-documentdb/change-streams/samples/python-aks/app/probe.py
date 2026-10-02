@@ -76,19 +76,21 @@ def _event_shapes():
         coll.update_one({"_id": 1}, {"$set": {"a": 2}, "$unset": {"arr": ""}})
         coll.replace_one({"_id": 1}, {"a": 3})
         coll.delete_one({"_id": 1})
-        shapes = {}
+        # A list, not a dict keyed by operationType: the replace may arrive as a
+        # second update and must not overwrite the first one.
+        events = []
         for _ in range(4):
             e = next_event(s)
             if e is None:
                 break
-            shapes[e["operationType"]] = {
+            events.append({
+                "operationType": e["operationType"],
                 "keys": sorted(e.keys()),
                 "updateDescription": e.get("updateDescription"),
                 "clusterTime_type": type(e.get("clusterTime")).__name__,
                 "wallTime": e.get("wallTime"),
-            }
-    status = "PASS" if set(shapes) == {"insert", "update", "replace", "delete"} else "FAIL"
-    record("event_shapes", status, shapes=shapes)
+            })
+    record("event_shapes", "PASS" if len(events) == 4 else "FAIL", events=events)
 
 
 @check("update_full_document_default")
@@ -98,6 +100,9 @@ def _update_default():
     with coll.watch(max_await_time_ms=500) as s:
         coll.update_one({"_id": 1}, {"$set": {"a": 2}})
         e = next_event(s)
+    if e is None:
+        record("update_full_document_default", "FAIL", error=f"no update event within {WAIT_S}s")
+        return
     record("update_full_document_default", "INFO", has_fullDocument="fullDocument" in e,
            fullDocument=e.get("fullDocument"), updateDescription=e.get("updateDescription"))
 
