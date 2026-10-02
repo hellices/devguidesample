@@ -14,6 +14,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/documentdb/change-streams
   - title: AzureCosmosDB/changestream-driver-compatibility
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
+  - title: Lease Blob
+    url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
 ---
 
 # Azure DocumentDB change stream을 Airflow DAG로 Parquet에 내리기
@@ -52,14 +54,15 @@ change stream은 컬렉션의 변경을 이벤트로 받아 보는 MongoDB 기�
 Airflow가 5분마다 `KubernetesPodOperator`로 내보내기 파드를 하나 띄웁니다. 파드는
 다음 순서로 동작하고 끝나면 사라집니다.
 
-1. ADLS Gen2의 checkpoint 파일에서 resume token을 읽습니다. 없으면 stream의 현재
-   위치에서 시작합니다.
+1. ADLS Gen2의 lock 파일에 lease를 잡고 checkpoint 파일에서 resume token을
+   읽습니다. checkpoint가 없으면 현재 시각을 시작 위치로 먼저 저장합니다.
 2. 실행을 시작한 시각까지 기록된 이벤트를 읽어 100,000건씩 Parquet 청크로
    올립니다. 청크 파일 이름은 청크 첫 이벤트 바로 앞의 resume token으로 만듭니다.
 3. 청크를 올린 뒤 checkpoint를 ETag 조건으로 갱신합니다.
 
 DAG는 `max_active_runs=1`이고 실패하면 세 번까지 재시도합니다. 재시도는 같은
-checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁니다.
+checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁니다. 첫 실행의
+재시도도 저장해 둔 시작 시각부터 다시 읽습니다.
 
 ## 결과: 동작하는가
 
@@ -82,7 +85,11 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 - 파일을 먼저 쓰고 checkpoint를 나중에 씁니다. 순서가 반대면 그 사이 장애로
   이벤트를 잃습니다.
 - 파일 이름을 resume token으로 정해 재시도가 같은 파일을 덮어쓰게 합니다.
-- 실행이 겹치지 않게 `max_active_runs=1`과 checkpoint ETag 조건을 함께 씁니다.
+- checkpoint가 없는 첫 실행은 시작 위치를 먼저 저장합니다. 저장하지 않으면 첫
+  청크를 쓰다 실패했을 때 재시도가 더 뒤에서 시작해 그 사이 이벤트를 잃습니다.
+- 실행이 겹치지 않게 `max_active_runs=1`을 두고 실행 동안 lock 파일 lease를
+  잡습니다. checkpoint ETag 조건은 checkpoint만 보호합니다. 이미 올린 파일을 다른
+  실행이 짧은 청크로 덮어쓰는 것은 막지 못합니다.
 - 감시할 컬렉션을 먼저 만듭니다. 없으면 `watch()`가 code 26으로 실패합니다.
 
 ## 공식 예제가 놓친 부분
@@ -155,9 +162,13 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
 | Airflow | Helm chart 1.22.0, Airflow 3.2.2, `LocalExecutor` |
 | 내보내기 파드 | Python 3.12, PyMongo 4.18.2, pyarrow 25.0.1, snappy 압축 |
 
-컬렉션 하나를 하루 동안 측정한 결과입니다.
+컬렉션 하나를 하루 동안 측정한 결과입니다. 측정 뒤 리뷰에서 나온 실패 경로를
+sample에 반영했습니다. 첫 실행 시작 위치 저장, lock 파일 lease, `wallTime`이 없는
+이벤트의 파티션 고정, 검증 스크립트의 순서 역전 실패 처리입니다. 측정에서 거치지
+않은 경로이며 로컬 fake로만 확인했고 Azure에서 다시 실행하지 않았습니다.
 
 ## 공식 출처
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
 - [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
+- [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)

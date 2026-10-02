@@ -96,7 +96,7 @@ def main() -> None:
     }
     print(json.dumps(result, default=str, indent=None if os.getenv("COMPACT") else 2))
     client.close()
-    sys.exit(0 if not missing and not unexpected else 1)
+    sys.exit(0 if not missing and not unexpected and not out_of_order else 1)
 
 
 if __name__ == "__main__":

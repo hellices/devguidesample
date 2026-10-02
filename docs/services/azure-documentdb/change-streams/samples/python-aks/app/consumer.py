@@ -2,7 +2,8 @@
 
 The consumer stores processed events in a sink collection and saves the
 resume token in a checkpoint collection, so a replacement pod continues from
-the last committed event instead of a local file.
+the last committed event instead of a local file. The first start saves its
+start time there before reading, so a failed first batch is read again.
 """
 
 import json
@@ -12,6 +13,7 @@ import socket
 import time
 from typing import Any, Optional
 
+from bson.timestamp import Timestamp
 from pymongo import UpdateOne
 from pymongo.errors import OperationFailure, PyMongoError
 
@@ -37,9 +39,14 @@ def handle_sigterm(signum: int, _frame: Any) -> None:
     log_json(logger, "signal", signum=signum)
 
 
-def load_checkpoint(db, consumer_id: str) -> Optional[dict]:
-    doc = db[CHECKPOINT_COLLECTION].find_one({"_id": consumer_id})
-    return doc["token"] if doc else None
+def load_checkpoint(db, consumer_id: str) -> dict:
+    """Return the saved position, creating it with the current time on first start."""
+    db[CHECKPOINT_COLLECTION].update_one(
+        {"_id": consumer_id},
+        {"$setOnInsert": {"token": None, "start_at": Timestamp(int(time.time()), 0), "events": 0}},
+        upsert=True,
+    )
+    return db[CHECKPOINT_COLLECTION].find_one({"_id": consumer_id})
 
 
 def save_checkpoint(db, consumer_id: str, token: dict, events: int) -> None:
@@ -78,7 +85,7 @@ def to_sink(change: dict, pod: str) -> UpdateOne:
                      upsert=True)
 
 
-def build_watch_kwargs(token: Optional[dict]) -> dict:
+def build_watch_kwargs(token: Optional[dict], start_at: Optional[Timestamp]) -> dict:
     kwargs: dict = {"max_await_time_ms": int(os.getenv("MAX_AWAIT_MS", "1000"))}
     full_document = os.getenv("FULL_DOCUMENT", "updateLookup")
     if full_document != "default":
@@ -88,6 +95,8 @@ def build_watch_kwargs(token: Optional[dict]) -> dict:
         kwargs["batch_size"] = int(batch_size)
     if token:
         kwargs["resume_after"] = token
+    elif start_at:
+        kwargs["start_at_operation_time"] = start_at
     return kwargs
 
 
@@ -103,7 +112,8 @@ def main() -> None:
     source = get_source(db)
     sink = db[SINK_COLLECTION]
 
-    token = load_checkpoint(db, consumer_id)
+    position = load_checkpoint(db, consumer_id)
+    token, start_at = position.get("token"), position.get("start_at")
     log_json(logger, "start", consumer_id=consumer_id, pod=pod, resume=bool(token),
              namespace=source.full_name, pipeline=pipeline)
 
@@ -115,7 +125,7 @@ def main() -> None:
     total = 0
     while not stopping:
         try:
-            with source.watch(pipeline, **build_watch_kwargs(token)) as stream:
+            with source.watch(pipeline, **build_watch_kwargs(token, start_at)) as stream:
                 log_json(logger, "stream_open", resume=bool(token))
                 backoff = 1.0
                 pending: list = []

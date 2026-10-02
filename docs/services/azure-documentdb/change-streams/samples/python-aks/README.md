@@ -112,7 +112,7 @@ kubectl -n cslab exec cs-toolbox -- python -c \
 envsubst < k8s/consumer.yaml | kubectl apply -f -
 kubectl -n cslab rollout status deployment/cs-consumer
 
-JOB_NAME=gen-r1 SCRIPT=generator.py RUN_ID=r1 DOCS=100000 WORKERS=16 RATE=0 \
+JOB_NAME=gen-r1 SCRIPT=generator.py RUN_ID=r1 DOCS=10000 WORKERS=16 RATE=0 \
   envsubst < k8s/job.yaml | kubectl apply -f -
 # After the generator finishes and the consumer catches up:
 JOB_NAME=verify-r1 SCRIPT=verify.py RUN_ID=r1 DOCS=0 WORKERS=0 RATE=0 \
@@ -126,6 +126,9 @@ Run `probe.py` the same way with `SCRIPT=probe.py`.
 
 - The sink write is an upsert keyed by the resume token `_data`. A replayed
   event increments `deliveries` on the existing row instead of adding a row.
+- On its first start the consumer saves the current time as its start position
+  before it reads. A retry before the first checkpoint opens the stream at that
+  time with `startAtOperationTime` and reads the same events again.
 - The checkpoint is saved after each sink batch. When the stream is idle, the
   consumer saves the post-batch resume token instead.
 - Delivery is at-least-once. `FAULT_EXIT_AFTER_WRITE=<events>` makes the
@@ -178,8 +181,8 @@ kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
   airflow dags list-runs change_stream_to_parquet
 ```
 
-The first run has no checkpoint, so it starts at the current position of the
-stream and saves it. Write events after that run and compare them with the
+The first run has no checkpoint, so it saves the current time as its start
+position and reads from there. Write events after that run and compare them with the
 Parquet files once a later run has exported them.
 
 ```bash
@@ -196,11 +199,20 @@ Export behavior:
 - A run stops at the first event written after the run started, or when the
   stream has nothing to return. Under steady writes `try_next()` rarely
   returns `None`, so the time boundary is what ends the run.
-- A run with no checkpoint starts at the current position of the stream.
+- A run with no checkpoint saves the current time as the start position before
+  it reads. Its retry starts at the same time.
 - Each chunk is named after the resume token before its first event. A retry
   reads the same events from the same checkpoint and overwrites the same file.
+  The partition comes from the first event's `wallTime`, or `dt=unknown` when
+  the event has none, so a retry in a later hour writes the same path.
 - The checkpoint is `_checkpoints/<stream>.json` in the same file system. It is
   written with an ETag condition after each chunk upload.
+- A run holds a 20-second lease on `_checkpoints/<stream>.lock` and renews it
+  in the background. A second run waits up to 90 seconds for the lease and
+  then fails, so two runs never overwrite each other's chunks. The ETag
+  condition alone only protects the checkpoint, not files already uploaded.
+  A lease that expires instead of being released can take up to a minute to
+  become available again.
 - Trigger the DAG with `{"fault_after_chunks": 1}` to make the first try exit
   after one upload and before the checkpoint. The retry finishes the run.
 - `max_await_time_ms` is not set unless `MAX_AWAIT_MS` is non-zero. The test
@@ -218,14 +230,22 @@ Export behavior:
 
 The published results come from these runs. Each one uses the commands from
 steps 4 and 5 with the parameters below. Verify every run with `verify.py`
-(consumer) or `verify_lake.py` (Parquet) and the same `RUN_ID`.
+(consumer) or `verify_lake.py` (Parquet) and the same `RUN_ID`. Both exit with
+code 1 on a missing, unexpected or out-of-order event. The generator records a
+run as `failed` and exits with code 1 if any write fails, and the verifiers
+refuse such a run.
+
+The runs used the sample before these changes: the first-run start position,
+the stream lease, the `dt=unknown` partition and the stricter exit codes.
+They change only failure paths that the runs did not hit, and were checked
+with local fakes, not on Azure.
 
 | Run | Generator parameters | Extra steps |
 | --- | --- | --- |
-| r1 | `DOCS=100000 RATE=0` | None |
+| r1 | `DOCS=10000 RATE=0` | None |
 | r2 | `DOCS=100000 RATE=0` | While the generator runs, delete the consumer pod repeatedly with `kubectl -n cslab delete pod -l app=cs-consumer --wait=false` |
 | r3 | `DOCS=100000 RATE=0` | Before the generator, run `kubectl -n cslab set env deployment/cs-consumer FAULT_EXIT_AFTER_WRITE=200`. The container exits after each 200-event write and restarts. Remove it with `FAULT_EXIT_AFTER_WRITE-` after the number of faults you want |
-| r4 | `DOCS=300000 RATE=1000` | None |
+| r4 | `DOCS=130000 RATE=1000` | None |
 | Airflow latency | `DOCS=780000 RATE=1000 PAD_BYTES=1000` | DAG unpaused for the whole run |
 | Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG, run the generator, then `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container |
 | Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |

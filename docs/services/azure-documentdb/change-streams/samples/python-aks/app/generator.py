@@ -6,8 +6,10 @@ change event, including deletes that carry only ``documentKey``.
 
 import os
 import secrets
+import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from pymongo import WriteConcern
 
@@ -35,32 +37,35 @@ def worker(source, run_id: str, indexes: range, rate: float, pad_bytes: int, cou
             if delay > 0:
                 time.sleep(delay)
 
-    for i in indexes:
-        doc_id = f"{run_id}:{i:07d}"
-        source.insert_one({
-            "_id": doc_id, "run_id": run_id, "seq": i, "version": 1,
-            "status": "new", "qty": i % 100, "created_at": utcnow(), "pad": pad(pad_bytes),
-        })
-        local["insert"] += 1
-        pace()
-        source.update_one({"_id": doc_id}, {"$set": {"status": "paid", "updated_at": utcnow()},
-                                            "$inc": {"version": 1}})
-        local["update"] += 1
-        pace()
-        if i % 10 == 0:
-            source.replace_one({"_id": doc_id}, {
-                "run_id": run_id, "seq": i, "version": 3, "status": "replaced", "updated_at": utcnow(),
-                "pad": pad(pad_bytes),
+    try:
+        for i in indexes:
+            doc_id = f"{run_id}:{i:07d}"
+            source.insert_one({
+                "_id": doc_id, "run_id": run_id, "seq": i, "version": 1,
+                "status": "new", "qty": i % 100, "created_at": utcnow(), "pad": pad(pad_bytes),
             })
-            local["replace"] += 1
+            local["insert"] += 1
             pace()
-        if i % 5 == 0:
-            source.delete_one({"_id": doc_id})
-            local["delete"] += 1
+            source.update_one({"_id": doc_id}, {"$set": {"status": "paid", "updated_at": utcnow()},
+                                                "$inc": {"version": 1}})
+            local["update"] += 1
             pace()
-    with lock:
-        for key, value in local.items():
-            counts[key] += value
+            if i % 10 == 0:
+                source.replace_one({"_id": doc_id}, {
+                    "run_id": run_id, "seq": i, "version": 3, "status": "replaced", "updated_at": utcnow(),
+                    "pad": pad(pad_bytes),
+                })
+                local["replace"] += 1
+                pace()
+            if i % 5 == 0:
+                source.delete_one({"_id": doc_id})
+                local["delete"] += 1
+                pace()
+    finally:
+        # Keep the writes that succeeded before a failure in the run record.
+        with lock:
+            for key, value in local.items():
+                counts[key] += value
 
 
 def main() -> None:
@@ -84,25 +89,28 @@ def main() -> None:
     log_json(logger, "generator_start", run_id=run_id, docs=docs, workers=workers, rate=rate,
              pad_bytes=pad_bytes)
 
-    threads = []
     per_worker_rate = rate / workers if rate else 0.0
-    for w in range(workers):
-        t = threading.Thread(target=worker, args=(source, run_id, range(w, docs, workers),
-                                                   per_worker_rate, pad_bytes, counts, lock))
-        t.start()
-        threads.append(t)
-    for t in threads:
-        t.join()
+    errors = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(worker, source, run_id, range(w, docs, workers), per_worker_rate,
+                               pad_bytes, counts, lock) for w in range(workers)]
+    for future in futures:
+        if future.exception():
+            errors.append(repr(future.exception())[:500])
 
     finished = utcnow()
     elapsed = (finished - started).total_seconds()
     total_ops = sum(counts.values())
+    # A failed worker leaves the workload incomplete, so the verifiers refuse it.
+    state = "failed" if errors else "done"
     runs.update_one({"_id": run_id}, {"$set": {"expected": counts, "finished_at": finished,
                                                "elapsed_s": elapsed, "ops_per_s": total_ops / elapsed,
-                                               "state": "done"}})
-    log_json(logger, "generator_done", run_id=run_id, expected=counts, elapsed_s=round(elapsed, 2),
-             ops_per_s=round(total_ops / elapsed, 1))
+                                               "state": state, "errors": errors}})
+    log_json(logger, f"generator_{state}", run_id=run_id, expected=counts, elapsed_s=round(elapsed, 2),
+             ops_per_s=round(total_ops / elapsed, 1), errors=errors)
     client.close()
+    if errors:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

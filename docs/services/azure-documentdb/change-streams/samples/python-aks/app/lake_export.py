@@ -7,26 +7,30 @@ fixed size and move the checkpoint after every uploaded chunk.
 A chunk is named after the resume token that precedes its first event. A retry
 starts from the same checkpoint, reads the same events in the same order and
 overwrites the same file with the same or a longer chunk, so a crash between
-the upload and the checkpoint does not leave duplicate rows.
+the upload and the checkpoint does not leave duplicate rows. The first run
+saves its start time before reading, so its retry starts at the same place.
+
+A run holds a lease on a lock file next to the checkpoint, so two runs never
+write chunks for the same stream at the same time.
 """
 
 import hashlib
 import io
-import json
 import logging
 import os
 import socket
+import threading
 import time
-from datetime import datetime, timezone
 from typing import Optional
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from azure.core import MatchConditions
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.filedatalake import DataLakeServiceClient
 from bson import json_util
+from bson.timestamp import Timestamp
 
 from common import env, get_client, get_database, get_source, log_json, setup_logging, utcnow
 
@@ -46,7 +50,10 @@ SCHEMA = pa.schema([
 
 
 class Checkpoint:
-    """Resume token stored next to the data, updated with an ETag condition."""
+    """Stream position stored next to the data, updated with an ETag condition.
+
+    The position is a resume token, or the start time saved by the first run.
+    """
 
     def __init__(self, fs, stream_id: str):
         self.file = fs.get_file_client(f"_checkpoints/{stream_id}.json")
@@ -58,16 +65,70 @@ class Checkpoint:
         except ResourceNotFoundError:
             return None
         self.etag = download.properties.etag
-        return json_util.loads(download.readall())["token"]
+        return json_util.loads(download.readall())
 
-    def save(self, token: dict, events: int) -> None:
-        body = json_util.dumps({"token": token, "updated_at": utcnow(), "events": events,
-                                "pod": socket.gethostname()})
+    def save(self, token: Optional[dict], events: int, start_at: Optional[Timestamp] = None) -> None:
+        body = json_util.dumps({"token": token, "start_at": start_at, "updated_at": utcnow(),
+                                "events": events, "pod": socket.gethostname()})
         # IfNotModified fails if another run moved the checkpoint since we read it.
         condition = (dict(etag=self.etag, match_condition=MatchConditions.IfNotModified)
                      if self.etag else dict(match_condition=MatchConditions.IfMissing))
         result = self.file.upload_data(body, overwrite=True, **condition)
         self.etag = result["etag"]
+
+
+class StreamLock:
+    """Lease on ``_checkpoints/<stream>.lock`` held for the whole run.
+
+    The lease is short and renewed in the background. A lease left by a killed
+    pod expires, but Blob Storage can take up to a minute to grant a new one,
+    so acquiring waits that long before the task fails.
+    """
+
+    DURATION_S = 20
+    ACQUIRE_WAIT_S = 90
+
+    def __init__(self, fs, stream_id: str):
+        self.file = fs.get_file_client(f"_checkpoints/{stream_id}.lock")
+        self.lease = None
+        self.lost: Optional[Exception] = None
+        self.stopped = threading.Event()
+
+    def acquire(self) -> None:
+        try:
+            self.file.create_file(match_condition=MatchConditions.IfMissing)
+        except HttpResponseError as error:
+            if error.status_code != 409:
+                raise
+        deadline = time.monotonic() + self.ACQUIRE_WAIT_S
+        while True:
+            try:
+                self.lease = self.file.acquire_lease(lease_duration=self.DURATION_S)
+                break
+            except HttpResponseError as error:
+                # 409 while another run holds the lease.
+                if error.status_code != 409 or time.monotonic() >= deadline:
+                    raise
+                time.sleep(5)
+        threading.Thread(target=self._renew, daemon=True).start()
+
+    def _renew(self) -> None:
+        while not self.stopped.wait(self.DURATION_S / 4):
+            try:
+                self.lease.renew()
+            except Exception as error:  # noqa: BLE001 - any failure means the lease may be gone
+                self.lost = error
+                return
+
+    def check(self) -> None:
+        """Call before every write; stop instead of writing without the lease."""
+        if self.lost:
+            raise RuntimeError(f"stream lease lost: {self.lost}")
+
+    def release(self) -> None:
+        self.stopped.set()
+        if self.lease and not self.lost:
+            self.lease.release()
 
 
 def to_row(change: dict) -> dict:
@@ -84,11 +145,14 @@ def to_row(change: dict) -> dict:
     }
 
 
-def chunk_path(prefix: str, start_token: Optional[dict], rows: list) -> str:
-    first = rows[0]["wall_time"] or datetime.now(timezone.utc)
-    key = start_token["_data"] if start_token else "origin"
+def chunk_path(prefix: str, start: dict, rows: list) -> str:
+    """Path from the chunk start position only, so a retry rewrites the same file."""
+    key = start["token"]["_data"] if start.get("token") else f"start-{start['start_at']}"
     digest = hashlib.sha256(key.encode()).hexdigest()[:20]
-    return f"{prefix}/dt={first:%Y-%m-%d}/hour={first:%H}/part-{digest}.parquet"
+    first = rows[0]["wall_time"]
+    # Without wallTime the read time would move the file on a later retry.
+    partition = f"dt={first:%Y-%m-%d}/hour={first:%H}" if first else "dt=unknown"
+    return f"{prefix}/{partition}/part-{digest}.parquet"
 
 
 def write_chunk(fs, path: str, rows: list) -> int:
@@ -111,8 +175,16 @@ def main() -> None:
 
     service = DataLakeServiceClient(env("LAKE_URL"), credential=DefaultAzureCredential())
     fs = service.get_file_system_client(env("LAKE_FILESYSTEM", "cdc"))
+    lock = StreamLock(fs, stream_id)
+    lock.acquire()
     checkpoint = Checkpoint(fs, stream_id)
-    token = checkpoint.load()
+    position = checkpoint.load()
+    if position is None:
+        # First run: save the start time before reading, so a retry after a
+        # failed first chunk reads the same events instead of starting later.
+        position = {"token": None, "start_at": Timestamp(int(time.time()), 0)}
+        checkpoint.save(None, 0, start_at=position["start_at"])
+    token = position.get("token")
 
     client = get_client(f"cs-lake-export-{socket.gethostname()}")
     source = get_source(get_database(client))
@@ -126,6 +198,8 @@ def main() -> None:
         kwargs["max_await_time_ms"] = max_await_ms
     if token:
         kwargs["resume_after"] = token
+    else:
+        kwargs["start_at_operation_time"] = position["start_at"]
 
     started = time.monotonic()
     run_started_at = utcnow()
@@ -134,7 +208,7 @@ def main() -> None:
     caught_up = False
     with source.watch(**kwargs) as stream:
         rows: list = []
-        chunk_start = token
+        chunk_start = position
         last_token = token
         while True:
             change = stream.try_next()
@@ -152,24 +226,28 @@ def main() -> None:
                     (max_seconds and time.monotonic() - started >= max_seconds)
             if rows and (full or caught_up or limit):
                 path = chunk_path(prefix, chunk_start, rows)
+                lock.check()
                 size = write_chunk(fs, path, rows)
                 chunks += 1
                 if fault_after_chunks and chunks >= fault_after_chunks:
                     log_json(logger, "fault_exit", chunks=chunks, path=path)
                     os._exit(137)
+                lock.check()
                 checkpoint.save(last_token, len(rows))
                 total += len(rows)
                 written_bytes += size
                 log_json(logger, "chunk", path=path, rows=len(rows), bytes=size, total=total)
                 rows = []
-                chunk_start = last_token
+                chunk_start = {"token": last_token}
             if caught_up or limit:
                 break
         # Nothing new: move the checkpoint to the post-batch resume token so
         # the next run does not scan the same idle range again.
         if total == 0 and stream.resume_token and stream.resume_token != token:
+            lock.check()
             checkpoint.save(stream.resume_token, 0)
 
+    lock.release()
     log_json(logger, "export_done", events=total, chunks=chunks, bytes=written_bytes,
              caught_up=caught_up, elapsed_s=round(time.monotonic() - started, 2))
     client.close()
