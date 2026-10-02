@@ -27,6 +27,7 @@ collections:
 services:
   application-development: Application Development
   azure-application-gateway: Azure Application Gateway
+  azure-application-gateway-for-containers: Azure Application Gateway for Containers
   azure-ai-search: Azure AI Search
   azure-api-management: Azure API Management
   azure-app-service: Azure App Service
@@ -37,6 +38,7 @@ services:
   azure-database-for-mysql: Azure Database for MySQL
   azure-documentdb: Azure DocumentDB
   azure-functions: Azure Functions
+  azure-front-door: Azure Front Door
   azure-hdinsight: Azure HDInsight
   azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
@@ -122,6 +124,14 @@ verification_statuses: [verified, needs-review]
 required_source_host: learn.microsoft.com
 official_source_hosts:
   - learn.microsoft.com
+  - www.copilotkit.ai
+  - docs.copilotkit.ai
+  - docs.ag-ui.com
+  - dojo.ag-ui.com
+  - a2ui.org
+  - generativeui.github.io
+  - blog.google
+  - openjdk.org
   - kubernetes.io
   - www.cncf.io
   - cncf.io
@@ -129,3 +139,4 @@ official_source_hosts:
   - modelcontextprotocol.io
   - py.sdk.modelcontextprotocol.io
   - prices.azure.com
+  - www.rfc-editor.org

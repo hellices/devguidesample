@@ -1,0 +1,5 @@
+title: AGFC protocol acceptance results
+description: Actual Azure HTTP/2 and strict HTTP/3 observations, separate from the local performance control.
+kind: artifact
+used_by:
+  - index

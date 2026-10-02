@@ -1,0 +1,500 @@
+{
+  "profiles": {
+    "unshaped": {
+      "before": [
+        {
+          "kind": "noqueue",
+          "handle": "0:",
+          "dev": "lo",
+          "root": true,
+          "refcnt": 2,
+          "options": {},
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "dev": "eth0",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "seed": 8636189665405066271,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8004:",
+          "dev": "eth1",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "seed": 16372058035622535339,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        }
+      ],
+      "after": [
+        {
+          "kind": "noqueue",
+          "handle": "0:",
+          "dev": "lo",
+          "root": true,
+          "refcnt": 2,
+          "options": {},
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "dev": "eth0",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "seed": 8636189665405066271,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 17213024,
+          "packets": 14238,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8004:",
+          "dev": "eth1",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "seed": 16372058035622535339,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 873265,
+          "packets": 5216,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        }
+      ],
+      "icmp_rtt_ms": {
+        "min": 0.041,
+        "avg": 0.105,
+        "max": 0.194,
+        "mdev": 0.048
+      }
+    },
+    "mobile-clean": {
+      "before": [
+        {
+          "kind": "noqueue",
+          "handle": "0:",
+          "dev": "lo",
+          "root": true,
+          "refcnt": 2,
+          "options": {},
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "dev": "eth0",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 2808204822899426765,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 17213024,
+          "packets": 14238,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8004:",
+          "dev": "eth1",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 12677222430787119595,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 873265,
+          "packets": 5216,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        }
+      ],
+      "after": [
+        {
+          "kind": "noqueue",
+          "handle": "0:",
+          "dev": "lo",
+          "root": true,
+          "refcnt": 2,
+          "options": {},
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "dev": "eth0",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 2808204822899426765,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 34361220,
+          "packets": 28111,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 354,
+          "qlen": 5
+        },
+        {
+          "kind": "netem",
+          "handle": "8004:",
+          "dev": "eth1",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 12677222430787119595,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 1965947,
+          "packets": 14327,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        }
+      ],
+      "icmp_rtt_ms": {
+        "min": 80.241,
+        "avg": 85.043,
+        "max": 90.839,
+        "mdev": 3.224
+      }
+    },
+    "mobile-loss": {
+      "before": [
+        {
+          "kind": "noqueue",
+          "handle": "0:",
+          "dev": "lo",
+          "root": true,
+          "refcnt": 2,
+          "options": {},
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "dev": "eth0",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.01,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 20260915,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 34361574,
+          "packets": 28116,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8004:",
+          "dev": "eth1",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.01,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 20260916,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 1966109,
+          "packets": 14330,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        }
+      ],
+      "after": [
+        {
+          "kind": "noqueue",
+          "handle": "0:",
+          "dev": "lo",
+          "root": true,
+          "refcnt": 2,
+          "options": {},
+          "bytes": 0,
+          "packets": 0,
+          "drops": 0,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        },
+        {
+          "kind": "netem",
+          "handle": "8003:",
+          "dev": "eth0",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.01,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 20260915,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 51544488,
+          "packets": 41957,
+          "drops": 129,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 222,
+          "qlen": 3
+        },
+        {
+          "kind": "netem",
+          "handle": "8004:",
+          "dev": "eth1",
+          "root": true,
+          "refcnt": 3,
+          "options": {
+            "limit": 10000,
+            "delay": {
+              "delay": 0.04,
+              "jitter": 0,
+              "correlation": 0
+            },
+            "loss-random": {
+              "loss": 0.01,
+              "correlation": 0
+            },
+            "rate": {
+              "rate": 1250000,
+              "packetoverhead": 0,
+              "cellsize": 0,
+              "celloverhead": 0
+            },
+            "seed": 20260916,
+            "ecn": false,
+            "gap": 0
+          },
+          "bytes": 3151046,
+          "packets": 24050,
+          "drops": 108,
+          "overlimits": 0,
+          "requeues": 0,
+          "backlog": 0,
+          "qlen": 0
+        }
+      ],
+      "icmp_rtt_ms": {
+        "min": 81.051,
+        "avg": 85.892,
+        "max": 91.78,
+        "mdev": 3.411
+      }
+    }
+  },
+  "offloads": {
+    "client": {
+      "tcp-segmentation-offload": "off",
+      "generic-segmentation-offload": "off",
+      "generic-receive-offload": "off",
+      "tx-udp-segmentation": "off"
+    },
+    "server": {
+      "tcp-segmentation-offload": "off",
+      "generic-segmentation-offload": "off",
+      "generic-receive-offload": "off",
+      "tx-udp-segmentation": "off"
+    },
+    "router-eth0": {
+      "tcp-segmentation-offload": "off",
+      "generic-segmentation-offload": "off",
+      "generic-receive-offload": "off",
+      "tx-udp-segmentation": "off"
+    },
+    "router-eth1": {
+      "tcp-segmentation-offload": "off",
+      "generic-segmentation-offload": "off",
+      "generic-receive-offload": "off",
+      "tx-udp-segmentation": "off"
+    }
+  }
+}

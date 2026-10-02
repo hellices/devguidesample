@@ -434,6 +434,7 @@ body {
   border-radius: 0.35rem;
   font-size: 0.72rem;
   line-height: 1.75;
+  overflow-wrap: break-word;
 }
 
 .md-typeset table:not([class]) th {

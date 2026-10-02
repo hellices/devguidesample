@@ -363,6 +363,18 @@ def test_topic_and_sample_styles_are_responsive_and_accessible() -> None:
     assert "transition: none" in reduced_motion
 
 
+def test_markdown_tables_preserve_words_without_changing_prose_wrapping() -> None:
+    css = (
+        Path(__file__).parents[2] / "docs/assets/stylesheets/extra.css"
+    ).read_text(encoding="utf-8")
+    prose_rule = css.split(".md-typeset {", 1)[1].split("}", 1)[0]
+    table_rule = css.split(".md-typeset table:not([class]) {", 1)[1].split("}", 1)[0]
+
+    assert "overflow-wrap: anywhere;" in prose_rule
+    assert "overflow-wrap: break-word;" in table_rule
+    assert "white-space: nowrap;" not in table_rule
+
+
 def test_strict_build_rejects_missing_anchors(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

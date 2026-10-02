@@ -714,6 +714,20 @@ def test_resolution_rejects_a_missing_baseline_current_document(
         lineage_api("resolve_current_documents")(repo, inventory)
 
 
+def test_resolution_rejects_baseline_loss_despite_an_unrelated_replacement(
+    document_history: tuple[Path, PrePagesInventory],
+) -> None:
+    repo, inventory = document_history
+    (repo / "docs/services/service/topic-00/index.md").unlink()
+    extra = repo / "docs/services/service/unrelated-topic/index.md"
+    extra.parent.mkdir(parents=True)
+    extra.write_text("---\ntitle: Unrelated topic\n---\n# Unrelated topic\n")
+    catalog = build_topic_catalog(repo / "docs", load_taxonomy(repo / "docs-taxonomy.yml"))
+    assert len(catalog.documents) == len(inventory.documents) == 62
+    with pytest.raises(AuditFormatError, match="guides/service/topic-00/index.md"):
+        lineage_api("resolve_current_documents")(repo, inventory)
+
+
 @pytest.mark.parametrize("extra_count", [1, 4, 7])
 def test_resolution_allows_extra_current_documents_without_expanding_the_baseline(
     document_history: tuple[Path, PrePagesInventory], extra_count: int,
