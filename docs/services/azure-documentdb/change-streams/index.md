@@ -1,255 +1,163 @@
 ---
-title: Azure DocumentDB change stream을 Python으로 AKS에서 검증하기
-description: 프라이빗 엔드포인트 뒤의 Azure DocumentDB(vCore) 클러스터에서 PyMongo change stream의 지원 범위, 재개, 중복 처리와 지연을 AKS consumer로 측정합니다.
-document_type: lab
-services: [azure-documentdb, azure-kubernetes-service]
-technologies: [python, mongodb, kubernetes, bicep]
-tags: [build, evaluate]
-status: verified
+title: Azure DocumentDB change stream을 Airflow DAG로 Parquet에 내리기
+description: AKS 위 Airflow DAG가 Azure DocumentDB(vCore) change stream을 주기적으로 읽어 ADLS Gen2에 Parquet으로 쓸 때 이벤트 누락과 중복이 없는지 확인했습니다. 공식 예제가 다루지 않는 부분과 운영 전에 더 확인할 항목도 정리했습니다.
+document_type: research
+services: [azure-documentdb, azure-storage, azure-kubernetes-service]
+technologies: [python, mongodb, airflow, kubernetes]
+tags: [evaluate, build, storage]
+status: current
 verification_status: verified
 sources_checked_at: 2026-10-02
+published_at: 2026-10-02
 official_sources:
   - title: Change streams in Azure DocumentDB
     url: https://learn.microsoft.com/azure/documentdb/change-streams
-  - title: $changeStream (Azure DocumentDB aggregation operator)
-    url: https://learn.microsoft.com/documentdb/query/operators/aggregation/$changestream
-  - title: Use Azure Private Link in Azure DocumentDB
-    url: https://learn.microsoft.com/azure/documentdb/how-to-private-link
-  - title: Compute and storage configurations for Azure DocumentDB
-    url: https://learn.microsoft.com/azure/documentdb/compute-storage
-  - title: Release notes for Azure DocumentDB
-    url: https://learn.microsoft.com/azure/documentdb/release-notes
-  - title: Microsoft.DocumentDB mongoClusters (Bicep reference)
-    url: https://learn.microsoft.com/azure/templates/microsoft.documentdb/2026-06-01/mongoclusters
-  - title: Work with Azure Developer CLI environment variables
-    url: https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables
   - title: AzureCosmosDB/changestream-driver-compatibility
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
-last_verified: 2026-10-02
-review_cycle_days: 90
-estimated_time: 90m
-cost: paid
-cleanup_required: true
 ---
 
-# Azure DocumentDB change stream을 Python으로 AKS에서 검증하기
+# Azure DocumentDB change stream을 Airflow DAG로 Parquet에 내리기
 
-Azure DocumentDB(이전 이름 Azure Cosmos DB for MongoDB vCore)는 MongoDB
-change stream을 제공합니다. 다만 지원 범위가 MongoDB 서버와 다르므로 코드를
-옮기기 전에 실제 클러스터에서 확인해야 합니다. 이 실습은 PyMongo consumer를 AKS에
-띄우고 프라이빗 엔드포인트로 클러스터에 연결해 다음 네 가지를 측정합니다.
+Azure DocumentDB(이전 이름 Azure Cosmos DB for MongoDB vCore)의 change stream을
+Airflow DAG가 주기적으로 읽어 Parquet 파일로 내리는 방식이 실제로 쓸 만한지
+확인했습니다. 질문은 세 가지입니다.
 
-- 어떤 옵션과 이벤트 필드가 실제로 동작하는가
-- 파드를 죽였다 살려도 이벤트가 빠지지 않는가
-- 중복이 생기는 지점은 어디이고 어떻게 흡수하는가
-- 초당 1,000건 쓰기에서 지연은 얼마인가
+- 이벤트를 빠뜨리거나 두 번 쓰지 않고 파일로 내릴 수 있는가
+- 공식 예제를 그대로 옮기면 어디서 문제가 생기는가
+- 운영에 올리기 전에 무엇을 더 확인해야 하는가
 
-상시 consumer 대신 Airflow DAG가 주기마다 change stream을 읽어 ADLS Gen2에
-Parquet으로 쓰는 방식은 [Airflow DAG로 Parquet 적재](airflow-parquet/index.md)에서
-측정했습니다.
+시험 환경은 이 질문에 답하려고 만든 것입니다. 배포와 실행 절차는 sample
+[README](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)에,
+시나리오별 수치는 [측정 상세](measurements/index.md)에 있습니다.
 
-## 목표
+## change stream 소개
 
-- 프라이빗 엔드포인트만 열린 DocumentDB 클러스터와 AKS를 azd로 배포합니다.
-- `probe.py`로 change stream 옵션별 동작을 확인합니다.
-- 생성기가 만든 이벤트와 sink에 기록된 이벤트를 `verify.py`로 대조해 누락,
-  중복, 순서 역전과 지연을 숫자로 남깁니다.
+change stream은 컬렉션의 변경을 이벤트로 받아 보는 MongoDB 기능입니다. 변경을
+찾으려고 컬렉션을 반복해서 조회할 필요가 없습니다. Learn 문서에 나온 DocumentDB의
+동작은 다음과 같습니다.
 
-## 사전 조건
+- 이벤트의 `_id`가 resume token입니다. 이 값을 저장했다가 `resumeAfter`로 넘기면
+  그 다음 이벤트부터 이어 읽습니다.
+- 기본 change stream은 400 MB 활성 change log 안의 이벤트만 읽습니다. PITR 로그와
+  통합되면 최대 35일 또는 클러스터 초기화 시점 중 이른 쪽까지 재개할 수 있습니다.
+- 파이프라인에는 `$addFields`, `$match`, `$project`, `$set`, `$unset`을 쓸 수
+  있습니다. `showExpandedEvents`는 지원하지 않습니다.
+- 변경 전 문서(pre-image)와 다중 shard 클러스터 지원은 미리 보기이며 지원
+  요청으로 켭니다.
 
-- Azure 구독에서 리소스 그룹을 만들 수 있는 권한
-- Azure Developer CLI(azd) 1.29 이상, Azure CLI, `kubectl`, `envsubst`
-- 이 저장소의 [python-aks sample](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)
+## 확인한 구성
 
-이 문서의 결과는 2026-10-02에 아래 환경에서 측정했습니다.
+![AKS의 Airflow scheduler가 5분마다 내보내기 파드를 만들면 그 파드가 프라이빗 엔드포인트를 거쳐 DocumentDB change stream을 읽어 ADLS Gen2에 Parquet 청크와 checkpoint를 쓰며 Entra ID 워크로드 ID로 인증하는 구성](images/architecture.svg)
 
-| 항목 | 값 |
+Airflow가 5분마다 `KubernetesPodOperator`로 내보내기 파드를 하나 띄웁니다. 파드는
+다음 순서로 동작하고 끝나면 사라집니다.
+
+1. ADLS Gen2의 checkpoint 파일에서 resume token을 읽습니다. 없으면 stream의 현재
+   위치에서 시작합니다.
+2. 실행을 시작한 시각까지 기록된 이벤트를 읽어 100,000건씩 Parquet 청크로
+   올립니다. 청크 파일 이름은 청크 첫 이벤트 바로 앞의 resume token으로 만듭니다.
+3. 청크를 올린 뒤 checkpoint를 ETag 조건으로 갱신합니다.
+
+DAG는 `max_active_runs=1`이고 실패하면 세 번까지 재시도합니다. 재시도는 같은
+checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁니다.
+
+## 결과: 동작하는가
+
+동작합니다. 모든 시나리오에서 생성기가 만든 이벤트가 Parquet 파일에 한 번씩
+들어갔고 누락, 중복, 문서별 순서 역전은 0건이었습니다. 단 아래 표의 조건을
+지켰을 때입니다.
+
+| 확인 항목 | 결과 |
 | --- | --- |
-| 리전 | East US 2 |
-| DocumentDB | M30(2 vCore, 8 GiB), shard 1개, 스토리지 32 GiB, 고가용성 끔, 서버 버전 7.0.0 |
-| 네트워크 | 공용 액세스 끔, 프라이빗 엔드포인트(`privatelink.mongocluster.cosmos.azure.com`, 포트 10260) |
-| AKS | Kubernetes 1.35, Standard_D4s_v6 노드, Azure CNI overlay |
-| 클라이언트 | Python 3.12, PyMongo 4.18.2 |
+| 5분 주기 지연 | 초당 약 1,000건 쓰기에서 이벤트 기록부터 파일 저장까지 p50 156초, p99 302초 |
+| 업로드 직후 장애와 재시도 | 첫 청크를 올리고 checkpoint를 쓰기 전에 파드를 죽여도 재시도 후 중복 0, 누락 0 |
+| 400 MB 활성 change log를 넘긴 재개 | DAG를 31분 멈춘 사이 쌓인 문서 본문 2.6 GB 이상의 백로그를 누락 없이 따라잡음. `maxAwaitTimeMS`를 지정하지 않았을 때만 성공 |
+| 처리 속도 | 1 KB 문서는 초당 약 13,000–18,000건, 4 KB 문서 백로그는 초당 약 3,600건 |
+| 파일 크기 | 이벤트에 실린 문서 크기와 비슷함. update 이벤트에도 문서 전체가 실려 문서 하나가 여러 번 저장됨 |
 
-## 비용과 안전 경계
+지켜야 할 조건은 다음과 같습니다.
 
-- 클러스터, AKS 노드, ACR과 프라이빗 엔드포인트는 실행하는 동안 과금됩니다.
-  측정이 끝나면 바로 리소스 그룹을 삭제합니다.
-- 관리자 비밀번호는 셸 환경 변수로만 azd에 넘기고 연결 문자열은 Kubernetes
-  Secret에만 넣습니다. Learn은 azd 환경의 `.env` 파일에 비밀을 넣지 말라고
-  경고합니다. 그 파일이 있는 `.azure/`는 `.gitignore` 대상이며 커밋하지 않습니다.
-- 생성기는 지정한 데이터베이스(`cslab`)의 `orders` 컬렉션에 직접 씁니다.
-  운영 클러스터를 대상으로 실행하지 않습니다.
-- 이 문서에 나오는 리소스 이름과 레지스트리 주소는 가상 값입니다.
+- change stream을 열 때 짧은 `maxAwaitTimeMS`를 주지 않습니다. 1초로 두면 큰
+  백로그를 재개할 때 code 50으로 실패하고 재시도로도 넘어가지 못했습니다.
+- 파일을 먼저 쓰고 checkpoint를 나중에 씁니다. 순서가 반대면 그 사이 장애로
+  이벤트를 잃습니다.
+- 파일 이름을 resume token으로 정해 재시도가 같은 파일을 덮어쓰게 합니다.
+- 실행이 겹치지 않게 `max_active_runs=1`과 checkpoint ETag 조건을 함께 씁니다.
+- 감시할 컬렉션을 먼저 만듭니다. 없으면 `watch()`가 code 26으로 실패합니다.
 
-## 배포
+## 공식 예제가 놓친 부분
 
-Azure 리소스는 azd로 배포하고 이미지와 파드는 `az acr build`와 `kubectl`로 직접
-배포합니다. 명령은 sample 디렉터리에서 실행하며 전체 절차는 sample README에
-있습니다.
+Learn 문서의 시작 예제(Python, Java, C#, Ruby, Node.js)와
+[changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
+저장소의 sample은 계속 떠 있는 consumer가 이벤트를 출력하는 예제입니다. 기능
+확인에는 충분하지만 주기 실행하는 DAG로 옮기면 다음 부분이 문제가 됩니다.
 
-```bash
-azd env new docdb-changestream
-azd env set AZURE_LOCATION eastus2
-export DOCDB_ADMIN_PASSWORD="Cs$(openssl rand -hex 12)Aa9"
-azd provision
-
-set -a; eval "$(azd env get-values)"; set +a
-export IMAGE=$AZURE_CONTAINER_REGISTRY_ENDPOINT/cslab:v1
-az acr build -r $AZURE_CONTAINER_REGISTRY_NAME -t cslab:v1 app/
-az aks get-credentials -g $AZURE_RESOURCE_GROUP -n $AZURE_AKS_CLUSTER_NAME
-
-kubectl create namespace cslab
-MONGO_URI="${DOCDB_CONNECTION_STRING/<user>:<password>/$DOCDB_ADMIN_USER:$DOCDB_ADMIN_PASSWORD}"
-kubectl -n cslab create secret generic docdb --from-literal=uri="$MONGO_URI"
-```
-
-`azd provision`은 `rg-<환경 이름>` 리소스 그룹을 만들고 `infra/cluster.bicep`과
-`infra/lake.bicep`을 배포합니다. `cluster.bicep`은 VNet,
-`Microsoft.DocumentDB/mongoClusters` 클러스터(M30, shard 1개), 프라이빗
-엔드포인트와 사설 DNS 영역, ACR, AKS를 만듭니다. `lake.bicep`은
-[Airflow DAG로 Parquet 적재](airflow-parquet/index.md)에서 쓰는 ADLS Gen2와 워크로드
-ID를 만듭니다. 배포 출력은 azd 환경 값으로 저장되고 위의 `azd env get-values`로
-셸 변수가 됩니다.
-
-프라이빗 엔드포인트의 group ID는 `MongoCluster`입니다. Learn은 프라이빗
-엔드포인트로 연결할 때 `mongodb+srv` 형식의 연결 문자열을 쓰라고 안내합니다. 배포
-출력의 연결 문자열은 `<user>`와 `<password>` 자리 표시자를 담고 있어 위 명령이
-관리자 계정으로 바꿉니다. AKS 파드에서는 클러스터 호스트 이름이 사설 DNS 영역을
-거쳐 프라이빗 IP로 확인됩니다.
-
-감시할 컬렉션은 consumer보다 먼저 만듭니다. 컬렉션이 없으면 `watch()`가
-`NamespaceNotFound`(code 26)로 실패합니다.
-
-```bash
-envsubst < k8s/toolbox.yaml | kubectl apply -f -
-kubectl -n cslab exec cs-toolbox -- python -c \
-  "from common import *; get_database(get_client('setup')).create_collection('orders')"
-envsubst < k8s/consumer.yaml | kubectl apply -f -
-```
-
-## 시나리오 실행
-
-모든 시나리오는 `k8s/job.yaml`에 `SCRIPT`와 매개변수를 넣어 Job으로 실행합니다.
-
-| 실행 | 스크립트와 매개변수 | 목적 |
+| 공식 예제 | 옮겼을 때의 문제 | 이번 구현 |
 | --- | --- | --- |
-| probe | `SCRIPT=probe.py` | 옵션, 이벤트 필드, 재개 방식과 오류 코드 확인 |
-| r1 | `generator.py`, `DOCS=10000` | 기본 정합성과 지연 |
-| r2 | `generator.py`, `DOCS=100000`, 실행 중 consumer 파드 반복 삭제 | 재시작 후 누락 여부 |
-| r3 | `generator.py`, `DOCS=100000`, consumer에 `FAULT_EXIT_AFTER_WRITE=200` 설정 | sink 쓰기와 checkpoint 사이에서 프로세스가 죽을 때의 중복 |
-| r4 | `generator.py`, `RATE=1000`, 5분 | 초당 1,000건에서의 지연 |
+| 저장소의 `mongo_utils.py`가 resume token을 이벤트마다 로컬 파일 `.resume_token.json`에 씀 | 실행마다 새 파드가 뜨면 파일이 없어 현재 위치부터 읽음. 그 사이 이벤트를 잃음 | checkpoint를 ADLS Gen2 파일로 두고 청크마다 ETag 조건으로 갱신 |
+| Python 예제가 대상 컬렉션에 `insert_one`을 한 뒤 token을 저장 | 두 동작 사이에서 프로세스가 죽으면 재시작 후 같은 이벤트가 한 번 더 들어감 | resume token으로 파일 이름을 정해 덮어씀. 상시 consumer는 token을 키로 upsert |
+| `for change in stream`처럼 끝없이 읽음 | 배치 실행이 끝나지 않음 | `try_next()`로 읽고 실행 시작 시각 이후 이벤트를 만나면 종료 |
+| C# 예제와 저장소의 지원 확인 스크립트가 대기 시간을 1초로 지정 | 큰 백로그 재개에서 code 50(`ExceededTimeLimit`)이 같은 위치에서 반복 | `max_await_time_ms`를 지정하지 않음 |
+| 오류가 나면 메시지를 출력하고 끝남 | Learn 제한 사항은 장애 조치 뒤 커서를 다시 열어야 한다고 설명함 | Airflow 재시도가 새 파드에서 checkpoint로 stream을 다시 엶 |
+| 감시할 컬렉션이 있다고 가정 | 컬렉션이 없으면 `watch()`가 code 26 | 컬렉션을 먼저 만듦 |
 
-생성기는 문서마다 insert와 update를 한 번씩 실행합니다. 10번째 문서마다
-replace, 5번째 문서마다 delete를 더합니다. 따라서 문서 10,000개는 이벤트
-23,000건이 됩니다. 쓰기는 모두 `w=majority`입니다.
-
-```bash
-JOB_NAME=gen-r4 SCRIPT=generator.py RUN_ID=r4 DOCS=300000 WORKERS=16 RATE=1000 \
-  envsubst < k8s/job.yaml | kubectl apply -f -
-# 생성기가 끝나고 consumer가 따라잡은 뒤
-JOB_NAME=verify-r4 SCRIPT=verify.py RUN_ID=r4 DOCS=0 WORKERS=0 RATE=0 \
-  envsubst < k8s/job.yaml | kubectl apply -f -
-kubectl -n cslab logs job/verify-r4
-```
-
-consumer는 다음 방식으로 동작합니다.
-
-- `collection.watch(full_document="updateLookup", max_await_time_ms=1000)`로 열고
-  `try_next()`로 읽습니다.
-- 이벤트를 최대 200건씩 sink 컬렉션에 `bulk_write`한 뒤 resume token을
-  `_cs_checkpoints`에 저장합니다. 대기 중에는 post-batch resume token을 저장합니다.
-- sink는 resume token의 `_data`를 키로 upsert합니다. 같은 이벤트가 다시 오면
-  행을 추가하지 않고 `deliveries`를 1 올립니다.
-- 지연은 consumer가 이벤트를 받은 시각에서 생성기가 문서에 기록한
-  `updated_at` 또는 `created_at`을 뺀 값입니다.
-
-## 예상 결과
-
-### 옵션과 이벤트 필드
-
-Learn 문서에 나온 동작과 이번 클러스터에서 관찰한 동작을 구분했습니다.
-관찰 결과는 M30, shard 1개, 서버 7.0.0 클러스터에서 2026-10-02에 확인한 값입니다.
+Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 있었습니다. 2026-10-02
+기준 M30, shard 1개, 서버 7.0.0 클러스터에서 관찰한 결과입니다.
 
 | 항목 | Learn 문서 | 관찰 결과 |
 | --- | --- | --- |
-| 이벤트 필드 | insert, update, delete 예시에 `_id`, `operationType`, `fullDocument`, `ns`, `documentKey` | `_id`, `operationType`, `fullDocument`, `ns`, `documentKey`, `wallTime`. `clusterTime`은 없음 |
-| replace | 예시 없음 | `operationType: update`로 오고 `fullDocument`에 교체 후 문서 전체가 있음 |
-| update의 `fullDocument` | 변경 후 문서 전체를 보여 주는 예시 | 옵션 없이도 포함됨. `updateLookup`, `whenAvailable`, `required` 모두 오류 없이 열림 |
-| `updateDescription` | 별도 옵션 예시로 제시. 파이프라인 안의 update에서는 지원하지 않음 | 파이프라인이 있든 없든 반환되지 않음 |
-| pre-image | 미리 보기. 지원 요청으로 클러스터에서 켜야 함 | `collMod`는 성공. `whenAvailable`은 `null`, `required`는 code 10065 오류. 지원 요청은 하지 않음 |
-| 파이프라인 단계 | `$addFields`, `$match`, `$project`, `$set`, `$unset` | 다섯 개 모두 동작. 목록에 없는 `$replaceRoot`, `$redact`도 오류 없이 동작 |
-| 감시 범위 | 컬렉션 예시 | `db.watch()`는 code 26. `client.watch()`에 `ns.db` 조건을 건 `$match`는 동작 |
-| 재개 | `resumeAfter`, `startAt`, `startAtOperationTime` 지원 | `resume_after`, `start_after` 동작. 세션의 `operationTime`이 비어 있어 이를 쓴 `start_at_operation_time`은 실패. 현재 시각에서 10분 뺀 `Timestamp`는 동작 |
-| 잘못된 resume token | 언급 없음 | code 2(BadValue) |
-| `showExpandedEvents` | 지원하지 않음 | code 115(CommandNotSupported) |
-| 감시 중인 컬렉션 drop, rename | 언급 없음 | `invalidate` 이벤트 없이 code 26으로 커서 종료 |
-| 트랜잭션 | 언급 없음 | 이벤트는 오지만 `txnNumber`, `lsid`는 없음 |
-| 큰 문서 | 언급 없음 | 14 MiB 문서의 insert와 update 이벤트 모두 전달됨 |
-| 대기 중 resume token | 언급 없음 | 이벤트가 없어도 post-batch resume token이 전진함 |
+| `maxAwaitTimeMS` | 설명 없음. C# 예제는 1초 | 새 이벤트 대기 시간이 아니라 `getMore` 전체의 실행 제한으로 적용됨 |
+| 이벤트 필드 | `_id`, `operationType`, `fullDocument`, `ns`, `documentKey` | 같은 필드에 `wallTime`이 더 있고 `clusterTime`은 없음 |
+| replace | 예시 없음 | `operationType: update`로 오고 교체 후 문서 전체가 실림 |
+| update의 `fullDocument` | 변경 후 문서 전체를 보여 주는 예시 | `updateLookup` 없이도 포함됨 |
+| `updateDescription` | 이벤트 예시가 있음 | 파이프라인이 있든 없든 반환되지 않음 |
+| 감시 범위 | 컬렉션 예시만 있음 | `db.watch()`는 code 26. `client.watch()`에 `$match`로 `ns.db`를 거르면 동작 |
+| 컬렉션 drop, rename | 설명 없음 | `invalidate` 이벤트 없이 code 26으로 커서 종료 |
+| `startAtOperationTime` | 날짜로 `Timestamp`를 만드는 예시 | 날짜로 만든 값은 동작함. 세션의 `operationTime`은 비어 있어 쓸 수 없음 |
+| pre-image | 미리 보기. 지원 요청으로 켬 | 지원 요청 없이 `required`로 열면 code 10065 |
 
-Learn은 이력 재개에 대해 다음을 설명합니다. 기본 change stream은 400 MB 크기의
-활성 change log 안의 이벤트만 읽습니다. PITR 로그와 통합되면 최대 35일 또는 클러스터
-초기화 시점 중 이른 쪽까지 재개 범위가 늘어납니다. 이번 실습은 이 범위를 시험하지
-않았습니다.
+옵션별 관찰 전체는 [측정 상세](measurements/index.md)에 있습니다.
 
-### 정합성과 지연
+## 운영 전에 더 확인할 것
 
-모든 실행에서 `verify.py`가 보고한 누락, 예상 밖 이벤트, 문서별 순서 역전은
-0건이었습니다.
+이번 시험에서 다루지 않았거나 숫자로 확인하지 못한 항목입니다.
 
-| 실행 | 부하 | 이벤트 | 누락 | 재전달 | 지연 p50 / p99 |
-| --- | --- | --- | --- | --- | --- |
-| r1 | 문서 10,000개, 속도 제한 없음 | 23,000 | 0 | 0 | 57 / 177 ms |
-| r2 | 문서 100,000개, consumer 파드 반복 삭제 | 230,000 | 0 | 0 | 측정 대상 아님 |
-| r3 | 문서 100,000개, 200건 쓰기 직후 프로세스 종료를 5회 주입 | 230,000 | 0 | 1,000 | 측정 대상 아님 |
-| r4 | 초당 1,000건, 5분 | 299,000 | 0 | 0 | 55 / 123 ms |
+- **장애 조치:** 시험 클러스터는 고가용성을 껐습니다. 고가용성을 켠 클러스터에서
+  실행 중 장애 조치가 나면 태스크가 실패하고 재시도가 이어 읽는지 확인합니다.
+- **다중 shard:** 미리 보기 기능입니다. Learn은 전역 순서를 보장하지 않고 단일
+  shard에서 다중 shard로 바꾸면 재개할 수 없다고 설명합니다. 파일 안 이벤트 순서에
+  기대는 다운스트림 처리를 다시 봐야 합니다.
+- **재개 범위를 넘긴 정지:** DAG가 35일 또는 클러스터 초기화 시점보다 오래 멈추면
+  저장한 token으로 재개할 수 없습니다. 그때 나는 오류와 전체 재적재 절차를
+  정합니다. 마지막 checkpoint 갱신 시각을 모니터링합니다.
+- **400 MB 경계:** change log 크기는 조회할 수 없어 문서 본문 크기로 추정했습니다.
+  백로그 재개가 PITR 로그를 거쳤는지는 구분하지 못했습니다.
+- **서버 업데이트:** `maxAwaitTimeMS`, `updateDescription`처럼 문서와 다르게 동작한
+  항목은 서버 버전이 바뀌면 다시 확인합니다.
+- **부하와 주기:** 실행 한 번이 주기(5분) 안에 끝나야 지연이 쌓이지 않습니다. 더
+  높은 쓰기 속도와 다른 클러스터 tier에서 실행 시간을 다시 잽니다.
+- **파일 크기와 압축:** 시험 데이터는 압축되지 않는 랜덤 문자열이었습니다. 실제
+  문서로 snappy와 zstd의 크기, 시간, CPU를 비교합니다.
+- **다운스트림 처리:** 파일은 이벤트 이력입니다. 문서별 최신 상태 병합, 문서가
+  없는 delete 이벤트 처리, JSON 문자열 열 펼치기, 작은 파일 정리를 설계합니다.
+- **운영 Airflow:** 차트에 포함된 PostgreSQL 대신 외부 데이터베이스를 쓰고 실패한
+  실행에 알림을 겁니다.
+- **변경 전 문서가 필요할 때:** pre-image는 지원 요청으로 켠 뒤 저장 공간과 지연
+  영향을 측정합니다.
 
-- r2에서 파드를 삭제하면 이전 파드가 종료되는 동안 ReplicaSet이 새 파드를
-  띄웠습니다. `Recreate` 전략은 롤아웃에만 적용되므로 잠깐 두 consumer가 함께
-  읽었지만 upsert 덕분에 sink에 중복 행은 생기지 않았습니다.
-- r3의 재전달 1,000건은 5회 × 200건입니다. checkpoint보다 sink 쓰기가 먼저
-  끝난 배치를 재시작 후 다시 받은 것입니다. change stream 소비는
-  at-least-once이므로 sink가 멱등이어야 합니다.
-- r3에서 밀린 이벤트를 따라잡는 속도는 초당 약 6,800건이었습니다.
-- 클러스터 CPU는 초당 약 1,000건에서 약 30%, 속도 제한 없이 초당 약 2,900건을
-  쓸 때 약 60%였습니다.
+## 시험 범위와 한계
 
-## 검증
-
-- `verify.py` 출력의 `missing`, `unexpected`, `per_doc_out_of_order`가 모두 0인지 확인합니다.
-- `redelivered_events`는 장애를 주입하지 않은 실행에서 0, r3에서는 주입 횟수 × 배치
-  크기와 같아야 합니다.
-- `kubectl -n cslab logs deploy/cs-consumer`에서 재시작 직후 `start` 로그의
-  `resume` 값이 `true`인지 확인합니다. 저장된 token으로 이어 읽었다는 뜻입니다.
-
-## 정리
-
-```bash
-azd down
-kubectl config delete-context $AZURE_AKS_CLUSTER_NAME
-```
-
-`azd down`은 리소스 그룹과 그 안의 리소스를 모두 삭제합니다.
-
-## 문제 해결
-
-| 증상 | 원인과 조치 |
+| 항목 | 값 |
 | --- | --- |
-| `watch()`가 code 26으로 실패 | 컬렉션이 없거나 `db.watch()`를 호출했습니다. 컬렉션을 먼저 만들거나 `client.watch()`와 `$match`를 씁니다 |
-| 컬렉션을 지운 뒤 consumer가 반복 실패 | drop과 rename은 `invalidate` 없이 code 26을 반환합니다. 컬렉션을 다시 만들고 새 stream을 엽니다 |
-| `start_at_operation_time`에 넘길 값이 없음 | 세션의 `operationTime`이 비어 있습니다. 시각 기반 `Timestamp`를 만들거나 resume token을 저장합니다 |
-| `full_document_before_change="required"`가 code 10065로 실패 | pre-image는 미리 보기이며 지원 요청으로 켜야 합니다 |
-| 큰 백로그를 재개할 때 code 50 `ExceededTimeLimit`로 반복 실패 | 이 클러스터는 `maxAwaitTimeMS`를 `getMore` 실행 제한으로 적용합니다. 오래된 change log를 읽는 `getMore`는 몇 초 걸릴 수 있습니다. consumer는 `MAX_AWAIT_MS`를 늘리고 직접 작성한 코드는 `max_await_time_ms`를 지정하지 않습니다. [Airflow DAG로 Parquet 적재](airflow-parquet/index.md)에서 측정했습니다 |
-| 노드 크기 오류로 AKS 배포 실패 | 구독에서 허용되지 않는 VM 크기입니다. `nodeVmSize` 매개변수를 바꿉니다 |
+| 측정일 | 2026-10-02, East US 2 |
+| DocumentDB | M30(2 vCore, 8 GiB), shard 1개, 스토리지 32 GiB, 고가용성 끔, 서버 7.0.0, 공용 액세스 끔 |
+| AKS | Kubernetes 1.35, Standard_D4s_v6 노드 4개 |
+| Airflow | Helm chart 1.22.0, Airflow 3.2.2, `LocalExecutor` |
+| 내보내기 파드 | Python 3.12, PyMongo 4.18.2, pyarrow 25.0.1, snappy 압축 |
 
-## 공식 참고 자료
+컬렉션 하나를 하루 동안 측정한 결과입니다.
+
+## 공식 출처
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
-- [$changeStream](https://learn.microsoft.com/documentdb/query/operators/aggregation/$changestream)
-- [Use Azure Private Link in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/how-to-private-link)
-- [Compute and storage configurations](https://learn.microsoft.com/azure/documentdb/compute-storage)
-- [Release notes for Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/release-notes)
-- [Microsoft.DocumentDB mongoClusters Bicep reference](https://learn.microsoft.com/azure/templates/microsoft.documentdb/2026-06-01/mongoclusters)
-- [Work with Azure Developer CLI environment variables](https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables)
 - [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)

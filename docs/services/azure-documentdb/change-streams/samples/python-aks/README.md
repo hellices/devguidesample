@@ -1,7 +1,9 @@
-# Python change stream consumer on AKS
+# Change stream to Parquet with Airflow on AKS
 
-This runnable sample tests MongoDB change streams on Azure DocumentDB with
-PyMongo. The cluster has public network access disabled. Pods on AKS reach it
+This runnable sample checks whether an Airflow DAG on AKS can export Azure
+DocumentDB change stream events to Parquet files in ADLS Gen2 without losing
+or duplicating events. A long-running PyMongo consumer is included as a
+baseline. The cluster has public network access disabled. Pods on AKS reach it
 through a private endpoint.
 
 | Path | Purpose |
@@ -17,7 +19,7 @@ through a private endpoint.
 | `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes Parquet chunks and exits |
 | `app/verify_lake.py` | Compares the generator's expected events with the Parquet files |
 | `airflow/` | DAG that runs `lake_export.py` with `KubernetesPodOperator`, the Airflow image and chart values |
-| `k8s/` | Consumer Deployment, generic Job, toolbox pod, lake Job and service account, RBAC for the Airflow scheduler |
+| `k8s/` | Consumer Deployment, generic Job, toolbox pod, lake Job, RBAC for the Airflow scheduler |
 
 Azure resources are provisioned with azd. Images, pods and Airflow are
 deployed by hand with `az acr build`, `kubectl` and `helm` so each step can be
@@ -211,6 +213,25 @@ Export behavior:
   Airflow scheduler environment. The DAG passes it to the pod as `CHUNK_EVENTS`.
 - `consumer.py` always passes `MAX_AWAIT_MS`, 1000 by default. Raise it before
   the consumer resumes a large backlog.
+
+## 6. Measured scenarios
+
+The published results come from these runs. Each one uses the commands from
+steps 4 and 5 with the parameters below. Verify every run with `verify.py`
+(consumer) or `verify_lake.py` (Parquet) and the same `RUN_ID`.
+
+| Run | Generator parameters | Extra steps |
+| --- | --- | --- |
+| r1 | `DOCS=100000 RATE=0` | None |
+| r2 | `DOCS=100000 RATE=0` | While the generator runs, delete the consumer pod repeatedly with `kubectl -n cslab delete pod -l app=cs-consumer --wait=false` |
+| r3 | `DOCS=100000 RATE=0` | Before the generator, run `kubectl -n cslab set env deployment/cs-consumer FAULT_EXIT_AFTER_WRITE=200`. The container exits after each 200-event write and restarts. Remove it with `FAULT_EXIT_AFTER_WRITE-` after the number of faults you want |
+| r4 | `DOCS=300000 RATE=1000` | None |
+| Airflow latency | `DOCS=780000 RATE=1000 PAD_BYTES=1000` | DAG unpaused for the whole run |
+| Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG, run the generator, then `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container |
+| Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |
+
+All runs use `WORKERS=16`. Pause the DAG with `airflow dags pause
+change_stream_to_parquet` in the scheduler container.
 
 ## Clean up
 

@@ -1,0 +1,207 @@
+---
+title: Azure DocumentDB change stream Parquet 적재 측정 상세
+description: Airflow DAG의 5분 주기 지연, 업로드 직후 장애 재시도, 400 MB 활성 change log를 넘긴 재개, Parquet 파일 크기와 상시 PyMongo consumer 기준선, change stream 옵션별 동작을 측정한 수치입니다.
+document_type: research
+services: [azure-documentdb, azure-storage, azure-kubernetes-service]
+technologies: [python, mongodb, airflow, kubernetes]
+tags: [evaluate, storage]
+status: current
+verification_status: verified
+sources_checked_at: 2026-10-02
+published_at: 2026-10-02
+topic_order: 1
+official_sources:
+  - title: Change streams in Azure DocumentDB
+    url: https://learn.microsoft.com/azure/documentdb/change-streams
+---
+
+# Azure DocumentDB change stream Parquet 적재 측정 상세
+
+[상위 문서](../index.md)의 결론을 뒷받침하는 측정값입니다. 시험 환경도 상위 문서에
+있습니다. 각 시나리오의 생성기 매개변수와 실행 방법은 sample
+[README](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)의
+Measured scenarios에 있습니다.
+
+검증은 `verify_lake.py`가 Parquet 파일 전체를 생성기가 만든 이벤트와 대조했습니다.
+중복은 같은 resume token이 두 행 이상인 경우입니다. 저장 지연은 파일
+last-modified(초 단위)에서 이벤트 `wallTime`을 뺀 값입니다.
+
+## 5분 주기 지연
+
+부하는 문서 780,000개, 1 KB 채움, 초당 1,000건 제한으로 31분 동안 실행했습니다. DAG는
+5분 주기로 계속 돌았습니다. 생성기가 실제로 낸 속도는 초당 958건이었습니다. 이벤트
+1,794,000건이 모두 파일에 들어갔고 중복, 누락, 문서별 순서 역전은 0건이었습니다.
+
+| 지표 | p50 | p95 | p99 | 최대 |
+| --- | --- | --- | --- | --- |
+| 이벤트 기록부터 파일 저장까지 | 156초 | 290초 | 302초 | 311초 |
+| 이벤트 기록부터 파드가 읽기까지 | 154초 | 284초 | 296초 | 301초 |
+
+- 지연 분포는 주기 간격과 거의 같습니다. 직전 실행 직후에 기록된 이벤트는 약 5분을
+  기다리고 실행 직전에 기록된 이벤트는 몇 초 만에 저장됩니다.
+- 실행 한 번은 이벤트 약 300,000건을 16–24초에 썼습니다. Airflow가 실행을 시작해
+  파드를 정리하기까지는 21–30초였습니다. 차이인 약 7초가 파드 예약, 기동, 연결과
+  정리에 쓰였습니다.
+- 파일은 21개였고 대부분 100,000행, 약 69 MB였습니다. 실행 끝의 나머지 청크는 더
+  작았습니다.
+- 생성기만 돌 때 클러스터 CPU는 1분 평균 약 23–25%였습니다. 내보내기가 도는 분에도
+  같은 범위여서 1분 단위에서는 읽기 부하가 드러나지 않았습니다.
+
+## 업로드 직후 장애와 재시도
+
+DAG를 멈춘 상태에서 문서 100,000개(이벤트 230,000건)를 쓰고 첫 시도만 첫 청크 업로드
+직후 종료하도록 실행했습니다. 첫 시도는 checkpoint를 쓰기 전에 종료 코드 137로
+끝났습니다. Airflow가 30초 뒤 재시도했고 두 번째 시도는 같은 checkpoint에서 시작해
+첫 청크를 같은 경로에 덮어썼습니다.
+
+| 기대 이벤트 | 저장된 이벤트 | 중복 | 누락 | 파일 |
+| --- | --- | --- | --- | --- |
+| 230,000 | 230,000 | 0 | 0 | 3 |
+
+## 활성 change log를 넘긴 재개
+
+DAG를 멈춘 상태에서 생성기가 31분 동안 문서 600,000개를 4 KB씩 채워 이벤트
+1,380,000건을 썼습니다. 문서 본문만 2.6 GB가 넘어 Learn이 설명하는 활성 change log
+400 MB의 6배 이상입니다. 그동안 클러스터 스토리지 사용률은 약 30%에서 44%로
+올랐습니다.
+
+### maxAwaitTimeMS가 재개를 막음
+
+DAG를 다시 켜자 첫 시도와 재시도 모두 약 13초 만에 실패했습니다. 청크는 하나도
+쓰지 못했고 checkpoint도 그대로였습니다.
+
+```text
+pymongo.errors.ExecutionTimeout: Query exceeded command timeout of 1000ms
+full error: {'ok': 0.0, 'code': 50, 'codeName': 'ExceededTimeLimit', ...}
+```
+
+당시 코드는 `max_await_time_ms=1000`으로 stream을 열었습니다. 같은 checkpoint에서
+읽기만 하는 프로브로 비교했습니다.
+
+| `maxAwaitTimeMS` | 결과 |
+| --- | --- |
+| 1000 | 58,000번째 이벤트 뒤 `getMore`에서 code 50으로 실패 |
+| 지정 안 함 | 1,380,000건을 311초에 모두 읽음(초당 4,436건). 0.5초 넘는 `getMore` 65회, 최대 7.4초 |
+
+- 이 클러스터는 `maxAwaitTimeMS`를 새 이벤트를 기다리는 시간이 아니라 `getMore`
+  전체의 실행 제한으로 적용했습니다. 그 시간을 넘긴 `getMore`는 빈 배치 대신 오류를
+  돌려주었습니다.
+- 지정하지 않은 실행에서 처음 느려진 `getMore`도 58,000번째 이벤트 뒤였습니다(1.4초).
+  느린 `getMore`는 그 뒤로도 불규칙하게 나타났습니다.
+- 같은 위치에서 매번 실패하므로 Airflow 재시도로는 넘어가지 못합니다. 고치지 않으면
+  이후 주기 실행도 모두 같은 지점에서 실패합니다.
+- 새 이벤트가 없을 때 `try_next()`는 값을 지정했을 때와 지정하지 않았을 때 모두
+  1.0초 뒤 `None`을 돌려주었습니다. 따라서 값을 빼도 실행 종료 조건은 그대로
+  동작합니다.
+
+### 수정 후 결과
+
+`lake_export.py`가 기본적으로 `max_await_time_ms`를 지정하지 않도록 바꾼 뒤 Airflow의
+세 번째 시도가 같은 checkpoint에서 시작했습니다.
+
+| 지표 | 값 |
+| --- | --- |
+| 저장된 이벤트 | 1,380,000건(기대값과 같음), 중복 0, 누락 0, 문서별 순서 역전 0 |
+| 내보내기 시간 | 380.5초(초당 약 3,600건). Airflow 태스크 전체 398초 |
+| 파일 | 14개, 대부분 100,000행·약 374 MB, 합계 5.13 GB |
+| 내보내기 파드 메모리 | 20초 간격 측정에서 최대 약 1.9 GiB |
+| 클러스터 CPU(1분 평균) | 따라잡는 동안 15–32%, 직전 약 5% |
+
+바로 다음 주기 실행은 새 이벤트 0건으로 1.2초 만에 끝났습니다.
+
+## 파일 크기
+
+백로그 재개 시험의 Parquet 합계 5.13 GB는 생성기가 쓴 문서 본문 2.6 GB의 약 두 배입니다. 가장 큰
+파일(100,000행, 374 MB)을 열어 원인을 확인했습니다.
+
+| 열 | 압축 전 | snappy 압축 후 | 비율 |
+| --- | --- | --- | --- |
+| `full_document` | 382.3 MB | 371.1 MB | 0.97 |
+| 나머지 6개 열 합계 | 7.2 MB | 2.7 MB | 0.38 |
+
+- 파일 크기의 99%가 문서 본문입니다. 이 파일의 행은 insert 43,567건, update 47,720건,
+  delete 8,713건이었고 delete를 뺀 91,287행에 문서 전체가 들어 있었습니다. 문서는
+  BSON 기준 평균 4,129바이트였습니다.
+- change stream은 변경마다 문서 전체를 보냅니다. 이 클러스터는 update에도
+  `fullDocument`를 넣습니다. 그래서 문서 하나가 insert와 update에 한 번씩 저장됩니다.
+  문서가 실린 이벤트 약 1,260,000건 × 약 4.1 KB가 약 5.2 GB이고 Parquet 합계와 거의
+  같습니다.
+- 크기 대부분은 생성기가 채운 4,000자 랜덤 16진 문자열입니다. 반복이 없어 snappy는
+  거의 줄이지 못했습니다.
+
+같은 파일을 다른 방식으로 다시 써 비교했습니다.
+
+| 방식 | 크기 |
+| --- | --- |
+| snappy(현재) | 374 MB |
+| gzip | 210 MB |
+| zstd level 3 | 107 MB |
+| zstd level 9 | 111 MB |
+| snappy, 채움 문자열 제거 | 4.8 MB |
+
+zstd는 insert와 update에 반복된 같은 채움 문자열까지 찾아 줄였습니다. 채움 문자열을
+빼면 100,000행이 4.8 MB여서 Parquet의 열 구조가 더하는 크기는 작습니다. 실제 문서는
+랜덤 문자열보다 잘 압축되므로 이번 숫자는 압축 측면의 최악에 가깝습니다.
+
+## 상시 consumer 기준선
+
+DAG와 비교하려고 계속 떠 있는 PyMongo consumer로도 같은 클러스터를 읽었습니다.
+consumer는 이벤트를 최대 200건씩 MongoDB sink 컬렉션에 resume token을 키로
+upsert한 뒤 checkpoint를 저장합니다. 생성기는 문서마다 insert와 update를 한 번씩
+실행하고 10번째 문서마다 replace, 5번째 문서마다 delete를 더합니다. 문서
+10,000개가 이벤트 23,000건이 됩니다.
+
+모든 실행에서 `verify.py`가 보고한 누락, 예상 밖 이벤트, 문서별 순서 역전은
+0건이었습니다.
+
+| 실행 | 부하 | 이벤트 | 누락 | 재전달 | 지연 p50 / p99 |
+| --- | --- | --- | --- | --- | --- |
+| r1 | 문서 10,000개, 속도 제한 없음 | 23,000 | 0 | 0 | 57 / 177 ms |
+| r2 | 문서 100,000개, consumer 파드 반복 삭제 | 230,000 | 0 | 0 | 측정 대상 아님 |
+| r3 | 문서 100,000개, 200건 쓰기 직후 프로세스 종료를 5회 주입 | 230,000 | 0 | 1,000 | 측정 대상 아님 |
+| r4 | 초당 1,000건, 5분 | 299,000 | 0 | 0 | 55 / 123 ms |
+
+- r2에서 파드를 삭제하면 이전 파드가 종료되는 동안 ReplicaSet이 새 파드를
+  띄웠습니다. `Recreate` 전략은 롤아웃에만 적용되므로 잠깐 두 consumer가 함께
+  읽었지만 upsert 덕분에 sink에 중복 행은 생기지 않았습니다.
+- r3의 재전달 1,000건은 5회 × 200건입니다. checkpoint보다 sink 쓰기가 먼저
+  끝난 배치를 재시작 후 다시 받은 것입니다. change stream 소비는
+  at-least-once이므로 sink가 멱등이어야 합니다.
+- r3에서 밀린 이벤트를 따라잡는 속도는 초당 약 6,800건이었습니다.
+- 클러스터 CPU는 초당 약 1,000건에서 약 30%, 속도 제한 없이 초당 약 2,900건을
+  쓸 때 약 60%였습니다.
+
+## change stream 동작 확인
+
+`probe.py`로 옵션과 이벤트 필드를 확인했습니다. Learn 문서에 나온 동작과 이번
+클러스터에서 관찰한 동작을 구분했습니다.
+
+| 항목 | Learn 문서 | 관찰 결과 |
+| --- | --- | --- |
+| 이벤트 필드 | insert, update, delete 예시에 `_id`, `operationType`, `fullDocument`, `ns`, `documentKey` | `_id`, `operationType`, `fullDocument`, `ns`, `documentKey`, `wallTime`. `clusterTime`은 없음 |
+| replace | 예시 없음 | `operationType: update`로 오고 `fullDocument`에 교체 후 문서 전체가 있음 |
+| update의 `fullDocument` | 변경 후 문서 전체를 보여 주는 예시 | 옵션 없이도 포함됨. `updateLookup`, `whenAvailable`, `required` 모두 오류 없이 열림 |
+| `updateDescription` | 별도 옵션 예시로 제시. 파이프라인 안의 update에서는 지원하지 않음 | 파이프라인이 있든 없든 반환되지 않음 |
+| pre-image | 미리 보기. 지원 요청으로 클러스터에서 켜야 함 | `collMod`는 성공. `whenAvailable`은 `null`, `required`는 code 10065 오류. 지원 요청은 하지 않음 |
+| 파이프라인 단계 | `$addFields`, `$match`, `$project`, `$set`, `$unset` | 다섯 개 모두 동작. 목록에 없는 `$replaceRoot`, `$redact`도 오류 없이 동작 |
+| 감시 범위 | 컬렉션 예시 | `db.watch()`는 code 26. `client.watch()`에 `ns.db` 조건을 건 `$match`는 동작 |
+| 재개 | `resumeAfter`, `startAt`, `startAtOperationTime` 지원 | `resume_after`, `start_after` 동작. 세션의 `operationTime`이 비어 있어 이를 쓴 `start_at_operation_time`은 실패. 현재 시각에서 10분 뺀 `Timestamp`는 동작 |
+| 잘못된 resume token | 언급 없음 | code 2(BadValue) |
+| `showExpandedEvents` | 지원하지 않음 | code 115(CommandNotSupported) |
+| 감시 중인 컬렉션 drop, rename | 언급 없음 | `invalidate` 이벤트 없이 code 26으로 커서 종료 |
+| 트랜잭션 | 언급 없음 | 이벤트는 오지만 `txnNumber`, `lsid`는 없음 |
+| 큰 문서 | 언급 없음 | 14 MiB 문서의 insert와 update 이벤트 모두 전달됨 |
+| 대기 중 resume token | 언급 없음 | 이벤트가 없어도 post-batch resume token이 전진함 |
+
+## 측정의 한계
+
+- change log의 실제 크기는 조회할 수 없어 문서 본문 크기로 추정했습니다.
+- `maxAwaitTimeMS`가 `getMore` 실행 제한으로 적용되는 동작은 Learn에 설명이
+  없습니다. 이 클러스터에서 관측한 결과입니다.
+- 압축 비교는 백로그 재개 시험의 파일 하나를 다시 써서 얻었습니다. zstd로 쓸 때의
+  시간과 CPU는 측정하지 않았습니다.
+- 파일 저장 지연은 초 단위 last-modified로 계산했습니다.
+
+## 공식 출처
+
+- [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
