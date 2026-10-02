@@ -8,7 +8,7 @@ targetScope = 'resourceGroup'
 @description('Region for every resource.')
 param location string = resourceGroup().location
 
-@description('Short prefix used in resource names. Must match main.bicep.')
+@description('Short prefix used in resource names. Must match cluster.bicep.')
 param prefix string = 'docdbcs'
 
 @description('OIDC issuer URL of the AKS cluster.')

@@ -69,7 +69,7 @@ def main() -> None:
     workers = int(os.getenv("WORKERS", "4"))
     rate = float(os.getenv("RATE", "0"))  # total ops/s, 0 = unthrottled
     # Filler on inserts and replaces so the change log grows like a real payload.
-    pad_bytes = int(os.getenv("PAD_BYTES", "0"))
+    pad_bytes = int(os.getenv("PAD_BYTES") or "0")  # envsubst leaves "" when unset
 
     client = get_client(f"cs-generator-{run_id}")
     db = get_database(client)

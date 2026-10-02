@@ -1,13 +1,5 @@
-# Service account federated to the lake identity (infra/lake.bicep) and a
-# one-shot job that runs lake_export.py or verify_lake.py with it.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cs-lake
-  namespace: cslab
-  annotations:
-    azure.workload.identity/client-id: "${LAKE_CLIENT_ID}"
----
+# One-shot job that runs lake_export.py or verify_lake.py as the cs-lake service
+# account, which the README creates and federates to the lake identity.
 apiVersion: batch/v1
 kind: Job
 metadata:

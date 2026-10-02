@@ -21,6 +21,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/documentdb/release-notes
   - title: Microsoft.DocumentDB mongoClusters (Bicep reference)
     url: https://learn.microsoft.com/azure/templates/microsoft.documentdb/2026-06-01/mongoclusters
+  - title: Work with Azure Developer CLI environment variables
+    url: https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables
   - title: AzureCosmosDB/changestream-driver-compatibility
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
 last_verified: 2026-10-02
@@ -48,7 +50,7 @@ Parquet으로 쓰는 방식은 [Airflow DAG로 Parquet 적재](airflow-parquet/i
 
 ## 목표
 
-- 프라이빗 엔드포인트만 열린 DocumentDB 클러스터와 AKS를 Bicep으로 배포합니다.
+- 프라이빗 엔드포인트만 열린 DocumentDB 클러스터와 AKS를 azd로 배포합니다.
 - `probe.py`로 change stream 옵션별 동작을 확인합니다.
 - 생성기가 만든 이벤트와 sink에 기록된 이벤트를 `verify.py`로 대조해 누락,
   중복, 순서 역전과 지연을 숫자로 남깁니다.
@@ -56,7 +58,7 @@ Parquet으로 쓰는 방식은 [Airflow DAG로 Parquet 적재](airflow-parquet/i
 ## 사전 조건
 
 - Azure 구독에서 리소스 그룹을 만들 수 있는 권한
-- Azure CLI, `kubectl`, `envsubst`
+- Azure Developer CLI(azd) 1.29 이상, Azure CLI, `kubectl`, `envsubst`
 - 이 저장소의 [python-aks sample](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)
 
 이 문서의 결과는 2026-10-02에 아래 환경에서 측정했습니다.
@@ -73,41 +75,53 @@ Parquet으로 쓰는 방식은 [Airflow DAG로 Parquet 적재](airflow-parquet/i
 
 - 클러스터, AKS 노드, ACR과 프라이빗 엔드포인트는 실행하는 동안 과금됩니다.
   측정이 끝나면 바로 리소스 그룹을 삭제합니다.
-- 관리자 비밀번호와 연결 문자열은 Kubernetes Secret에만 넣습니다. sample의
-  `.env`는 `.gitignore` 대상이며 커밋하지 않습니다.
+- 관리자 비밀번호는 셸 환경 변수로만 azd에 넘기고 연결 문자열은 Kubernetes
+  Secret에만 넣습니다. Learn은 azd 환경의 `.env` 파일에 비밀을 넣지 말라고
+  경고합니다. 그 파일이 있는 `.azure/`는 `.gitignore` 대상이며 커밋하지 않습니다.
 - 생성기는 지정한 데이터베이스(`cslab`)의 `orders` 컬렉션에 직접 씁니다.
   운영 클러스터를 대상으로 실행하지 않습니다.
 - 이 문서에 나오는 리소스 이름과 레지스트리 주소는 가상 값입니다.
 
 ## 배포
 
-sample 디렉터리에서 실행합니다.
+Azure 리소스는 azd로 배포하고 이미지와 파드는 `az acr build`와 `kubectl`로 직접
+배포합니다. 명령은 sample 디렉터리에서 실행하며 전체 절차는 sample README에
+있습니다.
 
 ```bash
-RG=rg-docdb-changestream
-az group create -n $RG -l eastus2
-az deployment group create -g $RG -f infra/main.bicep \
-  -p adminPassword="$ADMIN_PASSWORD"
+azd env new docdb-changestream
+azd env set AZURE_LOCATION eastus2
+export DOCDB_ADMIN_PASSWORD="Cs$(openssl rand -hex 12)Aa9"
+azd provision
 
-ACR=docdbcsacrexample
-az acr build -r $ACR -t cslab:v1 app/
-az aks get-credentials -g $RG -n aks-docdbcs
+set -a; eval "$(azd env get-values)"; set +a
+export IMAGE=$AZURE_CONTAINER_REGISTRY_ENDPOINT/cslab:v1
+az acr build -r $AZURE_CONTAINER_REGISTRY_NAME -t cslab:v1 app/
+az aks get-credentials -g $AZURE_RESOURCE_GROUP -n $AZURE_AKS_CLUSTER_NAME
 
 kubectl create namespace cslab
+MONGO_URI="${DOCDB_CONNECTION_STRING/<user>:<password>/$DOCDB_ADMIN_USER:$DOCDB_ADMIN_PASSWORD}"
 kubectl -n cslab create secret generic docdb --from-literal=uri="$MONGO_URI"
 ```
 
-`main.bicep`은 VNet, `Microsoft.DocumentDB/mongoClusters` 클러스터(M30, shard 1개),
-프라이빗 엔드포인트와 사설 DNS 영역, ACR, AKS를 만듭니다. 프라이빗 엔드포인트의
-group ID는 `MongoCluster`입니다. Learn은 프라이빗 엔드포인트로 연결할 때
-`mongodb+srv` 형식의 연결 문자열을 쓰라고 안내합니다. AKS 파드에서는 클러스터
-호스트 이름이 사설 DNS 영역을 거쳐 프라이빗 IP로 확인됩니다.
+`azd provision`은 `rg-<환경 이름>` 리소스 그룹을 만들고 `infra/cluster.bicep`과
+`infra/lake.bicep`을 배포합니다. `cluster.bicep`은 VNet,
+`Microsoft.DocumentDB/mongoClusters` 클러스터(M30, shard 1개), 프라이빗
+엔드포인트와 사설 DNS 영역, ACR, AKS를 만듭니다. `lake.bicep`은
+[Airflow DAG로 Parquet 적재](airflow-parquet/index.md)에서 쓰는 ADLS Gen2와 워크로드
+ID를 만듭니다. 배포 출력은 azd 환경 값으로 저장되고 위의 `azd env get-values`로
+셸 변수가 됩니다.
+
+프라이빗 엔드포인트의 group ID는 `MongoCluster`입니다. Learn은 프라이빗
+엔드포인트로 연결할 때 `mongodb+srv` 형식의 연결 문자열을 쓰라고 안내합니다. 배포
+출력의 연결 문자열은 `<user>`와 `<password>` 자리 표시자를 담고 있어 위 명령이
+관리자 계정으로 바꿉니다. AKS 파드에서는 클러스터 호스트 이름이 사설 DNS 영역을
+거쳐 프라이빗 IP로 확인됩니다.
 
 감시할 컬렉션은 consumer보다 먼저 만듭니다. 컬렉션이 없으면 `watch()`가
 `NamespaceNotFound`(code 26)로 실패합니다.
 
 ```bash
-export IMAGE=docdbcsacrexample.azurecr.io/cslab:v1
 envsubst < k8s/toolbox.yaml | kubectl apply -f -
 kubectl -n cslab exec cs-toolbox -- python -c \
   "from common import *; get_database(get_client('setup')).create_collection('orders')"
@@ -212,10 +226,11 @@ Learn은 이력 재개에 대해 다음을 설명합니다. 기본 change stream
 ## 정리
 
 ```bash
-az group delete -n $RG
+azd down
+kubectl config delete-context $AZURE_AKS_CLUSTER_NAME
 ```
 
-삭제 전에 `kubectl config delete-context`로 로컬 kubeconfig의 AKS 항목도 지웁니다.
+`azd down`은 리소스 그룹과 그 안의 리소스를 모두 삭제합니다.
 
 ## 문제 해결
 
@@ -236,4 +251,5 @@ az group delete -n $RG
 - [Compute and storage configurations](https://learn.microsoft.com/azure/documentdb/compute-storage)
 - [Release notes for Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/release-notes)
 - [Microsoft.DocumentDB mongoClusters Bicep reference](https://learn.microsoft.com/azure/templates/microsoft.documentdb/2026-06-01/mongoclusters)
+- [Work with Azure Developer CLI environment variables](https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables)
 - [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
