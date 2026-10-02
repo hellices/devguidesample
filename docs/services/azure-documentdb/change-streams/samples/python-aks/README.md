@@ -237,8 +237,13 @@ refuse such a run.
 
 The runs used the sample before these changes: the first-run start position,
 the stream lease, the `dt=unknown` partition and the stricter exit codes.
-They change only failure paths that the runs did not hit, and were checked
-with local fakes, not on Azure.
+They change only failure paths that the runs did not hit. The changed sample
+was then deployed again on Azure with the defaults in this README. r1, the
+first DAG run without a checkpoint, a 100,000-document Airflow run and the
+Airflow retry passed again. A second export started while another pod held the
+stream lease waited about 90 seconds and failed with `LeaseAlreadyPresent`
+before it opened the change stream. The `dt=unknown` partition and the
+out-of-order failure were not hit there and were checked with local fakes only.
 
 | Run | Generator parameters | Extra steps |
 | --- | --- | --- |
@@ -247,7 +252,7 @@ with local fakes, not on Azure.
 | r3 | `DOCS=100000 RATE=0` | Before the generator, run `kubectl -n cslab set env deployment/cs-consumer FAULT_EXIT_AFTER_WRITE=200`. The container exits after each 200-event write and restarts. Remove it with `FAULT_EXIT_AFTER_WRITE-` after the number of faults you want |
 | r4 | `DOCS=130000 RATE=1000` | None |
 | Airflow latency | `DOCS=780000 RATE=1000 PAD_BYTES=1000` | DAG unpaused for the whole run |
-| Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG, run the generator, then `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container |
+| Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG, run the generator, then run `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container and unpause the DAG. The triggered run stays queued while the DAG is paused and runs before the next scheduled run |
 | Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |
 
 All runs use `WORKERS=16`. Pause the DAG with `airflow dags pause
