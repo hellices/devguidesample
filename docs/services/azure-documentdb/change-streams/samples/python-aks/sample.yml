@@ -1,0 +1,6 @@
+title: Python change stream consumer on AKS
+description: Runnable PyMongo change stream probe, consumer, Airflow Parquet export, load generator and verifiers for Azure DocumentDB behind a private endpoint.
+kind: runnable
+used_by:
+- index
+- airflow-parquet
