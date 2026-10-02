@@ -149,12 +149,41 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   }
 }
 
+resource aksSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
+  parent: vnet
+  name: 'snet-aks'
+}
+
+// AKS needs Network Contributor on its custom subnet before the cluster is created.
+// A system-assigned identity exists only after creation, so the control plane uses
+// a user-assigned identity that is granted the role first.
+resource aksIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-aks-${prefix}'
+  location: location
+}
+
+resource aksSubnetRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aksSubnet.id, aksIdentity.id, 'netcontrib')
+  scope: aksSubnet
+  properties: {
+    principalId: aksIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
+  }
+}
+
 resource aks 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
   name: 'aks-${prefix}'
   location: location
   identity: {
-    type: 'SystemAssigned'
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${aksIdentity.id}': {}
+    }
   }
+  dependsOn: [
+    aksSubnetRole
+  ]
   properties: {
     dnsPrefix: 'aks-${prefix}-${suffix}'
     // Workload identity lets the Airflow export pods use a managed identity (lake.bicep).
@@ -173,7 +202,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2024-09-01' = {
         count: nodeCount
         vmSize: nodeVmSize
         osType: 'Linux'
-        vnetSubnetID: '${vnet.id}/subnets/snet-aks'
+        vnetSubnetID: aksSubnet.id
       }
     ]
     networkProfile: {
@@ -194,17 +223,6 @@ resource acrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: aks.properties.identityProfile.kubeletidentity.objectId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-  }
-}
-
-// AKS needs Network Contributor on its subnet when using a custom VNet.
-resource aksSubnetRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(vnet.id, aks.id, 'netcontrib')
-  scope: vnet
-  properties: {
-    principalId: aks.identity.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
   }
 }
 
