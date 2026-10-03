@@ -13,6 +13,7 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.filedatalake import DataLakeServiceClient
 
 from common import RUN_COLLECTION, env, get_client, get_database
+from lake_export import window_start
 from verify import expected_events, percentile, summarize
 
 logging.getLogger("azure").setLevel(logging.WARNING)
@@ -29,6 +30,8 @@ def main() -> None:
     service = DataLakeServiceClient(env("LAKE_URL"), credential=DefaultAzureCredential())
     fs = service.get_file_system_client(env("LAKE_FILESYSTEM", "cdc"))
     prefix = env("LAKE_PREFIX", "orders")
+    window_minutes = int(os.getenv("WINDOW_MINUTES", "10"))
+    chunk_bytes = int(os.getenv("CHUNK_BYTES", str(50_000_000)))
     columns = ["resume_token", "op", "doc_id", "wall_time", "read_at"]
 
     rows = []
@@ -41,7 +44,11 @@ def main() -> None:
         mine = [r for r in table.to_pylist() if r["doc_id"].startswith(f"{run_id}:")]
         if not mine:
             continue
-        files.append({"rows": len(mine), "file_rows": table.num_rows, "bytes": path.content_length})
+        # A file holds one window, so every row with wallTime maps to it.
+        windows = {window_start(t, window_minutes) for t in table.column("wall_time").to_pylist()
+                   if t is not None}
+        files.append({"rows": len(mine), "file_rows": table.num_rows, "bytes": path.content_length,
+                      "windows": len(windows)})
         # The listing returns last-modified as a naive UTC datetime.
         committed_at = path.last_modified.replace(tzinfo=timezone.utc)
         for i, r in enumerate(mine):
@@ -75,6 +82,8 @@ def main() -> None:
     commit_lag_s = [(e["committed_at"] - e["wall_time"]).total_seconds() for e in events if e["wall_time"]]
     file_rows = [f["file_rows"] for f in files]
     file_bytes = [f["bytes"] for f in files]
+    mixed_windows = sum(1 for f in files if f["windows"] > 1)
+    oversize = sum(1 for b in file_bytes if b > chunk_bytes)
 
     result = {
         "run_id": run_id,
@@ -97,10 +106,13 @@ def main() -> None:
                       "max": max(file_rows, default=None)},
         "file_bytes": {"min": min(file_bytes, default=None), "p50": percentile(file_bytes, 50),
                        "max": max(file_bytes, default=None), "total": sum(file_bytes)},
+        "files_with_mixed_windows": mixed_windows,
+        "files_over_chunk_bytes": oversize,
     }
     print(json.dumps(result, default=str, indent=None if os.getenv("COMPACT") else 2))
     client.close()
-    sys.exit(0 if not missing and not unexpected and not duplicates and not out_of_order else 1)
+    ok = not (missing or unexpected or duplicates or out_of_order or mixed_windows or oversize)
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

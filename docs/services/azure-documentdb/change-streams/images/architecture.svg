@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 700" role="img" aria-labelledby="title desc">
   <title id="title">AKS 위 Airflow DAG가 Azure DocumentDB change stream을 ADLS Gen2 Parquet으로 적재하는 구성</title>
-  <desc id="desc">AKS의 airflow 네임스페이스에서 Airflow scheduler가 5분마다 cslab 네임스페이스에 내보내기 파드를 만든다. 내보내기 파드는 프라이빗 엔드포인트를 거쳐 Azure DocumentDB의 change stream을 읽고, blob과 dfs 프라이빗 엔드포인트를 거쳐 ADLS Gen2에 Parquet 청크와 checkpoint를 쓴다. 스토리지 인증은 Microsoft Entra ID의 관리 ID와 워크로드 ID로 한다.</desc>
+  <desc id="desc">AKS의 airflow 네임스페이스에서 Airflow scheduler가 10분 구간이 닫힐 때마다 cslab 네임스페이스에 내보내기 파드를 만든다. 내보내기 파드는 프라이빗 엔드포인트를 거쳐 Azure DocumentDB의 change stream을 읽고, blob과 dfs 프라이빗 엔드포인트를 거쳐 ADLS Gen2에 Parquet 청크와 checkpoint를 쓴다. 스토리지 인증은 Microsoft Entra ID의 관리 ID와 워크로드 ID로 한다.</desc>
   <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#4a5a6a"/></marker></defs>
   <style>text{font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;fill:#1f2933;font-size:18px}.title{font-size:22px;font-weight:700}.label{font-size:16px;fill:#4a5a6a}.small{font-size:15px;fill:#3e4c59}.mono{font-family:Menlo,Consolas,monospace;font-size:14px;fill:#3e4c59}.boundary{fill:none;stroke:#9aa5b1;stroke-width:1.5;stroke-dasharray:6 5}.ns{fill:#f7f9fb;stroke:#bcc5ce;stroke-width:1.5}.box{fill:#ffffff;stroke:#52606d;stroke-width:1.5}.azure{fill:#eef4fb;stroke:#2f6aa3;stroke-width:1.5}.pe{fill:#ffffff;stroke:#2f6aa3;stroke-width:1.5}.flow{fill:none;stroke:#4a5a6a;stroke-width:2;marker-end:url(#arrow)}</style>
   <rect width="1120" height="700" fill="white"/>
@@ -15,7 +15,7 @@
   <text x="75" y="180" class="label">namespace airflow</text>
   <rect x="75" y="195" width="210" height="75" rx="6" class="box"/>
   <text x="180" y="226" text-anchor="middle">Airflow scheduler</text>
-  <text x="180" y="252" text-anchor="middle" class="small">LocalExecutor · 5분 주기</text>
+  <text x="180" y="252" text-anchor="middle" class="small">LocalExecutor · 10분 구간</text>
   <rect x="300" y="195" width="165" height="75" rx="6" class="box"/>
   <text x="382" y="226" text-anchor="middle">PostgreSQL</text>
   <text x="382" y="252" text-anchor="middle" class="small">메타데이터</text>

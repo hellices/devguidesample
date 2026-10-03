@@ -9,13 +9,13 @@ env:
     value: "${IMAGE}"
   - name: CS_LAKE_URL
     value: "${LAKE_URL}"
-  - name: CS_EXPORT_INTERVAL_MIN
-    value: "5"
+  - name: CS_WINDOW_MINUTES
+    value: "10"
 config:
   core:
     load_examples: "False"
-  scheduler:
-    dag_dir_list_interval: 30
+  dag_processor:
+    refresh_interval: 30
 triggerer:
   enabled: false
 redis:

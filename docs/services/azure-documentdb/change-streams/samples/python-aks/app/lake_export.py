@@ -1,14 +1,20 @@
 """Export change stream events to Parquet files in ADLS Gen2.
 
-One run is one Airflow task: resume from the checkpoint, read the events
-written before the run started (or up to a limit), write Parquet chunks of a
-fixed size and move the checkpoint after every uploaded chunk.
+One run is one Airflow task: resume from the checkpoint, read the events of
+the time windows that closed before the run started (or up to a limit), write
+Parquet chunks and move the checkpoint after every uploaded chunk.
+
+Events are grouped by ``wallTime`` into windows of ``WINDOW_MINUTES``. A chunk
+holds events of one window and ends at the window boundary or before its rows
+pass ``CHUNK_BYTES``. Both cut points depend only on the events, so a retry
+cuts the same chunks. The run never writes the window that is still open, so
+one window is not spread over several runs.
 
 A chunk is named after the resume token that precedes its first event. A retry
 starts from the same checkpoint, reads the same events in the same order and
-overwrites the same file with the same or a longer chunk, so a crash between
-the upload and the checkpoint does not leave duplicate rows. The first run
-saves its start time before reading, so its retry starts at the same place.
+overwrites the same file with the same chunk, so a crash between the upload
+and the checkpoint does not leave duplicate rows. The first run saves its
+start time before reading, so its retry starts at the same place.
 
 A run holds a lease on a lock file next to the checkpoint, so two runs never
 write chunks for the same stream at the same time.
@@ -145,14 +151,57 @@ def to_row(change: dict) -> dict:
     }
 
 
-def chunk_path(prefix: str, start: dict, rows: list) -> str:
-    """Path from the chunk start position only, so a retry rewrites the same file."""
+def row_bytes(row: dict) -> int:
+    """Plain-encoded size of a row: string bytes plus a 4-byte length each,
+    and 8 bytes per timestamp. ``read_at`` changes on a retry but its size
+    does not, so the same events always give the same size."""
+    size = 16
+    for column in ("resume_token", "op", "doc_id", "ns", "full_document"):
+        if row[column] is not None:
+            size += len(row[column].encode()) + 4
+    return size
+
+
+def window_start(wall_time, minutes: int):
+    if wall_time is None:
+        return None
+    return wall_time.replace(minute=wall_time.minute - wall_time.minute % minutes,
+                             second=0, microsecond=0)
+
+
+def chunk_path(prefix: str, start: dict, window) -> str:
+    """Path from the chunk start position and window only, so a retry
+    rewrites the same file."""
     key = start["token"]["_data"] if start.get("token") else f"start-{start['start_at']}"
     digest = hashlib.sha256(key.encode()).hexdigest()[:20]
-    first = rows[0]["wall_time"]
     # Without wallTime the read time would move the file on a later retry.
-    partition = f"dt={first:%Y-%m-%d}/hour={first:%H}" if first else "dt=unknown"
-    return f"{prefix}/{partition}/part-{digest}.parquet"
+    if window is None:
+        return f"{prefix}/dt=unknown/part-{digest}.parquet"
+    return f"{prefix}/dt={window:%Y-%m-%d}/hour={window:%H}/part-{window:%Y%m%dT%H%M}-{digest}.parquet"
+
+
+class Chunk:
+    """Rows of one window, started after the position in ``start``."""
+
+    def __init__(self, start: dict):
+        self.start = start
+        self.rows: list = []
+        self.size = 0
+        self.window = None
+        self.end_token: Optional[dict] = None
+
+    def fits(self, size: int, window, max_bytes: int) -> bool:
+        if not self.rows:
+            return True
+        if window is not None and self.window is not None and window != self.window:
+            return False
+        return self.size + size <= max_bytes
+
+    def add(self, row: dict, size: int, window, token: dict) -> None:
+        self.rows.append(row)
+        self.size += size
+        self.window = self.window or window
+        self.end_token = token
 
 
 def write_chunk(fs, path: str, rows: list) -> int:
@@ -164,10 +213,27 @@ def write_chunk(fs, path: str, rows: list) -> int:
     return len(data)
 
 
+def publish(fs, lock: StreamLock, checkpoint: Checkpoint, prefix: str, chunk: Chunk, fault: bool) -> int:
+    """Upload the chunk, then move the checkpoint past its last event."""
+    path = chunk_path(prefix, chunk.start, chunk.window)
+    lock.check()
+    size = write_chunk(fs, path, chunk.rows)
+    if fault:
+        log_json(logger, "fault_exit", path=path)
+        os._exit(137)
+    lock.check()
+    checkpoint.save(chunk.end_token, len(chunk.rows))
+    log_json(logger, "chunk", path=path, rows=len(chunk.rows), row_bytes=chunk.size, bytes=size)
+    return size
+
+
 def main() -> None:
     stream_id = env("STREAM_ID", "orders")
     prefix = env("LAKE_PREFIX", "orders")
-    chunk_events = int(os.getenv("CHUNK_EVENTS", "100000"))
+    window_minutes = int(os.getenv("WINDOW_MINUTES", "10"))
+    if window_minutes <= 0 or 60 % window_minutes:
+        raise SystemExit("WINDOW_MINUTES must divide 60")
+    chunk_bytes = int(os.getenv("CHUNK_BYTES", str(50_000_000)))
     max_events = int(os.getenv("MAX_EVENTS", "0"))  # 0 = until caught up
     max_seconds = float(os.getenv("MAX_SECONDS", "0"))
     # Test-only: exit after uploading this many chunks, before the checkpoint.
@@ -202,48 +268,49 @@ def main() -> None:
         kwargs["start_at_operation_time"] = position["start_at"]
 
     started = time.monotonic()
-    run_started_at = utcnow()
-    log_json(logger, "export_start", stream_id=stream_id, resume=bool(token), chunk_events=chunk_events)
+    # Events from the start of the open window on belong to a later run.
+    cutoff = window_start(utcnow(), window_minutes)
+    log_json(logger, "export_start", stream_id=stream_id, resume=bool(token), cutoff=cutoff,
+             window_minutes=window_minutes, chunk_bytes=chunk_bytes)
     total = chunks = written_bytes = 0
-    caught_up = False
+    caught_up = read_any = False
     with source.watch(**kwargs) as stream:
-        rows: list = []
-        chunk_start = position
-        last_token = token
+        chunk = Chunk(position)
         while True:
             change = stream.try_next()
-            if change is not None:
-                rows.append(to_row(change))
-                last_token = change["_id"]
-                # Under steady load try_next rarely returns None, so stop once
-                # the stream reaches events written after this run started.
-                wall_time = change.get("wallTime")
-                caught_up = wall_time is not None and wall_time >= run_started_at
-            else:
+            if change is None:
+                # Every buffered row is older than the open window.
                 caught_up = True
-            full = len(rows) >= chunk_events
-            limit = (max_events and total + len(rows) >= max_events) or \
+            else:
+                read_any = True
+                wall_time = change.get("wallTime")
+                # Under steady load try_next rarely returns None, so stop at
+                # the first event of the open window. The next run reads it.
+                caught_up = wall_time is not None and wall_time >= cutoff
+            if change is not None and not caught_up:
+                row = to_row(change)
+                size = row_bytes(row)
+                window = window_start(wall_time, window_minutes)
+                if not chunk.fits(size, window, chunk_bytes):
+                    chunks += 1
+                    written_bytes += publish(fs, lock, checkpoint, prefix, chunk,
+                                             fault_after_chunks and chunks >= fault_after_chunks)
+                    total += len(chunk.rows)
+                    chunk = Chunk({"token": chunk.end_token})
+                chunk.add(row, size, window, change["_id"])
+            limit = (max_events and total + len(chunk.rows) >= max_events) or \
                     (max_seconds and time.monotonic() - started >= max_seconds)
-            if rows and (full or caught_up or limit):
-                path = chunk_path(prefix, chunk_start, rows)
-                lock.check()
-                size = write_chunk(fs, path, rows)
-                chunks += 1
-                if fault_after_chunks and chunks >= fault_after_chunks:
-                    log_json(logger, "fault_exit", chunks=chunks, path=path)
-                    os._exit(137)
-                lock.check()
-                checkpoint.save(last_token, len(rows))
-                total += len(rows)
-                written_bytes += size
-                log_json(logger, "chunk", path=path, rows=len(rows), bytes=size, total=total)
-                rows = []
-                chunk_start = {"token": last_token}
             if caught_up or limit:
+                if chunk.rows:
+                    chunks += 1
+                    written_bytes += publish(fs, lock, checkpoint, prefix, chunk,
+                                             fault_after_chunks and chunks >= fault_after_chunks)
+                    total += len(chunk.rows)
                 break
-        # Nothing new: move the checkpoint to the post-batch resume token so
-        # the next run does not scan the same idle range again.
-        if total == 0 and stream.resume_token and stream.resume_token != token:
+        # Nothing to read: move the checkpoint to the post-batch resume token
+        # so the next run does not scan the same idle range again. Skip it
+        # when an event of the open window was read, or that event is lost.
+        if not read_any and stream.resume_token and stream.resume_token != token:
             lock.check()
             checkpoint.save(stream.resume_token, 0)
 

@@ -7,7 +7,7 @@ technologies: [python, mongodb, airflow, kubernetes]
 tags: [evaluate, build, storage]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-02
+sources_checked_at: 2026-10-03
 published_at: 2026-10-02
 official_sources:
   - title: Change streams in Azure DocumentDB
@@ -16,6 +16,8 @@ official_sources:
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
   - title: Lease Blob
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
+  - title: Best practices for using Azure Data Lake Storage
+    url: https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices
 ---
 
 # Azure DocumentDB change stream을 Airflow DAG로 Parquet에 내리기
@@ -49,16 +51,20 @@ change stream은 컬렉션의 변경을 이벤트로 받아 보는 MongoDB 기�
 
 ## 확인한 구성
 
-![AKS의 Airflow scheduler가 5분마다 내보내기 파드를 만들면 그 파드가 프라이빗 엔드포인트를 거쳐 DocumentDB change stream을 읽어 ADLS Gen2에 Parquet 청크와 checkpoint를 쓰며 Entra ID 워크로드 ID로 인증하는 구성](images/architecture.svg)
+![AKS의 Airflow scheduler가 10분 구간이 닫힐 때마다 내보내기 파드를 만들면 그 파드가 프라이빗 엔드포인트를 거쳐 DocumentDB change stream을 읽어 ADLS Gen2에 Parquet 청크와 checkpoint를 쓰며 Entra ID 워크로드 ID로 인증하는 구성](images/architecture.svg)
 
-Airflow가 5분마다 `KubernetesPodOperator`로 내보내기 파드를 하나 띄웁니다. 파드는
-다음 순서로 동작하고 끝나면 사라집니다.
+Airflow가 매시 2분, 12분, 22분처럼 10분 구간이 닫히고 2분 뒤에
+`KubernetesPodOperator`로 내보내기 파드를 하나 띄웁니다. 파드는 다음 순서로
+동작하고 끝나면 사라집니다.
 
 1. ADLS Gen2의 lock 파일에 lease를 잡고 checkpoint 파일에서 resume token을
    읽습니다. checkpoint가 없으면 현재 시각을 시작 위치로 먼저 저장합니다.
-2. 실행을 시작한 시각까지 기록된 이벤트를 읽어 100,000건씩 Parquet 청크로
-   올립니다. 청크 파일 이름은 청크 첫 이벤트 바로 앞의 resume token으로 만듭니다.
-3. 청크를 올린 뒤 checkpoint를 ETag 조건으로 갱신합니다.
+2. 이벤트를 `wallTime` 기준 10분 구간(UTC)으로 나눠 실행 전에 닫힌 구간만
+   읽습니다. 아직 열린 구간의 첫 이벤트를 만나면 쓰지 않고 멈춥니다.
+3. 구간마다 Parquet 청크로 올립니다. 한 구간이 50 MB(50,000,000바이트)를 넘으면
+   그 앞에서 잘라 다음 파일로 넘깁니다. 청크 파일 이름은 구간 시작 시각과 청크 첫
+   이벤트 바로 앞의 resume token으로 만듭니다.
+4. 청크를 올린 뒤 checkpoint를 ETag 조건으로 갱신합니다.
 
 DAG는 `max_active_runs=1`이고 실패하면 세 번까지 재시도합니다. 재시도는 같은
 checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁니다. 첫 실행의
@@ -72,11 +78,13 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 
 | 확인 항목 | 결과 |
 | --- | --- |
-| 5분 주기 지연 | 초당 약 1,000건 쓰기에서 이벤트 기록부터 파일 저장까지 p50 156초, p99 302초 |
+| 10분 구간 지연 | 초당 약 960건 쓰기에서 이벤트 기록부터 파일 저장까지 p50 454초, p99 722초, 최대 731초 |
 | 업로드 직후 장애와 재시도 | 첫 청크를 올리고 checkpoint를 쓰기 전에 파드를 죽여도 재시도 후 중복 0, 누락 0 |
-| 400 MB 활성 change log를 넘긴 재개 | DAG를 31분 멈춘 사이 쌓인 문서 본문 2.6 GB 이상의 백로그를 누락 없이 따라잡음. `maxAwaitTimeMS`를 지정하지 않았을 때만 성공 |
-| 처리 속도 | 1 KB 문서는 초당 약 13,000–18,000건, 4 KB 문서 백로그는 초당 약 3,600건 |
-| 파일 크기 | 이벤트에 실린 문서 크기와 비슷함. update 이벤트에도 문서 전체가 실려 문서 하나가 여러 번 저장됨 |
+| 구간과 크기로 자르기 | 검증한 파일 58개가 모두 구간 하나의 이벤트만 담았고 50 MB를 넘은 파일은 없음 |
+| 400 MB 활성 change log를 넘긴 재개 | DAG를 31분 멈춘 사이 쌓인 문서 본문 2.6 GB 이상의 백로그를 누락 없이 따라잡음. `maxAwaitTimeMS`를 지정하지 않았을 때만 성공. 이전 구성에서 측정 |
+| 처리 속도 | 1 KB 문서 10분 구간 하나(약 600,000건)를 32–38초에 씀 |
+| 파일 크기 | 압축 전 50 MB에서 자른 파일이 1 KB 랜덤 채움 문서는 약 28 MB, 채움 없는 작은 문서는 8.2 MB |
+| 내보내기 파드 메모리 | 최대 RSS 358–386 MiB. 메모리 요청 512Mi, 제한 1Gi로 실행 |
 
 지켜야 할 조건은 다음과 같습니다.
 
@@ -85,6 +93,9 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 - 파일을 먼저 쓰고 checkpoint를 나중에 씁니다. 순서가 반대면 그 사이 장애로
   이벤트를 잃습니다.
 - 파일 이름을 resume token으로 정해 재시도가 같은 파일을 덮어쓰게 합니다.
+  자르는 위치도 이벤트의 `wallTime`과 압축 전 크기로만 정해야 재시도가 같은
+  위치에서 자릅니다. 실행 시각이나 압축 후 크기로 자르면 재시도가 다른 파일을
+  만들어 중복이 생깁니다.
 - checkpoint가 없는 첫 실행은 시작 위치를 먼저 저장합니다. 저장하지 않으면 첫
   청크를 쓰다 실패했을 때 재시도가 더 뒤에서 시작해 그 사이 이벤트를 잃습니다.
 - 실행이 겹치지 않게 `max_active_runs=1`을 두고 실행 동안 lock 파일 lease를
@@ -103,7 +114,7 @@ Learn 문서의 시작 예제(Python, Java, C#, Ruby, Node.js)와
 | --- | --- | --- |
 | 저장소의 `mongo_utils.py`가 resume token을 이벤트마다 로컬 파일 `.resume_token.json`에 씀 | 실행마다 새 파드가 뜨면 파일이 없어 현재 위치부터 읽음. 그 사이 이벤트를 잃음 | checkpoint를 ADLS Gen2 파일로 두고 청크마다 ETag 조건으로 갱신 |
 | Python 예제가 대상 컬렉션에 `insert_one`을 한 뒤 token을 저장 | 두 동작 사이에서 프로세스가 죽으면 재시작 후 같은 이벤트가 한 번 더 들어감 | resume token으로 파일 이름을 정해 덮어씀. 상시 consumer는 token을 키로 upsert |
-| `for change in stream`처럼 끝없이 읽음 | 배치 실행이 끝나지 않음 | `try_next()`로 읽고 실행 시작 시각 이후 이벤트를 만나면 종료 |
+| `for change in stream`처럼 끝없이 읽음 | 배치 실행이 끝나지 않음 | `try_next()`로 읽고 아직 열린 10분 구간의 이벤트를 만나면 쓰지 않고 종료 |
 | C# 예제와 저장소의 지원 확인 스크립트가 대기 시간을 1초로 지정 | 큰 백로그 재개에서 code 50(`ExceededTimeLimit`)이 같은 위치에서 반복 | `max_await_time_ms`를 지정하지 않음 |
 | 오류가 나면 메시지를 출력하고 끝남 | Learn 제한 사항은 장애 조치 뒤 커서를 다시 열어야 한다고 설명함 | Airflow 재시도가 새 파드에서 checkpoint로 stream을 다시 엶 |
 | 감시할 컬렉션이 있다고 가정 | 컬렉션이 없으면 `watch()`가 code 26 | 컬렉션을 먼저 만듦 |
@@ -141,12 +152,19 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
   백로그 재개가 PITR 로그를 거쳤는지는 구분하지 못했습니다.
 - **서버 업데이트:** `maxAwaitTimeMS`, `updateDescription`처럼 문서와 다르게 동작한
   항목은 서버 버전이 바뀌면 다시 확인합니다.
-- **부하와 주기:** 실행 한 번이 주기(5분) 안에 끝나야 지연이 쌓이지 않습니다. 더
-  높은 쓰기 속도와 다른 클러스터 tier에서 실행 시간을 다시 잽니다.
+- **부하와 주기:** 실행 한 번이 구간 길이(10분) 안에 끝나야 지연이 쌓이지
+  않습니다. 초당 약 960건에서는 40초 안팎이었습니다. 더 높은 쓰기 속도와 다른
+  클러스터 tier에서 실행 시간을 다시 잽니다. 구간이 닫힌 뒤에야 쓰므로 지연은 최대
+  구간 길이에 대기 시간(2분)과 실행 시간을 더한 값입니다.
+- **파일 크기 규칙:** ADLS 모범 사례는 분석용 파일 크기로 256 MB–100 GB를 권하고
+  작은 파일이 많으면 읽기 성능과 트랜잭션 비용이 나빠진다고 설명합니다. 50 MB는
+  지연을 줄이려고 그보다 작게 고른 값입니다. 이 한도는 압축 전 크기라서 실제 파일은
+  압축률만큼 더 작습니다. 시험에서는 28 MB와 8.2 MB였습니다. 쓰기가 적은 구간도
+  파일이 작아지므로 다운스트림에서 큰 파일로 합치는 작업을 둡니다.
 - **파일 크기와 압축:** 시험 데이터는 압축되지 않는 랜덤 문자열이었습니다. 실제
   문서로 snappy와 zstd의 크기, 시간, CPU를 비교합니다.
 - **다운스트림 처리:** 파일은 이벤트 이력입니다. 문서별 최신 상태 병합, 문서가
-  없는 delete 이벤트 처리, JSON 문자열 열 펼치기, 작은 파일 정리를 설계합니다.
+  없는 delete 이벤트 처리, JSON 문자열 열 펼치기를 설계합니다.
 - **운영 Airflow:** 차트에 포함된 PostgreSQL 대신 외부 데이터베이스를 쓰고 실패한
   실행에 알림을 겁니다.
 - **변경 전 문서가 필요할 때:** pre-image는 지원 요청으로 켠 뒤 저장 공간과 지연
@@ -156,14 +174,15 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
 
 | 항목 | 값 |
 | --- | --- |
-| 측정일 | 2026-10-02, East US 2 |
+| 측정일 | 2026-10-02(UTC), East US 2 |
 | DocumentDB | M30(2 vCore, 8 GiB), shard 1개, 스토리지 32 GiB, 고가용성 끔, 서버 7.0.0, 공용 액세스 끔 |
 | AKS | Kubernetes 1.35, Standard_D4s_v6 노드 4개 |
 | Airflow | Helm chart 1.22.0, Airflow 3.2.2, `LocalExecutor` |
 | 내보내기 파드 | Python 3.12, PyMongo 4.18.2, pyarrow 25.0.1, snappy 압축 |
 
-컬렉션 하나를 하루 동안 측정한 결과입니다. 측정 뒤 리뷰에서 나온 실패 경로를
-sample에 반영했습니다. 같은 날 반영한 sample을 새 환경에 다시 배포해 아래 경로를
+컬렉션 하나를 하루 동안 측정한 결과입니다. 처음에는 5분 주기와 100,000건 청크로
+측정했습니다. 백로그 재개와 consumer 기준선은 그 구성의 결과입니다. 이후 리뷰에서
+나온 실패 경로를 sample에 반영했고 반영한 sample을 새 환경에 다시 배포해 아래 경로를
 확인했습니다.
 
 - **첫 실행 시작 위치 저장:** checkpoint 없이 시작한 첫 실행이 현재 시각을 저장하고
@@ -172,6 +191,9 @@ sample에 반영했습니다. 같은 날 반영한 sample을 새 환경에 다�
   기다린 뒤 change stream을 열지 않고 실패했습니다.
 - **다시 실행한 적재:** 문서 100,000개 적재와 업로드 직후 장애 재시도를 다시
   실행했습니다. 두 경우 모두 이벤트 230,000건이 중복과 누락 없이 들어갔습니다.
+- **10분 구간과 50 MB 규칙:** 같은 날 규칙을 바꾼 sample을 다시 새 환경에 배포해
+  지연, 재시도, 열린 구간 보류, 메모리를 측정했습니다. 표의 지연, 자르기, 처리 속도,
+  파일 크기, 메모리 값이 이 측정입니다.
 - **로컬 fake로만 확인한 경로:** `wallTime`이 없는 이벤트의 파티션 고정과 검증
   스크립트의 순서 역전 실패 처리입니다. 이 클러스터의 이벤트에는 항상 `wallTime`이
   있었고 순서 역전도 생기지 않았습니다.
@@ -181,3 +203,20 @@ sample에 반영했습니다. 같은 날 반영한 sample을 새 환경에 다�
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
 - [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
+- [Best practices for using Azure Data Lake Storage](https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices)
+
+## 더 읽을 문서
+
+이번 sample에 그대로 채택하지 않았지만 구성을 바꿀 때 참고할 문서입니다.
+
+- AKS에 Airflow 배포: [개요](https://learn.microsoft.com/azure/aks/airflow-overview),
+  [인프라 만들기](https://learn.microsoft.com/azure/aks/airflow-create-infrastructure),
+  [배포](https://learn.microsoft.com/azure/aks/airflow-deploy).
+  Key Vault 비밀 연동과 운영 체크리스트가 있습니다.
+- [Fabric open mirroring best practices](https://learn.microsoft.com/fabric/mirroring/open-mirroring-best-practices):
+  임시 이름으로 올린 뒤 이름을 바꾸는 방식으로 파일을 원자적으로 게시합니다.
+- pandas `to_parquet`로 ADLS에 쓰기:
+  [Synapse](https://learn.microsoft.com/azure/synapse-analytics/spark/tutorial-use-pandas-spark-pool),
+  [Fabric](https://learn.microsoft.com/fabric/data-science/read-write-pandas)
+- [`pyarrow.fs.AzureFileSystem`](https://arrow.apache.org/docs/python/generated/pyarrow.fs.AzureFileSystem.html)
+- [PyMongo `ChangeStream.try_next`](https://pymongo.readthedocs.io/en/stable/api/pymongo/change_stream.html#pymongo.change_stream.ChangeStream.try_next)

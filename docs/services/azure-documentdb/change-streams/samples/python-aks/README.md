@@ -16,7 +16,7 @@ through a private endpoint.
 | `app/consumer.py` | Long-running consumer. Writes events to a sink collection and keeps the resume token in a checkpoint collection |
 | `app/generator.py` | Deterministic insert, update, replace and delete workload |
 | `app/verify.py` | Compares the generator's expected events with a sink collection |
-| `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes Parquet chunks and exits |
+| `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes the closed 10-minute windows as Parquet chunks of at most 50 MB of row data and exits |
 | `app/verify_lake.py` | Compares the generator's expected events with the Parquet files |
 | `airflow/` | DAG that runs `lake_export.py` with `KubernetesPodOperator`, the Airflow image and chart values |
 | `k8s/` | Consumer Deployment, generic Job, toolbox pod, lake Job, RBAC for the Airflow scheduler |
@@ -172,7 +172,8 @@ With chart defaults the database migration job is a post-install hook, so
 advises for `--wait`.
 
 The DAG is paused when Airflow first loads it. Unpause it to start the
-5-minute schedule.
+schedule. Runs start at minute 2, 12, 22 and so on (UTC), two minutes after
+each 10-minute window closes.
 
 ```bash
 kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
@@ -183,7 +184,8 @@ kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
 
 The first run has no checkpoint, so it saves the current time as its start
 position and reads from there. Write events after that run and compare them with the
-Parquet files once a later run has exported them.
+Parquet files once a later run has exported them. An event is exported by the
+first run after its window closes.
 
 ```bash
 JOB_NAME=gen-af1 SCRIPT=generator.py RUN_ID=af1 DOCS=100000 WORKERS=16 RATE=0 \
@@ -196,15 +198,30 @@ kubectl -n cslab logs job/verify-lake-af1
 
 Export behavior:
 
-- A run stops at the first event written after the run started, or when the
+- Events are grouped by `wallTime` into UTC windows of `WINDOW_MINUTES`
+  (10). A run reads only the windows that closed before it started. It stops
+  at the first event of the open window without writing it, or when the
   stream has nothing to return. Under steady writes `try_next()` rarely
-  returns `None`, so the time boundary is what ends the run.
+  returns `None`, so the window boundary is what ends the run.
+- A chunk holds events of one window. It ends at the window boundary or
+  before its rows pass `CHUNK_BYTES` (50,000,000). The size is the
+  plain-encoded row size before compression, so a retry cuts at the same
+  events and the Parquet file is smaller than the limit. A window that gets
+  more data than the limit is split into several files. In the test, files
+  cut at the limit were about 29 MB with 1 KB random padding and 8.2 MB with
+  unpadded documents.
+- An event is written about 2 to 12 minutes after it happens, plus the run
+  time: it waits for its window to close and for the offset. The test measured
+  p50 454 seconds and a maximum of 731 seconds.
+- The export pod requests 512Mi of memory and is limited to 1Gi. With 50 MB
+  chunks its peak RSS was 358–386 MiB.
 - A run with no checkpoint saves the current time as the start position before
   it reads. Its retry starts at the same time.
-- Each chunk is named after the resume token before its first event. A retry
-  reads the same events from the same checkpoint and overwrites the same file.
-  The partition comes from the first event's `wallTime`, or `dt=unknown` when
-  the event has none, so a retry in a later hour writes the same path.
+- Each chunk is written to
+  `dt=<date>/hour=<hour>/part-<window start>-<hash>.parquet`. The hash comes
+  from the resume token before its first event. A retry reads the same events
+  from the same checkpoint and overwrites the same file. A chunk whose events
+  have no `wallTime` goes to `dt=unknown`.
 - The checkpoint is `_checkpoints/<stream>.json` in the same file system. It is
   written with an ETag condition after each chunk upload.
 - A run holds a 20-second lease on `_checkpoints/<stream>.lock` and renews it
@@ -220,9 +237,10 @@ Export behavior:
   a backlog larger than the active change log failed with code 50
   (`ExceededTimeLimit`) at the same event on every retry. An idle `getMore`
   without it still returns after about one second.
-- With 4 KB documents a 100,000-event chunk is about 374 MB and the export pod
-  used up to about 1.9 GiB. For large documents lower `CS_CHUNK_EVENTS` in the
-  Airflow scheduler environment. The DAG passes it to the pod as `CHUNK_EVENTS`.
+- To change the window, set `CS_WINDOW_MINUTES` in `airflow/values.yaml`. The
+  DAG passes it to the pod and builds its schedule from it, so the two stay
+  equal. `CS_EXPORT_OFFSET_MIN` (2) delays the run after the window closes.
+  `CS_CHUNK_BYTES` sets the file limit.
 - `consumer.py` always passes `MAX_AWAIT_MS`, 1000 by default. Raise it before
   the consumer resumes a large backlog.
 
@@ -245,6 +263,11 @@ stream lease waited about 90 seconds and failed with `LeaseAlreadyPresent`
 before it opened the change stream. The `dt=unknown` partition and the
 out-of-order failure were not hit there and were checked with local fakes only.
 
+The Airflow rows were run once more on a new deployment after the export
+switched to 10-minute windows and 50 MB chunks. The published latency, retry,
+file size and memory results for that rule come from those runs. The backlog
+row was not repeated.
+
 | Run | Generator parameters | Extra steps |
 | --- | --- | --- |
 | r1 | `DOCS=10000 RATE=0` | None |
@@ -252,7 +275,8 @@ out-of-order failure were not hit there and were checked with local fakes only.
 | r3 | `DOCS=100000 RATE=0` | Before the generator, run `kubectl -n cslab set env deployment/cs-consumer FAULT_EXIT_AFTER_WRITE=200`. The container exits after each 200-event write and restarts. Remove it with `FAULT_EXIT_AFTER_WRITE-` after the number of faults you want |
 | r4 | `DOCS=130000 RATE=1000` | None |
 | Airflow latency | `DOCS=780000 RATE=1000 PAD_BYTES=1000` | DAG unpaused for the whole run |
-| Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG, run the generator, then run `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container and unpause the DAG. The triggered run stays queued while the DAG is paused and runs before the next scheduled run |
+| Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG and run the generator. After the window of its events closes, run `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container and unpause the DAG. The triggered run stays queued while the DAG is paused and runs before the next scheduled run |
+| Export memory | `DOCS=100000 RATE=0`, once with `PAD_BYTES=1000` and once with `PAD_BYTES=0` | Pause the DAG. After the window closes, run `lake_export.py` with `k8s/lake.yaml` and wrap it to print `resource.getrusage(resource.RUSAGE_SELF).ru_maxrss` at exit |
 | Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |
 
 All runs use `WORKERS=16`. Pause the DAG with `airflow dags pause
