@@ -31,7 +31,7 @@ def main() -> None:
     fs = service.get_file_system_client(env("LAKE_FILESYSTEM", "cdc"))
     prefix = env("LAKE_PREFIX", "orders")
     window_minutes = int(os.getenv("WINDOW_MINUTES", "10"))
-    chunk_bytes = int(os.getenv("CHUNK_BYTES", str(50_000_000)))
+    chunk_bytes = int(os.getenv("CHUNK_BYTES", str(80_000_000)))
     columns = ["resume_token", "op", "doc_id", "wall_time", "read_at"]
 
     rows = []

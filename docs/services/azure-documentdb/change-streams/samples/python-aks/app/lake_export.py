@@ -53,6 +53,9 @@ SCHEMA = pa.schema([
     ("read_at", pa.timestamp("us", tz="UTC")),
     ("full_document", pa.string()),
 ])
+# Rows are moved into Arrow every BATCH_ROWS rows. A large chunk then holds
+# the column data once instead of as Python objects plus an Arrow copy.
+BATCH_ROWS = 10_000
 
 
 class Checkpoint:
@@ -185,13 +188,15 @@ class Chunk:
 
     def __init__(self, start: dict):
         self.start = start
-        self.rows: list = []
+        self.batches: list = []
+        self.pending: list = []
+        self.count = 0
         self.size = 0
         self.window = None
         self.end_token: Optional[dict] = None
 
     def fits(self, size: int, window, max_bytes: int) -> bool:
-        if not self.rows:
+        if not self.count:
             return True
         # None (no wallTime) is its own window, kept apart from dated ones.
         if window != self.window:
@@ -199,33 +204,44 @@ class Chunk:
         return self.size + size <= max_bytes
 
     def add(self, row: dict, size: int, window, token: dict) -> None:
-        if not self.rows:
+        if not self.count:
             self.window = window
-        self.rows.append(row)
+        self.pending.append(row)
+        self.count += 1
         self.size += size
         self.end_token = token
+        if len(self.pending) >= BATCH_ROWS:
+            self.batches.append(pa.RecordBatch.from_pylist(self.pending, schema=SCHEMA))
+            self.pending = []
+
+    def table(self) -> pa.Table:
+        if self.pending:
+            self.batches.append(pa.RecordBatch.from_pylist(self.pending, schema=SCHEMA))
+            self.pending = []
+        return pa.Table.from_batches(self.batches, schema=SCHEMA)
 
 
-def write_chunk(fs, path: str, rows: list) -> int:
-    table = pa.Table.from_pylist(rows, schema=SCHEMA)
+def write_chunk(fs, path: str, table: pa.Table) -> int:
     buffer = io.BytesIO()
     pq.write_table(table, buffer, compression="snappy")
-    data = buffer.getvalue()
-    fs.get_file_client(path).upload_data(data, overwrite=True)
-    return len(data)
+    size = buffer.tell()
+    # Upload from the buffer itself instead of a bytes copy of the file.
+    buffer.seek(0)
+    fs.get_file_client(path).upload_data(buffer, length=size, overwrite=True)
+    return size
 
 
 def publish(fs, lock: StreamLock, checkpoint: Checkpoint, prefix: str, chunk: Chunk, fault: bool) -> int:
     """Upload the chunk, then move the checkpoint past its last event."""
     path = chunk_path(prefix, chunk.start, chunk.window)
     lock.check()
-    size = write_chunk(fs, path, chunk.rows)
+    size = write_chunk(fs, path, chunk.table())
     if fault:
         log_json(logger, "fault_exit", path=path)
         os._exit(137)
     lock.check()
-    checkpoint.save(chunk.end_token, len(chunk.rows))
-    log_json(logger, "chunk", path=path, rows=len(chunk.rows), row_bytes=chunk.size, bytes=size)
+    checkpoint.save(chunk.end_token, chunk.count)
+    log_json(logger, "chunk", path=path, rows=chunk.count, row_bytes=chunk.size, bytes=size)
     return size
 
 
@@ -235,7 +251,7 @@ def main() -> None:
     window_minutes = int(os.getenv("WINDOW_MINUTES", "10"))
     if window_minutes <= 0 or 60 % window_minutes:
         raise SystemExit("WINDOW_MINUTES must divide 60")
-    chunk_bytes = int(os.getenv("CHUNK_BYTES", str(50_000_000)))
+    chunk_bytes = int(os.getenv("CHUNK_BYTES", str(80_000_000)))
     max_events = int(os.getenv("MAX_EVENTS", "0"))  # 0 = until caught up
     max_seconds = float(os.getenv("MAX_SECONDS", "0"))
     # Test-only: exit after uploading this many chunks, before the checkpoint.
@@ -297,17 +313,17 @@ def main() -> None:
                     chunks += 1
                     written_bytes += publish(fs, lock, checkpoint, prefix, chunk,
                                              fault_after_chunks and chunks >= fault_after_chunks)
-                    total += len(chunk.rows)
+                    total += chunk.count
                     chunk = Chunk({"token": chunk.end_token})
                 chunk.add(row, size, window, change["_id"])
-            limit = (max_events and total + len(chunk.rows) >= max_events) or \
+            limit = (max_events and total + chunk.count >= max_events) or \
                     (max_seconds and time.monotonic() - started >= max_seconds)
             if caught_up or limit:
-                if chunk.rows:
+                if chunk.count:
                     chunks += 1
                     written_bytes += publish(fs, lock, checkpoint, prefix, chunk,
                                              fault_after_chunks and chunks >= fault_after_chunks)
-                    total += len(chunk.rows)
+                    total += chunk.count
                 break
         # Nothing to read: move the checkpoint to the post-batch resume token
         # so the next run does not scan the same idle range again. Skip it

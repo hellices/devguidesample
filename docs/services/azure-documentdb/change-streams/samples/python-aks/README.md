@@ -16,7 +16,7 @@ through a private endpoint.
 | `app/consumer.py` | Long-running consumer. Writes events to a sink collection and keeps the resume token in a checkpoint collection |
 | `app/generator.py` | Deterministic insert, update, replace and delete workload |
 | `app/verify.py` | Compares the generator's expected events with a sink collection |
-| `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes the closed 10-minute windows as Parquet chunks of at most 50 MB of row data and exits |
+| `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes the closed 10-minute windows as Parquet chunks of at most 80 MB of row data and exits |
 | `app/verify_lake.py` | Compares the generator's expected events with the Parquet files |
 | `airflow/` | DAG that runs `lake_export.py` with `KubernetesPodOperator`, the Airflow image and chart values |
 | `k8s/` | Consumer Deployment, generic Job, toolbox pod, lake Job, RBAC for the Airflow scheduler |
@@ -204,17 +204,21 @@ Export behavior:
   stream has nothing to return. Under steady writes `try_next()` rarely
   returns `None`, so the window boundary is what ends the run.
 - A chunk holds events of one window. It ends at the window boundary or
-  before its rows pass `CHUNK_BYTES` (50,000,000). The size is the
-  plain-encoded row size before compression, so a retry cuts at the same
-  events and the Parquet file is smaller than the limit. A window that gets
-  more data than the limit is split into several files. In the test, files
-  cut at the limit were about 29 MB with 1 KB random padding and 8.2 MB with
-  unpadded documents.
+  before its rows pass `CHUNK_BYTES` (80,000,000). The size is the
+  plain-encoded row size before compression, so the Parquet file is smaller
+  than the limit. A window that gets more data than the limit is split into
+  several files. In the test, files cut at the limit were 43.7–46.7 MB with
+  1 KB random padding and 13.3–13.4 MB with unpadded documents. The file is a
+  fixed share of the limit that depends on how well the data compresses, so
+  data that hardly compresses gets files close to 80 MB. Set `CS_CHUNK_BYTES` to 50,000,000 if files must stay under 50 MB.
 - An event is written about 2 to 12 minutes after it happens, plus the run
   time: it waits for its window to close and for the offset. The test measured
   p50 454 seconds and a maximum of 731 seconds.
-- The export pod requests 512Mi of memory and is limited to 1Gi. With 50 MB
-  chunks its peak RSS was 358–386 MiB.
+- Rows are moved into Arrow record batches every 10,000 rows, so a chunk is
+  not held as Python objects and an Arrow copy at the same time. The export
+  pod requests 512Mi of memory and is limited to 1Gi. Peak RSS was 336 MiB
+  with 80 MB chunks of 1 KB padded documents, 390 MiB at 100 MB and 620 MiB
+  at 200 MB. Raise the pod memory with the limit.
 - A run with no checkpoint saves the current time as the start position before
   it reads. Its retry starts at the same time.
 - Each chunk is written to
@@ -264,9 +268,12 @@ before it opened the change stream. The `dt=unknown` partition and the
 out-of-order failure were not hit there and were checked with local fakes only.
 
 The Airflow rows were run once more on a new deployment after the export
-switched to 10-minute windows and 50 MB chunks. The published latency, retry,
-file size and memory results for that rule come from those runs. The backlog
-row was not repeated.
+switched to 10-minute windows and 50 MB chunks. The published latency results
+come from those runs. The next day the export started to move rows into Arrow
+batches and the default limit became 80 MB. The chunk limit comparison, the
+Airflow 80 MB backlog and the Airflow retry were run on the same deployment
+with that sample. The published file size, memory and 80 MB retry results come
+from them. The backlog row was not repeated.
 
 | Run | Generator parameters | Extra steps |
 | --- | --- | --- |
@@ -275,8 +282,10 @@ row was not repeated.
 | r3 | `DOCS=100000 RATE=0` | Before the generator, run `kubectl -n cslab set env deployment/cs-consumer FAULT_EXIT_AFTER_WRITE=200`. The container exits after each 200-event write and restarts. Remove it with `FAULT_EXIT_AFTER_WRITE-` after the number of faults you want |
 | r4 | `DOCS=130000 RATE=1000` | None |
 | Airflow latency | `DOCS=780000 RATE=1000 PAD_BYTES=1000` | DAG unpaused for the whole run |
-| Airflow retry | `DOCS=100000 RATE=0 PAD_BYTES=1000` | Pause the DAG and run the generator. After the window of its events closes, run `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container and unpause the DAG. The triggered run stays queued while the DAG is paused and runs before the next scheduled run |
+| Airflow retry | `DOCS=300000 RATE=0 PAD_BYTES=1000` (`DOCS=100000` with 50 MB chunks) | Keep the DAG unpaused. Start the generator right after a window opens so its events fall in that window. After the window closes and before the next scheduled run, in the first two minutes of the next window, run `airflow dags trigger change_stream_to_parquet -c '{"fault_after_chunks": 1}'` in the scheduler container. Do not pause the DAG for this run. Unpausing creates the missed scheduled run at once, and that run can read the events before the triggered run |
 | Export memory | `DOCS=100000 RATE=0`, once with `PAD_BYTES=1000` and once with `PAD_BYTES=0` | Pause the DAG. After the window closes, run `lake_export.py` with `k8s/lake.yaml` and wrap it to print `resource.getrusage(resource.RUSAGE_SELF).ru_maxrss` at exit |
+| Chunk limit comparison | `DOCS=200000 RATE=0 PAD_BYTES=1000`, then `DOCS=450000 RATE=0 PAD_BYTES=0` in the next window | Pause the DAG. Before the generator, run `lake_export.py` once per limit with its own `LAKE_PREFIX`, which is also the stream ID, so each saves its own start position. After each window closes, run the exports again with `CHUNK_BYTES` added to the Job env (50000000, 100000000 or 200000000) and wrapped as in Export memory. Verify each prefix with `verify_lake.py`. The 80 MB memory was measured the same way on the third run of the next row |
+| Airflow 80 MB backlog | The two runs above, then `DOCS=300000 RATE=0 PAD_BYTES=1000` in another window | Keep the DAG paused while the three runs write, then unpause it. One scheduled run reads the three windows |
 | Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |
 
 All runs use `WORKERS=16`. Pause the DAG with `airflow dags pause

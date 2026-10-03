@@ -45,7 +45,7 @@ with DAG(
             "LAKE_PREFIX": "orders",
             "STREAM_ID": "orders",
             "WINDOW_MINUTES": str(WINDOW_MINUTES),
-            "CHUNK_BYTES": os.getenv("CS_CHUNK_BYTES", str(50_000_000)),
+            "CHUNK_BYTES": os.getenv("CS_CHUNK_BYTES", str(80_000_000)),
             "MAX_EVENTS": "{{ dag_run.conf.get('max_events', 0) }}",
             "FAULT_EXIT_AFTER_UPLOAD":
                 "{{ dag_run.conf.get('fault_after_chunks', 0) if ti.try_number == 1 else 0 }}",
