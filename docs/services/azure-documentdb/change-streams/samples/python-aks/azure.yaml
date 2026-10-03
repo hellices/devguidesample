@@ -1,0 +1,9 @@
+# azd provisions the Azure resources only. Images and Kubernetes resources are
+# deployed by hand with az acr build, kubectl and helm (see README.md).
+name: docdb-changestream-lab
+requiredVersions:
+  azd: ">=1.29.0"
+infra:
+  provider: bicep
+  path: infra
+  module: main

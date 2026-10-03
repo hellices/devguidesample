@@ -1,0 +1,22 @@
+# Interactive pod for ad-hoc probes: kubectl -n cslab exec -i cs-toolbox -- python - < script.py
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cs-toolbox
+  namespace: cslab
+spec:
+  containers:
+    - name: toolbox
+      image: ${IMAGE}
+      command: ["sleep", "infinity"]
+      workingDir: /app
+      env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: docdb
+              key: uri
+        - name: MONGO_DB
+          value: cslab
+        - name: PYTHONWARNINGS
+          value: ignore

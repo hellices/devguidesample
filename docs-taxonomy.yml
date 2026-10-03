@@ -36,6 +36,7 @@ services:
   azure-container-apps: Azure Container Apps
   azure-cosmos-db: Azure Cosmos DB
   azure-database-for-mysql: Azure Database for MySQL
+  azure-documentdb: Azure DocumentDB
   azure-functions: Azure Functions
   azure-front-door: Azure Front Door
   azure-hdinsight: Azure HDInsight
@@ -49,6 +50,7 @@ services:
   microsoft-foundry: Microsoft Foundry
 
 technologies:
+  airflow: Apache Airflow
   azure-cli: Azure CLI
   bicep: Bicep
   cosmos-db: Azure Cosmos DB
@@ -61,6 +63,7 @@ technologies:
   kafka: Apache Kafka
   kubernetes: Kubernetes
   mcp: Model Context Protocol
+  mongodb: MongoDB
   mysql: MySQL
   nodejs: Node.js
   open-telemetry: OpenTelemetry
