@@ -1,18 +1,22 @@
 ---
 title: Azure DocumentDB change stream Parquet 적재 측정 상세
-description: Airflow DAG의 10분 구간 지연, 크기 한도별 파일 크기와 메모리, 이전 5분 주기 구성의 지연, 업로드 직후 장애 재시도, 400 MB 활성 change log를 넘긴 재개, Parquet 파일 크기와 상시 PyMongo consumer 기준선, change stream 옵션별 동작을 측정한 수치입니다.
+description: Airflow DAG의 10분 구간 지연, 크기 한도별 파일 크기와 메모리, 이전 5분 주기 구성의 지연, 업로드 직후 장애 재시도, lock lease를 잃은 실행의 늦은 업로드, 400 MB 활성 change log를 넘긴 재개, Parquet 파일 크기와 상시 PyMongo consumer 기준선, change stream 옵션별 동작을 측정한 수치입니다.
 document_type: research
 services: [azure-documentdb, azure-storage, azure-kubernetes-service]
 technologies: [python, mongodb, airflow, kubernetes]
 tags: [evaluate, storage]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-02
+sources_checked_at: 2026-10-03
 published_at: 2026-10-02
 topic_order: 1
 official_sources:
   - title: Change streams in Azure DocumentDB
     url: https://learn.microsoft.com/azure/documentdb/change-streams
+  - title: Lease Blob
+    url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
+  - title: Path - Update
+    url: https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update
 ---
 
 # Azure DocumentDB change stream Parquet 적재 측정 상세
@@ -102,8 +106,10 @@ checkpoint에서 230,000건을 모두 읽어 6개 파일로 썼습니다.
   측정부터 내보내기는 행을 10,000건마다 Arrow 배치로 옮겨 청크 전체를 Python 객체와
   Arrow 사본으로 함께 들고 있지 않습니다. 같은 50 MB 한도에서 이전 sample의 최대 RSS는 1 KB 채움
   문서가 358 MiB, 채움 없는 문서가 386 MiB였습니다.
-- 내보내기 파드는 메모리 요청 512Mi, 제한 1Gi로 실행합니다. 200 MB 한도의 620 MiB는
-  요청을 넘습니다. 한도를 올리면 파드 메모리도 함께 늘립니다.
+- 이 표의 메모리는 `k8s/lake.yaml`로 띄운 파드에서 쟀습니다. 이 파드는 메모리 요청
+  512Mi, 제한 4Gi입니다. Airflow DAG가 띄우는 내보내기 파드는 요청 512Mi, 제한
+  1Gi입니다. 200 MB 한도의 620 MiB는 그 요청을 넘으니 한도를 올리면 DAG의 파드
+  메모리도 함께 늘립니다.
 
 ### 80 MB 한도로 다시 실행
 
@@ -130,6 +136,39 @@ checkpoint에서 230,000건을 모두 읽어 6개 파일로 썼습니다.
 | 기대 이벤트 | 저장된 이벤트 | 중복 | 누락 | 파일 |
 | --- | --- | --- | --- | --- |
 | 690,000 | 690,000 | 0 | 0 | 11 |
+
+## lock lease를 잃은 실행의 늦은 업로드
+
+2026-10-03에 `stale_writer_test.py`로 확인했습니다. 실행 A는 첫 청크를 올리기 전에
+멈추고 stream lock lease 갱신을 끊습니다. lease가 만료되면 실행 B가 같은 checkpoint에서
+시작해 1,000건짜리 첫 청크를 같은 파일에 쓰고 checkpoint를 옮깁니다. 그 뒤 A가 이어서
+진행합니다. 파일이 B의 청크로 남아 마지막 resume token이 checkpoint와 같으면
+통과입니다.
+
+데이터는 1 KB 채움 문서 20,000개의 이벤트 46,000건이고 10분 구간 하나에 썼습니다.
+경우마다 prefix와 stream ID를 따로 두었습니다. 시험 뒤 같은 prefix로 내보내기를 한 번 더
+실행해 나머지 이벤트를 쓰고 `verify_lake.py`로 대조했습니다.
+
+| sample | A가 멈춘 위치 | A의 결과 | 파일 행 수 | 후속 실행 뒤 중복 | 누락 |
+| --- | --- | --- | --- | --- | --- |
+| 이전(청크 파일 lease 없음) | 업로드 직전 | B의 청크를 46,000행으로 덮어쓰고 checkpoint 저장에서 `ConditionNotMet` | 46,000 | 45,000 | 0 |
+| 현재 | 파일 lease를 잡은 뒤 업로드 직전 | B가 lease를 끊어 업로드가 412 `LeaseNotPresent`로 거부됨 | 1,000 | 0 | 0 |
+| 현재 | checkpoint에 파일을 기록한 뒤 lease 전 | checkpoint 확인에서 멈춤 | 1,000 | 0 | 0 |
+
+- 이전 sample에서는 A의 업로드가 성공했습니다. checkpoint는 B의 1,000건 뒤를 가리키는데
+  파일에는 46,000건이 있어 후속 실행이 쓴 45,000건이 그대로 중복됐습니다.
+- 같은 데이터로 업로드 직후 장애도 다시 실행했습니다. 첫 시도는 종료 코드 137로 끝났고
+  후속 실행이 같은 파일을 덮어써 46,000건이 중복과 누락 없이 들어갔습니다. 첫 시도의
+  파일 lease는 후속 실행 전에 만료됐습니다.
+- 별도 시험 작업에서 lease가 걸린 파일에 lease ID 없이 올리면 `LeaseIdMissing`, 끊긴
+  lease ID로 올리면 `LeaseIdMismatch`가 나왔고 모두 412였습니다.
+- `create_file`에 lease ID를 함께 넘겨 만든 파일은 그 lease를 Blob 엔드포인트로 해제할
+  때 `LeaseIdMismatchWithLeaseOperation`이 났습니다. 만든 직후에도 같았습니다. 그래서
+  빈 파일을 먼저 만들고 lease를 따로 잡습니다.
+- 중간 구현은 파일 lease만 잡고 checkpoint가 그대로인지 확인했습니다. 이 방식은 B가
+  업로드를 마치고 checkpoint를 갱신하기 전에 A가 lease를 끊으면 확인을 통과합니다. 파일
+  경로를 checkpoint에 먼저 기록하는 단계를 더해 막았고 이 순서는 로컬 fake로만
+  재현했습니다.
 
 ## 5분 주기 지연(이전 구성)
 
@@ -310,7 +349,10 @@ upsert한 뒤 checkpoint를 저장합니다. 생성기는 문서마다 insert와
 - 압축 비교는 백로그 재개 시험의 파일 하나를 다시 써서 얻었습니다. zstd로 쓸 때의
   시간과 CPU는 측정하지 않았습니다.
 - 파일 저장 지연은 초 단위 last-modified로 계산했습니다.
+- lock lease를 잃은 실행의 시험은 경우마다 한 번씩 실행했습니다.
 
 ## 공식 출처
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
+- [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
+- [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)

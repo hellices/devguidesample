@@ -17,7 +17,13 @@ and the checkpoint does not leave duplicate rows. The first run saves its
 start time before reading, so its retry starts at the same place.
 
 A run holds a lease on a lock file next to the checkpoint, so two runs never
-write chunks for the same stream at the same time.
+write chunks for the same stream at the same time. A run can still lose that
+lease while it writes, so a chunk is written in three steps. The run first
+records the chunk file in the checkpoint with the ETag condition, then leases
+the file and checks that the checkpoint still holds its own record, and then
+uploads with the lease ID. A later run that writes the same file records it
+and breaks the lease, so the older run fails the check, or Blob Storage
+rejects its upload.
 """
 
 import hashlib
@@ -34,7 +40,7 @@ import pyarrow.parquet as pq
 from azure.core import MatchConditions
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
-from azure.storage.filedatalake import DataLakeServiceClient
+from azure.storage.filedatalake import DataLakeLeaseClient, DataLakeServiceClient
 from bson import json_util
 from bson.timestamp import Timestamp
 
@@ -76,14 +82,22 @@ class Checkpoint:
         self.etag = download.properties.etag
         return json_util.loads(download.readall())
 
-    def save(self, token: Optional[dict], events: int, start_at: Optional[Timestamp] = None) -> None:
+    def save(self, token: Optional[dict], events: int, start_at: Optional[Timestamp] = None,
+             writing: Optional[str] = None) -> None:
         body = json_util.dumps({"token": token, "start_at": start_at, "updated_at": utcnow(),
-                                "events": events, "pod": socket.gethostname()})
+                                "events": events, "writing": writing, "pod": socket.gethostname()})
         # IfNotModified fails if another run moved the checkpoint since we read it.
         condition = (dict(etag=self.etag, match_condition=MatchConditions.IfNotModified)
                      if self.etag else dict(match_condition=MatchConditions.IfMissing))
         result = self.file.upload_data(body, overwrite=True, **condition)
         self.etag = result["etag"]
+
+    def claim(self, start: dict, path: str) -> None:
+        """Record the chunk file about to be written, at the same position."""
+        self.save(start.get("token"), 0, start_at=start.get("start_at"), writing=path)
+
+    def unchanged(self) -> bool:
+        return self.file.get_file_properties().etag == self.etag
 
 
 class StreamLock:
@@ -221,26 +235,61 @@ class Chunk:
         return pa.Table.from_batches(self.batches, schema=SCHEMA)
 
 
-def write_chunk(fs, path: str, table: pa.Table) -> int:
-    buffer = io.BytesIO()
-    pq.write_table(table, buffer, compression="snappy")
-    size = buffer.tell()
-    # Upload from the buffer itself instead of a bytes copy of the file.
-    buffer.seek(0)
-    fs.get_file_client(path).upload_data(buffer, length=size, overwrite=True)
-    return size
+def lease_file(file, duration: int = 60) -> DataLakeLeaseClient:
+    """Lease the chunk file, creating it empty if it does not exist.
+
+    A lease already on the file belongs to a run that crashed or lost the
+    stream lock. Breaking it makes that run's upload fail.
+    """
+    # A lease proposed on create could not be released through the Blob
+    # endpoint in the test, so create the file first and lease it after.
+    try:
+        file.create_file(match_condition=MatchConditions.IfMissing)
+    except HttpResponseError as error:
+        if error.status_code != 409:
+            raise
+    lease = DataLakeLeaseClient(file)
+    try:
+        lease.acquire(lease_duration=duration)
+    except HttpResponseError as error:
+        if error.status_code != 409:
+            raise
+        lease.break_lease(lease_break_period=0)
+        log_json(logger, "file_lease_broken", path=file.path_name)
+        lease.acquire(lease_duration=duration)
+    return lease
 
 
 def publish(fs, lock: StreamLock, checkpoint: Checkpoint, prefix: str, chunk: Chunk, fault: bool) -> int:
     """Upload the chunk, then move the checkpoint past its last event."""
     path = chunk_path(prefix, chunk.start, chunk.window)
+    buffer = io.BytesIO()
+    pq.write_table(chunk.table(), buffer, compression="snappy")
+    size = buffer.tell()
     lock.check()
-    size = write_chunk(fs, path, chunk.table())
+    # Fails if another run moved the checkpoint or recorded its own chunk.
+    checkpoint.claim(chunk.start, path)
+    file = fs.get_file_client(path)
+    lease = lease_file(file)
+    # Another run that writes this file records it before it breaks the lease.
+    # If our record is still there, any later writer has to break this lease
+    # first, and the upload below then fails.
+    if not checkpoint.unchanged():
+        raise RuntimeError("another run recorded a chunk after this run")
+    # Upload from the buffer itself instead of a bytes copy of the file.
+    buffer.seek(0)
+    file.upload_data(buffer, length=size, overwrite=True, lease=lease)
     if fault:
         log_json(logger, "fault_exit", path=path)
         os._exit(137)
     lock.check()
     checkpoint.save(chunk.end_token, chunk.count)
+    try:
+        lease.release()
+    except HttpResponseError:
+        # A run that lost the stream lock broke the lease after the upload.
+        # The checkpoint is saved, so that run fails its check.
+        log_json(logger, "file_lease_release_failed", path=path)
     log_json(logger, "chunk", path=path, rows=chunk.count, row_bytes=chunk.size, bytes=size)
     return size
 

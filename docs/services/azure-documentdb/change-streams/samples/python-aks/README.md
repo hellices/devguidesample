@@ -18,6 +18,7 @@ through a private endpoint.
 | `app/verify.py` | Compares the generator's expected events with a sink collection |
 | `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes the closed 10-minute windows as Parquet chunks of at most 80 MB of row data and exits |
 | `app/verify_lake.py` | Compares the generator's expected events with the Parquet files |
+| `app/stale_writer_test.py` | Test only. Stops one export run before its first upload, lets a second run write the same file and checks that the first run cannot overwrite it |
 | `airflow/` | DAG that runs `lake_export.py` with `KubernetesPodOperator`, the Airflow image and chart values |
 | `k8s/` | Consumer Deployment, generic Job, toolbox pod, lake Job, RBAC for the Airflow scheduler |
 
@@ -28,7 +29,8 @@ inspected. Run every command from this directory.
 ## Prerequisites
 
 - Azure Developer CLI 1.29 or later and Azure CLI
-- `kubectl`, `helm` and `envsubst` (gettext)
+- `kubectl`, Helm 3.19.0 or later (Airflow chart 1.22.0 requires it) and
+  `envsubst` (gettext)
 - Permission to create a resource group and role assignments in the
   subscription
 
@@ -215,10 +217,11 @@ Export behavior:
   time: it waits for its window to close and for the offset. The test measured
   p50 454 seconds and a maximum of 731 seconds.
 - Rows are moved into Arrow record batches every 10,000 rows, so a chunk is
-  not held as Python objects and an Arrow copy at the same time. The export
-  pod requests 512Mi of memory and is limited to 1Gi. Peak RSS was 336 MiB
-  with 80 MB chunks of 1 KB padded documents, 390 MiB at 100 MB and 620 MiB
-  at 200 MB. Raise the pod memory with the limit.
+  not held as Python objects and an Arrow copy at the same time. Peak RSS was
+  336 MiB with 80 MB chunks of 1 KB padded documents, 390 MiB at 100 MB and
+  620 MiB at 200 MB. These runs used `k8s/lake.yaml` pods, which request
+  512Mi and are limited to 4Gi. The pod the DAG starts requests 512Mi and is
+  limited to 1Gi. Raise its memory in the DAG when you raise the limit.
 - A run with no checkpoint saves the current time as the start position before
   it reads. Its retry starts at the same time.
 - Each chunk is written to
@@ -230,10 +233,28 @@ Export behavior:
   written with an ETag condition after each chunk upload.
 - A run holds a 20-second lease on `_checkpoints/<stream>.lock` and renews it
   in the background. A second run waits up to 90 seconds for the lease and
-  then fails, so two runs never overwrite each other's chunks. The ETag
-  condition alone only protects the checkpoint, not files already uploaded.
-  A lease that expires instead of being released can take up to a minute to
-  become available again.
+  then fails, so two runs do not write chunks at the same time. A lease that
+  expires instead of being released can take up to a minute to become
+  available again.
+- A run can lose the stream lease while it serializes or uploads a chunk. The
+  next run then starts from the same checkpoint and may write a shorter chunk
+  to the same file. The ETag condition only protects the checkpoint, so a
+  chunk is written in three steps:
+  1. The run saves the checkpoint again at the same position with the chunk
+     path in `writing`, under the ETag condition. This fails if another run
+     moved the checkpoint or recorded its own chunk.
+  2. It creates the chunk file empty if it is missing and acquires a
+     60-second lease on it. A lease left by an older run is broken. It then
+     checks that the checkpoint ETag is still the one it saved.
+  3. It uploads with the lease ID and saves the checkpoint.
+
+  A later run that writes the same file saves its own record before it breaks
+  the lease. So an older run either fails the check in step 2 or gets 412 from
+  storage on the upload instead of overwriting the file. One chunk upload has
+  to finish within the 60 seconds. A lease proposed when the file is created
+  could not be released through the Blob endpoint in the test
+  (`LeaseIdMismatchWithLeaseOperation`), so the run creates the file first
+  and leases it after.
 - Trigger the DAG with `{"fault_after_chunks": 1}` to make the first try exit
   after one upload and before the checkpoint. The retry finishes the run.
 - `max_await_time_ms` is not set unless `MAX_AWAIT_MS` is non-zero. The test
@@ -273,7 +294,9 @@ come from those runs. The next day the export started to move rows into Arrow
 batches and the default limit became 80 MB. The chunk limit comparison, the
 Airflow 80 MB backlog and the Airflow retry were run on the same deployment
 with that sample. The published file size, memory and 80 MB retry results come
-from them. The backlog row was not repeated.
+from them. The backlog row was not repeated. The stale writer row was run
+with the current sample and, for comparison, with the sample before the chunk
+file lease.
 
 | Run | Generator parameters | Extra steps |
 | --- | --- | --- |
@@ -287,6 +310,7 @@ from them. The backlog row was not repeated.
 | Chunk limit comparison | `DOCS=200000 RATE=0 PAD_BYTES=1000`, then `DOCS=450000 RATE=0 PAD_BYTES=0` in the next window | Pause the DAG. Before the generator, run `lake_export.py` once per limit with its own `LAKE_PREFIX`, which is also the stream ID, so each saves its own start position. After each window closes, run the exports again with `CHUNK_BYTES` added to the Job env (50000000, 100000000 or 200000000) and wrapped as in Export memory. Verify each prefix with `verify_lake.py`. The 80 MB memory was measured the same way on the third run of the next row |
 | Airflow 80 MB backlog | The two runs above, then `DOCS=300000 RATE=0 PAD_BYTES=1000` in another window | Keep the DAG paused while the three runs write, then unpause it. One scheduled run reads the three windows |
 | Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |
+| Stale writer | `DOCS=20000 RATE=0 PAD_BYTES=1000` | Pause the DAG. Before the generator, run `lake_export.py` once per case with its own `LAKE_PREFIX`. After the window closes, run `stale_writer_test.py` with `k8s/lake.yaml` (`SCRIPT=stale_writer_test.py`), once as is and once with `STALL_AT=lease` added to the Job env. It exits with code 1 when the older run overwrote the newer chunk. Then run `lake_export.py` again on each prefix and verify it with `verify_lake.py` |
 
 All runs use `WORKERS=16`. Pause the DAG with `airflow dags pause
 change_stream_to_parquet` in the scheduler container.

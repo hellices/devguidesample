@@ -16,6 +16,8 @@ official_sources:
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
   - title: Lease Blob
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
+  - title: Path - Update
+    url: https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update
   - title: Best practices for using Azure Data Lake Storage
     url: https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices
 ---
@@ -64,7 +66,9 @@ Airflow가 매시 2분, 12분, 22분처럼 10분 구간이 닫히고 2분 뒤에
 3. 구간마다 Parquet 청크로 올립니다. 한 구간이 압축 전 80 MB(80,000,000바이트)를
    넘으면 그 앞에서 잘라 다음 파일로 넘깁니다. 청크 파일 이름은 구간 시작 시각과 청크 첫
    이벤트 바로 앞의 resume token으로 만듭니다.
-4. 청크를 올린 뒤 checkpoint를 ETag 조건으로 갱신합니다.
+4. 올릴 청크 파일 경로를 checkpoint에 먼저 기록합니다. 그 다음 청크 파일에
+   lease를 잡고 checkpoint가 자기 기록 그대로인지 확인한 뒤 그 lease ID로
+   올립니다. 마지막으로 checkpoint를 ETag 조건으로 갱신합니다.
 
 DAG는 `max_active_runs=1`이고 실패하면 세 번까지 재시도합니다. 재시도는 같은
 checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁니다. 첫 실행의
@@ -79,12 +83,13 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 | 확인 항목 | 결과 |
 | --- | --- |
 | 10분 구간 지연 | 초당 약 960건 쓰기에서 이벤트 기록부터 파일 저장까지 p50 454초, p99 722초, 최대 731초 |
+| lock lease를 잃은 실행 | 멈춰 있던 실행이 다음 실행 뒤에 같은 파일을 쓰려 하면 업로드가 412로 거부되거나 checkpoint 확인에서 멈춤. 중복 0, 누락 0. 이전 sample은 45,000행 중복 |
 | 업로드 직후 장애와 재시도 | 첫 청크를 올리고 checkpoint를 쓰기 전에 파드를 죽여도 재시도 후 중복 0, 누락 0. 50 MB와 80 MB 한도에서 각각 확인 |
 | 구간과 크기로 자르기 | 50, 80, 100, 200 MB 한도로 쓴 파일이 모두 구간 하나의 이벤트만 담았고 한도를 넘은 파일은 없음 |
 | 400 MB 활성 change log를 넘긴 재개 | DAG를 31분 멈춘 사이 쌓인 문서 본문 2.6 GB 이상의 백로그를 누락 없이 따라잡음. `maxAwaitTimeMS`를 지정하지 않았을 때만 성공. 이전 구성에서 측정 |
 | 처리 속도 | 1 KB 문서 10분 구간 하나(약 600,000건)를 32–38초에 씀. 한도를 50–200 MB로 바꿔도 시간은 비슷함 |
 | 파일 크기 | 압축 전 80 MB에서 자른 파일이 1 KB 랜덤 채움 문서는 43.7–46.7 MB, 채움 없는 작은 문서는 13.3–13.4 MB. 파일 크기는 한도에 비례함 |
-| 내보내기 파드 메모리 | 80 MB 한도에서 최대 RSS 336 MiB. 200 MB 한도는 620 MiB. 메모리 요청 512Mi, 제한 1Gi로 실행 |
+| 내보내기 파드 메모리 | 80 MB 한도에서 최대 RSS 336 MiB. 200 MB 한도는 620 MiB. 측정 파드는 요청 512Mi, 제한 4Gi. Airflow DAG의 파드는 요청 512Mi, 제한 1Gi |
 
 지켜야 할 조건은 다음과 같습니다.
 
@@ -99,8 +104,11 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 - checkpoint가 없는 첫 실행은 시작 위치를 먼저 저장합니다. 저장하지 않으면 첫
   청크를 쓰다 실패했을 때 재시도가 더 뒤에서 시작해 그 사이 이벤트를 잃습니다.
 - 실행이 겹치지 않게 `max_active_runs=1`을 두고 실행 동안 lock 파일 lease를
-  잡습니다. checkpoint ETag 조건은 checkpoint만 보호합니다. 이미 올린 파일을 다른
-  실행이 짧은 청크로 덮어쓰는 것은 막지 못합니다.
+  잡습니다. checkpoint ETag 조건은 checkpoint만 보호합니다. lock lease를 잃은 실행이
+  늦게 업로드하면 다음 실행이 쓴 더 짧은 청크를 덮어씁니다. 그래서 올릴 파일
+  경로를 checkpoint에 먼저 기록하고 청크 파일에도 lease를 잡아 그 lease ID로
+  올립니다. 같은 파일을 쓰는 다음 실행은 자기 기록을 남긴 뒤 lease를 끊습니다.
+  이전 실행은 기록 확인에서 멈추거나 업로드가 412로 거부됩니다.
 - 감시할 컬렉션을 먼저 만듭니다. 없으면 `watch()`가 code 26으로 실패합니다.
 
 ## 공식 예제가 놓친 부분
@@ -200,16 +208,23 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
   바꾸고 한도를 50, 80, 100, 200 MB로 바꿔 파일 크기와 메모리를 쟀습니다. 기본값을
   80 MB로 올린 뒤 Airflow 실행과 업로드 직후 장애 재시도를 다시 확인했습니다. 표의
   자르기, 파일 크기, 메모리, 재시도 값이 이 측정입니다.
+- **lock lease를 잃은 실행:** 실행 하나를 첫 업로드 전에 멈추고 lock lease를 잃게 한
+  뒤 다음 실행이 같은 파일을 쓰게 했습니다. 이전 sample은 늦은 업로드가 다음 실행의
+  청크를 덮어써 후속 실행 뒤 45,000행이 중복됐습니다. 현재 sample은 업로드 직전과 lease
+  직전 두 위치에서 모두 늦은 실행이 실패했고 중복과 누락은 0이었습니다.
 - **로컬 fake로만 확인한 경로:** `wallTime`이 없는 이벤트의 파티션 고정, 검증
   스크립트의 순서 역전 실패 처리, 재시도가 첫 시도와 다른 위치에서 자르는 경우입니다.
   이 클러스터의 이벤트에는 항상 `wallTime`이 있었고 순서 역전도 생기지 않았습니다.
-  Azure에서 재시도는 첫 시도와 같은 한도로 실행해 같은 위치에서 잘랐습니다.
+  Azure에서 재시도는 첫 시도와 같은 한도로 실행해 같은 위치에서 잘랐습니다. 다음
+  실행이 업로드를 마치고 checkpoint를 갱신하기 전에 이전 실행이 파일 lease를 끊는
+  순서도 fake로만 재현했습니다.
 
 ## 공식 출처
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
 - [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
+- [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)
 - [Best practices for using Azure Data Lake Storage](https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices)
 
 ## 더 읽을 문서
