@@ -44,9 +44,9 @@ def main() -> None:
         mine = [r for r in table.to_pylist() if r["doc_id"].startswith(f"{run_id}:")]
         if not mine:
             continue
-        # A file holds one window, so every row with wallTime maps to it.
-        windows = {window_start(t, window_minutes) for t in table.column("wall_time").to_pylist()
-                   if t is not None}
+        # A file holds one window. Rows without wallTime count as their own
+        # window, so a file that mixes them with dated rows fails too.
+        windows = {window_start(t, window_minutes) for t in table.column("wall_time").to_pylist()}
         files.append({"rows": len(mine), "file_rows": table.num_rows, "bytes": path.content_length,
                       "windows": len(windows)})
         # The listing returns last-modified as a naive UTC datetime.

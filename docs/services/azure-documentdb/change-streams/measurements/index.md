@@ -187,8 +187,9 @@ full error: {'ok': 0.0, 'code': 50, 'codeName': 'ExceededTimeLimit', ...}
 - 파일 크기의 99%가 문서 본문입니다. 이 파일의 행은 insert 43,567건, update 47,720건,
   delete 8,713건이었고 delete를 뺀 91,287행에 문서 전체가 들어 있었습니다. 문서는
   BSON 기준 평균 4,129바이트였습니다.
-- change stream은 변경마다 문서 전체를 보냅니다. 이 클러스터는 update에도
-  `fullDocument`를 넣습니다. 그래서 문서 하나가 insert와 update에 한 번씩 저장됩니다.
+- change stream은 insert와 update 이벤트에 문서 전체를 싣습니다. 이 클러스터는
+  옵션 없이도 update에 `fullDocument`를 넣고 delete에는 본문이 없습니다. 그래서 문서
+  하나가 insert와 update에 한 번씩 저장됩니다.
   문서가 실린 이벤트 약 1,260,000건 × 약 4.1 KB가 약 5.2 GB이고 Parquet 합계와 거의
   같습니다.
 - 크기 대부분은 생성기가 채운 4,000자 랜덤 16진 문자열입니다. 반복이 없어 snappy는
@@ -255,7 +256,7 @@ upsert한 뒤 checkpoint를 저장합니다. 생성기는 문서마다 insert와
 | `showExpandedEvents` | 지원하지 않음 | code 115(CommandNotSupported) |
 | 감시 중인 컬렉션 drop, rename | 언급 없음 | `invalidate` 이벤트 없이 code 26으로 커서 종료 |
 | 트랜잭션 | 언급 없음 | 이벤트는 오지만 `txnNumber`, `lsid`는 없음 |
-| 큰 문서 | 언급 없음 | 14 MiB 문서의 insert와 update 이벤트 모두 전달됨 |
+| 큰 문서 | 언급 없음 | 7 MiB 문서의 insert와 약 14 MiB로 커진 update 이벤트 모두 전달됨 |
 | 대기 중 resume token | 언급 없음 | 이벤트가 없어도 post-batch resume token이 전진함 |
 
 ## 측정의 한계

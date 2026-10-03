@@ -193,14 +193,16 @@ class Chunk:
     def fits(self, size: int, window, max_bytes: int) -> bool:
         if not self.rows:
             return True
-        if window is not None and self.window is not None and window != self.window:
+        # None (no wallTime) is its own window, kept apart from dated ones.
+        if window != self.window:
             return False
         return self.size + size <= max_bytes
 
     def add(self, row: dict, size: int, window, token: dict) -> None:
+        if not self.rows:
+            self.window = window
         self.rows.append(row)
         self.size += size
-        self.window = self.window or window
         self.end_token = token
 
 
