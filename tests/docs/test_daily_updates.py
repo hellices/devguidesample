@@ -65,6 +65,22 @@ def test_load_daily_update_reports_rejects_directory_metadata_mismatch(
         load_daily_update_reports(docs)
 
 
+def test_load_daily_update_reports_rejects_impossible_directory_date(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-02-30")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=(
+            r"azure-daily-update/2026-02-30/index\.md: "
+            r"directory must be a valid ISO calendar date"
+        ),
+    ):
+        load_daily_update_reports(docs)
+
+
 def test_build_daily_update_index_lists_each_date_once_newest_first(
     tmp_path: Path,
 ) -> None:

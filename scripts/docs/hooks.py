@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.docs.content import load_taxonomy
+from scripts.docs.daily_updates import is_publishable_daily_update_path
 from scripts.docs.generate_indexes import build_tag_links
 from scripts.docs.explore import filter_redirect_targets
 from scripts.docs.topics import TopicCatalog, build_topic_catalog, iter_topic_documents
@@ -55,6 +56,12 @@ def on_files(files: Any, config: Mapping[str, Any]) -> Any:
     for file in list(files):
         src_uri = getattr(file, "src_uri", "")
         if isinstance(src_uri, str) and "/samples/" in src_uri:
+            file.inclusion = InclusionLevel.EXCLUDED
+        elif (
+            isinstance(src_uri, str)
+            and src_uri.startswith("azure-daily-update/")
+            and not is_publishable_daily_update_path(src_uri)
+        ):
             file.inclusion = InclusionLevel.EXCLUDED
         elif catalog is not None and PurePosixPath(src_uri) in catalog.published_assets:
             if file.is_documentation_page():

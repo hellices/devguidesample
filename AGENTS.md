@@ -6,6 +6,9 @@
 - 공개 기술 문서는
   `docs/services/<service>/<topic>[/<child>]/index.md` topic package로
   작성한다.
+- 자동 생성 뉴스 아카이브만
+  `docs/azure-daily-update/YYYY-MM-DD/index.md`를 사용하며
+  `document_type`과 taxonomy 값을 선언하지 않는다.
 - topic entry는 `<topic>/index.md`이며 `topic_order`를 쓰지 않는다. 연결된
   자식 문서는 `<topic>/<child>/index.md`에 두고 `topic_order`를 1부터
   중복 없이 연속으로 지정한다.
@@ -40,7 +43,8 @@
 
 - 메뉴 트리, 서비스별 보기·글 찾기, 검색 인덱스, collection 호환
   색인과 이전 URL redirect page는 빌드 시 자동 생성한다.
-- 대메뉴는 `홈`, `서비스별 보기`, `글 찾기`, `기여하기`다.
+- 대메뉴는 `홈`, `Azure Daily Update`, `서비스별 보기`, `글 찾기`,
+  `기여하기`다.
   서비스 branch 아래에는 canonical topic entry와 순서가 있는 자식 문서만
   배치한다. redirect page와 collection 호환 색인은 이 branch에 넣지 않는다.
 - 서비스 목록은 front matter의 `services` 전체를 반영한다. 사이드바에는

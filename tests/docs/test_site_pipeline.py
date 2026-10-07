@@ -289,6 +289,9 @@ generated_at: 2026-10-08T09:00:00+09:00
 """,
         encoding="utf-8",
     )
+    draft = docs / "azure-daily-update" / "draft" / "index.md"
+    draft.parent.mkdir(parents=True)
+    draft.write_text("# Unpublished draft\n", encoding="utf-8")
 
     build(load_config(str(root / "mkdocs.yml"), strict=True))
 
@@ -301,6 +304,16 @@ generated_at: 2026-10-08T09:00:00+09:00
     assert "2026-10-07" in landing
     assert "2026-10-07/" in landing
     assert "업데이트 없음" in dated
+    assert not (root / "site" / "azure-daily-update" / "draft").exists()
+    search = json.loads(
+        (root / "site" / "search" / "search_index.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert all(
+        entry["location"] != "azure-daily-update/draft/"
+        for entry in search["docs"]
+    )
 
 
 def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:

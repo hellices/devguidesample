@@ -173,6 +173,11 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
 서비스 topic package가 아니므로 `document_type`과 taxonomy 값을 선언하지
 않습니다.
 
+각 일자별 페이지에는 `title`, `description`, `report_date`,
+`generated_at` front matter를 지정합니다. `report_date`는 디렉터리의
+`YYYY-MM-DD`와 같아야 하며 실제 달력 날짜여야 합니다. 날짜가 아닌 하위
+경로는 사이트와 검색 색인에서 제외합니다.
+
 - 서비스, 목적·주제별 태그, 기술은 front matter 값과 정확히 일치해야 합니다.
 - 태그 하나를 선택하면 해당 태그가 붙은 문서만 표시합니다. 여러 태그,
   서비스, 기술은 **같은 문서에 AND**로 적용합니다. 서로 다른 자식의

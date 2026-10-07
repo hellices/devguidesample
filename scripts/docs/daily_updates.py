@@ -25,6 +25,24 @@ class DailyUpdateReport:
     relative_path: PurePosixPath
 
 
+def is_publishable_daily_update_path(relative_path: PurePosixPath | str) -> bool:
+    path = PurePosixPath(relative_path)
+    if path == PurePosixPath("azure-daily-update/index.md"):
+        return True
+    if (
+        len(path.parts) != 3
+        or path.parts[0] != "azure-daily-update"
+        or path.parts[2] != "index.md"
+        or _DATE_DIRECTORY.fullmatch(path.parts[1]) is None
+    ):
+        return False
+    try:
+        date.fromisoformat(path.parts[1])
+    except ValueError:
+        return False
+    return True
+
+
 def _required_text(
     metadata: dict[str, Any], field: str, relative_path: PurePosixPath
 ) -> str:
@@ -64,7 +82,13 @@ def load_daily_update_reports(
             continue
         relative_path = PurePosixPath(path.relative_to(docs_root).as_posix())
         document = load_document(path, docs_dir=docs_root)
-        directory_date = date.fromisoformat(directory)
+        try:
+            directory_date = date.fromisoformat(directory)
+        except ValueError as error:
+            raise DocumentFormatError(
+                f"{relative_path.as_posix()}: "
+                "directory must be a valid ISO calendar date"
+            ) from error
         report_date = _report_date(
             document.metadata.get("report_date"), relative_path
         )

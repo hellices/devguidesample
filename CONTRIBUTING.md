@@ -1,9 +1,13 @@
 # 기여하기
 
-새 공개 문서는
+새 공개 기술 문서는
 `docs/services/<service>/<topic>[/<child>]/index.md`에 추가합니다.
 `document_type`은 `case`, `guide`, `lab`, `research` 중 문서의 수명주기에
 맞게 선택하지만 물리 폴더에는 사용하지 않습니다.
+
+자동화가 생성하는 `Azure Daily Update`만
+`docs/azure-daily-update/YYYY-MM-DD/index.md`를 사용합니다. 상세한
+front matter와 날짜 규칙은 공개 문서 작성 계약을 따릅니다.
 
 `tags`에는 taxonomy의 목적·주제 통제 태그를 1–4개 지정하고 목적을 먼저
 배치합니다. 중복 태그나 기술을 대신하는 태그는 추가하지 않습니다.
