@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.docs.content import Document, DocumentFormatError, load_taxonomy
+from scripts.docs.daily_updates import build_daily_update_index
 from scripts.docs.explore import build_explore_page, build_filter_redirect_pages, count_label, topic_groups
 from scripts.docs.topics import (
     LEGACY_COLLECTIONS,
@@ -810,6 +811,10 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
     for path, content in build_redirect_pages(catalog).items():
         with mkdocs_gen_files.open(path.as_posix(), "w") as generated:
             generated.write(content)
+
+    daily_update_index = build_daily_update_index(root / "docs")
+    with mkdocs_gen_files.open("azure-daily-update/index.md", "w") as generated:
+        generated.write(daily_update_index)
 
     template = (root / "docs" / "index.md").read_text(encoding="utf-8")
     home_page = build_home_page(template, documents, taxonomy, catalog=catalog)

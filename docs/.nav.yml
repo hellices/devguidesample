@@ -1,6 +1,7 @@
 # Root reader destinations only; service and topic branches are generated.
 nav:
   - 홈: index.md
+  - Azure Daily Update: azure-daily-update
   - 서비스별 보기: services
   - 글 찾기: explore
   - 기여하기: contributing

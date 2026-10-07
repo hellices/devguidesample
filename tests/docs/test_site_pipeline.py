@@ -257,6 +257,52 @@ def make_topic_repository(tmp_path: Path) -> Path:
     return root
 
 
+def test_daily_update_archive_builds_landing_and_dated_page(tmp_path: Path) -> None:
+    root = make_topic_repository(tmp_path)
+    docs = root / "docs"
+    (docs / ".nav.yml").write_text(
+        "nav:\n"
+        "  - Home: index.md\n"
+        "  - Azure Daily Update: azure-daily-update\n"
+        "  - Services: services\n"
+        "  - 글 찾기: explore\n"
+        "  - glob: '*'\n"
+        "    ignore_no_matches: true\n",
+        encoding="utf-8",
+    )
+    archive = docs / "azure-daily-update" / "2026-10-07" / "index.md"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(
+        """\
+---
+title: Azure Daily Update — 2026-10-07
+description: 2026-10-07 Azure 업데이트 요약
+report_date: 2026-10-07
+generated_at: 2026-10-08T09:00:00+09:00
+---
+
+# Azure Daily Update — 2026-10-07
+
+## AI & Apps
+
+업데이트 없음
+""",
+        encoding="utf-8",
+    )
+
+    build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+    landing = (root / "site" / "azure-daily-update" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    dated = (
+        root / "site" / "azure-daily-update" / "2026-10-07" / "index.html"
+    ).read_text(encoding="utf-8")
+    assert "2026-10-07" in landing
+    assert "2026-10-07/" in landing
+    assert "업데이트 없음" in dated
+
+
 def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:
     loaded = load_document(FIXTURE, docs_dir=FIXTURE.parent)
     document = loaded.__class__(

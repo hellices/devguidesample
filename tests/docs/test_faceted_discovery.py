@@ -228,7 +228,13 @@ def test_discovery_redirects_are_taxonomy_owned_and_search_excluded(taxonomy, ca
 
 def test_home_navigation_and_article_chips_use_explore(taxonomy, catalog):
     nav = yaml.safe_load((ROOT / "docs/.nav.yml").read_text())["nav"]
-    assert [next(iter(item)) for item in nav if "glob" not in item] == ["홈", "서비스별 보기", "글 찾기", "기여하기"]
+    assert [next(iter(item)) for item in nav if "glob" not in item] == [
+        "홈",
+        "Azure Daily Update",
+        "서비스별 보기",
+        "글 찾기",
+        "기여하기",
+    ]
     home = build_home_page((ROOT / "docs/index.md").read_text(), catalog.documents, taxonomy, catalog=catalog)
     assert f"{len(catalog.topics)}개 주제 · {len(catalog.documents)}개 문서" in home
     assert "전체 글" not in home and "태그별 보기" not in home

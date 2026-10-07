@@ -7,10 +7,11 @@ description: 서비스 중심 topic package와 샘플, 메타데이터, 검증 �
 
 # 공개 문서 작성 계약
 
-이 페이지는 공개 문서 작성 규칙의 단일 기준입니다. 새 문서와 샘플은 모두
-`docs/services/` 아래의 topic package에 둡니다. `cases`, `guides`, `labs`,
-`research`는 물리 폴더가 아니라 front matter의 `document_type`과 수명주기
-정책으로만 유지합니다.
+이 페이지는 공개 문서 작성 규칙의 단일 기준입니다. 새 기술 문서와 샘플은
+`docs/services/` 아래의 topic package에 둡니다. 자동 생성되는
+`Azure Daily Update`만 아래에서 정의한 전용 아카이브 경로를 사용합니다.
+`cases`, `guides`, `labs`, `research`는 물리 폴더가 아니라 front matter의
+`document_type`과 수명주기 정책으로만 유지합니다.
 
 루트 `README.md`, `AGENTS.md`, `CONTRIBUTING.md`는 이 계약의 요약입니다.
 
@@ -161,10 +162,16 @@ redirect 경로는 `cases`, `guides`, `labs`, `research` 중 하나로 시작하
 
 ## 글 찾기와 실용 태그
 
-대메뉴는 **홈 · 서비스별 보기 · 글 찾기 · 기여하기**입니다. 글 찾기는
-모든 주제를 canonical topic 카드로 묶고 실제 catalog에서 계산한
-**주제 수 · 문서 수**를 함께 표시합니다. 여러 문서가 있는 topic도
-카드 하나이며 각 문서로 직접 연결합니다.
+대메뉴는 **홈 · Azure Daily Update · 서비스별 보기 · 글 찾기 ·
+기여하기**입니다. 글 찾기는 모든 주제를 canonical topic 카드로 묶고 실제
+catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 여러 문서가
+있는 topic도 카드 하나이며 각 문서로 직접 연결합니다.
+
+`Azure Daily Update`는 자동화가 생성하는 시계열 뉴스 아카이브입니다.
+일자별 원본은 `docs/azure-daily-update/YYYY-MM-DD/index.md`에 두고,
+`/azure-daily-update/` 색인은 빌드가 최신순으로 생성합니다. 이 페이지들은
+서비스 topic package가 아니므로 `document_type`과 taxonomy 값을 선언하지
+않습니다.
 
 - 서비스, 목적·주제별 태그, 기술은 front matter 값과 정확히 일치해야 합니다.
 - 태그 하나를 선택하면 해당 태그가 붙은 문서만 표시합니다. 여러 태그,

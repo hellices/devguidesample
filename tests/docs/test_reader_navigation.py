@@ -547,7 +547,14 @@ def test_each_new_bundle_updates_all_reader_destinations(
     build(load_config(str(settings_path), strict=True))
     home = ReaderPage(tmp_path / "site/index.html")
 
-    assert list(home.root_links.values()) == ["홈", "서비스별 보기", "글 찾기", "기여하기"]
+    assert list(home.root_links.values()) == [
+        "홈",
+        "Azure Daily Update",
+        "서비스별 보기",
+        "글 찾기",
+        "기여하기",
+    ]
+    assert home.navigation_links["azure-daily-update/"] == "Azure Daily Update"
     assert home.navigation_links["services/azure-monitor/"] == "Azure Monitor"
     assert home.navigation_links["services/azure-monitor/setup/"] == "B 구성 절차"
     assert home.expanded_groups == 0
