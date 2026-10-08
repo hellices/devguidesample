@@ -161,7 +161,7 @@ test("body matches show bounded surrounding text instead of the generic descript
   assert.equal(preview.length, 1);
   assert.match(preview[0].textContent, /AKS networking 연결 진단 절차/);
   assert.match(preview[0].textContent, /^….*…$/);
-  assert.ok(preview[0].textContent.length <= 182);
+  assert.ok(preview[0].textContent.length <= 180);
   assert.deepEqual(highlights(preview[0]), ["AKS"]);
   assert.doesNotMatch(nodes.results.textContent, /Daily summary/);
 });
@@ -183,12 +183,33 @@ test("readable excerpt paragraphs take priority while raw-only matches still hav
   assert.ok(highlights(mixed.results).includes("example.test"));
 });
 
+test("raw-only matches retain a slot when two readable paragraphs match", () => {
+  const item = {
+    ...report("2026-10-07", "AKS networking\nUbuntu release\n[details](https://example.test/raw-only)"),
+    excerpt: "AKS networking\nUbuntu release\ndetails",
+  };
+  const nodes = searchResults([item], "aks ubuntu raw-only");
+  const preview = excerpts(nodes.results);
+  assert.equal(preview.length, 2);
+  assert.deepEqual(highlights(preview[0]), ["AKS"]);
+  assert.deepEqual(highlights(preview[1]), ["raw-only"]);
+  assert.match(preview[1].textContent, /https:\/\/example\.test/);
+});
+
+test("metadata-only terms do not consume a readable excerpt slot", () => {
+  const nodes = searchResults([report("2026-10-07", "AKS networking\nUbuntu release")], "2026-10-07 aks ubuntu");
+  const preview = excerpts(nodes.results);
+  assert.equal(preview.length, 2);
+  assert.deepEqual(highlights(preview[0]), ["AKS"]);
+  assert.deepEqual(highlights(preview[1]), ["Ubuntu"]);
+});
+
 test("separated query terms get at most two excerpts and nearby terms share one", () => {
   const body = `AKS networking. ${"Filler text. ".repeat(40)}Ubuntu updates. ${"More text. ".repeat(40)}Storage changes.`;
   const nodes = searchResults([report("2026-10-07", body)], "aks ubuntu storage");
   assert.equal(excerpts(nodes.results).length, 2);
   assert.deepEqual(highlights(nodes.results), ["AKS", "Ubuntu"]);
-  assert.ok(excerpts(nodes.results).every(node => node.textContent.length <= 182));
+  assert.ok(excerpts(nodes.results).every(node => node.textContent.length <= 180));
   const nearby = searchResults([report("2026-10-07", "AKS networking on Ubuntu.")], "aks ubuntu");
   assert.equal(excerpts(nearby.results).length, 1);
   assert.deepEqual(highlights(nearby.results), ["AKS", "Ubuntu"]);
@@ -208,8 +229,28 @@ test("long query terms are clipped without losing highlights or exceeding excerp
   const query = "a".repeat(250);
   const nodes = searchResults([report("2026-10-07", `prefix ${query} suffix`)], query);
   assert.equal(excerpts(nodes.results).length, 1);
-  assert.ok(excerpts(nodes.results)[0].textContent.length <= 182);
+  assert.ok(excerpts(nodes.results)[0].textContent.length <= 180);
   assert.ok(highlights(nodes.results)[0].startsWith("aaaa"));
+});
+
+test("the 180-character rendered limit includes omission markers and preserves Unicode boundaries", () => {
+  for (const [body, leading, trailing] of [
+    [`AKS ${"x".repeat(176)}`, false, false],
+    [`AKS ${"x".repeat(177)}`, false, true],
+    [`${"x".repeat(200)}AKS${"x".repeat(200)}`, true, true],
+    [`${"x".repeat(200)}AKS`, true, false],
+    [`${"x".repeat(101)}😀${"x".repeat(49)}AKS`, true, false],
+    [`AKS${"x".repeat(175)}😀tail`, false, true],
+  ]) {
+    const nodes = searchResults([report("2026-10-07", body)], "aks");
+    const text = excerpts(nodes.results)[0].textContent;
+    assert.ok(text.length <= 180, `Rendered excerpt has ${text.length} characters`);
+    assert.equal(text.startsWith("…"), leading);
+    assert.equal(text.endsWith("…"), trailing);
+    assert.equal(text.isWellFormed(), true);
+    assert.deepEqual(highlights(nodes.results), ["AKS"]);
+    if (body.length === 180) assert.equal(text, body);
+  }
 });
 
 test("highlighting follows Unicode normalization and treats punctuation literally", () => {

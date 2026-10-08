@@ -143,11 +143,12 @@
     for (const match of matchRanges(field, terms, true)) {
       if (match.start < previousEnd) continue;
       let start = Math.max(previousEnd, match.start - 50, field.text.lastIndexOf("\n", match.start - 1) + 1);
-      let end = Math.min(field.text.length, start + 180);
-      const paragraphEnd = field.text.indexOf("\n", match.end);
-      if (paragraphEnd !== -1) end = Math.min(end, paragraphEnd);
       // Never split a surrogate pair at the excerpt boundary.
       if (/[\uDC00-\uDFFF]/.test(field.text[start] || "")) start++;
+      let end = Math.min(field.text.length, start + 180 - (start ? 1 : 0));
+      if (end < field.text.length) end--;
+      const paragraphEnd = field.text.indexOf("\n", match.end);
+      if (paragraphEnd !== -1) end = Math.min(end, paragraphEnd);
       if (/[\uDC00-\uDFFF]/.test(field.text[end] || "")) end--;
       excerpts.push({field, start, end});
       previousEnd = end;
@@ -267,9 +268,10 @@
         link.href = new URL(report.url, archive).href;
         item.append(time, link);
         const rawOnlyTerms = terms.filter(term => !fields.excerpt.search.includes(term));
+        const rawExcerpts = searchExcerpts(fields.text, rawOnlyTerms);
         const excerpts = [
-          ...searchExcerpts(fields.excerpt, terms),
-          ...searchExcerpts(fields.text, rawOnlyTerms),
+          ...searchExcerpts(fields.excerpt, terms).slice(0, rawExcerpts.length ? 1 : 2),
+          ...rawExcerpts,
         ].slice(0, 2);
         if (!excerpts.length || matchRanges(fields.description, terms, true).length) {
           item.append(highlightedElement(documentRef, "p", fields.description, terms));
