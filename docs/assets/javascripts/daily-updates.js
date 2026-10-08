@@ -25,7 +25,7 @@
     const reports = parseCalendar(data);
     for (const report of reports) {
       if (typeof report.description !== "string" || !report.description.trim() ||
-          typeof report.text !== "string") {
+          typeof report.text !== "string" || typeof report.excerpt !== "string") {
         throw new Error("Invalid daily update archive search record");
       }
     }
@@ -59,18 +59,101 @@
     return value.normalize("NFKC").toLowerCase();
   }
 
+  function queryTerms(query) {
+    return [...new Set(normalized(query).trim().split(/\s+/).filter(Boolean))];
+  }
+
+  function searchableText(value) {
+    const text = value.normalize("NFKC").replace(/[^\S\n]+/g, " ").trim();
+    const search = text.toLowerCase();
+    const offsets = [];
+    // Lowercasing can expand a character (for example, İ), shifting highlight offsets.
+    if (text.length !== search.length) {
+      let start = 0;
+      for (const character of text) {
+        const end = start + character.length;
+        for (let index = 0; index < character.toLowerCase().length; index++) {
+          offsets.push({start, end});
+        }
+        start = end;
+      }
+    }
+    return {text, search, offsets};
+  }
+
   function createSearchIndex(reports) {
-    return reports.map(report => ({
-      report,
-      text: normalized(`${report.date} ${report.title} ${report.description} ${report.text}`),
-    }));
+    return reports.map(report => {
+      const fields = Object.fromEntries(
+        ["date", "title", "description", "text", "excerpt"].map(key => [key, searchableText(report[key])])
+      );
+      return {report, fields, text: Object.values(fields).map(field => field.search).join(" ")};
+    });
+  }
+
+  function matchingEntries(index, terms) {
+    return terms.length ? index.filter(entry => terms.every(term => entry.text.includes(term))) : [];
   }
 
   function searchReports(index, query) {
-    const terms = normalized(query).trim().split(/\s+/).filter(Boolean);
-    if (!terms.length) return [];
-    return index.filter(entry => terms.every(term => entry.text.includes(term)))
-      .map(entry => entry.report);
+    return matchingEntries(index, queryTerms(query)).map(entry => entry.report);
+  }
+
+  function matchRanges(field, terms, firstOnly = false) {
+    const ranges = [];
+    for (const term of terms) {
+      let position = field.search.indexOf(term);
+      while (position !== -1) {
+        ranges.push({
+          start: field.offsets[position]?.start ?? position,
+          end: field.offsets[position + term.length - 1]?.end ?? position + term.length,
+        });
+        if (firstOnly) break;
+        position = field.search.indexOf(term, position + term.length);
+      }
+    }
+    const merged = [];
+    for (const range of ranges.sort((left, right) => left.start - right.start)) {
+      const previous = merged.at(-1);
+      if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+      else merged.push(range);
+    }
+    return merged;
+  }
+
+  function highlightedElement(documentRef, tag, field, terms, from = 0, to = field.text.length) {
+    const element = createElement(documentRef, tag);
+    if (from) element.append(createElement(documentRef, "span", "…"));
+    let cursor = from;
+    for (const range of matchRanges(field, terms)) {
+      const start = Math.max(from, range.start);
+      const end = Math.min(to, range.end);
+      if (start >= end) continue;
+      if (start > cursor) element.append(createElement(documentRef, "span", field.text.slice(cursor, start)));
+      element.append(createElement(documentRef, "mark", field.text.slice(start, end)));
+      cursor = end;
+    }
+    if (cursor < to) element.append(createElement(documentRef, "span", field.text.slice(cursor, to)));
+    if (to < field.text.length) element.append(createElement(documentRef, "span", "…"));
+    return element;
+  }
+
+  function searchExcerpts(field, terms) {
+    const excerpts = [];
+    let previousEnd = 0;
+    for (const match of matchRanges(field, terms, true)) {
+      if (match.start < previousEnd) continue;
+      let start = Math.max(previousEnd, match.start - 50, field.text.lastIndexOf("\n", match.start - 1) + 1);
+      let end = Math.min(field.text.length, start + 180);
+      const paragraphEnd = field.text.indexOf("\n", match.end);
+      if (paragraphEnd !== -1) end = Math.min(end, paragraphEnd);
+      // Never split a surrogate pair at the excerpt boundary.
+      if (/[\uDC00-\uDFFF]/.test(field.text[start] || "")) start++;
+      if (/[\uDC00-\uDFFF]/.test(field.text[end] || "")) end--;
+      excerpts.push({field, start, end});
+      previousEnd = end;
+      if (excerpts.length === 2) break;
+    }
+    return excerpts;
   }
 
   function createElement(documentRef, tag, text) {
@@ -174,14 +257,28 @@
     reset.disabled = false;
 
     function render() {
-      const matching = searchReports(index, query.value);
-      results.replaceChildren(...matching.slice(0, visible).map(report => {
+      const terms = queryTerms(query.value);
+      const matching = matchingEntries(index, terms);
+      results.replaceChildren(...matching.slice(0, visible).map(({report, fields}) => {
         const item = createElement(documentRef, "li");
-        const time = createElement(documentRef, "time", report.date);
+        const time = highlightedElement(documentRef, "time", fields.date, terms);
         time.setAttribute("datetime", report.date);
-        const link = createElement(documentRef, "a", report.title);
+        const link = highlightedElement(documentRef, "a", fields.title, terms);
         link.href = new URL(report.url, archive).href;
-        item.append(time, link, createElement(documentRef, "p", report.description));
+        item.append(time, link);
+        const rawOnlyTerms = terms.filter(term => !fields.excerpt.search.includes(term));
+        const excerpts = [
+          ...searchExcerpts(fields.excerpt, terms),
+          ...searchExcerpts(fields.text, rawOnlyTerms),
+        ].slice(0, 2);
+        if (!excerpts.length || matchRanges(fields.description, terms, true).length) {
+          item.append(highlightedElement(documentRef, "p", fields.description, terms));
+        }
+        for (const {field, start, end} of excerpts) {
+          const paragraph = highlightedElement(documentRef, "p", field, terms, start, end);
+          paragraph.className = "dg-daily-excerpt";
+          item.append(paragraph);
+        }
         return item;
       }));
       results.hidden = matching.length === 0;

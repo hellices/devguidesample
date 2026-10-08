@@ -270,6 +270,19 @@
   font-weight: 600;
 }
 
+.dg-daily-search .dg-daily-excerpt {
+  color: var(--dg-text);
+  overflow-wrap: anywhere;
+}
+
+.dg-daily-search mark {
+  padding: 0 0.08em;
+  border-radius: 0.12em;
+  color: var(--dg-text);
+  background: var(--md-typeset-mark-color);
+  font-weight: 700;
+}
+
 .dg-daily-error {
   padding: 0.6rem;
   border-inline-start: 3px solid var(--dg-accent);
