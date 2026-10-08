@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cs-consumer
+  namespace: cslab
+spec:
+  replicas: 1          # one stream owner per CONSUMER_ID; checkpoint is shared
+  strategy:
+    type: Recreate     # avoid two pods committing the same checkpoint during rollout
+  selector:
+    matchLabels:
+      app: cs-consumer
+  template:
+    metadata:
+      labels:
+        app: cs-consumer
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: consumer
+          image: ${IMAGE}
+          command: ["python", "consumer.py"]
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: docdb
+                  key: uri
+            - name: MONGO_DB
+              value: cslab
+            - name: MONGO_COLLECTION
+              value: orders
+            - name: CONSUMER_ID
+              value: orders-consumer
+            - name: FULL_DOCUMENT
+              value: updateLookup
+            - name: SINK_BATCH
+              value: "200"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              memory: 512Mi

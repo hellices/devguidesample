@@ -1,0 +1,32 @@
+# Values for apache-airflow/airflow 1.22.0. Rendered with envsubst.
+executor: LocalExecutor
+images:
+  airflow:
+    repository: ${ACR}/cslab-airflow
+    tag: "${AIRFLOW_IMAGE_TAG}"
+env:
+  - name: CS_EXPORT_IMAGE
+    value: "${IMAGE}"
+  - name: CS_LAKE_URL
+    value: "${LAKE_URL}"
+  - name: CS_WINDOW_MINUTES
+    value: "10"
+config:
+  core:
+    load_examples: "False"
+  dag_processor:
+    refresh_interval: 30
+triggerer:
+  enabled: false
+redis:
+  enabled: false
+statsd:
+  enabled: false
+# Run the migration and user jobs as normal resources so `helm --wait` does
+# not wait on pods that are blocked behind a post-install hook.
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+createUserJob:
+  useHelmHooks: false
+  applyCustomEnv: false

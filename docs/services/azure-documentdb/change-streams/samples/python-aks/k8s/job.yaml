@@ -1,0 +1,44 @@
+# Generic one-shot job: SCRIPT is generator.py, verify.py or probe.py.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: cslab
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: job
+          image: ${IMAGE}
+          command: ["python", "${SCRIPT}"]
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: docdb
+                  key: uri
+            - name: MONGO_DB
+              value: cslab
+            - name: MONGO_COLLECTION
+              value: orders
+            - name: RUN_ID
+              value: "${RUN_ID}"
+            - name: DOCS
+              value: "${DOCS}"
+            - name: WORKERS
+              value: "${WORKERS}"
+            - name: RATE
+              value: "${RATE}"
+            - name: SINK
+              value: "${SINK}"
+            - name: PAD_BYTES
+              value: "${PAD_BYTES}"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 256Mi
+            limits:
+              memory: 1Gi

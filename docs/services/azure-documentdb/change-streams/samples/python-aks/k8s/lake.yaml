@@ -1,0 +1,47 @@
+# One-shot job that runs lake_export.py or verify_lake.py as the cs-lake service
+# account, which the README creates and federates to the lake identity.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: cslab
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: cs-lake
+      restartPolicy: Never
+      containers:
+        - name: job
+          image: ${IMAGE}
+          command: ["python", "${SCRIPT}"]
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: docdb
+                  key: uri
+            - name: LAKE_URL
+              value: "${LAKE_URL}"
+            - name: LAKE_FILESYSTEM
+              value: cdc
+            - name: LAKE_PREFIX
+              value: "${LAKE_PREFIX}"
+            - name: STREAM_ID
+              value: "${LAKE_PREFIX}"
+            - name: RUN_ID
+              value: "${RUN_ID}"
+            - name: MAX_EVENTS
+              value: "${MAX_EVENTS}"
+            - name: FAULT_EXIT_AFTER_UPLOAD
+              value: "${FAULT_EXIT_AFTER_UPLOAD}"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 512Mi
+            limits:
+              memory: 4Gi
