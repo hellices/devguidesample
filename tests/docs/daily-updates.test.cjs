@@ -215,6 +215,23 @@ test("separated query terms get at most two excerpts and nearby terms share one"
   assert.deepEqual(highlights(nearby.results), ["AKS", "Ubuntu"]);
 });
 
+test("partially covered terms get a complete match in an overlapping excerpt", () => {
+  for (const rawOnly of [false, true]) {
+    for (const offset of [178, 173, 174, 177, 179, 180]) {
+      const body = `AKS ${"x".repeat(offset - 4)}Ubuntu ${"detail ".repeat(40)}`;
+      const item = {
+        ...report("2026-10-07", body),
+        excerpt: rawOnly ? "Unrelated readable paragraph" : body,
+      };
+      const nodes = searchResults([item], "aks ubuntu");
+      const preview = excerpts(nodes.results);
+      assert.equal(preview.length, offset + "Ubuntu".length <= 179 ? 1 : 2);
+      assert.ok(highlights(nodes.results).includes("Ubuntu"), `Complete match missing at offset ${offset}`);
+      assert.ok(preview.every(node => node.textContent.length <= 180));
+    }
+  }
+});
+
 test("metadata-only matches highlight date, title and summary without unrelated body", () => {
   const item = {...report("2026-10-07", ""), title: "AKS daily update", description: "Ubuntu release notes"};
   for (const [query, expected] of [["aks", "AKS"], ["2026-10", "2026-10"], ["ubuntu", "Ubuntu"]]) {

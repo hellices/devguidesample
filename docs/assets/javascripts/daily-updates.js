@@ -141,8 +141,8 @@
     const excerpts = [];
     let previousEnd = 0;
     for (const match of matchRanges(field, terms, true)) {
-      if (match.start < previousEnd) continue;
-      let start = Math.max(previousEnd, match.start - 50, field.text.lastIndexOf("\n", match.start - 1) + 1);
+      if (match.end <= previousEnd) continue;
+      let start = Math.max(0, match.start - 50, field.text.lastIndexOf("\n", match.start - 1) + 1);
       // Never split a surrogate pair at the excerpt boundary.
       if (/[\uDC00-\uDFFF]/.test(field.text[start] || "")) start++;
       let end = Math.min(field.text.length, start + 180 - (start ? 1 : 0));
