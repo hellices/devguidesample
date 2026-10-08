@@ -18,7 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.docs.content import Document, DocumentFormatError, load_taxonomy
-from scripts.docs.daily_updates import build_daily_update_index
+from scripts.docs.daily_updates import build_daily_update_data, build_daily_update_index
 from scripts.docs.explore import build_explore_page, build_filter_redirect_pages, count_label, topic_groups
 from scripts.docs.topics import (
     LEGACY_COLLECTIONS,
@@ -815,6 +815,10 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
     daily_update_index = build_daily_update_index(root / "docs")
     with mkdocs_gen_files.open("azure-daily-update/index.md", "w") as generated:
         generated.write(daily_update_index)
+    with mkdocs_gen_files.open("assets/daily-updates.json", "w") as generated:
+        generated.write(build_daily_update_data(root / "docs"))
+    with mkdocs_gen_files.open("assets/daily-updates-calendar.json", "w") as generated:
+        generated.write(build_daily_update_data(root / "docs", include_search=False))
 
     template = (root / "docs" / "index.md").read_text(encoding="utf-8")
     home_page = build_home_page(template, documents, taxonomy, catalog=catalog)

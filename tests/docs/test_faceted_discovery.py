@@ -267,7 +267,9 @@ def test_service_discovery_reports_topics_and_documents(taxonomy, catalog):
         assert "개 주제 · " in pages[PurePosixPath(path)]
 
 
-@pytest.mark.parametrize("script_name", ("explore.test.cjs", "sidebar-toggle.test.cjs"))
+@pytest.mark.parametrize(
+    "script_name", ("explore.test.cjs", "sidebar-toggle.test.cjs", "daily-updates.test.cjs")
+)
 def test_javascript_behavior_with_available_node(script_name):
     node = shutil.which("node")
     if not node:

@@ -32,8 +32,260 @@
   --md-code-fg-color: #24354c;
 }
 
-.dg-explore [hidden] {
+.dg-explore [hidden],
+.dg-daily-archive [hidden],
+.dg-daily-sidebar [hidden] {
   display: none !important;
+}
+
+.dg-daily-recent {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.8rem;
+}
+
+.dg-daily-card,
+.dg-daily-calendar,
+.dg-daily-search {
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.5rem;
+  background: var(--dg-surface);
+}
+
+.md-typeset .dg-daily-card h3 {
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.dg-daily-card time,
+.dg-daily-search time {
+  color: var(--dg-muted);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.md-typeset .dg-daily-card p {
+  margin-bottom: 0;
+  color: var(--dg-muted);
+  font-size: 0.72rem;
+}
+
+.dg-daily-archive {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+}
+
+.dg-daily-archive noscript {
+  grid-column: 1 / -1;
+}
+
+.dg-daily-calendar-controls {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) 1.6rem;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dg-daily-calendar-controls :is(button, select) {
+  width: 100%;
+  min-width: 0;
+  height: 1.8rem;
+  padding: 0.15rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.25rem;
+  color: var(--dg-text);
+  background: var(--dg-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dg-daily-calendar-controls button {
+  font-size: 1.1rem;
+}
+
+.dg-daily-calendar-controls :disabled {
+  color: var(--dg-muted);
+  cursor: default;
+}
+
+.dg-daily-calendar-grid {
+  width: 100%;
+  margin: 0.65rem 0 0.3rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dg-daily-calendar-grid th {
+  padding: 0.2rem 0;
+  color: var(--dg-muted);
+  text-align: center;
+  font-weight: 500;
+}
+
+.dg-daily-calendar-grid td {
+  padding: 1px;
+  text-align: center;
+}
+
+.dg-daily-calendar-grid :is(a, td > span) {
+  display: grid;
+  min-height: 1.65rem;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+}
+
+.dg-daily-calendar-grid td > span {
+  color: var(--dg-muted);
+}
+
+.dg-daily-calendar-grid a {
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dg-daily-calendar-grid a:hover {
+  border-color: var(--dg-accent);
+}
+
+.dg-daily-calendar-grid a[aria-current="page"] {
+  color: var(--dg-on-accent);
+  background: var(--dg-accent);
+  border-color: var(--dg-accent);
+}
+
+.dg-daily-calendar-status,
+.dg-daily-calendar-legend {
+  margin: 0.4rem 0 0;
+  color: var(--dg-muted);
+  text-align: center;
+  font-size: 0.6rem;
+}
+
+.dg-daily-calendar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.dg-daily-calendar-legend span::before {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-right: 0.2rem;
+  border: 1px solid var(--dg-accent);
+  border-radius: 0.1rem;
+  background: var(--dg-accent-soft);
+  content: "";
+}
+
+.dg-daily-calendar-legend span + span::before {
+  background: var(--dg-accent);
+}
+
+.dg-daily-sidebar {
+  margin: 0.5rem 0 0.8rem;
+}
+
+.dg-daily-sidebar .dg-daily-calendar {
+  padding: 0.4rem 0.3rem;
+}
+
+.dg-daily-sidebar .dg-daily-calendar-grid {
+  font-size: 0.62rem;
+}
+
+.dg-daily-archive-link {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--dg-accent);
+  text-align: center;
+  font-size: 0.6rem;
+}
+
+.dg-daily-search form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+}
+
+.dg-daily-search label {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.dg-daily-search input {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--dg-border);
+  border-radius: 0.3rem;
+  color: var(--dg-text);
+  background: var(--dg-bg);
+}
+
+.dg-daily-search button {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--dg-accent);
+  border-radius: 0.3rem;
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+  cursor: pointer;
+}
+
+.dg-daily-search p {
+  color: var(--dg-muted);
+  font-size: 0.68rem;
+}
+
+.md-typeset .dg-daily-search ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .dg-daily-search li {
+  margin: 0;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--dg-border);
+}
+
+.dg-daily-search :is(time, li > a) {
+  display: block;
+}
+
+.dg-daily-search li > a {
+  font-weight: 600;
+}
+
+.dg-daily-error {
+  padding: 0.6rem;
+  border-inline-start: 3px solid var(--dg-accent);
+  background: var(--dg-accent-soft);
+  overflow-wrap: anywhere;
+}
+
+:is(.dg-daily-calendar, .dg-daily-search, .dg-daily-sidebar) :is(a, button, select, input):focus-visible {
+  outline: 2px solid var(--dg-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 800px) {
+  .dg-daily-archive {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dg-explore-filters {
