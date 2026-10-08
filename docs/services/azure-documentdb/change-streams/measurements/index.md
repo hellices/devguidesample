@@ -15,6 +15,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/documentdb/change-streams
   - title: Read and read/write privileges with secondary native users
     url: https://learn.microsoft.com/azure/documentdb/secondary-users
+  - title: AzureCosmosDB/changestream-driver-compatibility
+    url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
+  - title: MongoDB Change Streams Specification
+    url: https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md
   - title: Lease Blob
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
   - title: Path - Update
@@ -258,6 +262,28 @@ full error: {'ok': 0.0, 'code': 50, 'codeName': 'ExceededTimeLimit', ...}
 
 바로 다음 주기 실행은 새 이벤트 0건으로 1.2초 만에 끝났습니다.
 
+### 1초 verifier 설정을 consumer에 옮기면 안 되는 이유
+
+Microsoft의 `changestream-driver-compatibility` 저장소는 Python, C#, Java verifier에
+1초 `maxAwaitTimeMS`를 둡니다. 이 코드는 change stream cursor가 열리는지만 확인하고
+이벤트를 계속 읽지 않습니다. MongoDB Change Streams Specification은 이 옵션이 initial
+`aggregate`나 `$changeStream` stage가 아니라 후속 `getMore`의 `maxTimeMS`라고
+명시합니다. 따라서 verifier의 1초를 historical consumer의 전체 실행 제한으로 쓰면
+적용 대상이 달라집니다.
+
+별도 M25, shard 1개, 서버 7.0 클러스터에서 timestamp와 marker 사이에 4 KiB update
+event 본문을 약 6.14 GB 만들고 wire command를 기록했습니다. initial `aggregate`는
+약 52.5초에 성공했지만 다음 `getMore(maxTimeMS=1000)`가 1.0초에 code 50으로
+끝났습니다. 같은 timestamp에서 이 옵션을 생략하자 aggregate 뒤 네 번의 `getMore`가
+각각 88–114초 걸렸고 466초에 marker를 반환했습니다. `pymongo.timeout(30분)`은
+aggregate에 약 180만 ms의 `maxTimeMS`로 전달됐지만 별도
+`max_await_time_ms=1000`을 덮어쓰지 못했습니다.
+
+따라서 이 sample은 historical read에 `max_await_time_ms` 기본값을 두지 않습니다.
+전체 실행 상한은 Airflow `execution_timeout`, PyMongo CSOT, 애플리케이션 deadline으로
+관리합니다. 실시간 tail의 polling 주기를 조정하려고 값을 추가할 때도 저장된
+checkpoint가 밀린 경우를 별도로 처리해야 합니다.
+
 ## 파일 크기(이전 구성)
 
 백로그 재개 시험의 Parquet 합계 5.13 GB는 생성기가 쓴 문서 본문 2.6 GB의 약 두 배입니다. 가장 큰
@@ -411,5 +437,7 @@ action 목록에도 전후 모두 `changeStream`과 `find`가 있었으므로 �
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
 - [Read and read/write privileges with secondary native users](https://learn.microsoft.com/azure/documentdb/secondary-users)
+- [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
+- [MongoDB Change Streams Specification](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
 - [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)

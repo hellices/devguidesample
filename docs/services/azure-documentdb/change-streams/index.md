@@ -16,6 +16,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/documentdb/secondary-users
   - title: AzureCosmosDB/changestream-driver-compatibility
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
+  - title: MongoDB Change Streams Specification
+    url: https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md
   - title: Lease Blob
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
   - title: Path - Update
@@ -96,8 +98,9 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 
 지켜야 할 조건은 다음과 같습니다.
 
-- change stream을 열 때 짧은 `maxAwaitTimeMS`를 주지 않습니다. 1초로 두면 큰
-  백로그를 재개할 때 code 50으로 실패하고 재시도로도 넘어가지 못했습니다.
+- historical change stream을 열 때 짧은 `maxAwaitTimeMS`를 주지 않습니다. 이
+  값은 stream 전체 제한이 아니라 후속 `getMore`의 `maxTimeMS`가 됩니다. 1초로
+  두면 큰 백로그를 재개할 때 code 50으로 실패하고 재시도로도 넘어가지 못했습니다.
 - secondary user로 `startAtOperationTime`을 쓸 때는 `readAnyDatabase` 역할을
   확인합니다. `readWriteAnyDatabase + clusterAdmin`만 있으면 일반 `watch()`와
   `resumeAfter`는 동작해도 과거 시점 시작은 code 13으로 실패했습니다.
@@ -166,7 +169,7 @@ Learn 문서의 시작 예제(Python, Java, C#, Ruby, Node.js)와
 | 저장소의 `mongo_utils.py`가 resume token을 이벤트마다 로컬 파일 `.resume_token.json`에 씀 | 실행마다 새 파드가 뜨면 파일이 없어 현재 위치부터 읽음. 그 사이 이벤트를 잃음 | checkpoint를 ADLS Gen2 파일로 두고 청크마다 ETag 조건으로 갱신 |
 | Python 예제가 대상 컬렉션에 `insert_one`을 한 뒤 token을 저장 | 두 동작 사이에서 프로세스가 죽으면 재시작 후 같은 이벤트가 한 번 더 들어감 | resume token으로 파일 이름을 정해 덮어씀. 상시 consumer는 token을 키로 upsert |
 | `for change in stream`처럼 끝없이 읽음 | 배치 실행이 끝나지 않음 | `try_next()`로 읽고 아직 열린 10분 구간의 이벤트를 만나면 쓰지 않고 종료 |
-| C# 예제와 저장소의 지원 확인 스크립트가 대기 시간을 1초로 지정 | 큰 백로그 재개에서 code 50(`ExceededTimeLimit`)이 같은 위치에서 반복 | `max_await_time_ms`를 지정하지 않음 |
+| Microsoft의 driver compatibility verifier가 대기 시간을 1초로 지정 | verifier는 cursor가 열리는지만 확인하고 바로 닫음. 이 값을 historical consumer에 옮기면 오래 걸리는 `getMore`가 code 50(`ExceededTimeLimit`)으로 끝남 | historical read에는 `max_await_time_ms`를 지정하지 않음 |
 | 오류가 나면 메시지를 출력하고 끝남 | Learn 제한 사항은 장애 조치 뒤 커서를 다시 열어야 한다고 설명함 | Airflow 재시도가 새 파드에서 checkpoint로 stream을 다시 엶 |
 | 감시할 컬렉션이 있다고 가정 | 컬렉션이 없으면 `watch()`가 code 26 | 컬렉션을 먼저 만듦 |
 
@@ -175,7 +178,7 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
 
 | 항목 | Learn 문서 | 관찰 결과 |
 | --- | --- | --- |
-| `maxAwaitTimeMS` | 설명 없음. C# 예제는 1초 | 새 이벤트 대기 시간이 아니라 `getMore` 전체의 실행 제한으로 적용됨 |
+| `maxAwaitTimeMS` | Learn의 historical 예제에는 없음. 별도 compatibility verifier는 1초 | MongoDB spec대로 `getMore.maxTimeMS`가 됨. DocumentDB가 history를 스캔 중이면 빈 batch 대신 code 50을 반환할 수 있음 |
 | 이벤트 필드 | `_id`, `operationType`, `fullDocument`, `ns`, `documentKey` | 같은 필드에 `wallTime`이 더 있고 `clusterTime`은 없음 |
 | replace | 예시 없음 | `operationType: update`로 오고 교체 후 문서 전체가 실림 |
 | update의 `fullDocument` | 변경 후 문서 전체를 보여 주는 예시 | `updateLookup` 없이도 포함됨 |
@@ -267,6 +270,7 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
 - [AzureCosmosDB/changestream-driver-compatibility](https://github.com/AzureCosmosDB/changestream-driver-compatibility)
+- [MongoDB Change Streams Specification](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
 - [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)
 - [Best practices for using Azure Data Lake Storage](https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices)

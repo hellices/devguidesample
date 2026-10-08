@@ -86,7 +86,12 @@ def to_sink(change: dict, pod: str) -> UpdateOne:
 
 
 def build_watch_kwargs(token: Optional[dict], start_at: Optional[Timestamp]) -> dict:
-    kwargs: dict = {"max_await_time_ms": int(os.getenv("MAX_AWAIT_MS", "1000"))}
+    kwargs: dict = {}
+    max_await_time_ms = os.getenv("MAX_AWAIT_MS")
+    if max_await_time_ms:
+        # DocumentDB applies this as getMore.maxTimeMS. A short value can abort
+        # historical catch-up, so omit it unless the workload has been measured.
+        kwargs["max_await_time_ms"] = int(max_await_time_ms)
     full_document = os.getenv("FULL_DOCUMENT", "updateLookup")
     if full_document != "default":
         kwargs["full_document"] = full_document

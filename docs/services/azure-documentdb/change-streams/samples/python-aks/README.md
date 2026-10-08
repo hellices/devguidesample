@@ -197,6 +197,11 @@ Run `probe.py` the same way with `SCRIPT=probe.py`.
 - On its first start the consumer saves the current time as its start position
   before it reads. A retry before the first checkpoint opens the stream at that
   time with `startAtOperationTime` and reads the same events again.
+- The consumer does not set `maxAwaitTimeMS` by default. Microsoft's driver
+  compatibility verifier uses one second only to check that a cursor opens.
+  MongoDB drivers send this option as `getMore.maxTimeMS`; on DocumentDB a
+  historical scan that needs longer can return code 50 instead of an empty
+  batch. Set `MAX_AWAIT_MS` only after testing the largest expected backlog.
 - The checkpoint is saved after each sink batch. When the stream is idle, the
   consumer saves the post-batch resume token instead.
 - Delivery is at-least-once. `FAULT_EXIT_AFTER_WRITE=<events>` makes the
