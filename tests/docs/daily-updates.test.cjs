@@ -23,6 +23,7 @@ function element(tag = "div") {
   return {
     tagName: tag, children: [], attributes: {}, dataset: {}, listeners: {},
     hidden: false, disabled: true, textContent: "", value: "",
+    set innerHTML(_value) { throw new Error("innerHTML writes are forbidden in this DOM fixture"); },
     setAttribute(name, value) { this.attributes[name] = value; },
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; },
