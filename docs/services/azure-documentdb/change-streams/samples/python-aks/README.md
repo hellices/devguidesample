@@ -100,6 +100,72 @@ kubectl -n cslab create secret generic docdb --from-literal=uri="$MONGO_URI"
 The connection string uses `mongodb+srv://`. The cluster host name resolves to
 the private endpoint address inside the VNet, so it works only from AKS.
 
+### Use a secondary user for CDC
+
+The commands above use the built-in administrator to keep the lab short. For
+a long-running deployment, create a secondary user with the least privilege
+needed by each workload. Azure DocumentDB documents two secondary-user role
+sets:
+
+- A read-only CDC that stores checkpoints outside DocumentDB can use
+  `readAnyDatabase`.
+- A consumer that writes its checkpoint or sink back to DocumentDB needs
+  `readWriteAnyDatabase` and `clusterAdmin`.
+
+In the service behavior measured on 2026-10-08, a user with only the two
+read-write roles could open a plain stream and use `resumeAfter`, but
+`startAtOperationTime` returned code 13. Granting `readAnyDatabase` after
+creation enabled the same request. Creating the user with all three roles at
+once returned code 31, and changing roles through `updateUser` returned code
+2. Create the read-write user first, then grant the additional read role.
+
+```javascript
+use admin
+
+db.runCommand({
+  createUser: "cdc_writer",
+  pwd: "<strong-password>",
+  roles: [
+    { role: "readWriteAnyDatabase", db: "admin" },
+    { role: "clusterAdmin", db: "admin" }
+  ]
+})
+
+db.runCommand({
+  grantRolesToUser: "cdc_writer",
+  roles: [
+    { role: "readAnyDatabase", db: "admin" }
+  ]
+})
+```
+
+Verify the stored roles with `usersInfo`, not `connectionStatus`.
+`connectionStatus.authenticatedUserRoles` did not display the granted
+`readAnyDatabase` role in this test even though a new connection could use
+`startAtOperationTime`.
+
+```javascript
+db.runCommand({ usersInfo: "cdc_writer" })
+```
+
+Close existing MongoClient pools after the grant and reconnect. To roll back
+the added role:
+
+```javascript
+db.runCommand({
+  revokeRolesFromUser: "cdc_writer",
+  roles: [
+    { role: "readAnyDatabase", db: "admin" }
+  ]
+})
+```
+
+This role-specific behavior is an observed Azure DocumentDB compatibility
+detail, not a behavior described in the
+[secondary-user documentation](https://learn.microsoft.com/azure/documentdb/secondary-users).
+Recheck it after service upgrades. Do not put real credentials in this
+repository or in `azd` environment files.
+
 ## 4. Run the consumer
 
 The watched collection must exist before the consumer starts. The cluster

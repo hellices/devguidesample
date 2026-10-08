@@ -7,12 +7,14 @@ technologies: [python, mongodb, airflow, kubernetes]
 tags: [evaluate, storage]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-03
+sources_checked_at: 2026-10-08
 published_at: 2026-10-02
 topic_order: 1
 official_sources:
   - title: Change streams in Azure DocumentDB
     url: https://learn.microsoft.com/azure/documentdb/change-streams
+  - title: Read and read/write privileges with secondary native users
+    url: https://learn.microsoft.com/azure/documentdb/secondary-users
   - title: Lease Blob
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
   - title: Path - Update
@@ -319,6 +321,59 @@ upsert한 뒤 checkpoint를 저장합니다. 생성기는 문서마다 insert와
 - 클러스터 CPU는 초당 약 1,000건에서 약 30%, 속도 제한 없이 초당 약 2,900건을
   쓸 때 약 60%였습니다.
 
+## secondary user 역할과 `startAtOperationTime`
+
+2026-10-08 M25, shard 1개, 서버 8.0 클러스터에서 역할별 권한을 분리했습니다.
+동일 컬렉션에 서버 `operationTime` 직후 marker 문서를 쓰고 같은 BSON
+`Timestamp`를 세 principal이 읽었습니다. 매 라운드마다 raw `$changeStream`,
+raw 명령에 `updateLookup`과 실제 CDC `$match`를 더한 경우, PyMongo `watch()`를
+각각 실행했고 이 과정을 세 번 반복했습니다.
+
+| principal | raw 최소 옵션 | raw CDC 옵션 | PyMongo CDC 옵션 |
+| --- | ---: | ---: | ---: |
+| built-in 관리자(`root`) | 3/3 marker 확인 | 3/3 marker 확인 | 3/3 marker 확인 |
+| `readAnyDatabase` | 3/3 marker 확인 | 3/3 marker 확인 | 3/3 marker 확인 |
+| `readWriteAnyDatabase + clusterAdmin` | 3/3 code 13 | 3/3 code 13 | 3/3 code 13 |
+
+마지막 principal도 옵션 없는 `watch()`와 event token을 쓴 `resumeAfter`는
+성공했습니다. 따라서 연결, 컬렉션 read, pipeline, resume token이 아니라
+`startAtOperationTime` 권한 경로에서만 차이가 났습니다.
+
+같은 읽기·쓰기 사용자의 역할을 바꾸며 인과관계도 확인했습니다.
+
+| 순서 | `usersInfo` 역할 | 같은 timestamp의 결과 |
+| --- | --- | --- |
+| 생성 직후 | `readWriteAnyDatabase`, `clusterAdmin` | code 13 |
+| `readAnyDatabase` grant | 위 두 역할 + `readAnyDatabase` | marker 확인 |
+| `readAnyDatabase` revoke | 다시 두 역할 | code 13 |
+| `readAnyDatabase` re-grant | 다시 세 역할 | marker 확인 |
+
+grant와 revoke 뒤에는 매번 새 MongoClient를 만들었습니다. `usersInfo`에는
+`readAnyDatabase`가 추가·제거됐지만 `connectionStatus.authenticatedUserRoles`에는
+grant 뒤에도 기존 두 역할만 보였습니다. `connectionStatus(showPrivileges)`의
+action 목록에도 전후 모두 `changeStream`과 `find`가 있었으므로 역할 적용 여부와 이
+옵션의 동작은 `usersInfo`와 실제 요청으로 확인해야 합니다.
+
+역할을 만드는 명령 경로도 raw `mongosh`로 세 번 반복했습니다.
+
+| 명령 | 결과 | 직후 `usersInfo` |
+| --- | --- | --- |
+| 세 역할을 한 번에 `createUser` | code 31(`RoleNotFound`) | 사용자 없음 |
+| 두 읽기·쓰기 역할로 `createUser` | 성공 | 두 역할 |
+| 세 역할로 `updateUser` | code 2(`BadValue`), role update 미지원 | 두 역할 유지 |
+| `grantRolesToUser(readAnyDatabase)` | 성공 | 세 역할 |
+
+이 결과는 secondary user 문서가 설명하는 생성 시 역할 조합과 grant 이후 실제로
+저장할 수 있는 조합이 다름을 보여 줍니다. 읽기 전용 CDC는 `readAnyDatabase`만
+쓰고, DocumentDB 안에도 데이터를 써야 하는 CDC는 두 읽기·쓰기 역할로 사용자를 만든
+뒤 `readAnyDatabase`를 grant하는 방식으로 확인했습니다. 관리형 서비스의 내부 권한
+검사 원인은 확인하지 않았습니다.
+
+이 시험의 1분·1시간·7일 전 timestamp는 모두 역할을 grant한 뒤 열렸습니다. 35일보다
+오래된 실제 archived event를 읽은 시험은 아니며, 역할 문제를 해결한 뒤 큰 백로그에서
+짧은 `maxAwaitTimeMS`를 주면 별도로 code 50이 날 수 있습니다. 이는 위
+"활성 change log를 넘긴 재개(이전 구성)" 절과 같은 문제입니다.
+
 ## change stream 동작 확인
 
 `probe.py`로 옵션과 이벤트 필드를 확인했습니다. Learn 문서에 나온 동작과 이번
@@ -334,6 +389,7 @@ upsert한 뒤 checkpoint를 저장합니다. 생성기는 문서마다 insert와
 | 파이프라인 단계 | `$addFields`, `$match`, `$project`, `$set`, `$unset` | 다섯 개 모두 동작. 목록에 없는 `$replaceRoot`, `$redact`도 오류 없이 동작 |
 | 감시 범위 | 컬렉션 예시 | `db.watch()`는 code 26. `client.watch()`에 `ns.db` 조건을 건 `$match`는 동작 |
 | 재개 | `resumeAfter`, `startAt`, `startAtOperationTime` 지원 | `resume_after`, `start_after` 동작. 세션의 `operationTime`이 비어 있어 이를 쓴 `start_at_operation_time`은 실패. 현재 시각에서 10분 뺀 `Timestamp`는 동작 |
+| secondary user | 읽기 전용과 읽기·쓰기 역할을 설명 | `readAnyDatabase`는 `startAtOperationTime` 성공. 읽기·쓰기 두 역할만 있으면 code 13이고 해당 역할을 grant하면 성공 |
 | 잘못된 resume token | 언급 없음 | code 2(BadValue) |
 | `showExpandedEvents` | 지원하지 않음 | code 115(CommandNotSupported) |
 | 감시 중인 컬렉션 drop, rename | 언급 없음 | `invalidate` 이벤트 없이 code 26으로 커서 종료 |
@@ -354,5 +410,6 @@ upsert한 뒤 checkpoint를 저장합니다. 생성기는 문서마다 insert와
 ## 공식 출처
 
 - [Change streams in Azure DocumentDB](https://learn.microsoft.com/azure/documentdb/change-streams)
+- [Read and read/write privileges with secondary native users](https://learn.microsoft.com/azure/documentdb/secondary-users)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
 - [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)

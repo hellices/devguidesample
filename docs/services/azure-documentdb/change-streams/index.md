@@ -7,11 +7,13 @@ technologies: [python, mongodb, airflow, kubernetes]
 tags: [evaluate, build, storage]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-03
+sources_checked_at: 2026-10-08
 published_at: 2026-10-02
 official_sources:
   - title: Change streams in Azure DocumentDB
     url: https://learn.microsoft.com/azure/documentdb/change-streams
+  - title: Read and read/write privileges with secondary native users
+    url: https://learn.microsoft.com/azure/documentdb/secondary-users
   - title: AzureCosmosDB/changestream-driver-compatibility
     url: https://github.com/AzureCosmosDB/changestream-driver-compatibility
   - title: Lease Blob
@@ -87,6 +89,7 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 | 업로드 직후 장애와 재시도 | 첫 청크를 올리고 checkpoint를 쓰기 전에 파드를 죽여도 재시도 후 중복 0, 누락 0. 50 MB와 80 MB 한도에서 각각 확인 |
 | 구간과 크기로 자르기 | 50, 80, 100, 200 MB 한도로 쓴 파일이 모두 구간 하나의 이벤트만 담았고 한도를 넘은 파일은 없음 |
 | 400 MB 활성 change log를 넘긴 재개 | DAG를 31분 멈춘 사이 쌓인 문서 본문 2.6 GB 이상의 백로그를 누락 없이 따라잡음. `maxAwaitTimeMS`를 지정하지 않았을 때만 성공. 이전 구성에서 측정 |
+| secondary user의 과거 시점 시작 | `readWriteAnyDatabase + clusterAdmin`만 가진 사용자는 `startAtOperationTime`이 code 13. `readAnyDatabase`를 grant하면 같은 사용자가 성공했고 revoke하면 다시 실패 |
 | 처리 속도 | 1 KB 문서 10분 구간 하나(약 600,000건)를 32–38초에 씀. 한도를 50–200 MB로 바꿔도 시간은 비슷함 |
 | 파일 크기 | 압축 전 80 MB에서 자른 파일이 1 KB 랜덤 채움 문서는 43.7–46.7 MB, 채움 없는 작은 문서는 13.3–13.4 MB. 파일 크기는 한도에 비례함 |
 | 내보내기 파드 메모리 | 80 MB 한도에서 최대 RSS 336 MiB. 200 MB 한도는 620 MiB. 측정 파드는 요청 512Mi, 제한 4Gi. Airflow DAG의 파드는 요청 512Mi, 제한 1Gi |
@@ -95,6 +98,9 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
 
 - change stream을 열 때 짧은 `maxAwaitTimeMS`를 주지 않습니다. 1초로 두면 큰
   백로그를 재개할 때 code 50으로 실패하고 재시도로도 넘어가지 못했습니다.
+- secondary user로 `startAtOperationTime`을 쓸 때는 `readAnyDatabase` 역할을
+  확인합니다. `readWriteAnyDatabase + clusterAdmin`만 있으면 일반 `watch()`와
+  `resumeAfter`는 동작해도 과거 시점 시작은 code 13으로 실패했습니다.
 - 파일을 먼저 쓰고 checkpoint를 나중에 씁니다. 순서가 반대면 그 사이 장애로
   이벤트를 잃습니다.
 - 파일 이름을 청크 첫 이벤트 바로 앞의 resume token으로 정해 재시도가 같은 파일을
@@ -110,6 +116,43 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
   올립니다. 같은 파일을 쓰는 다음 실행은 자기 기록을 남긴 뒤 lease를 끊습니다.
   이전 실행은 기록 확인에서 멈추거나 업로드가 412로 거부됩니다.
 - 감시할 컬렉션을 먼저 만듭니다. 없으면 `watch()`가 code 26으로 실패합니다.
+
+## secondary user로 과거 시점부터 읽기
+
+Learn의 secondary native user 문서는 읽기 전용 사용자에 `readAnyDatabase`,
+읽기·쓰기 사용자에 `readWriteAnyDatabase + clusterAdmin`을 지정합니다. 2026-10-08
+M25, shard 1개, 서버 8.0 클러스터에서는 후자의 사용자가 일반 `watch()`와
+`resumeAfter`는 열었지만 `startAtOperationTime`만 code 13(`Unauthorized`)으로
+실패했습니다. 같은 timestamp와 이벤트를 사용한 raw aggregate와 PyMongo 시험에서
+built-in 관리자와 `readAnyDatabase` 사용자는 성공했습니다.
+
+기존 읽기·쓰기 사용자에는 built-in 관리자로 역할을 grant할 수 있었습니다.
+
+```javascript
+use admin
+
+db.runCommand({
+  grantRolesToUser: "cdc_user",
+  roles: [
+    { role: "readAnyDatabase", db: "admin" }
+  ]
+})
+```
+
+세 역할을 `createUser`에 한꺼번에 주면 code 31, `updateUser`로 역할을 바꾸면 code 2로
+실패했습니다. 반면 위 grant는 성공했고 `usersInfo`에 세 역할이 저장됐습니다.
+`connectionStatus`에는 추가 역할이 보이지 않았으므로 적용 여부는 아래 명령으로
+확인합니다. 기존 client pool도 닫고 새 연결에서 다시 시험합니다.
+
+```javascript
+db.runCommand({ usersInfo: "cdc_user" })
+```
+
+DocumentDB에서 읽기만 하고 checkpoint와 결과를 외부 저장소에 쓰는 CDC라면
+`readAnyDatabase` 전용 사용자가 더 단순합니다. 같은 계정이 DocumentDB 안에
+checkpoint나 sink도 써야 하면 읽기·쓰기 역할을 유지하고 `readAnyDatabase`를
+grant합니다. rollback은 `revokeRolesFromUser`에 같은 역할을 넘깁니다. 이 역할별
+차이는 Learn에 설명되지 않은 관찰 결과이므로 서버 업데이트 뒤 다시 확인합니다.
 
 ## 공식 예제가 놓친 부분
 
@@ -140,6 +183,7 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
 | 감시 범위 | 컬렉션 예시만 있음 | `db.watch()`는 code 26. `client.watch()`에 `$match`로 `ns.db`를 거르면 동작 |
 | 컬렉션 drop, rename | 설명 없음 | `invalidate` 이벤트 없이 code 26으로 커서 종료 |
 | `startAtOperationTime` | 날짜로 `Timestamp`를 만드는 예시 | 날짜로 만든 값은 동작함. 세션의 `operationTime`은 비어 있어 쓸 수 없음 |
+| secondary user 역할 | 읽기 전용과 읽기·쓰기 역할을 설명하지만 change stream 옵션별 차이는 없음 | `readAnyDatabase`는 과거 시점 시작 성공. `readWriteAnyDatabase + clusterAdmin`은 code 13이고 `readAnyDatabase` grant 뒤 성공 |
 | pre-image | 미리 보기. 지원 요청으로 켬 | 지원 요청 없이 `required`로 열면 code 10065 |
 
 옵션별 관찰 전체는 [측정 상세](measurements/index.md)에 있습니다.
