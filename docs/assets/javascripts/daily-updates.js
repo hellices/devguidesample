@@ -7,19 +7,29 @@
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }
 
-  function parseArchive(data) {
+  function parseCalendar(data) {
     if (!data || !Array.isArray(data.reports)) throw new Error("Invalid daily update archive");
     const dates = new Set();
     for (const report of data.reports) {
       if (!report || !validDate(report.date) || dates.has(report.date) ||
           report.url !== `${report.date}/` ||
-          !["title", "description", "text"].every(key => typeof report[key] === "string") ||
-          !report.title.trim() || !report.description.trim()) {
+          typeof report.title !== "string" || !report.title.trim()) {
         throw new Error("Invalid daily update archive record");
       }
       dates.add(report.date);
     }
     return [...data.reports].sort((left, right) => right.date.localeCompare(left.date));
+  }
+
+  function parseArchive(data) {
+    const reports = parseCalendar(data);
+    for (const report of reports) {
+      if (typeof report.description !== "string" || !report.description.trim() ||
+          typeof report.text !== "string") {
+        throw new Error("Invalid daily update archive search record");
+      }
+    }
+    return reports;
   }
 
   function calendarWeeks(month) {
@@ -49,13 +59,18 @@
     return value.normalize("NFKC").toLowerCase();
   }
 
-  function searchReports(reports, query) {
+  function createSearchIndex(reports) {
+    return reports.map(report => ({
+      report,
+      text: normalized(`${report.date} ${report.title} ${report.description} ${report.text}`),
+    }));
+  }
+
+  function searchReports(index, query) {
     const terms = normalized(query).trim().split(/\s+/).filter(Boolean);
     if (!terms.length) return [];
-    return reports.filter(report => {
-      const text = normalized(`${report.date} ${report.title} ${report.description} ${report.text}`);
-      return terms.every(term => text.includes(term));
-    });
+    return index.filter(entry => terms.every(term => entry.text.includes(term)))
+      .map(entry => entry.report);
   }
 
   function createElement(documentRef, tag, text) {
@@ -146,6 +161,7 @@
 
   function mountSearch(root, reports, environment) {
     const documentRef = root.ownerDocument;
+    const index = createSearchIndex(reports);
     const archive = new URL(root.dataset.dailyBase, environment.location.href);
     const form = root.querySelector("[data-daily-form]");
     const query = root.querySelector("[data-daily-query]");
@@ -158,7 +174,7 @@
     reset.disabled = false;
 
     function render() {
-      const matching = searchReports(reports, query.value);
+      const matching = searchReports(index, query.value);
       results.replaceChildren(...matching.slice(0, visible).map(report => {
         const item = createElement(documentRef, "li");
         const time = createElement(documentRef, "time", report.date);
@@ -198,23 +214,23 @@
   async function fetchArchive(url, environment) {
     const response = await environment.fetch(url);
     if (!response.ok) throw new Error(`Daily update archive request failed: ${response.status}`);
-    return parseArchive(await response.json());
+    return response.json();
   }
 
   async function mountDailyUpdates(documentRef, environment) {
     const requests = new Map();
     const mounts = [];
-    for (const [selector, mount] of [
-      ["[data-daily-calendar]", mountCalendar],
-      ["[data-daily-search]", mountSearch],
+    for (const [selector, parse, mount] of [
+      ["[data-daily-calendar]", parseCalendar, mountCalendar],
+      ["[data-daily-search]", parseArchive, mountSearch],
     ]) {
       for (const root of documentRef.querySelectorAll(selector)) {
         if (root.dataset.dailyReady) continue;
         root.dataset.dailyReady = "loading";
         const url = new URL(root.dataset.dailySource, environment.location.href).href;
         if (!requests.has(url)) requests.set(url, fetchArchive(url, environment));
-        mounts.push(requests.get(url).then(reports => {
-          mount(root, reports, environment);
+        mounts.push(requests.get(url).then(data => {
+          mount(root, parse(data), environment);
           root.dataset.dailyReady = "true";
         }).catch(error => {
           const alert = root.querySelector("[data-daily-error]");
@@ -229,7 +245,7 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = {parseArchive, calendarWeeks, searchReports, mountCalendar, mountSearch, mountDailyUpdates};
+    module.exports = {parseCalendar, parseArchive, calendarWeeks, createSearchIndex, searchReports, mountCalendar, mountSearch, mountDailyUpdates};
   }
   if (typeof document !== "undefined") {
     const start = () => mountDailyUpdates(document, window);

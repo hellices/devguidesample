@@ -14,6 +14,11 @@ function report(date, text = "Container networking 연결 진단") {
   return {date, title: `Update ${date}`, description: "Daily summary", url: `${date}/`, text};
 }
 
+function calendarReport(day) {
+  const {date, title, url} = report(day);
+  return {date, title, url};
+}
+
 function element(tag = "div") {
   return {
     tagName: tag, children: [], attributes: {}, dataset: {}, listeners: {},
@@ -42,7 +47,7 @@ function fixture(kind) {
   const root = element();
   root.ownerDocument = ownerDocument;
   root.dataset = {
-    dailySource: "../../assets/daily-updates.json",
+    dailySource: kind === "calendar" ? "../../assets/daily-updates-calendar.json" : "../../assets/daily-updates.json",
     dailyBase: "../",
     ...(kind === "calendar"
       ? {dailyCalendar: "2024-02", dailySelected: "2024-02-29"}
@@ -87,16 +92,46 @@ test("archive parsing validates dates, duplicate records, text and local URLs", 
   assert.throws(() => parseArchive({}), /Invalid/);
 });
 
+test("calendar parsing accepts metadata without weakening full-text validation", () => {
+  const {parseCalendar, parseArchive} = behavior();
+  const records = [calendarReport("2024-02-29")];
+  assert.deepEqual(parseCalendar({reports: records}), records);
+  assert.throws(() => parseArchive({reports: records}), /Invalid/);
+  for (const reports of [
+    [calendarReport("2026-02-29")],
+    [records[0], records[0]],
+    [{...records[0], title: ""}],
+    [{...records[0], url: "https://example.test/unrelated/"}],
+  ]) assert.throws(() => parseCalendar({reports}), /Invalid/);
+});
+
 test("archive search ANDs terms over each report's date, title, summary and body", () => {
-  const {searchReports} = behavior();
-  const reports = [
+  const {createSearchIndex, searchReports} = behavior();
+  const index = createSearchIndex([
     report("2026-10-07", "Storage release"),
     report("2025-12-31", "Container networking 연결 진단"),
-  ];
-  assert.deepEqual(searchReports(reports, "  CONTAINER   진단 ").map(item => item.date), ["2025-12-31"]);
-  assert.deepEqual(searchReports(reports, "2026-10 summary").map(item => item.date), ["2026-10-07"]);
-  assert.deepEqual(searchReports(reports, "Storage Container"), []);
-  assert.deepEqual(searchReports(reports, " \t "), []);
+  ]);
+  assert.deepEqual(searchReports(index, "  CONTAINER   진단 ").map(item => item.date), ["2025-12-31"]);
+  assert.deepEqual(searchReports(index, "2026-10 summary").map(item => item.date), ["2026-10-07"]);
+  assert.deepEqual(searchReports(index, "Storage Container"), []);
+  assert.deepEqual(searchReports(index, " \t "), []);
+});
+
+test("search builds its normalized body index once instead of on every input", () => {
+  const {mountSearch} = behavior();
+  const {root, nodes, environment} = fixture("search");
+  let bodyReads = 0;
+  const item = {
+    ...report("2024-02-29"),
+    get text() { bodyReads++; return "Ｃｏｎｔａｉｎｅｒ 연결 진단"; },
+  };
+  mountSearch(root, [item], environment);
+  for (const query of ["CONTAINER", "연결", "Container 진단"]) {
+    nodes.query.value = query;
+    nodes.query.dispatch("input");
+    assert.equal(nodes.results.children.length, 1);
+  }
+  assert.equal(bodyReads, 1);
 });
 
 test("calendar marks published and current dates and moves between available months", () => {
@@ -156,27 +191,72 @@ test("search results are bounded, expandable, escaped and reset without touching
   assert.equal(environment.location.search, "?q=keep");
 });
 
-test("calendar and search share one asset request and mount only once", async () => {
+test("calendars share metadata while only search loads the full archive", async () => {
   const {mountDailyUpdates} = behavior();
   const calendar = fixture("calendar");
+  const secondCalendar = fixture("calendar");
   const search = fixture("search");
   const documentRef = {
-    querySelectorAll: selector => selector === "[data-daily-calendar]" ? [calendar.root] : [search.root],
+    querySelectorAll: selector => selector === "[data-daily-calendar]" ? [calendar.root, secondCalendar.root] : [search.root],
   };
   const requested = [];
   const environment = {
     ...calendar.environment,
     fetch: async url => {
       requested.push(url);
-      return {ok: true, json: async () => ({reports: [report("2024-02-29")]})};
+      const record = url.endsWith("daily-updates-calendar.json") ? calendarReport("2024-02-29") : report("2024-02-29");
+      return {ok: true, json: async () => ({reports: [record]})};
     },
     console: {error: (...args) => assert.fail(args.join(" "))},
   };
   await mountDailyUpdates(documentRef, environment);
   await mountDailyUpdates(documentRef, environment);
-  assert.deepEqual(requested, ["https://example.test/project/assets/daily-updates.json"]);
+  assert.deepEqual(requested, [
+    "https://example.test/project/assets/daily-updates-calendar.json",
+    "https://example.test/project/assets/daily-updates.json",
+  ]);
   assert.equal(calendar.nodes.month.listeners.change.length, 1);
+  assert.equal(secondCalendar.nodes.month.listeners.change.length, 1);
   assert.equal(search.nodes.query.disabled, false);
+});
+
+test("dated pages never request the full-text search asset", async () => {
+  const {mountDailyUpdates} = behavior();
+  const {root, nodes, environment} = fixture("calendar");
+  const requested = [];
+  await mountDailyUpdates({
+    querySelectorAll: selector => selector === "[data-daily-calendar]" ? [root] : [],
+  }, {
+    ...environment,
+    fetch: async url => {
+      requested.push(url);
+      return {ok: true, json: async () => ({reports: [calendarReport("2024-02-29")]})};
+    },
+    console: {error: (...args) => assert.fail(args.join(" "))},
+  });
+  assert.deepEqual(requested, ["https://example.test/project/assets/daily-updates-calendar.json"]);
+  assert.equal(nodes.month.disabled, false);
+});
+
+test("a search payload failure does not disable the calendar", async () => {
+  const {mountDailyUpdates} = behavior();
+  const calendar = fixture("calendar");
+  const search = fixture("search");
+  const errors = [];
+  await mountDailyUpdates({
+    querySelectorAll: selector => selector === "[data-daily-calendar]" ? [calendar.root] : [search.root],
+  }, {
+    ...calendar.environment,
+    fetch: async url => url.endsWith("daily-updates-calendar.json")
+      ? {ok: true, json: async () => ({reports: [calendarReport("2024-02-29")]})}
+      : {ok: false, status: 503},
+    console: {error: (...args) => errors.push(args)},
+  });
+  assert.equal(calendar.nodes.month.disabled, false);
+  assert.equal(calendar.nodes.error.hidden, true);
+  assert.equal(search.nodes.error.hidden, false);
+  assert.equal(search.nodes.query.disabled, true);
+  assert.equal(errors.length, 1);
 });
 
 test("load failures are visible and keep the server-rendered date links usable", async () => {

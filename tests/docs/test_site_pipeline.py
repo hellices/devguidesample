@@ -308,7 +308,10 @@ generated_at: 2026-10-08T09:00:00+09:00
     assert "업데이트 없음" in dated
     assert landing.count("data-daily-recent=") == 3
     assert 'data-daily-selected="2026-10-07"' in dated
-    assert 'data-daily-source="../../assets/daily-updates.json"' in dated
+    assert 'data-daily-source="../../assets/daily-updates-calendar.json"' in dated
+    assert 'data-daily-source="../../assets/daily-updates.json"' not in dated
+    assert landing.count('data-daily-source="../assets/daily-updates-calendar.json"') == 2
+    assert landing.count('data-daily-source="../assets/daily-updates.json"') == 1
     assert "assets/javascripts/daily-updates.js" in dated
     for report_date in ("2026-10-07", "2025-12-31"):
         reader = TopicReaderPage(
@@ -335,6 +338,11 @@ generated_at: 2026-10-08T09:00:00+09:00
     )
     assert [report["date"] for report in data["reports"]] == sorted(report_dates, reverse=True)
     assert all("업데이트 없음" in report["text"] for report in data["reports"])
+    calendar_data = json.loads(
+        (root / "site" / "assets" / "daily-updates-calendar.json").read_text(encoding="utf-8")
+    )
+    assert [report["date"] for report in calendar_data["reports"]] == sorted(report_dates, reverse=True)
+    assert all(set(report) == {"date", "title", "url"} for report in calendar_data["reports"])
     assert not (root / "site" / "azure-daily-update" / "draft").exists()
     search = json.loads(
         (root / "site" / "search" / "search_index.json").read_text(

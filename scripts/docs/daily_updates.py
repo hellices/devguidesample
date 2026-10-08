@@ -117,22 +117,25 @@ def load_daily_update_reports(
     )
 
 
-def build_daily_update_data(docs_dir: Path | str) -> str:
-    reports = [
-        {
+def build_daily_update_data(
+    docs_dir: Path | str, *, include_search: bool = True
+) -> str:
+    reports = []
+    for report in load_daily_update_reports(docs_dir):
+        record = {
             "date": report.report_date.isoformat(),
             "title": report.title,
-            "description": report.description,
             "url": f"{report.report_date.isoformat()}/",
-            "text": report.text,
         }
-        for report in load_daily_update_reports(docs_dir)
-    ]
+        if include_search:
+            record.update(description=report.description, text=report.text)
+        reports.append(record)
     return json.dumps({"reports": reports}, ensure_ascii=False) + "\n"
 
 
-def _archive_attributes(source_url: str) -> str:
-    source = get_relative_url("assets/daily-updates.json", source_url)
+def _archive_attributes(source_url: str, *, search: bool = False) -> str:
+    filename = "daily-updates.json" if search else "daily-updates-calendar.json"
+    source = get_relative_url(f"assets/{filename}", source_url)
     archive = get_relative_url("azure-daily-update/", source_url)
     return (
         f'data-daily-source="{escape(source, quote=True)}" '
@@ -266,7 +269,7 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
         '<div class="dg-daily-archive" data-search-exclude="true">',
         build_daily_update_calendar(reports, source_url="azure-daily-update/"),
         '<section class="dg-daily-search" data-daily-search '
-        f'{_archive_attributes("azure-daily-update/")} aria-label="일일 업데이트 검색">',
+        f'{_archive_attributes("azure-daily-update/", search=True)} aria-label="일일 업데이트 검색">',
         '<form data-daily-form role="search">',
         '<label><span>업데이트 검색</span>',
         '<input type="search" data-daily-query placeholder="검색어 또는 YYYY-MM-DD" '

@@ -817,6 +817,8 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
         generated.write(daily_update_index)
     with mkdocs_gen_files.open("assets/daily-updates.json", "w") as generated:
         generated.write(build_daily_update_data(root / "docs"))
+    with mkdocs_gen_files.open("assets/daily-updates-calendar.json", "w") as generated:
+        generated.write(build_daily_update_data(root / "docs", include_search=False))
 
     template = (root / "docs" / "index.md").read_text(encoding="utf-8")
     home_page = build_home_page(template, documents, taxonomy, catalog=catalog)

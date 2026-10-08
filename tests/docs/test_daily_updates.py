@@ -154,7 +154,7 @@ def test_calendar_marks_only_published_days_and_the_current_report(tmp_path: Pat
     assert links[1]["aria-current"] == "page"
     assert "aria-current" not in links[0]
     assert len(markup.select("data-daily-unavailable")) == 27
-    assert markup.select("data-daily-source")[0]["data-daily-source"] == "../../assets/daily-updates.json"
+    assert markup.select("data-daily-source")[0]["data-daily-source"] == "../../assets/daily-updates-calendar.json"
     assert markup.select("data-daily-month")[0]["disabled"] is None
     assert [
         attrs["value"] for tag, attrs in markup.elements if tag == "option"
@@ -187,6 +187,32 @@ def test_archive_data_retains_all_dates_and_body_search_text(tmp_path: Path) -> 
     assert "Container networking" in data["reports"][1]["text"]
     assert "연결 진단" in data["reports"][1]["text"]
     assert data["reports"][1]["description"] == "2025-12-31 Azure 업데이트 요약"
+
+
+def test_calendar_data_excludes_search_fields_and_does_not_grow_with_body(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-07", body="Short report")
+    calendar = daily_updates.build_daily_update_data(docs, include_search=False)
+
+    data = json.loads(calendar)
+    assert data["reports"] == [{
+        "date": "2026-10-07",
+        "title": "Azure Daily Update — 2026-10-07",
+        "url": "2026-10-07/",
+    }]
+    long_body = "Archived body text " * 10_000
+    write_report(docs, "2026-10-07", body=long_body)
+    assert daily_updates.build_daily_update_data(docs, include_search=False) == calendar
+    assert long_body in json.loads(daily_updates.build_daily_update_data(docs))["reports"][0]["text"]
+
+
+def test_index_loads_full_text_only_for_search(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-07")
+    markup = ArchiveMarkup(build_daily_update_index(docs))
+
+    assert markup.select("data-daily-calendar")[0]["data-daily-source"] == "../assets/daily-updates-calendar.json"
+    assert markup.select("data-daily-search")[0]["data-daily-source"] == "../assets/daily-updates.json"
 
 
 def test_archive_escapes_report_titles_in_cards_calendar_and_fallback(tmp_path: Path) -> None:
