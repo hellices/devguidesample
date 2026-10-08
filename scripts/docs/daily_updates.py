@@ -11,10 +11,12 @@ from pathlib import Path, PurePosixPath
 import re
 from typing import Any
 
+from markdown import Markdown
 from mkdocs.utils import get_relative_url
 import yaml
 
 from scripts.docs.content import DocumentFormatError, load_document
+from scripts.docs.search_text import visible_text
 
 
 _DATE_DIRECTORY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -120,6 +122,7 @@ def load_daily_update_reports(
 def build_daily_update_data(
     docs_dir: Path | str, *, include_search: bool = True
 ) -> str:
+    renderer = Markdown(extensions=["extra", "admonition", "pymdownx.superfences"]) if include_search else None
     reports = []
     for report in load_daily_update_reports(docs_dir):
         record = {
@@ -127,8 +130,13 @@ def build_daily_update_data(
             "title": report.title,
             "url": f"{report.report_date.isoformat()}/",
         }
-        if include_search:
-            record.update(description=report.description, text=report.text)
+        if renderer is not None:
+            excerpt = visible_text(renderer.reset().convert(report.text))
+            record.update(
+                description=report.description,
+                text=report.text,
+                excerpt="\n".join(line.strip() for line in excerpt.splitlines() if line.strip()),
+            )
         reports.append(record)
     return json.dumps({"reports": reports}, ensure_ascii=False) + "\n"
 

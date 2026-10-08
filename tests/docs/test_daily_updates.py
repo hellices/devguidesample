@@ -206,6 +206,26 @@ def test_calendar_data_excludes_search_fields_and_does_not_grow_with_body(tmp_pa
     assert long_body in json.loads(daily_updates.build_daily_update_data(docs))["reports"][0]["text"]
 
 
+def test_search_excerpts_use_readable_markdown_text_without_changing_raw_search(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    body = (
+        "## Networking updates\n\n"
+        "**AKS**와 [Ubuntu](https://example.test/networking) 연결 진단\n\n"
+        "| Service | Status |\n|---|---|\n| AKS | Preview |\n\n"
+        "<script>hiddenScript()</script><style>.hidden {}</style>\n"
+    )
+    write_report(docs, "2026-10-07", body=body)
+    report = json.loads(daily_updates.build_daily_update_data(docs))["reports"][0]
+
+    assert body in report["text"]
+    assert "Networking updates\n" in report["excerpt"]
+    assert "AKS와 Ubuntu 연결 진단" in report["excerpt"]
+    assert "Preview" in report["excerpt"]
+    assert all(value not in report["excerpt"] for value in (
+        "**", "##", "https://", "|", "hiddenScript", ".hidden",
+    ))
+
+
 def test_index_loads_full_text_only_for_search(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     write_report(docs, "2026-10-07")
