@@ -270,25 +270,27 @@ def test_daily_update_archive_builds_landing_and_dated_page(tmp_path: Path) -> N
         "    ignore_no_matches: true\n",
         encoding="utf-8",
     )
-    archive = docs / "azure-daily-update" / "2026-10-07" / "index.md"
-    archive.parent.mkdir(parents=True)
-    archive.write_text(
-        """\
+    report_dates = ("2025-12-31", "2026-09-01", "2026-10-05", "2026-10-06", "2026-10-07")
+    for report_date in report_dates:
+        archive = docs / "azure-daily-update" / report_date / "index.md"
+        archive.parent.mkdir(parents=True)
+        archive.write_text(
+            f"""\
 ---
-title: Azure Daily Update — 2026-10-07
-description: 2026-10-07 Azure 업데이트 요약
-report_date: 2026-10-07
+title: Azure Daily Update — {report_date}
+description: {report_date} Azure 업데이트 요약
+report_date: {report_date}
 generated_at: 2026-10-08T09:00:00+09:00
 ---
 
-# Azure Daily Update — 2026-10-07
+# Azure Daily Update — {report_date}
 
 ## AI & Apps
 
 업데이트 없음
 """,
-        encoding="utf-8",
-    )
+            encoding="utf-8",
+        )
     draft = docs / "azure-daily-update" / "draft" / "index.md"
     draft.parent.mkdir(parents=True)
     draft.write_text("# Unpublished draft\n", encoding="utf-8")
@@ -304,6 +306,35 @@ generated_at: 2026-10-08T09:00:00+09:00
     assert "2026-10-07" in landing
     assert "2026-10-07/" in landing
     assert "업데이트 없음" in dated
+    assert landing.count("data-daily-recent=") == 3
+    assert 'data-daily-selected="2026-10-07"' in dated
+    assert 'data-daily-source="../../assets/daily-updates.json"' in dated
+    assert "assets/javascripts/daily-updates.js" in dated
+    for report_date in ("2026-10-07", "2025-12-31"):
+        reader = TopicReaderPage(
+            root / "site" / "azure-daily-update" / report_date / "index.html"
+        )
+        calendar_links = [
+            (target, title)
+            for target, title, _ in reader.navigation_entries
+            if any(
+                day in urljoin(
+                    f"https://example.test/devguidesample/azure-daily-update/{report_date}/",
+                    target,
+                )
+                for day in report_dates
+            )
+        ]
+        expected_days = ["5", "6", "7"] if report_date == "2026-10-07" else ["31"]
+        assert [title for _, title in calendar_links] == expected_days
+    home = (root / "site" / "index.html").read_text(encoding="utf-8")
+    assert "data-daily-calendar=" not in home
+    assert "Azure Daily Update" in home
+    data = json.loads(
+        (root / "site" / "assets" / "daily-updates.json").read_text(encoding="utf-8")
+    )
+    assert [report["date"] for report in data["reports"]] == sorted(report_dates, reverse=True)
+    assert all("업데이트 없음" in report["text"] for report in data["reports"])
     assert not (root / "site" / "azure-daily-update" / "draft").exists()
     search = json.loads(
         (root / "site" / "search" / "search_index.json").read_text(
@@ -314,6 +345,11 @@ generated_at: 2026-10-08T09:00:00+09:00
         entry["location"] != "azure-daily-update/draft/"
         for entry in search["docs"]
     )
+    for report_date in report_dates:
+        assert any(
+            entry["location"] == f"azure-daily-update/{report_date}/"
+            for entry in search["docs"]
+        )
 
 
 def test_indexes_are_generated_from_metadata_with_safe_yaml() -> None:

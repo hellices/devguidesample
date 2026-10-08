@@ -1,0 +1,31 @@
+{% import "partials/dg-material-nav-item.html" as material with context %}
+
+{% macro render(nav_item, path, level, parent) %}
+  {% set daily = namespace(index=none) %}
+  {% if level == 1 %}
+    {% if nav_item.is_page and nav_item.file.src_uri == "azure-daily-update/index.md" %}
+      {% set daily.index = nav_item %}
+    {% elif nav_item.children %}
+      {% for child in nav_item.children %}
+        {% if child.is_page and child.file.src_uri == "azure-daily-update/index.md" %}
+          {% set daily.index = child %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+  {% if daily.index %}
+    <li class="md-nav__item{% if nav_item.active %} md-nav__item--active{% endif %}">
+      <a href="{{ daily.index.url | url }}" class="md-nav__link{% if nav_item.active %} md-nav__link--active{% endif %}"{% if daily.index == page %} aria-current="page"{% endif %}>
+        <span class="md-ellipsis">{{ nav_item.title }}</span>
+      </a>
+      {% if nav_item.active and page %}
+        <div class="dg-daily-sidebar">
+          {{ daily_update_calendar(source_url=page.url, selected_date=page.meta.get("report_date")) | safe }}
+          <a class="dg-daily-archive-link" href="{{ daily.index.url | url }}#archive">전체 달력 · 검색</a>
+        </div>
+      {% endif %}
+    </li>
+  {% else %}
+    {{ material.render(nav_item, path, level, parent) }}
+  {% endif %}
+{% endmacro %}

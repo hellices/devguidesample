@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from calendar import Calendar
 from dataclasses import dataclass
 from datetime import date, datetime
 from html import escape
+import json
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any
 
+from mkdocs.utils import get_relative_url
 import yaml
 
 from scripts.docs.content import DocumentFormatError, load_document
@@ -23,6 +26,7 @@ class DailyUpdateReport:
     title: str
     description: str
     relative_path: PurePosixPath
+    text: str
 
 
 def is_publishable_daily_update_path(relative_path: PurePosixPath | str) -> bool:
@@ -105,6 +109,7 @@ def load_daily_update_reports(
                     document.metadata, "description", relative_path
                 ),
                 relative_path=relative_path,
+                text=document.body,
             )
         )
     return tuple(
@@ -112,12 +117,110 @@ def load_daily_update_reports(
     )
 
 
+def build_daily_update_data(docs_dir: Path | str) -> str:
+    reports = [
+        {
+            "date": report.report_date.isoformat(),
+            "title": report.title,
+            "description": report.description,
+            "url": f"{report.report_date.isoformat()}/",
+            "text": report.text,
+        }
+        for report in load_daily_update_reports(docs_dir)
+    ]
+    return json.dumps({"reports": reports}, ensure_ascii=False) + "\n"
+
+
+def _archive_attributes(source_url: str) -> str:
+    source = get_relative_url("assets/daily-updates.json", source_url)
+    archive = get_relative_url("azure-daily-update/", source_url)
+    return (
+        f'data-daily-source="{escape(source, quote=True)}" '
+        f'data-daily-base="{escape(archive, quote=True)}"'
+    )
+
+
+def build_daily_update_calendar(
+    reports: tuple[DailyUpdateReport, ...],
+    *,
+    source_url: str,
+    selected_date: date | str | None = None,
+) -> str:
+    if not reports:
+        return '<p class="dg-daily-empty">아직 게시된 일일 업데이트가 없습니다.</p>'
+
+    by_date = {report.report_date.isoformat(): report for report in reports}
+    selected = selected_date.isoformat() if isinstance(selected_date, date) else selected_date
+    if selected is not None and selected not in by_date:
+        raise ValueError(f"selected daily update is not published: {selected}")
+    month = (selected or reports[0].report_date.isoformat())[:7]
+    year, month_number = map(int, month.split("-"))
+    month_label = f"{year}년 {month_number}월"
+    months = sorted({value[:7] for value in by_date}, reverse=True)
+    lines = [
+        f'<section class="dg-daily-calendar" data-daily-calendar="{month}" '
+        f'data-daily-selected="{selected or ""}" {_archive_attributes(source_url)} '
+        'aria-label="업데이트 발행 달력">',
+        '<div class="dg-daily-calendar-controls">',
+        '<button type="button" data-daily-prev aria-label="이전 발행 월" disabled>&lsaquo;</button>',
+        '<select data-daily-month aria-label="발행 월 선택" disabled>',
+    ]
+    for value in months:
+        option_year, option_month = map(int, value.split("-"))
+        selected_attribute = " selected" if value == month else ""
+        lines.append(
+            f'<option value="{value}"{selected_attribute}>{option_year}년 {option_month}월</option>'
+        )
+    lines.extend([
+        "</select>",
+        '<button type="button" data-daily-next aria-label="다음 발행 월" disabled>&rsaquo;</button>',
+        "</div>",
+        f'<table class="dg-daily-calendar-grid" data-daily-grid aria-label="{month_label} 발행 달력">',
+        "<thead><tr>",
+        *[f'<th scope="col">{day}</th>' for day in ("일", "월", "화", "수", "목", "금", "토")],
+        "</tr></thead>",
+        "<tbody data-daily-days>",
+    ])
+    for week in Calendar(firstweekday=6).monthdayscalendar(year, month_number):
+        lines.append("<tr>")
+        for day in week:
+            if day == 0:
+                lines.append('<td aria-hidden="true"></td>')
+                continue
+            iso_date = f"{month}-{day:02d}"
+            report = by_date.get(iso_date)
+            if report is None:
+                lines.append(
+                    f'<td><span data-daily-unavailable="{iso_date}" '
+                    f'aria-label="{iso_date} 자료 없음">{day}</span></td>'
+                )
+                continue
+            href = get_relative_url(f"azure-daily-update/{iso_date}/", source_url)
+            current = ' aria-current="page"' if iso_date == selected else ""
+            label = escape(f"{iso_date} 업데이트: {report.title}", quote=True)
+            lines.append(
+                f'<td><a href="{escape(href, quote=True)}" data-daily-date="{iso_date}" '
+                f'aria-label="{label}"{current}>{day}</a></td>'
+            )
+        lines.append("</tr>")
+    count = sum(value.startswith(month) for value in by_date)
+    lines.extend([
+        "</tbody></table>",
+        f'<p class="dg-daily-calendar-status" data-daily-status role="status">{count}일 발행</p>',
+        '<p class="dg-daily-calendar-legend"><span>자료 있음</span>'
+        + ("<span>현재 문서</span>" if selected else "") + "</p>",
+        '<p class="dg-daily-error" data-daily-error role="alert" hidden></p>',
+        "</section>",
+    ])
+    return "\n".join(lines)
+
+
 def build_daily_update_index(docs_dir: Path | str) -> str:
     reports = load_daily_update_reports(docs_dir)
     front_matter = yaml.safe_dump(
         {
             "title": "Azure Daily Update",
-            "description": "Azure 전일 업데이트를 날짜별로 확인합니다.",
+            "description": "최근 Azure 업데이트를 읽고 달력과 검색으로 지난 자료를 찾습니다.",
             "hide": ["toc"],
         },
         allow_unicode=True,
@@ -136,17 +239,55 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
         "",
     ]
     if not reports:
-        lines.append("아직 게시된 일일 업데이트가 없습니다.")
+        lines.append('<p id="archive">아직 게시된 일일 업데이트가 없습니다.</p>')
+        return "\n".join(lines).rstrip() + "\n"
+
+    lines.extend([
+        "## 최근 업데이트",
+        "",
+        "자료가 있는 최신 발행일 3개를 보여줍니다. 지난 자료는 아래 달력과 검색에서 찾을 수 있습니다.",
+        "",
+        '<div class="dg-daily-recent">',
+    ])
+    for report in reports[:3]:
+        iso_date = report.report_date.isoformat()
+        lines.extend([
+            f'<article class="dg-daily-card" data-daily-recent="{iso_date}">',
+            f'<time datetime="{iso_date}">{iso_date}</time>',
+            f'<h3><a href="{iso_date}/">{escape(report.title)}</a></h3>',
+            f"<p>{escape(report.description)}</p>",
+            "</article>",
+        ])
+    lines.extend([
+        "</div>",
+        "",
+        '## 지난 업데이트 찾기 {#archive}',
+        "",
+        '<div class="dg-daily-archive" data-search-exclude="true">',
+        build_daily_update_calendar(reports, source_url="azure-daily-update/"),
+        '<section class="dg-daily-search" data-daily-search '
+        f'{_archive_attributes("azure-daily-update/")} aria-label="일일 업데이트 검색">',
+        '<form data-daily-form role="search">',
+        '<label><span>업데이트 검색</span>',
+        '<input type="search" data-daily-query placeholder="검색어 또는 YYYY-MM-DD" '
+        'aria-describedby="daily-search-help" disabled></label>',
+        '<button type="reset" disabled>검색 초기화</button>',
+        "</form>",
+        '<p id="daily-search-help">전체 기간의 제목·요약·본문을 검색합니다. '
+        "상단의 사이트 전체 검색도 사용할 수 있습니다.</p>",
+        '<p data-daily-search-status role="status">검색어를 입력하거나 달력에서 날짜를 선택하세요.</p>',
+        '<ol data-daily-results hidden></ol>',
+        '<button type="button" data-daily-more hidden>결과 더 보기</button>',
+        '<p class="dg-daily-error" data-daily-error role="alert" hidden></p>',
+        "</section>",
+        "<noscript>",
+        "<p>JavaScript가 꺼져 있어 월 이동과 아카이브 검색을 사용할 수 없습니다. "
+        "아래 전체 발행일 목록에서 문서를 선택하세요.</p>",
+        "<details><summary>전체 발행일 목록</summary><ul>",
+    ])
     for report in reports:
-        target = f"{report.report_date.isoformat()}/index.md"
-        lines.extend(
-            [
-                f"## {report.report_date.isoformat()}",
-                "",
-                f"### [{escape(report.title)}]({target})",
-                "",
-                escape(report.description),
-                "",
-            ]
+        lines.append(
+            f'<li><a href="{report.report_date.isoformat()}/">{escape(report.title)}</a></li>'
         )
+    lines.extend(["</ul></details>", "</noscript>", "</div>"])
     return "\n".join(lines).rstrip() + "\n"

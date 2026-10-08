@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import partial
 from html import escape
 from pathlib import Path, PurePosixPath
 import posixpath
@@ -22,7 +23,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.docs.content import load_taxonomy
-from scripts.docs.daily_updates import is_publishable_daily_update_path
+from scripts.docs.daily_updates import (
+    build_daily_update_calendar,
+    is_publishable_daily_update_path,
+    load_daily_update_reports,
+)
 from scripts.docs.generate_indexes import build_tag_links
 from scripts.docs.explore import filter_redirect_targets
 from scripts.docs.topics import TopicCatalog, build_topic_catalog, iter_topic_documents
@@ -385,19 +390,37 @@ def on_page_markdown(markdown: str, page: Any, config: Mapping[str, Any], files:
 
 
 def on_env(env: Any, config: Mapping[str, Any], files: Any) -> Any:
-    """Keep Material's sharing anchor without its executable placeholder URL."""
+    """Adapt Material navigation and keep its sharing anchor non-executable."""
     theme = config.get("theme", {})
-    if theme.get("name") != "material" or "search.share" not in theme.get("features", []):
+    if theme.get("name") != "material":
         return env
-    template = "partials/search.html"
-    source, _, _ = env.loader.get_source(env, template)
-    safe_source = re.sub(
-        r'<a\b[^>]*data-md-component="search-share"[^>]*>',
-        lambda match: match[0].replace('href="javascript:void(0)"', 'href="#"'),
-        source,
-    )
-    if safe_source != source:
-        env.loader = ChoiceLoader([DictLoader({template: safe_source}), env.loader])
+
+    templates: dict[str, str] = {}
+    docs_dir = config.get("docs_dir")
+    if isinstance(docs_dir, str):
+        template = "partials/nav-item.html"
+        source, _, _ = env.loader.get_source(env, template)
+        templates["partials/dg-material-nav-item.html"] = source
+        templates[template] = (
+            Path(__file__).with_name("templates") / "daily-update-nav.html"
+        ).read_text(encoding="utf-8")
+        env.globals["daily_update_calendar"] = partial(
+            build_daily_update_calendar, load_daily_update_reports(docs_dir)
+        )
+
+    if "search.share" in theme.get("features", []):
+        template = "partials/search.html"
+        source, _, _ = env.loader.get_source(env, template)
+        safe_source = re.sub(
+            r'<a\b[^>]*data-md-component="search-share"[^>]*>',
+            lambda match: match[0].replace('href="javascript:void(0)"', 'href="#"'),
+            source,
+        )
+        if safe_source != source:
+            templates[template] = safe_source
+
+    if templates:
+        env.loader = ChoiceLoader([DictLoader(templates), env.loader])
         if env.cache is not None:
             env.cache.clear()
     return env

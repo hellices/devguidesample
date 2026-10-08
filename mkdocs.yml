@@ -83,5 +83,6 @@ extra_css:
 extra_javascript:
   - assets/javascripts/explore.js
   - assets/javascripts/sidebar-toggle.js
+  - assets/javascripts/daily-updates.js
 
 copyright: Copyright &copy; Azure Engineering Notes contributors
