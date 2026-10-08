@@ -76,12 +76,14 @@ def main() -> None:
     if "path" not in held:
         raise SystemExit("run A wrote no chunk; write more events in a closed window first")
 
-    service = lake_export.DataLakeServiceClient(lake_export.env("LAKE_URL"),
-                                                credential=lake_export.DefaultAzureCredential())
-    fs = service.get_file_system_client(lake_export.env("LAKE_FILESYSTEM", "cdc"))
+    fs, blobs = lake_export.get_storage_clients()
     data = fs.get_file_client(held["path"]).download_file().readall()
     tokens = pq.read_table(io.BytesIO(data), columns=["resume_token"]).column("resume_token").to_pylist()
-    checkpoint = lake_export.Checkpoint(fs, lake_export.env("STREAM_ID", "orders")).load()
+    checkpoint = lake_export.Checkpoint(
+        fs,
+        blobs,
+        lake_export.env("STREAM_ID", "orders"),
+    ).load()
     ok = held["b_exit"] == 0 and tokens[-1] == checkpoint["token"]["_data"]
     print(json.dumps({"result": "pass" if ok else "fail", "path": held["path"], "file_rows": len(tokens),
                       "file_ends_at_checkpoint": tokens[-1] == checkpoint["token"]["_data"],

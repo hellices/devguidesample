@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from collections import Counter, defaultdict
+from typing import Optional
 
 from common import RUN_COLLECTION, SINK_COLLECTION, env, get_client, get_database
 
@@ -21,19 +22,36 @@ def summarize(values: list) -> dict:
             "max": percentile(values, 100), "n": len(values)}
 
 
-def expected_events(run_id: str, docs: int) -> Counter:
-    """Expected (doc_id, op) counts.
+def event_identity(doc_id: str, op: str, version: Optional[int]) -> tuple:
+    """Identity that distinguishes the ordinary update from a replacement."""
+    return doc_id, op, version if op in ("insert", "update") else None
 
-    ``replace_one`` is counted under ``update`` because the cluster under test
-    emits replacements as ``operationType: update``.
-    """
+
+def event_rank(op: str, version: Optional[int]) -> int:
+    """Expected per-document order for the deterministic generator."""
+    if op == "insert":
+        return 0
+    if op == "update" and version == 2:
+        return 1
+    if op == "update" and version == 3:
+        return 2
+    if op == "delete":
+        return 3
+    return 99
+
+
+def expected_events(run_id: str, docs: int) -> Counter:
+    """Expected (doc_id, operationType, version) identities."""
     expected = Counter()
     for i in range(docs):
         doc_id = f"{run_id}:{i:07d}"
-        expected[(doc_id, "insert")] += 1
-        expected[(doc_id, "update")] += 2 if i % 10 == 0 else 1
+        expected[event_identity(doc_id, "insert", 1)] += 1
+        expected[event_identity(doc_id, "update", 2)] += 1
+        if i % 10 == 0:
+            # DocumentDB reports replace_one as operationType: update.
+            expected[event_identity(doc_id, "update", 3)] += 1
         if i % 5 == 0:
-            expected[(doc_id, "delete")] += 1
+            expected[event_identity(doc_id, "delete", None)] += 1
     return expected
 
 
@@ -50,20 +68,21 @@ def main() -> None:
     events = list(db[sink].find(
         {"doc_id": {"$regex": f"^{re.escape(run_id)}:"}},
         {"doc_id": 1, "op": 1, "recv_ns": 1, "pod": 1, "has_full_document": 1,
-         "has_update_description": 1, "deliveries": 1, "lag_ms": 1},
+         "has_update_description": 1, "deliveries": 1, "lag_ms": 1, "version": 1},
     ))
     # The sink is keyed by resume token, so each row is one distinct event and
     # replays show up as deliveries > 1 instead of extra rows.
-    got = Counter((e["doc_id"], e["op"]) for e in events)
+    got = Counter(event_identity(e["doc_id"], e["op"], e.get("version")) for e in events)
     expected = expected_events(run_id, run["docs"])
     missing = sorted((expected - got).elements())
     unexpected = sorted((got - expected).elements())
 
-    # Per-document order: insert -> update(s) -> delete.
-    order = {"insert": 0, "update": 1, "replace": 1, "delete": 2}
+    # Per-document order: insert(v1) -> update(v2) -> replacement(v3) -> delete.
     per_doc = defaultdict(list)
     for e in events:
-        per_doc[e["doc_id"]].append((e["recv_ns"], order[e["op"]]))
+        per_doc[e["doc_id"]].append(
+            (e["recv_ns"], event_rank(e["op"], e.get("version")))
+        )
     out_of_order = [d for d, seq in per_doc.items()
                     if [o for _, o in sorted(seq)] != sorted(o for _, o in seq)]
 

@@ -18,6 +18,7 @@ through a private endpoint.
 | `app/verify.py` | Compares the generator's expected events with a sink collection |
 | `app/lake_export.py` | One export run: resumes from the checkpoint in the lake, writes the closed 10-minute windows as Parquet chunks of at most 80 MB of row data and exits |
 | `app/verify_lake.py` | Compares the generator's expected events with the Parquet files |
+| `app/test_*.py` | Local regression tests for event identity/order and atomic checkpoint replacement |
 | `app/stale_writer_test.py` | Test only. Stops one export run before its first upload, lets a second run write the same file and checks that the first run cannot overwrite it |
 | `airflow/` | DAG that runs `lake_export.py` with `KubernetesPodOperator`, the Airflow image and chart values |
 | `k8s/` | Consumer Deployment, generic Job, toolbox pod, lake Job, RBAC for the Airflow scheduler |
@@ -263,7 +264,8 @@ first run after its window closes.
 ```bash
 JOB_NAME=gen-af1 SCRIPT=generator.py RUN_ID=af1 DOCS=100000 WORKERS=16 RATE=0 \
   envsubst < k8s/job.yaml | kubectl apply -f -
-# After the next DAG run finishes:
+# After the generator finishes, wait until its last event's window closes and
+# the DAG run that starts after that boundary completes successfully:
 JOB_NAME=verify-lake-af1 SCRIPT=verify_lake.py LAKE_PREFIX=orders RUN_ID=af1 MAX_EVENTS=0 \
   FAULT_EXIT_AFTER_UPLOAD=0 envsubst < k8s/lake.yaml | kubectl apply -f -
 kubectl -n cslab logs job/verify-lake-af1
@@ -301,7 +303,9 @@ Export behavior:
   from the same checkpoint and overwrites the same file. A chunk whose events
   have no `wallTime` goes to `dt=unknown`.
 - The checkpoint is `_checkpoints/<stream>.json` in the same file system. It is
-  written with an ETag condition after each chunk upload.
+  replaced with one conditional `Put Blob` after each chunk upload. The small
+  JSON write is atomic, so an interrupted replacement leaves the previous
+  checkpoint readable.
 - A run holds a 20-second lease on `_checkpoints/<stream>.lock` and renews it
   in the background. A second run waits up to 90 seconds for the lease and
   then fails, so two runs do not write chunks at the same time. A lease that
@@ -337,8 +341,8 @@ Export behavior:
   DAG passes it to the pod and builds its schedule from it, so the two stay
   equal. `CS_EXPORT_OFFSET_MIN` (2) delays the run after the window closes.
   `CS_CHUNK_BYTES` sets the file limit.
-- `consumer.py` always passes `MAX_AWAIT_MS`, 1000 by default. Raise it before
-  the consumer resumes a large backlog.
+- `consumer.py` and `lake_export.py` omit `MAX_AWAIT_MS` by default. A short
+  value becomes `getMore.maxTimeMS` and can abort historical catch-up.
 
 ## 6. Measured scenarios
 

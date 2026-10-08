@@ -40,6 +40,7 @@ import pyarrow.parquet as pq
 from azure.core import MatchConditions
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
 from azure.storage.filedatalake import DataLakeLeaseClient, DataLakeServiceClient
 from bson import json_util
 from bson.timestamp import Timestamp
@@ -70,8 +71,9 @@ class Checkpoint:
     The position is a resume token, or the start time saved by the first run.
     """
 
-    def __init__(self, fs, stream_id: str):
+    def __init__(self, fs, blobs, stream_id: str):
         self.file = fs.get_file_client(f"_checkpoints/{stream_id}.json")
+        self.blob = blobs.get_blob_client(f"_checkpoints/{stream_id}.json")
         self.etag: Optional[str] = None
 
     def load(self) -> Optional[dict]:
@@ -86,10 +88,18 @@ class Checkpoint:
              writing: Optional[str] = None) -> None:
         body = json_util.dumps({"token": token, "start_at": start_at, "updated_at": utcnow(),
                                 "events": events, "writing": writing, "pod": socket.gethostname()})
-        # IfNotModified fails if another run moved the checkpoint since we read it.
-        condition = (dict(etag=self.etag, match_condition=MatchConditions.IfNotModified)
-                     if self.etag else dict(match_condition=MatchConditions.IfMissing))
-        result = self.file.upload_data(body, overwrite=True, **condition)
+        # A small checkpoint is one conditional Put Blob. Unlike DFS
+        # upload_data(overwrite=True), it never truncates the old checkpoint
+        # before the replacement body is committed.
+        if self.etag:
+            result = self.blob.upload_blob(
+                body,
+                overwrite=True,
+                etag=self.etag,
+                match_condition=MatchConditions.IfNotModified,
+            )
+        else:
+            result = self.blob.upload_blob(body, overwrite=False)
         self.etag = result["etag"]
 
     def claim(self, start: dict, path: str) -> None:
@@ -294,6 +304,21 @@ def publish(fs, lock: StreamLock, checkpoint: Checkpoint, prefix: str, chunk: Ch
     return size
 
 
+def get_storage_clients():
+    credential = DefaultAzureCredential()
+    lake_url = env("LAKE_URL")
+    filesystem = env("LAKE_FILESYSTEM", "cdc")
+    fs = DataLakeServiceClient(
+        lake_url,
+        credential=credential,
+    ).get_file_system_client(filesystem)
+    blobs = BlobServiceClient(
+        lake_url.replace(".dfs.", ".blob."),
+        credential=credential,
+    ).get_container_client(filesystem)
+    return fs, blobs
+
+
 def main() -> None:
     stream_id = env("STREAM_ID", "orders")
     prefix = env("LAKE_PREFIX", "orders")
@@ -301,16 +326,15 @@ def main() -> None:
     if window_minutes <= 0 or 60 % window_minutes:
         raise SystemExit("WINDOW_MINUTES must divide 60")
     chunk_bytes = int(os.getenv("CHUNK_BYTES", str(80_000_000)))
-    max_events = int(os.getenv("MAX_EVENTS", "0"))  # 0 = until caught up
-    max_seconds = float(os.getenv("MAX_SECONDS", "0"))
+    max_events = int(os.getenv("MAX_EVENTS") or "0")  # envsubst may leave ""
+    max_seconds = float(os.getenv("MAX_SECONDS") or "0")
     # Test-only: exit after uploading this many chunks, before the checkpoint.
-    fault_after_chunks = int(os.getenv("FAULT_EXIT_AFTER_UPLOAD", "0"))
+    fault_after_chunks = int(os.getenv("FAULT_EXIT_AFTER_UPLOAD") or "0")
 
-    service = DataLakeServiceClient(env("LAKE_URL"), credential=DefaultAzureCredential())
-    fs = service.get_file_system_client(env("LAKE_FILESYSTEM", "cdc"))
+    fs, blobs = get_storage_clients()
     lock = StreamLock(fs, stream_id)
     lock.acquire()
-    checkpoint = Checkpoint(fs, stream_id)
+    checkpoint = Checkpoint(fs, blobs, stream_id)
     position = checkpoint.load()
     if position is None:
         # First run: save the start time before reading, so a retry after a

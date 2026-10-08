@@ -22,6 +22,8 @@ official_sources:
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
   - title: Path - Update
     url: https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update
+  - title: Put Blob
+    url: https://learn.microsoft.com/rest/api/storageservices/put-blob
   - title: Best practices for using Azure Data Lake Storage
     url: https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices
 ---
@@ -72,7 +74,8 @@ Airflow가 매시 2분, 12분, 22분처럼 10분 구간이 닫히고 2분 뒤에
    이벤트 바로 앞의 resume token으로 만듭니다.
 4. 올릴 청크 파일 경로를 checkpoint에 먼저 기록합니다. 그 다음 청크 파일에
    lease를 잡고 checkpoint가 자기 기록 그대로인지 확인한 뒤 그 lease ID로
-   올립니다. 마지막으로 checkpoint를 ETag 조건으로 갱신합니다.
+   올립니다. 마지막으로 checkpoint를 ETag 조건이 붙은 단일 `Put Blob`으로
+   교체해 갱신 중 장애가 나도 이전 위치를 보존합니다.
 
 DAG는 `max_active_runs=1`이고 실패하면 세 번까지 재시도합니다. 재시도는 같은
 checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁니다. 첫 실행의
@@ -112,6 +115,9 @@ checkpoint에서 같은 이벤트를 읽어 같은 파일 이름으로 덮어씁
   파일 이름에 넣으면 다른 파일이 생겨 중복이 됩니다.
 - checkpoint가 없는 첫 실행은 시작 위치를 먼저 저장합니다. 저장하지 않으면 첫
   청크를 쓰다 실패했을 때 재시도가 더 뒤에서 시작해 그 사이 이벤트를 잃습니다.
+- checkpoint JSON은 ETag 조건이 붙은 단일 `Put Blob`으로 교체합니다. DFS
+  `upload_data(overwrite=True)`는 기존 path를 자른 뒤 append/flush하는 중 장애가
+  나면 이전 checkpoint도 잃을 수 있습니다.
 - 실행이 겹치지 않게 `max_active_runs=1`을 두고 실행 동안 lock 파일 lease를
   잡습니다. checkpoint ETag 조건은 checkpoint만 보호합니다. lock lease를 잃은 실행이
   늦게 업로드하면 다음 실행이 쓴 더 짧은 청크를 덮어씁니다. 그래서 올릴 파일
@@ -273,6 +279,7 @@ Learn 문서와 다르게 동작했거나 문서에 설명이 없는 부분도 �
 - [MongoDB Change Streams Specification](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
 - [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)
+- [Put Blob](https://learn.microsoft.com/rest/api/storageservices/put-blob)
 - [Best practices for using Azure Data Lake Storage](https://learn.microsoft.com/azure/storage/blobs/data-lake-storage-best-practices)
 
 ## 더 읽을 문서

@@ -11,10 +11,11 @@ from datetime import timezone
 import pyarrow.parquet as pq
 from azure.identity import DefaultAzureCredential
 from azure.storage.filedatalake import DataLakeServiceClient
+from bson import json_util
 
 from common import RUN_COLLECTION, env, get_client, get_database
 from lake_export import window_start
-from verify import expected_events, percentile, summarize
+from verify import event_identity, event_rank, expected_events, percentile, summarize
 
 logging.getLogger("azure").setLevel(logging.WARNING)
 
@@ -32,7 +33,7 @@ def main() -> None:
     prefix = env("LAKE_PREFIX", "orders")
     window_minutes = int(os.getenv("WINDOW_MINUTES", "10"))
     chunk_bytes = int(os.getenv("CHUNK_BYTES", str(80_000_000)))
-    columns = ["resume_token", "op", "doc_id", "wall_time", "read_at"]
+    columns = ["resume_token", "op", "doc_id", "wall_time", "read_at", "full_document"]
 
     rows = []
     files = []
@@ -52,6 +53,12 @@ def main() -> None:
         # The listing returns last-modified as a naive UTC datetime.
         committed_at = path.last_modified.replace(tzinfo=timezone.utc)
         for i, r in enumerate(mine):
+            full_document = (
+                json_util.loads(r["full_document"])
+                if r["full_document"] is not None
+                else {}
+            )
+            r["version"] = full_document.get("version")
             r["committed_at"] = committed_at
             r["idx"] = i
             rows.append(r)
@@ -67,15 +74,14 @@ def main() -> None:
             seen.add(r["resume_token"])
             events.append(r)
 
-    got = Counter((e["doc_id"], e["op"]) for e in events)
+    got = Counter(event_identity(e["doc_id"], e["op"], e.get("version")) for e in events)
     expected = expected_events(run_id, run["docs"])
     missing = sorted((expected - got).elements())
     unexpected = sorted((got - expected).elements())
 
-    order = {"insert": 0, "update": 1, "replace": 1, "delete": 2}
     per_doc = defaultdict(list)
     for e in events:
-        per_doc[e["doc_id"]].append(order[e["op"]])
+        per_doc[e["doc_id"]].append(event_rank(e["op"], e.get("version")))
     out_of_order = [d for d, seq in per_doc.items() if seq != sorted(seq)]
 
     read_lag_ms = [(e["read_at"] - e["wall_time"]).total_seconds() * 1000 for e in events if e["wall_time"]]

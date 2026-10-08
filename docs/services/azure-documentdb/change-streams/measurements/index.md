@@ -23,6 +23,8 @@ official_sources:
     url: https://learn.microsoft.com/rest/api/storageservices/lease-blob
   - title: Path - Update
     url: https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update
+  - title: Put Blob
+    url: https://learn.microsoft.com/rest/api/storageservices/put-blob
 ---
 
 # Azure DocumentDB change stream Parquet 적재 측정 상세
@@ -175,6 +177,11 @@ checkpoint에서 230,000건을 모두 읽어 6개 파일로 썼습니다.
   업로드를 마치고 checkpoint를 갱신하기 전에 A가 lease를 끊으면 확인을 통과합니다. 파일
   경로를 checkpoint에 먼저 기록하는 단계를 더해 막았고 이 순서는 로컬 fake로만
   재현했습니다.
+- 후속 리뷰에서 DFS `upload_data(overwrite=True)`가 checkpoint를 먼저 truncate한 뒤
+  append/flush하는 다중 요청임을 확인했습니다. 작은 checkpoint JSON은 ETag 조건을
+  유지한 단일 `Put Blob`으로 교체했고, 업로드 실패 시 기존 body가 남는 회귀 테스트를
+  추가했습니다. 이 원자 교체 변경은 로컬 fake로 확인했으며 위 Azure 수치를 다시
+  측정한 것은 아닙니다.
 
 ## 5분 주기 지연(이전 구성)
 
@@ -441,3 +448,4 @@ action 목록에도 전후 모두 `changeStream`과 `find`가 있었으므로 �
 - [MongoDB Change Streams Specification](https://github.com/mongodb/specifications/blob/master/source/change-streams/change-streams.md)
 - [Lease Blob](https://learn.microsoft.com/rest/api/storageservices/lease-blob)
 - [Path - Update](https://learn.microsoft.com/rest/api/storageservices/datalakestoragegen2/path/update)
+- [Put Blob](https://learn.microsoft.com/rest/api/storageservices/put-blob)
