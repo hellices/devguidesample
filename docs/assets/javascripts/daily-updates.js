@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  const EXCERPT_LENGTH = 180;
+
   function validDate(value) {
     if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false;
     const parsed = new Date(`${value}T00:00:00Z`);
@@ -111,23 +113,29 @@
         position = field.search.indexOf(term, position + term.length);
       }
     }
-    const merged = [];
-    for (const range of ranges.sort((left, right) => left.start - right.start)) {
-      const previous = merged.at(-1);
-      if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
-      else merged.push(range);
-    }
-    return merged;
+    return ranges.sort((left, right) => left.start - right.start);
+  }
+
+  function matchFitsExcerpt(field, range) {
+    const markers = Number(range.start > 0) + Number(range.end < field.text.length);
+    return range.end - range.start + markers <= EXCERPT_LENGTH;
   }
 
   function highlightedElement(documentRef, tag, field, terms, from = 0, to = field.text.length) {
     const element = createElement(documentRef, tag);
     if (from) element.append(createElement(documentRef, "span", "…"));
-    let cursor = from;
+    const ranges = [];
     for (const range of matchRanges(field, terms)) {
+      if ((range.start < from || range.end > to) && matchFitsExcerpt(field, range)) continue;
       const start = Math.max(from, range.start);
       const end = Math.min(to, range.end);
       if (start >= end) continue;
+      const previous = ranges.at(-1);
+      if (previous && start <= previous.end) previous.end = Math.max(previous.end, end);
+      else ranges.push({start, end});
+    }
+    let cursor = from;
+    for (const {start, end} of ranges) {
       if (start > cursor) element.append(createElement(documentRef, "span", field.text.slice(cursor, start)));
       element.append(createElement(documentRef, "mark", field.text.slice(start, end)));
       cursor = end;
@@ -143,9 +151,12 @@
     for (const match of matchRanges(field, terms, true)) {
       if (match.end <= previousEnd) continue;
       let start = Math.max(0, match.start - 50, field.text.lastIndexOf("\n", match.start - 1) + 1);
+      if (matchFitsExcerpt(field, match)) {
+        start = Math.max(start, Math.min(match.start, match.end - EXCERPT_LENGTH + 2));
+      }
       // Never split a surrogate pair at the excerpt boundary.
       if (/[\uDC00-\uDFFF]/.test(field.text[start] || "")) start++;
-      let end = Math.min(field.text.length, start + 180 - (start ? 1 : 0));
+      let end = Math.min(field.text.length, start + EXCERPT_LENGTH - (start ? 1 : 0));
       if (end < field.text.length) end--;
       const paragraphEnd = field.text.indexOf("\n", match.end);
       if (paragraphEnd !== -1) end = Math.min(end, paragraphEnd);

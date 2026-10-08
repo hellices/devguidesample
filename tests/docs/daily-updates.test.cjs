@@ -226,9 +226,43 @@ test("partially covered terms get a complete match in an overlapping excerpt", (
       const nodes = searchResults([item], "aks ubuntu");
       const preview = excerpts(nodes.results);
       assert.equal(preview.length, offset + "Ubuntu".length <= 179 ? 1 : 2);
-      assert.ok(highlights(nodes.results).includes("Ubuntu"), `Complete match missing at offset ${offset}`);
+      assert.deepEqual(highlights(nodes.results), ["AKS", "Ubuntu"], `Partial highlight at offset ${offset}`);
       assert.ok(preview.every(node => node.textContent.length <= 180));
     }
+  }
+});
+
+test("ordinary matches clipped at the left edge are not highlighted again", () => {
+  const term = "a".repeat(100);
+  const body = `AKS ${"x".repeat(46)}${term}${"y".repeat(40)}Ubuntu`;
+  const nodes = searchResults([report("2026-10-07", body)], `aks ${term} ubuntu`);
+  assert.equal(excerpts(nodes.results).length, 2);
+  assert.deepEqual(highlights(nodes.results), ["AKS", term, "Ubuntu"]);
+  assert.ok(excerpts(nodes.results).every(node => node.textContent.length <= 180));
+});
+
+test("fully visible query terms are retained before overlapping highlight ranges are merged", () => {
+  const body = `AKS ${"x".repeat(166)}networking ${"detail ".repeat(40)}`;
+  const nodes = searchResults([report("2026-10-07", body)], "aks network networking");
+  assert.equal(excerpts(nodes.results).length, 2);
+  assert.deepEqual(highlights(nodes.results), ["AKS", "network", "networking"]);
+  assert.ok(excerpts(nodes.results).every(node => node.textContent.length <= 180));
+});
+
+test("excerpt context yields space to an anchor term that fits with its omission markers", () => {
+  for (const [length, prefix, suffix] of [
+    [130, "x".repeat(80), "z".repeat(200)],
+    [150, "x".repeat(80), "z".repeat(200)],
+    [178, "x".repeat(80), "z".repeat(200)],
+    [179, "", "z".repeat(200)],
+    [179, "x".repeat(80), ""],
+    [180, "", ""],
+  ]) {
+    const term = "a".repeat(length);
+    const nodes = searchResults([report("2026-10-07", `${prefix}${term}${suffix}`)], term);
+    assert.equal(excerpts(nodes.results).length, 1);
+    assert.deepEqual(highlights(nodes.results), [term]);
+    assert.ok(excerpts(nodes.results)[0].textContent.length <= 180);
   }
 });
 
