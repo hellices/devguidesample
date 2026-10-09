@@ -20,6 +20,21 @@ from scripts.docs.search_text import visible_text
 
 
 _DATE_DIRECTORY = re.compile(r"\d{4}-\d{2}-\d{2}")
+_SUMMARY_LABELS = ("AI & Apps", "Infra", "Database", "총계", "핵심 한 줄")
+_SUMMARY_ITEM = re.compile(
+    r"(?m)^-\s+\*\*(AI & Apps|Infra|Database|총계|핵심 한 줄):\*\*"
+    r"[ \t]*(.*(?:\n(?:[ \t]{2,}).*)*)"
+)
+_COUNT = re.compile(r"^(\d+)건(?:\s|$)")
+
+
+@dataclass(frozen=True)
+class DailyUpdateSummary:
+    ai_apps: int
+    infra: int
+    database: int
+    total: int
+    highlight: str
 
 
 @dataclass(frozen=True)
@@ -29,6 +44,7 @@ class DailyUpdateReport:
     description: str
     relative_path: PurePosixPath
     text: str
+    summary: DailyUpdateSummary
 
 
 def is_publishable_daily_update_path(relative_path: PurePosixPath | str) -> bool:
@@ -73,6 +89,52 @@ def _report_date(value: Any, relative_path: PurePosixPath) -> date:
     )
 
 
+def _daily_update_summary(
+    body: str, relative_path: PurePosixPath
+) -> DailyUpdateSummary:
+    preamble = re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
+    values: dict[str, list[str]] = {label: [] for label in _SUMMARY_LABELS}
+    for match in _SUMMARY_ITEM.finditer(preamble):
+        values[match.group(1)].append(match.group(2).strip())
+
+    for label, matches in values.items():
+        if len(matches) != 1:
+            raise DocumentFormatError(
+                f"{relative_path.as_posix()}: {label} must appear exactly once"
+            )
+
+    counts: dict[str, int] = {}
+    for label in _SUMMARY_LABELS[:4]:
+        match = _COUNT.match(values[label][0])
+        if match is None:
+            raise DocumentFormatError(
+                f"{relative_path.as_posix()}: {label} must start with "
+                "a non-negative count followed by 건"
+            )
+        counts[label] = int(match.group(1))
+
+    if counts["총계"] != sum(counts[label] for label in _SUMMARY_LABELS[:3]):
+        raise DocumentFormatError(
+            f"{relative_path.as_posix()}: 총계 must equal the category count sum"
+        )
+
+    renderer = Markdown(extensions=["extra"])
+    highlight = " ".join(
+        visible_text(renderer.convert(values["핵심 한 줄"][0])).split()
+    )
+    if not highlight:
+        raise DocumentFormatError(
+            f"{relative_path.as_posix()}: 핵심 한 줄 must be non-empty"
+        )
+    return DailyUpdateSummary(
+        ai_apps=counts["AI & Apps"],
+        infra=counts["Infra"],
+        database=counts["Database"],
+        total=counts["총계"],
+        highlight=highlight,
+    )
+
+
 def load_daily_update_reports(
     docs_dir: Path | str,
 ) -> tuple[DailyUpdateReport, ...]:
@@ -112,6 +174,7 @@ def load_daily_update_reports(
                 ),
                 relative_path=relative_path,
                 text=document.body,
+                summary=_daily_update_summary(document.body, relative_path),
             )
         )
     return tuple(
@@ -262,11 +325,21 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
     ])
     for report in reports[:3]:
         iso_date = report.report_date.isoformat()
+        summary = report.summary
         lines.extend([
             f'<article class="dg-daily-card" data-daily-recent="{iso_date}">',
+            '<div class="dg-daily-card-meta">',
             f'<time datetime="{iso_date}">{iso_date}</time>',
-            f'<h3><a href="{iso_date}/">{escape(report.title)}</a></h3>',
-            f"<p>{escape(report.description)}</p>",
+            f'<span class="dg-daily-total">총 {summary.total}건</span>',
+            "</div>",
+            '<div class="dg-daily-counts" role="group" '
+            'aria-label="분야별 업데이트 수">',
+            f'<span class="dg-daily-count">AI &amp; Apps {summary.ai_apps}</span>',
+            f'<span class="dg-daily-count">Infra {summary.infra}</span>',
+            f'<span class="dg-daily-count">Database {summary.database}</span>',
+            "</div>",
+            '<h3 class="dg-daily-card-summary">'
+            f'<a href="{iso_date}/">{escape(summary.highlight)}</a></h3>',
             "</article>",
         ])
     lines.extend([
