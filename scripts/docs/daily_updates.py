@@ -103,7 +103,12 @@ def _daily_update_summary(
     for match in _SUMMARY_ITEM.finditer(preamble):
         values[match.group(1)].append(match.group(2).strip())
 
-    if not any(values.values()):
+    has_counts = any(
+        _COUNT.match(value)
+        for label in _SUMMARY_LABELS[:3]
+        for value in values[label]
+    )
+    if not (has_counts or values["총계"] or values["핵심 한 줄"]):
         return None
 
     for label, matches in values.items():

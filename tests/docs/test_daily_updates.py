@@ -259,14 +259,25 @@ def test_recent_cards_show_counts_and_highlight_instead_of_generic_metadata(
     assert "2026-10-08 Azure 업데이트 요약" not in card
 
 
+@pytest.mark.parametrize(
+    "classification",
+    [
+        "",
+        "- **AI & Apps:** [Anyscale GA](#anyscale)\n"
+        "- **Database:** [SQL Server](#sql-server)\n",
+    ],
+)
 def test_report_without_count_summary_uses_description_for_recent_card(
-    tmp_path: Path,
+    tmp_path: Path, classification: str
 ) -> None:
     docs = tmp_path / "docs"
     write_report(
         docs,
         "2026-10-08",
-        body="Anyscale on Azure GA.\n\n## 주요 업데이트\n\n기능 설명",
+        body=(
+            f"Anyscale on Azure GA.\n\n{classification}\n"
+            "## 주요 업데이트\n\n기능 설명"
+        ),
     )
 
     report = load_daily_update_reports(docs)[0]
