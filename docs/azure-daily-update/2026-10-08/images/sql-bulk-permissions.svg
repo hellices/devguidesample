@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="title desc">
+  <title id="title">Linux SQL Server 대량 적재 권한 구조</title>
+  <desc id="desc">bulkadmin 또는 ADMINISTER BULK OPERATIONS와 대상 테이블 권한, mssql 서비스 계정의 파일 읽기 권한, 관리자가 승인한 디렉터리가 함께 대량 적재의 접근 조건을 구성한다. 지원 버전에서는 적재 사용자에게 sysadmin을 부여할 필요가 없다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/>
+    </marker>
+    <style>
+      text { font-family: sans-serif; fill: #172554; font-size: 23px; }
+      .heading { font-size: 27px; font-weight: 700; }
+      .detail { font-size: 21px; }
+      .flow { fill: none; stroke: #2563eb; stroke-width: 3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="900" height="470" rx="18" fill="#ffffff"/>
+  <text x="35" y="50" class="heading">전체 관리자 권한 대신 적재에 필요한 접근만 허용</text>
+  <rect x="35" y="85" width="520" height="95" rx="12" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="55" y="118" font-weight="700">SQL 권한</text>
+  <text x="55" y="147" class="detail">bulkadmin 또는 ADMINISTER BULK OPERATIONS</text>
+  <text x="55" y="171" class="detail">+ 대상 데이터베이스·테이블 권한</text>
+  <rect x="35" y="200" width="520" height="80" rx="12" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="55" y="234" font-weight="700">파일 읽기 권한</text>
+  <text x="55" y="262" class="detail">mssql 서비스 계정이 원본 파일을 읽을 수 있어야 함</text>
+  <rect x="35" y="300" width="520" height="80" rx="12" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="55" y="334" font-weight="700">관리자 승인 경로</text>
+  <text x="55" y="362" class="detail">mssql-conf: bulkadmin.allowedpathslist</text>
+  <path d="M555 132 H615 V240 H650" class="flow"/>
+  <path d="M555 240 H650" class="flow"/>
+  <path d="M555 340 H615 V240 H650" class="flow"/>
+  <rect x="665" y="180" width="200" height="125" rx="12" fill="#dcfce7" stroke="#86efac" stroke-width="2"/>
+  <text x="765" y="222" text-anchor="middle" font-weight="700">대량 적재</text>
+  <text x="765" y="252" text-anchor="middle" class="detail">BULK INSERT</text>
+  <text x="765" y="279" text-anchor="middle" class="detail">OPENROWSET</text>
+  <text x="35" y="425" class="detail">세 가지 조건을 함께 적용 · 적재 사용자에게 sysadmin 불필요</text>
+</svg>

@@ -44,17 +44,23 @@ class DailyUpdateReport:
     description: str
     relative_path: PurePosixPath
     text: str
-    summary: DailyUpdateSummary
+    summary: DailyUpdateSummary | None
 
 
 def is_publishable_daily_update_path(relative_path: PurePosixPath | str) -> bool:
     path = PurePosixPath(relative_path)
     if path == PurePosixPath("azure-daily-update/index.md"):
         return True
+    is_page = len(path.parts) == 3 and path.parts[2] == "index.md"
+    is_image = (
+        len(path.parts) == 4
+        and path.parts[2] == "images"
+        and not path.name.startswith(".")
+        and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp", ".avif"}
+    )
     if (
-        len(path.parts) != 3
+        not (is_page or is_image)
         or path.parts[0] != "azure-daily-update"
-        or path.parts[2] != "index.md"
         or _DATE_DIRECTORY.fullmatch(path.parts[1]) is None
     ):
         return False
@@ -91,11 +97,14 @@ def _report_date(value: Any, relative_path: PurePosixPath) -> date:
 
 def _daily_update_summary(
     body: str, relative_path: PurePosixPath
-) -> DailyUpdateSummary:
+) -> DailyUpdateSummary | None:
     preamble = re.split(r"(?m)^##\s+", body, maxsplit=1)[0]
     values: dict[str, list[str]] = {label: [] for label in _SUMMARY_LABELS}
     for match in _SUMMARY_ITEM.finditer(preamble):
         values[match.group(1)].append(match.group(2).strip())
+
+    if not any(values.values()):
+        return None
 
     for label, matches in values.items():
         if len(matches) != 1:
@@ -330,16 +339,23 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
             f'<article class="dg-daily-card" data-daily-recent="{iso_date}">',
             '<div class="dg-daily-card-meta">',
             f'<time datetime="{iso_date}">{iso_date}</time>',
-            f'<span class="dg-daily-total">총 {summary.total}건</span>',
-            "</div>",
-            '<div class="dg-daily-counts" role="group" '
-            'aria-label="분야별 업데이트 수">',
-            f'<span class="dg-daily-count">AI &amp; Apps {summary.ai_apps}</span>',
-            f'<span class="dg-daily-count">Infra {summary.infra}</span>',
-            f'<span class="dg-daily-count">Database {summary.database}</span>',
-            "</div>",
+        ])
+        if summary is not None:
+            lines.append(f'<span class="dg-daily-total">총 {summary.total}건</span>')
+        lines.append("</div>")
+        if summary is not None:
+            lines.extend([
+                '<div class="dg-daily-counts" role="group" '
+                'aria-label="분야별 업데이트 수">',
+                f'<span class="dg-daily-count">AI &amp; Apps {summary.ai_apps}</span>',
+                f'<span class="dg-daily-count">Infra {summary.infra}</span>',
+                f'<span class="dg-daily-count">Database {summary.database}</span>',
+                "</div>",
+            ])
+        highlight = summary.highlight if summary is not None else report.description
+        lines.extend([
             '<h3 class="dg-daily-card-summary">'
-            f'<a href="{iso_date}/">{escape(summary.highlight)}</a></h3>',
+            f'<a href="{iso_date}/">{escape(highlight)}</a></h3>',
             "</article>",
         ])
     lines.extend([

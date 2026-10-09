@@ -75,6 +75,24 @@ class ArchiveMarkup(HTMLParser):
         return [attrs for _, attrs in self.elements if attribute in attrs]
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("azure-daily-update/2026-10-08/images/architecture.png", True),
+        ("azure-daily-update/2026-10-08/images/permissions.svg", True),
+        ("azure-daily-update/draft/images/architecture.png", False),
+        ("azure-daily-update/2026-02-30/images/architecture.png", False),
+        ("azure-daily-update/2026-10-08/images/notes.md", False),
+        ("azure-daily-update/2026-10-08/images/.private.png", False),
+        ("azure-daily-update/2026-10-08/architecture.png", False),
+    ],
+)
+def test_daily_report_only_publishes_images_in_valid_date_bundles(
+    path: str, expected: bool
+) -> None:
+    assert daily_updates.is_publishable_daily_update_path(path) is expected
+
+
 def test_load_daily_update_reports_ignores_non_date_paths_and_sorts_newest_first(
     tmp_path: Path,
 ) -> None:
@@ -239,6 +257,45 @@ def test_recent_cards_show_counts_and_highlight_instead_of_generic_metadata(
     ) in card
     assert "Azure Daily Update — 2026-10-08" not in card
     assert "2026-10-08 Azure 업데이트 요약" not in card
+
+
+def test_report_without_count_summary_uses_description_for_recent_card(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(
+        docs,
+        "2026-10-08",
+        body="Anyscale on Azure GA.\n\n## 주요 업데이트\n\n기능 설명",
+    )
+
+    report = load_daily_update_reports(docs)[0]
+    assert report.summary is None
+    page = build_daily_update_index(docs)
+    card = page.split(
+        '<article class="dg-daily-card" data-daily-recent="2026-10-08">', 1
+    )[1].split("</article>", 1)[0]
+    assert '<time datetime="2026-10-08">2026-10-08</time>' in card
+    assert (
+        '<a href="2026-10-08/">2026-10-08 Azure 업데이트 요약</a>'
+        in card
+    )
+    assert "dg-daily-total" not in card
+    assert "dg-daily-counts" not in card
+
+
+def test_report_without_count_summary_remains_searchable(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    write_report(
+        docs,
+        "2026-10-08",
+        body="핵심 기능 소개.\n\n## 주요 업데이트\n\nAnyscale Operator 폴링",
+    )
+
+    data = json.loads(daily_updates.build_daily_update_data(docs))
+
+    assert data["reports"][0]["url"] == "2026-10-08/"
+    assert "Anyscale Operator 폴링" in data["reports"][0]["excerpt"]
 
 
 def test_index_limits_recent_reports_to_three_available_dates(tmp_path: Path) -> None:

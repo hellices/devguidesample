@@ -320,6 +320,25 @@ applies_to: [AKS 1.34+]
 사용합니다. 홈에 소개할 topic entry에는 `featured: true`를 지정할 수
 있습니다.
 
+## Azure Daily Update 보고서
+
+일일 브리핑은 `docs/azure-daily-update/YYYY-MM-DD/index.md`에 작성합니다.
+front matter는 `title`, `description`, `report_date`, `generated_at`을
+사용하며, 날짜 디렉터리와 `report_date`는 일치해야 합니다.
+`description`에는 그날의 핵심 기능 변화를 구체적으로 요약합니다.
+
+본문은 짧은 핵심 요약, 주요 기능의 개요·구조와 동작, 필요한 대응,
+기타 업데이트 순으로 구성합니다. 건수·총계, 조사 방법, 빈 범주와
+일률적인 전제조건 체크리스트는 넣지 않습니다. 업데이트 원문의 연결
+문서와 Microsoft Learn 원문을 확인하고, 재배포가 허용된 공식
+다이어그램을 출처와 함께 활용합니다. 해당 페이지에 사용하는 이미지는
+같은 날짜 bundle의 `images/`에 둡니다.
+
+기존의 분야별 건수·총계·핵심 한 줄 형식도 계속 지원합니다.
+이 형식의 필드를 사용하면 전체 필드와 합계가 유효해야 합니다.
+통계 요약이 없는 새 보고서는 최근 카드에 `description`을 표시하며
+건수를 추정하지 않습니다. 날짜별 검색·달력은 두 형식 모두 지원합니다.
+
 ## 공식 출처 검증
 
 Microsoft 또는 Azure의 동작, 지원 상태, 제한, 버전, 구성 단계나 CLI/API

@@ -257,6 +257,45 @@ def make_topic_repository(tmp_path: Path) -> Path:
     return root
 
 
+def test_feature_report_builds_without_counts_and_publishes_diagrams(
+    tmp_path: Path,
+) -> None:
+    root = make_topic_repository(tmp_path)
+    report = root / "docs" / "azure-daily-update" / "2026-10-08"
+    images = report / "images"
+    images.mkdir(parents=True)
+    diagram = '<svg xmlns="http://www.w3.org/2000/svg"><text>Operator</text></svg>'
+    (images / "architecture.svg").write_text(diagram, encoding="utf-8")
+    (report / "index.md").write_text(
+        "---\n"
+        "title: Azure Daily Update — 2026-10-08\n"
+        "description: Anyscale on Azure GA의 실행 구조\n"
+        "report_date: 2026-10-08\n"
+        "generated_at: 2026-10-09T09:00:00+09:00\n"
+        "---\n\n"
+        "# Azure Daily Update — 2026-10-08\n\n"
+        "Anyscale on Azure GA.\n\n"
+        "## 주요 업데이트\n\n"
+        "![Operator 실행 구조](images/architecture.svg)\n",
+        encoding="utf-8",
+    )
+
+    build(load_config(str(root / "mkdocs.yml"), strict=True))
+
+    site_report = root / "site" / "azure-daily-update" / "2026-10-08"
+    assert (site_report / "images" / "architecture.svg").read_text(
+        encoding="utf-8"
+    ) == diagram
+    assert 'src="images/architecture.svg"' in (
+        site_report / "index.html"
+    ).read_text(encoding="utf-8")
+    landing = (root / "site" / "azure-daily-update" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "Anyscale on Azure GA의 실행 구조" in landing
+    assert "dg-daily-counts" not in landing
+
+
 def test_daily_update_archive_builds_landing_and_dated_page(tmp_path: Path) -> None:
     root = make_topic_repository(tmp_path)
     docs = root / "docs"
