@@ -1,196 +1,186 @@
 ---
 title: Azure Daily Update — 2026-10-07
-description: 2026-10-07 Azure 업데이트 요약
+description: 고객 Ubuntu 하드웨어에서 실행하는 bare-metal AKS와 SGX·AKS 메트릭·App Service 지원 종료 대응
 report_date: 2026-10-07
-generated_at: 2026-10-08T09:04:03+09:00
+generated_at: 2026-10-09T22:26:00+09:00
 ---
 
 # Azure 일일 업데이트 브리핑 — 2026-10-07
 
-- **조사 대상:** 2026-10-07 00:00–23:59 (Asia/Seoul)
-- **AI & Apps:** 2건
-- **Infra:** 2건
-- **Database:** 1건
-- **총계:** 5건
-- **핵심 한 줄:** AKS가 하이퍼바이저 없이 베어메탈에서 동작하는 Ubuntu 프리뷰를
-  열었고, Azure SQL Database의 Always Encrypted SGX enclave는 2027년 10월
-  VBS enclave로 전환이 예고됐습니다.
+**AKS on bare metal의 Ubuntu 옵션**이 Public Preview로 공개됐습니다.
+고객 하드웨어에서 hypervisor 없이 Kubernetes를 실행하고 Azure Arc로 관리합니다.
+지원 종료 공지는 **Azure SQL의 SGX enclave, AKS pod 메트릭, App Service**에
+영향을 주므로 기능 소개와 별도로 대응 일정을 정리했습니다.
 
-!!! note "검증 범위"
-    Azure Updates 개별 링크(`azure.microsoft.com/updates?id=...`)는
-    2026-10-08 확인 시에도 클라이언트 렌더링 페이지만 반환해 상세 본문을
-    직접 열 수 없었습니다. 항목의 날짜·제목·분류·요약은 Microsoft 공식 Azure
-    service updates RSS에서 확인했고, 스포트라이트의 제품 동작·지원 범위·
-    제한·마이그레이션 절차는 Microsoft Learn 원문 전체와 대조했습니다.
+**이번 보고서의 업데이트**
 
-## AI & Apps
+- **AI & Apps:** [App Service — Java 8·11·17 지원 종료](#app-service-java) ·
+  [Azure Stack Hub의 App Service 종료](#stack-hub-app-service)
+- **Infra:** [AKS on bare metal — Ubuntu 프리뷰](#aks-bare-metal-ubuntu) ·
+  [AKS platform metrics — Pod name dimension 종료](#aks-pod-metrics)
+- **Database:** [Always Encrypted — Intel SGX 종료·VBS 전환](#always-encrypted-sgx)
 
-| 상태 | 서비스 | 업데이트 | 범위와 핵심 변경 |
-|---|---|---|---|
-| Retirement | Azure App Service (Azure Stack Hub) | [Retirement: Azure App Service on Azure Stack Hub](https://azure.microsoft.com/updates?id=568178) | Azure Stack Hub의 App Service가 2029-09-30에 완전히 폐지됩니다. 2026-09-30부터는 신규 설치가 중단되고 새 릴리스·기능·개선이 제공되지 않으며, 기존 배포는 지원 종료일까지만 유지됩니다. |
-| Retirement | Azure App Service | [Retirement: Support for Java 8, 11 and 17 will end on September 1, 2027](https://azure.microsoft.com/updates?id=568585) | 2027-09-01부터 App Service에서 Java 8, 11, 17에 대한 보안 업데이트와 고객 지원이 중단됩니다. 앱은 계속 실행되지만 지원되는 Java 버전으로 업그레이드가 필요합니다. |
+## 주요 업데이트
 
-## Infra
+### AKS on bare metal — Ubuntu Public Preview { #aks-bare-metal-ubuntu }
 
-| 상태 | 서비스 | 업데이트 | 범위와 핵심 변경 |
-|---|---|---|---|
-| Public Preview | Azure Kubernetes Service (AKS) | [[In preview] Public Preview: AKS on bare metal now on Ubuntu](https://azure.microsoft.com/updates?id=573782) | 고객이 보유한 Ubuntu 24.04.3/24.04.4 LTS 하드웨어에 하이퍼바이저 없이 AKS를 직접 설치하는 기능이 Public Preview로 공개됐습니다. 현재는 East US 리전의 단일 노드 클러스터만 지원됩니다. |
-| Retirement | AKS (Azure Monitor 플랫폼 메트릭) | [Retirement: Pod name dimension in AKS pod platform metrics](https://azure.microsoft.com/updates?id=570232) | 2027-09-30부터 `kube_pod_status_phase` 등 AKS pod 플랫폼 메트릭의 pod name 차원 지원이 종료되고 집계(pod 수) 카운터로 전환됩니다. 어느 메트릭이 포함되는지 세부 목록은 원문 리디렉션 문제로 전체를 **확인하지 못했습니다**. |
+**기존 Ubuntu 서버에 Kubernetes를 직접 설치하고 Azure에서 관리**
 
-## Database
+온프레미스·edge에서 Kubernetes를 실행할 때는 로컬 데이터와 CPU·GPU,
+driver·runtime을 유지하면서 클러스터 관리 방식도 일관되게 가져갈 필요가 있습니다.
+AKS on bare metal은 **hypervisor 없이 host OS와 하드웨어에서
+Control plane·worker component를 직접 실행**하는 배포 모델입니다.
 
-| 상태 | 서비스 | 업데이트 | 범위와 핵심 변경 |
-|---|---|---|---|
-| Retirement | Azure SQL Database | [Retirement: Always Encrypted with Intel SGX Enclaves](https://azure.microsoft.com/updates?id=569236) | Intel SGX 기반 secure enclave 지원이 2027-10-31에 종료되며, DC-series 하드웨어도 단계적으로 폐지됩니다. 고객은 하드웨어에 의존하지 않는 Virtualization-Based Security(VBS) enclave로 전환해야 합니다. |
+이번 Ubuntu 옵션은 고객이 보유한 하드웨어에 Azure CLI로 AKS를 추가합니다.
+Azure Local의 검증된 하드웨어와 Azure Linux를 사용하는 옵션과 달리,
+**Ubuntu host를 다시 이미징하지 않고 기존 인프라를 활용**할 수 있습니다.
+Kubernetes는 AKS가 관리하고, Ubuntu OS·kernel·driver·하드웨어는 고객이 관리합니다.
 
-## 오늘의 스포트라이트
+[![Azure 관리와 Arc 연결, AKS가 관리하는 Kubernetes Control plane·worker, 고객이 관리하는 Ubuntu·하드웨어의 세 계층](images/aks-bare-metal-ubuntu.svg)](images/aks-bare-metal-ubuntu.svg)
 
-### 1. AKS on bare metal: 하이퍼바이저 없이 고객 소유 Ubuntu 서버에서 Kubernetes 실행
+*Microsoft Learn [AKS on bare metal 개요](https://learn.microsoft.com/azure/aks-hybrid-edge/bare-metal/aks-bare-metal-overview)의
+세 계층과 host 관리 책임 설명을 바탕으로 새로 그린 개념도입니다.*
 
-**무엇이 바뀌었나**
+**구조와 동작**
 
-AKS가 하이퍼바이저 계층 없이 호스트 운영체제와 하드웨어에서 직접 동작하는
-"AKS on bare metal"을 Public Preview로 공개했습니다. Azure Local의 검증된
-소형 하드웨어에서는 Azure Linux 3.0을, 고객이 직접 보유한 하드웨어에서는
-Ubuntu 24.04.3 LTS 또는 24.04.4 LTS를 호스트 OS로 사용할 수 있습니다.
-Azure Arc가 호스트와 클러스터를 Azure에 연결해 수명주기와 정책을 관리합니다.
+- **Azure management·Azure Arc:** host와 Kubernetes cluster를 Azure에 연결합니다.
+  Kubernetes lifecycle을 Azure와 AKS Resource provider를 통해 관리합니다.
+- **Kubernetes layer:** Control plane과 worker component가 host에서 실행합니다.
+  워크로드는 표준 Kubernetes API·도구로 관리하고, networking은 Cilium CNI를 사용합니다.
+- **Ubuntu host:** 고객이 CPU·GPU 하드웨어와 소프트웨어 stack을 선택하고 유지합니다.
+  워크로드·데이터를 온프레미스에 두면서 Azure의 관리 모델을 연결하는 구조입니다.
 
-**왜 중요한가**
+**프리뷰에서 제공하는 범위**
 
-- 매장, 공장, 현장 사무소처럼 가상화 계층을 두기 어렵거나 기존 하드웨어를
-  재사용해야 하는 edge 환경에서 하이퍼바이저 오버헤드 없이 Kubernetes를
-  운영할 수 있습니다.
-- Azure Arc 기반 관리로 온프레미스에서도 Azure와 동일한 Kubernetes API와
-  도구 경험을 유지합니다.
-- Ubuntu 옵션은 호스트를 재이미징하지 않고 기존 인프라에 AKS를 추가할 수
-  있어 reimaging 비용과 downtime을 줄입니다.
+- **Ubuntu 24.04.3 LTS·24.04.4 LTS**, x86_64 하드웨어를 지원합니다.
+  현재는 host당 **single-node cluster 하나**이며 multi-node 확장은 지원하지 않습니다.
+- Cluster 생성·관리·patch upgrade는 **Azure CLI**로 수행합니다.
+  Ubuntu 옵션의 Azure portal은 상태 조회용이며, portal·ARM·Bicep으로 생성하지 않습니다.
+- 기본 Kubernetes 버전은 **1.33.3**이고, 현재는 patch-version upgrade만 지원합니다.
+- Azure 리소스 가용 리전은 **East US만**입니다.
+  Korea Central·Korea South는 아직 지원 목록에 없습니다.
+  이는 온프레미스 실행 위치와 별개인 Azure 관리 리소스의 리전 범위입니다.
 
-**대상과 가용성**
+!!! note "Public Preview 범위"
+    SLA에서 제외되며 production용 기능이 아닙니다.
+    GA로 전환할 때 in-place upgrade가 지원되지 않아 cluster를 다시 만들어야 할 수 있습니다.
 
-- Public Preview이며 자체 선택(opt-in) 방식으로 제공되고 SLA 적용 대상이
-  아닙니다.
-- Ubuntu 옵션은 East US 리전에서만 사용할 수 있으며, 호스트당 단일 노드
-  클러스터 1개만 지원됩니다.
-- 클러스터 생성·관리는 Azure CLI 확장(`aksarc`)으로 수행하며, Azure
-  portal은 읽기 전용 상태 확인만 제공합니다.
-- 기본 Kubernetes 버전은 1.33.3이며 patch 버전 업그레이드만 지원됩니다.
+**공식 자료:**
+[Ubuntu 프리뷰 발표](https://azure.microsoft.com/updates?id=573782) ·
+[배포 구조·host 관리 책임](https://learn.microsoft.com/azure/aks-hybrid-edge/bare-metal/aks-bare-metal-overview) ·
+[프리뷰 지원 범위](https://learn.microsoft.com/azure/aks-hybrid-edge/bare-metal/aks-bare-metal-preview-limitations)
 
-**전제 조건과 제한**
+## 대응이 필요한 업데이트
 
-- 최소 사양: x86_64 2 physical core, 4 GB RAM, 256 GB 여유 디스크(권장은
-  4 core·8 GB·256 GB 이상).
-- 호스트 OS 설치·패치·커널·드라이버 유지관리는 고객 책임이며, AKS는
-  Kubernetes 계층만 관리합니다.
-- 고정 node/control plane IP와 outbound HTTPS(443) 연결이 필요하며,
-  `Microsoft.HybridCompute`, `Microsoft.HybridContainerService`,
-  `Microsoft.Kubernetes`, `Microsoft.ExtendedLocation`,
-  `Microsoft.HybridConnectivity`, `Microsoft.AzureStackHCI` provider 등록이
-  필요합니다.
-- 다중 노드 클러스터, 호스트당 다중 클러스터, minor 버전 업그레이드는
-  지원되지 않으며 Ubuntu 24.04.5 LTS는 아직 지원되지 않습니다.
-- 프리뷰 기간 생성한 클러스터는 GA 전환 시 in-place 업그레이드가 보장되지
-  않아 재생성과 워크로드 재배포 계획이 필요할 수 있습니다.
+### Always Encrypted — Intel SGX 종료·VBS 전환 { #always-encrypted-sgx }
 
-**비용과 운영 영향**
+**종료일: 2027-10-31 · 대상: Azure SQL Database의 DC-series·Intel SGX enclave**
 
-- Public Preview 기간 AKS 클러스터 리소스 자체는 zero-rated billing
-  meter로 과금되지 않지만, Arc-enabled 머신과 Monitor·Policy 등 연계
-  Azure 서비스는 표준 요금이 적용됩니다.
-- 운영팀은 host OS 패치, 네트워크·방화벽 구성, 보안 업데이트 적용을 직접
-  수행해야 하므로 기존 AKS(완전관리형) 대비 운영 부담이 늘어납니다.
+Always Encrypted는 client에서 민감 데이터를 암호화합니다.
+일반 Database Engine에는 복호화 key를 노출하지 않으므로 암호화된 column의
+서버 측 연산이 제한됩니다. **Secure enclave**는 보호된 메모리 영역 안에서만
+데이터를 복호화·계산해 더 풍부한 query와 in-place 암호화 작업을 가능하게 합니다.
 
-**다음 단계**
+이번 종료 대상은 Always Encrypted 전체가 아니라,
+**DC-series 하드웨어에서 사용하는 Intel SGX enclave**입니다.
+Azure SQL Database에 남으려면 지원되는 non-DC compute와
+**Virtualization-Based Security(VBS) enclave**로 전환합니다.
 
-1. East US 리전에서 비프로덕션 Ubuntu 호스트로 사전 요구사항(네트워크,
-   provider 등록)을 구성합니다.
-2. 단일 노드 제약과 patch 전용 업그레이드가 실제 워크로드 요구사항과
-   맞는지 검증합니다.
-3. GA 전환 시 클러스터 재생성 가능성을 전제로 백업·재배포 절차를 미리
-   준비합니다.
+[![Client driver가 안전한 채널로 key를 secure enclave에 전달하고 Database Engine이 enclave에 암호화 데이터 연산을 위임하는 공식 흐름](images/always-encrypted-data-flow.png)](images/always-encrypted-data-flow.png)
 
-### 2. Azure SQL Database의 Always Encrypted: Intel SGX에서 VBS enclave로 전환 예고
+*출처: Microsoft Learn,
+[Always Encrypted with secure enclaves](https://learn.microsoft.com/sql/relational-databases/security/encryption/always-encrypted-enclaves).
+SGX·VBS의 공통 enclave 처리 흐름이며, 그림을 선택하면 원본 크기로 볼 수 있습니다.*
 
-**무엇이 바뀌었나**
+**Enclave에서 처리하는 방식**
 
-Azure SQL Database에서 Always Encrypted with secure enclaves가 사용하는
-Intel SGX(DC-series 전용) enclave 지원이 2027-10-31에 종료됩니다. 종료일
-이후 DC-series compute tier에 남아 있는 데이터베이스는 Azure가 자동으로
-표준 시리즈(non-DC) compute tier로 이동시키고 Virtualization-Based
-Security(VBS) enclave를 활성화합니다. VBS는 Windows hypervisor 기반의
-software 기술로 특수 하드웨어가 필요하지 않습니다.
+1. Client driver가 연산에 필요한 column encryption key를 enclave에 안전한 채널로 전달합니다.
+2. Database Engine이 암호화 연산·암호화된 column의 계산을 enclave에 위임합니다.
+3. 복호화된 데이터와 key는 enclave 밖의 Database Engine에 평문으로 노출되지 않습니다.
 
-**왜 중요한가**
+**SGX에서 VBS로 바뀌는 부분**
 
-- DC-series 하드웨어는 리전 가용성과 성능 제약이 있던 반면, VBS enclave는
-  DTU 모델을 포함한 대부분의 하드웨어 구성에서 사용할 수 있어 선택지가
-  넓어집니다.
-- SGX enclave는 Microsoft Azure Attestation을 통한 attestation이
-  필수였지만, Azure SQL Database의 VBS enclave는 attestation을 지원하지
-  않아(미사용) 구성이 단순해집니다.
-- 마이그레이션을 미루면 종료일에 자동 전환되므로, 애플리케이션이 VBS
-  동작 방식과 호환되는지 사전에 검증하지 않으면 예기치 않은 동작 변경을
-  겪을 수 있습니다.
+- **실행 기반:** SGX는 DC-series의 하드웨어 기반 enclave,
+  VBS는 Windows hypervisor 기반이며 특수 하드웨어가 필요하지 않습니다.
+- **Attestation:** SGX는 Microsoft Azure Attestation이 필수입니다.
+  Azure SQL Database의 VBS는 attestation을 지원하지 않으므로
+  client의 protocol을 `None`으로 바꾸고 SGX attestation URL을 제거합니다.
+- **보호 경계:** 두 방식은 동등하지 않습니다. VBS는 VM 내부 공격에 대한
+  보호를 제공하지만 host의 privileged account에서 시작하는 공격은 보호하지 않습니다.
+  Host 격리가 필요한 경우 공식 가이드의 **SQL Server on Azure confidential VM** 대안과
+  보안 차이를 검토해야 합니다.
+- **리전:** VBS는 **Jio India Central을 제외한 모든 Azure SQL Database 리전**에서 제공됩니다.
 
-**대상과 가용성**
+**필요한 전환**
 
-- 영향 대상은 vCore 구매 모델의 DC-series 하드웨어로 Intel SGX enclave를
-  사용 중인 Azure SQL Database뿐입니다. SQL Server 2019 이상은 이미 VBS
-  enclave만 지원하므로 영향이 없습니다.
-- VBS enclave는 Jio India Central을 제외한 모든 Azure SQL Database
-  리전에서 사용할 수 있습니다.
+DC-series standalone database와 elastic pool을 식별해 지원되는 standard-series로
+옮기고, database 또는 pool의 **VBS enclave를 명시적으로 활성화**합니다.
+VBS를 지원하는 client driver와 연결 설정으로 바꾼 뒤 enclave query를 검증합니다.
+**Compute만 변경하면 수동 전환이 끝나는 것은 아닙니다.**
 
-**제한과 호환성**
+Microsoft Learn은 종료일 이후 남은 DC-series database를 Azure가 non-DC compute로
+자동 이동하고 VBS를 활성화한다고 설명합니다. 이 자동 변경과 별개로 애플리케이션의
+driver·connection string·보안 요구사항은 **2027-10-31 전에** 전환·검증해야 합니다.
 
-- DC-series가 아닌 표준 시리즈(Gen5 등)와 DTU 구매 모델은 애초에 Intel
-  SGX를 지원하지 않으므로 VBS로만 구성할 수 있습니다.
-- 클라이언트 드라이버가 VBS enclave와 attestation 설정을 지원해야 하며,
-  SGX 전용으로 구성된 attestation 정책이나 연결 문자열은 제거하거나
-  갱신해야 합니다.
-- 보안 강도 차이가 있을 수 있으므로(enclave 유형별 공격 표면), 규제·
-  컴플라이언스 요구사항이 SGX 수준의 host 격리를 요구한다면 Azure
-  Confidential VM의 SQL Server 같은 대안을 검토해야 합니다.
+**공식 자료:**
+[종료 발표](https://azure.microsoft.com/updates?id=569236) ·
+[Enclave 동작·보호 경계](https://learn.microsoft.com/sql/relational-databases/security/encryption/always-encrypted-enclaves) ·
+[SGX migration guide](https://learn.microsoft.com/sql/relational-databases/security/encryption/always-encrypted-enclaves-migration) ·
+[VBS 활성화](https://learn.microsoft.com/azure/azure-sql/database/always-encrypted-enclaves-enable)
 
-**마이그레이션과 운영 영향**
+### AKS platform metrics — Pod name dimension 종료 { #aks-pod-metrics }
 
-- 포털, PowerShell 또는 CLI로 데이터베이스/탄력적 풀의 compute tier를
-  DC-series에서 표준 시리즈로 변경하면 VBS enclave가 활성화됩니다.
-- 2027-10-31 이전에 애플리케이션의 attestation 설정과 connection string을
-  점검하고, 영향받는 DC-series 데이터베이스 목록을 먼저 인벤토리해야
-  합니다.
-- 자동 전환에 의존하면 compute tier 변경 시점을 직접 통제할 수 없으므로,
-  유지보수 기간을 정해 계획적으로 전환하는 편이 운영 리스크를 줄입니다.
+**종료일: 2027-09-30 · 대상: Pod name으로 필터링·그룹화·알림을 구성한 모니터링**
 
-**다음 단계**
+Azure Monitor의 AKS platform metrics가 개별 Pod 이름에 따른 시계열에서
+**집계 Pod counter**로 전환됩니다. 대상은 다음 두 메트릭입니다.
 
-1. Azure portal 또는 스크립트로 DC-series 하드웨어를 사용하는 데이터베이스를
-   식별합니다.
-2. 비프로덕션 환경에서 표준 시리즈로 compute tier를 변경해 VBS enclave
-   동작과 애플리케이션 드라이버 호환성을 검증합니다.
-3. 검증 후 production 데이터베이스를 2027-10-31 이전에 순차적으로
-   전환합니다.
+- `kube_pod_status_phase` — phase별 Pod 수.
+- `kube_pod_status_ready` — Ready 상태의 Pod 수.
 
-## 출처
+Metric 이름과 aggregate count·namespace 수준 모니터링은 유지되지만,
+**Pod name dimension을 이용한 필터·그룹·알림은 사용할 수 없게 됩니다.**
+유예 기간에는 기존 방식과 집계 방식이 함께 제공됩니다.
 
-- [Azure service updates RSS](https://www.microsoft.com/releasecommunications/api/v2/azure/rss)
-  — 확인 시점 2026-10-08; 각 항목의 `pubDate`/`a10:updated` 값을 Asia/Seoul
-  기준으로 환산해 2026-10-07 00:00–23:59 범위를 판정함
-- [What is Azure Kubernetes Service on bare metal? (preview)](https://learn.microsoft.com/en-us/azure/aks-hybrid-edge/bare-metal/aks-bare-metal-overview)
-  — Microsoft Learn 최종 업데이트 2026-09-22
-- [Public preview limitations for AKS on bare metal (preview)](https://learn.microsoft.com/en-us/azure/aks-hybrid-edge/bare-metal/aks-bare-metal-preview-limitations)
-  — Microsoft Learn 최종 업데이트 2026-09-22
-- [Prepare an Ubuntu Host for AKS on Bare Metal (Preview)](https://learn.microsoft.com/en-us/azure/aks-hybrid-edge/bare-metal/aks-bare-metal-ubuntu-system-requirements)
-  — Microsoft Learn 최종 업데이트 2026-09-22
-- [Always Encrypted with secure enclaves - SQL Server](https://learn.microsoft.com/en-us/sql/relational-databases/security/encryption/always-encrypted-enclaves?view=sql-server-ver17)
-  — Microsoft Learn 최종 업데이트 2026-10-01
-- [Enable Always Encrypted with Secure Enclaves - Azure SQL Database](https://learn.microsoft.com/en-us/azure/azure-sql/database/always-encrypted-enclaves-enable?view=azuresql)
-  — Microsoft Learn 최종 업데이트 2026-10-01
-- [Language Runtime Support Policy - Azure App Service](https://learn.microsoft.com/en-us/azure/app-service/language-support-policy)
-  — Microsoft Learn 최종 업데이트 2026-06-12
-- [Plan a Migration to Azure App Service from Azure Stack Hub](https://learn.microsoft.com/en-us/azure-stack/operator/app-service-planning-migrate-to-azure)
-  — Microsoft Learn 최종 업데이트 2026-07-13
-- [Azure Stack Hub - Microsoft Lifecycle](https://learn.microsoft.com/en-us/lifecycle/products/azure-stack-hub)
-  — Microsoft Learn 최종 업데이트 2022-10-25(Azure Stack Hub 제품 전체는
-  "In Support"이며, App Service 리소스 공급자 개별 폐지 일정은 Azure
-  Updates 공지로만 확인됨)
+Pod 이름을 참조하는 dashboard·workbook·alert·automation은 종료 전에 수정해야 합니다.
+개별 Pod 관측·문제 해결에는 공식 권장인 **Azure Monitor Managed Prometheus와
+Kubernetes-native Pod metrics**를 사용합니다.
+이 종료는 platform metrics의 dimension 변경이지, 같은 이름의
+Prometheus Pod metrics까지 폐지하는 것이 아닙니다.
+집계 Pod 수만 사용한다면 별도 대응이 필요하지 않습니다.
 
-**검증일:** 2026-10-08
+**공식 자료:**
+[대상 메트릭·전환 일정](https://azure.microsoft.com/updates?id=570232) ·
+[AKS platform metrics 참조](https://learn.microsoft.com/azure/aks/monitor-aks-reference#category-pods) ·
+[Prometheus 기본 수집 메트릭](https://learn.microsoft.com/azure/azure-monitor/containers/prometheus-metrics-scrape-default#kube-state)
+
+### App Service — Java 8·11·17 지원 종료 { #app-service-java }
+
+**종료일: 2027-09-01 · 대상: App Service에서 Java 8·11·17로 실행하는 앱**
+
+종료 후에도 앱은 실행되지만 해당 Java 버전의 **보안 업데이트와 고객 지원은
+제공되지 않습니다.** 즉시 실행 중단이 아니라 지원·보안 유지 범위의 변경입니다.
+공지의 권장 대상은 **Java 25**이며, 종료 전에 앱·의존성의 호환성을 확인하고
+runtime을 업그레이드해야 합니다.
+
+**공식 자료:**
+[종료 일정·Java 25 업그레이드 안내](https://azure.microsoft.com/updates?id=568585) ·
+[App Service runtime 지원 정책](https://learn.microsoft.com/azure/app-service/language-support-policy)
+
+### Azure Stack Hub의 App Service 종료 { #stack-hub-app-service }
+
+**신규 설치·새 릴리스 중단: 2026-09-30 · 서비스 지원 종료: 2029-09-30**
+
+대상은 **Azure Stack Hub 위의 App Service**이며, public Azure App Service나
+Azure Stack Hub 전체의 종료 공지가 아닙니다.
+기존 지원 대상 배포는 종료일까지 실행하고 마지막 가용 릴리스로 업그레이드할 수 있지만,
+새 제품 릴리스·기능·개선은 제공되지 않습니다.
+
+공식 권장은 **Azure App Service로의 이전**입니다.
+이전 시 앱 runtime뿐 아니라 database·file share·인증·내부 API·네트워크 의존성의
+위치도 함께 결정합니다. COM·registry·custom runtime 등 Windows 의존성이 큰 앱은
+공식 migration guide에서 **Managed Instance on Azure App Service**를 대안으로 제시합니다.
+
+**공식 자료:**
+[중단·종료 일정](https://azure.microsoft.com/updates?id=568178) ·
+[Azure App Service 이전 계획](https://learn.microsoft.com/azure-stack/operator/app-service-planning-migrate-to-azure)

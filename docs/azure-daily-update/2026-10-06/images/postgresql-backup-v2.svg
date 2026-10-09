@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="390" viewBox="0 0 1100 390" role="img" aria-labelledby="title desc">
+  <title id="title">PostgreSQL vaulted backup v2</title>
+  <desc id="desc">Managed disk snapshots are copied to a Backup vault, with a full first backup and incremental later backups. Restore writes to a pre-created empty PostgreSQL target.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#2563eb"/></marker>
+  </defs>
+  <rect width="1100" height="390" rx="18" fill="#f8fafc"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle">
+    <text x="550" y="43" fill="#0f172a" font-size="25" font-weight="700">PostgreSQL vaulted backup v2</text>
+    <rect x="35" y="90" width="240" height="130" rx="12" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="155" y="132" font-size="19" font-weight="700" fill="#0f172a">PostgreSQL source</text>
+    <text x="155" y="166" font-size="16" fill="#334155">Flexible server / Elastic cluster</text>
+    <text x="155" y="196" font-size="16" fill="#334155">Managed disk snapshot</text>
+    <path d="M275 155H410" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="343" y="121" font-size="16" fill="#334155">Copy to vault</text>
+    <rect x="420" y="90" width="260" height="130" rx="12" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="550" y="132" font-size="20" font-weight="700" fill="#0f172a">Backup vault</text>
+    <text x="550" y="166" font-size="16" fill="#334155">First full / Later incremental</text>
+    <text x="550" y="196" font-size="16" fill="#334155">Retention: 7 days to 10 years</text>
+    <path d="M680 155H815" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+    <text x="748" y="112" font-size="16" fill="#334155">Restore</text>
+    <text x="748" y="134" font-size="16" fill="#334155">as Server</text>
+    <rect x="825" y="90" width="240" height="130" rx="12" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="945" y="132" font-size="19" font-weight="700" fill="#0f172a">PostgreSQL target</text>
+    <text x="945" y="166" font-size="16" fill="#334155">Pre-created, empty server</text>
+    <text x="945" y="196" font-size="16" fill="#334155">Restore disk contents</text>
+    <rect x="150" y="265" width="800" height="80" rx="12" fill="#fff" stroke="#cbd5e1"/>
+    <text x="550" y="297" font-size="17" font-weight="700" fill="#0f172a">Managed identity + Backup policy</text>
+    <text x="550" y="325" font-size="16" fill="#334155">Source / target permissions · Daily or weekly schedule · Retention rules</text>
+  </g>
+</svg>
