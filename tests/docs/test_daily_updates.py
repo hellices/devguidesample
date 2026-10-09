@@ -15,13 +15,32 @@ from scripts.docs.daily_updates import (
 )
 
 
+def summary_body(
+    *,
+    ai_apps: int = 1,
+    infra: int = 1,
+    database: int = 1,
+    highlight: str = "AKS와 Azure SQL의 운영 선택지가 확대됐습니다.",
+    remainder: str = "",
+) -> str:
+    total = ai_apps + infra + database
+    return (
+        f"- **AI & Apps:** {ai_apps}건\n"
+        f"- **Infra:** {infra}건\n"
+        f"- **Database:** {database}건\n"
+        f"- **총계:** {total}건\n"
+        f"- **핵심 한 줄:** {highlight}\n\n"
+        f"{remainder}"
+    )
+
+
 def write_report(
     docs_dir: Path,
     directory_date: str,
     *,
     report_date: str | None = None,
     title: str | None = None,
-    body: str = "",
+    body: str | None = None,
 ) -> None:
     path = docs_dir / "azure-daily-update" / directory_date / "index.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -35,7 +54,9 @@ def write_report(
         "---\n"
         + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False)
         + "---\n\n"
-        + f"# {metadata['title']}\n\n{body}\n",
+        + f"# {metadata['title']}\n\n"
+        + (summary_body() if body is None else body)
+        + "\n",
         encoding="utf-8",
     )
 
@@ -97,6 +118,72 @@ def test_load_daily_update_reports_rejects_impossible_directory_date(
             r"azure-daily-update/2026-02-30/index\.md: "
             r"directory must be a valid ISO calendar date"
         ),
+    ):
+        load_daily_update_reports(docs)
+
+
+def test_load_daily_update_reports_parses_multiline_safe_summary(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    body = summary_body(
+        ai_apps=2,
+        infra=0,
+        database=1,
+        highlight=(
+            "Anyscale on Azure가 **GA**로 발표됐으며,\n"
+            "  Linux용 SQL Server는 `sysadmin` 없이 적재할 수 있습니다."
+        ),
+        remainder="## AI & Apps\n\n세부 내용",
+    )
+    write_report(docs, "2026-10-08", body=body)
+
+    report = load_daily_update_reports(docs)[0]
+
+    assert report.summary == daily_updates.DailyUpdateSummary(
+        ai_apps=2,
+        infra=0,
+        database=1,
+        total=3,
+        highlight=(
+            "Anyscale on Azure가 GA로 발표됐으며, "
+            "Linux용 SQL Server는 sysadmin 없이 적재할 수 있습니다."
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        (
+            summary_body().replace("- **Infra:** 1건\n", ""),
+            "Infra must appear exactly once",
+        ),
+        (
+            summary_body() + "\n- **Infra:** 0건\n",
+            "Infra must appear exactly once",
+        ),
+        (
+            summary_body().replace("- **Database:** 1건", "- **Database:** many"),
+            "Database must start with a non-negative count followed by 건",
+        ),
+        (
+            summary_body().replace("- **총계:** 3건", "- **총계:** 4건"),
+            "총계 must equal the category count sum",
+        ),
+        (
+            summary_body(highlight=" "),
+            "핵심 한 줄 must be non-empty",
+        ),
+    ],
+)
+def test_load_daily_update_reports_rejects_invalid_summary(
+    tmp_path: Path, body: str, message: str
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-08", body=body)
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=rf"azure-daily-update/2026-10-08/index\.md: {message}",
     ):
         load_daily_update_reports(docs)
 
@@ -177,7 +264,11 @@ def test_calendar_defaults_to_latest_publication_not_wall_clock(tmp_path: Path) 
 
 def test_archive_data_retains_all_dates_and_body_search_text(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
-    write_report(docs, "2025-12-31", body="## Container networking\n\n연결 진단 절차")
+    write_report(
+        docs,
+        "2025-12-31",
+        body=summary_body(remainder="## Container networking\n\n연결 진단 절차"),
+    )
     write_report(docs, "2026-10-07")
 
     data = json.loads(daily_updates.build_daily_update_data(docs))
@@ -191,7 +282,7 @@ def test_archive_data_retains_all_dates_and_body_search_text(tmp_path: Path) -> 
 
 def test_calendar_data_excludes_search_fields_and_does_not_grow_with_body(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
-    write_report(docs, "2026-10-07", body="Short report")
+    write_report(docs, "2026-10-07", body=summary_body(remainder="Short report"))
     calendar = daily_updates.build_daily_update_data(docs, include_search=False)
 
     data = json.loads(calendar)
@@ -201,7 +292,7 @@ def test_calendar_data_excludes_search_fields_and_does_not_grow_with_body(tmp_pa
         "url": "2026-10-07/",
     }]
     long_body = "Archived body text " * 10_000
-    write_report(docs, "2026-10-07", body=long_body)
+    write_report(docs, "2026-10-07", body=summary_body(remainder=long_body))
     assert daily_updates.build_daily_update_data(docs, include_search=False) == calendar
     assert long_body in json.loads(daily_updates.build_daily_update_data(docs))["reports"][0]["text"]
 
@@ -214,7 +305,7 @@ def test_search_excerpts_use_readable_markdown_text_without_changing_raw_search(
         "| Service | Status |\n|---|---|\n| AKS | Preview |\n\n"
         "<script>hiddenScript()</script><style>.hidden {}</style>\n"
     )
-    write_report(docs, "2026-10-07", body=body)
+    write_report(docs, "2026-10-07", body=summary_body(remainder=body))
     report = json.loads(daily_updates.build_daily_update_data(docs))["reports"][0]
 
     assert body in report["text"]
