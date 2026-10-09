@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from calendar import Calendar
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta, timezone
+from email.utils import format_datetime
 from html import escape
 import json
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any
+from urllib.parse import urljoin
+import xml.etree.ElementTree as ET
 
 from markdown import Markdown
 from mkdocs.utils import get_relative_url
@@ -26,6 +29,7 @@ _SUMMARY_ITEM = re.compile(
     r"[ \t]*(.*(?:\n(?:[ \t]{2,}).*)*)"
 )
 _COUNT = re.compile(r"^(\d+)건(?:\s|$)")
+_KST = timezone(timedelta(hours=9))
 
 
 @dataclass(frozen=True)
@@ -49,7 +53,10 @@ class DailyUpdateReport:
 
 def is_publishable_daily_update_path(relative_path: PurePosixPath | str) -> bool:
     path = PurePosixPath(relative_path)
-    if path == PurePosixPath("azure-daily-update/index.md"):
+    if path in {
+        PurePosixPath("azure-daily-update/index.md"),
+        PurePosixPath("azure-daily-update/feed.xml"),
+    }:
         return True
     is_page = len(path.parts) == 3 and path.parts[2] == "index.md"
     is_image = (
@@ -218,6 +225,39 @@ def build_daily_update_data(
     return json.dumps({"reports": reports}, ensure_ascii=False) + "\n"
 
 
+def build_daily_update_feed(
+    docs_dir: Path | str,
+    *,
+    site_url: str,
+) -> str:
+    base_url = site_url.rstrip("/") + "/"
+    archive_url = urljoin(base_url, "azure-daily-update/")
+    root = ET.Element("rss", {"version": "2.0"})
+    channel = ET.SubElement(root, "channel")
+    ET.SubElement(channel, "title").text = "Azure Daily Update"
+    ET.SubElement(channel, "link").text = archive_url
+    ET.SubElement(channel, "description").text = (
+        "전일 Azure 업데이트를 한국어로 정리한 일일 브리핑입니다."
+    )
+    ET.SubElement(channel, "language").text = "ko-kr"
+
+    for report in load_daily_update_reports(docs_dir):
+        report_url = urljoin(archive_url, f"{report.report_date.isoformat()}/")
+        item = ET.SubElement(channel, "item")
+        ET.SubElement(item, "title").text = report.title
+        ET.SubElement(item, "link").text = report_url
+        ET.SubElement(item, "guid", {"isPermaLink": "true"}).text = report_url
+        ET.SubElement(item, "pubDate").text = format_datetime(
+            datetime.combine(report.report_date, time(hour=9), tzinfo=_KST)
+        )
+        ET.SubElement(item, "description").text = report.description
+
+    ET.indent(root, space="  ")
+    return '<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(
+        root, encoding="unicode"
+    )
+
+
 def _archive_attributes(source_url: str, *, search: bool = False) -> str:
     filename = "daily-updates.json" if search else "daily-updates-calendar.json"
     source = get_relative_url(f"assets/{filename}", source_url)
@@ -328,71 +368,117 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
     ]
     if not reports:
         lines.append('<p id="archive">아직 게시된 일일 업데이트가 없습니다.</p>')
-        return "\n".join(lines).rstrip() + "\n"
+    else:
+        lines.extend([
+            "## 최근 업데이트",
+            "",
+            "자료가 있는 최신 발행일 3개를 보여줍니다. 지난 자료는 아래 달력과 검색에서 찾을 수 있습니다.",
+            "",
+            '<div class="dg-daily-recent">',
+        ])
+        for report in reports[:3]:
+            iso_date = report.report_date.isoformat()
+            summary = report.summary
+            lines.extend([
+                f'<article class="dg-daily-card" data-daily-recent="{iso_date}">',
+                '<div class="dg-daily-card-meta">',
+                f'<time datetime="{iso_date}">{iso_date}</time>',
+            ])
+            if summary is not None:
+                lines.append(f'<span class="dg-daily-total">총 {summary.total}건</span>')
+            lines.append("</div>")
+            if summary is not None:
+                lines.extend([
+                    '<div class="dg-daily-counts" role="group" '
+                    'aria-label="분야별 업데이트 수">',
+                    f'<span class="dg-daily-count">AI &amp; Apps {summary.ai_apps}</span>',
+                    f'<span class="dg-daily-count">Infra {summary.infra}</span>',
+                    f'<span class="dg-daily-count">Database {summary.database}</span>',
+                    "</div>",
+                ])
+            highlight = summary.highlight if summary is not None else report.description
+            lines.extend([
+                '<h3 class="dg-daily-card-summary">'
+                f'<a href="{iso_date}/">{escape(highlight)}</a></h3>',
+                "</article>",
+            ])
+        lines.extend([
+            "</div>",
+            "",
+            '## 지난 업데이트 찾기 {#archive}',
+            "",
+            '<div class="dg-daily-archive" data-search-exclude="true">',
+            build_daily_update_calendar(reports, source_url="azure-daily-update/"),
+            '<section class="dg-daily-search" data-daily-search '
+            f'{_archive_attributes("azure-daily-update/", search=True)} aria-label="일일 업데이트 검색">',
+            '<form data-daily-form role="search">',
+            '<label><span>업데이트 검색</span>',
+            '<input type="search" data-daily-query placeholder="검색어 또는 YYYY-MM-DD" '
+            'aria-describedby="daily-search-help" disabled></label>',
+            '<button type="reset" disabled>검색 초기화</button>',
+            "</form>",
+            '<p id="daily-search-help">전체 기간의 제목·요약·본문을 검색합니다. '
+            "상단의 사이트 전체 검색도 사용할 수 있습니다.</p>",
+            '<p data-daily-search-status role="status">검색어를 입력하거나 달력에서 날짜를 선택하세요.</p>',
+            '<ol data-daily-results hidden></ol>',
+            '<button type="button" data-daily-more hidden>결과 더 보기</button>',
+            '<p class="dg-daily-error" data-daily-error role="alert" hidden></p>',
+            "</section>",
+            "<noscript>",
+            "<p>JavaScript가 꺼져 있어 월 이동과 아카이브 검색을 사용할 수 없습니다. "
+            "아래 전체 발행일 목록에서 문서를 선택하세요.</p>",
+            "<details><summary>전체 발행일 목록</summary><ul>",
+        ])
+        for report in reports:
+            lines.append(
+                f'<li><a href="{report.report_date.isoformat()}/">{escape(report.title)}</a></li>'
+            )
+        lines.extend(["</ul></details>", "</noscript>", "</div>"])
 
     lines.extend([
-        "## 최근 업데이트",
         "",
-        "자료가 있는 최신 발행일 3개를 보여줍니다. 지난 자료는 아래 달력과 검색에서 찾을 수 있습니다.",
+        "## 업데이트 받아보기",
         "",
-        '<div class="dg-daily-recent">',
+        "아래 방법은 모두 같은 Azure Daily Update 피드를 사용합니다.",
+        "",
+        '<details markdown="1">',
+        "<summary>RSS 리더로 받기</summary>",
+        "",
+        "1. [`feed.xml`](feed.xml) 주소를 복사합니다.",
+        "2. 사용하는 RSS 리더에서 **새 피드 추가** 또는 **URL로 구독**을 선택합니다.",
+        "3. 복사한 주소를 붙여 넣고 구독합니다.",
+        "",
+        "</details>",
+        "",
+        '<details markdown="1">',
+        "<summary>메일로 받기</summary>",
+        "",
+        "1. [Power Automate](https://make.powerautomate.com/)에서 **자동화된 클라우드 흐름**을 만듭니다.",
+        "2. RSS 트리거 **When a feed item is published**를 선택하고 `feed.xml`의 전체 주소를 입력합니다.",
+        "3. Office 365 Outlook 작업 **Send an email (V2)**를 추가합니다.",
+        "4. 제목에는 **Feed title**, 본문에는 **Feed summary**와 **Primary feed link**를 넣습니다.",
+        "5. 저장하고 다음 보고서가 발행될 때 링크가 포함된 메일이 오는지 확인합니다.",
+        "",
+        "[RSS 커넥터 공식 문서](https://learn.microsoft.com/connectors/rss/) · "
+        "[Office 365 Outlook 커넥터 공식 문서](https://learn.microsoft.com/connectors/office365/)",
+        "",
+        "</details>",
+        "",
+        '<details markdown="1">',
+        "<summary>Microsoft Teams로 직접 받아보기</summary>",
+        "",
+        "1. [Power Automate](https://make.powerautomate.com/)에서 **자동화된 클라우드 흐름**을 만듭니다.",
+        "2. RSS 트리거 **When a feed item is published**를 선택하고 `feed.xml`의 전체 주소를 입력합니다.",
+        "3. Microsoft Teams 작업 **Post message in a chat or channel**을 추가합니다.",
+        "4. 게시할 팀과 채널을 선택합니다.",
+        "5. 메시지에 **Feed title**, **Feed summary**, **Primary feed link**를 넣습니다.",
+        "6. 저장하고 다음 보고서의 제목과 링크가 채널에 표시되는지 확인합니다.",
+        "",
+        "Teams 게시 작업에는 Workflows 앱이 허용되어 있어야 합니다. 조직에서 앱을 차단했다면 Teams 관리자에게 허용을 요청하세요. 흐름이 한 사용자에게만 의존하지 않도록 공동 소유자도 지정합니다.",
+        "",
+        "[Teams Workflows 웹후크 공식 문서](https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook) · "
+        "[Microsoft Teams 커넥터 공식 문서](https://learn.microsoft.com/connectors/teams/)",
+        "",
+        "</details>",
     ])
-    for report in reports[:3]:
-        iso_date = report.report_date.isoformat()
-        summary = report.summary
-        lines.extend([
-            f'<article class="dg-daily-card" data-daily-recent="{iso_date}">',
-            '<div class="dg-daily-card-meta">',
-            f'<time datetime="{iso_date}">{iso_date}</time>',
-        ])
-        if summary is not None:
-            lines.append(f'<span class="dg-daily-total">총 {summary.total}건</span>')
-        lines.append("</div>")
-        if summary is not None:
-            lines.extend([
-                '<div class="dg-daily-counts" role="group" '
-                'aria-label="분야별 업데이트 수">',
-                f'<span class="dg-daily-count">AI &amp; Apps {summary.ai_apps}</span>',
-                f'<span class="dg-daily-count">Infra {summary.infra}</span>',
-                f'<span class="dg-daily-count">Database {summary.database}</span>',
-                "</div>",
-            ])
-        highlight = summary.highlight if summary is not None else report.description
-        lines.extend([
-            '<h3 class="dg-daily-card-summary">'
-            f'<a href="{iso_date}/">{escape(highlight)}</a></h3>',
-            "</article>",
-        ])
-    lines.extend([
-        "</div>",
-        "",
-        '## 지난 업데이트 찾기 {#archive}',
-        "",
-        '<div class="dg-daily-archive" data-search-exclude="true">',
-        build_daily_update_calendar(reports, source_url="azure-daily-update/"),
-        '<section class="dg-daily-search" data-daily-search '
-        f'{_archive_attributes("azure-daily-update/", search=True)} aria-label="일일 업데이트 검색">',
-        '<form data-daily-form role="search">',
-        '<label><span>업데이트 검색</span>',
-        '<input type="search" data-daily-query placeholder="검색어 또는 YYYY-MM-DD" '
-        'aria-describedby="daily-search-help" disabled></label>',
-        '<button type="reset" disabled>검색 초기화</button>',
-        "</form>",
-        '<p id="daily-search-help">전체 기간의 제목·요약·본문을 검색합니다. '
-        "상단의 사이트 전체 검색도 사용할 수 있습니다.</p>",
-        '<p data-daily-search-status role="status">검색어를 입력하거나 달력에서 날짜를 선택하세요.</p>',
-        '<ol data-daily-results hidden></ol>',
-        '<button type="button" data-daily-more hidden>결과 더 보기</button>',
-        '<p class="dg-daily-error" data-daily-error role="alert" hidden></p>',
-        "</section>",
-        "<noscript>",
-        "<p>JavaScript가 꺼져 있어 월 이동과 아카이브 검색을 사용할 수 없습니다. "
-        "아래 전체 발행일 목록에서 문서를 선택하세요.</p>",
-        "<details><summary>전체 발행일 목록</summary><ul>",
-    ])
-    for report in reports:
-        lines.append(
-            f'<li><a href="{report.report_date.isoformat()}/">{escape(report.title)}</a></li>'
-        )
-    lines.extend(["</ul></details>", "</noscript>", "</div>"])
     return "\n".join(lines).rstrip() + "\n"
