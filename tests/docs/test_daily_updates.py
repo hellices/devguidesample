@@ -226,6 +226,10 @@ def test_recent_cards_show_counts_and_highlight_instead_of_generic_metadata(
 
     assert '<time datetime="2026-10-08">2026-10-08</time>' in card
     assert '<span class="dg-daily-total">총 3건</span>' in card
+    assert (
+        '<div class="dg-daily-counts" role="group" '
+        'aria-label="분야별 업데이트 수">'
+    ) in card
     assert '<span class="dg-daily-count">AI &amp; Apps 2</span>' in card
     assert '<span class="dg-daily-count">Infra 0</span>' in card
     assert '<span class="dg-daily-count">Database 1</span>' in card

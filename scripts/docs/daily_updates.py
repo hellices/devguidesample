@@ -332,7 +332,8 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
             f'<time datetime="{iso_date}">{iso_date}</time>',
             f'<span class="dg-daily-total">총 {summary.total}건</span>',
             "</div>",
-            '<div class="dg-daily-counts" aria-label="분야별 업데이트 수">',
+            '<div class="dg-daily-counts" role="group" '
+            'aria-label="분야별 업데이트 수">',
             f'<span class="dg-daily-count">AI &amp; Apps {summary.ai_apps}</span>',
             f'<span class="dg-daily-count">Infra {summary.infra}</span>',
             f'<span class="dg-daily-count">Database {summary.database}</span>',
