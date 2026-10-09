@@ -204,6 +204,39 @@ def test_build_daily_update_index_lists_each_date_once_newest_first(
     assert "# Azure Daily Update" in page
 
 
+def test_recent_cards_show_counts_and_highlight_instead_of_generic_metadata(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(
+        docs,
+        "2026-10-08",
+        body=summary_body(
+            ai_apps=2,
+            infra=0,
+            database=1,
+            highlight="Anyscale on Azure GA와 SQL Server 최소 권한 변화",
+        ),
+    )
+
+    page = build_daily_update_index(docs)
+    card = page.split(
+        '<article class="dg-daily-card" data-daily-recent="2026-10-08">', 1
+    )[1].split("</article>", 1)[0]
+
+    assert '<time datetime="2026-10-08">2026-10-08</time>' in card
+    assert '<span class="dg-daily-total">총 3건</span>' in card
+    assert '<span class="dg-daily-count">AI &amp; Apps 2</span>' in card
+    assert '<span class="dg-daily-count">Infra 0</span>' in card
+    assert '<span class="dg-daily-count">Database 1</span>' in card
+    assert (
+        '<h3 class="dg-daily-card-summary"><a href="2026-10-08/">'
+        "Anyscale on Azure GA와 SQL Server 최소 권한 변화</a></h3>"
+    ) in card
+    assert "Azure Daily Update — 2026-10-08" not in card
+    assert "2026-10-08 Azure 업데이트 요약" not in card
+
+
 def test_index_limits_recent_reports_to_three_available_dates(tmp_path: Path) -> None:
     docs = tmp_path / "docs"
     for day in ("2025-12-31", "2026-01-02", "2026-09-25", "2026-10-06", "2026-10-07"):
