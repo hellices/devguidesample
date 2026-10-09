@@ -18,7 +18,7 @@
       <a href="{{ daily.index.url | url }}" class="md-nav__link{% if nav_item.active %} md-nav__link--active{% endif %}"{% if daily.index == page %} aria-current="page"{% endif %}>
         <span class="md-ellipsis">{{ nav_item.title }}</span>
       </a>
-      {% if nav_item.active and page %}
+      {% if nav_item.active and page and daily.index != page %}
         <div class="dg-daily-sidebar">
           {{ daily_update_calendar(source_url=page.url, selected_date=page.meta.get("report_date")) | safe }}
           <a class="dg-daily-archive-link" href="{{ daily.index.url | url }}#archive">전체 달력 · 검색</a>

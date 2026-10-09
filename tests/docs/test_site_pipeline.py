@@ -285,6 +285,12 @@ generated_at: 2026-10-08T09:00:00+09:00
 
 # Azure Daily Update — {report_date}
 
+- **AI & Apps:** 1건
+- **Infra:** 0건 — 업데이트 없음
+- **Database:** 1건
+- **총계:** 2건
+- **핵심 한 줄:** {report_date}의 AKS와 Azure SQL 변경 요약
+
 ## AI & Apps
 
 업데이트 없음
@@ -310,7 +316,22 @@ generated_at: 2026-10-08T09:00:00+09:00
     assert 'data-daily-selected="2026-10-07"' in dated
     assert 'data-daily-source="../../assets/daily-updates-calendar.json"' in dated
     assert 'data-daily-source="../../assets/daily-updates.json"' not in dated
-    assert landing.count('data-daily-source="../assets/daily-updates-calendar.json"') == 2
+    assert landing.count("data-daily-calendar=") == 1
+    assert (
+        landing.count(
+            'data-daily-source="../assets/daily-updates-calendar.json"'
+        )
+        == 1
+    )
+    assert "전체 달력 · 검색" not in landing
+    assert dated.count("data-daily-calendar=") == 1
+    assert (
+        dated.count(
+            'data-daily-source="../../assets/daily-updates-calendar.json"'
+        )
+        == 1
+    )
+    assert "전체 달력 · 검색" in dated
     assert landing.count('data-daily-source="../assets/daily-updates.json"') == 1
     assert "assets/javascripts/daily-updates.js" in dated
     for report_date in ("2026-10-07", "2025-12-31"):
