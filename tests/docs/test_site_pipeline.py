@@ -752,6 +752,27 @@ def test_on_post_page_injects_head_redirect_tags_when_theme_canonical_is_missing
     assert '<meta http-equiv="refresh" content="0; url=../../../services/aks/network-diagnosis/">' in rendered
 
 
+def test_on_post_page_advertises_daily_update_feed() -> None:
+    page = SimpleNamespace(
+        file=SimpleNamespace(src_uri="azure-daily-update/2026-10-08/index.md")
+    )
+
+    rendered = on_post_page(
+        "<html><head></head><body></body></html>",
+        page,
+        {
+            "docs_dir": "docs",
+            "site_url": "https://example.test/devguidesample/",
+        },
+    )
+
+    assert (
+        '<link rel="alternate" type="application/rss+xml" '
+        'title="Azure Daily Update" '
+        'href="https://example.test/devguidesample/azure-daily-update/feed.xml">'
+    ) in rendered
+
+
 def make_search_repository(tmp_path: Path) -> Path:
     taxonomy = {
         "collections": {"guide": {"path": "guides"}},
