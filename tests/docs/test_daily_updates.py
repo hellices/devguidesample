@@ -41,6 +41,7 @@ def write_report(
     directory_date: str,
     *,
     report_date: str | None = None,
+    generated_at: str = "2026-10-08T09:00:00+09:00",
     title: str | None = None,
     body: str | None = None,
 ) -> None:
@@ -50,7 +51,7 @@ def write_report(
         "title": title or f"Azure Daily Update — {directory_date}",
         "description": f"{directory_date} Azure 업데이트 요약",
         "report_date": report_date or directory_date,
-        "generated_at": "2026-10-08T09:00:00+09:00",
+        "generated_at": generated_at,
     }
     path.write_text(
         "---\n"
@@ -464,8 +465,16 @@ def test_daily_update_feed_contains_reports_newest_first_with_absolute_links(
     tmp_path: Path,
 ) -> None:
     docs = tmp_path / "docs"
-    write_report(docs, "2026-10-06")
-    write_report(docs, "2026-10-08")
+    write_report(
+        docs,
+        "2026-10-06",
+        generated_at="2026-10-10T10:30:00+09:00",
+    )
+    write_report(
+        docs,
+        "2026-10-08",
+        generated_at="2026-10-09T21:52:00+09:00",
+    )
 
     root = ET.fromstring(
         build_daily_update_feed(
@@ -481,14 +490,32 @@ def test_daily_update_feed_contains_reports_newest_first_with_absolute_links(
     )
     items = channel.findall("item")
     assert [item.findtext("title") for item in items] == [
-        "Azure Daily Update — 2026-10-08",
         "Azure Daily Update — 2026-10-06",
+        "Azure Daily Update — 2026-10-08",
     ]
     assert items[0].findtext("link") == (
-        "https://example.test/devguidesample/azure-daily-update/2026-10-08/"
+        "https://example.test/devguidesample/azure-daily-update/2026-10-06/"
     )
     assert items[0].findtext("guid") == items[0].findtext("link")
-    assert items[0].findtext("pubDate") == "Thu, 08 Oct 2026 09:00:00 +0900"
+    assert items[0].findtext("pubDate") == "Sat, 10 Oct 2026 10:30:00 +0900"
+
+
+@pytest.mark.parametrize(
+    "generated_at",
+    ["not-a-time", "2026-10-09T21:52:00"],
+)
+def test_load_daily_update_reports_rejects_invalid_generated_at(
+    tmp_path: Path,
+    generated_at: str,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-08", generated_at=generated_at)
+
+    with pytest.raises(
+        DocumentFormatError,
+        match="generated_at must be an ISO timestamp with a UTC offset",
+    ):
+        load_daily_update_reports(docs)
 
 
 def test_daily_update_index_ends_with_collapsible_feed_guides(
