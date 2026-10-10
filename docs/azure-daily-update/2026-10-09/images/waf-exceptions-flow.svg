@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Application Gateway·Front Door WAF Exceptions 평가 흐름</title>
+  <desc id="desc">요청이 WAF 정책에 도달하면 Exception 목록의 Request URI, Remote IP, 헤더 조건을 먼저 확인한다. 조건이 일치하는 요청은 지정한 rule, rule group 또는 전체 managed ruleset 평가만 건너뛰고 나머지 rule은 계속 적용된다. 조건이 일치하지 않으면 전체 managed ruleset을 그대로 평가한다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/>
+    </marker>
+    <style>
+      text { font-family: sans-serif; fill: #172554; font-size: 22px; }
+      .heading { font-size: 26px; font-weight: 700; }
+      .label { font-size: 20px; font-weight: 700; }
+      .detail { font-size: 19px; }
+      .flow { fill: none; stroke: #2563eb; stroke-width: 3; marker-end: url(#arrow); }
+      .flow-dim { fill: none; stroke: #94a3b8; stroke-width: 3; marker-end: url(#arrow); stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+  <rect width="900" height="520" rx="18" fill="#ffffff"/>
+  <text x="35" y="45" class="heading">Exception 조건 일치 여부에 따라 평가 범위가 달라진다</text>
+
+  <rect x="35" y="80" width="200" height="70" rx="12" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="60" y="122" class="label">수신 요청</text>
+
+  <rect x="335" y="80" width="260" height="110" rx="12" fill="#fef9c3" stroke="#eab308" stroke-width="2"/>
+  <text x="355" y="113" class="label">Exception 목록 평가</text>
+  <text x="355" y="140" class="detail">Request URI · Remote IP</text>
+  <text x="355" y="164" class="detail">Header 이름·값 일치 확인</text>
+
+  <path class="flow" d="M235 115 L335 135" />
+
+  <rect x="690" y="40" width="175" height="150" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="710" y="75" class="label">조건 일치</text>
+  <text x="710" y="102" class="detail">지정한 rule ·</text>
+  <text x="710" y="126" class="detail">rule group 또는</text>
+  <text x="710" y="150" class="detail">ruleset만 bypass</text>
+  <text x="710" y="174" class="detail">(나머지는 계속 평가)</text>
+
+  <path class="flow" d="M595 115 L690 115" />
+
+  <rect x="690" y="230" width="175" height="140" rx="12" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+  <text x="710" y="265" class="label">조건 불일치</text>
+  <text x="710" y="292" class="detail">DRS/CRS,</text>
+  <text x="710" y="316" class="detail">Bot Protection 등</text>
+  <text x="710" y="340" class="detail">전체 ruleset 평가</text>
+
+  <path class="flow-dim" d="M465 190 L780 230" />
+
+  <rect x="35" y="250" width="560" height="230" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="55" y="285" class="label">세 가지 우회 방식 비교</text>
+  <text x="55" y="318" class="detail">Exclusions — 요청 일부(헤더·쿠키 등)만 검사 제외,</text>
+  <text x="55" y="342" class="detail">  나머지 요청은 계속 검사</text>
+  <text x="55" y="372" class="detail">Exceptions — 지정한 rule·group·ruleset만 bypass,</text>
+  <text x="55" y="396" class="detail">  나머지 보호는 유지 (이번 GA 대상)</text>
+  <text x="55" y="426" class="detail">Custom rule Allow — DRS·CRS·Bot Protection 전체를</text>
+  <text x="55" y="450" class="detail">  요청 전체에서 완전히 건너뜀 (가장 넓은 범위)</text>
+
+  <text x="35" y="505" class="detail">HTTP DDoS protection ruleset은 Exception·Allow 설정과 무관하게 항상 평가됩니다.</text>
+</svg>

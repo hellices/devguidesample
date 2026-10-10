@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" role="img" aria-labelledby="title desc">
+  <title id="title">Microsoft Agent 365와 Azure API Management MCP 거버넌스 연동 구조</title>
+  <desc id="desc">Microsoft Agent 365는 Azure API Management의 gateway와 MCP 서버 inventory를 가져와 중앙에서 접근 정책을 설정한다. 실제 enforcement는 API Management AI Gateway tier가 런타임에 수행하며, 개별 tool 차단, 사용 모니터링, Microsoft Defender·Purview를 통한 위협·민감정보 검사를 포함한다.</desc>
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#2563eb"/>
+    </marker>
+    <style>
+      text { font-family: sans-serif; fill: #172554; font-size: 21px; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .label { font-size: 20px; font-weight: 700; }
+      .detail { font-size: 18px; }
+      .flow { fill: none; stroke: #2563eb; stroke-width: 3; marker-end: url(#arrow2); }
+      .flow-back { fill: none; stroke: #16a34a; stroke-width: 3; stroke-dasharray: 5 4; marker-end: url(#arrow2); }
+    </style>
+  </defs>
+  <rect width="900" height="480" rx="18" fill="#ffffff"/>
+  <text x="30" y="42" class="heading">중앙 거버넌스(Agent 365)와 런타임 enforcement(APIM) 분리</text>
+
+  <rect x="30" y="70" width="280" height="150" rx="12" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="50" y="100" class="label">Microsoft Agent 365</text>
+  <text x="50" y="128" class="detail">· Gateway·MCP 서버 inventory</text>
+  <text x="50" y="152" class="detail">  중앙 Discover</text>
+  <text x="50" y="176" class="detail">· 접근 정책 설정(governance)</text>
+  <text x="50" y="200" class="detail">· 감사용 활동 모니터링</text>
+
+  <path class="flow" d="M310 130 L420 130" />
+  <path class="flow-back" d="M420 165 L310 165" />
+
+  <rect x="420" y="70" width="280" height="150" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="440" y="100" class="label">Azure API Management</text>
+  <text x="440" y="128" class="detail">AI Gateway tier (preview)</text>
+  <text x="440" y="152" class="detail">· Tool 단위 차단/허용 enforcement</text>
+  <text x="440" y="176" class="detail">· 요청·응답 관측(observability)</text>
+  <text x="440" y="200" class="detail">· Defender·Purview 위협 검사</text>
+
+  <path class="flow" d="M560 220 L560 270" />
+
+  <rect x="420" y="270" width="280" height="90" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="440" y="300" class="label">MCP 서버 · Tool</text>
+  <text x="440" y="326" class="detail">고객 환경의 gateway-managed</text>
+  <text x="440" y="348" class="detail">MCP 서버와 개별 tool</text>
+
+  <rect x="30" y="250" width="280" height="170" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="50" y="280" class="label">v2 tier vs AI Gateway tier</text>
+  <text x="50" y="310" class="detail">v2 tier — 중앙 inventory,</text>
+  <text x="50" y="332" class="detail">  서버 단위 차단/해제</text>
+  <text x="50" y="362" class="detail">AI Gateway tier(preview) —</text>
+  <text x="50" y="384" class="detail">  개별 tool 차단 + 관측 +</text>
+  <text x="50" y="406" class="detail">  위협 보호 추가</text>
+
+  <text x="30" y="450" class="detail">AI 관리자는 Agent 365에서 정책을 정하고, 플랫폼 팀은 고객 Azure 환경의</text>
+  <text x="30" y="472" class="detail">APIM에서 그 정책을 실제로 집행합니다.</text>
+</svg>
