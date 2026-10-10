@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from calendar import Calendar
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime
 from email.utils import format_datetime
 from html import escape
 import json
@@ -29,7 +29,6 @@ _SUMMARY_ITEM = re.compile(
     r"[ \t]*(.*(?:\n(?:[ \t]{2,}).*)*)"
 )
 _COUNT = re.compile(r"^(\d+)건(?:\s|$)")
-_KST = timezone(timedelta(hours=9))
 
 
 @dataclass(frozen=True)
@@ -44,6 +43,7 @@ class DailyUpdateSummary:
 @dataclass(frozen=True)
 class DailyUpdateReport:
     report_date: date
+    generated_at: datetime
     title: str
     description: str
     relative_path: PurePosixPath
@@ -99,6 +99,20 @@ def _report_date(value: Any, relative_path: PurePosixPath) -> date:
             pass
     raise DocumentFormatError(
         f"{relative_path.as_posix()}: report_date must be an ISO calendar date"
+    )
+
+
+def _generated_at(value: Any, relative_path: PurePosixPath) -> datetime:
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            pass
+    if isinstance(value, datetime) and value.utcoffset() is not None:
+        return value
+    raise DocumentFormatError(
+        f"{relative_path.as_posix()}: "
+        "generated_at must be an ISO timestamp with a UTC offset"
     )
 
 
@@ -189,6 +203,9 @@ def load_daily_update_reports(
         reports.append(
             DailyUpdateReport(
                 report_date=report_date,
+                generated_at=_generated_at(
+                    document.metadata.get("generated_at"), relative_path
+                ),
                 title=_required_text(document.metadata, "title", relative_path),
                 description=_required_text(
                     document.metadata, "description", relative_path
@@ -207,7 +224,7 @@ def build_daily_update_data(
     docs_dir: Path | str, *, include_search: bool = True
 ) -> str:
     renderer = Markdown(extensions=["extra", "admonition", "pymdownx.superfences"]) if include_search else None
-    reports = []
+    records = []
     for report in load_daily_update_reports(docs_dir):
         record = {
             "date": report.report_date.isoformat(),
@@ -221,8 +238,8 @@ def build_daily_update_data(
                 text=report.text,
                 excerpt="\n".join(line.strip() for line in excerpt.splitlines() if line.strip()),
             )
-        reports.append(record)
-    return json.dumps({"reports": reports}, ensure_ascii=False) + "\n"
+        records.append(record)
+    return json.dumps({"reports": records}, ensure_ascii=False) + "\n"
 
 
 def build_daily_update_feed(
@@ -241,15 +258,18 @@ def build_daily_update_feed(
     )
     ET.SubElement(channel, "language").text = "ko-kr"
 
-    for report in load_daily_update_reports(docs_dir):
+    reports = sorted(
+        load_daily_update_reports(docs_dir),
+        key=lambda report: report.generated_at,
+        reverse=True,
+    )
+    for report in reports:
         report_url = urljoin(archive_url, f"{report.report_date.isoformat()}/")
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = report.title
         ET.SubElement(item, "link").text = report_url
         ET.SubElement(item, "guid", {"isPermaLink": "true"}).text = report_url
-        ET.SubElement(item, "pubDate").text = format_datetime(
-            datetime.combine(report.report_date, time(hour=9), tzinfo=_KST)
-        )
+        ET.SubElement(item, "pubDate").text = format_datetime(report.generated_at)
         ET.SubElement(item, "description").text = report.description
 
     ET.indent(root, space="  ")
