@@ -2,6 +2,7 @@ from datetime import date
 from html.parser import HTMLParser
 import json
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from markdown import Markdown
 import pytest
@@ -10,6 +11,7 @@ import yaml
 from scripts.docs import daily_updates
 from scripts.docs.content import DocumentFormatError
 from scripts.docs.daily_updates import (
+    build_daily_update_feed,
     build_daily_update_index,
     load_daily_update_reports,
 )
@@ -39,6 +41,7 @@ def write_report(
     directory_date: str,
     *,
     report_date: str | None = None,
+    generated_at: str = "2026-10-08T09:00:00+09:00",
     title: str | None = None,
     body: str | None = None,
 ) -> None:
@@ -48,7 +51,7 @@ def write_report(
         "title": title or f"Azure Daily Update — {directory_date}",
         "description": f"{directory_date} Azure 업데이트 요약",
         "report_date": report_date or directory_date,
-        "generated_at": "2026-10-08T09:00:00+09:00",
+        "generated_at": generated_at,
     }
     path.write_text(
         "---\n"
@@ -78,6 +81,7 @@ class ArchiveMarkup(HTMLParser):
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
+        ("azure-daily-update/feed.xml", True),
         ("azure-daily-update/2026-10-08/images/architecture.png", True),
         ("azure-daily-update/2026-10-08/images/permissions.svg", True),
         ("azure-daily-update/draft/images/architecture.png", False),
@@ -455,3 +459,92 @@ def test_build_daily_update_index_has_explicit_empty_state(tmp_path: Path) -> No
     markup = ArchiveMarkup(page)
     assert not markup.select("data-daily-calendar")
     assert any(item.get("id") == "archive" for _, item in markup.elements)
+
+
+def test_daily_update_feed_contains_reports_newest_first_with_absolute_links(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(
+        docs,
+        "2026-10-06",
+        generated_at="2026-10-10T10:30:00+09:00",
+    )
+    write_report(
+        docs,
+        "2026-10-08",
+        generated_at="2026-10-09T21:52:00+09:00",
+    )
+
+    root = ET.fromstring(
+        build_daily_update_feed(
+            docs,
+            site_url="https://example.test/devguidesample/",
+        )
+    )
+
+    channel = root.find("channel")
+    assert channel is not None
+    assert channel.findtext("link") == (
+        "https://example.test/devguidesample/azure-daily-update/"
+    )
+    items = channel.findall("item")
+    assert [item.findtext("title") for item in items] == [
+        "Azure Daily Update — 2026-10-06",
+        "Azure Daily Update — 2026-10-08",
+    ]
+    assert items[0].findtext("link") == (
+        "https://example.test/devguidesample/azure-daily-update/2026-10-06/"
+    )
+    assert items[0].findtext("guid") == items[0].findtext("link")
+    assert items[0].findtext("pubDate") == "Sat, 10 Oct 2026 10:30:00 +0900"
+
+
+@pytest.mark.parametrize(
+    "generated_at",
+    ["not-a-time", "2026-10-09T21:52:00"],
+)
+def test_load_daily_update_reports_rejects_invalid_generated_at(
+    tmp_path: Path,
+    generated_at: str,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-08", generated_at=generated_at)
+
+    with pytest.raises(
+        DocumentFormatError,
+        match="generated_at must be an ISO timestamp with a UTC offset",
+    ):
+        load_daily_update_reports(docs)
+
+
+def test_daily_update_index_ends_with_collapsible_feed_guides(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-08")
+
+    page = build_daily_update_index(docs)
+
+    guide_position = page.index("## 업데이트 받아보기")
+    assert page.index("## 지난 업데이트 찾기") < guide_position
+    assert page.count('<details markdown="1">') == 3
+    assert "<summary>RSS 리더로 받기</summary>" in page
+    assert "<summary>메일로 받기</summary>" in page
+    assert "<summary>Microsoft Teams로 직접 받아보기</summary>" in page
+    assert "When a feed item is published" in page
+    assert "Post message in a chat or channel" in page
+    assert "https://make.powerautomate.com/" in page
+    assert page.rstrip().endswith("</details>")
+
+
+def test_empty_daily_update_index_still_offers_feed_subscription(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+
+    page = build_daily_update_index(docs)
+
+    assert "아직 게시된 일일 업데이트가 없습니다." in page
+    assert "## 업데이트 받아보기" in page

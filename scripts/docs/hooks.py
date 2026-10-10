@@ -427,11 +427,22 @@ def on_env(env: Any, config: Mapping[str, Any], files: Any) -> Any:
 
 
 def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
-    """Move generated redirect metadata into the final HTML head."""
+    """Advertise the daily feed and move redirect metadata into the HTML head."""
     page_file = getattr(page, "file", None)
     src_uri = getattr(page_file, "src_uri", None)
     if not isinstance(src_uri, str):
         return output
+    if src_uri.startswith("azure-daily-update/") and "application/rss+xml" not in output:
+        site_url = str(config.get("site_url", "")).rstrip("/")
+        if site_url:
+            feed_url = escape(
+                site_url + "/azure-daily-update/feed.xml", quote=True
+            )
+            feed_link = (
+                '<link rel="alternate" type="application/rss+xml" '
+                f'title="Azure Daily Update" href="{feed_url}">'
+            )
+            output = output.replace("</head>", feed_link + "\n</head>", 1)
 
     catalog = _topic_catalog_from_config(config)
     if catalog is None:
