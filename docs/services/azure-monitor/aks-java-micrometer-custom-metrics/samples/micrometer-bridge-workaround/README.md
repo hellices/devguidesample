@@ -60,10 +60,19 @@ build 또는 digest 조회가 실패하면 Helm upgrade를 실행하지 않습�
 
 ## 2. custom 3.7.9 mode 배포
 
+실제 Spring Boot application image를 필수로 지정합니다.
+
 ```bash
-helm lint ./helm
+APP_IMAGE_REPOSITORY="<application-image-repository>"
+APP_IMAGE_TAG="<application-image-tag>"
+
+helm lint ./helm \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG"
 
 helm template example ./helm \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
@@ -71,6 +80,8 @@ helm template example ./helm \
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
@@ -128,6 +139,8 @@ Portal namespace-wide onboarding이면
 
 ```bash
 helm template example ./helm \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=true \
   --set-string monitoring.managedInstrumentationRef=true
@@ -135,6 +148,8 @@ helm template example ./helm \
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=true \
   --set-string monitoring.managedInstrumentationRef=true
@@ -160,6 +175,8 @@ bridge를 끕니다.
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.managedInstrumentationRef=true
