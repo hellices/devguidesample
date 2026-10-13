@@ -32,27 +32,29 @@ application image에 jar를 직접 포함하는 PoC 방식은 포함하지 않�
 
 ## 1. 권장 3.7.9 init image build
 
-먼저 ACR image 존재를 확인합니다.
+기존 mutable tag의 존재 여부만으로 image를 재사용하지 않습니다.
+version-controlled Dockerfile로 build한 뒤 manifest digest를 기록합니다.
 
 ```bash
-az acr repository show \
-  --name <acr-name> \
-  --image observability/applicationinsights-agent:3.7.9 \
-  --output none
-```
+ACR_NAME=<acr-name>
 
-tag가 없으면 build하고 push합니다.
-
-```bash
 az acr build \
-  --registry <acr-name> \
+  --registry "$ACR_NAME" \
   --image observability/applicationinsights-agent:3.7.9 \
   --file Dockerfile \
   .
+
+AGENT_DIGEST="$(az acr manifest show-metadata \
+  --registry "$ACR_NAME" \
+  --name observability/applicationinsights-agent:3.7.9 \
+  --query digest \
+  --output tsv)"
+test -n "$AGENT_DIGEST"
+
+AGENT_IMAGE="${ACR_NAME}.azurecr.io/observability/applicationinsights-agent@${AGENT_DIGEST}"
 ```
 
-ACR 조회나 build가 실패하면 Helm upgrade를 실행하지 않습니다. image가 없는
-custom rollout은 `ImagePullBackOff`가 됩니다.
+build 또는 digest 조회가 실패하면 Helm upgrade를 실행하지 않습니다.
 
 ## 2. custom 3.7.9 mode 배포
 
@@ -62,14 +64,14 @@ helm lint ./helm
 helm template example ./helm \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
-  --set-string monitoring.javaAgentImage=<acr-name>.azurecr.io/observability/applicationinsights-agent:3.7.9
+  --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
 
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
-  --set-string monitoring.javaAgentImage=<acr-name>.azurecr.io/observability/applicationinsights-agent:3.7.9
+  --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
 ```
 
 custom mode에서 bridge를 `true`로 설정하면 values schema와 template이
@@ -128,8 +130,9 @@ helm template example ./helm \
   --set monitoring.micrometerBridgeEnabled=true \
   --set-string monitoring.managedInstrumentationRef=true
 
-helm upgrade example ./helm \
+helm upgrade --install example ./helm \
   --namespace apps \
+  --create-namespace \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=true \
   --set-string monitoring.managedInstrumentationRef=true
@@ -152,8 +155,9 @@ bridge option을 사용했다면 agent upgrade와 **같은 Helm rollout**에서
 bridge를 끕니다.
 
 ```bash
-helm upgrade example ./helm \
+helm upgrade --install example ./helm \
   --namespace apps \
+  --create-namespace \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.managedInstrumentationRef=true

@@ -148,27 +148,32 @@ ENTRYPOINT ["cp", "/applicationinsights-agent-codeless.jar", "/azure-monitor-aut
 
 </details>
 
-먼저 ACR tag를 확인합니다.
+기존 mutable tag의 존재만 확인해서 build를 건너뛰지 않습니다.
+version-controlled Dockerfile로 image를 build한 뒤 manifest digest를
+기록합니다.
 
 ```bash
-az acr repository show \
-  --name <acr-name> \
-  --image observability/applicationinsights-agent:3.7.9 \
-  --output none
-```
+ACR_NAME=<acr-name>
 
-tag가 없으면 build하고 push합니다.
-
-```bash
 az acr build \
-  --registry <acr-name> \
+  --registry "$ACR_NAME" \
   --image observability/applicationinsights-agent:3.7.9 \
   --file Dockerfile \
   .
+
+AGENT_DIGEST="$(az acr manifest show-metadata \
+  --registry "$ACR_NAME" \
+  --name observability/applicationinsights-agent:3.7.9 \
+  --query digest \
+  --output tsv)"
+test -n "$AGENT_DIGEST"
+
+AGENT_IMAGE="${ACR_NAME}.azurecr.io/observability/applicationinsights-agent@${AGENT_DIGEST}"
 ```
 
-ACR 조회나 build가 실패하면 Helm upgrade를 실행하지 않습니다. image가
-없는 상태로 rollout하면 init container가 `ImagePullBackOff`가 됩니다.
+build 또는 digest 조회가 실패하면 Helm upgrade를 실행하지 않습니다.
+승인 기록에는 `AGENT_DIGEST`를 남기고 deployment에는 mutable tag가 아니라
+`repository@sha256:<digest>` 형식의 `AGENT_IMAGE`를 전달합니다.
 
 ### 2. Helm managed/custom switch
 
@@ -187,7 +192,7 @@ helm upgrade <release> <chart> \
   --namespace <namespace> \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
-  --set-string monitoring.javaAgentImage=<acr-name>.azurecr.io/observability/applicationinsights-agent:3.7.9
+  --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
 ```
 
 rendered Pod template에는 다음 항목이 있어야 합니다.
