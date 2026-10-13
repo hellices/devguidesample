@@ -1,0 +1,96 @@
+{{- $customJavaAgent := eq .Values.monitoring.javaAgentMode "custom" -}}
+{{- if and $customJavaAgent (not .Values.monitoring.javaAgentImage) -}}
+{{- fail "monitoring.javaAgentImage is required when monitoring.javaAgentMode=custom" -}}
+{{- end -}}
+{{- if and $customJavaAgent .Values.monitoring.micrometerBridgeEnabled -}}
+{{- fail "monitoring.micrometerBridgeEnabled must be false when monitoring.javaAgentMode=custom" -}}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Release.Name }}
+      annotations:
+        {{- if $customJavaAgent }}
+        instrumentation.opentelemetry.io/inject-java: "false"
+        {{- else }}
+        instrumentation.opentelemetry.io/inject-java: {{ .Values.monitoring.managedInstrumentationRef | quote }}
+        {{- end }}
+    spec:
+      {{- if $customJavaAgent }}
+      initContainers:
+        - name: applicationinsights-agent
+          image: {{ .Values.monitoring.javaAgentImage | quote }}
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: applicationinsights-agent
+              mountPath: /azure-monitor-auto-instrumentation-java
+      {{- end }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: {{ .Values.service.name | quote }}
+            - name: MANAGEMENT_APPLICATION_INSIGHTS_MICROMETER_BRIDGE_ENABLED
+              value: {{ .Values.monitoring.micrometerBridgeEnabled | quote }}
+            {{- if $customJavaAgent }}
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: JAVA_TOOL_OPTIONS
+              value: -javaagent:/azure-monitor-auto-instrumentation-java/applicationinsights-agent-codeless.jar
+            - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.monitoring.connectionStringSecret.name | quote }}
+                  key: {{ .Values.monitoring.connectionStringSecret.key | quote }}
+            - name: APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED
+              value: "true"
+            - name: APPLICATIONINSIGHTS_SELF_DIAGNOSTICS_LEVEL
+              value: INFO
+            - name: APPLICATIONINSIGHTS_SELF_DIAGNOSTICS_FILE_PATH
+              value: /var/log/applicationinsights/java-applicationinsights.log
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "k8s.namespace.name=$(POD_NAMESPACE),k8s.node.name=$(NODE_NAME),k8s.pod.name=$(POD_NAME),k8s.pod.uid=$(POD_UID),k8s.container.name=app,service.name={{ .Values.service.name }},service.instance.id=$(POD_NAME)"
+            {{- end }}
+          {{- if $customJavaAgent }}
+          volumeMounts:
+            - name: applicationinsights-agent
+              mountPath: /azure-monitor-auto-instrumentation-java
+              readOnly: true
+            - name: applicationinsights-logs
+              mountPath: /var/log/applicationinsights
+          {{- end }}
+      {{- if $customJavaAgent }}
+      volumes:
+        - name: applicationinsights-agent
+          emptyDir: {}
+        - name: applicationinsights-logs
+          emptyDir:
+            sizeLimit: 100Mi
+      {{- end }}

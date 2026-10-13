@@ -63,6 +63,7 @@ technologies:
   kafka: Apache Kafka
   kubernetes: Kubernetes
   mcp: Model Context Protocol
+  micrometer: Micrometer
   mongodb: MongoDB
   mysql: MySQL
   nodejs: Node.js
@@ -73,6 +74,7 @@ technologies:
   rag: Retrieval-augmented generation
   redis: Redis
   rest-api: REST API
+  spring-boot: Spring Boot
 
 tags:
   design: 설계
