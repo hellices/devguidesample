@@ -36,7 +36,9 @@ application image에 jar를 직접 포함하는 PoC 방식은 포함하지 않�
 version-controlled Dockerfile로 build한 뒤 manifest digest를 기록합니다.
 
 ```bash
-ACR_NAME=<acr-name>
+set -euo pipefail
+
+ACR_NAME="<acr-name>"
 
 az acr build \
   --registry "$ACR_NAME" \
@@ -49,7 +51,7 @@ AGENT_DIGEST="$(az acr manifest show-metadata \
   --name observability/applicationinsights-agent:3.7.9 \
   --query digest \
   --output tsv)"
-test -n "$AGENT_DIGEST"
+[[ "$AGENT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
 
 AGENT_IMAGE="${ACR_NAME}.azurecr.io/observability/applicationinsights-agent@${AGENT_DIGEST}"
 ```

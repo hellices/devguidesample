@@ -151,7 +151,9 @@ version-controlled Dockerfile로 image를 build한 뒤 manifest digest를
 기록합니다.
 
 ```bash
-ACR_NAME=<acr-name>
+set -euo pipefail
+
+ACR_NAME="<acr-name>"
 
 az acr build \
   --registry "$ACR_NAME" \
@@ -164,7 +166,7 @@ AGENT_DIGEST="$(az acr manifest show-metadata \
   --name observability/applicationinsights-agent:3.7.9 \
   --query digest \
   --output tsv)"
-test -n "$AGENT_DIGEST"
+[[ "$AGENT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
 
 AGENT_IMAGE="${ACR_NAME}.azurecr.io/observability/applicationinsights-agent@${AGENT_DIGEST}"
 ```
@@ -238,12 +240,23 @@ custom mode는 workload annotation을 `"false"`로 렌더링합니다. 관리형
 9. 합성 데이터를 삭제하고 read-after-delete를 확인합니다.
 
 ```kusto
+let rolloutStart = datetime(<UTC-rollout-start>);
 customMetrics
+| where timestamp >= rolloutStart
 | where name startswith "onboarding_write"
+| where cloud_RoleInstance in (
+    "<current-pod-name-1>",
+    "<current-pod-name-2>"
+  )
 | project timestamp, name, value, customDimensions,
           cloud_RoleName, cloud_RoleInstance
 | order by timestamp desc
 ```
+
+`rolloutStart`는 실제 rollout 직전 UTC 시각으로 바꾸고,
+`cloud_RoleInstance`에는 `kubectl get pods`로 확인한 현재 Pod 이름만
+나열합니다. 과거 rollout의 같은 metric 이름을 새 배포의 성공으로
+오인하지 마세요.
 
 Application Insights Java는 Micrometer metric 이름의 점을 underscore로
 정규화합니다. Counter는 increment가 없던 다음 step에 0이 보일 수 있으므로
