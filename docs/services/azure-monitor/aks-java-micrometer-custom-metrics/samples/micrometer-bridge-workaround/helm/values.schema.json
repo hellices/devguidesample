@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["image", "service", "monitoring"],
+  "properties": {
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "required": [
+        "javaAgentMode",
+        "micrometerBridgeEnabled",
+        "managedInstrumentationRef",
+        "connectionStringSecret"
+      ],
+      "properties": {
+        "javaAgentMode": {
+          "type": "string",
+          "enum": ["managed", "custom"]
+        },
+        "micrometerBridgeEnabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "javaAgentImage": {
+          "type": "string"
+        },
+        "managedInstrumentationRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "connectionStringSecret": {
+          "type": "object",
+          "required": ["name", "key"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "monitoring": {
+            "properties": {
+              "javaAgentMode": {
+                "const": "custom"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "monitoring": {
+            "required": ["javaAgentImage"],
+            "properties": {
+              "javaAgentImage": {
+                "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
+              },
+              "micrometerBridgeEnabled": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
