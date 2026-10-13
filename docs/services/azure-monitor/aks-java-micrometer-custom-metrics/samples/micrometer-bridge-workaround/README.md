@@ -98,6 +98,12 @@ CrashLoop과 Helm timeout을 일으켰으며 auto-configuration 순서 annotatio
 - `JAVA_TOOL_OPTIONS=-javaagent:...`
 - Secret 기반 connection string, self-diagnostics와 resource attributes
 
+환경 변수는 정확히
+`APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED=true`를 사용합니다.
+3.7.7/3.7.9 agent와 공식 AKS smoke test는 `LOGANALYTICS`를 한 단어로
+사용합니다. `APPLICATIONINSIGHTS_METRICS_TO_LOG_ANALYTICS_ENABLED`처럼
+underscore를 추가한 변형은 사용하지 않습니다.
+
 ## 3. application bridge test
 
 관리형 onboarding을 유지하면서 code로 해결하려는 경우에만 bridge를

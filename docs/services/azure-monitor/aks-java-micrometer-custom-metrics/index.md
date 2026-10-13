@@ -25,6 +25,8 @@ official_sources:
     url: https://github.com/microsoft/ApplicationInsights-Java/pull/4672
   - title: Application Insights Java 3.7.9 (GA)
     url: https://github.com/microsoft/ApplicationInsights-Java/releases/tag/3.7.9
+  - title: Application Insights Java 3.7.9 AKS Log Analytics metrics smoke test
+    url: https://github.com/microsoft/ApplicationInsights-Java/blob/3.7.9/smoke-tests/apps/OtlpMetrics/src/smokeTest/java/com/microsoft/applicationinsights/smoketest/OtlpLogAnalyticsOnAksTest.java
   - title: Micrometer metrics not pushed to Application Insights after upgrade to Spring Boot 4.0.0
     url: https://github.com/microsoft/ApplicationInsights-Java/issues/4577
   - title: Build a Container Image On-Demand in Azure
@@ -205,6 +207,14 @@ rendered Pod template에는 다음 항목이 있어야 합니다.
 - `APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED=true`
 - self-diagnostics와 bounded log volume
 - `OTEL_SERVICE_NAME`과 downward API 기반 Pod/node resource attributes
+
+!!! note "환경 변수 이름은 `LOGANALYTICS`가 한 단어"
+    정확한 key는
+    `APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED`입니다.
+    일반적인 이름 변환처럼 보이는
+    `APPLICATIONINSIGHTS_METRICS_TO_LOG_ANALYTICS_ENABLED`는 사용하지
+    않습니다. 3.7.7/3.7.9 agent는 역사적으로 `LOGANALYTICS`를 붙여 읽고,
+    공식 3.7.9 AKS smoke test도 같은 key를 사용합니다.
 
 하나의 JVM에 managed agent와 custom agent가 함께 붙지 않는지 rendered
 manifest와 실제 Pod spec을 모두 확인합니다.
@@ -426,6 +436,8 @@ managed 3.7.9+에서도 `@ConditionalOnMissingBean`만 믿고 자동 back-off를
 
 - actual agent가 3.7.9인지 확인합니다.
 - custom mode의 bridge flag가 `false`인지 확인합니다.
+- metrics-to-Log-Analytics key가 underscore 변형이 아닌
+  `APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED`인지 확인합니다.
 - Micrometer instrumentation을 비활성화한 설정이 없는지 확인합니다.
 - 점을 underscore로 바꾼 이름으로 조회합니다.
 - current Pod instance와 positive sample, dimension을 함께 확인합니다.
