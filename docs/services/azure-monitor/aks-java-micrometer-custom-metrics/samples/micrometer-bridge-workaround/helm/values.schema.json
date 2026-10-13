@@ -95,7 +95,7 @@
             "required": ["javaAgentImage"],
             "properties": {
               "javaAgentImage": {
-                "minLength": 1
+                "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
               },
               "micrometerBridgeEnabled": {
                 "const": false

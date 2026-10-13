@@ -116,12 +116,10 @@ curl -fsSL \
   | jq -r '.tags[] | select(endswith("-aks"))'
 ```
 
-2026-10-14 사례 환경의 CRD schema에는
-`spec.destination.applicationInsightsConnectionString`과
-`spec.settings.autoInstrumentationPlatforms`가 있었지만 image나 version
-필드는 없었습니다. managed Pod에는 `3.7.7-aks`가 주입됐고 MCR tag
-목록에는 `3.7.9-aks`가 없었습니다. 현재 상태는 바뀔 수 있으므로 적용 당일
-다시 조회하세요.
+`Instrumentation` CR은 connection string과 대상 platform을 구성하지만
+agent image/version override를 제공하지 않습니다. 실제 Pod에 주입된 image와
+MCR tag는 적용 당일 다시 조회하세요. 이 가이드는 actual image가
+`3.7.7-aks`일 때만 적용합니다.
 
 ## A. ACR custom 3.7.9 init image 적용
 
@@ -246,24 +244,6 @@ customMetrics
           cloud_RoleName, cloud_RoleInstance
 | order by timestamp desc
 ```
-
-2026-10-14 최종 rollout에서는 API 8, onboarding 10, consumer 4, 총 22
-Pods가 같은 ACR 3.7.9 init image를 사용했고 restart 0, health HTTP 200을
-유지했습니다. `onboarding_write_inflight`는 current instance 8/10/4
-전체에서 수집됐습니다.
-
-합성 record 한 건의 positive sample은 각각 한 행이었습니다.
-
-| metric | 관측 |
-|---|---|
-| `onboarding_write` | `27.762442` ms |
-| `onboarding_write_records` | value `1`, `collection=health_heart_rate` |
-| `onboarding_write_outcome` | value `1`, `collection=health_heart_rate`, `outcome=success` |
-| `onboarding_write_wait` | `0.137169` ms |
-
-중복 export는 없었습니다. 합성 record는 POST HTTP 200, 처리 records 1을
-확인한 뒤 DELETE HTTP 200으로 지웠고 같은 GUID의 GET HTTP 404로 cleanup을
-확인했습니다.
 
 Application Insights Java는 Micrometer metric 이름의 점을 underscore로
 정규화합니다. Counter는 increment가 없던 다음 step에 0이 보일 수 있으므로
@@ -398,15 +378,13 @@ helm upgrade <release> <chart> \
   --set monitoring.micrometerBridgeEnabled=true
 ```
 
-### bridge 실측
+### bridge 검증
 
-managed 3.7.7 + bridge `true`에서는 custom init container 0개, 22 Pods
-restart 0, health HTTP 200을 확인했습니다. Gauge는 API 8, onboarding 10,
-consumer 4 current instance 전체에서 수집됐습니다.
-
-합성 write의 timer, wait, records와 outcome positive sample은 각각 한 행씩
-도착했고 중복은 없었습니다. 합성 record cleanup도 POST 200, records 1,
-DELETE 200, GET 404로 확인했습니다.
+rendered Pod에 custom init container와 custom agent volume이 없어야 하며
+actual agent가 managed `3.7.7-aks`인지 확인합니다. Gauge, timer, counter와
+dimension을 발생시켜 current Pod instance마다 수집되는지, 같은 합성
+transaction이 중복 export되지 않는지 확인합니다. 합성 데이터는 검증 뒤
+삭제하고 read-after-delete까지 수행합니다.
 
 ### 3.7.9에서는 bridge를 반드시 끔
 
@@ -471,8 +449,8 @@ test를 유지하세요.
 - 3.7.7/3.7.9 source, PR #4672와 release는 Boot 4
   auto-configuration 차이를 확인합니다.
 - custom 3.7.9 bridge on/off, managed 3.7.7 bridge와 managed 3.7.9 takeover
-  조합을 live rollout 또는 회귀 test로 검증했습니다.
-- Microsoft Learn 원문, official source와 세 조합의 실측을 함께 대조해
+  조합을 sample test와 배포 검증 계약으로 고정했습니다.
+- Microsoft Learn 원문과 official source, sample 검증을 함께 대조해
   `verification_status: verified`로 기록했습니다.
 
 ## 공식 참고 자료

@@ -22,8 +22,8 @@ class AzureMonitorMeterRegistryBridgeConfigurationTest {
         try {
             contextRunner(false).run(context -> {
                 assertThat(context).hasNotFailed();
-                MeterRegistry registry = context.getBean("azureMonitorMeterRegistry",
-                        MeterRegistry.class);
+                MeterRegistry registry = context.getBean(MeterRegistry.class);
+                assertThat(registry).isNotSameAs(agentRegistry);
 
                 registry.counter("bridge.test", "source", "spring").increment();
 
