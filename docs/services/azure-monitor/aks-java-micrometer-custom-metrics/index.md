@@ -7,7 +7,7 @@ technologies: [kubernetes, java, spring-boot, micrometer, docker]
 tags: [diagnose, deploy, operate, evaluate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-14
+sources_checked_at: 2026-10-13
 official_sources:
   - title: Set up codeless monitoring for AKS with Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless
@@ -33,7 +33,7 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/cluster-container-registry-integration
   - title: Volumes
     url: https://kubernetes.io/docs/concepts/storage/volumes/
-last_verified: 2026-10-14
+last_verified: 2026-10-13
 review_cycle_days: 30
 applies_to:
   - AKS Application Monitoring Java autoinstrumentation
