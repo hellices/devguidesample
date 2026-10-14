@@ -493,10 +493,12 @@ def test_daily_update_feed_contains_reports_newest_first_with_absolute_links(
         "Azure Daily Update — 2026-10-06",
         "Azure Daily Update — 2026-10-08",
     ]
-    assert items[0].findtext("link") == (
-        "https://example.test/devguidesample/azure-daily-update/2026-10-06/"
-    )
-    assert items[0].findtext("guid") == items[0].findtext("link")
+    expected_links = [
+        "https://example.test/devguidesample/azure-daily-update/2026-10-06/",
+        "https://example.test/devguidesample/azure-daily-update/2026-10-08/",
+    ]
+    assert [item.findtext("link") for item in items] == expected_links
+    assert [item.findtext("guid") for item in items] == expected_links
     assert items[0].findtext("pubDate") == "Sat, 10 Oct 2026 01:30:00 GMT"
 
 
@@ -578,6 +580,7 @@ def test_daily_update_index_records_verified_microsoft_sources(
         "https://learn.microsoft.com/connectors/teams/",
         "https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook",
     }
+    assert metadata["official_sources"][-1]["title"] == "Create an Incoming Webhook"
 
 
 def test_empty_daily_update_index_still_offers_feed_subscription(
@@ -590,3 +593,4 @@ def test_empty_daily_update_index_still_offers_feed_subscription(
 
     assert "아직 게시된 일일 업데이트가 없습니다." in page
     assert "## 업데이트 받아보기" in page
+    assert "[`feed.xml`](feed.xml)" in page

@@ -389,7 +389,7 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
                     "url": "https://learn.microsoft.com/connectors/teams/",
                 },
                 {
-                    "title": "Create Incoming Webhooks",
+                    "title": "Create an Incoming Webhook",
                     "url": (
                         "https://learn.microsoft.com/microsoftteams/platform/"
                         "webhooks-and-connectors/how-to/add-incoming-webhook"

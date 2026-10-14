@@ -438,8 +438,9 @@ def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
         src_uri.startswith("azure-daily-update/")
         and "application/rss+xml" not in head_html
     ):
-        site_url = str(config.get("site_url", "")).rstrip("/")
-        if site_url:
+        raw_site_url = config.get("site_url")
+        if raw_site_url:
+            site_url = str(raw_site_url).rstrip("/")
             feed_url = escape(
                 site_url + "/azure-daily-update/feed.xml", quote=True
             )

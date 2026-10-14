@@ -791,6 +791,21 @@ def test_daily_update_body_text_does_not_suppress_feed_discovery() -> None:
     assert 'rel="alternate" type="application/rss+xml"' in head
 
 
+def test_daily_update_feed_discovery_skips_missing_site_url() -> None:
+    page = SimpleNamespace(
+        file=SimpleNamespace(src_uri="azure-daily-update/2026-10-08/index.md")
+    )
+
+    rendered = on_post_page(
+        "<html><head></head><body></body></html>",
+        page,
+        {"docs_dir": "docs", "site_url": None},
+    )
+
+    assert "application/rss+xml" not in rendered
+    assert "href=\"None/azure-daily-update/feed.xml\"" not in rendered
+
+
 def make_search_repository(tmp_path: Path) -> Path:
     taxonomy = {
         "collections": {"guide": {"path": "guides"}},
