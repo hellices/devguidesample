@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Treat Azure DocumentDB's MongoDB-compatible endpoint as the source for this repository-owned experiment.
-- Use a disposable single-shard, non-HA DocumentDB test cluster and two-node AKS cluster, then delete the resource group after evidence collection.
+- Use a disposable single-shard, non-HA DocumentDB test cluster and the existing sample's four-node AKS default, then delete the resource group after evidence collection.
 - Never publish subscription, tenant, resource-group, host, credential, kubeconfig, or user identifiers.
 - Keep one writer per `STREAM_ID`; scale only across independent stream IDs, collections, or tenant partitions.
 - Preserve the existing checkpoint, lease, deterministic chunk, and retry protocol.

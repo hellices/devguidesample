@@ -14,8 +14,8 @@ the sanitized results, and open a pull request.
   repository already owns a runnable Azure DocumentDB sample and the requested
   deployment target is an Azure subscription.
 - The experiment is disposable. It uses a single-shard, non-HA test cluster
-  and a two-node AKS cluster, then deletes the resource group after evidence is
-  collected.
+  and the existing sample's four-node AKS default, then deletes the resource
+  group after evidence is collected.
 - A source collection has one ordered resume-token chain. Parallel workers may
   process independent stream IDs, collections, or tenant partitions, but must
   not advance one checkpoint concurrently.
