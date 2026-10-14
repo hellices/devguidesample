@@ -30,6 +30,17 @@ application image에 jar를 직접 포함하는 PoC 방식은 포함하지 않�
 | `src/test/` | registry 노출, startup fail과 future-agent takeover test입니다. |
 | `pom.xml` | Spring Boot 4.0.0 기반 bridge test입니다. |
 
+## 공통 application image 입력
+
+custom init과 managed bridge 어느 경로를 선택하든 실제 Spring Boot
+application image가 필요합니다. 각 Helm 배포 세션을 시작할 때 먼저
+설정합니다.
+
+```bash
+APP_IMAGE_REPOSITORY="<application-image-repository>"
+APP_IMAGE_TAG="<application-image-tag>"
+```
+
 ## 1. 권장 3.7.9 init image build
 
 기존 mutable tag의 존재 여부만으로 image를 재사용하지 않습니다.
@@ -60,12 +71,7 @@ build 또는 digest 조회가 실패하면 Helm upgrade를 실행하지 않습�
 
 ## 2. custom 3.7.9 mode 배포
 
-실제 Spring Boot application image를 필수로 지정합니다.
-
 ```bash
-APP_IMAGE_REPOSITORY="<application-image-repository>"
-APP_IMAGE_TAG="<application-image-tag>"
-
 helm lint ./helm \
   --set-string image.repository="$APP_IMAGE_REPOSITORY" \
   --set-string image.tag="$APP_IMAGE_TAG"
