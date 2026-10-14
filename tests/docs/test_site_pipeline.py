@@ -791,10 +791,18 @@ def test_daily_update_body_text_does_not_suppress_feed_discovery() -> None:
     assert 'rel="alternate" type="application/rss+xml"' in head
 
 
-def test_daily_update_feed_discovery_skips_missing_site_url() -> None:
-    page = SimpleNamespace(
-        file=SimpleNamespace(src_uri="azure-daily-update/2026-10-08/index.md")
-    )
+@pytest.mark.parametrize(
+    ("src_uri", "expected_href"),
+    [
+        ("azure-daily-update/index.md", "feed.xml"),
+        ("azure-daily-update/2026-10-08/index.md", "../feed.xml"),
+    ],
+)
+def test_daily_update_feed_discovery_uses_relative_url_when_site_url_is_missing(
+    src_uri: str,
+    expected_href: str,
+) -> None:
+    page = SimpleNamespace(file=SimpleNamespace(src_uri=src_uri))
 
     rendered = on_post_page(
         "<html><head></head><body></body></html>",
@@ -802,8 +810,8 @@ def test_daily_update_feed_discovery_skips_missing_site_url() -> None:
         {"docs_dir": "docs", "site_url": None},
     )
 
-    assert "application/rss+xml" not in rendered
-    assert "href=\"None/azure-daily-update/feed.xml\"" not in rendered
+    assert 'type="application/rss+xml"' in rendered
+    assert f'href="{expected_href}"' in rendered
 
 
 def make_search_repository(tmp_path: Path) -> Path:

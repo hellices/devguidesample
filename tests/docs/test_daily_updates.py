@@ -573,14 +573,20 @@ def test_daily_update_index_records_verified_microsoft_sources(
     assert metadata["verification_status"] == "verified"
     assert metadata["sources_checked_at"] == date(2026, 10, 14)
     assert {
-        source["url"] for source in metadata["official_sources"]
+        (source["url"], source["title"])
+        for source in metadata["official_sources"]
     } == {
-        "https://learn.microsoft.com/connectors/rss/",
-        "https://learn.microsoft.com/connectors/office365/",
-        "https://learn.microsoft.com/connectors/teams/",
-        "https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook",
+        ("https://learn.microsoft.com/connectors/rss/", "RSS"),
+        (
+            "https://learn.microsoft.com/connectors/office365/",
+            "Office 365 Outlook",
+        ),
+        ("https://learn.microsoft.com/connectors/teams/", "Microsoft Teams"),
+        (
+            "https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook",
+            "Create an Incoming Webhook",
+        ),
     }
-    assert metadata["official_sources"][-1]["title"] == "Create an Incoming Webhook"
 
 
 def test_empty_daily_update_index_still_offers_feed_subscription(
