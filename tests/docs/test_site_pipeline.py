@@ -752,6 +752,68 @@ def test_on_post_page_injects_head_redirect_tags_when_theme_canonical_is_missing
     assert '<meta http-equiv="refresh" content="0; url=../../../services/aks/network-diagnosis/">' in rendered
 
 
+def test_on_post_page_advertises_daily_update_feed() -> None:
+    page = SimpleNamespace(
+        file=SimpleNamespace(src_uri="azure-daily-update/2026-10-08/index.md")
+    )
+
+    rendered = on_post_page(
+        "<html><head></head><body></body></html>",
+        page,
+        {
+            "docs_dir": "docs",
+            "site_url": "https://example.test/devguidesample/",
+        },
+    )
+
+    assert (
+        '<link rel="alternate" type="application/rss+xml" '
+        'title="Azure Daily Update" '
+        'href="https://example.test/devguidesample/azure-daily-update/feed.xml">'
+    ) in rendered
+
+
+def test_daily_update_body_text_does_not_suppress_feed_discovery() -> None:
+    page = SimpleNamespace(
+        file=SimpleNamespace(src_uri="azure-daily-update/2026-10-08/index.md")
+    )
+
+    rendered = on_post_page(
+        "<html><head></head><body><p>application/rss+xml</p></body></html>",
+        page,
+        {
+            "docs_dir": "docs",
+            "site_url": "https://example.test/devguidesample/",
+        },
+    )
+
+    head = rendered.split("<head>", 1)[1].split("</head>", 1)[0]
+    assert 'rel="alternate" type="application/rss+xml"' in head
+
+
+@pytest.mark.parametrize(
+    ("src_uri", "expected_href"),
+    [
+        ("azure-daily-update/index.md", "feed.xml"),
+        ("azure-daily-update/2026-10-08/index.md", "../feed.xml"),
+    ],
+)
+def test_daily_update_feed_discovery_uses_relative_url_when_site_url_is_missing(
+    src_uri: str,
+    expected_href: str,
+) -> None:
+    page = SimpleNamespace(file=SimpleNamespace(src_uri=src_uri))
+
+    rendered = on_post_page(
+        "<html><head></head><body></body></html>",
+        page,
+        {"docs_dir": "docs", "site_url": None},
+    )
+
+    assert 'type="application/rss+xml"' in rendered
+    assert f'href="{expected_href}"' in rendered
+
+
 def make_search_repository(tmp_path: Path) -> Path:
     taxonomy = {
         "collections": {"guide": {"path": "guides"}},

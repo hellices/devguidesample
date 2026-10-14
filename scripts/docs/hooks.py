@@ -16,6 +16,7 @@ from mkdocs.structure.files import File, InclusionLevel
 from mkdocs.structure import StructureItem
 from mkdocs.structure.nav import Navigation, Section
 from mkdocs.structure.pages import Page
+from mkdocs.utils import get_relative_url
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -427,11 +428,31 @@ def on_env(env: Any, config: Mapping[str, Any], files: Any) -> Any:
 
 
 def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
-    """Move generated redirect metadata into the final HTML head."""
+    """Advertise the daily feed and move redirect metadata into the HTML head."""
     page_file = getattr(page, "file", None)
     src_uri = getattr(page_file, "src_uri", None)
     if not isinstance(src_uri, str):
         return output
+    head_match = re.search(r"<head>(.*?)</head>", output, flags=re.DOTALL)
+    head_html = head_match.group(1) if head_match else ""
+    if (
+        src_uri.startswith("azure-daily-update/")
+        and "application/rss+xml" not in head_html
+    ):
+        raw_site_url = config.get("site_url")
+        if raw_site_url:
+            site_url = str(raw_site_url).rstrip("/")
+            feed_url = site_url + "/azure-daily-update/feed.xml"
+        else:
+            feed_url = get_relative_url(
+                "azure-daily-update/feed.xml",
+                src_uri,
+            )
+        feed_link = (
+            '<link rel="alternate" type="application/rss+xml" '
+            f'title="Azure Daily Update" href="{escape(feed_url, quote=True)}">'
+        )
+        output = output.replace("</head>", feed_link + "\n</head>", 1)
 
     catalog = _topic_catalog_from_config(config)
     if catalog is None:
