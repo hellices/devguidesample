@@ -30,6 +30,17 @@ application image에 jar를 직접 포함하는 PoC 방식은 포함하지 않�
 | `src/test/` | registry 노출, startup fail과 future-agent takeover test입니다. |
 | `pom.xml` | Spring Boot 4.0.0 기반 bridge test입니다. |
 
+## 공통 application image 입력
+
+custom init과 managed bridge 어느 경로를 선택하든 실제 Spring Boot
+application image가 필요합니다. 각 Helm 배포 세션을 시작할 때 먼저
+설정합니다.
+
+```bash
+APP_IMAGE_REPOSITORY="<application-image-repository>"
+APP_IMAGE_TAG="<application-image-tag>"
+```
+
 ## 1. 권장 3.7.9 init image build
 
 기존 mutable tag의 존재 여부만으로 image를 재사용하지 않습니다.
@@ -61,9 +72,13 @@ build 또는 digest 조회가 실패하면 Helm upgrade를 실행하지 않습�
 ## 2. custom 3.7.9 mode 배포
 
 ```bash
-helm lint ./helm
+helm lint ./helm \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG"
 
 helm template example ./helm \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
@@ -71,6 +86,8 @@ helm template example ./helm \
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=custom \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.javaAgentImage="$AGENT_IMAGE"
@@ -86,6 +103,12 @@ CrashLoop과 Helm timeout을 일으켰으며 auto-configuration 순서 annotatio
 - agent jar용 `emptyDir`와 app read-only mount
 - `JAVA_TOOL_OPTIONS=-javaagent:...`
 - Secret 기반 connection string, self-diagnostics와 resource attributes
+
+환경 변수는 정확히
+`APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED=true`를 사용합니다.
+3.7.7/3.7.9 agent와 공식 AKS smoke test는 `LOGANALYTICS`를 한 단어로
+사용합니다. `APPLICATIONINSIGHTS_METRICS_TO_LOG_ANALYTICS_ENABLED`처럼
+underscore를 추가한 변형은 사용하지 않습니다.
 
 ## 3. application bridge test
 
@@ -128,6 +151,8 @@ Portal namespace-wide onboarding이면
 
 ```bash
 helm template example ./helm \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=true \
   --set-string monitoring.managedInstrumentationRef=true
@@ -135,6 +160,8 @@ helm template example ./helm \
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=true \
   --set-string monitoring.managedInstrumentationRef=true
@@ -160,6 +187,8 @@ bridge를 끕니다.
 helm upgrade --install example ./helm \
   --namespace apps \
   --create-namespace \
+  --set-string image.repository="$APP_IMAGE_REPOSITORY" \
+  --set-string image.tag="$APP_IMAGE_TAG" \
   --set monitoring.javaAgentMode=managed \
   --set monitoring.micrometerBridgeEnabled=false \
   --set-string monitoring.managedInstrumentationRef=true
