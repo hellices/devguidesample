@@ -432,7 +432,12 @@ def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
     src_uri = getattr(page_file, "src_uri", None)
     if not isinstance(src_uri, str):
         return output
-    if src_uri.startswith("azure-daily-update/") and "application/rss+xml" not in output:
+    head_match = re.search(r"<head>(.*?)</head>", output, flags=re.DOTALL)
+    head_html = head_match.group(1) if head_match else ""
+    if (
+        src_uri.startswith("azure-daily-update/")
+        and "application/rss+xml" not in head_html
+    ):
         site_url = str(config.get("site_url", "")).rstrip("/")
         if site_url:
             feed_url = escape(

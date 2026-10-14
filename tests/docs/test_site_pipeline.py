@@ -773,6 +773,24 @@ def test_on_post_page_advertises_daily_update_feed() -> None:
     ) in rendered
 
 
+def test_daily_update_body_text_does_not_suppress_feed_discovery() -> None:
+    page = SimpleNamespace(
+        file=SimpleNamespace(src_uri="azure-daily-update/2026-10-08/index.md")
+    )
+
+    rendered = on_post_page(
+        "<html><head></head><body><p>application/rss+xml</p></body></html>",
+        page,
+        {
+            "docs_dir": "docs",
+            "site_url": "https://example.test/devguidesample/",
+        },
+    )
+
+    head = rendered.split("<head>", 1)[1].split("</head>", 1)[0]
+    assert 'rel="alternate" type="application/rss+xml"' in head
+
+
 def make_search_repository(tmp_path: Path) -> Path:
     taxonomy = {
         "collections": {"guide": {"path": "guides"}},

@@ -497,7 +497,29 @@ def test_daily_update_feed_contains_reports_newest_first_with_absolute_links(
         "https://example.test/devguidesample/azure-daily-update/2026-10-06/"
     )
     assert items[0].findtext("guid") == items[0].findtext("link")
-    assert items[0].findtext("pubDate") == "Sat, 10 Oct 2026 10:30:00 +0900"
+    assert items[0].findtext("pubDate") == "Sat, 10 Oct 2026 01:30:00 GMT"
+
+
+def test_daily_update_feed_normalizes_subminute_offsets_to_rfc822_gmt(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(
+        docs,
+        "2026-10-08",
+        generated_at="2026-10-09T12:00:00+09:00:30",
+    )
+
+    root = ET.fromstring(
+        build_daily_update_feed(
+            docs,
+            site_url="https://example.test/devguidesample/",
+        )
+    )
+
+    assert root.findtext("./channel/item/pubDate") == (
+        "Fri, 09 Oct 2026 02:59:30 GMT"
+    )
 
 
 @pytest.mark.parametrize(
@@ -536,6 +558,26 @@ def test_daily_update_index_ends_with_collapsible_feed_guides(
     assert "Post message in a chat or channel" in page
     assert "https://make.powerautomate.com/" in page
     assert page.rstrip().endswith("</details>")
+
+
+def test_daily_update_index_records_verified_microsoft_sources(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-08")
+
+    metadata = yaml.safe_load(build_daily_update_index(docs).split("---", 2)[1])
+
+    assert metadata["verification_status"] == "verified"
+    assert metadata["sources_checked_at"] == date(2026, 10, 14)
+    assert {
+        source["url"] for source in metadata["official_sources"]
+    } == {
+        "https://learn.microsoft.com/connectors/rss/",
+        "https://learn.microsoft.com/connectors/office365/",
+        "https://learn.microsoft.com/connectors/teams/",
+        "https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook",
+    }
 
 
 def test_empty_daily_update_index_still_offers_feed_subscription(

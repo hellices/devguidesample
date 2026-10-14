@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from calendar import Calendar
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from email.utils import format_datetime
 from html import escape
 import json
@@ -269,7 +269,10 @@ def build_daily_update_feed(
         ET.SubElement(item, "title").text = report.title
         ET.SubElement(item, "link").text = report_url
         ET.SubElement(item, "guid", {"isPermaLink": "true"}).text = report_url
-        ET.SubElement(item, "pubDate").text = format_datetime(report.generated_at)
+        ET.SubElement(item, "pubDate").text = format_datetime(
+            report.generated_at.astimezone(timezone.utc),
+            usegmt=True,
+        )
         ET.SubElement(item, "description").text = report.description
 
     ET.indent(root, space="  ")
@@ -370,6 +373,29 @@ def build_daily_update_index(docs_dir: Path | str) -> str:
             "title": "Azure Daily Update",
             "description": "최근 Azure 업데이트를 읽고 달력과 검색으로 지난 자료를 찾습니다.",
             "hide": ["toc"],
+            "verification_status": "verified",
+            "sources_checked_at": date(2026, 10, 14),
+            "official_sources": [
+                {
+                    "title": "RSS",
+                    "url": "https://learn.microsoft.com/connectors/rss/",
+                },
+                {
+                    "title": "Office 365 Outlook",
+                    "url": "https://learn.microsoft.com/connectors/office365/",
+                },
+                {
+                    "title": "Microsoft Teams",
+                    "url": "https://learn.microsoft.com/connectors/teams/",
+                },
+                {
+                    "title": "Create Incoming Webhooks",
+                    "url": (
+                        "https://learn.microsoft.com/microsoftteams/platform/"
+                        "webhooks-and-connectors/how-to/add-incoming-webhook"
+                    ),
+                },
+            ],
         },
         allow_unicode=True,
         sort_keys=False,
