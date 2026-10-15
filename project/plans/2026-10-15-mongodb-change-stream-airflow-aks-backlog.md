@@ -96,6 +96,8 @@ Expected: each command exits 0 with no Bicep error.
 - Use: `docs/services/azure-documentdb/change-streams/samples/python-aks/infra/main.bicep`
 - Use: `docs/services/azure-documentdb/change-streams/samples/python-aks/airflow/values.yaml`
 - Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/kubeconfig`
+- Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/cleanup.sh`
+- Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/guard.sh`
 - Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/setup.log`
 
 **Interfaces:**
@@ -116,10 +118,14 @@ az provider show --namespace Microsoft.Storage --query registrationState -o tsv
 
 Expected: `Enabled` followed by three `Registered` values.
 
-- [ ] **Step 2: Create one isolated azd environment and preview it**
+- [ ] **Step 2: Provision and bootstrap in one guarded shell**
 
-Run the preview and provisioning in the same shell so the generated
-administrator password is never persisted:
+Create an idempotent cleanup script immediately after the azd environment.
+`guard.sh` preserves the original non-zero exit code while invoking cleanup.
+Every later shell block through Task 3 Step 6 sources this guard, so a failed
+build, DAG run, verifier, duplicate run, or timeout does not leave billable
+resources behind. Keep provisioning through Kubernetes Secret creation in one
+shell so the generated administrator password is never persisted:
 
 ```bash
 set -euo pipefail
@@ -128,19 +134,57 @@ ENV_NAME="cs-backlog-20261015-$(openssl rand -hex 3)"
 mkdir -p "$EVIDENCE"
 azd env new "$ENV_NAME"
 azd env set AZURE_LOCATION eastus2
+
+cat > "$EVIDENCE/cleanup.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+SAMPLE_DIR=/Users/hwang-inhwan/workspace/devguidesample.worktrees/mongodb-change-stream-airflow-aks-architecture/docs/services/azure-documentdb/change-streams/samples/python-aks
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+cd "$SAMPLE_DIR"
+environment_name=$(azd env get-value AZURE_ENV_NAME 2>/dev/null || true)
+if [ -z "$environment_name" ]; then
+  echo "cleanup cannot determine AZURE_ENV_NAME" >&2
+  exit 1
+fi
+resource_group="rg-$environment_name"
+if az group exists --name "$resource_group" | grep -qx true; then
+  azd down --force --purge
+  for attempt in $(seq 1 60); do
+    if az group exists --name "$resource_group" | grep -qx false; then
+      break
+    fi
+    sleep 10
+  done
+  if az group exists --name "$resource_group" | grep -qx true; then
+    echo "cleanup did not remove $resource_group" >&2
+    exit 1
+  fi
+fi
+rm -f "$EVIDENCE/kubeconfig"
+SH
+
+cat > "$EVIDENCE/guard.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+cleanup_on_exit() {
+  status=$?
+  trap - EXIT
+  if [ "$status" -ne 0 ]; then
+    if ! "$EVIDENCE/cleanup.sh"; then
+      echo "cleanup failed after command exited with $status" >&2
+    fi
+  fi
+  exit "$status"
+}
+trap cleanup_on_exit EXIT
+SH
+chmod 700 "$EVIDENCE/cleanup.sh" "$EVIDENCE/guard.sh"
+source "$EVIDENCE/guard.sh"
+
 export DOCDB_ADMIN_PASSWORD="Cs$(openssl rand -hex 12)Aa9"
 azd provision --preview
 azd provision
-```
-
-Expected: the preview reports no validation error and provisioning outputs
-the AKS, ACR, DocumentDB, storage, and workload-identity values.
-
-- [ ] **Step 3: Build both container images**
-
-In the same shell, load azd outputs and build versioned images:
-
-```bash
 set -a
 eval "$(azd env get-values)"
 set +a
@@ -148,15 +192,6 @@ export ACR="$AZURE_CONTAINER_REGISTRY_ENDPOINT"
 export IMAGE="$ACR/cslab:backlog-20261015"
 az acr build -r "$AZURE_CONTAINER_REGISTRY_NAME" -t cslab:backlog-20261015 app/
 az acr build -r "$AZURE_CONTAINER_REGISTRY_NAME" -t cslab-airflow:backlog-20261015 airflow/
-```
-
-Expected: both ACR builds finish with `Run ID` status `Succeeded`.
-
-- [ ] **Step 4: Configure the isolated kubeconfig and Kubernetes secrets**
-
-Still in the shell that owns `DOCDB_ADMIN_PASSWORD`:
-
-```bash
 export KUBECONFIG="$EVIDENCE/kubeconfig"
 az aks get-credentials \
   -g "$AZURE_RESOURCE_GROUP" \
@@ -166,22 +201,23 @@ kubectl create namespace cslab
 MONGO_URI="${DOCDB_CONNECTION_STRING/<user>:<password>/$DOCDB_ADMIN_USER:$DOCDB_ADMIN_PASSWORD}"
 kubectl -n cslab create secret generic docdb --from-literal=uri="$MONGO_URI"
 unset MONGO_URI DOCDB_ADMIN_PASSWORD
-```
-
-Verify the existing sample's four-node default without printing the secret:
-
-```bash
 READY_NODES=$(kubectl get nodes --no-headers | awk '$2 == "Ready" { count++ } END { print count + 0 }')
 test "$READY_NODES" -eq 4
 kubectl -n cslab get secret docdb -o name
 ```
 
-Expected: all four AKS nodes are `Ready`, and the `docdb` secret exists
-without its value being printed.
+Expected: preview and provisioning succeed, both ACR builds report
+`Succeeded`, all four AKS nodes are `Ready`, and the `docdb` secret exists
+without printing its value. Any non-zero exit after the guard is sourced runs
+`azd down --force --purge` and confirms resource-group removal before
+preserving the original exit code.
 
-- [ ] **Step 5: Create the source collection and workload identity**
+- [ ] **Step 3: Create the source collection and workload identity**
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 set -a
 eval "$(azd env get-values)"
 set +a
@@ -202,9 +238,12 @@ kubectl apply -f k8s/airflow-rbac.yaml
 Expected: the collection command exits 0 and the `cs-lake` service account has
 the workload-identity client annotation.
 
-- [ ] **Step 6: Install Airflow and initialize the checkpoint**
+- [ ] **Step 4: Install Airflow and initialize the checkpoint**
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 set -a
 eval "$(azd env get-values)"
 set +a
@@ -220,14 +259,52 @@ kubectl -n airflow rollout status statefulset/airflow-scheduler --timeout=10m
 kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
   airflow dags list | grep change_stream_to_parquet
 kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
-  airflow dags trigger change_stream_to_parquet -r checkpoint-init-20261015
+  airflow dags trigger change_stream_to_parquet -r checkpoint-init-20261015 >/dev/null
+kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+  airflow dags unpause change_stream_to_parquet >/dev/null
+
+checkpoint_ready=false
+for attempt in $(seq 1 60); do
+  output=$(kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+    airflow dags list-runs change_stream_to_parquet --output json 2>/dev/null)
+  runs_json=$(printf '%s\n' "$output" | awk '/^\[/{line=$0} END{print line}')
+  status=$(RUNS_JSON="$runs_json" python - <<'PY'
+import json
+import os
+
+runs = json.loads(os.environ["RUNS_JSON"])
+initial = next(
+    (run for run in runs if run.get("run_id") == "checkpoint-init-20261015"),
+    None,
+)
+initial_state = initial["state"] if initial else "missing"
+active = sum(run["state"] in ("queued", "running") for run in runs)
+failed = sum(run["state"] == "failed" for run in runs)
+print(f"{initial_state}:{active}:{failed}")
+PY
+)
+  IFS=: read -r initial_state active_runs failed_runs <<EOF
+$status
+EOF
+  if [ "$failed_runs" -ne 0 ]; then
+    exit 1
+  fi
+  if [ "$initial_state" = success ] && [ "$active_runs" -eq 0 ]; then
+    kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+      airflow dags pause change_stream_to_parquet >/dev/null
+    checkpoint_ready=true
+    break
+  fi
+  sleep 10
+done
+if [ "$checkpoint_ready" != true ]; then
+  exit 2
+fi
 ```
 
-Poll `airflow dags list-runs change_stream_to_parquet --output json` until the
-`checkpoint-init-20261015` run is `success`.
-
-Expected: the DAG is loaded, the manual run succeeds while the DAG remains
-paused, and the first checkpoint is created before test data is written.
+Expected: the DAG is loaded, the manual checkpoint run succeeds, any no-data
+scheduled run created by unpausing also finishes, no run remains queued or
+running, and the DAG is paused again before test data is written.
 
 ---
 
@@ -253,10 +330,12 @@ Run every step in this task from
 - [ ] **Step 1: Generate a rate-limited backlog while the DAG stays paused**
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 set -a
 eval "$(azd env get-values)"
 set +a
-EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
 export KUBECONFIG="$EVIDENCE/kubeconfig"
 export ACR="$AZURE_CONTAINER_REGISTRY_ENDPOINT"
 export IMAGE="$ACR/cslab:backlog-20261015"
@@ -274,6 +353,9 @@ operations per second.
 - [ ] **Step 2: Wait until every generated event belongs to a closed window**
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 WAIT_SECONDS=$((600 - $(date -u +%s) % 600 + 5))
 sleep "$WAIT_SECONDS"
 ```
@@ -284,7 +366,9 @@ boundary following generator completion.
 - [ ] **Step 3: Unpause into exactly one Airflow catch-up run**
 
 ```bash
+set -euo pipefail
 EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 export KUBECONFIG="$EVIDENCE/kubeconfig"
 UNPAUSED_AT=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
 kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
@@ -349,6 +433,10 @@ Scope the evidence to that exact run instead of recursively combining every
 DAG run:
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
+export KUBECONFIG="$EVIDENCE/kubeconfig"
 matches=$(kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
   sh -c "grep -Rl 'export_done.*230000' \
   /opt/airflow/logs/dag_id=change_stream_to_parquet/run_id=*/task_id=export/attempt=*.log \
@@ -369,10 +457,12 @@ positive elapsed time, and one or more chunks.
 - [ ] **Step 5: Verify the complete Parquet result**
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 set -a
 eval "$(azd env get-values)"
 set +a
-EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
 export KUBECONFIG="$EVIDENCE/kubeconfig"
 export ACR="$AZURE_CONTAINER_REGISTRY_ENDPOINT"
 export IMAGE="$ACR/cslab:backlog-20261015"
@@ -425,6 +515,9 @@ Replace each numeric zero that represents a measured rate, duration, size, or
 lag with the parsed value by running:
 
 ```bash
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
 python - "$EVIDENCE" <<'PY'
 import json
 from pathlib import Path
@@ -519,20 +612,18 @@ copied into the public page.
 - [ ] **Step 7: Delete the Azure deployment and confirm removal**
 
 ```bash
-set -a
-eval "$(azd env get-values)"
-set +a
-RESOURCE_GROUP="$AZURE_RESOURCE_GROUP"
-azd down --force --purge
-az group exists --name "$RESOURCE_GROUP"
+set -euo pipefail
+EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
+source "$EVIDENCE/guard.sh"
+"$EVIDENCE/cleanup.sh"
+rm -f "$EVIDENCE/guard.sh" "$EVIDENCE/cleanup.sh"
+trap - EXIT
 ```
 
-Expected: `azd down` succeeds and `az group exists` prints `false`. Remove the
-local kubeconfig after the confirmation:
-
-```bash
-rm -f /Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/kubeconfig
-```
+Expected: the cleanup script runs `azd down --force --purge`, confirms
+`az group exists` is `false`, removes the local kubeconfig, and only then
+removes the cleanup guard. The same cleanup ran automatically on any earlier
+non-zero exit.
 
 ---
 
