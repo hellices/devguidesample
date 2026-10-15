@@ -4,7 +4,7 @@
 
 **Goal:** Deploy the existing Azure DocumentDB change-stream sample in the authenticated Azure subscription, measure an Airflow-on-AKS backlog drain, publish the sanitized architecture and result, and open a pull request.
 
-**Architecture:** Keep one ordered catch-up lane per resume-token chain. An Airflow `KubernetesPodOperator` pod resumes from an ADLS Gen2 checkpoint, writes deterministic Parquet chunks, and advances the checkpoint under leases and ETag conditions; independent stream IDs are the only horizontal-scaling boundary. If measured drain capacity cannot fit inside the remaining change-stream history, the public guidance escalates to a durable Event Hubs or raw-ADLS ingestion buffer instead of adding concurrent readers to one stream.
+**Architecture:** Keep one serial catch-up lane per resume-token chain. An Airflow `KubernetesPodOperator` pod resumes from an ADLS Gen2 checkpoint, writes deterministic Parquet chunks, and advances the checkpoint under leases and ETag conditions; independent stream IDs are the only horizontal-scaling boundary. If measured drain capacity cannot fit inside the remaining change-stream history, the public guidance escalates to a durable Event Hubs or raw-ADLS ingestion buffer instead of adding concurrent readers to one stream.
 
 **Tech Stack:** Azure Developer CLI, Azure CLI, Bicep, Azure DocumentDB, AKS, ACR, ADLS Gen2, Apache Airflow 3.2.2, Helm chart 1.22.0, Kubernetes, Python 3, PyMongo, PyArrow, MkDocs
 
@@ -168,8 +168,16 @@ kubectl -n cslab create secret generic docdb --from-literal=uri="$MONGO_URI"
 unset MONGO_URI DOCDB_ADMIN_PASSWORD
 ```
 
-Expected: `kubectl get nodes` shows two `Ready` nodes and the `docdb` secret
-exists without its value being printed.
+Verify the existing sample's four-node default without printing the secret:
+
+```bash
+READY_NODES=$(kubectl get nodes --no-headers | awk '$2 == "Ready" { count++ } END { print count + 0 }')
+test "$READY_NODES" -eq 4
+kubectl -n cslab get secret docdb -o name
+```
+
+Expected: all four AKS nodes are `Ready`, and the `docdb` secret exists
+without its value being printed.
 
 - [ ] **Step 5: Create the source collection and workload identity**
 
@@ -230,6 +238,7 @@ paused, and the first checkpoint is created before test data is written.
 - Use: `docs/services/azure-documentdb/change-streams/samples/python-aks/k8s/lake.yaml`
 - Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/generator.log`
 - Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/export.log`
+- Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/drain-run-id.txt`
 - Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/verify.json`
 - Create locally only: `/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15/summary.json`
 
@@ -272,35 +281,89 @@ sleep "$WAIT_SECONDS"
 Expected: current UTC time is at least five seconds after the next 10-minute
 boundary following generator completion.
 
-- [ ] **Step 3: Trigger exactly one Airflow catch-up run**
+- [ ] **Step 3: Unpause into exactly one Airflow catch-up run**
 
 ```bash
 EVIDENCE=/Users/hwang-inhwan/.copilot/session-state/1266790b-0c91-48ae-9910-085e05b9d78d/files/backlog-run-2026-10-15
 export KUBECONFIG="$EVIDENCE/kubeconfig"
+UNPAUSED_AT=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
 kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
-  airflow dags trigger change_stream_to_parquet -r backlog-drain-20261015
+  airflow dags unpause change_stream_to_parquet >/dev/null
+
+drain_succeeded=false
+for attempt in $(seq 1 90); do
+  output=$(kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+    airflow dags list-runs change_stream_to_parquet --output json 2>/dev/null)
+  runs_json=$(printf '%s\n' "$output" | awk '/^\[/{line=$0} END{print line}')
+  state=$(RUNS_JSON="$runs_json" UNPAUSED_AT="$UNPAUSED_AT" python - <<'PY'
+import json
+import os
+from datetime import datetime
+
+cutoff = datetime.fromisoformat(os.environ["UNPAUSED_AT"])
+runs = json.loads(os.environ["RUNS_JSON"])
+new_runs = [
+    run for run in runs
+    if run.get("start_date")
+    and datetime.fromisoformat(run["start_date"]) >= cutoff
+]
+if not new_runs:
+    print("waiting")
+elif len(new_runs) != 1:
+    print(f"unexpected:{len(new_runs)}")
+else:
+    print(new_runs[0]["state"])
+PY
+)
+  case "$state" in
+    success)
+      kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+        airflow dags pause change_stream_to_parquet >/dev/null
+      drain_succeeded=true
+      break
+      ;;
+    failed|unexpected:*)
+      kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+        airflow dags pause change_stream_to_parquet >/dev/null
+      exit 1
+      ;;
+  esac
+  sleep 10
+done
+if [ "$drain_succeeded" != true ]; then
+  kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+    airflow dags pause change_stream_to_parquet >/dev/null
+  exit 2
+fi
 ```
 
-Poll `airflow dags list-runs change_stream_to_parquet --output json` until the
-named run reaches a terminal state.
-
-Expected: `backlog-drain-20261015` is `success`; no second active run exists
-for the DAG.
+Expected: unpausing creates exactly one new scheduled run, it reaches
+`success`, and the DAG is paused again. Do not also queue a manual run:
+unpausing a paused DAG can create the latest scheduled run, and
+`max_active_runs=1` would make a second run execute after it.
 
 - [ ] **Step 4: Capture the Airflow task's structured completion event**
 
-Locate the task log under the scheduler's `/opt/airflow/logs` tree and copy
-only lines containing `export_start`, `chunk`, or `export_done`:
+Locate the one task log whose completion event drained all 230,000 events.
+Scope the evidence to that exact run instead of recursively combining every
+DAG run:
 
 ```bash
+matches=$(kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
+  sh -c "grep -Rl 'export_done.*230000' \
+  /opt/airflow/logs/dag_id=change_stream_to_parquet/run_id=*/task_id=export/attempt=*.log \
+  2>/dev/null")
+test "$(printf '%s\n' "$matches" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1
+DRAIN_LOG=$(printf '%s\n' "$matches" | sed '/^$/d')
+DRAIN_RUN_ID=$(printf '%s\n' "$DRAIN_LOG" | \
+  sed -E 's#^.*/run_id=([^/]+)/task_id=.*#\1#')
+printf '%s\n' "$DRAIN_RUN_ID" > "$EVIDENCE/drain-run-id.txt"
 kubectl -n airflow exec airflow-scheduler-0 -c scheduler -- \
-  sh -c "grep -R -E 'export_start|\"event\": \"chunk\"|export_done' \
-  /opt/airflow/logs/dag_id=change_stream_to_parquet 2>/dev/null" \
-  > "$EVIDENCE/export.log"
-grep export_done "$EVIDENCE/export.log"
+  cat "$DRAIN_LOG" > "$EVIDENCE/export.log"
 ```
 
-Expected: one completion event reports `events=230000`, `caught_up=true`, a
+Expected: exactly one run log matches. Step 6 verifies that this file has
+exactly one `export_done` event with `events=230000`, `caught_up=true`, a
 positive elapsed time, and one or more chunks.
 
 - [ ] **Step 5: Verify the complete Parquet result**
@@ -370,22 +433,53 @@ import sys
 evidence = Path(sys.argv[1])
 
 
-def logged_event(path: Path, name: str) -> dict:
+def logged_events(path: Path, name: str, run_id=None) -> list[dict]:
+    matches = []
     for line in path.read_text(encoding="utf-8").splitlines():
         start = line.find("{")
         if start < 0:
             continue
         try:
-            value = json.loads(line[start:])
+            outer = json.loads(line[start:])
         except json.JSONDecodeError:
             continue
-        if value.get("event") == name:
-            return value
-    raise SystemExit(f"{name} was not found in {path.name}")
+        candidates = [outer]
+        message = outer.get("event")
+        if isinstance(message, str):
+            inner_start = message.find("{")
+            if inner_start >= 0:
+                try:
+                    candidates.append(json.loads(message[inner_start:]))
+                except json.JSONDecodeError:
+                    pass
+        for value in candidates:
+            if value.get("event") != name:
+                continue
+            if run_id is not None and outer.get("run_id") != run_id:
+                raise SystemExit(f"unexpected run_id in {path.name}")
+            matches.append(value)
+    return matches
 
 
-generator = logged_event(evidence / "generator.log", "generator_done")
-export = logged_event(evidence / "export.log", "export_done")
+generator_events = logged_events(evidence / "generator.log", "generator_done")
+if len(generator_events) != 1:
+    raise SystemExit(f"expected one generator_done, got {len(generator_events)}")
+generator = generator_events[0]
+
+drain_run_id = (evidence / "drain-run-id.txt").read_text(encoding="utf-8").strip()
+export_events = logged_events(
+    evidence / "export.log",
+    "export_done",
+    run_id=drain_run_id,
+)
+if len(export_events) != 1:
+    raise SystemExit(f"expected one export_done, got {len(export_events)}")
+export = export_events[0]
+if export.get("events") != 230_000 or export.get("caught_up") is not True:
+    raise SystemExit("drain run did not catch up exactly 230000 events")
+if float(export.get("elapsed_s", 0)) <= 0 or int(export.get("chunks", 0)) <= 0:
+    raise SystemExit("drain run has invalid timing or chunk count")
+
 verify_text = (evidence / "verify.json").read_text(encoding="utf-8")
 verify = json.loads(verify_text[verify_text.find("{"):])
 elapsed = float(export["elapsed_s"])

@@ -182,6 +182,8 @@ Airflow 3.2.2와 chart 1.22.0을 설치하고 checkpoint를 먼저 만든 뒤 DA
 
 지연에는 백로그를 일부러 닫힌 10분 구간까지 기다린 시간이 포함됩니다. 파일은
 압축 전 80 MB row 한도로 잘랐고 가장 큰 실제 Parquet 파일은 약 46 MB였습니다.
+순서 검증은 같은 문서의 lifecycle 순서만 비교했습니다. 서로 다른 문서 사이의 전역
+이벤트 순서를 재구성하거나 보장했음을 뜻하지 않습니다.
 
 검증 뒤 `azd down --force --purge`로 실험 resource group을 삭제했고 존재 여부가
 `false`로 바뀐 것까지 확인했습니다. 실제 구독, tenant, resource 이름, endpoint와
