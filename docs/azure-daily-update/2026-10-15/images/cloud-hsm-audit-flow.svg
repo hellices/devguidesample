@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-labelledby="cloud-hsm-audit-flow-title cloud-hsm-audit-flow-desc">
+  <title id="cloud-hsm-audit-flow-title">Cloud HSM 감사 기록의 수집과 서명 검증</title>
+  <desc id="cloud-hsm-audit-flow-desc">HSM firmware가 관리 작업을 기록하고 batch를 서명한다. Diagnostic settings로 Log Analytics와 Storage에 내보내며, 같은 CorrelationId의 전체 기록을 내려받아 signature와 certificate chain을 검증한다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
+    </marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; fill: #172554; font-size: 22px; }
+      .heading { font-size: 28px; font-weight: 700; }
+      .name { font-weight: 700; }
+      .detail { font-size: 20px; fill: #475569; }
+      .flow { fill: none; stroke: #475569; stroke-width: 2; marker-end: url(#arrow); }
+      .verify { fill: none; stroke: #2563eb; stroke-width: 2; marker-end: url(#arrow-accent); }
+    </style>
+  </defs>
+  <rect width="960" height="600" fill="#ffffff"/>
+  <text x="32" y="48" class="heading">HSM이 남긴 증적을 수집하고 독립적으로 검증</text>
+  <path d="M272 160 H320" class="flow"/>
+  <path d="M624 160 H680" class="flow"/>
+  <path d="M752 220 V260 Q752 268 744 268 H580 Q572 268 572 276 V316" class="flow"/>
+  <path d="M872 220 V316" class="flow"/>
+  <path d="M572 420 V484" class="verify"/>
+  <rect x="32" y="100" width="240" height="120" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="52" y="136" class="name">HSM firmware</text>
+  <text x="52" y="172">관리 작업 기록</text>
+  <text x="52" y="202" class="detail">partition별 batch 서명</text>
+  <rect x="320" y="100" width="304" height="120" rx="8" fill="#ffffff" stroke="#475569"/>
+  <text x="340" y="136" class="name">Signed audit batch</text>
+  <text x="340" y="172" class="detail">기록·signature·certificate</text>
+  <text x="340" y="202" class="detail">공통 CorrelationId</text>
+  <rect x="680" y="100" width="248" height="120" rx="8" fill="#ffffff" stroke="#475569"/>
+  <text x="700" y="136" class="name">Azure Monitor</text>
+  <text x="700" y="172" class="detail">Diagnostic settings</text>
+  <text x="700" y="202" class="detail">HsmOperations</text>
+  <rect x="424" y="316" width="296" height="104" rx="8" fill="#f8fafc" stroke="#475569"/>
+  <text x="444" y="354" class="name">Log Analytics</text>
+  <text x="444" y="390" class="detail">감사 기록 조회·전체 batch 추출</text>
+  <rect x="752" y="316" width="176" height="104" rx="8" fill="#f8fafc" stroke="#475569"/>
+  <text x="772" y="354" class="name">Storage</text>
+  <text x="772" y="390" class="detail">로그 보관</text>
+  <rect x="424" y="484" width="504" height="80" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="444" y="516" class="name">서명·certificate chain 검증</text>
+  <text x="444" y="546" class="detail">일부 행이 아닌 같은 CorrelationId 전체 기록 사용</text>
+  <text x="32" y="548" class="detail">공식 문서 기반 재구성</text>
+  <text x="32" y="578" class="detail">Azure Cloud HSM</text>
+</svg>
