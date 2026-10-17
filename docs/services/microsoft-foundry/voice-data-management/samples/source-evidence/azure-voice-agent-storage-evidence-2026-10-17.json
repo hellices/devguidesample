@@ -18,6 +18,12 @@
       "status": "verified"
     },
     {
+      "id": "batch-transcription-storage-boundary",
+      "statement": "Batch transcription reads input from customer-specified URLs. Results use a Microsoft-managed container by default, or a supported customer Azure container when destinationContainerUrl is provided; timeToLiveHours controls how long the transcription remains in the service after completion.",
+      "source_ids": ["batch-transcription-create", "batch-transcription-get"],
+      "status": "verified"
+    },
+    {
       "id": "voice-agent-store-switch",
       "statement": "The preview Foundry voice-based prompt agent defaults store to false; store true persists transcript, event timeline, and raw audio together.",
       "source_ids": ["voice-agent-config"],
@@ -75,7 +81,7 @@
     },
     {
       "id": "blob-performance-block-size",
-      "statement": "High-throughput block blob optimizations apply when Put Blob or Put Block uses a blob or block larger than 256 KiB; single block blob request rate is a target up to 3,000 requests per second.",
+      "statement": "High-throughput block blob optimizations apply when Put Blob or Put Block uses a blob or block larger than 256 KiB; the target request rate is up to 3,000 requests per second for one block blob and up to 500 for one page blob.",
       "source_ids": ["blob-scalability"],
       "status": "verified",
       "qualification": "Targets are not guarantees and depend on concurrency, request size, tier, and source/destination speed."
@@ -150,7 +156,7 @@
       "url": "https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/speech-to-text/data-privacy-security",
       "title": "Data, privacy, and security for Speech to text",
       "mode": "Azure AI Speech real-time and batch speech-to-text",
-      "summary": "Real-time audio is processed only in Azure server memory. Batch transcription uses customer-selected storage for input and output.",
+      "summary": "Real-time audio is processed only in Azure server memory. Batch transcription reads input from a customer-specified location; separate API documentation defines result storage.",
       "checked_on": "2026-10-14"
     },
     {
@@ -274,6 +280,22 @@
       "mode": "Batch and fast transcription audio",
       "summary": "Lists supported codecs and recommends lossless WAV PCM or FLAC for best quality.",
       "checked_on": "2026-10-14"
+    },
+    {
+      "id": "batch-transcription-create",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-transcription-create",
+      "title": "Create a batch transcription",
+      "mode": "Batch transcription input, result destination, and retention configuration",
+      "summary": "Requires customer-specified input URLs, uses a Microsoft-managed result container unless destinationContainerUrl is provided, and documents the 6-hour to 31-day timeToLiveHours range for keeping the transcription in the service.",
+      "checked_on": "2026-10-17"
+    },
+    {
+      "id": "batch-transcription-get",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-transcription-get",
+      "title": "Get batch transcription results",
+      "mode": "Batch transcription result retrieval and deletion",
+      "summary": "States that results are stored in a Microsoft-managed container by default and are deleted when the transcription job is deleted.",
+      "checked_on": "2026-10-17"
     },
     {
       "id": "call-center-architecture",

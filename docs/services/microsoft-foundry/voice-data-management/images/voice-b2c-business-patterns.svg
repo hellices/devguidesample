@@ -22,11 +22,6 @@
   <text x="800" y="102" class="head">기간 · 삭제</text>
   <text x="1060" y="102" class="head">별도 업무 기록</text>
 
-  <line x1="280" y1="72" x2="280" y2="600" stroke="#e2e8f0"/>
-  <line x1="520" y1="72" x2="520" y2="600" stroke="#e2e8f0"/>
-  <line x1="780" y1="72" x2="780" y2="600" stroke="#e2e8f0"/>
-  <line x1="1040" y1="72" x2="1040" y2="600" stroke="#e2e8f0"/>
-
   <rect x="40" y="120" width="1200" height="96" fill="#ffffff" stroke="#e2e8f0"/>
   <text x="60" y="148" class="service">구매 · 주문</text>
   <text x="60" y="172" class="small">Alexa Shopping</text>
@@ -92,4 +87,9 @@
   <text x="1060" y="528" class="body">취약성 · 사기 표시</text>
   <text x="1060" y="552" class="body">판매 확인 · 법규 준수</text>
   <text x="1060" y="576" class="small">전체 통화 점검</text>
+
+  <line x1="280" y1="72" x2="280" y2="600" stroke="#e2e8f0"/>
+  <line x1="520" y1="72" x2="520" y2="600" stroke="#e2e8f0"/>
+  <line x1="780" y1="72" x2="780" y2="600" stroke="#e2e8f0"/>
+  <line x1="1040" y1="72" x2="1040" y2="600" stroke="#e2e8f0"/>
 </svg>

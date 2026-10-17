@@ -11,6 +11,10 @@ official_sources:
   url: https://learn.microsoft.com/azure/foundry/responsible-ai/speech-service/voice-live/data-privacy-security
 - title: Data, privacy, and security for Speech to text
   url: https://learn.microsoft.com/azure/foundry/responsible-ai/speech-service/speech-to-text/data-privacy-security
+- title: Create a batch transcription
+  url: https://learn.microsoft.com/azure/ai-services/speech-service/batch-transcription-create
+- title: Get batch transcription results
+  url: https://learn.microsoft.com/azure/ai-services/speech-service/batch-transcription-get
 - title: Access tiers for blob data
   url: https://learn.microsoft.com/azure/storage/blobs/access-tiers-overview
 - title: Blob Storage scalability and performance targets
@@ -89,7 +93,8 @@ Microsoft 문서는 이 대안에서 저장 대상을 제시하지만, 실시간
 | 서비스·기능 | Microsoft 문서에 명시된 동작 | 저장 위치·기간 |
 |---|---|---|
 | **Azure AI Speech 실시간 음성 인식** | 오디오는 Azure 서버 메모리에서만 처리되고 저장 상태로 남지 않음 | 서비스 저장 없음 |
-| **Azure AI Speech 배치 음성 인식** | 고객이 지정한 저장 위치의 입력 오디오를 처리하고 결과의 `timeToLive`를 지정할 수 있음 | 고객이 선택한 저장소 |
+| **Azure AI Speech 배치 음성 인식 입력** | `contentContainerUrl` 또는 `contentUrls`로 지정한 오디오를 읽어 처리함 | 고객이 지정한 오디오 URL·컨테이너 |
+| **Azure AI Speech 배치 음성 인식 결과** | `destinationContainerUrl`을 지정하지 않으면 Microsoft 관리 컨테이너에 결과를 저장함. 지정하면 지원되는 고객 Azure 컨테이너에 저장함 | 서비스 내 transcription의 `timeToLiveHours` 지원 범위는 완료 후 6시간~31일. 작업을 삭제하면 Microsoft 관리 결과도 삭제됨. 고객 컨테이너 사본의 보유기간 연동은 인용 문서에서 확인되지 않음 |
 | **Voice Live API** | Voice Live 자체는 고객 데이터를 저장하거나 보관하지 않음. 연결한 모델·Agent·Custom Voice 등은 각 기능의 정책을 따름 | Voice Live 자체 저장 없음 |
 | **Voice Live 지원 로그** | 지원 티켓을 연 뒤 사용자가 동의해 켤 수 있는 별도 디버깅 로그 | 같은 리전의 Microsoft 관리 Azure Storage, 생성 후 30일 자동 삭제 |
 | **Foundry voice-based prompt agent** | `store` 기본값은 `false`. `true`이면 대화 기록, 이벤트 시간선, 원음이 함께 저장됨 | Foundry voice agent 저장 기능. 2026-10-14 기준 미리 보기 |
@@ -138,7 +143,7 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
 [Blob Storage 확장성·성능 목표](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets)에 명시된 내용:
 
 - `Put Blob` 또는 `Put Block`에서 blob이나 block 크기가 **256KiB보다 클 때** 고처리량 block blob 최적화를 활용할 수 있음.
-- 단일 block blob 요청률은 초당 최대 약 **3,000회인 목표값**이며 보장값이 아님.
+- 단일 block blob 요청률은 초당 최대 약 **3,000회인 목표값**이며 보장값이 아님. 같은 표의 단일 page blob 목표값은 초당 최대 500회임.
 - 실제 처리량은 동시성, 요청 크기, 성능 계층, 업로드 원본과 다운로드 목적지 속도 등에 따라 달라짐.
 - 순차적이거나 append-only인 blob 이름은 한 partition에 트래픽을 집중시킬 수 있음.
 - Microsoft는 트래픽을 점진적으로 늘리고, 503 오류가 발생하면 지수형 backoff를 사용하라고 안내함.
