@@ -63,7 +63,7 @@
     },
     {
       "id": "blob-tiers-minimums",
-      "statement": "Blob access tiers are Hot, Cool, Cold, and Archive; Cool, Cold, and Archive have 30, 90, and 180 day minimum-duration guidance and early-deletion charges.",
+      "statement": "Blob access tiers include Hot, Cool, Cold, Archive, and Smart. Cool, Cold, and Archive have 30, 90, and 180 day minimum-duration guidance and early-deletion charges, while Smart automatically moves data among the Hot, Cool, and Cold online tiers.",
       "source_ids": ["blob-tiers"],
       "status": "verified"
     },
@@ -318,7 +318,7 @@
       "url": "https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview",
       "title": "Access tiers for blob data",
       "mode": "Hot, Cool, Cold, Archive, and Smart tiers",
-      "summary": "Documents tier access behavior, minimum durations, and early-deletion charges.",
+      "summary": "Documents Hot, Cool, Cold, Archive, and Smart tier behavior, the manual tiers' minimum durations, and early-deletion charges.",
       "checked_on": "2026-10-14"
     },
     {

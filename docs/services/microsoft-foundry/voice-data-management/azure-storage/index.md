@@ -136,7 +136,7 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
 - 선택적으로 남기는 원문 음성 텍스트 파일
 - Foundry 모델 또는 Azure Content Understanding이 만든 처리 결과
 
-[Blob 유형 문서](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs)는 block blob을 텍스트·이진 파일과 같은 개체에 사용하는 유형으로 설명함. [Blob 액세스 계층 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)는 Hot·Cool·Cold·Archive 계층이 block blob에만 적용된다고 설명함.
+[Blob 유형 문서](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs)는 block blob을 텍스트·이진 파일과 같은 개체에 사용하는 유형으로 설명함. [Blob 액세스 계층 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)는 Hot·Cool·Cold·Archive와 Smart tier를 설명하며, 액세스 계층 설정은 block blob에만 허용된다고 명시함.
 
 ### Microsoft의 Blob 성능 지침
 
@@ -239,6 +239,8 @@ Realtime API의 최대 세션 시간은 60분임. 이 제한은 Azure OpenAI Rea
 | **Cool** | 30일 | 즉시 읽기 |
 | **Cold** | 90일 | 즉시 읽기 |
 | **Archive** | 180일 | 오프라인, 읽기 전에 복원 필요 |
+
+[Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화함. 위 표의 30일·90일·180일은 각각 Cool·Cold·Archive에 적용되는 최소 저장기간이며 Smart tier 자체의 단일 최소기간이 아님.
 
 [Blob 액세스 계층](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)은 최소기간 전에 삭제·덮어쓰기·다른 계층 이동을 하면 조기 삭제 비용이 발생할 수 있다고 설명함. 이 기간은 Azure Storage의 계층별 비용 기준이며 업무 자료의 법적 보유기간을 정하는 값이 아님.
 
