@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "published_on": "2026-10-17",
-  "checked_on": "2026-10-14",
+  "checked_on": "2026-10-17",
   "timezone": "Asia/Seoul",
   "scope": "Official Microsoft and Azure documentation supporting the Azure voice-agent storage, audio-format, compression, lifecycle, and performance research. Arithmetic derived from official format parameters is marked separately from Microsoft guidance.",
   "material_claims": [
