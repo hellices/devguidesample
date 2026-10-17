@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "published_on": "2026-10-17",
+  "checked_on": "2026-10-14",
+  "timezone": "Asia/Seoul",
+  "scope": "Official Microsoft and Azure documentation supporting the Azure voice-agent storage, audio-format, compression, lifecycle, and performance research. Arithmetic derived from official format parameters is marked separately from Microsoft guidance.",
+  "material_claims": [
+    {
+      "id": "realtime-speech-memory-only",
+      "statement": "Azure AI Speech real-time speech-to-text processes audio in server memory and does not store it at rest.",
+      "source_ids": ["speech-stt-privacy"],
+      "status": "verified"
+    },
+    {
+      "id": "voice-live-default-no-retention",
+      "statement": "Voice Live API itself does not retain customer data by default, while connected services and features can have separate storage behavior.",
+      "source_ids": ["voice-live-privacy"],
+      "status": "verified"
+    },
+    {
+      "id": "voice-agent-store-switch",
+      "statement": "The preview Foundry voice-based prompt agent defaults store to false; store true persists transcript, event timeline, and raw audio together.",
+      "source_ids": ["voice-agent-config"],
+      "status": "verified",
+      "qualification": "Preview feature without an SLA; this switch is not documented as a raw Voice Live API session parameter."
+    },
+    {
+      "id": "model-stateless-stateful-features",
+      "statement": "The model is stateless, but optional Responses API, Threads, and Stored Completions features create a customer-resource data store for message history.",
+      "source_ids": ["openai-data-privacy"],
+      "status": "verified"
+    },
+    {
+      "id": "tts-prebuilt-no-log-storage",
+      "statement": "For prebuilt neural voices, input text and output audio are not stored in Microsoft logs.",
+      "source_ids": ["tts-data-privacy"],
+      "status": "verified",
+      "qualification": "Custom voice, personal voice, and avatar paths have separate rules."
+    },
+    {
+      "id": "diagnostics-separate-opt-in",
+      "statement": "Foundry tracing is off by default and uses configured Application Insights and Log Analytics resources, while Voice Live support logging is a separate opt-in control with Microsoft-managed storage and a 30-day deletion period.",
+      "source_ids": [
+        "foundry-trace-data",
+        "app-insights",
+        "log-analytics",
+        "voice-live-privacy"
+      ],
+      "status": "verified"
+    },
+    {
+      "id": "block-blob-artifact-store",
+      "statement": "Azure Architecture Center stores recorded audio and processed call-center outputs in Blob Storage, optionally stores raw transcripts there, and tells Voice Live and GPT Realtime users to store conversation audio and transcripts in Blob Storage for analytics.",
+      "source_ids": ["call-center-architecture", "blob-types"],
+      "status": "verified",
+      "qualification": "The core architecture is post-call batch analytics. Voice Live and GPT Realtime storage appears in the article's alternatives section and is not default service persistence."
+    },
+    {
+      "id": "blob-tiers-minimums",
+      "statement": "Blob access tiers are Hot, Cool, Cold, and Archive; Cool, Cold, and Archive have 30, 90, and 180 day minimum-duration guidance and early-deletion charges.",
+      "source_ids": ["blob-tiers"],
+      "status": "verified"
+    },
+    {
+      "id": "blob-lifecycle-not-exact-timer",
+      "statement": "Blob lifecycle policies can tier or delete matching blobs, but policy changes can take up to 24 hours to take effect and execution can be delayed near account limits.",
+      "source_ids": ["blob-lifecycle"],
+      "status": "verified"
+    },
+    {
+      "id": "archive-rehydration-delay",
+      "statement": "Archive data is offline; for objects under 10 GB, standard rehydration can take up to 15 hours and high priority can complete in under one hour, subject to account-level throughput.",
+      "source_ids": ["archive-rehydrate"],
+      "status": "verified"
+    },
+    {
+      "id": "blob-performance-block-size",
+      "statement": "High-throughput block blob optimizations apply when Put Blob or Put Block uses a blob or block larger than 256 KiB; single block blob request rate is a target up to 3,000 requests per second.",
+      "source_ids": ["blob-scalability"],
+      "status": "verified",
+      "qualification": "Targets are not guarantees and depend on concurrency, request size, tier, and source/destination speed."
+    },
+    {
+      "id": "blob-hot-partition-risk",
+      "statement": "Sequential blob naming can concentrate traffic on a hot partition; Azure recommends distributed naming, gradual ramp-up, and exponential-backoff retries.",
+      "source_ids": ["blob-scalability"],
+      "status": "verified"
+    },
+    {
+      "id": "adls-analytics-copy",
+      "statement": "Microsoft's Data Lake Storage guidance says analytics engines generally perform better with 256 MB to 100 GB files and describes aggregating small real-time files into larger analytics files.",
+      "source_ids": ["adls-best-practices"],
+      "status": "verified",
+      "qualification": "This is general analytics guidance, not a required size for individual voice recordings."
+    },
+    {
+      "id": "speech-compressed-input",
+      "statement": "Speech SDK compressed input uses GStreamer to decode MP3, Ogg/Opus, FLAC, and telephony codecs locally before sending raw PCM to Speech.",
+      "source_ids": ["speech-compressed-input"],
+      "status": "verified"
+    },
+    {
+      "id": "realtime-format-boundary",
+      "statement": "Voice Live documentation describes 16 and 24 kHz input sampling with a 24 kHz default and SDK enums for PCM16 and G.711; Realtime 2.x documents headerless mono PCM16 at 24 kHz.",
+      "source_ids": ["voice-live-howto", "voice-live-input-format", "voice-live-output-format", "realtime-2"],
+      "status": "verified",
+      "qualification": "The documented formats and sample rates vary by Voice Live page, deployed model, and API version."
+    },
+    {
+      "id": "batch-format-quality",
+      "statement": "Batch and fast transcription accept many compressed formats, but Microsoft recommends lossless WAV PCM or FLAC for best transcription quality.",
+      "source_ids": ["batch-audio-data"],
+      "status": "verified"
+    },
+    {
+      "id": "tts-latency-guidance",
+      "statement": "Azure TTS guidance prioritizes streaming, connection reuse, first-byte metrics, and compressed transmission under constrained bandwidth.",
+      "source_ids": ["tts-latency"],
+      "status": "verified"
+    },
+    {
+      "id": "realtime-transport-latency",
+      "statement": "Azure OpenAI Realtime documentation lists approximate latency of 100 ms for WebRTC, 200 ms for WebSocket, variable latency for SIP, and a 60-minute maximum session duration.",
+      "source_ids": ["realtime-audio"],
+      "status": "verified"
+    },
+    {
+      "id": "acs-audio-streaming-boundary",
+      "statement": "Azure Communication Services audio streaming documents 20 ms packets with 16-bit mono PCM at 16 or 24 kHz.",
+      "source_ids": ["acs-audio-streaming"],
+      "status": "verified"
+    },
+    {
+      "id": "diagnostic-content-unspecified",
+      "statement": "The Azure AI diagnostic logging overview does not establish a common guarantee that RequestResponse logs contain full prompts or audio bodies.",
+      "source_ids": ["ai-diagnostic-logging"],
+      "status": "verified"
+    },
+    {
+      "id": "derived-audio-size-calculation",
+      "statement": "PCM and G.711 storage-size figures in the document are arithmetic derived from official sample rates, bit depths, and channel counts.",
+      "source_ids": ["speech-raw-stream", "voice-live-input-format", "realtime-2", "acs-audio-streaming"],
+      "status": "verified",
+      "calculation": "bytes_per_second = sample_rate_hz * (bit_depth_bits / 8) * channels"
+    }
+  ],
+  "sources": [
+    {
+      "id": "speech-stt-privacy",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/speech-to-text/data-privacy-security",
+      "title": "Data, privacy, and security for Speech to text",
+      "mode": "Azure AI Speech real-time and batch speech-to-text",
+      "summary": "Real-time audio is processed only in Azure server memory. Batch transcription uses customer-selected storage for input and output.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "voice-live-privacy",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/voice-live/data-privacy-security",
+      "title": "Data, privacy, and security for Voice live",
+      "mode": "Microsoft Foundry Voice Live API",
+      "summary": "Voice Live itself does not retain customer data by default; connected services and opt-in support logging have separate behavior.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "realtime-audio",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/realtime-audio",
+      "title": "How to use the Realtime API",
+      "mode": "Azure OpenAI Realtime audio sessions",
+      "summary": "Conversation items, truncation, deletion, turn detection, protocol choice, and session behavior.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "voice-live-howto",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-how-to",
+      "title": "How to use Voice Live API",
+      "mode": "Voice Live session configuration and Azure-specific VAD",
+      "summary": "Input sample rates, server and semantic VAD modes, and Voice Live event configuration.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "voice-agent-config",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-voice-agent",
+      "title": "Configure a voice agent",
+      "mode": "Foundry voice-based prompt agent preview",
+      "summary": "store defaults false; true stores transcript, event timeline, and raw audio together.",
+      "qualification": "Preview without SLA and not recommended by Microsoft for production workloads.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "openai-data-privacy",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy",
+      "title": "Data, privacy, and security for Foundry Models sold by Azure",
+      "mode": "Foundry Models and Azure OpenAI",
+      "summary": "Models are stateless; optional stateful APIs persist data in the customer's resource according to configuration.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "tts-data-privacy",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/text-to-speech/data-privacy-security",
+      "title": "Data, privacy, and security for text to speech",
+      "mode": "Prebuilt neural voice and separately documented custom voice paths",
+      "summary": "Prebuilt voice input text and output audio aren't stored in Microsoft logs.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "ai-diagnostic-logging",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/diagnostic-logging",
+      "title": "Enable diagnostic logging for Azure AI services",
+      "mode": "Azure Monitor resource logs",
+      "summary": "Diagnostic logs are configured to a customer-selected destination with customer-set retention.",
+      "qualification": "The page doesn't establish whether RequestResponse includes full audio or prompt bodies.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "foundry-trace-data",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data",
+      "title": "Trace data in Microsoft Foundry",
+      "mode": "Foundry Agent Service OpenTelemetry tracing",
+      "summary": "Tracing is off by default; Application Insights and Log Analytics configuration controls storage and retention.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "speech-raw-stream",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-use-audio-input-streams",
+      "title": "How to use audio input streams",
+      "mode": "Speech SDK Push/Pull raw stream",
+      "summary": "Mono signed 16-bit PCM at 8 or 16 kHz; caller transcodes unsupported input.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "speech-compressed-input",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-use-codec-compressed-audio-input-streams",
+      "title": "How to use compressed input audio",
+      "mode": "Speech SDK and CLI compressed input",
+      "summary": "GStreamer decodes MP3, Ogg/Opus, FLAC, A-law, and μ-law locally to raw PCM before network transmission.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "voice-live-input-format",
+      "url": "https://learn.microsoft.com/en-us/javascript/api/@azure/ai-voicelive/inputaudioformat?view=azure-node-latest",
+      "title": "InputAudioFormat enum",
+      "mode": "Voice Live SDK input format",
+      "summary": "Documents PCM16 and G.711 μ-law/A-law input formats.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "voice-live-output-format",
+      "url": "https://learn.microsoft.com/en-us/javascript/api/@azure/ai-voicelive/outputaudioformat?view=azure-node-latest",
+      "title": "OutputAudioFormat enum",
+      "mode": "Voice Live SDK output format",
+      "summary": "Documents PCM16 variants and G.711 μ-law/A-law output formats.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "realtime-2",
+      "url": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/realtime-2",
+      "title": "Realtime API 2.x concepts",
+      "mode": "Azure OpenAI Realtime GA audio",
+      "summary": "Headerless mono PCM16 at 24 kHz for audio events.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "tts-latency",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-lower-speech-synthesis-latency",
+      "title": "How to lower speech synthesis latency",
+      "mode": "Speech SDK text-to-speech",
+      "summary": "Streaming, preconnection, reuse, latency metrics, and compressed transmission guidance.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "batch-audio-data",
+      "url": "https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-transcription-audio-data",
+      "title": "Locate audio files for batch transcription",
+      "mode": "Batch and fast transcription audio",
+      "summary": "Lists supported codecs and recommends lossless WAV PCM or FLAC for best quality.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "call-center-architecture",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics",
+      "title": "Extract and analyze call center data",
+      "mode": "Post-call batch analytics reference architecture",
+      "summary": "Uses Blob Storage for recorded audio, optional raw transcripts, and processed outputs.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "blob-types",
+      "url": "https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs",
+      "title": "Understanding block blobs, append blobs, and page blobs",
+      "mode": "Azure Blob Storage object types",
+      "summary": "Defines block, append, and page blob behavior and intended access patterns.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "blob-tiers",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview",
+      "title": "Access tiers for blob data",
+      "mode": "Hot, Cool, Cold, Archive, and Smart tiers",
+      "summary": "Documents tier access behavior, minimum durations, and early-deletion charges.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "blob-lifecycle",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview",
+      "title": "Blob Storage lifecycle management overview",
+      "mode": "Lifecycle tiering and deletion policies",
+      "summary": "Rules use time, path, and tag filters; first execution can take up to 24 hours.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "archive-rehydrate",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/blobs/archive-rehydrate-overview",
+      "title": "Blob rehydration from the archive tier",
+      "mode": "Archive retrieval",
+      "summary": "Documents standard/high-priority latency and account-level rehydration throughput.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "blob-scalability",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets",
+      "title": "Blob Storage scalability and performance targets",
+      "mode": "Blob request and throughput targets",
+      "summary": "Documents block size, request targets, high-throughput threshold, hot partitions, and backoff guidance.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "adls-best-practices",
+      "url": "https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-best-practices",
+      "title": "Best practices for Azure Data Lake Storage",
+      "mode": "Analytics-oriented storage and ingestion",
+      "summary": "Recommends larger analytics files, suitable formats, and regional source/storage proximity.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "app-insights",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview",
+      "title": "Application Insights overview",
+      "mode": "OpenTelemetry-based APM",
+      "summary": "Application performance monitoring for requests, dependencies, traces, exceptions, and metrics.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "log-analytics",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-workspace-overview",
+      "title": "Log Analytics workspace overview",
+      "mode": "Azure Monitor log data",
+      "summary": "Workspace stores and queries Azure Monitor log data with configurable retention.",
+      "checked_on": "2026-10-14"
+    },
+    {
+      "id": "acs-audio-streaming",
+      "url": "https://learn.microsoft.com/en-us/azure/communication-services/concepts/call-automation/audio-streaming-concept",
+      "title": "Azure Communication Services audio streaming overview",
+      "mode": "Call Automation bidirectional audio streaming",
+      "summary": "Documents 20 ms audio packets and 16 or 24 kHz 16-bit mono PCM.",
+      "checked_on": "2026-10-14"
+    }
+  ]
+}
