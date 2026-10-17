@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="voice-b2c-title voice-b2c-desc">
   <title id="voice-b2c-title">소비자 대상 음성 업무 사례의 저장 위치와 보유기간</title>
-  <desc id="voice-b2c-desc">구매와 주문, 제품 제어와 진단, 제품 지원과 A/S, 보험 청구와 상담, 상담 분석과 판매 확인 업무별 대표 사례의 음성 기록, 저장 위치, 보유와 삭제 방식, 별도 업무 기록을 비교합니다.</desc>
+  <desc id="voice-b2c-desc">구매·주문의 Alexa Shopping은 Amazon cloud와 Alexa 계정에 원음·음성 텍스트를 두고 3개월·18개월 자동 삭제나 미저장을 선택하며, 제품 제어·진단의 Bixby는 미동의 삭제·동의 1년, LG는 미감지 호출어 즉시 폐기, Dyson은 Alexa 계정 설정을 따릅니다. 제품 지원은 Be My Eyes 기본 녹화 없음과 고객사 요청 녹화를 구분하고 Microsoft 실제 설정과 Samsung·LG 원음 기간은 공개되지 않았습니다. 보험 청구·상담은 저장 위치와 원음 기간이 공개되지 않았고 AXA 보험·청구 기록은 최대 10년이며, 상담 분석·판매 확인 사례는 저장 위치와 보유기간이 공개되지 않았습니다.</desc>
   <style>
     text{font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#0f172a}
     .title{font-size:28px;font-weight:700}
