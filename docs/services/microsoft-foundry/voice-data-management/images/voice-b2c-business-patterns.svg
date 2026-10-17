@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="voice-b2c-title voice-b2c-desc">
+  <title id="voice-b2c-title">소비자 대상 음성 업무 사례의 저장 위치와 보유기간</title>
+  <desc id="voice-b2c-desc">구매·주문의 Alexa Shopping은 Amazon cloud와 Alexa 계정에 원음·음성 텍스트를 두고 3개월·18개월 자동 삭제나 미저장을 선택합니다. 제품 제어·진단에서 Bixby의 요청 처리 후 삭제 또는 동의 시 총 1년은 미국 정책 범위이고, LG의 즉시 폐기는 미국 Smart TV에서 호출어가 감지되지 않은 오디오에 적용되며 활성 세션 명령 원음의 고정 보유기간은 공개되지 않았습니다. Dyson은 Alexa 계정 설정을 따릅니다. 제품 지원은 Be My Eyes 기본 녹화 없음과 고객사 요청 녹화를 구분하고 Microsoft 실제 설정과 Samsung·LG 원음 기간은 공개되지 않았습니다. 보험 청구·상담은 저장 위치와 원음 기간이 공개되지 않았고 AXA 보험·청구 기록은 최대 10년이며, 상담 분석·판매 확인 사례는 저장 위치와 보유기간이 공개되지 않았습니다.</desc>
+  <style>
+    text{font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#0f172a}
+    .title{font-size:28px;font-weight:700}
+    .head{font-size:14px;font-weight:700;fill:#334155}
+    .service{font-size:16px;font-weight:700}
+    .body{font-size:13px;fill:#334155}
+    .small{font-size:12px;fill:#64748b}
+    .region{font-size:11px;font-weight:700;fill:#075985}
+  </style>
+
+  <rect width="1280" height="620" fill="#ffffff"/>
+  <text x="40" y="46" class="title">소비자 대상 음성 업무 · 무엇을 어디에 얼마나 저장하는가</text>
+
+  <rect x="40" y="72" width="1200" height="48" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="60" y="102" class="head">고객 업무 · 대표 사례</text>
+  <text x="300" y="102" class="head">저장되는 음성 기록</text>
+  <text x="540" y="102" class="head">저장 위치</text>
+  <text x="800" y="102" class="head">기간 · 삭제</text>
+  <text x="1060" y="102" class="head">별도 업무 기록</text>
+
+  <rect x="40" y="120" width="1200" height="96" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="60" y="148" class="service">구매 · 주문</text>
+  <text x="60" y="172" class="small">Alexa Shopping</text>
+  <text x="300" y="154" class="body">원음 · 음성 텍스트 · 입력 요청</text>
+  <text x="540" y="148" class="body">Amazon cloud</text>
+  <text x="540" y="172" class="small">Alexa 계정</text>
+  <text x="800" y="144" class="body">3개월·18개월 자동 삭제 / 미저장 선택</text>
+  <text x="800" y="168" class="body">미저장 음성 텍스트: 마지막 대화 후 30일</text>
+  <text x="800" y="194" class="region">계정 설정 기준</text>
+  <text x="1060" y="148" class="body">쇼핑 목록 · 주문</text>
+  <text x="1060" y="172" class="small">검색 · 실행 기록</text>
+
+  <rect x="40" y="216" width="1200" height="96" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="60" y="244" class="service">제품 제어 · 진단</text>
+  <text x="60" y="268" class="small">Bixby(미국) · LG 미국 TV · Dyson</text>
+  <text x="300" y="240" class="body">Bixby: 명령 원음</text>
+  <text x="300" y="264" class="body">LG TV: 호출어 · 활성 세션</text>
+  <text x="300" y="288" class="small">Dyson: Alexa 원음·음성 텍스트</text>
+  <text x="540" y="240" class="body">Bixby service</text>
+  <text x="540" y="264" class="body">LG TV 단말·음성 인식</text>
+  <text x="540" y="288" class="small">Dyson: Alexa</text>
+  <text x="800" y="238" class="body">Bixby 미국: 미동의 삭제 / 동의 1년</text>
+  <text x="800" y="260" class="body">LG 미국 TV: 미감지 호출어 즉시 폐기</text>
+  <text x="800" y="282" class="small">활성 세션: 기간 미공개</text>
+  <text x="800" y="302" class="small">Dyson: Alexa 계정 설정</text>
+  <text x="1060" y="244" class="body">기기 동작 · 상태</text>
+  <text x="1060" y="268" class="small">진단 단계 · 해결법</text>
+
+  <rect x="40" y="312" width="1200" height="96" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="60" y="340" class="service">제품 지원 · A/S</text>
+  <text x="60" y="364" class="small">Microsoft · Samsung · LG</text>
+  <text x="300" y="336" class="body">Microsoft 지원: 영상 · 음성 통화</text>
+  <text x="300" y="360" class="body">Samsung: 상담 원음</text>
+  <text x="300" y="384" class="small">LG: 보이스봇·원음 미공개</text>
+  <text x="540" y="332" class="body">Be My Eyes: 기본 녹화·저장 안 함</text>
+  <text x="540" y="356" class="body">고객사 요청 녹화 시: 별도 저장</text>
+  <text x="540" y="380" class="small">Samsung: 한국·외부 / LG: 미공개</text>
+  <text x="800" y="328" class="body">기본: 녹화·저장 없음</text>
+  <text x="800" y="350" class="body">요청 녹화 시: 고객사 정책</text>
+  <text x="800" y="372" class="small">Microsoft 실제 설정 미공개</text>
+  <text x="800" y="394" class="small">Samsung·LG 원음 기간 미공개</text>
+  <text x="1060" y="340" class="body">지원 티켓 · 수리 이력</text>
+  <text x="1060" y="364" class="small">상담 · 서비스 이력</text>
+
+  <rect x="40" y="408" width="1200" height="96" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="60" y="436" class="service">보험 청구 · 상담</text>
+  <text x="60" y="460" class="small">Lemonade · AXA UK</text>
+  <text x="300" y="432" class="body">Lemonade: 영상 진술</text>
+  <text x="300" y="456" class="small">AXA: 통화 원음·영상 심사</text>
+  <text x="540" y="436" class="body">저장 위치 미공개</text>
+  <text x="800" y="428" class="body">Lemonade: 목적·법적 기준</text>
+  <text x="800" y="452" class="body">AXA: 원음 기간 미공개</text>
+  <text x="800" y="476" class="small">AXA 보험·청구 기록 최대 10년</text>
+  <text x="1060" y="432" class="body">청구 증빙 · 청구 파일</text>
+  <text x="1060" y="456" class="small">민원 · 사기 조사</text>
+
+  <rect x="40" y="504" width="1200" height="96" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="60" y="532" class="service">상담 분석 · 판매 확인</text>
+  <text x="60" y="556" class="small">Aviva · 교보생명</text>
+  <text x="300" y="532" class="body">통화 녹음 → 음성 텍스트</text>
+  <text x="300" y="556" class="small">취약성·판매 설명 분석</text>
+  <text x="540" y="532" class="body">저장 위치 미공개</text>
+  <text x="800" y="532" class="body">보유기간 미공개</text>
+  <text x="1060" y="528" class="body">취약성 · 사기 표시</text>
+  <text x="1060" y="552" class="body">판매 확인 · 법규 준수</text>
+  <text x="1060" y="576" class="small">전체 통화 점검</text>
+
+  <line x1="280" y1="72" x2="280" y2="600" stroke="#e2e8f0"/>
+  <line x1="520" y1="72" x2="520" y2="600" stroke="#e2e8f0"/>
+  <line x1="780" y1="72" x2="780" y2="600" stroke="#e2e8f0"/>
+  <line x1="1040" y1="72" x2="1040" y2="600" stroke="#e2e8f0"/>
+</svg>

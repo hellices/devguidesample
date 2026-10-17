@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="570" viewBox="0 0 1280 570" role="img" aria-labelledby="voice-life-title voice-life-desc">
+  <title id="voice-life-title">음성 데이터 산출물과 삭제 검증 수명주기 검토 예시</title>
+  <desc id="voice-life-desc">여러 시장 사례와 법령 및 지침을 조합해 이 문서가 만든 설계 검토 예시로, 음성 입력이 원음, 음성 텍스트와 요약, 업무 결과로 분기되어 삭제 검증까지 이어지는 흐름을 보여줍니다. 특정 업체의 운영 구조나 확정 지침은 아닙니다.</desc>
+  <defs>
+    <marker id="voice-life-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6Z" fill="#475569"/>
+    </marker>
+    <marker id="voice-life-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6Z" fill="#ea580c"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#0f172a}
+      .title{font-size:28px;font-weight:700}
+      .node{font-size:18px;font-weight:700}.body{font-size:14px;fill:#334155}
+      .small{font-size:12px;fill:#64748b}.tag{font-size:12px;font-weight:700;letter-spacing:.04em}
+    </style>
+  </defs>
+  <rect width="1280" height="570" fill="#ffffff"/>
+  <text x="40" y="48" class="title">음성 입력에서 생기는 기록 · 수명주기 검토 예시</text>
+
+  <path d="M200 286 H252" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M440 258 H468 Q480 258 480 246 V176 Q480 164 492 164 H520" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M440 286 H520" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M440 314 H468 Q480 314 480 326 V396 Q480 408 492 408 H520" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M720 164 H748 Q760 164 760 176 V258 Q760 270 772 270 H800" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M720 286 H800" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M720 408 H748 Q760 408 760 396 V314 Q760 302 772 302 H800" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#voice-life-arrow)"/>
+  <path d="M980 286 H1032" fill="none" stroke="#ea580c" stroke-width="2.5" marker-end="url(#voice-life-arrow-accent)"/>
+
+  <rect x="40" y="238" width="160" height="96" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="120" y="268" text-anchor="middle" class="tag" fill="#475569">입력</text>
+  <text x="120" y="296" text-anchor="middle" class="node">음성 입력</text>
+  <text x="120" y="320" text-anchor="middle" class="small">스트림 · 단말 버퍼</text>
+
+  <rect x="260" y="226" width="180" height="120" rx="8" fill="#eff6ff" stroke="#0284c7"/>
+  <text x="350" y="258" text-anchor="middle" class="tag" fill="#075985">처리</text>
+  <text x="350" y="288" text-anchor="middle" class="node">실시간 처리</text>
+  <text x="350" y="314" text-anchor="middle" class="body">음성 인식 · AI 처리 · 연결</text>
+  <text x="350" y="334" text-anchor="middle" class="small">처리자 임시 사본 확인</text>
+
+  <rect x="520" y="116" width="200" height="96" rx="8" fill="#fff" stroke="#16a34a"/>
+  <text x="620" y="146" text-anchor="middle" class="tag" fill="#166534">원본</text>
+  <text x="620" y="174" text-anchor="middle" class="node">원음(原音)</text>
+  <text x="620" y="198" text-anchor="middle" class="small">재생 · 증빙 · 품질 검토</text>
+
+  <rect x="520" y="238" width="200" height="96" rx="8" fill="#fff" stroke="#16a34a"/>
+  <text x="620" y="268" text-anchor="middle" class="tag" fill="#166534">음성에서 생성</text>
+  <text x="620" y="294" text-anchor="middle" class="node">음성 텍스트 · 요약</text>
+  <text x="620" y="314" text-anchor="middle" class="small">전사(轉寫): 음성을 글자로 변환</text>
+  <text x="620" y="330" text-anchor="middle" class="small">검색 · 후속 처리</text>
+
+  <rect x="520" y="360" width="200" height="96" rx="8" fill="#fff" stroke="#16a34a"/>
+  <text x="620" y="390" text-anchor="middle" class="tag" fill="#166534">업무</text>
+  <text x="620" y="418" text-anchor="middle" class="node">업무 결과 · 로그</text>
+  <text x="620" y="442" text-anchor="middle" class="small">주문 · 기기 동작 · 티켓</text>
+
+  <rect x="800" y="226" width="180" height="120" rx="8" fill="#f8fafc" stroke="#64748b"/>
+  <text x="890" y="258" text-anchor="middle" class="tag" fill="#475569">정책 검토</text>
+  <text x="890" y="288" text-anchor="middle" class="node">보유 · 법적 보존</text>
+  <text x="890" y="314" text-anchor="middle" class="body">보유 시작 기준 · 기간 · 예외</text>
+  <text x="890" y="334" text-anchor="middle" class="small">산출물별 별도 적용</text>
+
+  <rect x="1040" y="226" width="200" height="120" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="1140" y="258" text-anchor="middle" class="tag" fill="#9a3412">검증</text>
+  <text x="1140" y="288" text-anchor="middle" class="node">삭제 검증</text>
+  <text x="1140" y="314" text-anchor="middle" class="body">삭제 입증 자료 · 미반환 시험</text>
+  <text x="1140" y="334" text-anchor="middle" class="small">백업 만료 · 재생성 차단</text>
+
+  <rect x="260" y="492" width="980" height="64" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="284" y="520" class="body">삭제 범위</text>
+  <text x="380" y="520" class="small">검색색인 · 벡터 · 임시 저장 · 작업 대기열 · 백업 · 외부 처리자</text>
+  <text x="284" y="544" class="body">완료 판정</text>
+  <text x="380" y="544" class="small">모든 위치의 입증 자료 + 복원/재처리 후 미반환</text>
+
+</svg>
