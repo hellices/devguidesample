@@ -42,9 +42,9 @@ topic_order: 2
 > - 연결 문서: [앱 음성 서비스 기록관리 사례와 정책](../business-patterns/index.md)
 > - 범위: Microsoft가 공개한 참조 아키텍처와 제품 문서에서 확인되는 원음·음성 텍스트·분석 결과의 저장 시점과 위치, 오디오 형식·압축, 지연·저장 성능 지침.
 > - 제외: 특정 애플리케이션의 확정 아키텍처 · 이 문서가 독자적으로 정한 저장 위치나 보유기간 · 법률 의견 · 가격 견적.
-> - 구조화 근거: [Azure 저장 근거 원장](../downloads/azure-voice-agent-storage-evidence-2026-10-17.json)
 
 > **읽는 기준**
+>
 > - **Microsoft 참조 아키텍처:** Microsoft가 예시 구성과 데이터 흐름을 직접 제시한 자료.
 > - **제품 동작:** 각 Azure 서비스 문서가 명시한 기본 저장·처리 방식과 제한.
 > - **Microsoft 일반 지침:** Blob Storage·Data Lake Storage·Speech 성능 문서의 명시적 권고. 음성 에이전트 전용 지침이 아닐 때는 그 범위를 함께 표시.
@@ -64,27 +64,7 @@ topic_order: 2
 
 ![Azure 음성 에이전트의 실시간 처리와 Microsoft 참조 저장·분석 흐름](../images/azure-voice-agent-ms-reference-architecture.svg)
 
-> **그림 범위:** 위쪽은 Voice Live 제품 동작, 아래쪽은 Azure Architecture Center의 콜센터 저장·분석 참조와 가상 에이전트 대안을 병치함. Microsoft가 제공한 단일 참조 아키텍처를 그대로 옮긴 그림은 아님.
-
-이 참조의 데이터 흐름은 다음과 같음.
-
-1. 전화 서버가 상담원과 고객의 통화를 녹음하고 **Azure Blob Storage에 저장**함.
-2. **Blob 업로드 이벤트** 또는 **정해진 시간의 일괄 실행**이 Azure Functions를 시작함.
-3. Azure Speech 배치 음성 인식이 오디오를 텍스트로 바꿈. 애플리케이션은 **원문 음성 텍스트 파일을 나중에 참조하도록 Blob Storage에 선택적으로 저장**할 수 있음.
-4. 애플리케이션은 개인 데이터를 가린 음성 텍스트를 Foundry 모델에 보내 통화 목적·감정·개체·요약을 추출하고, **처리 결과를 Azure Storage에 저장**함.
-5. Azure Content Understanding 경로를 사용할 때는 반환된 추출 결과를 **Blob Storage 또는 다른 데이터 저장소에 저장**함.
-6. 처리 결과는 Power BI가 시각화하거나 고객관계관리(CRM) 시스템에 저장할 수 있음.
-
-이 아키텍처는 **통화 후 배치 분석**을 중심으로 함. Voice Live나 GPT Realtime 서비스가 자동으로 위 저장을 수행한다는 뜻은 아님.
-
-### 같은 참조가 제시한 실시간 가상 에이전트 대안
-
-위 Azure Architecture Center 문서의 `Alternatives` 절은 가상 에이전트에 대해서도 다음과 같이 안내함.
-
-- **Voice Live API:** 대화 오디오와 음성 텍스트를 업무 분석용으로 **Blob Storage에 저장**.
-- **GPT Realtime API:** WebRTC·WebSocket·SIP로 실시간 음성을 송수신하고, 오디오와 음성 텍스트를 분석용으로 함께 저장.
-
-Microsoft 문서는 이 대안에서 저장 대상을 제시하지만, 실시간 음성 조각을 몇 개씩 묶는지, 세션 중 어느 이벤트에서 Blob 파일을 확정하는지, 입력·출력 오디오를 한 파일로 합치는지는 명시하지 않음.
+> **그림 범위:** 위쪽은 Voice Live의 실시간 제품 동작, 아래쪽은 통화 후 저장·분석 참조 흐름임. 파란 점선은 같은 Architecture Center 문서가 Voice Live·GPT Realtime의 오디오와 음성 텍스트를 분석용 Blob Storage에 저장하는 대안으로 제시한 경로임. 두 공식 문서 범위를 한 장에 병치한 것으로, Microsoft가 제공한 단일 아키텍처나 서비스의 기본 자동 저장 동작을 뜻하지 않음.
 
 ## 서비스 자체는 무엇을 저장하는가?
 
