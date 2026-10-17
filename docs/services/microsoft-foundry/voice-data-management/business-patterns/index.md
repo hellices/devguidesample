@@ -95,7 +95,7 @@ topic_order: 1
 | 고객 업무·대표 사례 | 저장되는 음성 기록 | 저장 위치 | 기간·삭제 | 별도 업무 기록 |
 |---|---|---|---|---|
 | 구매·주문 · Alexa Shopping | 원음·음성 텍스트·입력 요청 | Amazon cloud · Alexa 계정 | 3개월·18개월 자동 삭제 또는 미저장 선택. 미저장 음성 텍스트는 마지막 대화 후 30일 | 쇼핑 목록·주문 · 검색·실행 기록 |
-| 제품 제어·진단 · Bixby·LG ThinQ·Dyson Care | Bixby·LG 명령 원음 · Dyson Alexa 원음·음성 텍스트 | Bixby service · LG TV 단말·음성 인식 · Dyson Alexa | Bixby 미동의 삭제·동의 1년 · LG 미감지 호출어 즉시 폐기 · Dyson Alexa 계정 설정 | 기기 동작·상태 · 진단 단계·해결법 |
+| 제품 제어·진단 · Bixby(미국 정책)·LG 미국 Smart TV·Dyson Care | Bixby 명령 원음 · LG Smart TV 호출어 미감지 오디오와 활성 세션 · Dyson Alexa 원음·음성 텍스트 | Bixby service · LG Smart TV 단말·음성 인식 · Dyson Alexa | Bixby 미국 정책: 검토 미동의 시 요청 처리 후 원음 삭제, 동의 시 총 1년. LG 미국 Smart TV: 호출어 미감지 오디오는 즉시 폐기하나 활성 세션 명령 원음의 고정 보유기간은 미공개. Dyson은 Alexa 계정 설정 적용 | 기기 동작·상태 · 진단 단계·해결법 |
 | 제품 지원·A/S · Microsoft·Samsung·LG | Microsoft 영상·음성 통화 · Samsung 상담 원음 · LG 보이스봇 원음 미공개 | Be My Eyes 기본 녹화·저장 없음, 고객사 요청 녹화 시 별도 저장 · Samsung 한국·외부 · LG 미공개 | 기본 녹화·저장 없음 · 요청 녹화 시 고객사 정책 · Microsoft 실제 설정 미공개 · Samsung·LG 원음 기간 미공개 | 지원 티켓·수리 이력 · 상담·서비스 이력 |
 | 보험 청구·상담 · Lemonade·AXA UK | Lemonade 영상 진술 · AXA 통화 원음·영상 심사 | 저장 위치 미공개 | Lemonade 목적·법적 기준 · AXA 원음 기간 미공개 · AXA 보험·청구 기록 최대 10년 | 청구 증빙·청구 파일 · 민원·사기 조사 |
 | 상담 분석·판매 확인 · Aviva·교보생명 | 통화 녹음→음성 텍스트 · 취약성·판매 설명 분석 | 저장 위치 미공개 | 보유기간 미공개 | 취약성·사기 표시 · 판매 확인·법규 준수 · 전체 통화 점검 |

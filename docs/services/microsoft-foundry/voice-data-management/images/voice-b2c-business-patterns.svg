@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" role="img" aria-labelledby="voice-b2c-title voice-b2c-desc">
   <title id="voice-b2c-title">소비자 대상 음성 업무 사례의 저장 위치와 보유기간</title>
-  <desc id="voice-b2c-desc">구매·주문의 Alexa Shopping은 Amazon cloud와 Alexa 계정에 원음·음성 텍스트를 두고 3개월·18개월 자동 삭제나 미저장을 선택하며, 제품 제어·진단의 Bixby는 미동의 삭제·동의 1년, LG는 미감지 호출어 즉시 폐기, Dyson은 Alexa 계정 설정을 따릅니다. 제품 지원은 Be My Eyes 기본 녹화 없음과 고객사 요청 녹화를 구분하고 Microsoft 실제 설정과 Samsung·LG 원음 기간은 공개되지 않았습니다. 보험 청구·상담은 저장 위치와 원음 기간이 공개되지 않았고 AXA 보험·청구 기록은 최대 10년이며, 상담 분석·판매 확인 사례는 저장 위치와 보유기간이 공개되지 않았습니다.</desc>
+  <desc id="voice-b2c-desc">구매·주문의 Alexa Shopping은 Amazon cloud와 Alexa 계정에 원음·음성 텍스트를 두고 3개월·18개월 자동 삭제나 미저장을 선택합니다. 제품 제어·진단에서 Bixby의 요청 처리 후 삭제 또는 동의 시 총 1년은 미국 정책 범위이고, LG의 즉시 폐기는 미국 Smart TV에서 호출어가 감지되지 않은 오디오에 적용되며 활성 세션 명령 원음의 고정 보유기간은 공개되지 않았습니다. Dyson은 Alexa 계정 설정을 따릅니다. 제품 지원은 Be My Eyes 기본 녹화 없음과 고객사 요청 녹화를 구분하고 Microsoft 실제 설정과 Samsung·LG 원음 기간은 공개되지 않았습니다. 보험 청구·상담은 저장 위치와 원음 기간이 공개되지 않았고 AXA 보험·청구 기록은 최대 10년이며, 상담 분석·판매 확인 사례는 저장 위치와 보유기간이 공개되지 않았습니다.</desc>
   <style>
     text{font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#0f172a}
     .title{font-size:28px;font-weight:700}
@@ -36,16 +36,17 @@
 
   <rect x="40" y="216" width="1200" height="96" fill="#f8fafc" stroke="#e2e8f0"/>
   <text x="60" y="244" class="service">제품 제어 · 진단</text>
-  <text x="60" y="268" class="small">Bixby · LG ThinQ · Dyson Care</text>
-  <text x="300" y="240" class="body">Bixby·LG: 명령 원음</text>
-  <text x="300" y="264" class="body">Dyson: Alexa 원음·음성 텍스트</text>
-  <text x="300" y="288" class="small">호출어·활성 세션 구분</text>
+  <text x="60" y="268" class="small">Bixby(미국) · LG 미국 TV · Dyson</text>
+  <text x="300" y="240" class="body">Bixby: 명령 원음</text>
+  <text x="300" y="264" class="body">LG TV: 호출어 · 활성 세션</text>
+  <text x="300" y="288" class="small">Dyson: Alexa 원음·음성 텍스트</text>
   <text x="540" y="240" class="body">Bixby service</text>
   <text x="540" y="264" class="body">LG TV 단말·음성 인식</text>
   <text x="540" y="288" class="small">Dyson: Alexa</text>
-  <text x="800" y="240" class="body">Bixby: 미동의 삭제 / 동의 1년</text>
-  <text x="800" y="264" class="body">LG: 미감지 호출어 즉시 폐기</text>
-  <text x="800" y="288" class="small">Dyson: Alexa 계정 설정</text>
+  <text x="800" y="238" class="body">Bixby 미국: 미동의 삭제 / 동의 1년</text>
+  <text x="800" y="260" class="body">LG 미국 TV: 미감지 호출어 즉시 폐기</text>
+  <text x="800" y="282" class="small">활성 세션: 기간 미공개</text>
+  <text x="800" y="302" class="small">Dyson: Alexa 계정 설정</text>
   <text x="1060" y="244" class="body">기기 동작 · 상태</text>
   <text x="1060" y="268" class="small">진단 단계 · 해결법</text>
 
