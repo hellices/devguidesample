@@ -373,6 +373,17 @@ from them. The backlog row was not repeated. The stale writer row was run
 with the current sample and, for comparison, with the sample before the chunk
 file lease.
 
+On 2026-10-15 the backlog path was run again in a disposable East US 2
+environment with the current 80 MB sample: one non-HA M30 shard, four
+`Standard_D4s_v6` AKS nodes, Airflow 3.2.2 and chart 1.22.0. The DAG was
+initialized, paused, and given 100,000 padded documents at 957.8 operations
+per second. After the 10-minute window closed, unpausing the DAG created the
+latest scheduled run before the queued manual run. The scheduled run exported
+230,000 events in 15.25 seconds inside the pod and 22.12 seconds end to end.
+The verifier found zero missing, unexpected, duplicate or out-of-order events
+in five Parquet files. `azd down --force --purge` then removed the resource
+group, and `az group exists` returned `false`.
+
 | Run | Generator parameters | Extra steps |
 | --- | --- | --- |
 | r1 | `DOCS=10000 RATE=0` | None |
@@ -385,6 +396,7 @@ file lease.
 | Chunk limit comparison | `DOCS=200000 RATE=0 PAD_BYTES=1000`, then `DOCS=450000 RATE=0 PAD_BYTES=0` in the next window | Pause the DAG. Before the generator, run `lake_export.py` once per limit with its own `LAKE_PREFIX`, which is also the stream ID, so each saves its own start position. After each window closes, run the exports again with `CHUNK_BYTES` added to the Job env (50000000, 100000000 or 200000000) and wrapped as in Export memory. Verify each prefix with `verify_lake.py`. The 80 MB memory was measured the same way on the third run of the next row |
 | Airflow 80 MB backlog | The two runs above, then `DOCS=300000 RATE=0 PAD_BYTES=1000` in another window | Keep the DAG paused while the three runs write, then unpause it. One scheduled run reads the three windows |
 | Airflow backlog | `DOCS=600000 RATE=0 PAD_BYTES=4000` | Pause the DAG, run the generator, then unpause it |
+| 2026-10-15 backlog architecture rerun | `DOCS=100000 RATE=1000 PAD_BYTES=1000` | Initialize the checkpoint, pause the DAG, run the generator, wait until its 10-minute window closes, then unpause. Check `dags list-runs` before adding a manual run: unpausing can create the latest scheduled run, which handled the backlog in this test |
 | Stale writer | `DOCS=20000 RATE=0 PAD_BYTES=1000` | Pause the DAG. Before the generator, run `lake_export.py` once per case with its own `LAKE_PREFIX`. After the window closes, run `stale_writer_test.py` with `k8s/lake.yaml` (`SCRIPT=stale_writer_test.py`), once as is and once with `STALL_AT=lease` added to the Job env. It exits with code 1 when the older run overwrote the newer chunk. Then run `lake_export.py` again on each prefix and verify it with `verify_lake.py` |
 
 All runs use `WORKERS=16`. Pause the DAG with `airflow dags pause
