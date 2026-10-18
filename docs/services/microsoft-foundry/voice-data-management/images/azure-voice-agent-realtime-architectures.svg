@@ -88,8 +88,9 @@
   <text x="970" y="196" text-anchor="middle" class="node">도구 · 업무 시스템</text>
   <text x="970" y="216" text-anchor="middle" class="small">주문 · 기기 동작 · 지원 티켓</text>
 
-  <rect x="400" y="248" width="700" height="28" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
-  <text x="750" y="267" text-anchor="middle" class="small">선택 기록 · 선택 전사 · store · 추적 로그 · 사후 분석 사본</text>
+  <rect x="400" y="248" width="700" height="38" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
+  <text x="750" y="264" text-anchor="middle" class="small">선택 기록 · 선택 전사 · 추적 로그 · 사후 분석 사본</text>
+  <text x="750" y="281" text-anchor="middle" class="small">Foundry voice agent store(해당 시) · 직접 Realtime API 공통 설정 아님</text>
 
   <!-- Cascaded nodes -->
   <rect x="70" y="364" width="180" height="78" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
@@ -117,7 +118,7 @@
 
   <rect x="790" y="472" width="410" height="52" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
   <text x="995" y="493" text-anchor="middle" class="small">선택 기록 · 단계별 로그 · 오디오 사본</text>
-  <text x="995" y="513" text-anchor="middle" class="small">추적 · 지원 로그 · 사후 분석 경로는 별도 정책</text>
+  <text x="995" y="513" text-anchor="middle" class="small">Foundry voice agent store(해당 시) · 추적·사후 분석은 별도 정책</text>
 
   <!-- Legend -->
   <line x1="40" y1="606" x2="1240" y2="606" stroke="#cbd5e1"/>
