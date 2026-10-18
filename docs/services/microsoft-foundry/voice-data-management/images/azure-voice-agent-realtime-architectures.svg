@@ -54,6 +54,7 @@
   <path d="M730 402 H790" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
   <path d="M620 442 V466" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#azure-realtime-arrow)"/>
   <path d="M900 442 V472" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path d="M790 426 H768 Q760 426 760 434 V540 Q760 548 752 548 H168 Q160 548 160 540 V442" fill="none" stroke="#0284c7" stroke-width="1.8" marker-end="url(#azure-realtime-arrow-link)"/>
 
   <!-- Connector labels -->
   <rect x="302" y="146" width="76" height="16" rx="2" fill="#ffffff"/>
@@ -71,6 +72,8 @@
   <text x="480" y="386" text-anchor="middle" class="label">텍스트</text>
   <rect x="733" y="374" width="54" height="16" rx="2" fill="#ffffff"/>
   <text x="760" y="386" text-anchor="middle" class="label">응답문</text>
+  <rect x="328" y="526" width="92" height="14" rx="2" fill="#ffffff"/>
+  <text x="374" y="537" text-anchor="middle" class="label">음성 응답</text>
 
   <!-- Native realtime nodes -->
   <rect x="80" y="148" width="200" height="82" rx="8" fill="#f8fafc" stroke="#94a3b8"/>

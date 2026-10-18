@@ -52,7 +52,7 @@
   <path d="M420 230 V270" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow-link)"/>
 
   <!-- Content Understanding path -->
-  <path d="M770 455 H830" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
+  <path d="M770 455 H830" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
   <path d="M1010 455 H1022 Q1030 455 1030 447 V348 Q1030 340 1038 340 H1050" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
 
   <!-- Output path -->
@@ -70,7 +70,7 @@
   <rect x="1038" y="284" width="54" height="16" rx="2" fill="#ffffff"/>
   <text x="1065" y="296" text-anchor="middle" class="label">분석</text>
   <rect x="773" y="427" width="54" height="16" rx="2" fill="#ffffff"/>
-  <text x="800" y="439" text-anchor="middle" class="label">결과</text>
+  <text x="800" y="439" text-anchor="middle" class="label">선택 처리</text>
 
   <!-- Input -->
   <rect x="60" y="270" width="200" height="110" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
@@ -128,5 +128,7 @@
   <text x="124" y="644" class="legend">필수 처리 흐름</text>
   <line x1="270" y1="640" x2="318" y2="640" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow-link)"/>
   <text x="330" y="644" class="legend">선택 저장</text>
+  <line x1="448" y1="640" x2="496" y2="640" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
+  <text x="508" y="644" class="legend">선택 처리</text>
   <text x="1240" y="644" text-anchor="end" class="source">Azure Architecture Center 통화 후 분석 참조 · 2026-10-18 재확인</text>
 </svg>
