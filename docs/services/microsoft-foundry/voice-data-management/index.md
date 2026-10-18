@@ -416,35 +416,62 @@ published_at: 2026-10-17
 
 </details>
 
-## 한국·EU·미국 법규는 어디까지 적용되는가? { #jurisdiction-rules }
+## 법령이 보존기간을 직접 정한 경우 { #jurisdiction-rules }
 
-다음 표는 이용자·사업자·처리 국가, 업무·자료 유형, 처리 책임·위탁 관계와 아동·생체·자동결정 여부를 검토하기 위한 출발점입니다. 법률 의견이나 전 세계 공통 보유기간표가 아닙니다.
+아래 표는 조문이 숫자나 즉시 삭제 시점을 직접 제시한 범위만 옮깁니다.
+적용 여부를 해석하지 않으며, 다른 기록의 기간을 원음에 확대하지 않습니다.
 
-<details markdown="1">
-<summary><strong>한국·EU·미국 규칙과 Alexa 집행 사례 보기</strong></summary>
+| 관할·근거 | 정확한 대상 | 기간·기산점 | 원문 핵심 | 음성 경계 |
+|---|---|---|---|---|
+| **[한국 전자상거래법 시행령 제6조](https://law.go.kr/LSW/lsLinkCommonInfo.do?lspttninfSeq=63460&chrClsCd=010202)** | 표시·광고 / 계약·청약철회 / 대금결제·공급 / 불만·분쟁 기록 | **6개월 / 5년 / 5년 / 3년** | `거래기록의 대상ㆍ범위 및 기간` | 거래 결과 기록이며 모든 통화 원음의 기간이 아님 |
+| **[한국 금융소비자보호법 제28조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1033002393)·[시행령 제26조](https://law.go.kr/lsLinkCommonInfo.do?lspttninfSeq=166903&chrClsCd=010202)** | 계약체결·이행, 광고, 권리행사, 내부통제, 위탁 등 지정 자료 | 원칙 **10년**. 10년 초과 보장·계약은 해당 보장·계약기간 | `대통령령으로 정하는 기간이란 10년` | 적용 규칙이 녹취를 요구 자료로 보는 경우에만 해당하며 모든 금융 통화 원음의 공통 기간이 아님 |
+| **[EU MiFID II Article 16(7)](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014L0065-20240109)** | 자기계정 거래·고객 주문 접수·전달·실행과 관련되거나 이를 의도한 전화·전자통신 | **5년**, 감독기관 요청 시 **최대 7년** | `five years ... up to seven years` | 대상 투자업무 통화에 직접 적용 |
+| **[EU AI Act Articles 19(1), 26(6)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)** | 공급자·배포자가 통제하는 고위험 AI 자동 생성 로그 | 목적에 맞는 기간, **최소 6개월** | `at least six months` | 고위험 AI 로그 규칙이며 모든 음성·전사 보관 의무가 아님 |
+| **[COPPA 16 CFR 312.5(c)(9)](https://www.federalregister.gov/documents/full_text/text/2025/04/22/2025-05904.txt)** | 아동의 특정 요청 응답용 음성 파일만 수집하고 다른 개인정보·이용·공개가 없는 예외 | 응답 **직후 삭제** | `deletes it immediately after responding` | 조건을 모두 충족한 제한적 예외 |
+| **[Illinois BIPA §15(a)](https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K15.htm)** | voiceprint를 포함한 생체 식별자·정보 | 목적 달성 또는 마지막 상호작용 후 **3년** 중 빠른 시점 | `whichever occurs first` | 일반 음성 녹음이 아니라 voiceprint |
+| **[Texas B&amp;C Code §503.001](https://tcss.legis.texas.gov/resources/BC/htm/BC.503.htm)** | 상업 목적으로 수집한 voiceprint 등 생체 식별자 | 목적 종료 후 합리적 기간, 늦어도 **1년**. 다른 법정 문서와 연결되면 그 의무 종료 후 1년 | `not later than the first anniversary` | 금융기관 voiceprint와 법이 정한 일부 AI·보안·사기 용도 예외를 별도 확인 |
 
-| 관할·근거 | 음성 서비스의 적용 경계 | 운영 기록에 연결할 항목 |
-|---|---|---|
-| **[한국 개인정보 보호법 제15·18조](https://www.law.go.kr/법령/개인정보보호법)** | 수집·이용의 적법한 근거와 목적 범위; 목적 외 이용·제공 제한 및 예외. 서비스 제공과 모델 학습을 자동으로 같은 목적으로 묶지 않음 | 목적·근거·고지/동의 버전, 개선용 별도 평가 |
-| **[한국 개인정보 보호법 제21·26·28조의8·30조](https://www.law.go.kr/법령/개인정보보호법)** | 불필요한 개인정보 파기, 다른 법령상 보존 시 분리; 위탁 문서·관리; 국외 제공은 조회 포함, 처리위탁·보관도 국외이전 범위. 별도 동의 외 법정 경로도 있음. 현행본 시행 2026-09-11 | 저장/처리 국가·기간·수신자, STT/LLM·재위탁·원격 접근, 파기 입증 자료·방침 |
-| **[한국 개인정보 보호법 제22조의2·23·36·37조의2](https://www.law.go.kr/법령/개인정보보호법)** | 동의가 필요한 만 14세 미만 아동은 법정대리인 동의·확인. 민감정보는 별도 규율; 정정·삭제, 법정 요건에 해당하는 자동화된 결정 권리 | 아동 경로·쉬운 고지, 식별 목적 생체정보 구분, 정정·이의제기 절차 |
-| **[한국 AI 기본법 제2·31조](https://www.law.go.kr/법령/인공지능발전과신뢰기반조성등에관한기본법) · [시행령 제23조](https://www.law.go.kr/법령/인공지능발전과신뢰기반조성등에관한기본법시행령)** | 생성형 또는 고영향 AI 제품·서비스의 AI 기반 운용 사실 사전고지, 생성 결과 표시, 실제와 구분하기 어려운 가상 음향 표시. 제품·화면상 명백함·내부 업무 등 시행령상 예외. 법 현행본 2026-07-21, 시행령 현행본 2026-08-20 | 기능 모드·고지 시점·화면/음성 방식·예외 근거. 일반 구매·지원 AI는 그 사실만으로 고영향 AI가 아니며 법 제2조제4호 영역·중대한 영향 여부를 별도 판단 |
-| **[한국 PIPC 생성형 AI 이용자 가이드](https://pipc.go.kr/np/cop/bbs/selectBoardArticle.do?bbsId=BS074&mCode=C020010000&nttId=12084)** | 2026-05-19 공식 이용자 안내; 학습 활용 옵트아웃, 대화 기록 저장·삭제 설정, 외부 서비스 연동 등 이용자 통제 확인 | 운영자 법적 의무표가 아닌 UX·고지·권리행사 점검 자료 |
-| **[EU GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng) · [EDPB 음성비서 지침](https://www.edpb.europa.eu/documents/guideline/guidelines-022021-on-virtual-voice-assistants_en)** | 목적·필요성·기간 제한, 처리 근거·처리자·국외이전·권리. 웨이크워드·동석자·공용기기·단말/클라우드 처리의 구분. EDPB 최종판 2021-07-07 | 오작동 수집 최소화, 음성/음성 텍스트/명령 이력별 제어·삭제 UX |
-| **[EU AI Act 제5·50·113조](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)** | 일반 STT와 생체 기반 감정·생체 분류 구분. 직장·교육기관 감정 추론 금지에 의료·안전 목적 예외. 제50조는 표준 편집·수사·예술·창작물의 예외·완화 별도 규정. 금지 규칙 2025-02-02, 제50조 2026-08-02 적용 | AI 상호작용 고지, 공급자의 합성 오디오 machine-readable 표시와 배포자의 deepfake 공개를 역할·예외별 평가 |
-| **[미국 COPPA, 16 CFR Part 312](https://www.federalregister.gov/documents/2025/04/22/2025-05904/childrens-online-privacy-protection-rule)** | 아동 지향 서비스 또는 13세 미만임을 실제 아는 수집에 적용. 아동 음성 파일은 개인정보, 음성 생체정보(voiceprint) 등 생체 식별자 포함. 2025-06-23 시행, 일반 준수기한 2026-04-22 | 부모 동의·권리, 필요한 기간만 보유·삭제 정책. 특정 요청 응답용 음성만 수집하고 다른 이용·공개 없이 응답 직후 삭제하는 제312.5(c)(9) 예외를 학습·품질 검토·장기 녹음으로 확대하지 않음 |
-| **[미국 California CCPA/CPRA](https://oag.ca.gov/privacy/ccpa) · [§1798.100](https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1798.100.&lawCode=CIV) · [§1798.140](https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1798.140.&lawCode=CIV)** | 적용 요건을 충족하는 사업자; 개인정보 정의에 audio·생체정보 범주. §1798.100(a)(3)은 범주별 보유기간 또는 기준 고지와 공개 목적에 합리적으로 필요한 기간 초과 금지 | 수집 시 고지·목적·기간 기준, 열람·삭제·정정 요청, 법정 예외·service provider/contractor 사본 |
-| **[미국 Illinois BIPA §15](https://my.ilga.gov/legislation/ilcs/fulltext?DocName=074000140K15) / 법률 참고** | 일반 원음과 법상 voiceprint 구분. 생체정보 사전 고지·서면 release·공개 보유/파기 정책; 목적 달성 또는 마지막 상호작용 후 3년 중 빠른 시점 기준 | 적용 범위·예외와 현행 조문 대조 후 템플릿별 정책 확정; 일반 녹음의 3년 보유 의무로 해석 금지 |
+### 일률적인 일수가 없는 규정
 
-### Alexa 사건은 삭제 버튼만으로 부족함을 어떻게 보여주는가? { #alexa-deletion-case }
+한국 개인정보 보호법, GDPR, CCPA/CPRA는 목적·필요성·고지한 기준 또는
+필요 종료 후 삭제를 요구하지만 모든 음성 원음에 적용할 하나의 공통
+일수를 정하지 않습니다. 따라서 위 숫자 표에 임의 기간을 만들지 않습니다.
 
-[FTC의 2023 Amazon Alexa 사건](https://www.ftc.gov/legal-library/browse/cases-proceedings/192-3128-amazoncom-alexa-us-v)은 공개 제품 설정이 아니라 **삭제 운영 실패**의 실제 사례다. FTC 사건 요약은 Amazon이 COPPA를 위반하고 Alexa 이용자·부모에게 삭제 관행을 오인하게 했다는 혐의를 해결하기 위해 삭제 관행 전면 개편과 강화된 보호조치를 요구한다고 설명하며, 2023-07-19 법원에 입력된 합의명령을 제공한다.
+[COPPA §312.10](https://www.federalregister.gov/documents/full_text/text/2025/04/22/2025-05904.txt)도
+일반 아동 개인정보에는 공통 일수를 두지 않고, 특정 목적에 합리적으로
+필요한 기간만 보유하고 무기한 보유를 금지하며 서면 삭제 시점을 정하도록
+요구합니다.
 
-- **분석상 의미:** 삭제 버튼·정책 문구·API 성공만으로 원음·음성 텍스트·지리정보·학습 이용 중단을 증명할 수 없음.
-- **운영 연결:** 삭제 대상 목록(manifest), 파생물 연결 관계, 학습 반입 차단, 처리자 확인, 복원 시 재삭제, 이용자에게 실제 처리 범위 설명.
-- **증거 경계:** 사건 페이지·고소장·합의명령의 혐의와 구제조치를 현재 Alexa 제품의 모든 동작이나 모든 음성 서비스의 위반으로 일반화하지 않음.
+## Amazon Alexa 사건에서 실제로 무엇이 문제였는가? { #alexa-deletion-case }
 
-</details>
+이 사건은 현재 Alexa 정책의 설명이 아니라 2023년
+[고소장](https://search.ftc.gov/system/files/ftc_gov/pdf/Amazon-Complaint-%28Dkt.1%29.pdf)의
+혐의와 2023-07-19 법원에 제출된
+[합의명령](https://search.ftc.gov/system/files/ftc_gov/pdf/1923128amazonalexaorderfiled.pdf)의
+조치를 구분해 보는 집행 사례입니다. [FTC 사건 페이지](https://www.ftc.gov/legal-library/browse/cases-proceedings/192-3128-amazoncom-alexa-us-v)도
+관련 문서를 함께 제공합니다.
+
+### 고소장이 제기한 혐의
+
+| 대상 | FTC·DOJ 고소장의 주장 |
+|---|---|
+| **원음·전사문** | 기본 설정이 아동·성인의 원음과 전사문을 비활성 계정까지 무기한 저장 |
+| **제품 개선** | 저장한 원음·전사문을 요청 처리뿐 아니라 Alexa 학습·개선에 사용 |
+| **삭제 요청** | 일부 요청에서 원음 삭제 뒤에도 전사문을 유지하고 이를 알리지 않음 |
+| **위치·음성정보** | 이용자 요청 뒤에도 위치·음성정보를 삭제하지 않고 잠재적 이용을 위해 유지 |
+
+### 합의명령이 요구한 조치
+
+| 조치 | 명령 내용 |
+|---|---|
+| **민사 벌금** | **USD 25 million** |
+| **비활성 아동 프로필 식별** | 명령 입력 후 **6개월 이내** 식별 절차 구축 |
+| **비활성 아동 정보 삭제** | 프로필 식별 후 **90일 이내** 삭제. 부모가 보유를 요청하거나 프로필이 다시 활성화되면 예외 |
+| **삭제 요청 이행** | Amazon이 제공한 삭제 기능으로 요청된 Alexa 위치·음성정보와 아동 개인정보 삭제 |
+| **삭제 뒤 모델·제품 이용** | 삭제 처리한 정보를 이후 새 데이터 제품 생성·개선에 사용 금지. 삭제 처리 전 만들어진 제품까지 소급 폐기하는 명령은 아님 |
+
+고소장 주장은 혐의이고, 합의명령은 이 사건 당사자에게 적용되는 조치입니다.
+모든 음성 서비스의 법정 보유기간이나 현재 Alexa 동작으로 일반화하지 않습니다.
 
 ## 음성 텍스트·요약·음성 생체정보는 무엇을 검증해야 하는가?
 
