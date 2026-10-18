@@ -13,7 +13,7 @@ official_sources:
 document_type: research
 status: current
 verification_status: needs-review
-sources_checked_at: 2026-10-17
+sources_checked_at: 2026-10-18
 title: 앱 음성 서비스 기록관리 사례와 정책
 description: 실제 음성 서비스가 원음, 음성 텍스트, 요약과 업무 결과를 저장·삭제하는 방식을 비교합니다.
 technologies:
@@ -29,7 +29,7 @@ topic_order: 1
 # 앱 음성 서비스 기록관리 사례와 정책
 
 > - 리서치 발행일: 2026-10-17 (한국시간)
-> - 출처 링크 재확인일: 2026-10-17. front matter의 `sources_checked_at`은 이 날짜를 뜻합니다.
+> - 출처 링크 재확인일: 2026-10-18. front matter의 `sources_checked_at`은 이 날짜를 뜻합니다.
 > - 사례·제품 정책 세부 확인일: 2026-10-14. 시행일·갱신일·지역·기능 모드는 해석에 필요한 경우 본문에 표시하며, 공개 문서가 밝히지 않은 값은 추정하지 않음.
 > - 법령 세부 확인일: 2026-10-10. 직접 대조 범위는 개인정보 보호법 주요 조문, 한국 AI 기본법 제2·31조와 시행령 제23조, EU AI Act 제5·50·113조, COPPA 2025 개정 원문, California Civil Code §1798.100·1798.140. 금융 규칙·BIPA는 법률 참고이며 이 날짜의 현행법 대조 완료를 뜻하지 않음.
 > - 범위: 실제 앱의 제품 구매 준비·제품 지원·고객서비스(CS)를 우선하고, 학습·금융 앱은 업무 목적별 비교, 전화 컨택센터·게임 안전·공공 본인확인·코덱은 부록으로 둠.

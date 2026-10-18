@@ -5,6 +5,10 @@ services:
 - azure-storage
 - azure-architecture
 official_sources:
+- title: Voice Live API Overview
+  url: https://learn.microsoft.com/azure/ai-services/speech-service/voice-live
+- title: Supported regions for Azure Speech
+  url: https://learn.microsoft.com/azure/ai-services/speech-service/regions
 - title: Extract and analyze call center data
   url: https://learn.microsoft.com/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics
 - title: Data, privacy, and security for Voice live
@@ -15,6 +19,14 @@ official_sources:
   url: https://learn.microsoft.com/azure/foundry/responsible-ai/openai/data-privacy
 - title: Use the GPT Realtime API for speech and audio with Azure OpenAI
   url: https://learn.microsoft.com/azure/foundry/openai/how-to/realtime-audio
+- title: Configure a voice agent
+  url: https://learn.microsoft.com/azure/foundry/agents/how-to/configure-voice-agent
+- title: Microsoft Foundry tracing and data handling
+  url: https://learn.microsoft.com/azure/foundry/observability/concepts/trace-data
+- title: Identify and extract PII from conversations
+  url: https://learn.microsoft.com/azure/ai-services/language-service/personally-identifiable-information/how-to/redact-conversation-pii
+- title: PII detection language support
+  url: https://learn.microsoft.com/azure/ai-services/language-service/personally-identifiable-information/language-support
 - title: Create a batch transcription
   url: https://learn.microsoft.com/azure/ai-services/speech-service/batch-transcription-create
 - title: Get batch transcription results
@@ -32,7 +44,7 @@ official_sources:
 document_type: research
 status: current
 verification_status: needs-review
-sources_checked_at: 2026-10-17
+sources_checked_at: 2026-10-18
 title: Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장
 description: Microsoft 참조 아키텍처와 제품 문서에서 음성 원본·텍스트·분석 결과의 저장과 성능 근거를 확인합니다.
 technologies:
@@ -48,7 +60,7 @@ topic_order: 2
 # Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장
 
 > - 리서치 발행일: 2026-10-17 (한국시간)
-> - Microsoft 주요 공식 원문 재확인일: 2026-10-17
+> - Microsoft 주요 공식 원문 재확인일: 2026-10-18
 > - 연결 문서: [앱 음성 서비스 기록관리 사례와 정책](../business-patterns/index.md)
 > - 범위: Microsoft가 공개한 참조 아키텍처와 제품 문서에서 확인되는 원음·음성 텍스트·분석 결과의 저장 시점과 위치, 오디오 형식·압축, 지연·저장 성능 지침.
 > - 제외: 특정 애플리케이션의 확정 아키텍처 · 이 문서가 독자적으로 정한 저장 위치나 보유기간 · 법률 의견 · 가격 견적.
