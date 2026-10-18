@@ -94,9 +94,12 @@ verification_status: needs-review
 Keep the visible product-policy case date `2026-10-14`. Change the visible
 source/legal verification date to `2026-10-19`.
 
-Add these official sources to the root front matter:
+Keep the root front matter's existing Microsoft/Azure `official_sources`.
+The validator reserves that field for allowlisted Microsoft hosts. Task 3
+adds the following government and court sources as inline links in the
+exact-law and Alexa sections instead; do not add them to front matter:
 
-```yaml
+```text
 - title: 전자상거래법 시행령 제6조
   url: https://law.go.kr/LSW/lsLinkCommonInfo.do?lspttninfSeq=63460&chrClsCd=010202
 - title: 금융소비자 보호에 관한 법률 제28조
