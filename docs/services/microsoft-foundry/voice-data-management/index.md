@@ -41,52 +41,66 @@ published_at: 2026-10-17
 > - **법령·지침:** 해당 국가·업무·자료 유형에 적용 여부를 따로 판단할 규칙
 > - **교차 사례 분석:** 사례·법령·표준을 조합한 연구 해석. 특정 업체의 실제 운영 방식이나 법적 의무를 뜻하지 않음
 
-## 음성 서비스 기록관리에서 눈여겨볼 만한 6가지 패턴
+## 주요 AI·음성 제품은 무엇을 저장하고 언제 지우는가? { #product-storage-comparison }
 
-### 1. [한 번의 음성에서 여러 기록이 생김](#voice-record-types)
+이 표는 서비스·기능 모드·설정·지역별 공개 정책을 직접 비교한 이 문서의
+핵심 리서치 결과입니다. 실제 고객 설정이나 비공개 운영을 추정하지 않습니다.
 
-- 대화 처리: 원음(原音: 실제 녹음) → 음성 텍스트(전사, 轉寫: 음성을 글자로 바꾼 기록) → 질문/응답 → 요약·음성 요약
-- 업무 처리: 주문 · 기기 동작 · 지원 티켓 · 분석 결과 · 감사 로그
-- 관리 이유: 각 기록의 사용 목적·접근권한·보유기간·삭제 범위가 서로 다르며, [Microsoft 제품도 기록 종류별 저장 위치가 다름](#microsoft-record-locations)
+| 서비스·범위 | 원음 | 전사(음성 텍스트)·이력·삭제 경계 |
+|---|---|---|
+| **Bixby / 미국 정책, 2026-06-01** | 검토 미동의: 요청 처리 후 삭제. 동의: 식별자 연결 1개월, 총 1년 보관 | 계정 단위 동의·철회. 불필요 정보는 법적 예외를 전제로 백업 포함 45일 이내 삭제 또는 익명화. [정책](https://d264isyiyrfhr3.cloudfront.net/storage/tos/usa/2.1.3/1782805872274/eng/usa_eng_pp.html) |
+| **Gemini Live / 개인 계정** | Keep Activity 켜짐: 녹음·음성 텍스트·공유 콘텐츠를 계정 활동에 저장. 원음/영상/화면의 개선 활용은 별도 선택 | 활동 자동 삭제 기본 18개월, 3·36개월·무기한 선택. 꺼짐/임시 대화 72시간; 사람 검토 대화·관련 자료 최대 3년, 활동 삭제와 별개. 연결 서비스 자료는 별도. [Live](https://support.google.com/gemini/answer/15274899?hl=en) · [정책](https://support.google.com/gemini/answer/13594961?hl=en) |
+| **ChatGPT Voice / 음성 모드별** | Live·Advanced Voice 클립은 채팅 기록의 음성 텍스트와 함께 저장. Standard는 음성 텍스트 변환 후 삭제하며, 학습 공유 선택 시 예외 | FAQ는 Live·Advanced 클립을 30일 보관한다고 설명하면서 채팅 삭제 후 연결 클립도 30일 이내 삭제한다고 별도로 명시하나, 두 30일 시작 기준의 관계는 설명하지 않음. 일반 대화는 사용자 삭제/워크스페이스 정책을 따르고 Archive는 삭제가 아님. 보안·법적·계정 연결 해제 학습 자료 예외가 있음. [음성](https://help.openai.com/en/articles/20001274-chatgpt-voice) · [보유](https://help.openai.com/en/articles/8983778-chat-and-file-retention-in-chatgpt) |
+| **Microsoft Copilot Voice Chat / 상용 Copilot 라이선스** | 기본 오디오 미저장. 사용자가 Microsoft에 피드백을 제공하도록 피드백 기능이 켜진 경우에만 대화 오디오를 임시 저장하고 48시간 후 삭제 | 음성 텍스트는 Copilot 앱의 텍스트 대화와 같은 방식으로 저장·관리. Voice Chat FAQ는 상용 Copilot 라이선스 범위이며 GCC·GCC High는 향후 제공 예정, DoD 범위는 인용 문서에서 확인되지 않음. [음성 FAQ](https://support.microsoft.com/en-us/microsoft-365-copilot/frequently-asked-questions-about-voice-features-in-microsoft-365-copilot) · [조직 데이터](https://learn.microsoft.com/ko-kr/microsoft-365/copilot/microsoft-365-copilot-privacy) |
+| **Siri·Dictation / Apple 정책** | 지원 구성은 단말 처리; 개선 미동의 시 Apple 오디오 미저장 | 서버 음성 텍스트·요청 이력은 계정 아닌 순환 임의 식별자 연결, 최대 2년과 검토 표본 예외. 단말에서 이력 삭제 제어. [정책](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/) |
 
-### 2. [업무에 따라 달라지는 음성 보관](#raw-audio-retention)
+## 비즈니스가 먼저 결정할 기록
 
-- 처리 후 삭제: 미저장 설정 또는 해당 서비스 정책이 적용되는 일부 일회성 요청
-- 일정 기간 보관: 청구 증빙 · 안전 신고 · 본인확인
-- 보유 시작 시점·유지 조건: 요청 완료 · 사건 종료 · 보유 동의 유지 · 법정 보존 의무
-- [실제 차이](#gaming-public-identity): Xbox 미제출 신고 음성은 온라인 상태 누적 24시간 / HMRC 음성 생체정보는 최대 7년
+| 결정 | 필요한 근거 |
+|---|---|
+| **어떤 기록이 생기는가?** | 입력·출력 오디오, 전사문, 요약, 이벤트, 도구 호출, 업무 기록, 추적, 생체 템플릿 |
+| **왜 보관하는가?** | 기능 제공, 이용자 이력, 거래 증빙, 분쟁 처리, 법정 기록, 보안, 평가, 모델 개선 |
+| **언제 기간이 시작·종료되는가?** | 요청 완료, 계약·공급, 불만 종료, 목적 만료, 마지막 상호작용, 프로필 비활성, 삭제 요청 |
+| **어떤 근거가 기간을 정하는가?** | 제품 정책, 법령, 법원 명령, 조직 정책, 고객 설정 |
+| **무엇을 함께 지워야 하는가?** | 오디오, 전사문, 위치정보, 파생 사본, 모델 개선 입력, 처리자 사본, 색인, 백업 |
 
-### 3. [같은 회사라도 기능·지역에 따라 정책이 다름](#business-use-cases)
+### 어떤 기록인가?
 
-- 기능 차이: 일반 통화 / 기업 지원 / AI 대화 / 수학 튜터 등 [모드별 저장·삭제 정책](#product-storage-comparison)
-- 처리 위치: 단말의 호출어 감지 / 클라우드 전송·분석
-- 지역 차이: 미국·한국·EU 등 적용 정책과 이용자 권리 차이
-- 외부 업체: 음성 비서 · 음성 인식 · AI 모델 · 서비스를 도입한 회사가 만든 사본까지 확인
-- 책임 구분: 처리 책임 주체(controller: 목적·방법 결정) / 위탁 처리자(processor: 대신 처리)
+원음·전사문·요약·업무 결과·추적·voiceprint는 서로 다른 기록입니다.
 
-### 4. [삭제 버튼만으로는 완전 삭제가 아님](#deletion-completion)
+### 왜·얼마나 보관하는가?
 
-- 이용자 화면: 대화 삭제 · 계정 이력 삭제
-- 별도 잔존 가능: 음성 텍스트 · 요약 · 검색색인 · 학습 자료 · 외부 처리자 사본 · 백업 · 법규 준수용 보존 사본
-- 삭제 확인 항목(문서 제안): 위치별 삭제 입증 자료(완료를 증명하는 기록) · 검색 미반환 · 재생성 차단 · 백업 만료
-- 실제 사례: [FTC Alexa 사건](#alexa-deletion-case)의 삭제 요청·파생 자료(派生資料: 원본에서 새로 만든 자료)·학습 이용 불일치
+업무 목적과 정확한 기간 근거를 기록별로 연결하고, 다른 기록의 기간을
+원음에 복사하지 않습니다.
 
-### 5. [고지·접근권한·감사·보유는 따로 관리](#jurisdiction-rules)
+### 무엇을 함께 지우는가?
 
-- 이용자 대상: AI 사용 고지 · 녹음 동의 · 저장/삭제 설정
-- 운영자 대상: 제작자·관리자 접근권한 · 다운로드 권한 · [감사 로그와 별도 기록](#microsoft-record-locations)
-- 보유 정책: 일반 만료 · 법적 보존(legal hold: 분쟁·조사 때문에 삭제 중단)
-- 구분할 항목(문서 제안): 한 설정을 껐다고 다른 기록·권한·감사 로그까지 함께 중단된 것으로 판단하지 않음
+삭제 요청은 원음뿐 아니라 전사문·위치정보·파생 사본·모델 개선 입력과
+처리자 사본의 범위를 함께 확인해야 합니다.
 
-### 6. [음성 텍스트·요약·음성 생체정보는 검증 필요](#transcript-summary-quality)
+## 업무별 저장 방식과 기록 수명주기를 비교하면 무엇이 보이는가? { #business-use-cases }
 
-- 음성 텍스트 오류: 숫자 · 금액 · 날짜 · 이름 · 부정어 · 화자 구분
-- 요약 오류: 중요 내용 누락 · 원문에 없는 주장 · 근거 구간 불일치
-- [음성 생체정보 위험](#voice-biometric-attacks): voiceprint(목소리 특징을 수치화한 정보)를 노리는 녹음 재생 · 합성음성 · 음성변환 공격
-- 대응 검토 항목(문서 제안): 모델·언어·환경별 평가 · 원문 연결 · 사람 검토 · 정정/이의제기 · 비음성 인증 대안
-- 구조별 검증: 보조 전사와 모델 해석 · 이벤트 순서와 확정 상태 · 무발화·저음량 시험
+| 업무 | 서비스·모드 | 처리되는 데이터 | 보관 여부·공개 근거 | 별도 업무 기록 |
+|---|---|---|---|---|
+| 구매·주문 | [Alexa Shopping](#alexa-shopping) | 원음·음성 텍스트·입력 요청 | Amazon cloud·Alexa 계정. 원음 3개월·18개월 자동 삭제 또는 미저장 선택. 미저장 모드의 음성 텍스트·입력 요청은 마지막 상호작용 후 30일 | 쇼핑 목록·주문·검색·실행 기록 |
+| 제품 제어 | [Bixby 미국 정책](#bixby-smartthings) | 명령 원음과 연결 기기·서비스 정보 | 검토 미동의 시 요청 처리 후 원음 삭제. 동의 시 식별자 연결 1개월, 이후 분리해 총 1년. 미국 정책 범위 | 기기 동작·SmartThings 이력 |
+| 제품 제어 | [LG 미국 Smart TV · 호출어 미감지](#lg-thinq-smart-tv) | 호출어 판단을 위한 오디오 | 단말 처리 후 즉시 폐기하며 저장·음성 텍스트 변환·전송하지 않음 | 없음 |
+| 제품 제어 | [LG 미국 Smart TV · 활성 세션](#lg-thinq-smart-tv) | 활성 세션 음성·변환 텍스트 | 미국 Smart TV 설명과 글로벌 정책은 수집 가능성을 설명하지만 원음의 고정 보유기간은 미공개 | TV 동작·상태 이력 |
+| 제품 제어 | [LG ThinQ](#lg-thinq-smart-tv) | 지원 제품의 음성 명령과 기기 데이터 | 한국 제품 제어 기능은 확인되지만 원음 저장 여부·위치·고정 기간은 미공개. 미국 Smart TV 세부 정책을 그대로 적용하지 않음 | 기기 동작·상태 이력 |
+| 제품 진단 | [Dyson Care on Alexa](#dyson-care-alexa) | Alexa 원음·음성 텍스트와 Dyson 제품·성능 데이터 | 음성은 Alexa 계정 설정 적용. Dyson Care 원음의 별도 고정 보유기간은 미공개 | 진단 단계·해결 결과 |
+| 제품 지원 | [Microsoft DAD × Be My Eyes](#microsoft-dad-be-my-eyes) | 영상·음성 통화 스트림 | Be My Eyes 기업 서비스는 고객사 요청이 없으면 녹화·저장하지 않음. Microsoft의 실제 설정은 미공개 | 지원 티켓·상담 이력 |
+| 제품 지원 | [Samsung Electronics Service](#samsung-service) | Samsung Electronics 글로벌 정책이 고객서비스 음성 녹음·대화 기록 수집 가능성을 명시 | Samsung Electronics 글로벌 정책상 수집·국외 처리 가능성. 한국 Samsung Electronics Service의 동일 적용 여부와 상담 원음 보유기간은 인용 자료에서 미확인 | 수리·불만·분쟁 기록 |
+| 제품 지원 | [LG Electronics Service AICC](#lg-service-aicc) | 보이스봇 문의 처리와 ThinQ 제품 데이터 기반 원격진단 | 보이스봇 운영은 확인되지만 통화 원음의 녹음 여부·저장 위치·고정 기간은 미공개 | 고객상담·A/S 서비스 이력 |
+| 제품 지원 | [Whirlpool·Wpro 콜센터](#wpro-call-center) | 동의를 받은 전화 녹음·통화 시각·연락처·주문 정보 | 목적 달성에 필요한 기간만 공개. 녹음의 고정 기간은 미공개 | 주문·보증 서비스 요청 |
+| 보험 청구 | [Lemonade 영상 진술](#lemonade-claims) | 약 1분 영상·오디오와 사진·서명·영수증 | 청구·사기방지·법적 요건에 필요한 기간. 고정 기간과 저장 위치는 미공개 | 청구 파일·사기 조사 |
+| 보험 상담·청구 | [AXA UK 전화·영상 심사](#axa-uk) | 녹음된 전화 원음. 영상 심사는 처리되지만 녹화 여부 미공개 | 계약·청구 기록 최대 10년은 통화 원음 기간이 아님. 원음·영상의 고정 기간은 미공개 | 계약·청구·민원·사기 조사 |
+| 상담 분석 | [Aviva × Verint](#aviva-verint) | 기존 통화 녹음→음성 텍스트→취약성·준법 분석 | 원음·음성 텍스트·분석 결과의 저장 위치와 기간은 공개 사례에서 미공개 | 취약성·준법·사기 표시 |
+| 보험 판매 확인 | [교보생명 × Kakao Enterprise](#kyobo-kakao) | 음성봇·3자 통화→음성 텍스트→필수 설명·금칙어 분석 | 원음·음성 텍스트·평가 결과의 저장 위치와 기간은 공개 자료에서 미공개 | 판매 확인·준법 평가 |
+| 금융 문의 | [Bank of America Erica](#bank-of-america-erica) | 음성 상호작용·음성 텍스트 | 음성 상호작용 90일 저장·분석. 보관 음성 텍스트의 개인정보 마스킹 | 거래 검색·전문가 연결 |
+| 말하기 학습 | [Duolingo 일반 AI·수학 튜터](#duolingo-speaking) | 일반 AI는 제출 오디오·음성 텍스트. 수학 튜터는 Apple 음성 인식용 원음 | 일반 AI는 계정·정책 범위. 수학 튜터 원음은 변환 후 즉시 삭제하지만 음성 텍스트는 보관 가능 | 학습 수행·개인화 기록 |
 
-## 구매·제품 지원·보험·상담에서는 음성을 어떻게 쓰는가? { #business-use-cases }
+<details markdown="1">
+<summary><strong>사례별 공개 근거와 적용 범위 보기</strong></summary>
 
 - **이 절의 성격:** 실제 사례·제품 공개 문서
 - **우선:** 제품 구매 · 사용/제어 · 진단 · 지원
@@ -94,9 +108,6 @@ published_at: 2026-10-17
 - **태그 검색:** 브라우저 찾기(`Ctrl/Cmd+F`) → `#제품지원` · `#A/S` · `#보험` · `#고객상담`
 - **시점 읽기:** `공개 시점`은 인용 자료가 밝힌 발표·도입 시점이며 현재 운영 지속이나 현재 아키텍처를 뜻하지 않음. 페이지 접근일은 발표일로 대신하지 않음.
 - **해석 주의:** 상담 업무가 있다는 사실만으로 원음 녹음·고정 보유기간을 추정하지 않음. 공개되지 않은 항목은 `확인되지 않음`으로 표시.
-
-<details markdown="1">
-<summary><strong>사례별 음성 처리·저장·삭제 근거 보기</strong></summary>
 
 ### 제품 지원: Microsoft Disability Answer Desk(장애인·접근성 지원 창구) × Be My Eyes { #microsoft-dad-be-my-eyes }
 
@@ -256,29 +267,6 @@ published_at: 2026-10-17
 - **근거:** [실제 대화 학습](https://blog.duolingo.com/video-call/) · [AI·음성·보유 정책](https://www.duolingo.com/privacy).
 
 </details>
-
-## 업무별 저장 방식과 기록 수명주기를 비교하면 무엇이 보이는가?
-
-### 업무마다 무엇을 어디에 얼마나 저장하는가?
-
-| 업무 | 서비스·모드 | 처리되는 데이터 | 보관 여부·공개 근거 | 별도 업무 기록 |
-|---|---|---|---|---|
-| 구매·주문 | [Alexa Shopping](#alexa-shopping) | 원음·음성 텍스트·입력 요청 | Amazon cloud·Alexa 계정. 원음 3개월·18개월 자동 삭제 또는 미저장 선택. 미저장 모드의 음성 텍스트·입력 요청은 마지막 상호작용 후 30일 | 쇼핑 목록·주문·검색·실행 기록 |
-| 제품 제어 | [Bixby 미국 정책](#bixby-smartthings) | 명령 원음과 연결 기기·서비스 정보 | 검토 미동의 시 요청 처리 후 원음 삭제. 동의 시 식별자 연결 1개월, 이후 분리해 총 1년. 미국 정책 범위 | 기기 동작·SmartThings 이력 |
-| 제품 제어 | [LG 미국 Smart TV · 호출어 미감지](#lg-thinq-smart-tv) | 호출어 판단을 위한 오디오 | 단말 처리 후 즉시 폐기하며 저장·음성 텍스트 변환·전송하지 않음 | 없음 |
-| 제품 제어 | [LG 미국 Smart TV · 활성 세션](#lg-thinq-smart-tv) | 활성 세션 음성·변환 텍스트 | 미국 Smart TV 설명과 글로벌 정책은 수집 가능성을 설명하지만 원음의 고정 보유기간은 미공개 | TV 동작·상태 이력 |
-| 제품 제어 | [LG ThinQ](#lg-thinq-smart-tv) | 지원 제품의 음성 명령과 기기 데이터 | 한국 제품 제어 기능은 확인되지만 원음 저장 여부·위치·고정 기간은 미공개. 미국 Smart TV 세부 정책을 그대로 적용하지 않음 | 기기 동작·상태 이력 |
-| 제품 진단 | [Dyson Care on Alexa](#dyson-care-alexa) | Alexa 원음·음성 텍스트와 Dyson 제품·성능 데이터 | 음성은 Alexa 계정 설정 적용. Dyson Care 원음의 별도 고정 보유기간은 미공개 | 진단 단계·해결 결과 |
-| 제품 지원 | [Microsoft DAD × Be My Eyes](#microsoft-dad-be-my-eyes) | 영상·음성 통화 스트림 | Be My Eyes 기업 서비스는 고객사 요청이 없으면 녹화·저장하지 않음. Microsoft의 실제 설정은 미공개 | 지원 티켓·상담 이력 |
-| 제품 지원 | [Samsung Electronics Service](#samsung-service) | Samsung Electronics 글로벌 정책이 고객서비스 음성 녹음·대화 기록 수집 가능성을 명시 | Samsung Electronics 글로벌 정책상 수집·국외 처리 가능성. 한국 Samsung Electronics Service의 동일 적용 여부와 상담 원음 보유기간은 인용 자료에서 미확인 | 수리·불만·분쟁 기록 |
-| 제품 지원 | [LG Electronics Service AICC](#lg-service-aicc) | 보이스봇 문의 처리와 ThinQ 제품 데이터 기반 원격진단 | 보이스봇 운영은 확인되지만 통화 원음의 녹음 여부·저장 위치·고정 기간은 미공개 | 고객상담·A/S 서비스 이력 |
-| 제품 지원 | [Whirlpool·Wpro 콜센터](#wpro-call-center) | 동의를 받은 전화 녹음·통화 시각·연락처·주문 정보 | 목적 달성에 필요한 기간만 공개. 녹음의 고정 기간은 미공개 | 주문·보증 서비스 요청 |
-| 보험 청구 | [Lemonade 영상 진술](#lemonade-claims) | 약 1분 영상·오디오와 사진·서명·영수증 | 청구·사기방지·법적 요건에 필요한 기간. 고정 기간과 저장 위치는 미공개 | 청구 파일·사기 조사 |
-| 보험 상담·청구 | [AXA UK 전화·영상 심사](#axa-uk) | 녹음된 전화 원음. 영상 심사는 처리되지만 녹화 여부 미공개 | 계약·청구 기록 최대 10년은 통화 원음 기간이 아님. 원음·영상의 고정 기간은 미공개 | 계약·청구·민원·사기 조사 |
-| 상담 분석 | [Aviva × Verint](#aviva-verint) | 기존 통화 녹음→음성 텍스트→취약성·준법 분석 | 원음·음성 텍스트·분석 결과의 저장 위치와 기간은 공개 사례에서 미공개 | 취약성·준법·사기 표시 |
-| 보험 판매 확인 | [교보생명 × Kakao Enterprise](#kyobo-kakao) | 음성봇·3자 통화→음성 텍스트→필수 설명·금칙어 분석 | 원음·음성 텍스트·평가 결과의 저장 위치와 기간은 공개 사례에서 미공개 | 판매 확인·준법 평가 |
-| 금융 문의 | [Bank of America Erica](#bank-of-america-erica) | 음성 상호작용·음성 텍스트 | 음성 상호작용 90일 저장·분석. 보관 음성 텍스트의 개인정보 마스킹 | 거래 검색·전문가 연결 |
-| 말하기 학습 | [Duolingo 일반 AI·수학 튜터](#duolingo-speaking) | 일반 AI는 제출 오디오·음성 텍스트. 수학 튜터는 Apple 음성 인식용 원음 | 일반 AI는 계정·정책 범위. 수학 튜터 원음은 변환 후 즉시 삭제하지만 음성 텍스트는 보관 가능 | 학습 수행·개인화 기록 |
 
 ### 한 번의 음성은 어떤 기록으로 나뉘는가?
 
@@ -537,23 +525,6 @@ published_at: 2026-10-17
 - **공용기기 처리:** 계정 전환·잠금·최근 요청 재생 권한, 이전 이용자의 이력 노출 차단.
 - **아동 처리:** 아동/법정대리인 경로·쉬운 고지·비음성 대안. 미성년자의 우발적 배경 음성은 기본 미보존; 의도된 아동 서비스는 관할별 별도 처리 근거.
 - **실패 UX:** 인식 실패·녹음 중단·삭제 대기/예외를 명확하게 표시. 해결되지 않은 문의의 사람 연결은 [Erica](https://info.bankofamerica.com/en/digital-banking/erica), 말하기 건너뛰기는 [Duolingo 정책](https://www.duolingo.com/privacy)의 실제 제어 사례.
-
-</details>
-
-## 주요 AI·음성 제품은 무엇을 저장하고 언제 지우는가? { #product-storage-comparison }
-
-다음 비교는 제품·서비스 공개 문서의 서비스·기능 모드·설정·지역별 범위이며, 실제 구매·지원 업무의 저장 정책을 대신하지 않습니다.
-
-<details markdown="1">
-<summary><strong>Bixby·Gemini·ChatGPT·Microsoft Copilot·Siri 비교 보기</strong></summary>
-
-| 서비스·범위 | 원음 | 전사(음성 텍스트)·이력·삭제 경계 |
-|---|---|---|
-| **Bixby / 미국 정책, 2026-06-01** | 검토 미동의: 요청 처리 후 삭제. 동의: 식별자 연결 1개월, 총 1년 보관 | 계정 단위 동의·철회. 불필요 정보는 법적 예외를 전제로 백업 포함 45일 이내 삭제 또는 익명화. [정책](https://d264isyiyrfhr3.cloudfront.net/storage/tos/usa/2.1.3/1782805872274/eng/usa_eng_pp.html) |
-| **Gemini Live / 개인 계정** | Keep Activity 켜짐: 녹음·음성 텍스트·공유 콘텐츠를 계정 활동에 저장. 원음/영상/화면의 개선 활용은 별도 선택 | 활동 자동 삭제 기본 18개월, 3·36개월·무기한 선택. 꺼짐/임시 대화 72시간; 사람 검토 대화·관련 자료 최대 3년, 활동 삭제와 별개. 연결 서비스 자료는 별도. [Live](https://support.google.com/gemini/answer/15274899?hl=en) · [정책](https://support.google.com/gemini/answer/13594961?hl=en) |
-| **ChatGPT Voice / 음성 모드별** | Live·Advanced Voice 클립은 채팅 기록의 음성 텍스트와 함께 저장. Standard는 음성 텍스트 변환 후 삭제하며, 학습 공유 선택 시 예외 | FAQ는 Live·Advanced 클립을 30일 보관한다고 설명하면서 채팅 삭제 후 연결 클립도 30일 이내 삭제한다고 별도로 명시하나, 두 30일 시작 기준의 관계는 설명하지 않음. 일반 대화는 사용자 삭제/워크스페이스 정책을 따르고 Archive는 삭제가 아님. 보안·법적·계정 연결 해제 학습 자료 예외가 있음. [음성](https://help.openai.com/en/articles/20001274-chatgpt-voice) · [보유](https://help.openai.com/en/articles/8983778-chat-and-file-retention-in-chatgpt) |
-| **Microsoft Copilot Voice Chat / 상용 Copilot 라이선스** | 기본 오디오 미저장. 사용자가 Microsoft에 피드백을 제공하도록 피드백 기능이 켜진 경우에만 대화 오디오를 임시 저장하고 48시간 후 삭제 | 음성 텍스트는 Copilot 앱의 텍스트 대화와 같은 방식으로 저장·관리. Voice Chat FAQ는 상용 Copilot 라이선스 범위이며 GCC·GCC High는 향후 제공 예정, DoD 범위는 인용 문서에서 확인되지 않음. [음성 FAQ](https://support.microsoft.com/en-us/microsoft-365-copilot/frequently-asked-questions-about-voice-features-in-microsoft-365-copilot) · [조직 데이터](https://learn.microsoft.com/ko-kr/microsoft-365/copilot/microsoft-365-copilot-privacy) |
-| **Siri·Dictation / Apple 정책** | 지원 구성은 단말 처리; 개선 미동의 시 Apple 오디오 미저장 | 서버 음성 텍스트·요청 이력은 계정 아닌 순환 임의 식별자 연결, 최대 2년과 검토 표본 예외. 단말에서 이력 삭제 제어. [정책](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/) |
 
 </details>
 

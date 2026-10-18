@@ -232,20 +232,24 @@ Create:
 | **어떤 근거가 기간을 정하는가?** | 제품 정책, 법령, 법원 명령, 조직 정책, 고객 설정 |
 | **무엇을 함께 지워야 하는가?** | 오디오, 전사문, 위치정보, 파생 사본, 모델 개선 입력, 처리자 사본, 색인, 백업 |
 
-### 어떤 기록인가? { #voice-record-types }
+### 어떤 기록인가?
 
 원음·전사문·요약·업무 결과·추적·voiceprint는 서로 다른 기록입니다.
 
-### 왜·얼마나 보관하는가? { #raw-audio-retention }
+### 왜·얼마나 보관하는가?
 
 업무 목적과 정확한 기간 근거를 기록별로 연결하고, 다른 기록의 기간을
 원음에 복사하지 않습니다.
 
-### 무엇을 함께 지우는가? { #deletion-completion }
+### 무엇을 함께 지우는가?
 
 삭제 요청은 원음뿐 아니라 전사문·위치정보·파생 사본·모델 개선 입력과
 처리자 사본의 범위를 함께 확인해야 합니다.
 ```
+
+The existing long-form sections continue to own `#voice-record-types`,
+`#raw-audio-retention`, and `#deletion-completion` until Task 4 removes those
+sections and transfers the anchors to these H3 headings.
 
 - [ ] **Step 4: Put the business comparison before case details**
 
@@ -481,8 +485,9 @@ Create:
 
 Do not retain prescriptive tombstone, JIT, cryptographic deletion, or
 legal-hold workflow recipes in the core page.
-The explicit `#voice-record-types`, `#raw-audio-retention`, and
-`#deletion-completion` anchors remain on the H3 headings created in Task 2.
+Transfer the explicit `#voice-record-types`, `#raw-audio-retention`, and
+`#deletion-completion` anchors from the removed H2 sections to the three H3
+headings created in Task 2.
 
 - [ ] **Step 2: Group secondary research into collapsed appendices**
 
