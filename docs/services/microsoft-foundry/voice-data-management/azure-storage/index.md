@@ -64,7 +64,7 @@ topic_order: 2
 
 ### 통화 후 콜센터 분석 아키텍처
 
-[Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는 음성 원본, 음성 텍스트, 분석 결과의 저장 위치를 데이터 흐름에 명시한 Microsoft 참조임.
+[Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는 음성 원본, 음성 텍스트, 분석 결과의 저장 위치를 데이터 흐름에 명시한 Microsoft 참조입니다.
 
 - **자료 유형:** Azure Architecture Center 참조 아키텍처
 - **주요 범위:** 통화가 끝난 뒤 수행하는 배치 분석
@@ -74,17 +74,17 @@ topic_order: 2
 
 ![Azure 음성 에이전트의 실시간 처리와 Microsoft 참조 저장·분석 흐름](../images/azure-voice-agent-ms-reference-architecture.svg)
 
-> **그림 범위:** 위쪽은 Voice Live의 실시간 제품 동작, 아래쪽은 통화 후 저장·분석 참조 흐름임. 아래쪽에서 Speech→Language→Foundry 경로와 Content Understanding→애플리케이션 PII 제거 경로를 구분하고, 선택적 원문 음성 텍스트 저장은 Speech 처리 이후에 표시함. 파란 점선은 같은 Architecture Center 문서가 Voice Live·GPT Realtime의 오디오와 음성 텍스트를 분석용 Blob Storage에 저장하는 대안으로 제시한 경로임. 두 공식 문서 범위를 한 장에 병치한 것으로, Microsoft가 제공한 단일 아키텍처나 서비스의 기본 자동 저장 동작을 뜻하지 않음.
+> **그림 범위:** 위쪽은 Voice Live의 실시간 제품 동작, 아래쪽은 통화 후 저장·분석 참조 흐름입니다. 아래쪽에서 Speech→Language→Foundry 경로와 Content Understanding→애플리케이션 PII 제거 경로를 구분하고, 선택적 원문 음성 텍스트 저장은 Speech 처리 이후에 표시합니다. 파란 점선은 같은 Architecture Center 문서가 Voice Live·GPT Realtime의 오디오와 음성 텍스트를 분석용 Blob Storage에 저장하는 대안으로 제시한 경로입니다. 두 공식 문서 범위를 한 장에 병치한 것으로, Microsoft가 제공한 단일 아키텍처나 서비스의 기본 자동 저장 동작을 뜻하지 않습니다.
 
 ## 서비스 자체는 무엇을 저장하는가?
 
-다음 표는 참조 아키텍처에서 애플리케이션이 수행하는 저장과 서비스 자체의 기본 동작을 나누어 정리함.
+다음 표는 참조 아키텍처에서 애플리케이션이 수행하는 저장과 서비스 자체의 기본 동작을 나누어 정리합니다.
 
 | 서비스·기능 | Microsoft 문서에 명시된 동작 | 저장 위치·기간 |
 |---|---|---|
 | **Azure AI Speech 실시간 음성 인식** | 오디오는 Azure 서버 메모리에서만 처리되고 저장 상태로 남지 않음 | 서비스 저장 없음 |
 | **Azure AI Speech 배치 음성 인식 입력** | `contentContainerUrl` 또는 `contentUrls`로 지정한 오디오를 읽어 처리함 | 고객이 지정한 오디오 URL·컨테이너 |
-| **Azure AI Speech 배치 음성 인식 결과** | `destinationContainerUrl`을 지정하지 않으면 Microsoft 관리 컨테이너에 결과를 저장함. 지정하면 지원되는 고객 Azure 컨테이너에 저장함 | 서비스 내 transcription의 `timeToLiveHours` 지원 범위는 완료 후 6시간~31일. 작업을 삭제하면 Microsoft 관리 결과도 삭제됨. 고객 컨테이너 사본의 보유기간 연동은 인용 문서에서 확인되지 않음 |
+| **Azure AI Speech 배치 음성 인식 결과** | `destinationContainerUrl`을 지정하지 않으면 Microsoft 관리 컨테이너에 결과를 저장합니다. 지정하면 지원되는 고객 Azure 컨테이너에 저장합니다 | 서비스 내 transcription의 `timeToLiveHours` 지원 범위는 완료 후 6시간~31일입니다. 작업을 삭제하면 Microsoft 관리 결과도 삭제됩니다. 고객 컨테이너 사본의 보유기간 연동은 인용 문서에서 확인되지 않았습니다 |
 | **Voice Live API** | Voice Live 자체는 고객 데이터를 저장하거나 보관하지 않음. 연결한 모델·Agent·Custom Voice 등은 각 기능의 정책을 따름 | Voice Live 자체 저장 없음 |
 | **Voice Live 지원 로그** | 지원 티켓을 연 뒤 사용자가 동의해 켤 수 있는 별도 디버깅 로그 | 같은 리전의 Microsoft 관리 Azure Storage, 생성 후 30일 자동 삭제 |
 | **Foundry voice-based prompt agent** | `store` 기본값은 `false`. `true`이면 대화 기록, 이벤트 시간선, 원음이 함께 저장됨 | Foundry voice agent 저장 기능. 2026-10-14 기준 미리 보기 |
@@ -121,25 +121,25 @@ topic_order: 2
 
 ### 참조 아키텍처에서 저장하는 자료
 
-Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
+Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합니다.
 
 - 전화 서버가 만든 원음 파일
 - 선택적으로 남기는 원문 음성 텍스트 파일
 - Foundry 모델 또는 Azure Content Understanding이 만든 처리 결과
 
-[Blob 유형 문서](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs)는 block blob을 텍스트·이진 파일과 같은 개체에 사용하는 유형으로 설명함. [Blob 액세스 계층 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)는 Hot·Cool·Cold·Archive와 Smart tier를 설명하며, 액세스 계층 설정은 block blob에만 허용된다고 명시함.
+[Blob 유형 문서](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs)는 block blob을 텍스트·이진 파일과 같은 개체에 사용하는 유형으로 설명합니다. [Blob 액세스 계층 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)는 Hot·Cool·Cold·Archive와 Smart tier를 설명하며, 액세스 계층 설정은 block blob에만 허용된다고 명시합니다.
 
 ### Microsoft의 Blob 성능 지침
 
 [Blob Storage 확장성·성능 목표](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets)에 명시된 내용:
 
 - `Put Blob` 또는 `Put Block`에서 blob이나 block 크기가 **256KiB보다 클 때** 고처리량 block blob 최적화를 활용할 수 있음.
-- 단일 block blob 요청률은 초당 최대 약 **3,000회인 목표값**이며 보장값이 아님. 같은 표의 단일 page blob 목표값은 초당 최대 500회임.
+- 단일 block blob 요청률은 초당 최대 약 **3,000회인 목표값**이며 보장값이 아닙니다. 같은 표의 단일 page blob 목표값은 초당 최대 500회입니다.
 - 실제 처리량은 동시성, 요청 크기, 성능 계층, 업로드 원본과 다운로드 목적지 속도 등에 따라 달라짐.
 - 순차적이거나 append-only인 blob 이름은 한 partition에 트래픽을 집중시킬 수 있음.
-- Microsoft는 트래픽을 점진적으로 늘리고, 503 오류가 발생하면 지수형 backoff를 사용하라고 안내함.
+- Microsoft는 트래픽을 점진적으로 늘리고, 503 오류가 발생하면 지수형 backoff를 사용하라고 안내합니다.
 
-이 지침은 **Azure Blob Storage 일반 지침**임. Microsoft 문서는 Voice Live의 100ms 음성 조각과 Blob 요청 크기를 직접 연결한 값을 제시하지 않음.
+이 지침은 **Azure Blob Storage 일반 지침**입니다. Microsoft 문서는 Voice Live의 100ms 음성 조각과 Blob 요청 크기를 직접 연결한 값을 제시하지 않습니다.
 
 ### Data Lake Storage 분석 지침
 
@@ -157,10 +157,10 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
 |---|---|
 | **Speech SDK 원시 스트림(raw stream)** | 8kHz 또는 16kHz, 16비트 단일 채널 PCM. 지원하지 않는 입력은 호출 애플리케이션이 변환함 |
 | **Speech SDK 압축 입력** | MP3·Ogg/Opus·FLAC·A-law·μ-law 등을 GStreamer가 애플리케이션에서 압축 해제한 뒤, 압축되지 않은 PCM으로 Speech 서비스에 전송함 |
-| **Voice Live** | 사용법 문서는 입력 16kHz·24kHz와 기본 24kHz를 설명함. SDK 형식 열거형은 PCM16과 G.711 μ-law·A-law를 설명함 |
+| **Voice Live** | 사용법 문서는 입력 16kHz·24kHz와 기본 24kHz를 설명합니다. SDK 형식 열거형은 PCM16과 G.711 μ-law·A-law를 설명합니다 |
 | **Azure OpenAI Realtime 2.x** | 실시간 이벤트 오디오는 헤더 없는 24kHz, 16비트, 단일 채널 PCM을 사용함 |
-| **배치·빠른 음성 인식** | WAV·MP3·Ogg/Opus·FLAC·WMA·AAC·A-law·μ-law·AMR·WebM·Speex 등을 지원함. Microsoft는 최상의 음성 인식 품질을 위해 무손실 WAV PCM 또는 FLAC을 권고함 |
-| **Speech SDK 음성 합성 출력** | PCM·MP3·Ogg/Opus 등 여러 출력 형식을 지원함. 제한된 대역폭에서는 압축 형식 전송을 사용할 수 있음 |
+| **배치·빠른 음성 인식** | WAV·MP3·Ogg/Opus·FLAC·WMA·AAC·A-law·μ-law·AMR·WebM·Speex 등을 지원합니다. Microsoft는 최상의 음성 인식 품질을 위해 무손실 WAV PCM 또는 FLAC을 권고합니다 |
+| **Speech SDK 음성 합성 출력** | PCM·MP3·Ogg/Opus 등 여러 출력 형식을 지원합니다. 제한된 대역폭에서는 압축 형식 전송을 사용할 수 있습니다 |
 
 근거:
 
@@ -174,14 +174,14 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
 
 ## 공식 입력값으로 계산한 저장량
 
-아래 값은 Microsoft의 저장 용량 권고가 아님. Microsoft 문서에 나온 샘플률·비트 수·채널 수에 다음 표준 계산식을 적용한 값임.
+아래 값은 Microsoft의 저장 용량 권고가 아닙니다. Microsoft 문서에 나온 샘플률·비트 수·채널 수에 다음 표준 계산식을 적용한 값입니다.
 
 ```text
 초당 바이트 = 샘플률 × (비트 깊이 / 8) × 채널 수
 시간당 바이트 = 초당 바이트 × 3,600
 ```
 
-아래 MB는 1MB = 1,000,000바이트인 **10진수 MB** 기준임.
+아래 MB는 1MB = 1,000,000바이트인 **10진수 MB** 기준입니다.
 
 | 구성 | 계산 | 분당 크기 | 시간당 크기 | 공식 입력값 출처 |
 |---|---:|---:|---:|---|
@@ -191,7 +191,7 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
 | G.711 8kHz·8비트·단일 채널 | 8,000 × 1 | 0.48MB | 28.8MB | Voice Live 형식 열거형 |
 | MP3 48kbps | 48,000 ÷ 8 | 0.36MB | 21.6MB | Speech SDK 음성 합성 지연 문서의 전송 예시 |
 
-- 입력과 출력 음성을 모두 저장하는 경우의 합계는 각 방향의 실제 형식과 저장 시간으로 계산한 값의 합임.
+- 입력과 출력 음성을 모두 저장하는 경우의 합계는 각 방향의 실제 형식과 저장 시간으로 계산한 값의 합입니다.
 - WAV 헤더·JSON 메타데이터·암호화·복제·blob 버전은 위 계산에 포함하지 않음.
 - FLAC·Ogg/Opus는 음성 내용과 인코딩 설정에 따라 크기가 달라 고정값을 계산하지 않음.
 
@@ -212,20 +212,20 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장함.
 사용할 수 없습니다. 실제 평가는 모델·배포 유형·리전·코덱·동시성별로
 구간을 정의하고 p50·p95를 따로 측정해야 합니다.
 
-Realtime API의 최대 세션 시간은 60분임. 이 제한은 Azure OpenAI Realtime API 문서의 범위이며 Voice Live 전체 제한으로 제시된 값은 아님.
+Realtime API의 최대 세션 시간은 60분입니다. 이 제한은 Azure OpenAI Realtime API 문서의 범위이며 Voice Live 전체 제한으로 제시된 값은 아닙니다.
 
 ### Speech SDK 음성 합성
 
 [Speech SDK 음성 합성 지연 지침](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-lower-speech-synthesis-latency)에 명시된 권고:
 
-- 첫 바이트 지연, 완료 지연, 네트워크 지연, 서비스 첫 바이트 지연을 각각 측정함.
-- 전체 오디오가 끝날 때까지 기다리지 않고 스트리밍으로 재생함.
-- 음성 합성 연결을 미리 열고 `SpeechSynthesizer`를 재사용함.
+- 첫 바이트 지연, 완료 지연, 네트워크 지연, 서비스 첫 바이트 지연을 각각 측정합니다.
+- 전체 오디오가 끝날 때까지 기다리지 않고 스트리밍으로 재생합니다.
+- 음성 합성 연결을 미리 열고 `SpeechSynthesizer`를 재사용합니다.
 - 서비스 환경에서는 Microsoft가 제시한 object pool 예제를 사용할 수 있음.
-- 네트워크가 불안정하거나 대역폭이 제한될 때 압축 오디오 전송을 사용함.
-- 문서 예시에서 24kHz PCM은 384kbps, 24kHz MP3는 48kbps임.
+- 네트워크가 불안정하거나 대역폭이 제한될 때 압축 오디오 전송을 사용합니다.
+- 문서 예시에서 24kHz PCM은 384kbps, 24kHz MP3는 48kbps입니다.
 
-이 사전 연결·재사용 지침은 **SpeechSynthesizer**에 대한 문서임. SpeechRecognizer 또는 Voice Live 전체에 같은 지침을 적용한다고 명시하지 않음.
+이 사전 연결·재사용 지침은 **SpeechSynthesizer**에 대한 문서입니다. SpeechRecognizer 또는 Voice Live 전체에 같은 지침을 적용한다고 명시하지 않습니다.
 
 ## Blob 액세스 계층과 복원에 대한 공식 수치
 
@@ -236,15 +236,15 @@ Realtime API의 최대 세션 시간은 60분임. 이 제한은 Azure OpenAI Rea
 | **Cold** | 90일 | 즉시 읽기 |
 | **Archive** | 180일 | 오프라인, 읽기 전에 복원 필요 |
 
-[Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화함. 위 표의 30일·90일·180일은 각각 Cool·Cold·Archive에 적용되는 최소 저장기간이며 Smart tier 자체의 단일 최소기간이 아님.
+[Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화합니다. 위 표의 30일·90일·180일은 각각 Cool·Cold·Archive에 적용되는 최소 저장기간이며 Smart tier 자체의 단일 최소기간이 아닙니다.
 
-[Blob 액세스 계층](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)은 최소기간 전에 삭제·덮어쓰기·다른 계층 이동을 하면 조기 삭제 비용이 발생할 수 있다고 설명함. 이 기간은 Azure Storage의 계층별 비용 기준이며 업무 자료의 법적 보유기간을 정하는 값이 아님.
+[Blob 액세스 계층](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)은 최소기간 전에 삭제·덮어쓰기·다른 계층 이동을 하면 조기 삭제 비용이 발생할 수 있다고 설명합니다. 이 기간은 Azure Storage의 계층별 비용 기준이며 업무 자료의 법적 보유기간을 정하는 값이 아닙니다.
 
 [Archive 복원 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/archive-rehydrate-overview)에 명시된 수치:
 
 - 10GB 미만 객체의 Standard 우선순위 복원은 최대 15시간이 걸릴 수 있음.
 - 10GB 미만 객체의 High 우선순위 복원은 1시간 미만에 끝날 수 있으나 수요와 크기에 따라 더 오래 걸릴 수 있음.
-- 우선순위 복원 처리량은 storage account 전체에서 시간당 최대 10GiB임.
+- 우선순위 복원 처리량은 storage account 전체에서 시간당 최대 10GiB입니다.
 - 작은 blob을 많이 복원하면 각 blob 처리 부담 때문에 시간이 더 걸릴 수 있음.
 
 [Blob 수명주기 관리](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)에 명시된 내용:
@@ -261,7 +261,7 @@ Realtime API의 최대 세션 시간은 60분임. 이 제한은 Azure OpenAI Rea
   가능한 상태로 남음. soft-deleted 상태의 blob에는 수명주기 delete가 다시
   적용되지 않음. [공식 동작](https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview)
 - **버전·스냅샷:** 현재 버전, 이전 버전과 snapshot은 서로 다른 수명주기
-  대상을 가질 수 있으므로 각 대상의 규칙과 실제 잔존 여부를 따로 확인해야 함.
+  대상을 가질 수 있으므로 각 대상의 규칙과 실제 잔존 여부를 따로 확인해야 합니다.
 - **불변 보존:** immutable container의 blob에는 수명주기 delete가 동작하지
   않음. 시간 기반 보존이나 법적 보존이 끝나기 전에는 삭제할 수 없음.
 - **24시간의 의미:** 최대 24시간은 정책 변경이 반영되고 첫 실행이 시작되기
