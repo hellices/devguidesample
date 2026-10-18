@@ -19,6 +19,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/ai-services/speech-service/batch-transcription-create
 - title: Get batch transcription results
   url: https://learn.microsoft.com/azure/ai-services/speech-service/batch-transcription-get
+- title: Azure Blob storage trigger for Functions
+  url: https://learn.microsoft.com/azure/azure-functions/functions-bindings-storage-blob-trigger
 - title: Access tiers for blob data
   url: https://learn.microsoft.com/azure/storage/blobs/access-tiers-overview
 - title: Blob Storage scalability and performance targets
@@ -86,8 +88,8 @@ topic_order: 2
 | **Voice Live API** | Voice Live 자체는 고객 데이터를 저장하거나 보관하지 않음. 연결한 모델·Agent·Custom Voice 등은 각 기능의 정책을 따름 | Voice Live 자체 저장 없음 |
 | **Voice Live 지원 로그** | 지원 티켓을 연 뒤 사용자가 동의해 켤 수 있는 별도 디버깅 로그 | 같은 리전의 Microsoft 관리 Azure Storage, 생성 후 30일 자동 삭제 |
 | **Foundry voice-based prompt agent** | `store` 기본값은 `false`. `true`이면 대화 기록, 이벤트 시간선, 원음이 함께 저장됨 | Foundry voice agent 저장 기능. 2026-10-14 기준 미리 보기 |
-| **Foundry Models·Azure OpenAI 모델 호출** | 모델 자체는 무상태로 프롬프트·응답을 모델에 보관하지 않음. Responses API·Threads·Stored completions 같은 상태 유지 기능은 별도 데이터 저장소를 만듦 | 고객 리소스의 기능별 데이터 저장소 |
-| **Foundry Models 남용 모니터링** | 잠재적 남용 지표가 감지되면 일부 프롬프트·응답이 검토 표본으로 선택될 수 있음. 자동 검토는 저장하지 않지만 사람 검토 대상은 고객 리소스별로 논리 분리된 남용 모니터링 저장소에 보관될 수 있음 | 승인된 modified abuse monitoring에서는 위 저장·사람 검토 절차를 수행하지 않지만 자동 검토는 남을 수 있음. [공식 범위](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy#preventing-abuse) |
+| **Azure 판매 모델(Azure OpenAI 포함)** | 모델 자체는 무상태로 프롬프트·응답을 모델에 보관하지 않음. Responses API·Threads·Stored completions 같은 상태 유지 기능은 별도 데이터 저장소를 만듦 | Azure가 판매하는 Foundry 모델에 관한 정책 범위. 고객 리소스의 기능별 데이터 저장소 |
+| **Azure 판매 모델의 남용 모니터링** | 잠재적 남용 지표가 감지되면 일부 프롬프트·응답이 검토 표본으로 선택될 수 있음. 자동 검토는 저장하지 않지만 사람 검토 대상은 고객 리소스별로 논리 분리된 남용 모니터링 저장소에 보관될 수 있음 | Azure가 판매하는 Foundry 모델(Azure OpenAI 포함)의 정책 범위. 승인된 modified abuse monitoring에서는 위 저장·사람 검토 절차를 수행하지 않지만 자동 검토는 남을 수 있음. [공식 적용 범위](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy) |
 | **미리 구축된 음성의 음성 합성(TTS)** | 입력 텍스트와 출력 오디오를 Microsoft 로그에 저장하지 않음 | 서비스 로그 저장 없음 |
 | **Foundry 추적** | 기본적으로 꺼져 있음. 켜면 [Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview)와 [Log Analytics](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-workspace-overview) 설정에 따라 추적 자료가 저장됨 | 고객이 연결한 Application Insights·Log Analytics |
 
@@ -105,7 +107,7 @@ topic_order: 2
 | 시점 | 무엇 | 어디 | Microsoft 자료의 범위 |
 |---|---|---|---|
 | **통화 녹음 후** | 녹음 오디오 파일 | Azure Blob Storage | 콜센터 통화 후 분석 참조 아키텍처 |
-| **Blob 업로드 직후** | 새 오디오 파일을 처리할 작업 | Blob trigger가 Azure Functions 시작 | 콜센터 통화 후 분석 참조 아키텍처 |
+| **새 Blob 업로드 감지 후** | 새 오디오 파일을 처리할 작업 | [Blob trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger#choose-a-blob-storage-trigger-implementation)가 Azure Functions 시작 | 콜센터 통화 후 분석 참조 아키텍처. 이벤트 기반·폴링 기반 구현에 따라 지연 특성이 다름 |
 | **정해진 일괄 실행 시각** | 일정 기간 모인 오디오 파일 | Timer trigger가 Azure Functions 시작 | 콜센터 통화 후 분석 참조 아키텍처 |
 | **배치 음성 인식 후, 선택 시** | 원문 음성 텍스트 파일 | Azure Blob Storage | 콜센터 통화 후 분석 참조 아키텍처 |
 | **개인정보 제거·모델 분석 후** | 요약·감정·통화 목적·개체 등 처리 결과 | Azure Storage | 콜센터 통화 후 분석 참조 아키텍처 |
