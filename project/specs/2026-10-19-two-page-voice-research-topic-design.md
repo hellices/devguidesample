@@ -4,7 +4,7 @@
 
 Remove the summary-only landing document and publish the voice-data research as
 two substantive pages without violating the repository's required topic-entry
-contract or breaking the already-reviewed child URL.
+contract.
 
 ## Decision
 
@@ -34,18 +34,14 @@ This is preferable to:
   business and policy research.
 - `/services/microsoft-foundry/voice-data-management/azure-storage/` remains
   unchanged.
-- `/services/microsoft-foundry/voice-data-management/business-patterns/`
-  redirects to the topic root.
 - The promoted root has no `topic_order`.
 - The Azure child changes from `topic_order: 2` to `topic_order: 1`.
 - All explicit anchors inside the business document remain unchanged.
 
-The redirect is declared on the promoted root:
-
-```yaml
-redirect_from:
-- services/microsoft-foundry/voice-data-management/business-patterns/index.md
-```
+The old `/business-patterns/` path existed only on this unmerged pull-request
+branch and was never a published Pages URL. Remove it rather than extending the
+repository's legacy-collection redirect contract to support an unpublished
+child path.
 
 ## Content movement
 
@@ -112,11 +108,11 @@ Run the complete documentation contract. In addition, verify:
 - topic discovery reports one root and one child;
 - the root has no `topic_order`;
 - the Azure child has `topic_order: 1`;
-- the old business URL builds as a redirect to the root;
+- the unpublished business child path is absent from the built site;
 - the root's Azure link and lifecycle image resolve;
 - the Azure child's root link resolves;
 - all existing explicit business anchors remain in the root HTML; and
 - desktop and 390px pages have no layout regression.
 
-No implementation commit is pushed until the local move, redirect, links, and
-complete validation pass.
+No implementation commit is pushed until the local move, links, and complete
+validation pass.

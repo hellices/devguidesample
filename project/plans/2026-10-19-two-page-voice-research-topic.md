@@ -4,7 +4,7 @@
 
 **Goal:** Replace the summary-only voice-data landing page with the substantive business and policy research so the published topic contains exactly two content pages.
 
-**Architecture:** The business and policy document becomes the required topic root and declares a redirect from its old child URL. The Azure architecture and storage document remains the only child, is renumbered to `topic_order: 1`, and links back to the promoted root.
+**Architecture:** The business and policy document becomes the required topic root. The Azure architecture and storage document remains the only child, is renumbered to `topic_order: 1`, and links back to the promoted root. The old child path is removed because it existed only on the unmerged pull-request branch.
 
 **Tech Stack:** Markdown, YAML front matter, MkDocs Material, Python 3.13, pytest, GitHub CLI
 
@@ -12,7 +12,7 @@
 
 - The topic root must remain `docs/services/microsoft-foundry/voice-data-management/index.md`.
 - The Azure child URL must remain `/services/microsoft-foundry/voice-data-management/azure-storage/`.
-- The old business URL must redirect from `/services/microsoft-foundry/voice-data-management/business-patterns/` to the root.
+- The unpublished business child path must not remain in the authored or built site.
 - Preserve every explicit anchor from the current business document.
 - Remove `topic_order` from the promoted root.
 - Set the Azure child to `topic_order: 1`.
@@ -26,7 +26,7 @@
 ## File Structure
 
 - Replace `docs/services/microsoft-foundry/voice-data-management/index.md` with the complete current contents of `business-patterns/index.md`, adjusted for root-relative metadata and links.
-- Remove `docs/services/microsoft-foundry/voice-data-management/business-patterns/index.md`; its public URL is generated from `redirect_from`.
+- Remove `docs/services/microsoft-foundry/voice-data-management/business-patterns/index.md`.
 - Modify `docs/services/microsoft-foundry/voice-data-management/azure-storage/index.md`: child order and root link.
 - Keep all files under `docs/services/microsoft-foundry/voice-data-management/images/` unchanged.
 - Keep `project/specs/2026-10-19-two-page-voice-research-topic-design.md` as the governing design.
@@ -42,7 +42,7 @@
 
 **Interfaces:**
 - Consumes: the complete business-document front matter, body, and explicit anchors.
-- Produces: one topic root, one ordered child, and one generated redirect from the old business URL.
+- Produces: one topic root and one ordered child.
 
 - [ ] **Step 1: Verify the current state fails the two-page acceptance probe**
 
@@ -59,9 +59,7 @@ metadata = yaml.safe_load(root.split("---", 2)[1])
 
 assert metadata["title"] == "앱 음성 서비스 기록관리 사례와 정책"
 assert "topic_order" not in metadata
-assert metadata["redirect_from"] == [
-    "services/microsoft-foundry/voice-data-management/business-patterns/index.md"
-]
+assert "redirect_from" not in metadata
 assert not (topic / "business-patterns" / "index.md").exists()
 assert "images/voice-data-lifecycle.svg" in root
 assert "(azure-storage/index.md)" in root
@@ -102,8 +100,6 @@ tags:
 - ai-agents
 - storage
 published_at: 2026-10-17
-redirect_from:
-- services/microsoft-foundry/voice-data-management/business-patterns/index.md
 ```
 
 Do not carry `topic_order` into the root.
@@ -134,8 +130,7 @@ assert "business-patterns" not in body
 PY
 ```
 
-Expected: `rg` has no matches and the Python assertion exits 0. The
-`business-patterns` string remains only in `redirect_from` front matter.
+Expected: `rg` has no matches and the Python assertion exits 0.
 
 - [ ] **Step 4: Remove the old child source**
 
@@ -145,8 +140,8 @@ The authored file must no longer exist:
 docs/services/microsoft-foundry/voice-data-management/business-patterns/index.md
 ```
 
-Do not leave a stub Markdown file. MkDocs creates the redirect page
-from the root's `redirect_from` metadata.
+Do not leave a stub Markdown file or add redirect infrastructure for this
+unpublished pull-request path.
 
 - [ ] **Step 5: Renumber and relink the Azure child**
 
@@ -196,26 +191,24 @@ Run:
 
 Expected: every command exits 0.
 
-- [ ] **Step 8: Verify generated root, child, and redirect**
+- [ ] **Step 8: Verify generated root and child**
 
 Run:
 
 ```bash
 test -f site/services/microsoft-foundry/voice-data-management/index.html
 test -f site/services/microsoft-foundry/voice-data-management/azure-storage/index.html
-test -f site/services/microsoft-foundry/voice-data-management/business-patterns/index.html
+test ! -e site/services/microsoft-foundry/voice-data-management/business-patterns/index.html
 
 rg -n "앱 음성 서비스 기록관리 사례와 정책" \
   site/services/microsoft-foundry/voice-data-management/index.html
-rg -n "voice-data-management/" \
-  site/services/microsoft-foundry/voice-data-management/business-patterns/index.html
 ```
 
 Expected:
 
 - the root contains the promoted title;
 - the Azure child exists; and
-- the old business path is a redirect to the topic root.
+- the unpublished business child path is absent.
 
 - [ ] **Step 9: Verify stable anchors**
 
@@ -236,7 +229,6 @@ Open:
 ```text
 http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/
 http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/business-patterns/
 ```
 
 Verify:
@@ -244,7 +236,6 @@ Verify:
 - the root renders the business and policy page immediately;
 - the Azure link and lifecycle image load;
 - the Azure page links back to the root;
-- the old business URL redirects to the root;
 - the root navigation lists only the root and Azure child; and
 - desktop and 390px widths have no page overflow.
 
@@ -257,7 +248,7 @@ git commit -m "docs(foundry): reduce voice research to two pages" \
 ```
 
 Expected: one commit containing the root replacement, removed child source,
-redirect metadata, link rewrites, and Azure child order change.
+link rewrites, and Azure child order change.
 
 ---
 
