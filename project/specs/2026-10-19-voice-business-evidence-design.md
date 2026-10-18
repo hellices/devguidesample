@@ -151,8 +151,10 @@ Display:
 - a guaranteed product with a guarantee longer than 10 years: the guarantee
   period;
 - a financial product contract longer than 10 years: the contract period; and
-- separately delegated categories: the shorter or capped period stated in the
-  decree or Financial Services Commission notice.
+- internal-control records: the period set by Financial Services Commission
+  notice within a five-year maximum; and
+- equivalent delegated records: the period set by notice within a ten-year
+  maximum.
 
 Boundary: the decree defines record categories, not a universal rule that
 every financial call's raw audio is retained for 10 years. A recording is
@@ -299,8 +301,9 @@ Label every item as an allegation, not a final finding about current Alexa.
 State that the filed stipulated order:
 
 - imposed a USD 25 million civil penalty;
-- required a process to identify inactive Alexa child profiles within 6 months
-  of entry;
+- defined an inactive child profile as one that had interacted with Alexa and
+  had not been used for at least 18 months, and required a process to identify
+  those profiles within 6 months of entry;
 - required associated child personal information to be deleted within 90 days
   after identification unless the parent requested retention or the profile
   became active again;
@@ -308,8 +311,9 @@ State that the filed stipulated order:
   used Amazon's deletion mechanism;
 - required deletion of child personal information when a parent used the
   deletion mechanism; and
-- prohibited subsequent use of deleted information to create or improve a new
-  data product, while not undoing products created before deletion processing.
+- prohibited subsequent use of deleted information to create or improve any
+  data product, while permitting continued use of products created before
+  deletion processing.
 
 Official sources:
 
