@@ -103,6 +103,128 @@ Azure 음성 인식과 음성 합성을 결합한 분리형 경로를 사용할 
 모델 버전·GA/Preview·지역 지원은 적용 시점의 제품 문서에서 다시
 확인해야 합니다.
 
+## 구조별로 어떤 기록이 생기는가? { #records-by-architecture }
+
+| 기록 | 네이티브 Realtime | 분리형 파이프라인 | 통화 후 분석 |
+|---|---|---|---|
+| **입력·출력 오디오** | 모델이 직접 처리. 녹음·`store`는 별도 선택 | STT 입력·TTS 출력. 단계별 사본 여부 확인 | 이미 보관된 녹음이 분석 입력 |
+| **전사문** | 선택 전사 모델이 만드는 보조 기록일 수 있음 | 텍스트 모델에 전달되는 STT 결과 | 배치 전사 또는 Content Understanding 결과 |
+| **대화·도구 이벤트** | conversation item·response·tool event 연결 | STT·모델·TTS 단계와 업무 호출 연결 | 분석 작업·입력 파일·결과 ID 연결 |
+| **업무 결과** | 주문·기기 동작·지원 티켓 등 권위 시스템 기록 | 동일 | CRM·보고·분석 결과 |
+| **추적·지원 로그** | 기능을 켠 경우 별도 저장 | 기능을 켠 경우 별도 저장 | 파이프라인·Functions·Storage 로그 |
+| **분석 결과·사본** | 실시간 경로 밖에서 별도 생성 | 실시간 경로 밖에서 별도 생성 | 원음·전사·분석 결과를 독립 보관 |
+
+전사문을 하나의 의미로 다루지 않습니다. 네이티브 경로의 선택 전사는
+별도 배포가 만든 보조 기록이고, 분리형 경로의 STT 결과는 텍스트 모델
+입력일 수 있으며, 통화 후 전사는 이미 끝난 세션을 다시 처리한 기록입니다.
+
+## 저장은 어떤 설정에서 시작되는가? { #persistence-controls }
+
+### 실시간 세션 저장
+
+| 서비스·기능 | Microsoft 문서에 명시된 동작 | 저장 위치·기간 |
+|---|---|---|
+| **Azure AI Speech 실시간 음성 인식** | 오디오는 Azure 서버 메모리에서만 처리되고 저장 상태로 남지 않음 | 서비스 저장 없음 |
+| **Voice Live API** | Voice Live 자체는 고객 데이터를 저장하거나 보관하지 않음. 연결한 모델·Agent·Custom Voice 등은 각 기능의 정책을 따름 | Voice Live 자체 저장 없음 |
+| **Voice Live 지원 로그** | 지원 티켓을 연 뒤 사용자가 동의해 켜는 별도 디버깅 로그 | 같은 리전의 Microsoft 관리 Azure Storage, 생성 후 30일 자동 삭제 |
+| **Foundry voice-based prompt agent** | `store` 기본값은 `false`. 연결 요청에서 한 세션만 재정의 가능 | `store=true`이면 전사문·이벤트 시간선·원음 저장. 2026-10-18 기준 미리 보기 |
+| **미리 구축된 음성의 음성 합성(TTS)** | 입력 텍스트와 출력 오디오를 Microsoft 로그에 저장하지 않음 | 서비스 로그 저장 없음 |
+
+Foundry voice agent는 `store=false`이면 대화를 영속화하지 않습니다.
+`store=true`이면 전사문, 이벤트 시간선과 원음이 함께 저장되며 별도의
+오디오 저장 스위치는 없습니다. 연결 요청의 `store` 쿼리 매개변수로 한
+세션만 재정의할 수 있습니다.
+
+### 연결 모델과 관측성
+
+| 기능 | Microsoft 문서에 명시된 동작 | 별도 확인 항목 |
+|---|---|---|
+| **Azure 판매 모델(Azure OpenAI 포함)** | 모델 자체는 무상태. Responses API·Threads·Stored completions 같은 상태 유지 기능은 별도 데이터 저장소를 만듦 | 선택 기능의 저장소·보유기간 |
+| **Azure 판매 모델의 남용 모니터링** | 사람 검토 대상으로 선택된 일부 프롬프트·응답은 고객 리소스별로 논리 분리된 저장소에 보관될 수 있음 | modified abuse monitoring 승인 범위와 자동 검토 |
+| **Foundry 추적** | 기본적으로 꺼져 있으며, 프로젝트에 Application Insights를 연결하면 에이전트 입력·출력·도구 호출·중간 단계와 실행 메타데이터를 수집 | 연결한 Application Insights·Log Analytics의 위치·접근권한·보유기간 |
+
+추적을 끄면 새 추적 자료 수집은 중단되지만 이미 저장된 자료는 연결한
+Application Insights와 Log Analytics의 보유 정책을 따릅니다. 실시간
+세션 저장을 끄는 것과 추적·남용 모니터링·상태 유지 기능을 끄는 것은
+같은 조작이 아닙니다.
+
+### 배치 전사와 사후 분석
+
+| 기능 | 입력·결과 동작 | 저장 경계 |
+|---|---|---|
+| **Azure AI Speech 배치 음성 인식 입력** | `contentContainerUrl` 또는 `contentUrls`로 지정한 오디오를 읽어 처리 | 고객이 지정한 URL·컨테이너 |
+| **Azure AI Speech 배치 음성 인식 결과** | `destinationContainerUrl`이 없으면 Microsoft 관리 컨테이너, 있으면 지원되는 고객 Azure 컨테이너에 저장 | 서비스 내 `timeToLiveHours`는 완료 후 6시간~31일. 고객 컨테이너 사본은 별도 정책 |
+| **통화 후 분석 결과** | 요약·감정·통화 목적·개체 등 처리 결과를 Azure Storage에 저장 | 실시간 세션과 독립된 목적·기간·삭제 |
+
+Microsoft 관리 결과는 transcription 작업을 삭제하면 함께 삭제됩니다.
+고객 컨테이너 사본의 보유기간이 이 삭제와 자동 연동된다는 설명은 인용
+문서에서 확인되지 않았습니다.
+
+### 공식 자료에서 확인되는 저장 시점과 위치
+
+| 시점 | 무엇 | 어디 | Microsoft 자료의 범위 |
+|---|---|---|---|
+| **실시간 가상 에이전트 분석을 위해 저장할 때** | Voice Live 또는 GPT Realtime의 오디오와 음성 텍스트 | Azure Blob Storage | 통화 후 분석 참조의 가상 에이전트 대안 |
+| **Foundry voice agent 세션에서 `store=true`일 때** | 전사문·이벤트 시간선·원음 | Foundry voice agent 저장 기능 | 미리 보기 제품 문서 |
+| **Voice Live 지원 로그를 사용자가 켰을 때** | 지원용 음성 로그 | Microsoft 관리 Azure Storage | Voice Live 개인정보 처리 문서 |
+| **통화 녹음 후** | 녹음 오디오 파일 | Azure Blob Storage | 통화 후 분석 참조 아키텍처 |
+| **새 Blob 업로드 감지 후** | 새 오디오 파일을 처리할 작업 | [Blob trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger#choose-a-blob-storage-trigger-implementation)가 Azure Functions 시작 | 이벤트 기반·폴링 기반 구현에 따라 지연 특성이 다름 |
+| **정해진 일괄 실행 시각** | 일정 기간 모인 오디오 파일 | Timer trigger가 Azure Functions 시작 | 통화 후 분석 참조 아키텍처 |
+| **배치 음성 인식 후, 선택 시** | 원문 전사 파일 | Azure Blob Storage | 통화 후 분석 참조 아키텍처 |
+| **개인정보 제거·모델 분석 후** | 요약·감정·통화 목적·개체 등 처리 결과 | Azure Storage | 통화 후 분석 참조 아키텍처 |
+| **Content Understanding 처리 후** | 전사문과 추출 결과 | Blob Storage 또는 다른 데이터 저장소 | 통화 후 분석 참조 아키텍처 |
+| **업무 시스템 반영 시** | 통화 이력·요약·통화 이유 | CRM 시스템 | 통화 후 분석 참조 아키텍처 |
+
+근거:
+
+- [Speech to text 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/speech-to-text/data-privacy-security)
+- [Voice Live 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/voice-live/data-privacy-security)
+- [voice-based prompt agent 구성](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-voice-agent)
+- [Foundry Models 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy)
+- [Text to speech 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/text-to-speech/data-privacy-security)
+- [Foundry 추적 데이터](https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data)
+
+## 저장 위치와 처리 위치는 왜 다른가? { #storage-and-processing-scope }
+
+다음 다섯 위치를 따로 확인해야 합니다.
+
+1. 애플리케이션이 원음·파생 기록을 저장하는 리전
+2. STT·TTS 같은 음성 기능의 처리 범위
+3. 선택 모델의 추론 범위
+4. 선택 지원 로그의 저장 위치
+5. Application Insights·Log Analytics 추적 저장 위치
+
+한국 리전 Blob Storage에 원음을 저장해도 Voice Live의 음성 기능,
+선택한 LLM 추론, 지원 로그와 추적 데이터까지 모두 국내에서만
+처리·저장된다는 뜻은 아닙니다. [Voice Live 리전 표](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/regions?tabs=voice-live#voice-live)는
+음성 기능과 LLM의 지역 가용성·처리 범위를 별도로 제시하며, 각 기능은
+Global·Data Zone·Regional 범위를 가질 수 있습니다.
+
+- **애플리케이션 저장:** Blob Storage·Application Insights·Log Analytics의 선택 리전과 복제·보유 설정
+- **음성 기능:** Voice Live 리소스 리전과 별개로 표시된 음성 인식·HD 음성 합성 처리 범위
+- **모델 추론:** 선택한 Global·Data Zone·Regional 배포와 모델별 지원 범위
+- **지원 로그:** Voice Live 지원 로그를 켠 경우 Voice Live 리소스와 같은 리전의 Microsoft 관리 Storage
+- **추적:** Foundry 프로젝트에 연결한 Application Insights·Log Analytics 리소스
+
+## PII는 어느 처리 단계에서 통제하는가? { #pii-by-stage }
+
+| 경로 | PII 통제 시점 | 통제가 되돌리지 못하는 범위 |
+|---|---|---|
+| **네이티브 Realtime** | 전달 전 수집 최소화·클라이언트 통제. 텍스트 PII는 모델 처리 뒤 선택 전사·출력·저장 단계 | 모델에 이미 전달된 원음 |
+| **애플리케이션 분리형** | 지원 언어·버전에서 STT 뒤, 텍스트 모델 전달 전 적용 가능 | 원음과 별도 음성 사본 |
+| **Voice Live 관리형 분리 경로** | Microsoft 문서가 공개한 지원 통제만 적용 | 내부 단계에 임의 통제를 삽입했다고 가정하지 않음 |
+| **통화 후 Speech 경로** | 배치 전사 뒤, Foundry 모델 전달 전 Conversation PII | 원음 Blob |
+| **Content Understanding 경로** | 추출 결과 반환 뒤 애플리케이션 단계 | 서비스에 이미 전달된 원음 |
+
+- 전달 전 통제와 전달 후 마스킹을 구분합니다. 사후 마스킹은 이미 완료된 모델 전송을 되돌리지 않습니다.
+- 전사문 마스킹은 원음 마스킹·삭제가 아닙니다.
+- Conversation PII가 반환하는 오디오 타이밍은 원음의 민감 구간을 처리할 근거이며 저장된 원음을 자동 삭제했다는 뜻이 아닙니다.
+- [2026-10-18 확인 기준 언어 지원](https://learn.microsoft.com/en-us/azure/ai-services/language-service/personally-identifiable-information/language-support?tabs=conversation-pii#conversation-pii-language-support)에서 Text PII는 한국어를 지원하지만 Conversation PII `2024-11-01` GA 언어 목록은 영어·프랑스어·독일어·스페인어입니다.
+
+Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
+언어 지원 문서는 `2024-11-01` GA를 별도로 제시합니다. 이 문서는 두
+자료의 버전·표기를 병기하며 하나의 무조건적인 상태로 합치지 않습니다.
+
 ## Microsoft 통화 후 분석 참조 { #post-call-architecture }
 
 [Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는
@@ -120,48 +242,31 @@ Azure 음성 인식과 음성 합성을 결합한 분리형 경로를 사용할 
 > **그림 성격:** Microsoft 공식 참조의 두 분석 경로를 이 리서치가
 > 재도식화했습니다. 위 링크의 Microsoft 제공 SVG가 공식 원본입니다.
 
-## 서비스 자체는 무엇을 저장하는가?
+## 저장 수명주기와 삭제 제약 { #storage-lifecycle }
 
-다음 표는 참조 아키텍처에서 애플리케이션이 수행하는 저장과 서비스 자체의 기본 동작을 나누어 정리합니다.
+[Blob 수명주기 관리](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)는
+생성·수정·마지막 접근 시각, 경로 prefix와 blob tag를 기준으로 계층
+이동·삭제 규칙을 정의할 수 있다고 설명합니다.
 
-| 서비스·기능 | Microsoft 문서에 명시된 동작 | 저장 위치·기간 |
-|---|---|---|
-| **Azure AI Speech 실시간 음성 인식** | 오디오는 Azure 서버 메모리에서만 처리되고 저장 상태로 남지 않음 | 서비스 저장 없음 |
-| **Azure AI Speech 배치 음성 인식 입력** | `contentContainerUrl` 또는 `contentUrls`로 지정한 오디오를 읽어 처리함 | 고객이 지정한 오디오 URL·컨테이너 |
-| **Azure AI Speech 배치 음성 인식 결과** | `destinationContainerUrl`을 지정하지 않으면 Microsoft 관리 컨테이너에 결과를 저장합니다. 지정하면 지원되는 고객 Azure 컨테이너에 저장합니다 | 서비스 내 transcription의 `timeToLiveHours` 지원 범위는 완료 후 6시간~31일입니다. 작업을 삭제하면 Microsoft 관리 결과도 삭제됩니다. 고객 컨테이너 사본의 보유기간 연동은 인용 문서에서 확인되지 않았습니다 |
-| **Voice Live API** | Voice Live 자체는 고객 데이터를 저장하거나 보관하지 않음. 연결한 모델·Agent·Custom Voice 등은 각 기능의 정책을 따름 | Voice Live 자체 저장 없음 |
-| **Voice Live 지원 로그** | 지원 티켓을 연 뒤 사용자가 동의해 켤 수 있는 별도 디버깅 로그 | 같은 리전의 Microsoft 관리 Azure Storage, 생성 후 30일 자동 삭제 |
-| **Foundry voice-based prompt agent** | `store` 기본값은 `false`. `true`이면 대화 기록, 이벤트 시간선, 원음이 함께 저장됨 | Foundry voice agent 저장 기능. 2026-10-14 기준 미리 보기 |
-| **Azure 판매 모델(Azure OpenAI 포함)** | 모델 자체는 무상태로 프롬프트·응답을 모델에 보관하지 않음. Responses API·Threads·Stored completions 같은 상태 유지 기능은 별도 데이터 저장소를 만듦 | Azure가 판매하는 Foundry 모델에 관한 정책 범위. 고객 리소스의 기능별 데이터 저장소 |
-| **Azure 판매 모델의 남용 모니터링** | 잠재적 남용 지표가 감지되면 일부 프롬프트·응답이 검토 표본으로 선택될 수 있음. 자동 검토는 저장하지 않지만 사람 검토 대상은 고객 리소스별로 논리 분리된 남용 모니터링 저장소에 보관될 수 있음 | Azure가 판매하는 Foundry 모델(Azure OpenAI 포함)의 정책 범위. 승인된 modified abuse monitoring에서는 위 저장·사람 검토 절차를 수행하지 않지만 자동 검토는 남을 수 있음. [공식 적용 범위](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy) |
-| **미리 구축된 음성의 음성 합성(TTS)** | 입력 텍스트와 출력 오디오를 Microsoft 로그에 저장하지 않음 | 서비스 로그 저장 없음 |
-| **Foundry 추적** | 기본적으로 꺼져 있음. 켜면 [Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview)와 [Log Analytics](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-workspace-overview) 설정에 따라 추적 자료가 저장됨 | 고객이 연결한 Application Insights·Log Analytics |
+- 정책을 추가하거나 수정한 뒤 변경이 적용되고 첫 실행이 시작되기까지 최대 24시간이 걸릴 수 있음.
+- 계정 요청률이 한도에 가까우면 정책 실행이 더 늦어질 수 있음.
+- `LifecyclePolicyCompleted` 이벤트, 메트릭과 로그로 실행 결과를 확인할 수 있음.
 
-근거:
+수명주기 delete 실행이 곧 모든 사본의 최종 삭제 완료를 뜻하지는 않습니다.
 
-- [Speech to text 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/speech-to-text/data-privacy-security)
-- [Voice Live 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/voice-live/data-privacy-security)
-- [voice-based prompt agent 구성](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-voice-agent)
-- [Foundry Models 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy)
-- [Text to speech 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/text-to-speech/data-privacy-security)
-- [Foundry 추적 데이터](https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data)
+- **Soft delete:** soft delete가 켜진 계정에서 수명주기 delete가 실행되면
+  blob은 즉시 영구 삭제되지 않고 설정된 보유기간 동안 복구 가능한
+  상태로 남음. soft-deleted blob에는 수명주기 delete가 다시 적용되지
+  않음. [공식 동작](https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview)
+- **버전·스냅샷:** 현재 버전, 이전 버전과 snapshot은 서로 다른 수명주기
+  대상을 가질 수 있으므로 각 대상의 규칙과 실제 잔존 여부를 따로 확인해야 함.
+- **불변 보존:** immutable container의 blob에는 수명주기 delete가
+  동작하지 않음. 시간 기반 보존이나 법적 보존이 끝나기 전에는 삭제할 수 없음.
+- **24시간의 의미:** 최대 24시간은 정책 변경이 반영되고 첫 실행이
+  시작되기 전까지의 설명이며, 모든 대상 blob의 삭제 완료 기한이 아님.
+  실제 실행 시간은 대상 수와 계정 요청률에 따라 더 길어질 수 있음.
 
-## 공식 자료에서 확인되는 저장 시점과 저장 위치
-
-| 시점 | 무엇 | 어디 | Microsoft 자료의 범위 |
-|---|---|---|---|
-| **통화 녹음 후** | 녹음 오디오 파일 | Azure Blob Storage | 콜센터 통화 후 분석 참조 아키텍처 |
-| **새 Blob 업로드 감지 후** | 새 오디오 파일을 처리할 작업 | [Blob trigger](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger#choose-a-blob-storage-trigger-implementation)가 Azure Functions 시작 | 콜센터 통화 후 분석 참조 아키텍처. 이벤트 기반·폴링 기반 구현에 따라 지연 특성이 다름 |
-| **정해진 일괄 실행 시각** | 일정 기간 모인 오디오 파일 | Timer trigger가 Azure Functions 시작 | 콜센터 통화 후 분석 참조 아키텍처 |
-| **배치 음성 인식 후, 선택 시** | 원문 음성 텍스트 파일 | Azure Blob Storage | 콜센터 통화 후 분석 참조 아키텍처 |
-| **개인정보 제거·모델 분석 후** | 요약·감정·통화 목적·개체 등 처리 결과 | Azure Storage | 콜센터 통화 후 분석 참조 아키텍처 |
-| **Content Understanding 처리 후** | 음성 텍스트와 추출 결과 | Blob Storage 또는 다른 데이터 저장소 | 콜센터 통화 후 분석 참조 아키텍처 |
-| **업무 시스템 반영 시** | 통화 이력·요약·통화 이유 | CRM 시스템 | 콜센터 통화 후 분석 참조 아키텍처 |
-| **실시간 가상 에이전트 분석을 위해 저장할 때** | Voice Live 또는 GPT Realtime의 오디오와 음성 텍스트 | Azure Blob Storage | 같은 참조 아키텍처의 가상 에이전트 대안 |
-| **Foundry voice agent 세션에서 `store=true`일 때** | 대화 기록·이벤트 시간선·원음 | Foundry voice agent 저장 기능 | 미리 보기 제품 문서 |
-| **Voice Live 지원 로그를 사용자가 켰을 때** | 지원용 음성 로그 | Microsoft 관리 Azure Storage | Voice Live 개인정보 처리 문서 |
-
-## Blob Storage에 대해 Microsoft가 설명하는 범위
+## 보충: Blob Storage와 Data Lake 성능
 
 ### 참조 아키텍처에서 저장하는 자료
 
@@ -195,7 +300,7 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합�
 
 이 수치는 **Data Lake 분석 데이터 세트 지침**이며, 개별 음성 통화 파일의 크기 규격으로 제시된 값은 아님.
 
-## 오디오 형식과 압축은 어디에서 처리되는가?
+## 보충: 오디오 형식과 압축
 
 | 경로 | Microsoft 문서에 명시된 형식·처리 |
 |---|---|
@@ -216,7 +321,7 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합�
 - [Realtime 2.x 오디오 형식](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/realtime-2)
 - [배치 음성 인식 오디오 형식](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-transcription-audio-data)
 
-## 공식 입력값으로 계산한 저장량
+## 보충: 공식 입력값으로 계산한 저장량
 
 아래 값은 Microsoft의 저장 용량 권고가 아닙니다. Microsoft 문서에 나온 샘플률·비트 수·채널 수에 다음 표준 계산식을 적용한 값입니다.
 
@@ -239,7 +344,7 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합�
 - WAV 헤더·JSON 메타데이터·암호화·복제·blob 버전은 위 계산에 포함하지 않음.
 - FLAC·Ogg/Opus는 음성 내용과 인코딩 설정에 따라 크기가 달라 고정값을 계산하지 않음.
 
-## Microsoft가 공개한 지연·연결 지침
+## 보충: Microsoft가 공개한 지연·연결 지침
 
 ### Azure OpenAI Realtime
 
@@ -271,7 +376,7 @@ Realtime API의 최대 세션 시간은 60분입니다. 이 제한은 Azure Open
 
 이 사전 연결·재사용 지침은 **SpeechSynthesizer**에 대한 문서입니다. SpeechRecognizer 또는 Voice Live 전체에 같은 지침을 적용한다고 명시하지 않습니다.
 
-## Blob 액세스 계층과 복원에 대한 공식 수치
+## 보충: Blob 액세스 계층과 복원
 
 | 계층 | Microsoft가 안내한 최소 저장기간 | 온라인 여부 |
 |---|---:|---|
@@ -290,27 +395,6 @@ Realtime API의 최대 세션 시간은 60분입니다. 이 제한은 Azure Open
 - 10GB 미만 객체의 High 우선순위 복원은 1시간 미만에 끝날 수 있으나 수요와 크기에 따라 더 오래 걸릴 수 있음.
 - 우선순위 복원 처리량은 storage account 전체에서 시간당 최대 10GiB입니다.
 - 작은 blob을 많이 복원하면 각 blob 처리 부담 때문에 시간이 더 걸릴 수 있음.
-
-[Blob 수명주기 관리](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)에 명시된 내용:
-
-- 생성·수정·마지막 접근 시각, 경로 prefix, blob tag를 기준으로 계층 이동·삭제 규칙을 만들 수 있음.
-- 정책을 추가하거나 수정한 뒤 변경이 적용되고 첫 실행이 시작되기까지 최대 24시간이 걸릴 수 있음.
-- 계정 요청률이 한도에 가까우면 정책 실행이 더 늦어질 수 있음.
-- `LifecyclePolicyCompleted` 이벤트, 메트릭, 로그로 실행 결과를 확인할 수 있음.
-
-### 수명주기 삭제가 곧 최종 삭제를 뜻하지 않는 경우
-
-- **Soft delete:** soft delete가 켜진 계정에서 수명주기 delete가 실행되면
-  blob은 즉시 영구 삭제되지 않고 설정된 soft-delete 보유기간 동안 복구
-  가능한 상태로 남음. soft-deleted 상태의 blob에는 수명주기 delete가 다시
-  적용되지 않음. [공식 동작](https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview)
-- **버전·스냅샷:** 현재 버전, 이전 버전과 snapshot은 서로 다른 수명주기
-  대상을 가질 수 있으므로 각 대상의 규칙과 실제 잔존 여부를 따로 확인해야 합니다.
-- **불변 보존:** immutable container의 blob에는 수명주기 delete가 동작하지
-  않음. 시간 기반 보존이나 법적 보존이 끝나기 전에는 삭제할 수 없음.
-- **24시간의 의미:** 최대 24시간은 정책 변경이 반영되고 첫 실행이 시작되기
-  전까지의 설명이며, 모든 대상 blob의 삭제 완료 기한이 아님. 실제 실행
-  시간은 대상 수와 계정 요청률에 따라 더 길어질 수 있음.
 
 ## 공개 문서에서 확인되지 않은 값
 
