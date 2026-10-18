@@ -62,7 +62,7 @@ topic_order: 2
 > - 리서치 발행일: 2026-10-17 (한국시간)
 > - Microsoft 주요 공식 원문 재확인일: 2026-10-18
 > - 연결 문서: [앱 음성 서비스 기록관리 사례와 정책](../business-patterns/index.md)
-> - 범위: Microsoft가 공개한 참조 아키텍처와 제품 문서에서 확인되는 원음·음성 텍스트·분석 결과의 저장 시점과 위치, 오디오 형식·압축, 지연·저장 성능 지침.
+> - 범위: Microsoft 제품 문서의 네이티브 Realtime·분리형 음성 처리, 통화 후 참조 아키텍처, 구조별 원음·음성 텍스트·분석 결과의 저장과 처리 범위, 오디오 형식·압축, 지연·저장 성능 지침.
 > - 제외: 특정 애플리케이션의 확정 아키텍처 · 이 문서가 독자적으로 정한 저장 위치나 보유기간 · 법률 의견 · 가격 견적.
 
 > **읽는 기준**
@@ -72,21 +72,53 @@ topic_order: 2
 > - **Microsoft 일반 지침:** Blob Storage·Data Lake Storage·Speech 성능 문서의 명시적 권고. 음성 에이전트 전용 지침이 아닐 때는 그 범위를 함께 표시.
 > - **단순 계산:** Microsoft가 공개한 샘플률·비트 수·채널 수에 표준 계산식을 적용한 값. Microsoft의 용량 권고가 아님.
 
-## Microsoft가 공개한 관련 참조 아키텍처
+## 2026년 기준 실시간 음성 구조 { #realtime-voice-architectures }
 
-### 통화 후 콜센터 분석 아키텍처
+### 네이티브 Realtime과 분리형 파이프라인
 
-[Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는 음성 원본, 음성 텍스트, 분석 결과의 저장 위치를 데이터 흐름에 명시한 Microsoft 참조입니다.
+Microsoft 제품 문서에서 확인되는 실시간 음성 처리는 선택한 모델과
+오케스트레이션 방식에 따라 다음 두 구조로 나뉩니다.
+
+| 구조 | 처리 흐름 | 전사문의 의미 |
+|---|---|---|
+| **네이티브 Realtime** | 오디오를 Realtime 음성 모델이 직접 처리하고 음성으로 응답 | `input_audio_transcription`을 켠 경우 별도 전사 배포가 만드는 보조 기록. 모델이 내부에서 사용한 텍스트라고 가정하지 않음 |
+| **분리형 파이프라인** | STT → 텍스트 모델·에이전트 → TTS | STT 결과가 텍스트 모델 입력을 구성할 수 있으며 단계별 로그·사본을 별도로 확인 |
+
+[Voice Live](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live)는
+별도의 모델 유형이 아니라 음성 인식, 생성형 모델과 음성 합성을 하나의
+인터페이스로 제공하는 관리형 API입니다. Realtime 모델을 선택하면
+네이티브 경로를, GPT-4.1·GPT-5 계열처럼 비멀티모달 모델을 선택하면
+Azure 음성 인식과 음성 합성을 결합한 분리형 경로를 사용할 수 있습니다.
+애플리케이션이 Speech·텍스트 모델·TTS를 직접 조합하는 경우도 같은
+분리형 구조이지만 오케스트레이션 책임은 애플리케이션에 있습니다.
+
+[![네이티브 Realtime과 분리형 음성 파이프라인 비교](../images/azure-voice-agent-realtime-architectures.svg)](../images/azure-voice-agent-realtime-architectures.svg)
+
+> **그림 성격:** 여러 Microsoft 제품 문서를 이 리서치가 조합한
+> `공식 문서 기반 종합 구성 예시`입니다. Microsoft가 제공한 단일 그림이
+> 아니며, 점선의 저장·추적은 정책과 설정으로 선택하는 별도 경로입니다.
+
+이 구분은 연도별 대체 관계가 아닙니다. 네이티브·분리형 처리는 현재
+실시간 선택지이고, 다음 통화 후 분석도 현재 유효한 별도 목적의 구조입니다.
+모델 버전·GA/Preview·지역 지원은 적용 시점의 제품 문서에서 다시
+확인해야 합니다.
+
+## Microsoft 통화 후 분석 참조 { #post-call-architecture }
+
+[Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는
+통화가 끝난 뒤 녹음과 전사를 배치 처리하는 Microsoft 공식 참조
+아키텍처입니다. 실시간 음성 에이전트의 기본 처리 흐름이 아닙니다.
 
 - **자료 유형:** Azure Architecture Center 참조 아키텍처
 - **주요 범위:** 통화가 끝난 뒤 수행하는 배치 분석
 - **사용 서비스:** Azure Blob Storage, Azure Speech, Microsoft Foundry, Azure Language 또는 Azure Content Understanding, Power BI
-- **공식 그림:** [Microsoft 아키텍처 SVG](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/_images/call-center-analytics.svg)
-- **편집 가능한 원본:** [Microsoft 제공 Visio 파일](https://arch-center.azureedge.net/call-center-analytics.vsdx)
+- **Microsoft 공식 그림:** [Microsoft 아키텍처 SVG](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/_images/call-center-analytics.svg)
+- **Microsoft 제공 Visio:** [편집 가능한 원본 파일](https://arch-center.azureedge.net/call-center-analytics.vsdx)
 
-![Azure 음성 에이전트의 실시간 처리와 Microsoft 참조 저장·분석 흐름](../images/azure-voice-agent-ms-reference-architecture.svg)
+[![Microsoft 통화 후 분석 참조의 처리·저장 흐름](../images/azure-voice-agent-ms-reference-architecture.svg)](../images/azure-voice-agent-ms-reference-architecture.svg)
 
-> **그림 범위:** 위쪽은 Voice Live의 실시간 제품 동작, 아래쪽은 통화 후 저장·분석 참조 흐름입니다. 아래쪽에서 Speech→Language→Foundry 경로와 Content Understanding→애플리케이션 PII 제거 경로를 구분하고, 선택적 원문 음성 텍스트 저장은 Speech 처리 이후에 표시합니다. 파란 점선은 같은 Architecture Center 문서가 Voice Live·GPT Realtime의 오디오와 음성 텍스트를 분석용 Blob Storage에 저장하는 대안으로 제시한 경로입니다. 두 공식 문서 범위를 한 장에 병치한 것으로, Microsoft가 제공한 단일 아키텍처나 서비스의 기본 자동 저장 동작을 뜻하지 않습니다.
+> **그림 성격:** Microsoft 공식 참조의 두 분석 경로를 이 리서치가
+> 재도식화했습니다. 위 링크의 Microsoft 제공 SVG가 공식 원본입니다.
 
 ## 서비스 자체는 무엇을 저장하는가?
 
