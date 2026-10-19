@@ -222,7 +222,7 @@ rg -n \
 
 Expected: six matching explicit IDs in the promoted root.
 
-- [ ] **Step 10: Browser-check both pages and the redirect**
+- [ ] **Step 10: Browser-check both pages**
 
 Open:
 

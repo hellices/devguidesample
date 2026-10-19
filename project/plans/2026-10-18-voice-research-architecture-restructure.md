@@ -292,6 +292,22 @@ Run:
 
 Expected: `Documentation built` with exit code 0.
 
+If no preview server is already running, start:
+
+```bash
+../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123
+```
+
+Run it as a separate bounded async process through the execution harness,
+record its shell ID or exact PID, and verify readiness:
+
+```bash
+curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+```
+
+Keep that exact process for the remaining browser checks, then stop it by shell
+ID or exact PID. Do not use `pkill` or `killall`.
+
 Open:
 
 ```text
@@ -716,21 +732,21 @@ Run:
 git diff --check origin/main...HEAD
 git diff --stat origin/main...HEAD
 git status --short
+test ! -e docs/services/microsoft-foundry/voice-data-management/samples/source-evidence
 ```
 
 Expected: no whitespace errors; the PR diff remains limited to the
 `voice-data-management` topic package and its three SVG assets (the existing
 architecture and lifecycle diagrams plus the new realtime comparison), this
 design spec, and this plan; and the working tree is clean.
+The evidence-ledger path is absent from the current branch, so no deletion task
+is required.
 
 - [ ] **Step 5: Inspect unresolved PR review threads**
 
 Run a GitHub GraphQL review-thread query for PR 83 and inspect every unresolved
-thread. Reply in the inline thread with source, built HTML, or validation
-evidence. Resolve only threads that are addressed or demonstrably caused by a
-partial-diff review.
-
-Expected: unresolved review thread count is 0 before publication.
+thread. Plan the required replies and source evidence, but do not reply or
+resolve while the implementation commits remain local.
 
 - [ ] **Step 6: Obtain publication authorization**
 
@@ -761,7 +777,15 @@ passes. If `gh` monitoring times out while the workflow remains in progress,
 query the workflow run directly and use bounded status polling; do not report a
 CI failure unless the run conclusion fails.
 
-- [ ] **Step 8: Confirm final state**
+- [ ] **Step 8: Reply to and resolve review threads**
+
+After the push and passing CI, reply in each inline thread with the supporting
+commit, source, built HTML, or validation evidence. Resolve only threads that
+are addressed or demonstrably caused by a partial-diff review.
+
+Expected: unresolved review thread count is 0.
+
+- [ ] **Step 9: Confirm final state**
 
 Run:
 
