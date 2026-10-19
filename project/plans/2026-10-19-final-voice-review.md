@@ -208,7 +208,8 @@ assert "OpenAI 직접 API인 GPT-Live" in azure
 assert "last access time tracking" in azure
 assert "general-purpose v2(GPv2)" in azure
 assert "legacy Blob Storage" in azure
-assert "Microsoft 제공 단일 그림 아님" not in svg
+assert "Microsoft 제공 단일 그림 아님" not in azure + svg
+assert "Microsoft가 제공한 단일 그림이 아니며" not in azure
 assert "공식 문서를 기반으로 한 종합 구성 예시" in svg
 assert "## 먼저 확인할 세 가지 질문" in root
 assert "## 기록별 담당·정책·삭제 증빙" in root
@@ -389,11 +390,33 @@ same final validation and browser checks again. Stop before Step 4 if either
 gate fails; remote CI is additional evidence, not a replacement for local
 validation or browser review.
 
+If review fixes changed files, commit them before Step 4:
+
+```bash
+git add -A
+git commit -m "docs(foundry): address final voice review" \
+  -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+```
+
+Require a clean working tree and record the exact reviewed revision:
+
+```bash
+test -z "$(git status --porcelain=v1)"
+verified_sha=$(git rev-parse HEAD)
+```
+
 - [ ] **Step 4: Push and wait for CI**
 
 Require fresh Step 1 and Step 2 results for the exact final revision. Fetch
 the PR branch, require zero incoming commits, push, and require the workflow
 conclusion `success`.
+
+Before push:
+
+```bash
+test -z "$(git status --porcelain=v1)"
+test "$(git rev-parse HEAD)" = "$verified_sha"
+```
 
 - [ ] **Step 5: Reply to GitHub threads**
 

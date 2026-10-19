@@ -389,18 +389,20 @@ Realtime API의 최대 세션 시간은 60분입니다. 이 제한은 Azure Open
 
 ## 보충: Blob 액세스 계층과 복원
 
-| 계층 | Microsoft가 안내한 최소 저장기간 | 온라인 여부 |
+| 계층 | GPv2 조기 삭제 과금 기준 | 온라인 여부 |
 |---|---:|---|
 | **Hot** | 없음 | 즉시 읽기 |
 | **Cool** | 30일 | 즉시 읽기 |
 | **Cold** | 90일 | 즉시 읽기 |
 | **Archive** | 180일 | 오프라인, 읽기 전에 복원 필요 |
 
-Cool 30일·Cold 90일은 **general-purpose v2(GPv2) 계정**의 최소
-보관기간입니다. legacy Blob Storage 계정의 Cool·Cold에는 최소
-보관기간이 없습니다. 이 값은 과금 기준이며 법정 보유기간이 아닙니다.
+Cool 30일·Cold 90일은 **general-purpose v2(GPv2) 계정**에서 조기 삭제
+요금을 계산하는 최소 저장기간입니다. 기간 안에도 삭제·덮어쓰기·다른
+계층 이동은 가능하지만 남은 기간에 비례한 요금이 발생할 수 있습니다.
+legacy Blob Storage 계정의 Cool에는 최소기간이 없으며, Cold를
+사용하려면 GPv2 계정이 필요합니다. 이 값은 법정 보유기간이 아닙니다.
 
-[Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화합니다. 위 표의 30일·90일·180일은 각각 Cool·Cold·Archive에 적용되는 최소 저장기간이며 Smart tier 자체의 단일 최소기간이 아닙니다.
+[Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화합니다. 위 표의 30일·90일·180일은 각각 Cool·Cold·Archive의 조기 삭제 과금 기준이며 Smart tier 자체의 단일 기간이 아닙니다.
 
 [Blob 액세스 계층](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)은 최소기간 전에 삭제·덮어쓰기·다른 계층 이동을 하면 조기 삭제 비용이 발생할 수 있다고 설명합니다. 이 기간은 Azure Storage의 계층별 비용 기준이며 업무 자료의 법적 보유기간을 정하는 값이 아닙니다.
 

@@ -222,12 +222,38 @@ Expected:
 Run:
 
 ```bash
-rg -n \
-  'id="(business-use-cases|transcript-summary-quality|voice-biometric-attacks|product-storage-comparison|microsoft-record-locations|gaming-public-identity)"' \
-  site/services/microsoft-foundry/voice-data-management/index.html
+../../.venv/bin/python - <<'PY'
+from html.parser import HTMLParser
+from pathlib import Path
+
+class IdParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.ids = set()
+
+    def handle_starttag(self, tag, attrs):
+        self.ids.update(value for name, value in attrs if name == "id")
+
+parser = IdParser()
+parser.feed(
+    Path(
+        "site/services/microsoft-foundry/voice-data-management/index.html"
+    ).read_text(encoding="utf-8")
+)
+required = {
+    "business-use-cases",
+    "transcript-summary-quality",
+    "voice-biometric-attacks",
+    "product-storage-comparison",
+    "microsoft-record-locations",
+    "gaming-public-identity",
+}
+missing = required - parser.ids
+assert not missing, f"missing explicit anchors: {sorted(missing)}"
+PY
 ```
 
-Expected: six matching explicit IDs in the promoted root.
+Expected: exit 0; a failure prints every missing explicit ID.
 
 - [ ] **Step 10: Browser-check both pages**
 

@@ -94,12 +94,14 @@ access time tracking has been enabled; it is not an automatic default.
 
 State directly below the tier table:
 
-- Cool 30 days and Cold 90 days are minimum retention durations for
-  general-purpose v2 accounts; and
-- legacy Blob Storage accounts have no minimum retention duration for Cool or
-  Cold.
+- Cool 30 days and Cold 90 days are minimum storage durations used to
+  calculate early-deletion charges for general-purpose v2 accounts;
+- deletion, overwrite, or movement is possible inside the period, but the
+  remaining period can still be billed;
+- legacy Blob Storage accounts have no minimum duration for Cool; and
+- Cold requires a general-purpose v2 account.
 
-Keep the distinction between billing minimums and legal retention.
+Keep the distinction between billing criteria and legal retention.
 
 ## Business-page duplication
 
