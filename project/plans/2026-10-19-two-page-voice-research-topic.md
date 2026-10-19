@@ -435,14 +435,41 @@ Run:
 git fetch origin
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17
+pushed_sha=$(git rev-parse HEAD)
 git push origin HEAD
+
+pr_head_ready=false
+for attempt in {1..30}; do
+  remote_head=$(gh pr view 83 --json headRefOid --jq .headRefOid)
+  if test "$remote_head" = "$pushed_sha"; then
+    pr_head_ready=true
+    break
+  fi
+  sleep 2
+done
+test "$pr_head_ready" = true
+
+check_run_id=
+for attempt in {1..30}; do
+  check_run_id=$(gh api \
+    "repos/hellices/devguidesample/commits/$pushed_sha/check-runs" \
+    --jq '[.check_runs[] | select(.name == "validate")][0].id // empty')
+  test -n "$check_run_id" && break
+  sleep 2
+done
+test -n "$check_run_id"
+
+GH_PAGER=cat gh pr checks 83 --watch --interval 15
+ci_conclusion=$(gh api \
+  "repos/hellices/devguidesample/check-runs/$check_run_id" \
+  --jq .conclusion)
+test "$ci_conclusion" = "success"
 ```
 
-Expected before push: zero incoming commits.
-
-Wait for the new PR workflow run and require `completed success`. If a
-long-running `gh` watch request times out while the run remains in progress,
-use bounded REST status polling.
+Expected before push: zero incoming commits. Require the PR head and recorded
+`validate` check run to belong to `pushed_sha`, then require conclusion
+`success`. If the watch times out while that check remains in progress, poll
+the recorded `check_run_id`.
 
 Reply to and resolve actionable review threads only now, citing the pushed
 commit and successful CI run. Resolve a partial-diff false positive only with

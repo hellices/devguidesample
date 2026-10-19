@@ -63,8 +63,10 @@ assert "Cold는 GPv2 계정에서만 지원됩니다" in final_flat
 
 inspect = two_page.index("**Step 3: Inspect unresolved PR threads**")
 push = two_page.index("**Step 5: Push and wait for CI**")
+ci_check = two_page.index("GH_PAGER=cat gh pr checks 83 --watch", push)
+ci_success = two_page.index('test "$ci_conclusion" = "success"', ci_check)
 resolve = two_page.index("Reply to and resolve actionable review threads", push)
-assert inspect < push < resolve
+assert inspect < push < ci_check < ci_success < resolve
 PY
 ```
 
@@ -129,6 +131,7 @@ Expected: exit 0 with no output.
 
 ```bash
 ../../.venv/bin/python - <<'PY'
+import re
 from pathlib import Path
 
 root = Path("docs/services/microsoft-foundry/voice-data-management/index.md").read_text(encoding="utf-8")
@@ -136,9 +139,12 @@ azure = Path("docs/services/microsoft-foundry/voice-data-management/azure-storag
 css = Path("docs/assets/stylesheets/extra.css").read_text(encoding="utf-8")
 combined = root + azure
 
-assert combined.count('class="voice-diagram-scroll"') == 3
-assert combined.count('role="region"') >= 3
-assert combined.count('tabindex="0"') >= 3
+wrapper_tags = re.findall(r'<div class="voice-diagram-scroll"[^>]*>', combined)
+assert len(wrapper_tags) == 3
+for wrapper_tag in wrapper_tags:
+    assert 'role="region"' in wrapper_tag
+    assert 'tabindex="0"' in wrapper_tag
+    assert 'aria-label="도식 가로 스크롤"' in wrapper_tag
 assert ".md-typeset .voice-diagram-scroll" in css
 assert "overflow-x: auto" in css
 assert "min-width: 900px" in css
@@ -246,6 +252,7 @@ const result = await page.evaluate(() => {
     regions: regions.map((region) => ({
       clientWidth: region.clientWidth,
       scrollWidth: region.scrollWidth,
+      role: region.getAttribute("role"),
       labelled: region.getAttribute("aria-label"),
       keyboardFocusable: region.getAttribute("tabindex") === "0",
     })),
@@ -255,7 +262,7 @@ const result = await page.evaluate(() => {
 
 Require `pageHasOverflow === false` on both pages. Collect one region from the
 root and two from the Azure page; for all three require
-`scrollWidth > clientWidth`, a nonempty label, and
+`scrollWidth > clientWidth`, `role === "region"`, a nonempty label, and
 `keyboardFocusable === true`. At desktop width, require each diagram to fit
 the content column without forced horizontal scrolling.
 

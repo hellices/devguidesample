@@ -762,10 +762,10 @@ At desktop and 390px viewport widths, verify:
 Run:
 
 ```bash
+git fetch origin
 git diff --check origin/main...HEAD
 git diff --stat origin/main...HEAD
 git status --short
-git fetch origin
 test ! -e docs/services/microsoft-foundry/voice-data-management/samples/source-evidence
 test -z "$(git diff --name-only origin/main...HEAD -- \
   docs/services/microsoft-foundry/voice-data-management/samples/source-evidence)"
@@ -804,14 +804,41 @@ Run:
 git fetch origin
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17
+pushed_sha=$(git rev-parse HEAD)
 git push origin HEAD
+
+pr_head_ready=false
+for attempt in {1..30}; do
+  remote_head=$(gh pr view 83 --json headRefOid --jq .headRefOid)
+  if test "$remote_head" = "$pushed_sha"; then
+    pr_head_ready=true
+    break
+  fi
+  sleep 2
+done
+test "$pr_head_ready" = true
+
+check_run_id=
+for attempt in {1..30}; do
+  check_run_id=$(gh api \
+    "repos/hellices/devguidesample/commits/$pushed_sha/check-runs" \
+    --jq '[.check_runs[] | select(.name == "validate")][0].id // empty')
+  test -n "$check_run_id" && break
+  sleep 2
+done
+test -n "$check_run_id"
+
 GH_PAGER=cat gh pr checks 83 --watch --interval 15
+ci_conclusion=$(gh api \
+  "repos/hellices/devguidesample/check-runs/$check_run_id" \
+  --jq .conclusion)
+test "$ci_conclusion" = "success"
 ```
 
 Expected before push: zero incoming commits. Expected after push: `validate`
-passes. If `gh` monitoring times out while the workflow remains in progress,
-query the workflow run directly and use bounded status polling; do not report a
-CI failure unless the run conclusion fails.
+for `pushed_sha` passes. If `gh` monitoring times out while that check run
+remains in progress, poll the recorded `check_run_id`; do not report a CI
+failure unless its conclusion fails.
 
 - [ ] **Step 8: Reply to and resolve review threads**
 
