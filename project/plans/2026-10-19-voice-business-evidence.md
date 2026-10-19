@@ -56,6 +56,7 @@ Run:
 
 ```bash
 ../../.venv/bin/python - <<'PY'
+import re
 from pathlib import Path
 import yaml
 
@@ -191,7 +192,7 @@ laws = text.index("## 법령이 보존기간을 직접 정한 경우")
 
 assert product < decisions < comparison < laws
 assert "<summary><strong>Bixby·Gemini·ChatGPT·Microsoft Copilot·Siri" not in text
-assert "### 1. [한 번의 음성에서 여러 기록이 생김]" not in text
+assert not re.search(r"^### [1-6]\. \[", text, flags=re.MULTILINE)
 PY
 ```
 
@@ -405,6 +406,7 @@ Run:
 
 ```bash
 ../../.venv/bin/python - <<'PY'
+import re
 from pathlib import Path
 
 text = Path(
@@ -553,7 +555,7 @@ order = [
 ]
 positions = [text.index(value) for value in order]
 assert positions == sorted(positions)
-assert "### 1. [한 번의 음성에서 여러 기록이 생김]" not in text
+assert not re.search(r"^### [1-6]\. \[", text, flags=re.MULTILINE)
 assert "암호학적 삭제 검토 항목" not in text
 PY
 ```

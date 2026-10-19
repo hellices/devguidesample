@@ -54,6 +54,8 @@ published_at: 2026-10-17
 | **Microsoft Copilot Voice Chat / 상용 Copilot 라이선스** | 기본 오디오 미저장. 사용자가 Microsoft에 피드백을 제공하도록 피드백 기능이 켜진 경우에만 대화 오디오를 임시 저장하고 48시간 후 삭제 | 음성 텍스트는 Copilot 앱의 텍스트 대화와 같은 방식으로 저장·관리. Voice Chat FAQ는 상용 Copilot 라이선스 범위이며 GCC·GCC High는 향후 제공 예정, DoD 범위는 인용 문서에서 확인되지 않음. [음성 FAQ](https://support.microsoft.com/en-us/microsoft-365-copilot/frequently-asked-questions-about-voice-features-in-microsoft-365-copilot) · [조직 데이터](https://learn.microsoft.com/ko-kr/microsoft-365/copilot/microsoft-365-copilot-privacy) |
 | **Siri·Dictation / Apple 정책, 2026-09-14** | 지원 구성은 단말 처리; 개선 미동의 시 Apple 오디오 미저장 | 요청 이력은 시간당 여러 번 바뀌는 임의의 기기 생성 식별자와 연결되며 최대 2년 보유·이용 가능. 검토된 일부 자료는 2년 초과 보유 예외. [일반 정책](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/) · [개선 참여 정책](https://www.apple.com/legal/privacy/data/en/improve-siri-dictation/) |
 
+<a id="비즈니스가-먼저-결정할-기록"></a>
+
 ## 먼저 확인할 세 가지 질문
 
 ### 어떤 기록인가? {#voice-record-types}
@@ -317,6 +319,8 @@ published_at: 2026-10-17
 
 고소장 주장은 혐의이고, 합의명령은 이 사건 당사자에게 적용되는 조치입니다.
 모든 음성 서비스의 법정 보유기간이나 현재 Alexa 동작으로 일반화하지 않습니다.
+
+<a id="기록-삭제-결정-체크리스트"></a>
 
 ## 기록별 담당·정책·삭제 증빙
 

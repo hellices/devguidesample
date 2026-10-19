@@ -739,10 +739,12 @@ Review:
 ```text
 http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/
 http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
+http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/business-patterns/
 ```
 
-The root URL is the promoted business/policy document and owns the case timing
-lines; there is no separate authored `business-patterns` page.
+At this plan's execution point, the authored `business-patterns` child owns the
+case timing lines from Task 4. Review that child at both viewport widths. A
+later plan may promote its body into the topic root and remove the child.
 
 At desktop and 390px viewport widths, verify:
 

@@ -126,11 +126,14 @@ Rename:
 to:
 
 ```markdown
+<a id="비즈니스가-먼저-결정할-기록"></a>
+
 ## 먼저 확인할 세 가지 질문
 ```
 
 Delete its five-row decision table. Keep only the three anchored H3 questions
-and their one-sentence answers.
+and their one-sentence answers. The empty anchor preserves the former generated
+fragment after the heading changes.
 
 Rename:
 
@@ -141,6 +144,8 @@ Rename:
 to:
 
 ```markdown
+<a id="기록-삭제-결정-체크리스트"></a>
+
 ## 기록별 담당·정책·삭제 증빙
 ```
 
@@ -239,6 +244,8 @@ assert "공식 문서를 기반으로 한 종합 구성 예시입니다." in azu
 assert "점선은 저장·추적을 정책과 설정으로 선택하는 별도 경로입니다." in azure_text
 assert "## 먼저 확인할 세 가지 질문" in root
 assert "## 기록별 담당·정책·삭제 증빙" in root
+assert '<a id="비즈니스가-먼저-결정할-기록"></a>' in root
+assert '<a id="기록-삭제-결정-체크리스트"></a>' in root
 assert "| 결정 | 필요한 근거 |" not in questions_section
 assert questions_section.count("### ") == 3
 for heading in ["어떤 기록인가?", "왜·얼마나 보관하는가?", "무엇을 함께 지우는가?"]:
@@ -400,6 +407,23 @@ Run the repository's full documentation contract:
 ../../.venv/bin/python -m mkdocs build --strict
 ../../.venv/bin/python scripts/docs/validate_search_index.py
 ../../.venv/bin/python scripts/docs/audit_pre_pages.py
+```
+
+Verify the two former generated fragments in the built root:
+
+```bash
+../../.venv/bin/python - <<'PY'
+from pathlib import Path
+
+html = Path(
+    "site/services/microsoft-foundry/voice-data-management/index.html"
+).read_text(encoding="utf-8")
+for legacy_anchor in [
+    "비즈니스가-먼저-결정할-기록",
+    "기록-삭제-결정-체크리스트",
+]:
+    assert f'id="{legacy_anchor}"' in html
+PY
 ```
 
 - [ ] **Step 2: Browser-check desktop and 390px**
