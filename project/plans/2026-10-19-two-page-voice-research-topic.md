@@ -153,8 +153,15 @@ Apply exactly these replacements in the promoted root:
 Run:
 
 ```bash
-rg -n "\\.\\./" \
-  docs/services/microsoft-foundry/voice-data-management/index.md
+relative_link_status=0
+if rg -n "\\.\\./" \
+  docs/services/microsoft-foundry/voice-data-management/index.md; then
+  echo "unexpected parent-relative link" >&2
+  exit 1
+else
+  relative_link_status=$?
+  test "$relative_link_status" -eq 1
+fi
 
 ../../.venv/bin/python - <<'PY'
 from pathlib import Path
@@ -435,9 +442,11 @@ the pushed SHA and its `validate` run pass in Step 5.
 Run:
 
 ```bash
+set -euo pipefail
 git fetch origin
-git rev-list --left-right --count \
-  HEAD...origin/docs/voice-data-research-2026-10-17
+read -r ahead incoming <<<"$(git rev-list --left-right --count \
+  HEAD...origin/docs/voice-data-research-2026-10-17)"
+test "$incoming" -eq 0
 pushed_sha=$(git rev-parse HEAD)
 git push origin HEAD
 

@@ -805,9 +805,11 @@ resolve only evidenced review threads.
 Run:
 
 ```bash
+set -euo pipefail
 git fetch origin
-git rev-list --left-right --count \
-  HEAD...origin/docs/voice-data-research-2026-10-17
+read -r ahead incoming <<<"$(git rev-list --left-right --count \
+  HEAD...origin/docs/voice-data-research-2026-10-17)"
+test "$incoming" -eq 0
 pushed_sha=$(git rev-parse HEAD)
 git push origin HEAD
 

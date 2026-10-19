@@ -142,14 +142,19 @@ Replace the question/answer table with:
 
 | Record | Owner example | Values fixed in policy | Deletion evidence |
 |---|---|---|---|
-| Audio | service or recording owner | purpose, capture mode, store, region, trigger, period | object/version deletion, playback failure, processor confirmation, backup expiry |
+| Audio | service or recording owner | purpose, capture mode, store, region, trigger, period | object/version deletion logs, processor deletion confirmation, backup expiry records |
 | Transcript and summary | conversation or case-record owner | source audio link, correction version, search copies, period | database/ticket/index deletion and search non-return |
 | Events and business result | product and business-system owner | event IDs, authoritative result, statutory record category | event/record deletion or justified separate retention |
-| Voiceprint | authentication and security owner | consent, enrollment audio, template, last interaction, governing law | enrollment/template deletion and authentication failure |
+| Voiceprint | authentication and security owner | consent, enrollment audio, template, last interaction, governing law | enrollment-audio and template deletion audit logs |
 | Trace, search, and export copies | operations, security, and data owners | captured fields, access, region, retention, downstream copies | expiry jobs, access evidence, index/cache/export deletion |
 
 The front asks the questions; the later table assigns responsibility and
 evidence. Do not repeat the same five decisions twice.
+
+Playback and authentication failure are functional checks, not deletion
+evidence by themselves. Treat them separately and require direct storage-state
+evidence such as object, version, enrollment-audio, or template deletion logs
+before recording deletion as complete.
 
 ## Internal plan corrections
 

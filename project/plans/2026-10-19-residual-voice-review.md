@@ -309,15 +309,44 @@ git commit -m "docs(foundry): close residual voice review" \
 - [ ] **Step 4: Push and require successful CI**
 
 ```bash
+set -euo pipefail
 git fetch origin docs/voice-data-research-2026-10-17
-git rev-list --left-right --count \
-  HEAD...origin/docs/voice-data-research-2026-10-17
+read -r ahead incoming <<<"$(git rev-list --left-right --count \
+  HEAD...origin/docs/voice-data-research-2026-10-17)"
+test "$incoming" -eq 0
+pushed_sha=$(git rev-parse HEAD)
 git push origin docs/voice-data-research-2026-10-17
+
+pr_head_ready=false
+for attempt in {1..30}; do
+  remote_head=$(gh pr view 83 --json headRefOid --jq .headRefOid)
+  if test "$remote_head" = "$pushed_sha"; then
+    pr_head_ready=true
+    break
+  fi
+  sleep 2
+done
+test "$pr_head_ready" = true
+
+check_run_id=
+for attempt in {1..30}; do
+  check_run_id=$(gh api \
+    "repos/hellices/devguidesample/commits/$pushed_sha/check-runs" \
+    --jq '[.check_runs[] | select(.name == "validate")][0].id // empty')
+  test -n "$check_run_id" && break
+  sleep 2
+done
+test -n "$check_run_id"
+
 GH_PAGER=cat gh pr checks 83 --watch --interval 15
+ci_conclusion=$(gh api \
+  "repos/hellices/devguidesample/check-runs/$check_run_id" \
+  --jq .conclusion)
+test "$ci_conclusion" = "success"
 ```
 
-Expected before push: zero incoming commits. Expected after push: `validate`
-completes with `pass`.
+Expected before push: zero incoming commits. Expected after push: the
+`validate` check recorded for `pushed_sha` concludes with `success`.
 
 - [ ] **Step 5: Require a clean latest-HEAD review**
 
