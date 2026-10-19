@@ -17,7 +17,7 @@
 - Remove `topic_order` from the promoted root.
 - Set the Azure child to `topic_order: 1`.
 - Keep `published_at: 2026-10-17`.
-- Keep `sources_checked_at: 2026-10-18`.
+- Keep `sources_checked_at: 2026-10-19`.
 - Keep `verification_status: needs-review`.
 - Do not merge the old summary prose into the promoted business document.
 - Keep both architecture SVG previews in PR #83.
@@ -117,7 +117,7 @@ official_sources:
 document_type: research
 status: current
 verification_status: needs-review
-sources_checked_at: 2026-10-18
+sources_checked_at: 2026-10-19
 title: 앱 음성 서비스 기록관리 사례와 정책
 description: 실제 음성 서비스가 원음, 음성 텍스트, 요약과 업무 결과를 저장·삭제하는 방식을 비교합니다.
 technologies:

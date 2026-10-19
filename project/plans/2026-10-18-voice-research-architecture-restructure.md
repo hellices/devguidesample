@@ -719,9 +719,8 @@ the earlier combined label; do not reintroduce that label during implementation.
 Review:
 
 ```text
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/business-patterns/
+http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/
+http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
 ```
 
 At desktop and 390px viewport widths, verify:

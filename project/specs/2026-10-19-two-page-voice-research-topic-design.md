@@ -84,7 +84,7 @@ Keep:
 
 ```yaml
 published_at: 2026-10-17
-sources_checked_at: 2026-10-18
+sources_checked_at: 2026-10-19
 verification_status: needs-review
 ```
 

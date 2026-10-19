@@ -13,7 +13,7 @@
 - Keep exactly two authored pages: the business/policy topic root and the Azure child.
 - Do not add a redirect for the unpublished pull-request-only `business-patterns` path.
 - Preserve `published_at: 2026-10-17`.
-- Keep the CI-validated `sources_checked_at: 2026-10-18`.
+- Set `sources_checked_at: 2026-10-19`.
 - Keep the separate case/product policy date `2026-10-14`.
 - Keep `verification_status: needs-review`.
 - Keep the heading and anchor `주요 AI·음성 제품은 무엇을 저장하고 언제 지우는가? { #product-storage-comparison }`.
@@ -86,13 +86,13 @@ Expected: exit 0 with no output.
 Set:
 
 ```yaml
-sources_checked_at: 2026-10-18
+sources_checked_at: 2026-10-19
 published_at: 2026-10-17
 verification_status: needs-review
 ```
 
 Keep the visible product-policy case date `2026-10-14`. Set the visible
-legal/source verification date to `2026-10-19 (한국시간)`.
+recent-source and legal/source verification dates to `2026-10-19 (한국시간)`.
 
 Keep the root front matter's existing Microsoft/Azure `official_sources`.
 The validator reserves that field for allowlisted Microsoft hosts. Task 3
