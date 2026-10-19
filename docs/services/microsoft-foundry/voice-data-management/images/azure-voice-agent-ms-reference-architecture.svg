@@ -52,7 +52,7 @@
   <path d="M420 230 V270" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow-link)"/>
 
   <!-- Content Understanding path -->
-  <path d="M770 435 H786 Q794 435 794 427 V388 Q794 380 802 380 H1030 V348 Q1030 340 1038 340 H1050" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
+  <path d="M770 425 H786 Q794 425 794 417 V388 Q794 380 802 380 H1030 V348 Q1030 340 1038 340 H1050" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
   <path d="M770 455 H830" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
   <path d="M1010 455 H1022 Q1030 455 1030 447 V380" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
   <circle cx="1030" cy="380" r="3" fill="#475569"/>
