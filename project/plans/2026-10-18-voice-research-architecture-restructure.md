@@ -776,7 +776,7 @@ the PR update.
 Run:
 
 ```bash
-git fetch origin docs/voice-data-research-2026-10-17
+git fetch origin
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17
 git push origin HEAD
@@ -791,8 +791,10 @@ CI failure unless the run conclusion fails.
 - [ ] **Step 8: Reply to and resolve review threads**
 
 After the push and passing CI, reply in each inline thread with the supporting
-commit, source, built HTML, or validation evidence. Resolve only threads that
-are addressed or demonstrably caused by a partial-diff review.
+commit, source, built HTML, or validation evidence. Resolve only a thread
+whose pushed change and passing CI address the finding, or whose source/build
+evidence demonstrates a partial-diff false positive. Leave every other thread
+unresolved and return to implementation before Step 9.
 
 Expected: unresolved review thread count is 0.
 
@@ -801,7 +803,7 @@ Expected: unresolved review thread count is 0.
 Run:
 
 ```bash
-git fetch origin docs/voice-data-research-2026-10-17
+git fetch origin
 git status --short
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17

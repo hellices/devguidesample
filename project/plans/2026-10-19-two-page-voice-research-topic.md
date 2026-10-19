@@ -257,6 +257,15 @@ Expected: exit 0; a failure prints every missing explicit ID.
 
 - [ ] **Step 10: Browser-check both pages**
 
+If no preview server is responding, start
+`../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123` as a separate bounded
+async process through the execution harness. Record its shell ID or exact PID
+and verify readiness:
+
+```bash
+curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+```
+
 Open:
 
 ```text
@@ -271,6 +280,9 @@ Verify:
 - the Azure page links back to the root;
 - the root navigation lists only the root and Azure child; and
 - desktop and 390px widths have no page overflow.
+
+If this step started the server, stop that exact shell ID or PID after the
+browser checks. Do not use `pkill` or `killall`.
 
 - [ ] **Step 11: Commit the two-page topic**
 
@@ -373,7 +385,7 @@ both SVG previews and add this summary bullet:
 Run:
 
 ```bash
-git fetch origin docs/voice-data-research-2026-10-17
+git fetch origin
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17
 git push origin HEAD
@@ -390,7 +402,7 @@ use bounded REST status polling.
 Run:
 
 ```bash
-git fetch origin docs/voice-data-research-2026-10-17
+git fetch origin
 git status --short
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17

@@ -456,6 +456,9 @@ candidates=$(GH_PAGER=cat gh api -X GET search/users \
 candidate_count=$(printf '%s\n' "$candidates" | sed '/^$/d' | wc -l | tr -d ' ')
 test "$candidate_count" -eq 1
 reviewer_login="$candidates"
+GH_PAGER=cat gh api \
+  "repos/hellices/devguidesample/collaborators/$reviewer_login" \
+  --silent
 permission=$(GH_PAGER=cat gh api \
   "repos/hellices/devguidesample/collaborators/$reviewer_login/permission" \
   --jq '.permission')

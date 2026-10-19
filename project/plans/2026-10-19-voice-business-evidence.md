@@ -351,13 +351,17 @@ Immediately below the table:
 ```markdown
 ### 일률적인 일수가 없는 규정
 
-한국 개인정보 보호법, GDPR, CCPA/CPRA는 목적·필요성·고지한 기준 또는
-필요 종료 후 삭제를 요구하지만 모든 음성 원음에 적용할 하나의 공통
-일수를 정하지 않습니다. 따라서 위 숫자 표에 임의 기간을 만들지 않습니다.
+[한국 개인정보 보호법](https://www.law.go.kr/법령/개인정보보호법),
+[GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng),
+[CCPA/CPRA](https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1798.100.&lawCode=CIV)는
+목적·필요성·고지한 기준 또는 필요 종료 후 삭제를 요구하지만 모든 음성
+원음에 적용할 하나의 공통 일수를 정하지 않습니다. 따라서 위 숫자 표에
+임의 기간을 만들지 않습니다.
 
-COPPA §312.10도 일반 아동 개인정보에는 공통 일수를 두지 않고, 특정
-목적에 합리적으로 필요한 기간만 보유하고 무기한 보유를 금지하며 서면
-삭제 시점을 정하도록 요구합니다.
+[COPPA §312.10](https://www.federalregister.gov/documents/full_text/text/2025/04/22/2025-05904.txt)도
+일반 아동 개인정보에는 공통 일수를 두지 않고, 특정 목적에 합리적으로
+필요한 기간만 보유하고 무기한 보유를 금지하며 서면 삭제 시점을 정하도록
+요구합니다.
 ```
 
 - [ ] **Step 3: Replace the Alexa summary with the actual case**
@@ -671,7 +675,7 @@ Keep both SVG previews. Add summary bullets:
 Run:
 
 ```bash
-git fetch origin docs/voice-data-research-2026-10-17
+git fetch origin
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17
 git push origin HEAD
@@ -685,7 +689,7 @@ require `completed success`.
 Run:
 
 ```bash
-git fetch origin docs/voice-data-research-2026-10-17
+git fetch origin
 git status --short
 git rev-list --left-right --count \
   HEAD...origin/docs/voice-data-research-2026-10-17
