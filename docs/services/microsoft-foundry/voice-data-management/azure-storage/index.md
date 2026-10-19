@@ -63,6 +63,7 @@ topic_order: 1
 > - Microsoft 주요 공식 원문 재확인일: 2026-10-18
 > - 연결 문서: [앱 음성 서비스 기록관리 사례와 정책](../index.md)
 > - 범위: Microsoft 제품 문서의 네이티브 Realtime·분리형 음성 처리, 통화 후 참조 아키텍처, 구조별 원음·음성 텍스트·분석 결과의 저장과 처리 범위, 오디오 형식·압축, 지연·저장 성능 지침.
+> - API 경계: 이 문서는 Azure OpenAI Realtime과 Azure Voice Live를 다룹니다. [OpenAI 직접 API인 GPT-Live](https://developers.openai.com/api/docs/guides/live)의 음성 대화·백엔드 위임 구조는 별도이며, Azure 지원 여부와 데이터 정책을 공유한다고 가정하지 않습니다.
 > - 제외: 특정 애플리케이션의 확정 아키텍처 · 이 문서가 독자적으로 정한 저장 위치나 보유기간 · 법률 의견 · 가격 견적.
 
 > **읽는 기준**
@@ -87,16 +88,16 @@ Microsoft 제품 문서에서 확인되는 실시간 음성 처리는 선택한 
 [Voice Live](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live)는
 별도의 모델 유형이 아니라 음성 인식, 생성형 모델과 음성 합성을 하나의
 인터페이스로 제공하는 관리형 API입니다. Realtime 모델을 선택하면
-네이티브 경로를, GPT-4.1·GPT-5 계열처럼 비멀티모달 모델을 선택하면
-Azure 음성 인식과 음성 합성을 결합한 분리형 경로를 사용할 수 있습니다.
+네이티브 경로를, GPT-4.1·GPT-5 계열처럼 이 경로에서 텍스트 입력·출력을
+사용하는 모델을 선택하면 Azure 음성 인식과 음성 합성을 결합한 분리형
+경로를 사용할 수 있습니다.
 애플리케이션이 Speech·텍스트 모델·TTS를 직접 조합하는 경우도 같은
 분리형 구조이지만 오케스트레이션 책임은 애플리케이션에 있습니다.
 
 [![네이티브 Realtime과 분리형 음성 파이프라인 비교](../images/azure-voice-agent-realtime-architectures.svg)](../images/azure-voice-agent-realtime-architectures.svg)
 
-> **그림 성격:** 여러 Microsoft 제품 문서를 이 리서치가 조합한
-> `공식 문서 기반 종합 구성 예시`입니다. Microsoft가 제공한 단일 그림이
-> 아니며, 점선의 저장·추적은 정책과 설정으로 선택하는 별도 경로입니다.
+> **그림 성격:** 공식 문서를 기반으로 한 종합 구성 예시입니다.
+> 점선은 저장·추적을 정책과 설정으로 선택하는 별도 경로입니다.
 
 이 구분은 연도별 대체 관계가 아닙니다. 네이티브·분리형 처리는 현재
 실시간 선택지이고, 다음 통화 후 분석도 현재 유효한 별도 목적의 구조입니다.
@@ -248,8 +249,10 @@ Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 ## 저장 수명주기와 삭제 제약 { #storage-lifecycle }
 
 [Blob 수명주기 관리](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)는
-생성·수정·마지막 접근 시각, 경로 prefix와 blob tag를 기준으로 계층
-이동·삭제 규칙을 정의할 수 있다고 설명합니다.
+생성·수정 시각, 경로 prefix와 blob tag를 기준으로 계층 이동·삭제 규칙을
+정의할 수 있다고 설명합니다. 마지막 접근 시각 조건을 사용하려면 storage
+account에서 last access time tracking을 먼저 켜야 하며, 기본 활성화로
+가정하지 않습니다.
 
 - 정책을 추가하거나 수정한 뒤 변경이 적용되고 첫 실행이 시작되기까지 최대 24시간이 걸릴 수 있음.
 - 계정 요청률이 한도에 가까우면 정책 실행이 더 늦어질 수 있음.
@@ -387,6 +390,10 @@ Realtime API의 최대 세션 시간은 60분입니다. 이 제한은 Azure Open
 | **Cool** | 30일 | 즉시 읽기 |
 | **Cold** | 90일 | 즉시 읽기 |
 | **Archive** | 180일 | 오프라인, 읽기 전에 복원 필요 |
+
+Cool 30일·Cold 90일은 **general-purpose v2(GPv2) 계정**의 최소
+보관기간입니다. legacy Blob Storage 계정의 Cool·Cold에는 최소
+보관기간이 없습니다. 이 값은 과금 기준이며 법정 보유기간이 아닙니다.
 
 [Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화합니다. 위 표의 30일·90일·180일은 각각 Cool·Cold·Archive에 적용되는 최소 저장기간이며 Smart tier 자체의 단일 최소기간이 아닙니다.
 

@@ -52,17 +52,9 @@ published_at: 2026-10-17
 | **Gemini Live / 개인 계정** | Keep Activity 켜짐: 녹음·음성 텍스트·공유 콘텐츠를 계정 활동에 저장. 원음/영상/화면의 개선 활용은 별도 선택 | 활동 자동 삭제 기본 18개월, 3·36개월·무기한 선택. 꺼짐/임시 대화 72시간; 사람 검토 대화·관련 자료 최대 3년, 활동 삭제와 별개. 연결 서비스 자료는 별도. [Live](https://support.google.com/gemini/answer/15274899?hl=en) · [정책](https://support.google.com/gemini/answer/13594961?hl=en) |
 | **ChatGPT Voice / 음성 모드별** | Live·Advanced Voice 클립은 채팅 기록의 음성 텍스트와 함께 저장. Standard는 음성 텍스트 변환 후 삭제하며, 학습 공유 선택 시 예외 | FAQ는 Live·Advanced 클립을 30일 보관한다고 설명하면서 채팅 삭제 후 연결 클립도 30일 이내 삭제한다고 별도로 명시하나, 두 30일 시작 기준의 관계는 설명하지 않음. 일반 대화는 사용자 삭제/워크스페이스 정책을 따르고 Archive는 삭제가 아님. 보안·법적·계정 연결 해제 학습 자료 예외가 있음. [음성](https://help.openai.com/en/articles/20001274-chatgpt-voice) · [보유](https://help.openai.com/en/articles/8983778-chat-and-file-retention-in-chatgpt) |
 | **Microsoft Copilot Voice Chat / 상용 Copilot 라이선스** | 기본 오디오 미저장. 사용자가 Microsoft에 피드백을 제공하도록 피드백 기능이 켜진 경우에만 대화 오디오를 임시 저장하고 48시간 후 삭제 | 음성 텍스트는 Copilot 앱의 텍스트 대화와 같은 방식으로 저장·관리. Voice Chat FAQ는 상용 Copilot 라이선스 범위이며 GCC·GCC High는 향후 제공 예정, DoD 범위는 인용 문서에서 확인되지 않음. [음성 FAQ](https://support.microsoft.com/en-us/microsoft-365-copilot/frequently-asked-questions-about-voice-features-in-microsoft-365-copilot) · [조직 데이터](https://learn.microsoft.com/ko-kr/microsoft-365/copilot/microsoft-365-copilot-privacy) |
-| **Siri·Dictation / Apple 정책** | 지원 구성은 단말 처리; 개선 미동의 시 Apple 오디오 미저장 | 서버 음성 텍스트·요청 이력은 임의 식별자와 6개월 연결. 이후 식별자와 분리된 사본을 최대 2년 보관할 수 있으며 검토 표본에는 별도 예외. 단말에서 이력 삭제 제어. [정책](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/) |
+| **Siri·Dictation / Apple 정책, 2026-09-14** | 지원 구성은 단말 처리; 개선 미동의 시 Apple 오디오 미저장 | 요청 이력은 시간당 여러 번 바뀌는 임의의 기기 생성 식별자와 연결되며 최대 2년 보유·이용 가능. 검토된 일부 자료는 2년 초과 보유 예외. [일반 정책](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/) · [개선 참여 정책](https://www.apple.com/legal/privacy/data/en/improve-siri-dictation/) |
 
-## 비즈니스가 먼저 결정할 기록
-
-| 결정 | 필요한 근거 |
-|---|---|
-| **어떤 기록이 생기는가?** | 입력·출력 오디오, 전사문, 요약, 이벤트, 도구 호출, 업무 기록, 추적, 생체 템플릿 |
-| **왜 보관하는가?** | 기능 제공, 이용자 이력, 거래 증빙, 분쟁 처리, 법정 기록, 보안, 평가, 모델 개선 |
-| **언제 기간이 시작·종료되는가?** | 요청 완료, 계약·공급, 불만 종료, 목적 만료, 마지막 상호작용, 프로필 비활성, 삭제 요청 |
-| **어떤 근거가 기간을 정하는가?** | 제품 정책, 법령, 법원 명령, 조직 정책, 고객 설정 |
-| **무엇을 함께 지워야 하는가?** | 오디오, 전사문, 위치정보, 파생 사본, 모델 개선 입력, 처리자 사본, 색인, 백업 |
+## 먼저 확인할 세 가지 질문
 
 ### 어떤 기록인가? { #voice-record-types }
 
@@ -326,18 +318,17 @@ published_at: 2026-10-17
 고소장 주장은 혐의이고, 합의명령은 이 사건 당사자에게 적용되는 조치입니다.
 모든 음성 서비스의 법정 보유기간이나 현재 Alexa 동작으로 일반화하지 않습니다.
 
-## 기록·삭제 결정 체크리스트
+## 기록별 담당·정책·삭제 증빙
 
 ![음성 데이터 산출물과 삭제 검증 수명주기 검토 예시](images/voice-data-lifecycle.svg)
 
-| 확인 질문 | 기록할 답 |
-|---|---|
-| **어떤 기록인가?** | 원음·전사문·요약·이벤트·업무 결과·trace·voiceprint |
-| **왜 필요한가?** | 기능·이용자 이력·증빙·분쟁·법정 기록·보안·평가·개선 |
-| **어떤 근거가 기간을 정하는가?** | 제품 정책·법령·명령·조직 정책·고객 설정과 버전 |
-| **기산점은 무엇인가?** | 요청 완료·계약/공급·불만 종료·목적 만료·마지막 상호작용·프로필 비활성 |
-| **무엇을 함께 지우는가?** | 원음·전사문·위치·파생물·모델 개선 입력·처리자 사본·색인·백업 |
-| **완료를 무엇으로 확인하는가?** | 저장소별 삭제 결과·검색 미반환·재생성 차단·처리자 확인·백업 만료 |
+| 기록 | 담당자 예시 | 정책에 고정할 값 | 삭제 확인 자료 |
+|---|---|---|---|
+| **입력·출력 오디오** | 서비스·녹음 담당 | 목적, 캡처 방식, 저장소·지역, 기산점, 기간 | 객체·버전 삭제, 재생 불가, 처리자 확인, 백업 만료 |
+| **전사문·요약** | 상담기록·사건 담당 | 원음 연결, 정정 버전, 검색 사본, 기산점·기간 | DB·티켓·색인 삭제, 키워드·의미 검색 미반환 |
+| **이벤트·업무 결과** | 제품·업무 시스템 담당 | 이벤트 ID, 권위 있는 결과, 법정 기록 분류 | 이벤트·업무 기록 삭제 또는 별도 보존 근거 |
+| **voiceprint** | 인증·보안 담당 | 동의, 등록 원음, 템플릿, 마지막 상호작용, 적용 법령 | 등록 원음·템플릿 삭제, 인증 불가 확인 |
+| **trace·검색·반출 사본** | 운영·보안·데이터 담당 | 수집 필드, 접근권한, 지역, 기간, 하류 사본 | 만료 작업, 접근 기록, 색인·캐시·반출본 삭제 |
 
 ## 추가 검증·제품 자료
 
@@ -496,8 +487,8 @@ published_at: 2026-10-17
 
 | 서비스·업무 | 음성 처리 | 저장·보유·삭제 | 태그 |
 |---|---|---|---|
-| **Xbox 음성 신고 2023 공개 설계 / 게임 안전·괴롭힘 신고** | 신고가 필요한 게임 내 최근 60초 음성을 플레이어가 직접 캡처. 일반 캡처 목록 미표시, 다운로드·수정·공유 불가. 신고 시작 전 Xbox 미저장·미업로드 | 콘솔에 온라인 상태 누적 24시간 보관. 미제출 시 자동 삭제, 제출 시 Xbox Safety Team 조사 증거로 전달. 2023-09 선택 영어권 시장 배포까지 확인; 현재 지역·화면별 녹음 길이로 일반화하지 않음. [기능 설계](https://news.xbox.com/en-us/2023/07/12/xbox-voice-reporting-feature/) · [공개 배포](https://news.xbox.com/en-us/2023/09/05/xbox-september-2023-update/) | `#Microsoft` `#게임안전` `#게임` |
-| **HMRC Voice ID / 공공 세무서비스 본인확인** | 가입 문구 최대 5회 녹음, 원음을 수치형 음성 생체정보로 변환. HMRC가 처리 책임 주체, 통신 서비스 제공자가 캡처·암호화 위탁 처리자. 영국 데이터센터 저장 | 최초 녹음 3년 뒤 다음 통화에서 동의 재확인. 연락이 없으면 최대 7년 후 삭제. 동의 철회·Voice ID 시스템 교체 시 삭제. 미사용자는 보안 질문으로 본인확인. [GOV.UK privacy notice](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice) | `#HMRC` `#본인확인` `#공공` |
+| **Xbox 음성 신고 2023 공개 설계 / 게임 안전·괴롭힘 신고** | 신고가 필요한 게임 내 최근 60초 음성을 플레이어가 직접 캡처. 일반 캡처 목록 미표시, 다운로드·수정·공유 불가. 신고 시작 전 Xbox 미저장·미업로드 | 콘솔에 온라인 상태 누적 24시간 보관하고 미제출 시 자동 삭제. 제출하면 Xbox Safety Team 조사 증거로 전달되지만, 인용한 공식 자료는 제출 뒤 Xbox 서버의 원음 보유기간을 명시하지 않음. 2023-09 선택 영어권 시장 배포까지 확인. [기능 설계](https://news.xbox.com/en-us/2023/07/12/xbox-voice-reporting-feature/) · [공개 배포](https://news.xbox.com/en-us/2023/09/05/xbox-september-2023-update/) | `#Microsoft` `#게임안전` `#게임` |
+| **HMRC Voice ID / 공공 세무서비스 본인확인** | 가입 문구를 최대 5회 녹음해 voiceprint로 변환. 인용 고지는 원음 녹음의 별도 삭제 시점을 명시하지 않음. HMRC가 처리 책임 주체, 통신 서비스 제공자가 캡처·암호화 위탁 처리자 | **voiceprint**는 영국 데이터센터에 저장. 최초 등록 3년 뒤 다음 통화에서 동의 재확인하고, 연락이 없으면 최대 7년 후 삭제. 동의 철회·Voice ID 시스템 교체 시 생체정보 삭제. [GOV.UK privacy notice](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice) | `#HMRC` `#본인확인` `#공공` |
 
 HMRC가 “voiceprint는 복제·도난될 수 없다”고 설명하는 문구는 해당 기관의 서비스 설명이지 일반적인 기술 보증으로 사용하지 않는다. 합성·재생 공격과 NIST 인증 지침의 범위는 [음성 생체정보·합성음성 공격 검토](#voice-biometric-attacks)에서 별도로 다룬다.
 

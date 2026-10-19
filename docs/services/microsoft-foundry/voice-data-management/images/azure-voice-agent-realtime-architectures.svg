@@ -30,7 +30,7 @@
   <rect width="1280" height="660" fill="#ffffff"/>
   <text x="40" y="44" class="title">실시간 음성 처리 구조 비교</text>
   <text x="40" y="70" class="subtitle">네이티브 Realtime과 STT → 텍스트 모델·에이전트 → TTS 경로를 분리</text>
-  <text x="1240" y="70" text-anchor="end" class="source">공식 문서 기반 종합 구성 예시 · Microsoft 제공 단일 그림 아님</text>
+  <text x="1240" y="70" text-anchor="end" class="source">공식 문서를 기반으로 한 종합 구성 예시</text>
 
   <!-- Zones -->
   <rect x="40" y="100" width="1200" height="190" rx="8" fill="#eff6ff" fill-opacity=".58" stroke="#93c5fd"/>
@@ -39,7 +39,7 @@
 
   <rect x="40" y="318" width="1200" height="250" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
   <rect x="52" y="326" width="668" height="22" rx="3" fill="#ffffff"/>
-  <text x="64" y="342" class="zone-label">분리형 PIPELINE · Voice Live + 비멀티모달 모델 또는 애플리케이션 조합</text>
+  <text x="64" y="342" class="zone-label">분리형 PIPELINE · Voice Live + 텍스트 입출력 모델 또는 애플리케이션 조합</text>
 
   <!-- Native realtime connectors -->
   <path d="M280 174 H400" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
