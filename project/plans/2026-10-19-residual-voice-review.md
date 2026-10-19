@@ -45,6 +45,7 @@ architecture = (plans / "2026-10-18-voice-research-architecture-restructure.md")
 final = (plans / "2026-10-19-final-voice-review.md").read_text(encoding="utf-8")
 two_page = (plans / "2026-10-19-two-page-voice-research-topic.md").read_text(encoding="utf-8")
 evidence = (plans / "2026-10-19-voice-business-evidence.md").read_text(encoding="utf-8")
+final_flat = " ".join(final.split())
 
 visible_start = evidence.index("**Step 1: Write the visible-order acceptance probe**")
 visible_end = evidence.index("Expected before implementation:", visible_start)
@@ -56,9 +57,9 @@ core_probe = evidence[core_start:core_end]
 assert "import re" in visible_probe
 assert "import re" in core_probe
 assert "supports realtime and nonmultimodal models" not in architecture
-assert "legacy Blob Storage 계정의 Cool·Cold" not in final
-assert "legacy Blob Storage 계정의 Cool에는 최소 보관기간이 없습니다" in final
-assert "Cold는 GPv2 계정에서만 지원됩니다" in final
+assert "legacy Blob Storage 계정의 Cool·Cold" not in final_flat
+assert "legacy Blob Storage 계정의 Cool에는 최소 보관기간이 없습니다" in final_flat
+assert "Cold는 GPv2 계정에서만 지원됩니다" in final_flat
 
 inspect = two_page.index("**Step 3: Inspect unresolved PR threads**")
 push = two_page.index("**Step 5: Push and wait for CI**")

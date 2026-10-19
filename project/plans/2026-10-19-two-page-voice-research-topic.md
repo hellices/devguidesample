@@ -402,10 +402,12 @@ Expected:
 
 - [ ] **Step 3: Inspect unresolved PR threads**
 
-Query PR 83 review threads. Reply to actionable feedback in the inline thread
-and resolve only addressed or evidenced partial-diff false positives.
+Query PR 83 review threads. Classify every unresolved thread as actionable or
+a possible partial-diff false positive, and record the thread ID plus the
+source or built-output evidence needed for the later reply. Do not reply or
+resolve before the supporting changes are pushed and CI passes.
 
-Expected: unresolved review thread count is 0 before push.
+Expected: a complete thread inventory with no remote thread-state changes.
 
 - [ ] **Step 4: Update the PR body**
 
@@ -441,6 +443,11 @@ Expected before push: zero incoming commits.
 Wait for the new PR workflow run and require `completed success`. If a
 long-running `gh` watch request times out while the run remains in progress,
 use bounded REST status polling.
+
+Reply to and resolve actionable review threads only now, citing the pushed
+commit and successful CI run. Resolve a partial-diff false positive only with
+current source or built-output evidence. Requery all threads and require zero
+unresolved threads before Step 6.
 
 - [ ] **Step 6: Confirm final state**
 

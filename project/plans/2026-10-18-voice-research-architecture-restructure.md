@@ -74,7 +74,7 @@ Check these exact claims:
 
 | Claim | Required official source |
 |---|---|
-| Voice Live is one managed API and supports realtime and nonmultimodal models | `https://learn.microsoft.com/azure/ai-services/speech-service/voice-live` |
+| Voice Live is one managed API and supports Realtime models plus text-input/output model paths that combine STT and TTS | `https://learn.microsoft.com/azure/ai-services/speech-service/voice-live` |
 | Voice Live speech features and LLMs have separate processing scopes | `https://learn.microsoft.com/azure/ai-services/speech-service/regions?tabs=voice-live` |
 | GPT Realtime is speech-in/speech-out and optional input transcription uses a deployment | `https://learn.microsoft.com/azure/foundry/openai/how-to/realtime-audio` |
 | Voice-agent `store` defaults to false and is session-overridable | `https://learn.microsoft.com/azure/foundry/agents/how-to/configure-voice-agent` |

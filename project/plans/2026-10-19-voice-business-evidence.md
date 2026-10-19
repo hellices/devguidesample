@@ -56,7 +56,6 @@ Run:
 
 ```bash
 ../../.venv/bin/python - <<'PY'
-import re
 from pathlib import Path
 import yaml
 
@@ -179,6 +178,7 @@ Run:
 
 ```bash
 ../../.venv/bin/python - <<'PY'
+import re
 from pathlib import Path
 
 text = Path(
@@ -406,7 +406,6 @@ Run:
 
 ```bash
 ../../.venv/bin/python - <<'PY'
-import re
 from pathlib import Path
 
 text = Path(
@@ -538,6 +537,7 @@ Run:
 
 ```bash
 ../../.venv/bin/python - <<'PY'
+import re
 from pathlib import Path
 
 text = Path(

@@ -108,9 +108,10 @@ account에서 last access time tracking을 먼저 켜야 하며, 기본 활성�
 Immediately below the access-tier table, add:
 
 ```markdown
-Cool 30일·Cold 90일은 **general-purpose v2(GPv2) 계정**의 최소
-보관기간입니다. legacy Blob Storage 계정의 Cool·Cold에는 최소
-보관기간이 없습니다. 이 값은 과금 기준이며 법정 보유기간이 아닙니다.
+Cool 30일·Cold 90일은 **general-purpose v2(GPv2) 계정**에서 조기 삭제
+과금을 계산하는 최소 보관기간입니다. legacy Blob Storage 계정의 Cool에는
+최소 보관기간이 없습니다. Cold는 GPv2 계정에서만 지원됩니다. 이 값은
+과금 기준이며 법정 보유기간이 아닙니다.
 ```
 
 Keep the Archive 180-day explanation and existing legal/billing boundary.
