@@ -82,6 +82,16 @@ azure_metadata = yaml.safe_load(azure.split("---", 2)[1])
 azure_body = azure.split("---", 2)[2]
 
 assert metadata["title"] == "앱 음성 서비스 기록관리 사례와 정책"
+assert metadata["document_type"] == "research"
+assert metadata["published_at"].isoformat() == "2026-10-17"
+assert metadata["sources_checked_at"].isoformat() == "2026-10-19"
+assert metadata["verification_status"] == "needs-review"
+assert metadata["services"] == [
+    "microsoft-foundry",
+    "azure-openai",
+    "azure-storage",
+    "azure-architecture",
+]
 assert "topic_order" not in metadata
 assert "redirect_from" not in metadata
 assert not (topic / "business-patterns" / "index.md").exists()

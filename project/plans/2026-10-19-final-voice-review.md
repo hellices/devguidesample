@@ -197,11 +197,22 @@ svg = Path(
 ).read_text(encoding="utf-8")
 root_text = re.sub(r"\s+", " ", root)
 azure_text = re.sub(r"\s+", " ", azure)
+xbox_start = root.index("| **Xbox 음성 신고")
+xbox_end = root.index("\n| **HMRC Voice ID", xbox_start)
+xbox_row = root[xbox_start:xbox_end]
+questions_start = root.index("## 먼저 확인할 세 가지 질문")
+questions_end = root.index("## 업무별 저장 방식", questions_start)
+questions_section = root[questions_start:questions_end]
+owners_start = root.index("## 기록별 담당·정책·삭제 증빙")
+owners_end = root.index("## 추가 검증·제품 자료", owners_start)
+owners_section = root[owners_start:owners_end]
 
 assert "6개월 연결" not in root
 assert "시간당 여러 번 바뀌는" in root
 assert "서버의 원음 보유기간을 명시하지 않습니다" in root_text
 assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in root_text
+assert "90일" not in xbox_row
+assert "2년" not in xbox_row
 assert "비멀티모달" not in azure + svg
 assert "텍스트 입력·출력을 사용하는 모델" in azure_text
 assert "OpenAI 직접 API인 GPT-Live" in azure
@@ -215,6 +226,13 @@ assert "공식 문서를 기반으로 한 종합 구성 예시입니다." in azu
 assert "점선은 저장·추적을 정책과 설정으로 선택하는 별도 경로입니다." in azure_text
 assert "## 먼저 확인할 세 가지 질문" in root
 assert "## 기록별 담당·정책·삭제 증빙" in root
+assert "| 결정 | 필요한 근거 |" not in questions_section
+assert questions_section.count("### ") == 3
+for heading in ["어떤 기록인가?", "왜·얼마나 보관하는가?", "무엇을 함께 지우는가?"]:
+    assert heading in questions_section
+assert "| 기록 | 담당자 예시 | 정책에 고정할 값 | 삭제 확인 자료 |" in owners_section
+for record in ["입력·출력 오디오", "전사문·요약", "이벤트·업무 결과", "voiceprint", "trace·검색·반출 사본"]:
+    assert f"| **{record}** |" in owners_section
 PY
 ```
 
@@ -257,8 +275,8 @@ git commit -m "docs(foundry): clarify final voice evidence" \
 Before the first browser review in the 2026-10-18 plan, add:
 
 ```bash
-../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123
-curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124
+curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
 ```
 
 State that it runs as a separate bounded process, record its PID or shell ID,

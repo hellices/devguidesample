@@ -692,11 +692,15 @@ Run:
 
 ```bash
 topic=docs/services/microsoft-foundry/voice-data-management
-for phrase in \
-  "관리형 API" "네이티브 Realtime" "분리형 파이프라인" "통화 후 분석" \
-  "store=false" "destinationContainerUrl" "Conversation PII"; do
-  if ! rg -n -F -- "$phrase" "$topic/index.md" "$topic/azure-storage/index.md"; then
-    printf 'Missing voice research boundary: %s\n' "$phrase" >&2
+for phrase in "관리형 API" "네이티브 Realtime" "분리형 파이프라인" "통화 후 분석"; do
+  if ! rg -n -F -- "$phrase" "$topic/index.md"; then
+    printf 'Missing overview boundary: %s\n' "$phrase" >&2
+    exit 1
+  fi
+done
+for phrase in "store=false" "destinationContainerUrl" "Conversation PII"; do
+  if ! rg -n -F -- "$phrase" "$topic/azure-storage/index.md"; then
+    printf 'Missing Azure document boundary: %s\n' "$phrase" >&2
     exit 1
   fi
 done
@@ -742,7 +746,10 @@ Run:
 git diff --check origin/main...HEAD
 git diff --stat origin/main...HEAD
 git status --short
+git fetch origin
 test ! -e docs/services/microsoft-foundry/voice-data-management/samples/source-evidence
+test -z "$(git diff --name-only origin/main...HEAD -- \
+  docs/services/microsoft-foundry/voice-data-management/samples/source-evidence)"
 ```
 
 Expected: no whitespace errors; the PR diff remains limited to the
