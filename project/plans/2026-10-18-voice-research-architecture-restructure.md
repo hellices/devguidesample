@@ -796,6 +796,10 @@ Present:
 Do not push the implementation commits until the user explicitly authorizes
 the PR update.
 
+Authorization is a gate, not task completion. After approval, execute Steps 7
+and 8 to push the branch, verify the exact pushed SHA, update the PR, and
+resolve only evidenced review threads.
+
 - [ ] **Step 7: Push and verify CI after authorization**
 
 Run:

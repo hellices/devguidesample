@@ -90,7 +90,9 @@ in the same scroll-region class while preserving their existing links where
 present and all alt text. Desktop rendering continues to fit the content
 column. At 760 pixels and below, give each diagram block a 900-pixel minimum
 width and contain horizontal scrolling inside the labelled, keyboard-focusable
-region. The page itself must not gain horizontal overflow.
+region. The page itself must not gain horizontal overflow. Derive each
+region's accessible name from that diagram's alt text so multiple regions on
+the Azure page have unique names.
 
 Do not create mobile-only SVG copies or remove qualifiers to make the diagrams
 fit. The treatment is CSS-only apart from the semantic wrappers, requires no

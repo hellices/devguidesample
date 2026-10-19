@@ -203,6 +203,9 @@ svg = Path(
 ).read_text(encoding="utf-8")
 root_text = re.sub(r"\s+", " ", root)
 azure_text = re.sub(r"\s+", " ", azure)
+siri_start = root.index("| **Siri·Dictation")
+siri_end = root.index("\n\n", siri_start)
+siri_row = root[siri_start:siri_end]
 xbox_start = root.index("| **Xbox 음성 신고")
 xbox_end = root.index("\n| **HMRC Voice ID", xbox_start)
 xbox_row = root[xbox_start:xbox_end]
@@ -220,9 +223,10 @@ owners_start = root.index("## 기록별 담당·정책·삭제 증빙")
 owners_end = root.index("## 추가 검증·제품 자료", owners_start)
 owners_section = root[owners_start:owners_end]
 
-assert "6개월 연결" not in root
-assert "시간당 여러 번 바뀌는" in root
-assert "서버의 원음 보유기간을 명시하지 않습니다" in root_text
+assert "6개월 연결" not in siri_row
+assert "식별자 분리" not in siri_row
+assert "시간당 여러 번 바뀌는" in siri_row
+assert "서버의 원음 보유기간을 명시하지 않습니다" in xbox_row
 assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in root_text
 assert "90일" not in xbox_row
 assert "2년" not in xbox_row

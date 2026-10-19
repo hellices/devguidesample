@@ -324,7 +324,7 @@ published_at: 2026-10-17
 
 ## 기록별 담당·정책·삭제 증빙
 
-<div class="voice-diagram-scroll" role="region" aria-label="도식 가로 스크롤" tabindex="0" markdown="1">
+<div class="voice-diagram-scroll" role="region" aria-label="음성 데이터 산출물과 삭제 검증 수명주기 검토 예시 도식 가로 스크롤" tabindex="0" markdown="1">
 
 ![음성 데이터 산출물과 삭제 검증 수명주기 검토 예시](images/voice-data-lifecycle.svg)
 

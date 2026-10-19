@@ -97,7 +97,7 @@ Microsoft 제품 문서에서 확인되는 실시간 음성 처리는 선택한 
 애플리케이션이 Speech·텍스트 모델·TTS를 직접 조합하는 경우도 같은
 분리형 구조이지만 오케스트레이션 책임은 애플리케이션에 있습니다.
 
-<div class="voice-diagram-scroll" role="region" aria-label="도식 가로 스크롤" tabindex="0" markdown="1">
+<div class="voice-diagram-scroll" role="region" aria-label="네이티브 Realtime과 분리형 음성 파이프라인 비교 도식 가로 스크롤" tabindex="0" markdown="1">
 
 [![네이티브 Realtime과 분리형 음성 파이프라인 비교](../images/azure-voice-agent-realtime-architectures.svg)](../images/azure-voice-agent-realtime-architectures.svg)
 
@@ -248,7 +248,7 @@ Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 - **Microsoft 공식 그림:** [Microsoft 아키텍처 SVG](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/_images/call-center-analytics.svg)
 - **Microsoft 제공 Visio:** [편집 가능한 원본 파일](https://arch-center.azureedge.net/call-center-analytics.vsdx)
 
-<div class="voice-diagram-scroll" role="region" aria-label="도식 가로 스크롤" tabindex="0" markdown="1">
+<div class="voice-diagram-scroll" role="region" aria-label="Microsoft 통화 후 분석 참조의 처리·저장 흐름 도식 가로 스크롤" tabindex="0" markdown="1">
 
 [![Microsoft 통화 후 분석 참조의 처리·저장 흐름](../images/azure-voice-agent-ms-reference-architecture.svg)](../images/azure-voice-agent-ms-reference-architecture.svg)
 

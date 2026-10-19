@@ -409,7 +409,7 @@ resolve before the supporting changes are pushed and CI passes.
 
 Expected: a complete thread inventory with no remote thread-state changes.
 
-- [ ] **Step 4: Update the PR body**
+- [ ] **Step 4: Prepare the PR body update**
 
 The review table must contain exactly:
 
@@ -426,6 +426,9 @@ both SVG previews and add this summary bullet:
 ```markdown
 - collapse the summary-only landing page into the business and policy topic root, leaving two substantive pages
 ```
+
+Prepare this exact body change locally, but do not update the remote PR before
+the pushed SHA and its `validate` run pass in Step 5.
 
 - [ ] **Step 5: Push and wait for CI**
 
@@ -470,6 +473,10 @@ Expected before push: zero incoming commits. Require the PR head and recorded
 `validate` check run to belong to `pushed_sha`, then require conclusion
 `success`. If the watch times out while that check remains in progress, poll
 the recorded `check_run_id`.
+
+Apply the prepared PR body update only now, after
+`test "$ci_conclusion" = "success"`. Re-read the remote PR body and require the
+two document links, no overview row, and no direct business-child link.
 
 Reply to and resolve actionable review threads only now, citing the pushed
 commit and successful CI run. Resolve a partial-diff false positive only with

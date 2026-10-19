@@ -65,8 +65,9 @@ inspect = two_page.index("**Step 3: Inspect unresolved PR threads**")
 push = two_page.index("**Step 5: Push and wait for CI**")
 ci_check = two_page.index("GH_PAGER=cat gh pr checks 83 --watch", push)
 ci_success = two_page.index('test "$ci_conclusion" = "success"', ci_check)
+pr_body_update = two_page.index("Apply the prepared PR body update only now", ci_success)
 resolve = two_page.index("Reply to and resolve actionable review threads", push)
-assert inspect < push < ci_check < ci_success < resolve
+assert inspect < push < ci_check < ci_success < pr_body_update < resolve
 PY
 ```
 
@@ -141,10 +142,14 @@ combined = root + azure
 
 wrapper_tags = re.findall(r'<div class="voice-diagram-scroll"[^>]*>', combined)
 assert len(wrapper_tags) == 3
+wrapper_labels = []
 for wrapper_tag in wrapper_tags:
     assert 'role="region"' in wrapper_tag
     assert 'tabindex="0"' in wrapper_tag
-    assert 'aria-label="도식 가로 스크롤"' in wrapper_tag
+    label_match = re.search(r'aria-label="([^"]+)"', wrapper_tag)
+    assert label_match
+    wrapper_labels.append(label_match.group(1))
+assert len(set(wrapper_labels)) == 3
 assert ".md-typeset .voice-diagram-scroll" in css
 assert "overflow-x: auto" in css
 assert "min-width: 900px" in css
@@ -159,7 +164,7 @@ Use this structure for each of the two existing linked Azure diagrams,
 retaining its link, image path, and alt text:
 
 ```markdown
-<div class="voice-diagram-scroll" role="region" aria-label="도식 가로 스크롤" tabindex="0" markdown="1">
+<div class="voice-diagram-scroll" role="region" aria-label="<기존 대체텍스트> 도식 가로 스크롤" tabindex="0" markdown="1">
 [![기존 대체텍스트](기존-svg-경로)](기존-svg-경로)
 </div>
 ```
@@ -167,7 +172,7 @@ retaining its link, image path, and alt text:
 Wrap the unlinked lifecycle image without adding a link:
 
 ```markdown
-<div class="voice-diagram-scroll" role="region" aria-label="도식 가로 스크롤" tabindex="0" markdown="1">
+<div class="voice-diagram-scroll" role="region" aria-label="<기존 대체텍스트> 도식 가로 스크롤" tabindex="0" markdown="1">
 ![기존 대체텍스트](기존-svg-경로)
 </div>
 ```
@@ -258,13 +263,18 @@ const result = await page.evaluate(() => {
     })),
   };
 });
+const pageLabels = result.regions.map((region) => region.labelled);
+if (new Set(pageLabels).size !== pageLabels.length) {
+  throw new Error("Diagram region labels must be unique per page");
+}
 ```
 
 Require `pageHasOverflow === false` on both pages. Collect one region from the
 root and two from the Azure page; for all three require
 `scrollWidth > clientWidth`, `role === "region"`, a nonempty label, and
-`keyboardFocusable === true`. At desktop width, require each diagram to fit
-the content column without forced horizontal scrolling.
+`keyboardFocusable === true`. Require `pageLabels` to be unique on each page.
+At desktop width, require each diagram to fit the content column without
+forced horizontal scrolling.
 
 - [ ] **Step 2: Run the complete documentation contract**
 
