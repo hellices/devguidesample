@@ -356,7 +356,52 @@ Wait for a review containing:
 <!-- hermes-pr-review:v1:hellices/devguidesample#83@<full HEAD SHA> -->
 ```
 
-If the review creates threads, address them and repeat Tasks 2-3 as applicable.
-Completion requires the latest marker, zero new findings, zero unresolved
-threads, branch divergence `0 0`, a clean worktree, passing CI, and reviewer
-request `daeungo1`.
+If the review creates threads, record each thread ID and finding, address them,
+and repeat Tasks 2-3 through the exact-SHA CI gate. Continue with Step 6 before
+waiting for another latest-HEAD marker.
+
+- [ ] **Step 6: Reply to and resolve reviewed findings**
+
+For each actionable thread, set `thread_id` to the GraphQL thread ID returned
+by the latest review query and set `reply_body` to a finding-specific message
+that cites the pushed commit plus test, build, source, or CI evidence. Require
+both values, reply in the inline thread, and resolve only after the supporting
+commit's CI succeeds:
+
+```bash
+test -n "$thread_id"
+test -n "$reply_body"
+gh api graphql \
+  -F threadId="$thread_id" \
+  -f body="$reply_body" \
+  -f query='mutation($threadId:ID!,$body:String!){
+    addPullRequestReviewThreadReply(
+      input:{pullRequestReviewThreadId:$threadId,body:$body}
+    ){comment{id}}
+    resolveReviewThread(input:{threadId:$threadId}){thread{id isResolved}}
+  }'
+```
+
+After every evidenced thread is processed, requery the entire PR:
+
+```bash
+unresolved_count=$(gh api graphql \
+  -F owner=hellices \
+  -F name=devguidesample \
+  -F number=83 \
+  -f query='query($owner:String!,$name:String!,$number:Int!){
+    repository(owner:$owner,name:$name){
+      pullRequest(number:$number){
+        reviewThreads(first:100){nodes{isResolved}}
+      }
+    }
+  }' \
+  --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+    | select(.isResolved == false)] | length')
+test "$unresolved_count" -eq 0
+```
+
+If fixes produced a new commit, return to Step 5 and require a marker for that
+new full HEAD SHA. Completion requires the latest marker, zero new findings,
+zero unresolved threads, branch divergence `0 0`, a clean worktree, passing
+CI, and reviewer request `daeungo1`.

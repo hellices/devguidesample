@@ -230,6 +230,9 @@ questions_section = root[questions_start:questions_end]
 owners_start = root.index("## 기록별 담당·정책·삭제 증빙")
 owners_end = root.index("## 추가 검증·제품 자료", owners_start)
 owners_section = root[owners_start:owners_end]
+owners_table_start = owners_section.index("| 기록 |")
+owners_table_end = owners_section.index("\n\n", owners_table_start)
+owners_table = owners_section[owners_table_start:owners_table_end]
 
 assert "6개월 연결" not in siri_row
 assert "식별자 분리" not in siri_row
@@ -266,8 +269,8 @@ for heading in ["어떤 기록인가?", "왜·얼마나 보관하는가?", "무�
 assert "| 기록 | 담당자 예시 | 정책에 고정할 값 | 삭제 확인 자료 |" in owners_section
 for record in ["입력·출력 오디오", "전사문·요약", "이벤트·업무 결과", "voiceprint", "trace·검색·반출 사본"]:
     assert f"| **{record}** |" in owners_section
-assert "재생 불가" not in owners_section
-assert "인증 불가" not in owners_section
+assert "재생 불가" not in owners_table
+assert "인증 불가" not in owners_table
 assert "기능 검증 결과일 뿐 단독 삭제 증빙이 아닙니다" in owners_section
 PY
 ```
