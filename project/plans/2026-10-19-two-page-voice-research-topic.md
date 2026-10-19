@@ -279,20 +279,19 @@ Expected: exit 0; a failure prints every missing explicit ID.
 
 - [ ] **Step 10: Browser-check both pages**
 
-If no preview server is responding, start
-`../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123` as a separate bounded
-async process through the execution harness. Record its shell ID or exact PID
-and verify readiness:
+Always start `../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124` from the
+current worktree as a separate bounded async process through the execution
+harness. Record its shell ID or exact PID and verify readiness:
 
 ```bash
-curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
+http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/
+http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
 ```
 
 Verify:
@@ -303,8 +302,8 @@ Verify:
 - the root navigation lists only the root and Azure child; and
 - desktop and 390px widths have no page overflow.
 
-If this step started the server, stop that exact shell ID or PID after the
-browser checks. Do not use `pkill` or `killall`.
+Stop that exact shell ID or PID after the browser checks. Do not use `pkill` or
+`killall`.
 
 - [ ] **Step 11: Commit the two-page topic**
 

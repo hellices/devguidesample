@@ -353,13 +353,12 @@ Run the repository's full documentation contract:
 
 - [ ] **Step 2: Browser-check desktop and 390px**
 
-If the preview URL is not already responding, start
-`../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123` as a separate bounded
-async process through the execution harness. Record its shell ID or exact PID
-and verify readiness:
+Always start `../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124` from the
+current worktree as a separate bounded async process through the execution
+harness. Record its shell ID or exact PID and verify readiness:
 
 ```bash
-curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
 ```
 
 Verify:
@@ -373,8 +372,8 @@ Verify:
 - Xbox/HMRC scope; and
 - no horizontal page overflow.
 
-If this step started the preview server, stop that exact shell ID or PID after
-the browser checks. Do not use `pkill` or `killall`.
+Use the dedicated `http://127.0.0.1:8124/devguidesample/` URLs for browser
+checks, then stop that exact shell ID or PID. Do not use `pkill` or `killall`.
 
 - [ ] **Step 3: Run read-only review round**
 
@@ -452,12 +451,22 @@ the login instead of guessing.
 Run:
 
 ```bash
-candidates=$(GH_PAGER=cat gh api -X GET search/users \
+search_candidates=$(GH_PAGER=cat gh api -X GET search/users \
   -f q='"Daeun Go" in:fullname' \
   --jq '[.items[].login] | unique | .[]')
-candidate_count=$(printf '%s\n' "$candidates" | sed '/^$/d' | wc -l | tr -d ' ')
+collaborators=$(GH_PAGER=cat gh api \
+  repos/hellices/devguidesample/collaborators \
+  --paginate --jq '.[].login')
+review_candidates=""
+for login in $search_candidates; do
+  if printf '%s\n' "$collaborators" | grep -Fxq "$login"; then
+    review_candidates="${review_candidates}${review_candidates:+
+}$login"
+  fi
+done
+candidate_count=$(printf '%s\n' "$review_candidates" | sed '/^$/d' | wc -l | tr -d ' ')
 test "$candidate_count" -eq 1
-reviewer_login="$candidates"
+reviewer_login="$review_candidates"
 GH_PAGER=cat gh api \
   "repos/hellices/devguidesample/collaborators/$reviewer_login" \
   --silent

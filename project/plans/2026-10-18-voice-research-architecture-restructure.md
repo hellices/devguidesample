@@ -292,17 +292,17 @@ Run:
 
 Expected: `Documentation built` with exit code 0.
 
-If no preview server is already running, start:
+Always start a dedicated preview server from the current worktree:
 
 ```bash
-../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123
+../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124
 ```
 
 Run it as a separate bounded async process through the execution harness,
 record its shell ID or exact PID, and verify readiness:
 
 ```bash
-curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
 ```
 
 Keep that exact process for the remaining browser checks, then stop it by shell
@@ -311,7 +311,7 @@ ID or exact PID. Do not use `pkill` or `killall`.
 Open:
 
 ```text
-http://127.0.0.1:8123/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
+http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
 ```
 
 Verify:
@@ -695,8 +695,8 @@ topic=docs/services/microsoft-foundry/voice-data-management
 for phrase in \
   "관리형 API" "네이티브 Realtime" "분리형 파이프라인" "통화 후 분석" \
   "store=false" "destinationContainerUrl" "Conversation PII"; do
-  if ! rg -n -F -- "$phrase" "$topic/azure-storage/index.md"; then
-    printf 'Missing Azure document boundary: %s\n' "$phrase" >&2
+  if ! rg -n -F -- "$phrase" "$topic/index.md" "$topic/azure-storage/index.md"; then
+    printf 'Missing voice research boundary: %s\n' "$phrase" >&2
     exit 1
   fi
 done

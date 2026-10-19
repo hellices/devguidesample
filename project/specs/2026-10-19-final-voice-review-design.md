@@ -139,8 +139,8 @@ evidence. Do not repeat the same five decisions twice.
 
 Update project plans so they are executable:
 
-- add `mkdocs serve` startup, readiness check, and shutdown around browser
-  verification when no preview server is already running;
+- start a dedicated `mkdocs serve` process from the current worktree on port
+  8124, verify readiness, and stop that exact process after browser checks;
 - push implementation commits and confirm remote CI before replying to and
   resolving GitHub review threads;
 - align the Alexa assertion with the exact planned text;
