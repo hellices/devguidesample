@@ -203,6 +203,10 @@ xbox_row = root[xbox_start:xbox_end]
 hmrc_start = xbox_end + 1
 hmrc_end = root.index("\n\n", hmrc_start)
 hmrc_row = root[hmrc_start:hmrc_end]
+hmrc_cells = [cell.strip() for cell in hmrc_row.split("|")[1:-1]]
+assert len(hmrc_cells) == 4
+hmrc_processing = hmrc_cells[1]
+hmrc_retention = hmrc_cells[2]
 questions_start = root.index("## 먼저 확인할 세 가지 질문")
 questions_end = root.index("## 업무별 저장 방식", questions_start)
 questions_section = root[questions_start:questions_end]
@@ -216,10 +220,12 @@ assert "서버의 원음 보유기간을 명시하지 않습니다" in root_text
 assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in root_text
 assert "90일" not in xbox_row
 assert "2년" not in xbox_row
-assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in hmrc_row
-assert "| **voiceprint**는 영국 데이터센터에 저장." in hmrc_row
+assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in hmrc_processing
+for phrase in ["3년", "7년", "영국 데이터센터", "동의 철회"]:
+    assert phrase not in hmrc_processing
+assert hmrc_retention.startswith("**voiceprint**는 영국 데이터센터에 저장.")
 for phrase in ["3년", "최대 7년", "동의 철회", "생체정보 삭제"]:
-    assert phrase in hmrc_row
+    assert phrase in hmrc_retention
 assert "비멀티모달" not in azure + svg
 assert "텍스트 입력·출력을 사용하는 모델" in azure_text
 assert "OpenAI 직접 API인 GPT-Live" in azure
