@@ -16,8 +16,9 @@ The page must lead with:
 The document reports source text and scope. It does not decide legal
 applicability for a reader.
 
-Set the root's `sources_checked_at` and visible legal/source verification date
-to `2026-10-19`. Keep `published_at: 2026-10-17` and the separate
+Keep the root's CI-validated `sources_checked_at: 2026-10-18` while the runner
+is still on that UTC date. Set the visible legal/source verification date to
+`2026-10-19 (한국시간)`. Keep `published_at: 2026-10-17` and the separate
 `2026-10-14` product-policy case date.
 
 ## Page role and two-page topic

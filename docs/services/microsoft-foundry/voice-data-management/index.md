@@ -14,7 +14,7 @@ official_sources:
 document_type: research
 status: current
 verification_status: needs-review
-sources_checked_at: 2026-10-19
+sources_checked_at: 2026-10-18
 title: 앱 음성 서비스 기록관리 사례와 정책
 description: 실제 음성 서비스가 원음, 음성 텍스트, 요약과 업무 결과를 저장·삭제하는 방식을 비교합니다.
 technologies:
@@ -29,9 +29,9 @@ published_at: 2026-10-17
 # 앱 음성 서비스 기록관리 사례와 정책
 
 > - 리서치 발행일: 2026-10-17 (한국시간)
-> - 출처 링크 재확인일: 2026-10-19. front matter의 `sources_checked_at`은 이 날짜를 뜻합니다.
+> - 출처 링크 재확인일: 2026-10-18. front matter의 `sources_checked_at`은 CI가 검증한 날짜를 뜻합니다.
 > - 사례·제품 정책 세부 확인일: 2026-10-14. 시행일·갱신일·지역·기능 모드는 해석에 필요한 경우 본문에 표시하며, 공개 문서가 밝히지 않은 값은 추정하지 않음.
-> - 법령·집행 원문 확인일: 2026-10-19. 한국 전자상거래·금융소비자 기록, MiFID II 통화, EU 고위험 AI 로그, COPPA 아동 음성, Illinois·Texas voiceprint, Amazon Alexa 고소장·합의명령의 인용 범위를 직접 구분함.
+> - 법령·집행 원문 확인일: 2026-10-19 (한국시간). 한국 전자상거래·금융소비자 기록, MiFID II 통화, EU 고위험 AI 로그, COPPA 아동 음성, Illinois·Texas voiceprint, Amazon Alexa 고소장·합의명령의 인용 범위를 직접 구분함.
 > - 범위: 실제 앱의 제품 구매 준비·제품 지원·고객서비스(CS)를 우선하고, 학습·금융 앱은 업무 목적별 비교, 전화 컨택센터·게임 안전·공공 본인확인·코덱은 부록으로 둠.
 > - 연결 문서: [Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장](azure-storage/index.md)
 
