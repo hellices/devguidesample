@@ -298,15 +298,29 @@ Always start a dedicated preview server from the current worktree:
 ../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124
 ```
 
-Run it as a separate bounded async process through the execution harness,
-record its shell ID or exact PID, and verify readiness:
+Run it as a separate bounded async process through the execution harness.
+Record both its shell ID and exact PID, export the PID as `preview_pid`, and
+verify readiness from a separate probe shell:
 
 ```bash
-curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
+: "${preview_pid:?Set preview_pid to the exact preview-server PID}"
+preview_ready=false
+for attempt in {1..30}; do
+  if curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null; then
+    preview_ready=true
+    break
+  fi
+  if ! kill -0 "$preview_pid" 2>/dev/null; then
+    echo "Preview server exited before becoming ready" >&2
+    exit 1
+  fi
+  sleep 1
+done
+test "$preview_ready" = true
 ```
 
-Keep that exact process for the remaining browser checks, then stop it by shell
-ID or exact PID. Do not use `pkill` or `killall`.
+Keep that exact process for the remaining browser checks, then stop it through
+its recorded shell ID or exact PID. Do not use `pkill` or `killall`.
 
 Open:
 
@@ -726,6 +740,9 @@ Review:
 http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/
 http://127.0.0.1:8124/devguidesample/services/microsoft-foundry/voice-data-management/azure-storage/
 ```
+
+The root URL is the promoted business/policy document and owns the case timing
+lines; there is no separate authored `business-patterns` page.
 
 At desktop and 390px viewport widths, verify:
 

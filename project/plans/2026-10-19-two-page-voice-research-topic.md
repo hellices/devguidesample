@@ -291,10 +291,24 @@ Expected: exit 0; a failure prints every missing explicit ID.
 
 Always start `../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124` from the
 current worktree as a separate bounded async process through the execution
-harness. Record its shell ID or exact PID and verify readiness:
+harness. Record both its shell ID and exact PID, export the PID as
+`preview_pid`, and verify readiness from a separate probe shell:
 
 ```bash
-curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
+: "${preview_pid:?Set preview_pid to the exact preview-server PID}"
+preview_ready=false
+for attempt in {1..30}; do
+  if curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null; then
+    preview_ready=true
+    break
+  fi
+  if ! kill -0 "$preview_pid" 2>/dev/null; then
+    echo "Preview server exited before becoming ready" >&2
+    exit 1
+  fi
+  sleep 1
+done
+test "$preview_ready" = true
 ```
 
 Open:
@@ -312,8 +326,8 @@ Verify:
 - the root navigation lists only the root and Azure child; and
 - desktop and 390px widths have no page overflow.
 
-Stop that exact shell ID or PID after the browser checks. Do not use `pkill` or
-`killall`.
+Stop the process through its recorded shell ID or exact PID after the browser
+checks. Do not use `pkill` or `killall`.
 
 - [ ] **Step 11: Commit the two-page topic**
 

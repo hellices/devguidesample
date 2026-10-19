@@ -200,6 +200,9 @@ azure_text = re.sub(r"\s+", " ", azure)
 xbox_start = root.index("| **Xbox 음성 신고")
 xbox_end = root.index("\n| **HMRC Voice ID", xbox_start)
 xbox_row = root[xbox_start:xbox_end]
+hmrc_start = xbox_end + 1
+hmrc_end = root.index("\n\n", hmrc_start)
+hmrc_row = root[hmrc_start:hmrc_end]
 questions_start = root.index("## 먼저 확인할 세 가지 질문")
 questions_end = root.index("## 업무별 저장 방식", questions_start)
 questions_section = root[questions_start:questions_end]
@@ -213,6 +216,10 @@ assert "서버의 원음 보유기간을 명시하지 않습니다" in root_text
 assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in root_text
 assert "90일" not in xbox_row
 assert "2년" not in xbox_row
+assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in hmrc_row
+assert "| **voiceprint**는 영국 데이터센터에 저장." in hmrc_row
+for phrase in ["3년", "최대 7년", "동의 철회", "생체정보 삭제"]:
+    assert phrase in hmrc_row
 assert "비멀티모달" not in azure + svg
 assert "텍스트 입력·출력을 사용하는 모델" in azure_text
 assert "OpenAI 직접 API인 GPT-Live" in azure
@@ -272,16 +279,36 @@ git commit -m "docs(foundry): clarify final voice evidence" \
 
 - [ ] **Step 1: Add preview-server lifecycle**
 
-Before the first browser review in the 2026-10-18 plan, add:
+Before the first browser review in the 2026-10-18 plan, add the server command
+and require it to be started in async mode through the execution harness:
 
 ```bash
 ../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124
-curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
 ```
 
-State that it runs as a separate bounded process, record its PID or shell ID,
-and stop that exact process after the last browser check. Do not use `pkill` or
-`killall`.
+Then add this separate readiness probe:
+
+```bash
+: "${preview_pid:?Set preview_pid to the exact preview-server PID}"
+preview_ready=false
+for attempt in {1..30}; do
+  if curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null; then
+    preview_ready=true
+    break
+  fi
+  if ! kill -0 "$preview_pid" 2>/dev/null; then
+    echo "Preview server exited before becoming ready" >&2
+    exit 1
+  fi
+  sleep 1
+done
+test "$preview_ready" = true
+```
+
+State that the server command runs as a separate bounded async process. Record
+both its shell ID and exact PID, export the PID as `preview_pid` before the
+probe, and stop the process through its recorded shell ID or exact PID after
+the last browser check. Do not use `pkill` or `killall`.
 
 - [ ] **Step 2: Move review-thread resolution after push**
 
@@ -373,10 +400,24 @@ Run the repository's full documentation contract:
 
 Always start `../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8124` from the
 current worktree as a separate bounded async process through the execution
-harness. Record its shell ID or exact PID and verify readiness:
+harness. Record both its shell ID and exact PID, export the PID as
+`preview_pid`, and verify readiness from a separate probe shell:
 
 ```bash
-curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null
+: "${preview_pid:?Set preview_pid to the exact preview-server PID}"
+preview_ready=false
+for attempt in {1..30}; do
+  if curl -fsS http://127.0.0.1:8124/devguidesample/ >/dev/null; then
+    preview_ready=true
+    break
+  fi
+  if ! kill -0 "$preview_pid" 2>/dev/null; then
+    echo "Preview server exited before becoming ready" >&2
+    exit 1
+  fi
+  sleep 1
+done
+test "$preview_ready" = true
 ```
 
 Verify:
@@ -391,7 +432,8 @@ Verify:
 - no horizontal page overflow.
 
 Use the dedicated `http://127.0.0.1:8124/devguidesample/` URLs for browser
-checks, then stop that exact shell ID or PID. Do not use `pkill` or `killall`.
+checks, then stop the process through its recorded shell ID or exact PID. Do
+not use `pkill` or `killall`.
 
 - [ ] **Step 3: Run read-only review round**
 

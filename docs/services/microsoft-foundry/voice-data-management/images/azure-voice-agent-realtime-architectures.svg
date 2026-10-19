@@ -123,8 +123,8 @@
   <text x="620" y="510" text-anchor="middle" class="node">도구 · 업무 시스템</text>
 
   <rect x="790" y="472" width="410" height="52" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
-  <text x="995" y="493" text-anchor="middle" class="small">선택 기록 · 단계별 로그 · 오디오 사본</text>
-  <text x="995" y="513" text-anchor="middle" class="small">Foundry voice agent store(해당 시) · 추적·사후 분석은 별도 정책</text>
+  <text x="995" y="493" text-anchor="middle" class="small">TTS 로그 · 출력 오디오 사본</text>
+  <text x="995" y="513" text-anchor="middle" class="small">별도 저장 · 관측 설정 필요</text>
 
   <!-- Legend -->
   <line x1="40" y1="606" x2="1240" y2="606" stroke="#cbd5e1"/>
