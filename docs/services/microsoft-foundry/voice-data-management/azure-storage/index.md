@@ -76,7 +76,7 @@ topic_order: 1
 > - **Microsoft 일반 지침:** Blob Storage·Data Lake Storage·Speech 성능 문서의 명시적 권고. 음성 에이전트 전용 지침이 아닐 때는 그 범위를 함께 표시.
 > - **단순 계산:** Microsoft가 공개한 샘플률·비트 수·채널 수에 표준 계산식을 적용한 값. Microsoft의 용량 권고가 아님.
 
-## 2026년 기준 실시간 음성 구조 { #realtime-voice-architectures }
+## 2026년 기준 실시간 음성 구조 {#realtime-voice-architectures}
 
 ### 네이티브 Realtime과 분리형 파이프라인
 
@@ -107,7 +107,7 @@ Microsoft 제품 문서에서 확인되는 실시간 음성 처리는 선택한 
 모델 버전·GA/Preview·지역 지원은 적용 시점의 제품 문서에서 다시
 확인해야 합니다.
 
-## 구조별로 어떤 기록이 생기는가? { #records-by-architecture }
+## 구조별로 어떤 기록이 생기는가? {#records-by-architecture}
 
 | 기록 | 네이티브 Realtime | 분리형 파이프라인 | 통화 후 분석 |
 |---|---|---|---|
@@ -125,7 +125,7 @@ Foundry voice agent의 `store`는 선택 모델 구조와 독립된 agent 정의
 통제이며 네이티브·분리형 voice agent 모두에서 사용할 수 있습니다. 직접
 GPT Realtime API나 Voice Live API 전체에 공통으로 적용되는 설정은 아닙니다.
 
-## 저장은 어떤 설정에서 시작되는가? { #persistence-controls }
+## 저장은 어떤 설정에서 시작되는가? {#persistence-controls}
 
 ### 실시간 세션 저장
 
@@ -191,7 +191,7 @@ Microsoft 관리 결과는 transcription 작업을 삭제하면 함께 삭제됩
 - [Text to speech 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/text-to-speech/data-privacy-security)
 - [Foundry 추적 데이터](https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data)
 
-## 저장 위치와 처리 위치는 왜 다른가? { #storage-and-processing-scope }
+## 저장 위치와 처리 위치는 왜 다른가? {#storage-and-processing-scope}
 
 다음 다섯 위치를 따로 확인해야 합니다.
 
@@ -213,7 +213,7 @@ Global·Data Zone·Regional 범위를 가질 수 있습니다.
 - **지원 로그:** Voice Live 지원 로그를 켠 경우 Voice Live 리소스와 같은 리전의 Microsoft 관리 Storage
 - **추적:** Foundry 프로젝트에 연결한 Application Insights·Log Analytics 리소스
 
-## PII는 어느 처리 단계에서 통제하는가? { #pii-by-stage }
+## PII는 어느 처리 단계에서 통제하는가? {#pii-by-stage}
 
 | 경로 | PII 통제 시점 | 통제가 되돌리지 못하는 범위 |
 |---|---|---|
@@ -232,7 +232,7 @@ Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 언어 지원 문서는 `2024-11-01` GA를 별도로 제시합니다. 이 문서는 두
 자료의 버전·표기를 병기하며 하나의 무조건적인 상태로 합치지 않습니다.
 
-## Microsoft 통화 후 분석 참조 { #post-call-architecture }
+## Microsoft 통화 후 분석 참조 {#post-call-architecture}
 
 [Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는
 통화가 끝난 뒤 녹음과 전사를 배치 처리하는 Microsoft 공식 참조
@@ -251,7 +251,7 @@ Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 > Content Understanding 결과는 애플리케이션이 바로 저장하거나, 필요한
 > 경우 별도 PII 처리를 거친 뒤 같은 결과 저장 단계로 합류합니다.
 
-## 저장 수명주기와 삭제 제약 { #storage-lifecycle }
+## 저장 수명주기와 삭제 제약 {#storage-lifecycle}
 
 [Blob 수명주기 관리](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)는
 생성·수정 시각, 경로 prefix와 blob tag를 기준으로 계층 이동·삭제 규칙을

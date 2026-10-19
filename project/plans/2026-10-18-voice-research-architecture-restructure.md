@@ -43,7 +43,7 @@
 
 **Interfaces:**
 - Consumes: the date, evidence, architecture, and non-goal rules in `project/specs/2026-10-18-voice-research-architecture-restructure-design.md`.
-- Produces: topic-level terms and reading order used by Tasks 2-4: `네이티브 Realtime`, `분리형 파이프라인`, `통화 후 분석`, `공식 문서 기반 종합 구성 예시`, and `Microsoft 공식 참조 아키텍처`.
+- Produces: topic-level terms and reading order used by Tasks 2-4: `네이티브 Realtime`, `분리형 파이프라인`, `통화 후 분석`, `공식 문서를 기반으로 한 종합 구성 예시`, and `Microsoft 공식 참조 아키텍처`.
 
 - [ ] **Step 1: Confirm the implementation worktree and Python**
 
@@ -214,7 +214,7 @@ Create an accessible SVG with this exact semantic structure:
 The visible diagram must contain:
 
 - title: `실시간 음성 처리 구조 비교`;
-- source label: `공식 문서 기반 종합 구성 예시 · Microsoft 제공 단일 그림 아님`;
+- source label: `공식 문서를 기반으로 한 종합 구성 예시`;
 - native lane:
   `단말·전화 → Realtime 음성 모델 → 도구·업무 시스템 → 음성 응답`;
 - cascaded lane:
@@ -709,8 +709,10 @@ rg -n -F -- "Microsoft 공식 참조를 작성자가 재도식화" \
 
 Expected: every required boundary appears in its specified Markdown or SVG.
 Any missing phrase must make the probe exit nonzero, even if all other
-phrases are present. The realtime label uses the wording adopted in the final
-voice review rather than the superseded "Microsoft 제공 단일 그림 아님".
+phrases are present. Task 2 Step 1 and this probe both use the exact source
+label `공식 문서를 기반으로 한 종합 구성 예시`, as adopted in the
+[final voice review](2026-10-19-final-voice-review.md). This wording supersedes
+the earlier combined label; do not reintroduce that label during implementation.
 
 - [ ] **Step 3: Perform desktop and narrow browser review**
 

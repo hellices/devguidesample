@@ -379,10 +379,21 @@ Request one review over the commit range starting at `7fc5e22`. Fix all
 Critical or Important findings. Repeat only when the first review finds such a
 finding; do not relaunch when the review is clean.
 
+After each fix, rerun the affected tests and document probes. If Markdown,
+SVG, styles, or rendering changed, rebuild the preview and repeat Step 2 at
+desktop and 390px before continuing the review.
+
+After the final review fix, rerun all of Step 1, then repeat Step 2 on the
+final working tree. Any later edit invalidates these results and requires the
+same final validation and browser checks again. Stop before Step 4 if either
+gate fails; remote CI is additional evidence, not a replacement for local
+validation or browser review.
+
 - [ ] **Step 4: Push and wait for CI**
 
-Fetch the PR branch, require zero incoming commits, push, and require the
-workflow conclusion `success`.
+Require fresh Step 1 and Step 2 results for the exact final revision. Fetch
+the PR branch, require zero incoming commits, push, and require the workflow
+conclusion `success`.
 
 - [ ] **Step 5: Reply to GitHub threads**
 

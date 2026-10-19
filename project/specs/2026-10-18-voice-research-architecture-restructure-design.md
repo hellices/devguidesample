@@ -143,7 +143,7 @@ conversation's record policy.
 Use two separate diagrams:
 
 1. **Realtime architecture comparison** — a new locally authored SVG labelled
-   `공식 문서 기반 종합 구성 예시` at
+   `공식 문서를 기반으로 한 종합 구성 예시` at
    `images/azure-voice-agent-realtime-architectures.svg`. It compares native
    and cascaded paths. Optional persistence, tracing, and post-call copies use
    dotted side paths.

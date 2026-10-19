@@ -14,7 +14,7 @@ official_sources:
 document_type: research
 status: current
 verification_status: needs-review
-sources_checked_at: 2026-10-18
+sources_checked_at: 2026-10-19
 title: 앱 음성 서비스 기록관리 사례와 정책
 description: 실제 음성 서비스가 원음, 음성 텍스트, 요약과 업무 결과를 저장·삭제하는 방식을 비교합니다.
 technologies:
@@ -29,7 +29,7 @@ published_at: 2026-10-17
 # 앱 음성 서비스 기록관리 사례와 정책
 
 > - 리서치 발행일: 2026-10-17 (한국시간)
-> - 출처 링크 재확인일: 2026-10-18. front matter의 `sources_checked_at`은 CI가 검증한 날짜를 뜻합니다.
+> - 최근 출처 원문 확인일: 2026-10-19 (한국시간). `sources_checked_at`은 아래 조사 범위 중 가장 최근의 원문 확인일이며 CI 실행일이 아닙니다. 전체 의미 검증 상태는 `needs-review`로 유지합니다.
 > - 사례·제품 정책 세부 확인일: 2026-10-14. 시행일·갱신일·지역·기능 모드는 해석에 필요한 경우 본문에 표시하며, 공개 문서가 밝히지 않은 값은 추정하지 않음.
 > - 법령·집행 원문 확인일: 2026-10-19 (한국시간). 한국 전자상거래·금융소비자 기록, MiFID II 통화, EU 고위험 AI 로그, COPPA 아동 음성, Illinois·Texas voiceprint, Amazon Alexa 고소장·합의명령의 인용 범위를 직접 구분함.
 > - 범위: 실제 앱의 제품 구매 준비·제품 지원·고객서비스(CS)를 우선하고, 학습·금융 앱은 업무 목적별 비교, 전화 컨택센터·게임 안전·공공 본인확인·코덱은 부록으로 둠.
@@ -41,7 +41,7 @@ published_at: 2026-10-17
 > - **법령·지침:** 해당 국가·업무·자료 유형에 적용 여부를 따로 판단할 규칙
 > - **교차 사례 분석:** 사례·법령·표준을 조합한 연구 해석. 특정 업체의 실제 운영 방식이나 법적 의무를 뜻하지 않음
 
-## 주요 AI·음성 제품은 무엇을 저장하고 언제 지우는가? { #product-storage-comparison }
+## 주요 AI·음성 제품은 무엇을 저장하고 언제 지우는가? {#product-storage-comparison}
 
 이 표는 서비스·기능 모드·설정·지역별 공개 정책을 직접 비교한 이 문서의
 핵심 리서치 결과입니다. 실제 고객 설정이나 비공개 운영을 추정하지 않습니다.
@@ -56,21 +56,21 @@ published_at: 2026-10-17
 
 ## 먼저 확인할 세 가지 질문
 
-### 어떤 기록인가? { #voice-record-types }
+### 어떤 기록인가? {#voice-record-types}
 
 원음·전사문·요약·업무 결과·추적·voiceprint는 서로 다른 기록입니다.
 
-### 왜·얼마나 보관하는가? { #raw-audio-retention }
+### 왜·얼마나 보관하는가? {#raw-audio-retention}
 
 업무 목적과 정확한 기간 근거를 기록별로 연결하고, 다른 기록의 기간을
 원음에 복사하지 않습니다.
 
-### 무엇을 함께 지우는가? { #deletion-completion }
+### 무엇을 함께 지우는가? {#deletion-completion}
 
 삭제 요청은 원음뿐 아니라 전사문·위치정보·파생 사본·모델 개선 입력과
 처리자 사본의 범위를 함께 확인해야 합니다.
 
-## 업무별 저장 방식과 기록 수명주기를 비교하면 무엇이 보이는가? { #business-use-cases }
+## 업무별 저장 방식과 기록 수명주기를 비교하면 무엇이 보이는가? {#business-use-cases}
 
 | 업무 | 서비스·모드 | 처리되는 데이터 | 보관 여부·공개 근거 | 별도 업무 기록 |
 |---|---|---|---|---|
@@ -101,7 +101,7 @@ published_at: 2026-10-17
 - **시점 읽기:** `공개 시점`은 인용 자료가 밝힌 발표·도입 시점이며 현재 운영 지속이나 현재 아키텍처를 뜻하지 않음. 페이지 접근일은 발표일로 대신하지 않음.
 - **해석 주의:** 상담 업무가 있다는 사실만으로 원음 녹음·고정 보유기간을 추정하지 않음. 공개되지 않은 항목은 `확인되지 않음`으로 표시.
 
-### 제품 지원: Microsoft Disability Answer Desk(장애인·접근성 지원 창구) × Be My Eyes { #microsoft-dad-be-my-eyes }
+### 제품 지원: Microsoft Disability Answer Desk(장애인·접근성 지원 창구) × Be My Eyes {#microsoft-dad-be-my-eyes}
 
 - **태그:** `#Microsoft` `#제품지원` `#B2C`
 - **업체·고객:** Microsoft 제품 지원과 시각장애·저시력 이용자의 영상 지원 앱.
@@ -113,7 +113,7 @@ published_at: 2026-10-17
 - **정책 경계:** 일반 봉사자 연결·Be My AI·기업 지원은 서로 다른 모드. 일반 녹음·연구 공유 규칙을 Microsoft 지원에 적용하지 않음.
 - **근거:** [Microsoft 지원 채널](https://www.microsoft.com/en-us/accessibility/disability-answer-desk) · [공급자 Microsoft 사례](https://www.bemyeyes.com/business/microsoft-case-study/) · [모드별 정책](https://www.bemyeyes.com/privacy-policy/).
 
-### 구매 준비·재구매: Alexa Shopping { #alexa-shopping }
+### 구매 준비·재구매: Alexa Shopping {#alexa-shopping}
 
 - **태그:** `#Amazon` `#구매` `#B2C`
 - **업체·업무:** Amazon 소매 서비스; 쇼핑 목록 추가·상품 탐색·재구매·주문 확인.
@@ -125,7 +125,7 @@ published_at: 2026-10-17
 - **업무 결과:** 원음·음성 텍스트 삭제와 주문·쇼핑 목록·상품 검색·실행 기록의 삭제 범위 분리. 외부 기능(skill)은 별도 정책.
 - **근거:** [실제 쇼핑 서비스](https://www.amazon.com/alexa-shopping-hub/b?ie=UTF8&node=21467932011) · [원음·음성 텍스트·삭제 FAQ](https://www.amazon.com/gp/help/customer/display.html?nodeId=GVP69FUJ48X9DK8V).
 
-### 보유 제품 제어: Samsung Bixby × SmartThings { #bixby-smartthings }
+### 보유 제품 제어: Samsung Bixby × SmartThings {#bixby-smartthings}
 
 - **태그:** `#Samsung` `#제품제어` `#B2C`
 - **업체·업무:** 한국 전자제품 기업의 글로벌 음성 서비스; SmartThings에 등록한 조명·플러그·온도조절기·잠금장치·가전과 자동화 동작(routine)을 음성으로 제어.
@@ -136,7 +136,7 @@ published_at: 2026-10-17
 - **지역 경계:** 저장기간 근거는 **미국 Bixby 정책**이다. 한국 SmartThings/Bixby의 실제 제품 제어 사례를 보여주되 한국 이용자의 동일 기간으로 일반화하지 않음.
 - **근거:** [SmartThings 음성 서비스](https://support.smartthings.com/hc/en-us/articles/360052409891-Voice-Services-in-SmartThings) · [Bixby 제품 안내](https://www.samsung.com/us/apps/bixby/) · [Bixby 미국 정책](https://d264isyiyrfhr3.cloudfront.net/storage/tos/usa/2.1.3/1782805872274/eng/usa_eng_pp.html).
 
-### 보유 제품 제어: LG ThinQ·Smart TV { #lg-thinq-smart-tv }
+### 보유 제품 제어: LG ThinQ·Smart TV {#lg-thinq-smart-tv}
 
 - **태그:** `#LG` `#제품제어` `#B2C`
 - **업체·업무:** 한국 전자제품 기업의 ThinQ 앱·허브와 Smart TV; 등록한 에어컨·TV 등 지원 제품의 전원·온도·운전 모드·상태를 음성으로 제어.
@@ -148,7 +148,7 @@ published_at: 2026-10-17
 - **지역 경계:** 제품 제어 흐름은 한국 LG 안내, 데이터 처리 세부는 미국 Smart TV 설명과 글로벌 정책의 범위다.
 - **근거:** [ThinQ ON 음성 제어 가이드](https://www.lge.co.kr/story/user-guide/ai-home-air-conditioner-control-guide) · [지원 제품 확인](https://www.lge.co.kr/support/solutions-20154574797709) · [Smart TV 음성 개인정보 설명](https://www.lg.com/us/newsroom/corporate/statement-understanding-privacy-on-lg-smart-tvs) · [LG 글로벌 정책](https://www.lg.com/global/privacy/).
 
-### 제품 진단: Dyson Care on Alexa { #dyson-care-alexa }
+### 제품 진단: Dyson Care on Alexa {#dyson-care-alexa}
 
 - **태그:** `#Dyson` `#Amazon` `#제품진단` `#B2C`
 - **업체·업무:** 글로벌 가전기업 Dyson의 무선청소기 소유자가 “Alexa, open Dyson Care”라고 말해 성능·전원·외관 문제를 단계별로 진단.
@@ -158,7 +158,7 @@ published_at: 2026-10-17
 - **삭제 경계:** Alexa 음성 이력 삭제와 Dyson 계정·제품 성능·진단 자료 삭제는 별도 범위. 외부 음성 비서를 통한 제품 지원은 두 사업자의 처리 책임·위탁 관계를 명시해야 합니다.
 - **근거:** [Dyson Care 음성 진단](https://www.dyson.com/support/voice/amazon-alexa) · [Dyson smart-machine notice](https://privacy.dyson.com/en/smart-machines) · [Alexa 원음·음성 텍스트 정책](https://www.amazon.com/gp/help/customer/display.html?nodeId=GVP69FUJ48X9DK8V).
 
-### 제품 A/S: Samsung Electronics Service { #samsung-service }
+### 제품 A/S: Samsung Electronics Service {#samsung-service}
 
 - **태그:** `#Samsung` `#A/S` `#고객상담` `#B2C`
 - **업체·업무:** 전화·원격상담·방문 수리를 통한 제품 문의, 고장 진단, 수리 접수, 사후 지원.
@@ -169,7 +169,7 @@ published_at: 2026-10-17
 - **법인 경계:** Samsung Electronics 글로벌 정책과 한국의 Samsung Electronics Service 정책은 적용 법인·자료 범위가 다름.
 - **근거:** [Samsung 글로벌 정책](https://privacy.samsung.com/privacy-policy/en-US.html) · [Samsung Electronics Service 개인정보 처리방침](https://www.samsungsvc.co.kr/utils/dealing).
 
-### 제품 A/S: LG Electronics Service AICC(AI 고객센터) { #lg-service-aicc }
+### 제품 A/S: LG Electronics Service AICC(AI 고객센터) {#lg-service-aicc}
 
 - **태그:** `#LG` `#A/S` `#고객상담` `#음성봇` `#B2C`
 - **업체·업무:** 고객 문의·자가 수리 안내·수리 접수·원격 진단. AI 챗·보이스봇, 상담원 지원 Qbot, ThinQ 제품 데이터를 분석하는 Argus를 함께 운영.
@@ -180,7 +180,7 @@ published_at: 2026-10-17
 - **저장 경계:** 보이스봇 운영은 확인되지만 **통화 원음의 녹음 여부·저장 위치·고정 보유기간은 공개 자료에서 확인되지 않음**.
 - **근거:** [LG AICC 운영 사례](https://www.lge.co.kr/story/newsroom/236071) · [LG전자 서비스 개인정보 처리방침](https://account.lge.co.kr/terms/emp/detailView?tmsId=A_ITG_PRV_GDPR).
 
-### 제품 A/S: Whirlpool·Wpro 소비자 콜센터 { #wpro-call-center }
+### 제품 A/S: Whirlpool·Wpro 소비자 콜센터 {#wpro-call-center}
 
 - **태그:** `#Whirlpool` `#BekoEurope` `#A/S` `#고객상담` `#B2C`
 - **업체·업무:** EMEA 지역 가전제품 문의·주문·보증 서비스 요청을 처리하는 소비자 콜센터.
@@ -190,7 +190,7 @@ published_at: 2026-10-17
 - **법인 경계:** 해당 정책의 처리 책임 주체는 Beko Europe 계열 Beko Italy Manufacturing. 미국 Whirlpool Corporation 정책으로 일반화하지 않음.
 - **근거:** [Wpro 소비자 콜센터 개인정보 고지](https://www.wpro-whirlpool.com/privacy-notice).
 
-### 청구·보상: Lemonade { #lemonade-claims }
+### 청구·보상: Lemonade {#lemonade-claims}
 
 - **태그:** `#Lemonade` `#보험청구` `#B2C`
 - **업체·업무:** 디지털 보험사; 앱의 사고 신고·보험금 청구·지급 진행.
@@ -201,7 +201,7 @@ published_at: 2026-10-17
 - **보유·접근:** 목적 및 법적·회계·보안·사기방지·보고 요건에 필요한 기간. 서비스·정상 업무상 필요한 인원으로 접근 제한; 열람·정정·삭제 요청 창구.
 - **근거:** [청구 흐름](https://www.lemonade.com/claims) · [영상 진술 FAQ](https://www.lemonade.com/faq) · [자료·보유 정책](https://www.lemonade.com/privacy-policy).
 
-### 보험 상담·청구: AXA UK { #axa-uk }
+### 보험 상담·청구: AXA UK {#axa-uk}
 
 - **태그:** `#AXA` `#보험` `#보험청구` `#고객상담`
 - **업체·업무:** 영국 자동차·주택 보험의 가입·변경·취소·청구·민원·사기 조사.
@@ -212,7 +212,7 @@ published_at: 2026-10-17
 - **영상 청구:** 간단한 주택보험 사고는 실시간 영상 통화로 당일 손해 심사·합의 가능. 영상 통화 자체의 녹음·보유 여부는 공개되지 않음.
 - **근거:** [전화 녹음](https://www.axa.co.uk/privacy-policy/how-we-collect-data/) · [기록 보유](https://www.axa.co.uk/privacy-policy/record-keeping/) · [영상 청구 심사](https://www.axa.co.uk/about/inside-axa/claim-assessment/).
 
-### 보험 상담 분석: Aviva × Verint { #aviva-verint }
+### 보험 상담 분석: Aviva × Verint {#aviva-verint}
 
 - **태그:** `#Aviva` `#보험` `#고객상담` `#음성분석`
 - **업체·업무:** 영국 보험 고객·설계사 통화에서 취약고객 보호와 준법 절차 이행 여부 확인.
@@ -223,7 +223,7 @@ published_at: 2026-10-17
 - **자료 성격:** Aviva 자체 정책이 아니라 명명된 고객의 운영을 설명한 Verint 고객 사례.
 - **근거:** [취약고객 분석](https://www.verint.com/case-studies/aviva-life-reimagines-vulnerable-customer-experience-with-verint-speech-analytics/) · [준법 분석](https://www.verint.com/case-studies/aviva-increases-nps-and-improves-compliance-using-verint-speech-analytics/).
 
-### 보험 판매 확인: 교보생명 × Kakao Enterprise { #kyobo-kakao }
+### 보험 판매 확인: 교보생명 × Kakao Enterprise {#kyobo-kakao}
 
 - **태그:** `#교보생명` `#보험` `#고객상담` `#음성봇`
 - **업체·업무:** 보험 판매 후 설명 확인, 다이렉트 청약 표준 스크립트 낭독, 마케팅 재동의, 연체 안내.
@@ -234,7 +234,7 @@ published_at: 2026-10-17
 - **자료 성격:** 교보생명 자체 개인정보 정책이 아니라 고객 관계자 발언이 포함된 언론 사례.
 - **근거:** [교보생명 AICC(AI 고객센터) 운영 사례](https://www.fortunekorea.co.kr/news/articleView.html?idxno=26316).
 
-### 고객 문의: Bank of America Erica { #bank-of-america-erica }
+### 고객 문의: Bank of America Erica {#bank-of-america-erica}
 
 - **태그:** `#BankOfAmerica` `#금융문의` `#B2C`
 - **업체·업무:** 미국 은행; 인증된 Mobile Banking 앱의 거래 검색·지출 확인·계좌 문의.
@@ -245,7 +245,7 @@ published_at: 2026-10-17
 - **업무 결과:** 거래는 일반 앱 거래와 같은 확인 제공, 모바일·온라인 뱅킹에서 별도 조회.
 - **근거:** [은행의 업무·음성 기록 FAQ](https://info.bankofamerica.com/en/digital-banking/erica).
 
-### 말하기 학습: Duolingo { #duolingo-speaking }
+### 말하기 학습: Duolingo {#duolingo-speaking}
 
 - **태그:** `#Duolingo` `#학습` `#B2C`
 - **업체·업무:** 언어 학습 서비스; 말하기 활동·Duolingo Max의 Lily 대화 연습.
@@ -260,7 +260,7 @@ published_at: 2026-10-17
 
 </details>
 
-## 법령이 보존기간을 직접 정한 경우 { #jurisdiction-rules }
+## 법령이 보존기간을 직접 정한 경우 {#jurisdiction-rules}
 
 아래 표는 조문이 숫자나 즉시 삭제 시점을 직접 제시한 범위만 옮깁니다.
 적용 여부를 해석하지 않으며, 다른 기록의 기간을 원음에 확대하지 않습니다.
@@ -287,7 +287,7 @@ published_at: 2026-10-17
 필요한 기간만 보유하고 무기한 보유를 금지하며 서면 삭제 시점을 정하도록
 요구합니다.
 
-## Amazon Alexa 사건에서 실제로 무엇이 문제였는가? { #alexa-deletion-case }
+## Amazon Alexa 사건에서 실제로 무엇이 문제였는가? {#alexa-deletion-case}
 
 이 사건은 현재 Alexa 정책의 설명이 아니라 2023년
 [고소장](https://search.ftc.gov/system/files/ftc_gov/pdf/Amazon-Complaint-%28Dkt.1%29.pdf)의
@@ -347,7 +347,7 @@ published_at: 2026-10-17
 <details markdown="1">
 <summary><strong>음성 텍스트·화자 분리·요약 품질 평가 보기</strong></summary>
 
-### 음성 텍스트·요약의 오류는 어떻게 평가하는가? { #transcript-summary-quality }
+### 음성 텍스트·요약의 오류는 어떻게 평가하는가? {#transcript-summary-quality}
 
 **검토 전제:** 음성 텍스트·요약은 오류가 포함될 수 있는 추정 기록으로 보고, 원음과 동일한 증거로 자동 승격하지 않음.
 
@@ -391,7 +391,7 @@ published_at: 2026-10-17
 <details markdown="1">
 <summary><strong>음성 생체정보·합성음성·인증 위험 보기</strong></summary>
 
-### 음성 생체정보·합성음성은 어떤 공격을 확인해야 하는가? { #voice-biometric-attacks }
+### 음성 생체정보·합성음성은 어떤 공격을 확인해야 하는가? {#voice-biometric-attacks}
 
 - **산출물 구분:** 등록 원음 / 생체 템플릿 / 인증 이벤트 / 일반 상담 녹음. 목적·권한·기간·삭제 각각 지정.
 - **공격 분류:** 재생·합성·음성변환, 마이크 입력의 제시 공격(presentation attack), 디지털 경로의 주입 공격(injection attack), 탈취·등록 오염.
@@ -420,7 +420,7 @@ published_at: 2026-10-17
 <details markdown="1">
 <summary><strong>Microsoft 공개 문서로 본 기록 객체·저장·권한·보존 보기</strong></summary>
 
-### Microsoft 제품마다 기록은 어디에 남는가? { #microsoft-record-locations }
+### Microsoft 제품마다 기록은 어디에 남는가? {#microsoft-record-locations}
 
 | 계층 | 공개 문서에서 확인되는 동작 | 기록관리 경계 |
 |---|---|---|
@@ -481,7 +481,7 @@ published_at: 2026-10-17
 | KB금융 / 한국 금융그룹 | 7개 계열사 고객센터 연결·KB Link 상담원 연결 | `#KB금융` `#고객센터` `#금융` | [전자신문](https://www.etnews.com/20240419000213) |
 | 하나은행 / 한국 은행 | 금융거래 관계 설정·관리의 처리 항목으로 음성녹취 고지 | `#하나은행` `#음성녹취` `#금융` | [처리방침](https://biz.kebhana.com/conts/index.do?goUrl=/cont/customer/customer08/customer081/index.jsp) |
 
-### 게임 안전·공공 본인확인에서 원음은 어떻게 다른가? { #gaming-public-identity }
+### 게임 안전·공공 본인확인에서 원음은 어떻게 다른가? {#gaming-public-identity}
 
 앱 기반 구매·지원과 다른 목적의 비교. 게임 안전 신고와 공공 본인확인의 원음 역할·접근권한·보유 시작 기준 차이.
 
