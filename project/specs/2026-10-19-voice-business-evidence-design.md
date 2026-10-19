@@ -229,7 +229,7 @@ Official sources:
 
 ### United States: Illinois BIPA voiceprints
 
-Source: 740 ILCS 14/15(a).
+Source: 740 ILCS 14/10 and 15(a).
 
 Display:
 
@@ -240,8 +240,12 @@ Display:
 
 Boundary: a voiceprint is not every ordinary voice recording.
 
-Official source:
-`https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K15.htm`.
+Official sources:
+
+- Definition, including voiceprints (Section 10):
+  `https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K10.htm`.
+- Retention and destruction (Section 15(a)):
+  `https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K15.htm`.
 
 ### United States: Texas biometric identifiers
 

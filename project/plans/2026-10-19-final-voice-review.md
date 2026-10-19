@@ -195,12 +195,13 @@ azure = Path(
 svg = Path(
     "docs/services/microsoft-foundry/voice-data-management/images/azure-voice-agent-realtime-architectures.svg"
 ).read_text(encoding="utf-8")
+root_text = re.sub(r"\s+", " ", root)
 azure_text = re.sub(r"\s+", " ", azure)
 
 assert "6개월 연결" not in root
 assert "시간당 여러 번 바뀌는" in root
-assert "서버의 원음 보유기간을 명시하지 않음" in root
-assert "원음 녹음의 별도 삭제 시점을 명시하지 않음" in root
+assert "서버의 원음 보유기간을 명시하지 않습니다" in root_text
+assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in root_text
 assert "비멀티모달" not in azure + svg
 assert "텍스트 입력·출력을 사용하는 모델" in azure_text
 assert "OpenAI 직접 API인 GPT-Live" in azure

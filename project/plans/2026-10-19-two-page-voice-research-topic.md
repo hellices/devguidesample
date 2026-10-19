@@ -56,6 +56,9 @@ import yaml
 topic = Path("docs/services/microsoft-foundry/voice-data-management")
 root = (topic / "index.md").read_text(encoding="utf-8")
 metadata = yaml.safe_load(root.split("---", 2)[1])
+azure = (topic / "azure-storage" / "index.md").read_text(encoding="utf-8")
+azure_metadata = yaml.safe_load(azure.split("---", 2)[1])
+azure_body = azure.split("---", 2)[2]
 
 assert metadata["title"] == "앱 음성 서비스 기록관리 사례와 정책"
 assert "topic_order" not in metadata
@@ -63,6 +66,8 @@ assert "redirect_from" not in metadata
 assert not (topic / "business-patterns" / "index.md").exists()
 assert "images/voice-data-lifecycle.svg" in root
 assert "(azure-storage/index.md)" in root
+assert azure_metadata["topic_order"] == 1
+assert "[앱 음성 서비스 기록관리 사례와 정책](../index.md)" in azure_body
 PY
 ```
 
@@ -174,7 +179,9 @@ Do not change its shared-image links:
 
 Rerun the Step 1 probe.
 
-Expected: exit 0 with no output.
+Expected: exit 0 with no output. Setting the Azure child back to
+`topic_order: 2` or restoring its old business-child backlink must each make
+the same probe fail.
 
 - [ ] **Step 7: Run focused topic and document gates**
 

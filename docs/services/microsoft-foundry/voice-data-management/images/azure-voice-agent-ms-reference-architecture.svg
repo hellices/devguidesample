@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="660" viewBox="0 0 1280 660" role="img" aria-labelledby="azure-ms-voice-arch-title azure-ms-voice-arch-desc">
   <title id="azure-ms-voice-arch-title">Microsoft 통화 후 분석 참조 아키텍처의 처리·저장 흐름</title>
-  <desc id="azure-ms-voice-arch-desc">통화 녹음이 Blob Storage에 저장된 뒤 Speech 배치 전사, Conversation PII, Foundry 모델 분석으로 이어지는 경로와 Content Understanding, 애플리케이션 PII 처리로 이어지는 경로를 분리합니다. 두 경로의 결과는 Azure Storage에서 Power BI, 웹 앱과 CRM으로 전달됩니다.</desc>
+  <desc id="azure-ms-voice-arch-desc">통화 녹음이 Blob Storage에 저장된 뒤 Speech 배치 전사, Conversation PII, Foundry 모델 분석으로 이어지는 경로와 Content Understanding 경로를 분리합니다. Content Understanding 결과는 애플리케이션이 바로 저장하거나 필요한 경우 별도 PII 처리를 거쳐 결과 저장 전에 합류합니다. 두 경로의 결과는 Azure Storage에서 Power BI, 웹 앱과 CRM으로 전달됩니다.</desc>
   <defs>
     <marker id="azure-ms-voice-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
@@ -38,8 +38,8 @@
   <text x="64" y="124" class="zone-label">MICROSOFT REFERENCE · POST-CALL</text>
   <rect x="300" y="116" width="506" height="22" rx="3" fill="#ffffff"/>
   <text x="312" y="132" class="zone-label">경로 A · SPEECH 배치 전사 → PII → FOUNDRY 모델</text>
-  <rect x="540" y="386" width="402" height="22" rx="3" fill="#ffffff"/>
-  <text x="552" y="402" class="zone-label">경로 B · CONTENT UNDERSTANDING → 앱 PII</text>
+  <rect x="540" y="332" width="480" height="22" rx="3" fill="#ffffff"/>
+  <text x="552" y="348" class="zone-label">경로 B · CONTENT UNDERSTANDING → 선택 PII</text>
 
   <!-- Input branches -->
   <path d="M260 295 H292 Q300 295 300 287 V193 Q300 185 308 185 H330" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
@@ -52,8 +52,10 @@
   <path d="M420 230 V270" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow-link)"/>
 
   <!-- Content Understanding path -->
+  <path d="M770 435 H786 Q794 435 794 427 V388 Q794 380 802 380 H1030 V348 Q1030 340 1038 340 H1050" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
   <path d="M770 455 H830" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
-  <path d="M1010 455 H1022 Q1030 455 1030 447 V348 Q1030 340 1038 340 H1050" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
+  <path d="M1010 455 H1022 Q1030 455 1030 447 V380" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
+  <circle cx="1030" cy="380" r="3" fill="#475569"/>
 
   <!-- Output path -->
   <path d="M1140 370 V470" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
@@ -69,6 +71,8 @@
   <text x="800" y="169" text-anchor="middle" class="label">마스킹</text>
   <rect x="1038" y="284" width="54" height="16" rx="2" fill="#ffffff"/>
   <text x="1065" y="296" text-anchor="middle" class="label">분석</text>
+  <rect x="830" y="355" width="180" height="16" rx="2" fill="#ffffff"/>
+  <text x="920" y="367" text-anchor="middle" class="label">PII 미적용 시 결과 저장</text>
   <rect x="773" y="427" width="54" height="16" rx="2" fill="#ffffff"/>
   <text x="800" y="439" text-anchor="middle" class="label">선택 처리</text>
 
@@ -106,7 +110,7 @@
   <text x="670" y="462" text-anchor="middle" class="node">Content Understanding</text>
   <text x="670" y="486" text-anchor="middle" class="small">전사 · 요약 · 감정 · 개체</text>
 
-  <rect x="830" y="410" width="180" height="90" rx="8" fill="#ffffff" stroke="#64748b"/>
+  <rect x="830" y="410" width="180" height="90" rx="8" fill="#ffffff" stroke="#64748b" stroke-dasharray="5,4"/>
   <text x="850" y="434" class="tag" fill="#475569">APP STEP</text>
   <text x="920" y="462" text-anchor="middle" class="node">애플리케이션 PII</text>
   <text x="920" y="486" text-anchor="middle" class="small">필요한 경우 별도 처리</text>
@@ -125,10 +129,10 @@
   <!-- Legend -->
   <line x1="40" y1="616" x2="1240" y2="616" stroke="#cbd5e1"/>
   <line x1="64" y1="640" x2="112" y2="640" stroke="#475569" stroke-width="2" marker-end="url(#azure-ms-voice-arrow)"/>
-  <text x="124" y="644" class="legend">필수 처리 흐름</text>
+  <text x="124" y="644" class="legend">기본 처리·저장 흐름</text>
   <line x1="270" y1="640" x2="318" y2="640" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow-link)"/>
   <text x="330" y="644" class="legend">선택 저장</text>
   <line x1="448" y1="640" x2="496" y2="640" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-ms-voice-arrow)"/>
   <text x="508" y="644" class="legend">선택 처리</text>
-  <text x="1240" y="644" text-anchor="end" class="source">Azure Architecture Center 통화 후 분석 참조 · 2026-10-18 재확인</text>
+  <text x="1240" y="644" text-anchor="end" class="source">Azure Architecture Center 통화 후 분석 참조 · 2026-10-19 재확인</text>
 </svg>

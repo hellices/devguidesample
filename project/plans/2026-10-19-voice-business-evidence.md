@@ -609,17 +609,26 @@ the authored page count decreases from 80 to 79.
 Run:
 
 ```bash
-test -f site/services/microsoft-foundry/voice-data-management/index.html
-test -f site/services/microsoft-foundry/voice-data-management/azure-storage/index.html
-test ! -e site/services/microsoft-foundry/voice-data-management/business-patterns/index.html
+test -f site/services/microsoft-foundry/voice-data-management/index.html || exit 1
+test -f site/services/microsoft-foundry/voice-data-management/azure-storage/index.html || exit 1
+test ! -e site/services/microsoft-foundry/voice-data-management/business-patterns/index.html || exit 1
 
-rg -n \
-  'id="(product-storage-comparison|business-use-cases|jurisdiction-rules|alexa-deletion-case|voice-record-types|raw-audio-retention|deletion-completion|transcript-summary-quality|voice-biometric-attacks|microsoft-record-locations|gaming-public-identity)"' \
-  site/services/microsoft-foundry/voice-data-management/index.html
+for anchor in \
+  product-storage-comparison business-use-cases jurisdiction-rules \
+  alexa-deletion-case voice-record-types raw-audio-retention \
+  deletion-completion transcript-summary-quality voice-biometric-attacks \
+  microsoft-record-locations gaming-public-identity; do
+  if ! rg -n -F -- "id=\"$anchor\"" \
+    site/services/microsoft-foundry/voice-data-management/index.html; then
+    printf 'Missing required anchor: %s\n' "$anchor" >&2
+    exit 1
+  fi
+done
 ```
 
 Expected: root and Azure pages exist, the unpublished child path is absent,
-and all retained anchors are present.
+and all retained anchors are present. Removing any one required anchor must
+make the probe exit nonzero.
 
 - [ ] **Step 3: Review changes**
 

@@ -35,6 +35,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/azure-functions/functions-bindings-storage-blob-trigger
 - title: Access tiers for blob data
   url: https://learn.microsoft.com/azure/storage/blobs/access-tiers-overview
+- title: Blob rehydration from the archive tier
+  url: https://learn.microsoft.com/azure/storage/blobs/archive-rehydrate-overview
 - title: Blob Storage scalability and performance targets
   url: https://learn.microsoft.com/azure/storage/blobs/scalability-targets
 - title: Azure Blob Storage lifecycle management overview
@@ -44,7 +46,7 @@ official_sources:
 document_type: research
 status: current
 verification_status: needs-review
-sources_checked_at: 2026-10-18
+sources_checked_at: 2026-10-19
 title: Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장
 description: Microsoft 참조 아키텍처와 제품 문서에서 음성 원본·텍스트·분석 결과의 저장과 성능 근거를 확인합니다.
 technologies:
@@ -61,6 +63,7 @@ topic_order: 1
 
 > - 리서치 발행일: 2026-10-17 (한국시간)
 > - Microsoft 주요 공식 원문 재확인일: 2026-10-18
+> - 추가 원문 확인일: 2026-10-19 (Archive 복원 우선순위, 통화 후 분석의 선택 PII·저장 경로). 전체 검증 상태는 `needs-review`로 유지.
 > - 연결 문서: [앱 음성 서비스 기록관리 사례와 정책](../index.md)
 > - 범위: Microsoft 제품 문서의 네이티브 Realtime·분리형 음성 처리, 통화 후 참조 아키텍처, 구조별 원음·음성 텍스트·분석 결과의 저장과 처리 범위, 오디오 형식·압축, 지연·저장 성능 지침.
 > - API 경계: 이 문서는 Azure OpenAI Realtime과 Azure Voice Live를 다룹니다. [OpenAI 직접 API인 GPT-Live](https://developers.openai.com/api/docs/guides/live)의 음성 대화·백엔드 위임 구조는 별도이며, Azure 지원 여부와 데이터 정책을 공유한다고 가정하지 않습니다.
@@ -245,6 +248,8 @@ Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 
 > **그림 성격:** Microsoft 공식 참조의 두 분석 경로를 이 리서치가
 > 재도식화했습니다. 위 링크의 Microsoft 제공 SVG가 공식 원본입니다.
+> Content Understanding 결과는 애플리케이션이 바로 저장하거나, 필요한
+> 경우 별도 PII 처리를 거친 뒤 같은 결과 저장 단계로 합류합니다.
 
 ## 저장 수명주기와 삭제 제약 { #storage-lifecycle }
 
@@ -403,7 +408,7 @@ Cool 30일·Cold 90일은 **general-purpose v2(GPv2) 계정**의 최소
 
 - 10GB 미만 객체의 Standard 우선순위 복원은 최대 15시간이 걸릴 수 있음.
 - 10GB 미만 객체의 High 우선순위 복원은 1시간 미만에 끝날 수 있으나 수요와 크기에 따라 더 오래 걸릴 수 있음.
-- 우선순위 복원 처리량은 storage account 전체에서 시간당 최대 10GiB입니다.
+- High 우선순위 복원 처리량은 storage account 전체에서 시간당 최대 10GiB입니다.
 - 작은 blob을 많이 복원하면 각 blob 처리 부담 때문에 시간이 더 걸릴 수 있음.
 
 ## 공개 문서에서 확인되지 않은 값

@@ -691,17 +691,26 @@ because adding one SVG changes that count.
 Run:
 
 ```bash
-rg -n \
-  "관리형 API|네이티브 Realtime|분리형 파이프라인|통화 후 분석|store=false|destinationContainerUrl|Conversation PII" \
-  docs/services/microsoft-foundry/voice-data-management
+topic=docs/services/microsoft-foundry/voice-data-management
+for phrase in \
+  "관리형 API" "네이티브 Realtime" "분리형 파이프라인" "통화 후 분석" \
+  "store=false" "destinationContainerUrl" "Conversation PII"; do
+  if ! rg -n -F -- "$phrase" "$topic/azure-storage/index.md"; then
+    printf 'Missing Azure document boundary: %s\n' "$phrase" >&2
+    exit 1
+  fi
+done
 
-rg -n \
-  "Microsoft 제공 단일 그림 아님|Microsoft 공식 참조를 작성자가 재도식화" \
-  docs/services/microsoft-foundry/voice-data-management/images
+rg -n -F -- "공식 문서를 기반으로 한 종합 구성 예시" \
+  "$topic/images/azure-voice-agent-realtime-architectures.svg" || exit 1
+rg -n -F -- "Microsoft 공식 참조를 작성자가 재도식화" \
+  "$topic/images/azure-voice-agent-ms-reference-architecture.svg" || exit 1
 ```
 
-Expected: every required boundary appears in the intended Markdown or SVG;
-neither command has zero matches.
+Expected: every required boundary appears in its specified Markdown or SVG.
+Any missing phrase must make the probe exit nonzero, even if all other
+phrases are present. The realtime label uses the wording adopted in the final
+voice review rather than the superseded "Microsoft 제공 단일 그림 아님".
 
 - [ ] **Step 3: Perform desktop and narrow browser review**
 

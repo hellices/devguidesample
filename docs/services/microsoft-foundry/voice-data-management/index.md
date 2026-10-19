@@ -273,7 +273,7 @@ published_at: 2026-10-17
 | **[EU MiFID II Article 16(7)](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014L0065-20240109)** | 자기계정 거래·고객 주문 접수·전달·실행과 관련되거나 이를 의도한 전화·전자통신 | **5년**, 감독기관 요청 시 **최대 7년** | `five years ... up to seven years` | 대상 투자업무 통화에 직접 적용 |
 | **[EU AI Act Articles 19(1), 26(6)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng)** | 공급자·배포자가 통제하는 고위험 AI 자동 생성 로그 | 목적에 맞는 기간, **최소 6개월**. 적용되는 EU·회원국 법률이 달리 정하면 그 규칙 적용 | `at least six months, unless provided otherwise` | 고위험 AI 로그 규칙이며 모든 음성·전사 보관 의무가 아님 |
 | **[COPPA 16 CFR 312.5(c)(9)](https://www.federalregister.gov/documents/full_text/text/2025/04/22/2025-05904.txt)** | 아동의 특정 요청 응답용 음성 파일만 수집하고 다른 개인정보·이용·공개가 없는 예외 | 응답 **직후 삭제** | `deletes it immediately after responding` | 조건을 모두 충족한 제한적 예외 |
-| **[Illinois BIPA §15(a)](https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K15.htm)** | voiceprint를 포함한 생체 식별자·정보 | 목적 달성 또는 마지막 상호작용 후 **3년** 중 빠른 시점 | `whichever occurs first` | 일반 음성 녹음이 아니라 voiceprint |
+| **Illinois BIPA [§10](https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K10.htm)·[§15(a)](https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K15.htm)** | §10이 정의하는 voiceprint 포함 생체 식별자·정보 | §15(a): 목적 달성 또는 마지막 상호작용 후 **3년** 중 빠른 시점 | `whichever occurs first` | 일반 음성 녹음이 아니라 voiceprint |
 | **[Texas B&amp;C Code §503.001](https://tcss.legis.texas.gov/resources/BC/htm/BC.503.htm)** | 상업 목적으로 수집한 voiceprint 등 생체 식별자 | 목적 종료 후 합리적 기간, 늦어도 **1년**. 다른 법정 문서와 연결되면 그 의무 종료 후 1년 | `not later than the first anniversary` | 금융기관 voiceprint와 법이 정한 일부 AI·보안·사기 용도 예외를 별도 확인 |
 
 ### 일률적인 일수가 없는 규정
@@ -487,8 +487,8 @@ published_at: 2026-10-17
 
 | 서비스·업무 | 음성 처리 | 저장·보유·삭제 | 태그 |
 |---|---|---|---|
-| **Xbox 음성 신고 2023 공개 설계 / 게임 안전·괴롭힘 신고** | 신고가 필요한 게임 내 최근 60초 음성을 플레이어가 직접 캡처. 일반 캡처 목록 미표시, 다운로드·수정·공유 불가. 신고 시작 전 Xbox 미저장·미업로드 | 콘솔에 온라인 상태 누적 24시간 보관하고 미제출 시 자동 삭제. 제출하면 Xbox Safety Team 조사 증거로 전달되지만, 인용한 공식 자료는 제출 뒤 Xbox 서버의 원음 보유기간을 명시하지 않음. 2023-09 선택 영어권 시장 배포까지 확인. [기능 설계](https://news.xbox.com/en-us/2023/07/12/xbox-voice-reporting-feature/) · [공개 배포](https://news.xbox.com/en-us/2023/09/05/xbox-september-2023-update/) | `#Microsoft` `#게임안전` `#게임` |
-| **HMRC Voice ID / 공공 세무서비스 본인확인** | 가입 문구를 최대 5회 녹음해 voiceprint로 변환. 인용 고지는 원음 녹음의 별도 삭제 시점을 명시하지 않음. HMRC가 처리 책임 주체, 통신 서비스 제공자가 캡처·암호화 위탁 처리자 | **voiceprint**는 영국 데이터센터에 저장. 최초 등록 3년 뒤 다음 통화에서 동의 재확인하고, 연락이 없으면 최대 7년 후 삭제. 동의 철회·Voice ID 시스템 교체 시 생체정보 삭제. [GOV.UK privacy notice](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice) | `#HMRC` `#본인확인` `#공공` |
+| **Xbox 음성 신고 2023 공개 설계 / 게임 안전·괴롭힘 신고** | 신고가 필요한 게임 내 최근 60초 음성을 플레이어가 직접 캡처. 일반 캡처 목록 미표시, 다운로드·수정·공유 불가. 신고 시작 전 Xbox 미저장·미업로드 | 콘솔에 온라인 상태 누적 24시간 보관하고 미제출 시 자동 삭제. 제출하면 Xbox Safety Team 조사 증거로 전달되지만, 인용한 공식 자료는 제출 뒤 Xbox 서버의 원음 보유기간을 명시하지 않습니다. 2023-09 선택 영어권 시장 배포까지 확인. [기능 설계](https://news.xbox.com/en-us/2023/07/12/xbox-voice-reporting-feature/) · [공개 배포](https://news.xbox.com/en-us/2023/09/05/xbox-september-2023-update/) | `#Microsoft` `#게임안전` `#게임` |
+| **HMRC Voice ID / 공공 세무서비스 본인확인** | 가입 문구를 최대 5회 녹음해 voiceprint로 변환. 인용 고지는 원음 녹음의 별도 삭제 시점을 명시하지 않습니다. HMRC가 처리 책임 주체, 통신 서비스 제공자가 캡처·암호화 위탁 처리자 | **voiceprint**는 영국 데이터센터에 저장. 최초 등록 3년 뒤 다음 통화에서 동의 재확인하고, 연락이 없으면 최대 7년 후 삭제. 동의 철회·Voice ID 시스템 교체 시 생체정보 삭제. [GOV.UK privacy notice](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice) | `#HMRC` `#본인확인` `#공공` |
 
 HMRC가 “voiceprint는 복제·도난될 수 없다”고 설명하는 문구는 해당 기관의 서비스 설명이지 일반적인 기술 보증으로 사용하지 않는다. 합성·재생 공격과 NIST 인증 지침의 범위는 [음성 생체정보·합성음성 공격 검토](#voice-biometric-attacks)에서 별도로 다룬다.
 
