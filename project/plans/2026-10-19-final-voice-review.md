@@ -184,6 +184,7 @@ Run:
 ```bash
 ../../.venv/bin/python - <<'PY'
 from pathlib import Path
+import re
 
 root = Path(
     "docs/services/microsoft-foundry/voice-data-management/index.md"
@@ -194,13 +195,14 @@ azure = Path(
 svg = Path(
     "docs/services/microsoft-foundry/voice-data-management/images/azure-voice-agent-realtime-architectures.svg"
 ).read_text(encoding="utf-8")
+azure_text = re.sub(r"\s+", " ", azure)
 
 assert "6개월 연결" not in root
 assert "시간당 여러 번 바뀌는" in root
-assert "서버의 원음 보유기간을 명시하지 않습니다" in root
-assert "원음 녹음의 별도 삭제 시점을 명시하지 않습니다" in root
+assert "서버의 원음 보유기간을 명시하지 않음" in root
+assert "원음 녹음의 별도 삭제 시점을 명시하지 않음" in root
 assert "비멀티모달" not in azure + svg
-assert "텍스트 입력·출력을 사용하는 모델" in azure
+assert "텍스트 입력·출력을 사용하는 모델" in azure_text
 assert "OpenAI 직접 API인 GPT-Live" in azure
 assert "last access time tracking" in azure
 assert "general-purpose v2(GPv2)" in azure
@@ -347,6 +349,15 @@ Run the repository's full documentation contract:
 
 - [ ] **Step 2: Browser-check desktop and 390px**
 
+If the preview URL is not already responding, start
+`../../.venv/bin/mkdocs serve --dev-addr 127.0.0.1:8123` as a separate bounded
+async process through the execution harness. Record its shell ID or exact PID
+and verify readiness:
+
+```bash
+curl -fsS http://127.0.0.1:8123/devguidesample/ >/dev/null
+```
+
 Verify:
 
 - simplified realtime label;
@@ -357,6 +368,9 @@ Verify:
 - later responsibility/evidence table;
 - Xbox/HMRC scope; and
 - no horizontal page overflow.
+
+If this step started the preview server, stop that exact shell ID or PID after
+the browser checks. Do not use `pkill` or `killall`.
 
 - [ ] **Step 3: Run read-only review round**
 
