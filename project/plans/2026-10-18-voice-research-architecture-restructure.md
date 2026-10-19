@@ -791,10 +791,16 @@ CI failure unless the run conclusion fails.
 - [ ] **Step 8: Reply to and resolve review threads**
 
 After the push and passing CI, reply in each inline thread with the supporting
-commit, source, built HTML, or validation evidence. Resolve only a thread
-whose pushed change and passing CI address the finding, or whose source/build
-evidence demonstrates a partial-diff false positive. Leave every other thread
-unresolved and return to implementation before Step 9.
+commit, source, built HTML, or validation evidence.
+
+Resolve a thread only when both conditions are true:
+
+- the concern is fixed in the pushed commit, or source/build evidence proves a
+  partial-diff false positive; and
+- the inline reply contains that commit or evidence.
+
+Leave every other thread, including unresolved `needs-review` claims, open and
+return to implementation before Step 9.
 
 Expected: unresolved review thread count is 0.
 

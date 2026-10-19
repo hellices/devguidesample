@@ -211,6 +211,8 @@ assert "legacy Blob Storage" in azure
 assert "Microsoft 제공 단일 그림 아님" not in azure + svg
 assert "Microsoft가 제공한 단일 그림이 아니며" not in azure
 assert "공식 문서를 기반으로 한 종합 구성 예시" in svg
+assert "공식 문서를 기반으로 한 종합 구성 예시입니다." in azure_text
+assert "점선은 저장·추적을 정책과 설정으로 선택하는 별도 경로입니다." in azure_text
 assert "## 먼저 확인할 세 가지 질문" in root
 assert "## 기록별 담당·정책·삭제 증빙" in root
 PY

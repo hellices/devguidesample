@@ -51,11 +51,32 @@ Run:
 ```bash
 ../../.venv/bin/python - <<'PY'
 from pathlib import Path
+import subprocess
 import yaml
 
 topic = Path("docs/services/microsoft-foundry/voice-data-management")
 root = (topic / "index.md").read_text(encoding="utf-8")
 metadata = yaml.safe_load(root.split("---", 2)[1])
+root_body = root.split("---", 2)[2]
+child = topic / "business-patterns" / "index.md"
+if child.exists():
+    previous_business = child.read_text(encoding="utf-8")
+else:
+    previous_business = subprocess.check_output(
+        [
+            "git",
+            "show",
+            "HEAD:docs/services/microsoft-foundry/voice-data-management/"
+            "business-patterns/index.md",
+        ],
+        text=True,
+    )
+expected_body = previous_business.split("---", 2)[2]
+expected_body = expected_body.replace(
+    "(../azure-storage/index.md)", "(azure-storage/index.md)"
+).replace(
+    "(../images/voice-data-lifecycle.svg)", "(images/voice-data-lifecycle.svg)"
+)
 azure = (topic / "azure-storage" / "index.md").read_text(encoding="utf-8")
 azure_metadata = yaml.safe_load(azure.split("---", 2)[1])
 azure_body = azure.split("---", 2)[2]
@@ -66,6 +87,7 @@ assert "redirect_from" not in metadata
 assert not (topic / "business-patterns" / "index.md").exists()
 assert "images/voice-data-lifecycle.svg" in root
 assert "(azure-storage/index.md)" in root
+assert root_body == expected_body
 assert azure_metadata["topic_order"] == 1
 assert "[앱 음성 서비스 기록관리 사례와 정책](../index.md)" in azure_body
 PY
