@@ -83,6 +83,20 @@ statement that dotted storage and tracing paths are optional.
 The post-call diagram can retain concise source attribution to the Microsoft
 reference architecture.
 
+### Mobile diagram readability
+
+Keep one SVG source for each diagram. Wrap the three 1280-pixel voice diagrams
+in the same scroll-region class while preserving their existing links and alt
+text. Desktop rendering continues to fit the content column. At 760 pixels and
+below, give the linked diagram a 900-pixel minimum width and contain horizontal
+scrolling inside the labelled, keyboard-focusable region. The page itself must
+not gain horizontal overflow.
+
+Do not create mobile-only SVG copies or remove qualifiers to make the diagrams
+fit. The treatment is CSS-only apart from the semantic wrappers, requires no
+JavaScript, and falls back to the current scaled image if the extra stylesheet
+does not load.
+
 ## Azure Storage conditions
 
 ### Lifecycle last-access rules
@@ -166,6 +180,7 @@ Run:
 
 - targeted source/link/build and both SVG self-checks;
 - full documentation tests and repository validators;
-- desktop and 390px browser checks;
+- desktop and 390px browser checks, including readable diagram width, wrapper-
+  only horizontal scrolling, and zero page overflow;
 - GitHub CI; and
 - final unresolved-thread, branch divergence, and clean-tree checks.
