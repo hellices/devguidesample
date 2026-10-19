@@ -86,11 +86,11 @@ reference architecture.
 ### Mobile diagram readability
 
 Keep one SVG source for each diagram. Wrap the three 1280-pixel voice diagrams
-in the same scroll-region class while preserving their existing links and alt
-text. Desktop rendering continues to fit the content column. At 760 pixels and
-below, give the linked diagram a 900-pixel minimum width and contain horizontal
-scrolling inside the labelled, keyboard-focusable region. The page itself must
-not gain horizontal overflow.
+in the same scroll-region class while preserving their existing links where
+present and all alt text. Desktop rendering continues to fit the content
+column. At 760 pixels and below, give each diagram block a 900-pixel minimum
+width and contain horizontal scrolling inside the labelled, keyboard-focusable
+region. The page itself must not gain horizontal overflow.
 
 Do not create mobile-only SVG copies or remove qualifiers to make the diagrams
 fit. The treatment is CSS-only apart from the semantic wrappers, requires no
