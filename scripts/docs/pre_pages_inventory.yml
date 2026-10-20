@@ -1926,8 +1926,684 @@ documents:
     reviewed_changes: {}
   - baseline_path: monitor/azure-sre-agent.md
     pages_path: guides/azure-monitor/azure-sre-agent-overview/index.md
-    # Review reasons use 2026-10-21 KST, equivalent to the guide's 2026-10-20 UTC metadata.
+    # Original review ran after 15:00 UTC on 2026-10-20, hence the 2026-10-21 KST reasons.
     reviewed_changes:
+      headings:
+        c5449be003135ecb287461769ec9927148d714522894b22a2a9b60e94b5ea5e5:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''Azure SRE
+            Agent를 사용하면 무엇이 달라지나요?'' is now ''분산된 장애 대응을 하나의 조사 흐름으로 통합''. Unchanged reference/checklist labels
+            retain their names. The section meaning, body evidence and published fragment #azure-sre-agent_1
+            are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 35e86ad06e9907ee88af293e11377a4fac77d1434f08176398759ffd5d7e2931
+            count: 1
+        a26c21d79f2a58b32be69a6d5c38d23590037bd7c312c6e8f190f8b013e9b29a:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''인시던트가 발생하면
+            어떻게 조사하나요?'' is now ''경고 수신 → 가설 검증 → 조치 제안·결과 공유''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_3 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 3b1f0152e53a3dc8020d173373ce503f208c67a44eb077faa6f22cf3e4d6ae6d
+            count: 1
+        d44f236a64132a08853e60799c25204a136623e9b47648525bb5b027d246a9be:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''근본 원인은 어떻게
+            찾나요?'' is now ''로그·변경 이력으로 원인 가설을 검증''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_4 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 96d841a85eae4f2a2ccd7afdfc3be07f0cf5961150eed5dcd8effbb0ff5b708e
+            count: 1
+        db2df98d33735977f1c62aace916d73ae66f7beec962b308519c0542afa4f1bd:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''어떤 정보를 조사할
+            수 있나요?'' is now ''로그·메트릭·리소스 상태·배포 이력의 상관 분석''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_5 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: e4c50fda3601bf99a83c41ef8b27f274b869fb0ff0c9d86dd80ff08e5ec7d520
+            count: 1
+        8c2991e2b0f04fed938f9ec7ee4ed7491667067068f8595c73e08ac657b12dc3:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''과거 경험과 운영
+            문서는 어떻게 활용하나요?'' is now ''런북·지식 파일·메모리를 조사 맥락으로 활용''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_6 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 94b9f46bf794f355819b7a4b8eae775da889fb63e3e05663a5330ab6bebc8f78
+            count: 1
+        3d339ddc68cba1f0bd8de1ee6376f3f5ca424e8186a376b48463653b2497d98b:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''조사가 끝난 뒤
+            무엇을 학습하나요?'' is now ''조사의 증상·해결 단계·교훈을 다음 조사에 재사용''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_7 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 05dfcad9ff4772f1a8294cd8b14302f722f5d4543222b83f23a71d20c1b3dbc8
+            count: 1
+        35cfb1b04485536c808eacde1a53bac4b9a69a6d673fe2800c8bee53deb61d7b:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''어떤 시스템과 연결할
+            수 있나요?'' is now ''인시던트·소스 코드·협업·관찰 도구 연계''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_8 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 3404991762ea6bf02e3b4fbc7b6892a13bbe460989d7eb3994790bd31ce2ede9
+            count: 1
+        176099e5ecf45ae9335a1bfc41497d7ec547c6b1d5c6f3c52f653d6b9e5f4478:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''인시던트 관리''
+            is now ''Azure Monitor·PagerDuty·ServiceNow의 경고 수신''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_9 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 1455e935fea3402ec33b142af15c72854922a5564bfc3ff45d7003fa4af41da6
+            count: 1
+        0379f4fa49e322b96a38abb66f862092380fe13d6927394bfc716beed6b7c3d8:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''소스와 작업 관리''
+            is now ''소스 코드 검색과 Issue·Work Item 연계''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_10 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: b6540a391ae9d67afb356489860abfa3e06b3b96df3362200b6b69073c7b0702
+            count: 1
+        314d7896afd22950d03469a5540b6f6689d5fda8389b73e8ea7b92313c57fb1c:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''알림과 협업''
+            is now ''메일·Teams·Slack으로 조사 결과 전달''. Unchanged reference/checklist labels retain their names. The
+            section meaning, body evidence and published fragment #_11 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 3e86d462cdaf982271db818f53d54628541ad8292e757b929b59ed6df26cecbf
+            count: 1
+        760f03704cc8f46816e7c86657765815f455945d889262e1eed8dc7bc15e9b17:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''외부 관찰 도구''
+            is now ''외부 관찰 플랫폼과 사용자 지정 MCP 도구 연결''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_12 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 337bc046e6b65a8c351794e9eb2ddbe181fdd76fff1b6d9a7a2660520f5e4367
+            count: 1
+        e01f4a3506f6faf4f4b76101974df41a0b40cd5459198bf8ea906bb710866b76:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''권한과 승인 절차는
+            어떻게 제어하나요?'' is now ''접근 권한과 실행 승인을 별도로 제어''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_13 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: d0c387d42791c1ca6fbb12f1d26d5102641ab05e8e09cd81d8625eabf4880022
+            count: 1
+        5a3805ff162f511ec64211dc825ac8579623b02731f204961997899a15dafcb3:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''팀에 맞게 어떻게
+            확장하나요?'' is now ''스킬·전문 에이전트·지식 파일로 팀 절차 확장''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_14 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 9c774dde9c18c1c55b14afcda7e76b2f091b42f554bb81d090cad1549da7fcdd
+            count: 1
+        54c2a23d78e494d6db6afe942af5a913a817f7101874f9522e49b73743c959a0:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''인시던트를 담당자에게
+            어떻게 배분하나요?'' is now ''대응 계획으로 인시던트를 전문 에이전트에 배분''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_15 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 778194bc0290009c407cfbf3cf9144e8c2b35f4779560b4d1072210a384c380d
+            count: 1
+        189131a750665d36d424601e943e423aa81133365176e6aa737208932884b57c:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''제품에서 기본으로
+            지원하는 방식'' is now ''Azure Monitor 기본 연계와 대응 계획''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_16 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: ad6fdb720e7233dd1447f0634d2160d332a0f7e105625829d795658bb55a1d53
+            count: 1
+        3607636f58900ce2b40ca698d6b3d3f6f9ac6f0e7c2f1549003775a72731d15f:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''이번 실증에서 사용한
+            방식'' is now ''2026-08-12 실증의 HTTP Trigger 연결과 검증 범위''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_17 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: cf47c9526858d12775241e8d5052a75c4a507d06fdfdd17bbf9276f6db612acd
+            count: 1
+        f18361e60d338e02cb8ae55e099ae2e56863a44c0d71a19a0a58b8b5debbc5e6:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''실제 활용 예시:
+            주문 API에서 HTTP 500 발생'' is now ''주문 API HTTP 500 — 배포 설정 오류 추적''. Unchanged reference/checklist labels
+            retain their names. The section meaning, body evidence and published fragment #api-http-500 are
+            preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 64eea81df48aa0c1b4f7a4a98294e0d96fb00486bc941b5cae5949ff1480fca1
+            count: 1
+        42c9f793f96e8f06a20fb0568f2b57a2ae313980ea76028e87bd68ff338c854c:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''상황'' is now
+            ''검토 모드에서 주문 API 요청 120건 실패''. Unchanged reference/checklist labels retain their names. The section
+            meaning, body evidence and published fragment #_18 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 50692b13f0f22713e754f68567a3dd602b3520d259dafcff35c68dcaf0ad6d7a
+            count: 1
+        9c27182fdd5e6a742546988bebc20517e493f7676024330c5ecc0068c9f80c0a:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''에이전트에게 기대한
+            조사'' is now ''영향 범위·발생 시각·변경 이력·복구 여부 확인''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_19 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 67f7b17a81ce956eb5c723f9557edfe37a738121c5f166c43589a842d28043f1
+            count: 1
+        fea67a20826c6b9eaef21b9b9533f90afea6361a4d10a79a1cfc003018f78f66:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''실제 확인 결과''
+            is now ''실패 요청과 수정 버전의 설정 오류 확인''. Unchanged reference/checklist labels retain their names. The
+            section meaning, body evidence and published fragment #_20 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 97fd6ea50f586ce71f4677be4d87b629b6c5bf4b2aad5fc44f7d1623f8c7da02
+            count: 1
+        9b952395507072bbd797abeb283339412e27e404dbe82b4f13576ba13d3ffff3:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''조사 결과를 티켓으로
+            전달하기'' is now ''GitHub Issue에 영향·근거·후속 조치 기록''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_21 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 3aaafbd482a943267529a0be25d2485b1bce0e68abbdc41afbdf8ecd7aa4dce6
+            count: 1
+        3e4e00f5346f404dfb3742f4118a775a2ffd47e5b3fa7e0ce84e8581c559db30:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''조사 결과를 메일로
+            공유하기'' is now ''Outlook 초안 생성과 실제 전송의 구분''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_22 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 15f597ce61018a46468294de6081951d5238db2f04000db899681589ea73f20e
+            count: 1
+        54b38bdf3f8001d8c8d8f12e06f092c7df03186ae28a9fb7f02a52fd3d0083f4:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''다른 장애에도 같은
+            조사 방식을 적용할 수 있나요?'' is now ''HTTP 500·지연·Blob 권한 오류의 결과와 한계''. Unchanged reference/checklist labels
+            retain their names. The section meaning, body evidence and published fragment #_23 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 3b7ed3d60963fef15c1e93183dd56411fafd124af352abfd2313b5c850638a88
+            count: 1
+        38b9c4f9dcb966e7fbe1193e446067cf4ff1af56d6dd2dd6d3f1310637dbcc56:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''Dynamic Thresholds와
+            함께 사용할 수 있나요?'' is now ''Dynamic Thresholds는 탐지, SRE Agent는 원인 조사''. Unchanged reference/checklist
+            labels retain their names. The section meaning, body evidence and published fragment #dynamic-thresholds
+            are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: f82be6fdb933bba122b035f37dc4f71f416a725e6cceb5c18b2c898270f9f056
+            count: 1
+        8a8587ca457cfeed70391c50819b7f26d51c21f377b740a9e2e51f385773e167:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''도입 전에 확인해야
+            할 사전 조건'' is now ''생성 권한·UAMI·리전·모델 처리 위치 확인''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_24 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 8091faaf24eb45574fc80acfdefcbe53ab2a325b216a9b7cbe1d3e8e4372c54c
+            count: 1
+        791b17afea7a5bb8c631a4f3f3e271504c9a64aceadf83501067a6eb6b75f4fa:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''비용은 어떻게 발생하나요?''
+            is now ''상시 비용과 활성 AAU — 중지·한도·평가 과금''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_25 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: aae3689011f38d57c89400fe05708cdc66977b0934f60bc0bf91bcb0fedb3663
+            count: 1
+        da0b4372f35c930f5b78b176772560ccbb107cb6ec101deef0f311105bf41d12:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''보안과 데이터는
+            어떻게 보호되나요?'' is now ''격리된 도구 실행과 대화·메모리·감사 데이터 보존''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_26 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 3275e31054ca4b10f38e370b56a5644d94542f5759f04d3c5394a536dc9fe25d
+            count: 1
+        a208a9395a6eff788e0595b3b026c059e97b9ba70b9748726466e6a71fafeb4a:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''비공개 네트워크에는
+            어떻게 연결하나요?'' is now ''VNet 통합으로 프라이빗 리소스에 접근''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_27 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: e602518c41020392fee5edb673f71bd321f24c82b4a10c9b0ac16c873325f98a
+            count: 1
+        1f10e7f13c7295596d440f3e3726ef5ea0ba8f6a804ff3881b913f5d2d4da525:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''네트워크 제어가
+            왜 필요한가요?'' is now ''송신 제어의 필요성과 VNet 우회 경로''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_28 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 7084d3658ba2a3f713ecc095d9277e054bc3a8d19b429585be0aeb66745fa19b
+            count: 1
+        afaacfbf0ad08ca72c9f87929db662bf3520697aff6b9d42b52b6141007a1331:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''세 가지 네트워크
+            제어 모드'' is now ''Unrestricted·Limited·Azure VNet의 제어 범위''. Unchanged reference/checklist labels
+            retain their names. The section meaning, body evidence and published fragment #_29 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 4deda56ac1b5ee16544b018cdb66115d22d5cf881da97827d0ed69e9d6edd696
+            count: 1
+        b13bb886fec609e5d16be2666311b714a406638bf1ffb00f9716cf8989b90972:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''사전 준비 사항''
+            is now ''/27 이상 전용 서브넷과 위임·역할 요구 사항''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_30 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 5c0104ad39b544e2d6e5ba6a4589928a0260e6477cfaf000a20aca0380e40f91
+            count: 1
+        9e0a20dd558b86a04b55020f159fda52fd6079a80c5204ed0ee4963efe4882c5:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''트래픽 경로는 대상마다
+            다릅니다'' is now ''사용자 VNet·플랫폼·커넥터별 송신 경로''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_31 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 9973696cd4c5dadd48787b12c8fbad16d52299915eb83f8ae883de6c2480e8ea
+            count: 1
+        3002afa2588f92d5b9666c82f455a63630d61f67c3b0cd3103b63d920afa22be:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''설정 절차'' is
+            now ''서브넷 연결·프라이빗 DNS·접근 경로 검증''. Unchanged reference/checklist labels retain their names. The section
+            meaning, body evidence and published fragment #_32 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 73546572559353f11ba1e9f51ee7c185225731331364763d340d26fee47caa6e
+            count: 1
+        6f69a44aaae140dafef21a39c054bbcb5ebb0926eb8f73667377028bb60388c5:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''인프라 네트워크
+            토글은 과도기 수단입니다'' is now ''인프라 우회 토글과 FQDN 송신 필터의 역할''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_33 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 67431e2c62c1b6e86b6a6e5ca78c8f7c162800dcc19fe0f39b120264efbba453
+            count: 1
+        515841b4f938ffd6ed35ac12cf894f81a9f455bcd975b7d8d13c748331d8b5fd:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''패키지 레지스트리
+            대신 미리 설치를 사용할 수 있습니다'' is now ''패키지 사전 설치로 공개 레지스트리 접근 최소화''. Unchanged reference/checklist labels
+            retain their names. The section meaning, body evidence and published fragment #_34 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 26c100bf9f5cc3df7cce82b316b9c3c1509b1e84200fb2e66f30985b9b48331c
+            count: 1
+        912586e4cff91a8f18bc9b8b0936f2c17412519a85cdab54c3272cd4355f86e8:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''방화벽에서 허용해야
+            하는 도메인'' is now ''포털·쿼리·인증에 필요한 HTTP·WebSocket 도메인''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_35 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: e9f245340cf8394b1ca550a59706d2ad97142a841c7da2f36700ce14dff464da
+            count: 1
+        82f77607ab38942cc9a10799082f419ace073a30b91056135821d524c9f9bd89:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''네트워크가 호출을
+            차단하면 어떻게 되나요?'' is now ''연결 실패의 조사 영향과 송신 정책 감사''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_36 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: a71095e1e54b6b40d7910fa94429fce45c994afeb235d65eb3c298e73696670f
+            count: 1
+        77e5e5ef1f16c5e38cc214c59200a28bbc9287017750b31232742763396c51d1:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''알아두어야 할 제한
+            사항과 거버넌스'' is now ''아웃바운드 전용 범위와 우회·관리 권한 통제''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_37 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 21a1135931e0ee2bea9daf6a99456b2edcf2aac49a6af28d5e2d6a69fc407dc3
+            count: 1
+        786aa029c1b083990d82153b0034624880daf94d79be86db91dcf20a18a0f6e6:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''인시던트 대응 외에
+            무엇을 자동화할 수 있나요?'' is now ''예약 점검과 재사용 가능한 운영 자동화''. Unchanged reference/checklist labels retain
+            their names. The section meaning, body evidence and published fragment #_39 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: f97c8ab3ae277da673e44d7a135a727cc3f38c059eb8873d4562d590875af4d5
+            count: 1
+        9d8b05bc699db7702450e4764ffffae77270f1aff83c8367107979ea14ed4237:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''예약 작업'' is
+            now ''예약 작업으로 상태·비용·배포 결과 점검''. Unchanged reference/checklist labels retain their names. The section
+            meaning, body evidence and published fragment #_40 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: b6982eaf4bb7dec53269818095d6912cb08821c68230e817d601d5109501f8f6
+            count: 1
+        33ec388860dc3cbaa7133d30be720218b5c45a254c95137fff4c13d2e808f770:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''심층 조사'' is
+            now ''복잡한 장애의 여러 원인 가설을 단계별 검증''. Unchanged reference/checklist labels retain their names. The section
+            meaning, body evidence and published fragment #_41 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: b7650b6dcc43aa674093da120903c30a25b05235a28c3b9dc00a037ae475a6e4
+            count: 1
+        c4dcb3250f57364281a67cb094f756d132a4224db36390eb25fe0c2a43955599:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''팀 지식 온보딩''
+            is now ''팀 구조·아키텍처·대응 절차를 조사 맥락에 반영''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_42 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 7a517af0c8bf243731b4643686ac2fc08f6258540b21629bf1d158cd5885b080
+            count: 1
+        7f476a9cf1482e44f662a88685a2143c06ef7d6ce05a2ca35d3ee4afe4c4d0eb:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''Agent Hooks''
+            is now ''Stop·PostToolUse로 응답과 도구 결과 검증''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #agent-hooks are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 7f9017dcb524f4b724ffc4d8fac0b0706a0fd5a3b4fc35fb6aa477f1703a3ee2
+            count: 1
+        f11edaca5f28358734ef5556b1475bbf955c2c70455a3dcdd526e3b1c844173c:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''도구 용량 관리''
+            is now ''에이전트별 기본·MCP 도구 합산 80개 한도''. Unchanged reference/checklist labels retain their names. The
+            section meaning, body evidence and published fragment #_43 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: cff97db5d7c09b81f9662c74adb7042db45fc562257598df424b0c583bae26ad
+            count: 1
+        f6773ceb6336218e00fd119e5fdbf588ffd6a45aa854474401f8a821cfe65782:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''에이전트가 한 일을
+            어떻게 감사하나요?'' is now ''Application Insights 감사와 Operations Hub 효과 측정''. Unchanged reference/checklist
+            labels retain their names. The section meaning, body evidence and published fragment #_45 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: fb31cfcc8df5a0cc1b03a13b536da4ef76a092edcf5717082efc54ce5376a4f5
+            count: 1
+        34ef18f9b54eccfef171850a6301da0527fcc5537b52e44215c2a7f6687129fe:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''도입 전에 무엇을
+            확인해야 하나요?'' is now ''조사 범위·경고 전달·권한·결과 품질 점검''. Unchanged reference/checklist labels retain their
+            names. The section meaning, body evidence and published fragment #_47 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: bd0ac97f8922356fa155c105b33c7de7bb850680d6141705b5deaa448fac5f04
+            count: 1
+        d39a9861a3f718d884930da8482b66f6e58f1d07c3a3696e382f90e2cf3e5c24:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''조사 범위'' is
+            now ''조사 범위''. Unchanged reference/checklist labels retain their names. The section meaning, body
+            evidence and published fragment #_48 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 52bc648b964772cb19963d6b5813bbca285e1e3273fec081c27ac646ab8755b6
+            count: 1
+        1f24f352e55b135526b511d2d77d483ee68366c0491deb482f58f965e2d420d9:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''인시던트 전달''
+            is now ''인시던트 전달''. Unchanged reference/checklist labels retain their names. The section meaning,
+            body evidence and published fragment #_49 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: fb4446a4d1665868c5f844d61fb55ad5492bcbb576e878aee005476e709722d4
+            count: 1
+        39a40a4552f2da6dcb567a7fc089b3a65f450f87adcf82ba338262553a3d6258:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''권한과 안전''
+            is now ''권한과 안전''. Unchanged reference/checklist labels retain their names. The section meaning,
+            body evidence and published fragment #_50 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 22ef19f5552f32bd3b196b548d68bda2b4705cb8c2d1dc14d89234508d91f63f
+            count: 1
+        209274db449a178856d5d82a182661203fd6f6189458544d973a07e255fe28cf:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''조사 품질'' is
+            now ''조사 품질''. Unchanged reference/checklist labels retain their names. The section meaning, body
+            evidence and published fragment #_51 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 244d6d96edb815075cb7e54794df39e8fc181dd05013b721af1c063eb061b250
+            count: 1
+        306420fb185780fb1ef92324fffbe6e85219e17f4bf60d65c001e81ddeff905f:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''알아두어야 할 제한
+            사항'' is now ''AI 판단 오류·연결 맥락·권한에 따른 한계''. Unchanged reference/checklist labels retain their names.
+            The section meaning, body evidence and published fragment #_52 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: d2bb632ce43980b8c0c7ffcfcd2f3e03394ba27ab46a01be5c33fe8879ff02d9
+            count: 1
+        ef9aaca535344de2ef2eb7231d78eeaa4a46343b36b01cf2ff2d3173ed1e63fe:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''참고 자료'' is
+            now ''참고 자료''. Unchanged reference/checklist labels retain their names. The section meaning, body
+            evidence and published fragment #_53 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 4f037928d96ec09776b276bd4016eb363dda201f2207a113736d655d3a83a25a
+            count: 1
+        aa690ffab89de5c7b76fc9f33017c07797c2bb4d53404425a7ed6eb37c7e17ba:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''제품 개요와 조사
+            방식'' is now ''제품 개요와 조사 방식''. Unchanged reference/checklist labels retain their names. The section
+            meaning, body evidence and published fragment #_54 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 676468dca53f703eb3320f9a43a7dee45fe83f0fb6ca6285ca7dda6002bd2fbf
+            count: 1
+        82cc4dab44469488c09ee79804d8072db83ba71944f3c1230d2d0d55b9609364:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''도입과 운영''
+            is now ''도입과 운영''. Unchanged reference/checklist labels retain their names. The section meaning,
+            body evidence and published fragment #_55 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 8f205fb995a88e7b6b932505dc2b58674b83a24de0d515c7910540995de3d6b8
+            count: 1
+        794f5e5ac5d15cd71c4fdb060b5a888542889611a726e7003fd83f61d83beaa3:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''보안과 확장''
+            is now ''보안과 확장''. Unchanged reference/checklist labels retain their names. The section meaning,
+            body evidence and published fragment #_56 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: 544023e5f2abd71f47087ba22ee9106dd55453806d10fd6eafd22343f5d89dd5
+            count: 1
+        ee821a165efd6cab6c7c0997657d62206fe84062c88eef275ffb31de961df5f4:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md: user-requested daily-update explanatory
+            style replaces question or generic section labels with explicit core-content titles; ''실증 자료'' is
+            now ''실증 자료''. Unchanged reference/checklist labels retain their names. The section meaning, body
+            evidence and published fragment #_57 are preserved.'
+          evidence:
+          - kind: structure
+            path: docs/services/azure-monitor/azure-sre-agent/index.md
+            category: headings
+            fingerprint: e858d65a383ee2a0ce664ffa0581bad2aced1430d9076b653a276a23ed535d54
+            count: 1
       prose:
         4bec483512901718e6622d30e27194e0b4b2171f64a4eaf52e9e6f45d5d1daab:
           missing_count: 1
@@ -1989,12 +2665,14 @@ documents:
           missing_count: 1
           reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
             Learn MCP full-text review 2026-10-21, managed-connectors and tool-access-policies:
-            mail approval needs Ask plus Review without an overriding Allow or Hook.'
+            mail approval needs Ask plus Review without an overriding Allow policy.
+            Follow-up review leaves the Hook event-to-policy mapping explicitly unresolved,
+            rather than asserting that Stop or PostToolUse bypasses approval.'
           evidence:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: de6aa5831bfc62daeca1b40dd363d5193789c396990b206be98a30a0f55b9204
+              fingerprint: 3b4320ce05d63adad890f3ecf33eb5821294d668351e4714a24c43361f91837a
               count: 1
         60ed1edb8ecb55b1508c2a18546dd0596fe84dd75096ac031ad5c3c962fb5751:
           missing_count: 1
@@ -2143,12 +2821,13 @@ documents:
           missing_count: 1
           reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
             Learn MCP full-text review 2026-10-21, agent-hooks and tool-access-policies:
-            distinguish Stop completeness checks from preventive policy and post-execution validation.'
+            distinguish Stop completeness checks from preventive policy and post-execution validation.
+            Follow-up review explicitly leaves the mapping to Hook approval-policy precedence unresolved.'
           evidence:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: 689fc46508ed2afe3dc312d63e66abf9a356d4c7715cca5dc3d569296d73c7e6
+              fingerprint: cdabea9f32ea37d9d3d238641f6ab5c56673ea9df02d8b40c426c9e4383fae6b
               count: 1
         67cabb7f67011c9654e5b850941c0b26a26da853675300045e38efd38b531bfb:
           missing_count: 1
