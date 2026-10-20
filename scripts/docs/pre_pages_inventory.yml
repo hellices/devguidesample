@@ -1927,6 +1927,317 @@ documents:
   - baseline_path: monitor/azure-sre-agent.md
     pages_path: guides/azure-monitor/azure-sre-agent-overview/index.md
     reviewed_changes:
+      prose:
+        4bec483512901718e6622d30e27194e0b4b2171f64a4eaf52e9e6f45d5d1daab:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, run-modes and tool-access-policies:
+            narrow Review approval to Azure infrastructure and separate external actions.
+            Exact source URLs are in the guide official_sources; historical evidence is unchanged.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 5aef2fce99edb7a5dc5d6201b2fdb302edd93fae03d1d1114120e2aac5dade45
+              count: 1
+        1ede05cf7beb2712536c8f07845cabdc26d66555d1135093a7297d805b429210:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, permissions and run-modes:
+            separate resource authorization from approval workflow. Sources are recorded in the guide.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: fcd33fb9edbbee5d2815291191d1fc07363690f9a82aad6304f765544079f92a
+              count: 1
+        791beea25d969ace5e3a528b94a95047c0f54d116acc422517a8e7719fd289ea:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, skills and sub-agents:
+            include knowledge files as reference material, distinct from procedures and specialists.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 393083812244ed9c8ca04577b3d3324bd31198645a63facc04628fadc0f12070
+              count: 1
+        cbf4e8b20a6d742cc6ac42b465573961ea629831b2f857b12dc6d6bf26aea3ad:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, run-modes and incident-response-plans:
+            retain per-plan control and maintenance pause while recommending Review for production.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 1cabe769391239e60b784beec50ae1caa1c7ceebbb1c7d326f4687f3352fab07
+              count: 1
+        aeecb9d216aa9b92ceffeaf3d948d9f5a3bda5053096ae1882a282fad6075d18:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, run-modes and permissions:
+            Reader is a permission level, not a third run mode.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: bc729746aa9190a3d4fd587b647161693c9d178a9122e22951e33f4377d4397f
+              count: 1
+        f4ba136706ec43d589f83a2af2344af2dc904ecd91093ceeb521345a020794bd:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, managed-connectors and tool-access-policies:
+            mail approval needs Ask plus Review without an overriding Allow or Hook.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: de6aa5831bfc62daeca1b40dd363d5193789c396990b206be98a30a0f55b9204
+              count: 1
+        60ed1edb8ecb55b1508c2a18546dd0596fe84dd75096ac031ad5c3c962fb5751:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, create-and-set-up:
+            creation requires Owner or Contributor plus User Access Administrator on the deployment scope.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: a97926d2b3f45c7c323bc2623a183b1f255f8429fc98e1e6a8a0248bcb19c538
+              count: 1
+        5c32993dddda5c6b678e861f23486b2110a276360ff15ab971e7ea42ed76e186:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, create-and-set-up:
+            require active role assignments on every target scope and PIM activation when applicable.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 6ddd5a90e88987d1f6e9716f8af647709363944b90d2a6750ad97af3183867a8
+              count: 1
+        68258715d586fb1d29e3238401e916b4e3c363369c2b0f958579948545524a55:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, create-and-set-up and permissions:
+            identify UAMI resource access and the no-scope/no-permission default instead of assuming Reader.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 77135c40ac3555cef02836512a527ccf4254619114c999d774c22ce6bdf287e9
+              count: 1
+        38712027bc247cf6fd818dbd7b882a7bad73479f39480a1ef7e3d8c9b2749036:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, pricing-billing:
+            increasing allocation above current usage resumes service immediately; always-on charges continue.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 3e1bfe446546c19a92f60cea9d60e36c1829c069bc5842c7d8607ee7b2545ba7
+              count: 1
+        cdb97725019d644f199945e50ddf16c932584ec26d27055326b54295b2564324:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, security-overview:
+            distinguish per-call action tokens from managed-identity and OAuth token lifetimes.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: e514fd08024d6e4acdaa002ebedb13c732da1e4dcdcb981e4aedb553cd7d9e25
+              count: 1
+        53d7268253af790ac5408714bb7c013a739d3f2c7b7ab627b94111af2cf2aaf1:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, data-privacy and security-overview:
+            serialized tool results can persist in threads; memory, knowledge and files also persist.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: c1fc1448415ed320a8447e09a886f036e8a9b97ee1d304c0b6a7edd2fb9bb0c4
+              count: 1
+        6bc7883030cb31a180f2ef995da0678cfd5c43b3df5ae49b6e9447b202072d60:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, execute-mitigations:
+            scope command guardrails to the built-in Azure CLI path, not all connectors or Key Vault access.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: e4eb9069a3630bc0020c2bd947a6867a7d6102e40c087c5071272e65fdf97c61
+              count: 1
+        2106028bd000dbd691632e34dc8a48159f43c2e9472a3e28db0fc4f61cc3f7cd:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            retain private/public connectivity guidance without inferring release status from an old preview label.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 569389113f08dae36ae45bb49597207b60143554a0888799dfc398638bd26437
+              count: 1
+        b8d3e12c313934a2a504522399a6b0fde1186dc3d831794ffe5b5c2da558222c:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration and configure-network-controls:
+            retain official VNet terminology and current source links rather than an unsupported preview assertion.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: ff780070e1bf3ff6b1a3c4e290dcea5cbbba986416944f3d5dba98307073c255
+              count: 1
+        f4d34702d0c83896a9d5d0941ec76940ca3d905b9b78dbcfa6a0abfae1a29115:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            restrict Unrestricted suitability to nonsensitive short-lived development/testing; risks remain.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: a4ac5c80cb0a22e785a087ff9d3d418d5a48b3e2c1729133866fb92cef7dc2c7
+              count: 1
+        2dd57a47cb0c1a6a1d079b3e7dfc3490f96806d51f8fa30be75e11186e11d6c2:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration and configure-network-controls:
+            correct minimum subnet size to /27 or larger and explicitly reject /28; historical screenshot retained with warning.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: a15b84f6b2b419de42bd4802ac42936ad9a9fec736ab7f9b450c38d38e0dc025
+              count: 1
+        6b7f2ef8663cb9909c574b2fd955110b0f569639905893776f619d956fb2a5b4:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, configure-network-controls:
+            retain DNS examples but label them nonexhaustive, preserving fallback and failure warnings.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 91f987aea24a19ae9fcd63ab9509ac389316b0efd247d7357cff01e1626c8fd6
+              count: 1
+        c39311b40934447aa68f51f4e03a1852b96f5b02c37ca442a869f974ab4dafef:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            retain the egress-only and no-private-inbound limitation without unsupported preview wording.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: ce06a2992e322312cd37a85d24165fa4813a3c889b3fa80c2452b46477fd0a5b
+              count: 1
+        b006bdc12ee728f3349dbe0baa606c9b93af60d832bbd12552e2861c436aa345:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, agent-hooks and tool-access-policies:
+            distinguish Stop completeness checks from preventive policy and post-execution validation.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 689fc46508ed2afe3dc312d63e66abf9a356d4c7715cca5dc3d569296d73c7e6
+              count: 1
+        67cabb7f67011c9654e5b850941c0b26a26da853675300045e38efd38b531bfb:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, mcp-connectors:
+            scope the 80 native-plus-MCP tool limit to each agent across its connectors.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: b57dd90d308a5c1820ef98f11dbb471a6dbee39cedb7480bee5c83c062bcbe39
+              count: 1
+      tables:
+        fad197d04290651d6d7f0d87d79e1d37b234a1a37c67da1f1b4e220ed3e1fc6c:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, run-modes and permissions:
+            replace a nonexistent third run mode with an explanation of Reader and Privileged access levels.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: d5f32e18b307807cf21ad8c99f7b06e69cfd0d69a422de5c3154bf5bc604609b
+              count: 1
+        dafceb410f2d7d6557abc5a0292d277505fccd5e1553ecc598b3ccb32c702d71:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, run-modes and tool-access-policies:
+            limit Review table wording to the default Azure infrastructure approval workflow.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: cc7bd16f1b87678c35c15c4107b0a6e9eb2e7a9cde2b69e2c2f0225e19cb5a0b
+              count: 1
+        f90ab819ce2de43ba6d79f64e848b80b230e38bc1da034d0de0a3de14c1697c7:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, run-modes and permissions:
+            autonomy does not bypass Azure permissions or applicable policy.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: b379b80443e017621eb5c4773c0f00b166d556f68d2134856a6b772a7c4aa490
+              count: 1
+        a6e598ee19febb61af193d067a7f5acb4653882581984482efd46c835042a5f0:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, sub-agents:
+            preserve specialist usage and add response-plan and scheduled-task invocation.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: 9bfaa26cc2406381a085ed864b6c7e14eec387cd02fd87c3041d3b9bda338616
+              count: 1
+        950d752d60dc5cec8409e54a54fab659f6b5019632a827ee0ba87bc8be07dfa0:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            automatic own-host allowance is documented for packages, not all connectors.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: 6e2c2ef5ef789387fd63da704c3f9a4343369daeb3eebb1f318d75abb867ec55
+              count: 1
+        4baff2af502b93a37eb83510612d3a4fb4953764bb7f48317e02cd66ed41da07:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            preserve public connector routing and distinguish it from remote MCP toggles.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: 3aa97011c06615a2498024dd77d7e6f6dea6fa4f90293b3a1c2af570e2a6cbd5
+              count: 1
+        a0310db1d2ac4365a3991b052044fa02241d54eafceeb8ea88a198bb6ce19779:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            preserve the unsupported inbound limitation without unsupported preview wording.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: 3a07c39547ae469749aa791123f9cfe27c5416d76e3331ba286222ee29aed129
+              count: 1
       local_link_labels:
         c1ca913091c95d35a8482f0216524d86a34dd4070a62f9ca3ec7a89bef6abd81:
           missing_count: 2

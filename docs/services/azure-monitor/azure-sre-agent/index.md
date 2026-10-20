@@ -2,18 +2,95 @@
 services:
 - azure-monitor
 official_sources:
-- title: Azure Monitor documentation
-  url: https://learn.microsoft.com/azure/azure-monitor/
+- title: Overview of Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/overview
+- title: Automate incident response in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/incident-response
+- title: Root cause analysis in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/root-cause-analysis
+- title: Diagnose with Azure observability in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/diagnose-azure-observability
+- title: Memory and knowledge in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/memory
+- title: Connectors in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/connectors
+- title: Managed connectors in Azure SRE Agent (preview)
+  url: https://learn.microsoft.com/azure/sre-agent/managed-connectors
+- title: MCP connectors and tools in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/mcp-connectors
+- title: Agent reasoning in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/agent-reasoning
+- title: Run modes in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/run-modes
+- title: Agent permissions in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/permissions
+- title: Tool access policies in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/tool-access-policies
+- title: Agent hooks in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/agent-hooks
+- title: Skills in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/skills
+- title: Custom agents in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/sub-agents
+- title: Incident response plans in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/incident-response-plans
+- title: Incident platforms in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/incident-platforms
+- title: Execute mitigations in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/execute-mitigations
+- title: Create and set up Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/create-and-set-up
+- title: Supported regions for Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/supported-regions
+- title: Pricing and billing for Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/pricing-billing
+- title: Evaluate Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/evaluate
+- title: Security overview for Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/security-overview
+- title: Data residency and privacy in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/data-privacy
+- title: Azure SRE Agent network integration
+  url: https://learn.microsoft.com/azure/sre-agent/network-integration
+- title: Configure network controls
+  url: https://learn.microsoft.com/azure/sre-agent/configure-network-controls
+- title: Network requirements for Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/network-requirements
+- title: Allow list outbound IPs for Key Vault in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/allow-list-key-vault-firewall
+- title: Schedule tasks with Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/scheduled-tasks
+- title: Use deep investigation in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/deep-investigation
+- title: Team onboarding for Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/team-onboard
+- title: Audit agent actions in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/audit-agent-actions
+- title: Operations Hub in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/operations-hub
+- title: Track incident value in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/track-incident-value
+- title: Deploy with infrastructure as code in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/deploy-iac
+- title: Plugin marketplace in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/plugin-marketplace
+- title: SRE Agent MCP server in Azure SRE Agent
+  url: https://learn.microsoft.com/azure/sre-agent/mcp-server
+- title: Live reports in Azure SRE Agent (preview)
+  url: https://learn.microsoft.com/azure/sre-agent/live-reports
+- title: Alert rules with dynamic thresholds overview
+  url: https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds
 document_type: guide
-status: needs-review
-verification_status: needs-review
-sources_checked_at: 2026-09-12
-last_verified: null
+status: current
+verification_status: verified
+sources_checked_at: 2026-10-21
+last_verified: 2026-10-21
 review_cycle_days: 180
 applies_to:
-- 공식 원문 재검토 필요
+- Azure SRE Agent 제품 소개와 도입 검토
+- 2026-10-21 Microsoft Learn 문서 기준
 title: Azure SRE Agent 개요
-description: Azure SRE Agent의 기능, 구성 요소와 운영 흐름을 설명합니다.
+description: Azure SRE Agent의 조사 흐름, 권한·승인 경계, 운영 확장 기능과 실증 사례를 구분해 설명합니다.
 technologies:
 - rest-api
 tags:
@@ -30,7 +107,47 @@ Azure SRE Agent는 Azure 운영 환경에서 발생한 인시던트를 자동으
 
 이 문서에서는 Azure SRE Agent가 인시던트를 조사하는 방식과 실제 활용 예시를 소개합니다. 제품에서 제공하는 표준 기능과 이번 실증에서 확인한 내용을 구분해 설명합니다.
 
-## Azure SRE Agent를 사용하면 무엇이 달라지나요?
+> **읽는 기준:** 제품 설명은 **2026-10-21 Microsoft Learn** 기준입니다.
+> 실증 수치와 HTTP Trigger 연결 사례는 **2026-08-12의 관측 기록**이며,
+> 현재 제품의 처리 시간이나 성공률을 보장하지 않습니다. 화면 캡처의 메뉴와
+> 기본값은 현재 포털과 다를 수 있으므로 본문의 조건과 공식 절차를 함께 확인하세요.
+
+처음 접한다면 **핵심 개념 → 조사 흐름 → 권한·승인** 순서로 읽으세요.
+도입 검토자는 [도입과 운영 준비](#adoption), 실습을 원하는 독자는
+[실증 사례](#evidence)와 [실험 환경과 재현 방법](event-lab/index.md)으로
+이어가면 됩니다.
+
+## 핵심 개념과 활용 범위
+
+Azure Monitor가 로그·메트릭·경고를 제공한다면, Azure SRE Agent는 그 신호에
+소스 코드와 운영 지식을 연결해 **조사하고, 근거를 설명하고, 허용된 조치를
+제안하거나 실행하는 역할**을 맡습니다. 모니터링 데이터 수집을 대신하거나,
+연결하지 않은 시스템까지 자동으로 이해하는 서비스는 아닙니다.
+
+시작점은 장애 경고만이 아닙니다.
+
+| 시작 방식 | 운영자가 주는 입력 | 얻는 결과 |
+|---|---|---|
+| 대화형 조사 | “지난 배포 이후 주문 API가 느려진 이유를 확인해 줘” | 관련 신호, 원인 후보, 근거와 다음 조치 |
+| 인시던트 자동 대응 | 인시던트 플랫폼의 경고와 대응 계획 | 조건에 맞는 조사 스레드와 완화 제안 또는 허용된 조치 |
+| 예약 작업 | 점검할 내용, 대상과 실행 일정 | 정기 상태 점검·비용 이상 분석·배포 후 확인 결과 |
+
+다음 용어를 구분하면 설정 화면과 조사 흐름을 이해하기 쉽습니다.
+
+| 구성 요소 | 답하는 질문 | 예 |
+|---|---|---|
+| 인시던트 플랫폼 | 무엇이 조사를 시작하게 하나요? | Azure Monitor, PagerDuty, ServiceNow |
+| 대응 계획 | 어떤 인시던트를 누가, 어떤 실행 모드로 처리하나요? | 특정 서비스의 Sev2 경고를 API 전문 에이전트에 전달 |
+| 커넥터·도구 | 어디서 근거를 읽고 어떤 작업을 실행하나요? | GitHub 검색, 외부 로그 조회, Teams 알림 |
+| 지식 파일·메모리 | 어떤 팀 문서와 과거 경험을 참고하나요? | 런북, 아키텍처 문서, 이전 조사에서 얻은 교훈 |
+| 스킬·사용자 지정 에이전트 | 팀의 조사 절차와 전문성을 어떻게 재사용하나요? | 배포 점검 절차, 데이터베이스 전문 조사 |
+| 권한·도구 정책·실행 모드 | 실제 접근과 실행을 어디까지 허용하나요? | 리소스 범위, 도구 차단, 승인 필요 여부 |
+
+핵심은 “AI가 알아서 복구한다”가 아니라 **관측 데이터, 팀의 맥락, 실행 통제를
+하나의 조사 과정에 연결한다**는 점입니다. 근거가 부족하면 원인을 확정할 수
+없으며, 최종 복구 여부와 운영 책임은 사람이 확인해야 합니다.
+
+### Azure SRE Agent를 사용하면 무엇이 달라지나요?
 
 운영자는 경고가 발생하면 여러 도구를 오가며 원인을 찾아야 합니다. Azure SRE Agent는 이 과정을 하나의 조사 흐름으로 연결합니다.
 
@@ -44,11 +161,15 @@ Azure SRE Agent는 Azure 운영 환경에서 발생한 인시던트를 자동으
 
 Azure SRE Agent는 단순히 오류 로그를 나열하지 않습니다. 어떤 서비스가 영향을 받았는지 확인하고, 원격 분석 데이터와 변경 이력, 소스 코드를 함께 살펴본 뒤 근본 원인과 다음 조치를 설명합니다.
 
-## 인시던트가 발생하면 어떻게 조사하나요?
+## 조사 흐름과 데이터 연결
+
+### 인시던트가 발생하면 어떻게 조사하나요?
 
 ![경고 발생부터 해결까지 5분 안에 이어지는 흐름을 시간축으로 보여 주는 다이어그램입니다. 0:00에 PagerDuty와 Azure Monitor, ServiceNow에서 경고가 발생하고, 0:30에 에이전트가 경고를 접수해 팀에 알린 뒤 조사를 시작합니다. 1:30에는 로그 조회와 메트릭 확인, 배포 이력 연관 분석을 수행하고, 3:00에 근본 원인을 찾아 수정 방안을 제안하거나 자율 모드로 직접 조치합니다. 5:00에는 해결 상태가 되어 작업 항목이 갱신되고 팀에 알림이 전달됩니다.](images/incident-response-flow.svg)
 
 > 출처: [인시던트 대응 자동화](https://learn.microsoft.com/azure/sre-agent/incident-response)
+
+그림의 **0:00~5:00은 흐름을 설명하는 예시**이며 SLA나 처리 시간 보장이 아닙니다.
 
 Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
@@ -74,19 +195,27 @@ Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
 6. **사람이 검토하고 승인합니다.**
 
-   검토 모드에서는 변경 작업을 실행하기 전에 담당자의 승인을 받습니다.
+   검토 모드에서는 승인 대상 Azure 인프라 변경을 담당자가 검토합니다.
+   메일·Teams 같은 외부 작업의 승인 여부는 별도 도구·커넥터 정책에 달려 있습니다.
+   아래 [권한과 승인 절차](#governance)에서 예외와 우선순위를 설명합니다.
 
 7. **조사 결과를 공유합니다.**
 
    ServiceNow, PagerDuty, GitHub, Outlook, Microsoft Teams 등 기존 운영 도구로 결과를 전달할 수 있습니다.
 
-## 근본 원인은 어떻게 찾나요?
+### 근본 원인은 어떻게 찾나요?
 
 ![증상에서 시작해 로그와 메트릭, 배포 이력, 소스 코드, 과거 경험을 근거로 모으고 가설을 세워 검증한 뒤 근본 원인과 조치 방안을 제시하는 흐름](images/root-cause-analysis.svg)
 
 > 출처: [근본 원인 분석](https://learn.microsoft.com/azure/sre-agent/root-cause-analysis)
 
-## 어떤 정보를 조사할 수 있나요?
+예를 들어 HTTP 500은 **증상**이지 원인이 아닙니다. 에이전트는 장애 시작 시각,
+최근 배포, 종속성 실패, 리소스 상태를 비교해 “배포 설정 오류인가?”,
+“외부 서비스 문제인가?” 같은 가설을 확인하거나 제외합니다. 좋은 조사 결과는
+결론만이 아니라 **근거의 출처·시각, 제외한 가설, 확인하지 못한 부분**을
+함께 보여 줍니다.
+
+### 어떤 정보를 조사할 수 있나요?
 
 Azure SRE Agent는 관리 ID와 Azure RBAC 권한을 사용해 Azure 리소스를 조사합니다.
 
@@ -105,7 +234,12 @@ Azure SRE Agent는 관리 ID와 Azure RBAC 권한을 사용해 Azure 리소스�
 
 Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 있습니다. 외부 시스템이나 특정 데이터 원본을 지속해서 사용해야 하는 경우에는 커넥터를 추가합니다.
 
-## 과거 경험과 운영 문서는 어떻게 활용하나요?
+“커넥터가 필요 없다”는 설명은 **데이터 수집·RBAC·네트워크 준비까지 생략한다는
+뜻이 아닙니다.** 조사할 로그가 실제로 수집되어 있어야 하고, 관리 ID에 조회
+권한과 네트워크 접근 경로가 있어야 합니다. Log Analytics나 Application Insights
+커넥터를 추가하면 특정 원본을 지속적인 조사 맥락으로 연결할 수 있습니다.
+
+### 과거 경험과 운영 문서는 어떻게 활용하나요?
 
 ![과거 조사 기록과 사용자가 지정한 내용, 업로드한 운영 문서를 함께 검색해 근거와 출처가 있는 답변을 만드는 구조](images/memory-unified-search.svg)
 
@@ -115,21 +249,36 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 > 출처: [메모리와 지식 관리](https://learn.microsoft.com/azure/sre-agent/memory)
 
-## 조사가 끝난 뒤 무엇을 학습하나요?
+업로드한 지식 파일은 **참고 자료**, 스킬은 **재사용할 절차와 선택적 실행 도구**,
+메모리는 **이전 조사와 사용자가 저장한 맥락**입니다. 런북에 “운영 리소스를
+변경하지 말라”고 적는 것만으로 접근 권한이 차단되지는 않습니다. 강제할
+안전 경계는 RBAC와 도구 정책으로 설정하고, 오래된 문서는 갱신해야 합니다.
+
+### 조사가 끝난 뒤 무엇을 학습하나요?
 
 ![조사가 끝나면 증상과 해결 단계, 근본 원인, 피해야 할 접근을 추출해 다음 조사에 사용할 수 있도록 학습하는 흐름](images/memory-auto-learning.svg)
 
 > 출처: [메모리와 지식 관리](https://learn.microsoft.com/azure/sre-agent/memory)
 
-## 어떤 시스템과 연결할 수 있나요?
+여기서 “학습”은 조사에서 얻은 증상·해결 단계·근본 원인·실패한 접근을
+메모리와 지식으로 저장해 **다음 조사에서 검색·참조한다**는 뜻입니다.
+고객 데이터로 기반 AI 모델을 재학습한다는 뜻은 아닙니다.
+**Monitor > Session insights**에서 원본 조사 스레드와 연결된 교훈을 확인하고,
+다른 환경에도 그대로 적용할 수 있는지 검토하세요.
 
-### 인시던트 관리
+### 어떤 시스템과 연결할 수 있나요?
+
+#### 인시던트 관리
 
 - Azure Monitor 경고
 - PagerDuty
 - ServiceNow
 
-### 소스와 작업 관리
+한 에이전트에서 **활성화할 수 있는 인시던트 플랫폼은 한 번에 하나**입니다.
+다른 플랫폼으로 전환하면 기존 플랫폼 연결이 해제됩니다. 여러 데이터 조회용
+커넥터를 함께 연결하는 것과는 별개입니다.
+
+#### 소스와 작업 관리
 
 - GitHub 저장소, Issue, Pull Request
 - Azure DevOps 저장소와 Work Item
@@ -141,7 +290,7 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 > 출처: [관리형 커넥터(미리 보기)](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
-### 알림과 협업
+#### 알림과 협업
 
 - Outlook 메일
 - Microsoft Teams 채널
@@ -151,7 +300,7 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 > 출처: [조치 실행하기](https://learn.microsoft.com/azure/sre-agent/execute-mitigations)
 
-### 외부 관찰 도구
+#### 외부 관찰 도구
 
 - Grafana
 - Datadog
@@ -162,7 +311,9 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 커넥터에서는 사용할 작업만 선택할 수 있습니다. 메일 수신자나 Jira 프로젝트 키처럼 에이전트가 임의로 바꾸면 안 되는 값은 고정할 수 있습니다.
 
-## 권한과 승인 절차는 어떻게 제어하나요?
+## 권한·승인·확장 설계 { #governance }
+
+### 권한과 승인 절차는 어떻게 제어하나요?
 
 ![요청의 의미를 파악하고 맥락 정보를 모아 추론한 뒤 안전한 작업은 실행하고 위험한 작업은 승인을 기다리며 결과를 응답하는 흐름](images/agent-reasoning-flow.svg)
 
@@ -170,13 +321,20 @@ Azure 내부 원격 분석 데이터는 기본 도구만으로도 조회할 수 
 
 요청이 복잡하면 이 과정을 여러 차례 반복하며 판단을 다듬습니다. 각 단계에 걸리는 시간은 상황과 작업 범위에 따라 달라지므로 고정된 처리 시간을 보장하지는 않습니다.
 
-Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
+**접근 권한과 승인 흐름은 서로 다릅니다.** 관리 ID의 Azure RBAC는
+“리소스에 무엇을 할 수 있는가”를 정하고, 실행 모드는 “실행 전에 승인받는가”를
+정합니다. [실행 모드 전용 문서](https://learn.microsoft.com/azure/sre-agent/run-modes)는
+다음 두 모드를 설명합니다.
 
 | 모드 | 동작 |
 |---|---|
-| 읽기 전용 모드 | 자료를 조회하고 분석하지만 변경 작업은 실행하지 않습니다. |
-| 검토 모드(Review mode) | 조치 방안을 제안하고 담당자의 승인을 기다립니다. |
-| 자율 모드 | 허용된 작업을 별도 승인 없이 실행합니다. |
+| 검토 모드(Review) | 기본 승인 흐름에서 Azure 인프라 변경을 제안하고 승인을 기다립니다. |
+| 자율 모드(Autonomous) | 권한과 정책이 허용하는 작업을 해당 승인 대기 없이 실행합니다. |
+
+`Reader`와 `Privileged`는 이 표의 세 번째 실행 모드가 아니라 **리소스 접근 권한
+수준**입니다. 또한 `Reader` 프리셋도 Azure Monitor 경고 수명주기 관리를 위한
+구독 범위 `Monitoring Contributor` 역할을 포함하므로, 이름만 보고 모든 작업이
+읽기 전용이라고 판단하지 마세요. 실제 역할과 범위를 확인해야 합니다.
 
 공식 기능인 검토 모드(Review)와 자율 모드(Autonomous)의 차이는 다음 그림에서도 확인할 수 있습니다.
 
@@ -186,6 +344,18 @@ Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 
 처음 도입할 때는 **검토 모드로 시작하는 것을 권장합니다.** 조사 결과와 도구 선택이 실제 운영 절차에 맞는지 충분히 확인한 뒤 자동화 범위를 넓히는 편이 안전합니다.
 
+실행 모드는 **대응 계획과 예약 작업별로 확인**하세요. 에이전트의 기본값이
+Review여도 자동화 생성 시 기본 선택은 Autonomous일 수 있습니다.
+Azure 인프라 변경 승인과 권한 부족 시의 사용자 위임(OBO)은
+**SRE Agent Administrator**가 수행하며, OBO에는 회사·학교 Microsoft Entra
+계정이 필요합니다. Autonomous도 부족한 Azure RBAC 권한을 만들어 주지는 않습니다.
+
+> **Review는 모든 외부 작업의 승인 장치가 아닙니다.** 메일 전송이나 Teams
+> 게시까지 검토하려면 해당 관리형 커넥터 작업의 `Ask` 또는 도구 접근 정책을
+> 설정해야 합니다. 관리형 커넥터의 `Ask`는 Autonomous에서 사람의 승인 없이
+> 실행됩니다. 외부 연결이 설정자의 자격 증명을 공유할 수 있다는 점도
+> 고려해 작업 종류와 대상을 제한하세요.
+
 커넥터를 설정할 때도 최소 권한 원칙을 적용해야 합니다.
 
 - 읽기 작업과 쓰기 작업을 구분합니다.
@@ -194,24 +364,45 @@ Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 - 삭제나 변경 작업은 승인을 받도록 설정합니다.
 - 자율 모드에서는 일부 승인 절차가 생략될 수 있으므로 별도의 최소 권한 연결을 사용합니다.
 
+#### 도구 접근 정책과 Hooks의 역할
+
+[Tool access policies](https://learn.microsoft.com/azure/sre-agent/tool-access-policies)는
+도구 이름과 지원되는 명령 인수 패턴에 `Allow`, `Ask`, `Deny` 규칙을 적용합니다.
+전역 규칙은 세 값을 모두 지원하고, 사용자 지정 에이전트와 대화 스레드 규칙은
+`Allow`만 추가할 수 있습니다.
+
+- **도구 정책 안에서는 `Deny > Allow > Ask` 순서**로 평가합니다.
+  `Allow`에 일치하면 Review에서도 기본 승인 대기를 건너뜁니다.
+  따라서 `Ask`만으로 변경 불가능한 금지 경계를 만들 수는 없습니다.
+- **사용자 정의 Hook의 명시적 `Allow`는 전역 `Deny`도 재정의할 수 있습니다.**
+  Hooks는 관리자만 만들 수 있으므로 Hook 작성 권한과 변경 이력까지 검토해야 합니다.
+- [Agent Hooks](https://learn.microsoft.com/azure/sre-agent/agent-hooks)의
+  `Stop`은 최종 응답의 완전성을 확인하고, `PostToolUse`는 성공한 도구 호출
+  **이후** 결과를 검증·감사합니다. 사후 검증을 이미 실행된 작업의 예방이나
+  자동 롤백으로 해석하지 마세요.
+
+운영 도입 시에는 **실제 RBAC 범위 → 노출한 도구 → Hooks·도구 정책 →
+커넥터 승인 설정 → 실행 모드**를 함께 점검해야 합니다.
+
 관리 ID 권한이 부족할 때 담당자 승인으로 넘어가는 세부 과정은 다음 그림과 같습니다.
 
 ![에이전트가 작업을 수행하기 전에 관리 ID에 필요한 Azure RBAC 역할이 있는지 확인하는 판단 흐름 다이어그램입니다. 역할이 있으면 관리 ID로 그대로 실행하고, 없으면 담당자 승인을 거쳐 사용자 위임 자격 증명을 요청한 뒤 서비스 다시 시작, 리소스 크기 조정, 로그 조회, 구성 변경, 메트릭 읽기 같은 작업을 수행합니다.](images/permission-flow.svg)
 
 > 출처: [권한](https://learn.microsoft.com/azure/sre-agent/permissions)
 
-## 팀에 맞게 어떻게 확장하나요?
+### 팀에 맞게 어떻게 확장하나요?
 
 ![에이전트가 사용자 지정 스킬을 불러오고 스킬에 연결된 도구로 외부 API를 호출한 뒤 결과를 받아 조사에 활용하는 흐름](images/custom-skill-flow.svg)
 
 > 출처: [스킬](https://learn.microsoft.com/azure/sre-agent/skills)
 
-기본 에이전트만으로 부족한 영역은 두 가지 방법으로 보완합니다.
+기본 에이전트에 팀의 맥락과 전문성을 추가할 때는 다음 세 가지를 구분합니다.
 
 | 구분 | 사용 방식 | 적합한 용도 |
 |---|---|---|
 | 스킬 | 관련 상황에서 에이전트가 자동으로 불러옵니다. | 팀 공통 문제 해결 절차와 실행 도구 |
-| 사용자 지정 에이전트 | 담당자가 필요할 때 직접 호출합니다. | 데이터베이스, 보안처럼 특정 영역 전문 조사 |
+| 사용자 지정 에이전트 | 대화에서는 `/agent`로 호출하고, 대응 계획·예약 작업의 처리기로도 연결합니다. | 데이터베이스, 보안처럼 특정 영역 전문 조사 |
+| 지식 파일 | 관련 질문이 있을 때 검색하는 참고 자료입니다. 실행 도구는 없습니다. | 운영 절차서, 아키텍처 문서, 팀의 에스컬레이션 기준 |
 
 스킬에는 절차를 담은 문서와 함께 Azure CLI, Kusto 쿼리, Python 스크립트 같은 도구를 연결할 수 있습니다. 따라서 방법을 설명하는 데서 그치지 않고 필요한 조회를 직접 수행합니다. 한 대화에서 동시에 활성화되는 스킬은 **최대 5개**이며, 이 수를 넘으면 오래된 스킬부터 해제되었다가 필요할 때 다시 불러옵니다.
 
@@ -221,7 +412,7 @@ Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 
 > 출처: [사용자 지정 에이전트](https://learn.microsoft.com/azure/sre-agent/sub-agents)
 
-## 인시던트를 담당자에게 어떻게 배분하나요?
+### 인시던트를 담당자에게 어떻게 배분하나요?
 
 대응 계획은 들어온 인시던트를 조건에 따라 적절한 사용자 지정 에이전트로 전달합니다. 다음 조건을 조합할 수 있습니다.
 
@@ -230,15 +421,22 @@ Azure SRE Agent는 실행 수준에 따라 권한을 제어합니다.
 - 인시던트 유형
 - 제목에 포함된 키워드
 
-대응 계획마다 실행 수준을 따로 지정할 수 있어, 중요한 장애는 자동 조치를 허용하고 낮은 심각도는 검토 모드로 운영하는 방식이 가능합니다. 계획은 삭제하지 않고 사용 중지할 수 있으므로 정기 점검 기간에도 설정을 유지할 수 있습니다.
+대응 계획마다 실행 모드를 따로 지정할 수 있습니다. 심각도가 높다는 이유만으로
+자동 조치를 허용하기보다는, 운영 장애는 Review로 시작하고 검증된 반복 작업부터
+Autonomous 적용을 검토하세요. 계획은 삭제하지 않고 사용 중지할 수 있으므로
+정기 점검 기간에도 설정을 유지할 수 있습니다.
 
 인시던트 플랫폼을 처음 연결하면 빠른 시작 대응 계획이 자동으로 만들어집니다. 사용자 정의 대응 계획을 만든 뒤에는 이 계획을 삭제해야 인시던트가 잘못 전달되거나 두 번 처리되지 않습니다.
+
+빠른 시작 옵션의 사용 여부와 생성된 계획을 반드시 확인하세요.
+기본 quickstart 계획은 **Autonomous**로 동작하므로,
+직접 만든 Review 계획만 확인하고 도입을 마치면 안 됩니다.
 
 ![인시던트 플랫폼에서 시작해 조치와 효과 측정까지 이어지는 전체 흐름을 보여주는 다이어그램입니다. PagerDuty나 Azure Monitor 같은 플랫폼이 경고를 보내면 필터와 실행 모드를 지정한 대응 계획이 조건에 맞는 항목을 골라 에이전트에게 넘기고, 에이전트가 자동으로 조사해 얻은 결과로 문제를 완화하고 원래 플랫폼의 상태를 갱신한 뒤 처리 결과를 지표로 추적합니다.](images/incident-platform-flow.svg)
 
 > 출처: [인시던트 플랫폼](https://learn.microsoft.com/azure/sre-agent/incident-platforms)
 
-## 제품에서 기본으로 지원하는 방식
+### 제품에서 기본으로 지원하는 방식
 
 제품의 표준 Azure Monitor 연계는 **Azure Monitor 인시던트 플랫폼 → 대응 계획 → Azure SRE Agent** 순서로 동작합니다. 이 방식에서는 Logic App과 같은 중간 연결이 필요하지 않습니다.
 
@@ -250,7 +448,7 @@ Azure SRE Agent는 다음 기능을 제품에서 기본으로 지원합니다.
 - GitHub와 Azure DevOps 소스 연결
 - ServiceNow와 PagerDuty 상태 갱신
 - Outlook과 Microsoft Teams 알림 커넥터
-- 읽기 전용, 검토, 자율 실행 모드
+- Review·Autonomous 실행 모드와 별도의 리소스 접근 권한 제어
 
 자세한 제품 기능은 다음 자료에서 확인할 수 있습니다.
 
@@ -260,13 +458,24 @@ Azure SRE Agent는 다음 기능을 제품에서 기본으로 지원합니다.
 - [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
 - [관리형 커넥터(미리 보기)](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
-## 이번 실증에서 사용한 방식
+## 실증으로 보는 활용 예시 { #evidence }
+
+다음 절은 **2026-08-12 실험의 관측 결과**입니다. 당시 연결 방식과 수치는
+[실제 동작 검증 결과](validation-results/index.md)에 보존되어 있습니다.
+현재 제품의 표준 구성이나 재현 절차와 혼동하지 마세요.
+
+### 이번 실증에서 사용한 방식
 
 ![Azure SRE Agent의 인시던트 대응 흐름](images/sre-agent-process.png)
 
 [편집 가능한 SVG 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/sre-agent-process.svg)
 
 이번 실증에서는 대응 계획을 공개 API로 자동 구성하는 데 제약이 있어 Azure SRE Agent의 HTTP Trigger를 사용했습니다.
+
+위 제약은 **당시 실증 자동화의 제약**입니다. 현재 Learn은
+[IaC 배포](https://learn.microsoft.com/azure/sre-agent/deploy-iac)와
+[MCP 서버를 통한 관리](https://learn.microsoft.com/azure/sre-agent/mcp-server)를
+별도로 안내하므로, 현재도 포털이나 HTTP Trigger 연결만 가능하다고 일반화하면 안 됩니다.
 
 ```text
 Azure Monitor 경고
@@ -297,7 +506,7 @@ Azure Monitor 경고
 - Microsoft Teams 커넥터
 - Azure Monitor 기본 대응 계획
 
-## 실제 활용 예시: 주문 API에서 HTTP 500 발생
+### 실제 활용 예시: 주문 API에서 HTTP 500 발생
 
 배포 설정 오류로 주문 API가 HTTP 500을 반환하는 상황을 만들고, Azure SRE Agent가 어떤 근거를 확인하는지 검증했습니다.
 
@@ -305,14 +514,14 @@ Azure Monitor 경고
 
 [편집 가능한 SVG 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/s1-three-panel.svg)
 
-### 상황
+#### 상황
 
 - 서비스: `ca-sre-event-lab-vnet`
 - 영향: `GET /api/orders` 요청 120건 실패
 - 탐지: Azure Monitor 경고
 - 실행 수준: 검토 모드
 
-### 에이전트에게 기대한 조사
+#### 에이전트에게 기대한 조사
 
 1. 영향을 받은 서비스와 API를 정확히 찾아야 합니다.
 2. 장애가 시작된 시각을 확인해야 합니다.
@@ -321,7 +530,7 @@ Azure Monitor 경고
 5. 서비스가 정상으로 돌아왔는지 확인해야 합니다.
 6. 추가로 필요한 조치를 제안해야 합니다.
 
-### 실제 확인 결과
+#### 실제 확인 결과
 
 ![Azure SRE Agent가 확인한 결과](images/s1-agent-conclusion.png)
 
@@ -331,7 +540,12 @@ Azure Monitor 경고
 - 정상 설정을 사용한 후속 수정 버전으로 트래픽이 이동한 사실을 확인했습니다.
 - 에이전트는 검토 모드에서 Azure 리소스를 직접 변경하지 않았습니다.
 
-## 조사 결과를 티켓으로 전달하기
+이 사례에서 **2초는 경고 발생 후 조사 대화가 생성되기까지의 관측값**입니다.
+장애 탐지부터 복구까지의 시간이나 제품의 보장 시간이 아닙니다.
+또한 정상 수정 버전으로의 전환을 에이전트가 **확인한 것**과 에이전트가 직접
+**복구한 것**은 구분해야 합니다.
+
+### 조사 결과를 티켓으로 전달하기
 
 Azure SRE Agent가 정리한 근본 원인과 조치 방안을 작업 항목으로 전달할 수 있습니다. 이번 실증에서는 같은 조사 결과로 실제 GitHub Issue를 만들었습니다.
 
@@ -352,7 +566,7 @@ Issue에는 다음 내용을 포함했습니다.
 
 실제 운영 환경에서는 ServiceNow, PagerDuty, Azure DevOps Work Item, Jira 등으로 같은 형식을 전달할 수 있습니다.
 
-## 조사 결과를 메일로 공유하기
+### 조사 결과를 메일로 공유하기
 
 이번 실증에서는 외부 수신자에게 메일을 보내지 않았습니다. 대신 Azure SRE Agent의 조사 결과로 Outlook에서 열 수 있는 메일 초안과 화면 미리보기를 만들었습니다.
 
@@ -365,10 +579,10 @@ Issue에는 다음 내용을 포함했습니다.
 
 - 받는 사람은 담당자 또는 배포 목록으로 고정합니다.
 - 제목과 본문은 에이전트가 조사 결과를 바탕으로 작성하도록 설정할 수 있습니다.
-- 검토 모드에서는 담당자가 내용을 확인한 뒤 전송합니다.
+- 전송 전 사람의 검토가 필요하면 관리형 커넥터의 전송 작업을 `Ask`로 설정하고 Review에서 동작시킵니다. 이를 우회하는 `Allow` 정책이나 Hook이 없는지도 확인합니다.
 - 자율 모드에는 중요한 수신자나 작업을 별도의 최소 권한 연결로 분리합니다.
 
-## 다른 장애에도 같은 조사 방식을 적용할 수 있나요?
+### 다른 장애에도 같은 조사 방식을 적용할 수 있나요?
 
 이번 실증에서는 세 가지 유형을 확인했습니다.
 
@@ -380,9 +594,12 @@ Issue에는 다음 내용을 포함했습니다.
 
 상세 수치, 시간 순서, 평가 기준은 [실제 동작 검증 결과](validation-results/index.md)에서 확인할 수 있습니다.
 
-## Dynamic Thresholds와 함께 사용할 수 있나요?
+### Dynamic Thresholds와 함께 사용할 수 있나요?
 
 이번 실증은 같은 날 결과를 확인하기 위해 고정 임계값을 사용했습니다. 실제 운영에서는 Dynamic Thresholds를 함께 사용해 평소와 다른 패턴을 찾을 수 있습니다.
+
+이 기능은 **Azure Monitor의 탐지 임계값**을 조정합니다. SRE Agent의 원인
+분석 기능을 켜는 설정은 아니며, 발생한 경고를 대응 계획에 연결하는 구조는 같습니다.
 
 - 최소 3일과 30개 표본이 있어야 경고가 발생합니다.
 - 최근 10일의 데이터를 기준으로 허용 범위를 계산합니다.
@@ -393,22 +610,34 @@ Issue에는 다음 내용을 포함했습니다.
 
 자세한 내용은 [Dynamic Thresholds 연계 가이드](dynamic-thresholds/index.md)를 참고하세요.
 
-## 도입 전에 확인해야 할 사전 조건
+## 도입과 운영 준비 { #adoption }
+
+### 도입 전에 확인해야 할 사전 조건
 
 Azure SRE Agent를 만들기 전에 다음 조건을 먼저 확인하세요.
 
 - 구독이 Azure SRE Agent 사용 대상으로 등록되어 있어야 합니다. 등록되지 않으면 에이전트를 만들 때 리전 목록이 비어 있습니다.
-- 에이전트를 만드는 담당자에게 구독 Contributor 권한이 필요합니다. 리소스 공급자를 등록하고 리소스를 만들기 위한 권한입니다.
-- 역할 할당을 직접 만들려면 Owner 또는 User Access Administrator 권한이 추가로 필요합니다.
+- 포털에서 에이전트를 만드는 담당자는 배포할 구독 또는 리소스 그룹에 **Owner**, 또는 **Contributor와 User Access Administrator**가 필요합니다. 배포와 사용자 역할 할당을 함께 수행하므로 Contributor만으로 충분하다고 가정하지 마세요.
+- 조사할 Azure 범위를 추가하려면 각 범위에 활성 상태의 Owner 또는 User Access Administrator 권한이 필요합니다. PIM을 사용한다면 설정 전에 해당 역할을 활성화하세요.
 - 사내 네트워크에서 에이전트 포털 도메인을 차단하지 않아야 합니다. 보안 프록시 환경에서는 사전에 허용 목록을 확인하세요.
 
-에이전트가 조사에 사용하는 권한은 담당자의 권한과 다릅니다. 에이전트의 관리 ID는 기본적으로 읽기 권한만 가지며, 변경 작업을 하려면 필요한 범위에 권한을 따로 부여해야 합니다.
+에이전트가 조사에 사용하는 권한은 담당자의 권한과 다릅니다. 배포 시 시스템 할당
+관리 ID(SAMI)와 사용자 할당 관리 ID(UAMI)가 구성되며, Azure 리소스 접근과
+커넥터 인증에는 **UAMI**를 사용합니다. 조사 범위를 연결하지 않으면 관리 ID에
+리소스 접근 권한이 없습니다. 필요한 범위와 권한 수준을 명시적으로 선택하고,
+실제로 부여된 역할을 확인하세요.
 
 에이전트는 한 리전에 배포합니다. Korea Central을 포함해 여러 리전을 지원하지만, **만든 뒤에는 리전은 변경할 수 없습니다.** 다른 리전에서 운영하려면 해당 리전에 별도 에이전트를 만듭니다. 에이전트가 배포된 리전과 무관하게 다른 리전의 리소스를 조사할 수 있습니다.
 
 AI 모델 공급자도 함께 확인하세요. 조사 대화와 요약 결과는 에이전트를 배포한 리전에 저장되지만, 모델 추론은 공급자에 따라 다른 국가에서 처리될 수 있습니다. 지역별 기본 공급자가 다르므로, 데이터 처리 위치에 대한 요건이 있는 조직은 도입 검토 단계에서 현재 설정된 공급자와 처리 범위를 확인하세요.
 
-## 비용은 어떻게 발생하나요?
+대화·업로드 파일의 저장 위치, 메모리·지식 **검색 인덱스의 리전 예외**,
+모델 추론 위치를 각각 검토해야 합니다. Azure OpenAI도 EU/EFTA 경계 밖에서는
+추론이 전 세계에서 처리될 수 있고, Anthropic은 EU Data Boundary 적용 대상이
+아닙니다. Korea Central에 에이전트를 배포하는 것만으로 모든 처리가 국내에
+머문다고 해석하지 마세요.
+
+### 비용은 어떻게 발생하나요?
 
 Azure SRE Agent는 Azure Agent Unit(AAU)을 기준으로 과금합니다. 비용은 두 가지로 나뉩니다.
 
@@ -420,42 +649,60 @@ Azure SRE Agent는 Azure Agent Unit(AAU)을 기준으로 과금합니다. 비용
 비용을 관리할 때는 다음을 기억하세요.
 
 - 에이전트를 중지해도 상시 비용은 계속 발생합니다. 완전히 멈추려면 삭제해야 합니다.
-- 월별 AAU 한도를 설정할 수 있습니다. 이 한도는 활성 비용에만 적용되며, 한도에 도달하면 다음 달까지 조사와 채팅을 사용할 수 없습니다. 상시 비용은 한도와 무관하게 계속 발생합니다.
+- 월별 AAU 한도는 활성 비용에만 적용됩니다. 한도에 도달하면 조사·채팅·작업이 중단되며, 다음 달 초기화 또는 현재 사용량보다 높은 한도로 증액하면 재개됩니다. 증액은 즉시 적용되지만 상시 비용은 한도와 무관하게 계속 발생합니다.
 - 사용하는 모델에 따라 단가가 크게 달라집니다.
 - 스레드 유형별 사용량을 확인하고 내보낼 수 있어 팀별 비용 배분에 활용할 수 있습니다.
 - Azure Monitor 로그 조회처럼 연결된 서비스의 비용은 별도로 발생합니다.
 
-## 보안과 데이터는 어떻게 보호되나요?
+신규 고객 평가 혜택은 **최대 30일간 상시 비용을 면제**하는 것이며,
+조사와 채팅의 활성 사용량은 유료입니다. 계정당 최대 3개 에이전트 등 조건이
+있고 첫 에이전트 생성일부터 평가 기간이 시작됩니다. 기간 종료 후에는
+별도 재확인 없이 표준 과금으로 전환되므로
+[평가 조건](https://learn.microsoft.com/azure/sre-agent/evaluate)과 삭제 일정을
+함께 검토하세요.
+
+### 보안과 데이터는 어떻게 보호되나요?
 
 Azure SRE Agent는 조사 도구를 격리된 샌드박스에서 실행하고, 자격 증명을 대화 맥락에 남기지 않습니다.
 
 - 도구 실행 환경은 에이전트별로 분리되며, 호출마다 새 프로세스를 사용합니다.
-- 자격 증명은 호출 시점에 짧은 수명 토큰으로 발급하고 재사용하지 않습니다.
-- 조회한 원시 로그는 별도로 저장하지 않고, 조사 대화와 요약된 결과만 보존합니다.
+- 자격 증명은 격리된 ID 서비스가 관리하고, 도구 호출에 필요한 범위로 전달합니다. 호출별 action token과 관리 ID·OAuth 토큰의 수명은 서로 다릅니다.
+- 원시 쿼리 결과를 별도 저장소에 독립적으로 복제하지 않더라도, **도구 메시지와 결과 발췌·요약은 대화 기록에 저장될 수 있습니다.** 메모리·지식·업로드 파일도 보존 대상이므로 “로그가 전혀 남지 않는다”고 해석하면 안 됩니다.
 - 관리 ID 권한이 부족하면 담당자 승인 후 사용자 자격 증명으로 실행하며, 이후 자격 증명을 캐시하지 않습니다.
-- Azure CLI 기반 작업에는 안전 장치가 있어 삭제 계열 명령과 키 자격 증명 모음 접근은 차단됩니다.
+- 기본 Azure CLI 완화 도구에는 `delete`·`remove`와 `az keyvault` 명령 차단이 문서화되어 있습니다. 이를 외부 MCP·관리형 커넥터까지 모든 경로의 삭제나 Key Vault 접근이 금지된다는 뜻으로 확대하지 마세요.
 - 읽기 전용으로 잠근 리소스는 변경하지 않습니다.
 
-Log Analytics 작업 영역이나 AKS를 비공개 네트워크로만 노출한 환경이라면 에이전트의 네트워크 모드를 VNet 통합으로 설정해 프라이빗 엔드포인트에 접근할 수 있습니다. 이 기능은 현재 미리 보기입니다. 공개 엔드포인트만 사용하는 환경에서는 별도 VNet 구성 없이도 조사할 수 있습니다. 자세한 구성 방법은 아래 '비공개 네트워크에는 어떻게 연결하나요?' 절에서 설명합니다.
+대화 스레드를 삭제해도 그 스레드에서 학습한 에이전트 메모리는 남을 수 있습니다.
+에이전트 삭제는 에이전트가 관리하는 데이터의 삭제이며,
+Application Insights에 보낸 감사 데이터는 해당 리소스의 보존 정책을 따릅니다.
+도입 전에 민감정보 최소 수집, 메모리 관리, 감사 로그 보존·삭제 책임을 정하세요.
 
-## 비공개 네트워크에는 어떻게 연결하나요?
+Log Analytics 작업 영역이나 AKS를 비공개 네트워크로만 노출한 환경이라면 에이전트의 네트워크 모드를 VNet 통합으로 설정해 프라이빗 엔드포인트에 접근할 수 있습니다. 공개 엔드포인트만 사용하는 환경에서는 별도 VNet 구성 없이도 조사할 수 있습니다. 자세한 구성 방법은 아래 '비공개 네트워크에는 어떻게 연결하나요?' 절에서 설명합니다.
+
+### 비공개 네트워크에는 어떻게 연결하나요?
 
 ![작업 영역 구성 화면의 네트워킹 탭을 보여 주는 화면입니다. 제목 옆에는 미리 보기 배지가 있고, 송신 모드로 Unrestricted, Limited, Azure VNet 세 가지 카드가 나란히 있으며 그중 Azure VNet이 선택되어 연결됨 배지가 붙어 있고 나머지 두 카드는 흐리게 비활성 상태로 표시됩니다. 아래에는 연결한 위임 서브넷 경로와 함께 서브넷이 /28 이상이어야 하고 Microsoft.App/environments에 위임되어야 한다는 안내, 자동으로 켜진 VNet 프라이빗 DNS 사용 옵션, 1분 전에 확인을 마쳤다고 표시된 연결 테스트 단추와 VNet 연결 해제 단추가 있습니다. 그 아래 인프라 네트워크 영역에는 이 경로가 VNet을 우회하므로 NSG 규칙과 프라이빗 DNS가 적용되지 않는다는 경고와 함께 켜져 있는 MCP 서버 접근 토글과 패키지 관리자 접근 토글, 아직 선택하지 않은 GitHub와 GitHub Enterprise, Azure DevOps 코드 저장소 선택란, 와일드카드까지 입력할 수 있는 추가 호스트 입력란이 있습니다.](images/azure-sre-agent-networking-vnet.png)
 
 > 출처: [네트워크 통합](https://learn.microsoft.com/azure/sre-agent/network-integration)
 
-Azure SRE Agent가 비공개 네트워크에 있는 리소스에 접근하려면 **VNet 통합**(VNet integration)을 사용합니다. 이 기능의 공식 명칭은 VNet 통합이며, 흔히 쓰이는 표현인 'VNet 삽입(VNet injection)'은 공식 용어가 아니므로 안내나 문서에서 혼용하지 않는 것이 좋습니다. VNet 통합은 현재 미리 보기 상태입니다.
+위 캡처에는 과거 `/28` 안내와 미리 보기 배지가 남아 있습니다.
+**현재 구성 문서의 최소 서브넷 크기는 `/27` 이상**입니다.
+캡처의 숫자나 배지로 현재 요구 사항·지원 단계를 판단하지 마세요.
 
-### 네트워크 제어가 왜 필요한가요?
+Azure SRE Agent가 비공개 네트워크에 있는 리소스에 접근하려면 **VNet 통합**(VNet integration)을 사용합니다. 아래에서는 공식 문서의 용어인 VNet 통합과 Azure VNet 모드를 사용합니다. 지원 범위는 [네트워크 통합](https://learn.microsoft.com/azure/sre-agent/network-integration)과 [구성 절차](https://learn.microsoft.com/azure/sre-agent/configure-network-controls)를 기준으로 확인하세요.
 
-기본값인 Unrestricted 모드에서는 에이전트가 인터넷의 모든 엔드포인트에 연결할 수 있습니다. 개발과 테스트 환경에서는 문제가 되지 않지만, 운영 환경에서는 다음 두 가지 위험이 남습니다.
+#### 네트워크 제어가 왜 필요한가요?
+
+기본값인 Unrestricted 모드에서는 에이전트가 인터넷의 모든 엔드포인트에 연결할 수 있습니다.
+민감정보에 접근하지 않는 단기 개발·테스트에 적합한 선택지이며,
+개발 환경이라고 해서 다음 위험이 사라지는 것은 아닙니다.
 
 - **데이터 유출**(data exfiltration): 민감한 내부 데이터를 다루는 에이전트가 인터넷으로 자유롭게 나갈 수 있으면 조직 밖으로 데이터가 빠져나가는 경로가 생깁니다.
 - **프롬프트 인젝션**(prompt injection): 공개 인터넷의 악의적인 내용은 에이전트의 판단을 조작하도록 만들어질 수 있으며, 외부 콘텐츠를 가져오는 에이전트는 그 응답을 통한 공격에 노출됩니다.
 
 VNet 통합을 적용하면 에이전트의 아웃바운드 호출이 조직의 네트워크 인프라를 지나갑니다. 그 결과 네트워크 로그에 기록되어 감사와 모니터링에 활용할 수 있고, 계층 4와 계층 7 방화벽 검사, 사용자 지정 DNS 구성, 기존 송신 규칙이 그대로 적용됩니다. 에이전트는 같은 네트워크의 다른 워크로드와 동일한 규칙 아래에서 동작합니다.
 
-### 세 가지 네트워크 제어 모드
+#### 세 가지 네트워크 제어 모드
 
 | 모드 | 설명 | 이런 경우에 적합합니다 |
 |---|---|---|
@@ -463,16 +710,16 @@ VNet 통합을 적용하면 에이전트의 아웃바운드 호출이 조직의 
 | Limited | 허용 목록에 등록한 호스트로만 아웃바운드 연결을 제한합니다. | 전체 VNet 구성 없이 특정 대상만 제어하고 싶을 때 |
 | Azure VNet | 플랫폼 트래픽을 제외한 아웃바운드 트래픽을 사용자의 VNet으로 라우팅합니다. | 감사 추적과 송신 제어가 필요한 운영 환경 |
 
-### 사전 준비 사항
+#### 사전 준비 사항
 
 - 에이전트와 같은 리전에 있는 전용 서브넷이 필요합니다.
-- 서브넷 크기는 **/28** 이상이어야 하며, 여러 에이전트를 함께 운영하거나 트래픽이 몰릴 때를 대비하려면 **/26**까지 넉넉하게 확보하는 것을 권장합니다.
+- 서브넷 크기는 **/27 이상**이어야 합니다. `/26`처럼 더 큰 주소 공간도 가능하지만 `/28`은 현재 최소 요구 사항을 충족하지 않습니다.
 - 서브넷은 **Microsoft.App/environments**에 위임(delegate)되어 있어야 합니다.
 - 서브넷을 연결할 담당자에게는 대상 서브넷에 대한 **Network Contributor** 역할(또는 `Microsoft.Network/virtualNetworks/subnets/join/action` 권한을 포함하는 동급 역할)이 필요합니다.
 - 에이전트 리소스에는 **SRE Agent Administrator** 역할이 필요합니다.
 - 서브넷은 다른 서비스와 공유할 수 없으며 에이전트 전용으로 사용해야 합니다.
 
-### 트래픽 경로는 대상마다 다릅니다
+#### 트래픽 경로는 대상마다 다릅니다
 
 | 트래픽 대상 | 실제 경로 | 설정 가능 여부 |
 |---|---|---|
@@ -482,17 +729,17 @@ VNet 통합을 적용하면 에이전트의 아웃바운드 호출이 조직의 
 | 패키지 레지스트리(PyPI, npm, NuGet, apt 등) | 토글을 켜면 인프라 네트워크, 끄면 VNet의 FQDN 방화벽 규칙 | 레지스트리별로 개별 설정할 수 있습니다. |
 | 코드 저장소(GitHub, GitHub Enterprise, Azure DevOps) | 토글을 켜면 인프라 네트워크, 끄면 VNet의 FQDN 방화벽 규칙 | 공급자별로 개별 설정할 수 있습니다. |
 | 원격 MCP 서버 | 토글을 켜면 인프라 네트워크, 끄면 VNet의 FQDN 방화벽 규칙 | 단일 토글로 설정합니다. |
-| 추가 호스트 목록에 등록한 호스트 | 인프라 네트워크 | 호스트 이름이나 `*.example.com` 같은 와일드카드 패턴을 직접 입력해 관리합니다. 구성한 패키지와 커넥터는 각자 사용하는 호스트를 자동으로 허용하므로, 목록에는 레지스트리와 코드 저장소 밖의 대상만 등록하면 됩니다. |
-| 커넥터 트래픽(관리형 커넥터 포함) | 공개 인터넷 | 변경할 수 없습니다. 미리 보기 기간에는 VNet을 거치지 않고 공개 인터넷 경로로 전송됩니다. |
-| 프라이빗 엔드포인트를 통한 인바운드 연결 | 지원하지 않음 | 이번 미리 보기에서는 아웃바운드 방향만 제어합니다. |
+| 추가 호스트 목록에 등록한 호스트 | 인프라 네트워크 | 호스트 이름이나 `*.example.com` 같은 와일드카드 패턴을 직접 입력해 관리합니다. 구성한 패키지는 자신의 호스트를 자동 허용하므로 실제 허용 대상을 함께 확인합니다. |
+| 커넥터 트래픽(관리형 커넥터 포함) | 공개 인터넷 | VNet을 거치지 않습니다. 원격 MCP 서버의 토글 경로와 구분해야 합니다. |
+| 프라이빗 엔드포인트를 통한 인바운드 연결 | 지원하지 않음 | VNet 통합은 아웃바운드 방향을 제어합니다. |
 
-### 설정 절차
+#### 설정 절차
 
 1. 에이전트 포털에서 **설정 > 작업 영역 구성 > 네트워킹** 탭을 엽니다.
 2. 네트워크 제어 모드로 **Azure VNet**을 선택합니다.
 3. 서브넷 찾아보기에서 구독, 리소스 그룹, 가상 네트워크, 서브넷을 순서대로 선택하고 연결합니다.
 4. 연결하면 **Use VNet's private DNS** 옵션이 자동으로 켜집니다. 이 옵션을 사용하면 에이전트가 프라이빗 엔드포인트 호스트 이름을 확인할 수 있습니다.
-5. 프라이빗 엔드포인트 확인이 정상적으로 동작하려면 VNet에 관련 Azure Private DNS 영역을 연결해야 합니다. Log Analytics에는 `privatelink.ods.opinsights.azure.com`, Key Vault에는 `privatelink.vaultcore.azure.net` 영역을 연결하세요. DNS를 구성하지 않으면 에이전트가 공개 엔드포인트로 돌아가거나 연결에 실패할 수 있습니다.
+5. 프라이빗 엔드포인트 이름을 확인할 수 있도록 대상 서비스의 Azure Private DNS 구성을 완료하세요. 공식 SRE Agent 문서는 Log Analytics의 `privatelink.ods.opinsights.azure.com`, Key Vault의 `privatelink.vaultcore.azure.net`을 예로 듭니다. 이는 서비스별 전체 DNS 목록이 아니므로 실제 구성에 필요한 영역을 모두 확인해야 합니다. DNS가 잘못되면 공개 엔드포인트로 돌아가거나 연결에 실패할 수 있습니다.
 6. 인프라 네트워크 토글에서 원격 MCP 서버, 패키지 레지스트리, 코드 저장소, 추가 호스트 중 공개 인터넷 경로를 허용할 항목을 선택합니다.
 7. 저장한 뒤 공개 접근을 차단한 프라이빗 엔드포인트 리소스(예: 공개 접근을 비활성화한 Log Analytics 작업 영역)를 조사하도록 요청해 실제로 VNet 경로로 연결되는지 확인하세요.
 
@@ -501,13 +748,13 @@ VNet을 연결한 뒤에 구성을 바꿀 때는 다음 순서를 지켜야 합�
 - 송신 모드를 바꾸려면 먼저 VNet 연결을 해제해야 합니다. VNet이 연결되어 있는 동안에는 Unrestricted와 Limited 모드 카드가 비활성화되어 선택할 수 없습니다.
 - 서브넷을 바꿀 때도 VNet 연결을 해제한 뒤 새 서브넷으로 다시 연결해야 합니다.
 
-### 인프라 네트워크 토글은 과도기 수단입니다
+#### 인프라 네트워크 토글은 과도기 수단입니다
 
 GitHub는 Azure 서비스가 아니어서 서비스 태그를 제공하지 않고, PyPI와 npm, NuGet, 컨테이너 레지스트리처럼 널리 쓰이는 공개 서비스도 전 세계에 걸친 IP 대역이 자주 바뀝니다. 계층 4 IP 기반 방화벽만으로는 이런 대상의 주소 목록을 최신 상태로 유지하기 어렵고, 목록이 오래되면 에이전트가 필요한 서비스에 도달하지 못합니다. 인프라 네트워크 토글은 이런 대상에 플랫폼 송신 경로로 도달하도록 열어 주는 설정입니다.
 
 다만 이 토글은 호스트 이름이나 FQDN을 인식하는 송신 필터링을 대신하지 않습니다. FQDN 규칙을 지원하는 Azure Firewall Premium이나 TLS 검사를 지원하는 네트워크 가상 어플라이언스로 옮겨 가는 동안 한시적으로 사용하는 과도기 수단으로 다루고, 네트워크 팀이 방화벽 규칙을 갱신하면 열어 둔 범위를 다시 좁히세요.
 
-### 패키지 레지스트리 대신 미리 설치를 사용할 수 있습니다
+#### 패키지 레지스트리 대신 미리 설치를 사용할 수 있습니다
 
 에이전트가 조사 중에 실행하는 스크립트가 특정 패키지를 필요로 한다면, 패키지 레지스트리 토글을 켜서 인프라 네트워크로 우회하는 대신 샌드박스 기본 이미지에 필요한 패키지를 미리 설치할 수 있습니다. 이렇게 하면 실행할 때마다 패키지가 준비된 상태로 제공되므로 공개 레지스트리로 나가는 경로를 열지 않아도 됩니다.
 
@@ -519,7 +766,7 @@ GitHub는 Azure 서비스가 아니어서 서비스 태그를 제공하지 않�
 
 `NuGet` 항목에는 `dotnet-ef`처럼 .NET CLI 도구만 등록할 수 있으며, 라이브러리 패키지는 전역으로 설치할 수 없습니다.
 
-### 방화벽에서 허용해야 하는 도메인
+#### 방화벽에서 허용해야 하는 도메인
 
 에이전트 포털과 조사 기능을 사용하려면 사내 방화벽과 프록시에서 다음 도메인을 HTTP와 WebSocket 트래픽 모두에 대해 허용해야 합니다.
 
@@ -536,13 +783,18 @@ GitHub는 Azure 서비스가 아니어서 서비스 태그를 제공하지 않�
 
 Zscaler를 비롯한 일부 사내 프록시는 `*.azuresre.ai`를 기본적으로 차단합니다. 포털이 열리지 않거나 대화 화면이 응답하지 않는다면 이 도메인을 허용 목록에 추가하고, 프록시가 WebSocket 연결을 막고 있지 않은지 확인하세요. 브라우저 확장 프로그램의 영향을 배제하려면 시크릿 창에서도 확인해 보세요.
 
-### 네트워크가 호출을 차단하면 어떻게 되나요?
+#### 네트워크가 호출을 차단하면 어떻게 되나요?
 
 NSG 규칙에 막히거나 경로가 없어 아웃바운드 요청이 거부되면, 에이전트는 같은 서브넷의 다른 워크로드가 받는 것과 똑같은 네트워크 오류를 받습니다. 이때 에이전트는 실패한 사실을 조사 결과에 그대로 남기고(예: Log Analytics 작업 영역에 연결하지 못하고 시간이 초과됐다는 메시지) 접근할 수 있는 도구와 데이터로 조사를 이어 갑니다. 꼭 필요한 데이터 원본에 접근하지 못하면 조사 결과가 완전하지 않다는 사실도 함께 알려 줍니다.
 
-### 알아두어야 할 제한 사항과 거버넌스
+관리자는 **Settings > Workspace configuration > Inspect > Network audit**에서
+허용·거부된 송신 요청을 살펴볼 수 있습니다. 이 화면은 에이전트의 **송신 정책
+판정**을 보여 줄 뿐 모든 커넥터·플랫폼·방화벽·DNS 이벤트를 포함하는 완전한
+네트워크 감사 로그는 아닙니다.
 
-- VNet 통합은 아웃바운드 트래픽만 제어하며, 프라이빗 엔드포인트를 통한 인바운드 연결은 이번 미리 보기에서 지원하지 않습니다.
+#### 알아두어야 할 제한 사항과 거버넌스
+
+- VNet 통합은 아웃바운드 트래픽만 제어하며, 에이전트에 대한 프라이빗 인바운드 연결은 지원하지 않습니다.
 - Azure Policy를 적용해 인프라 네트워크 토글 자체를 제한하거나 비활성화할 수 있어 담당자가 임의로 VNet 밖으로 트래픽을 우회하지 못하도록 통제할 수 있습니다.
 - 네트워크 제어 설정을 변경할 수 있는 권한은 SRE Agent Administrator 역할을 가진 사용자로 제한됩니다. 관리 ID, 사용자 위임 자격 증명, Azure RBAC 권한과 함께 네트워크 구성을 묶어서 거버넌스를 설계하세요.
 - Key Vault 방화벽 허용은 VNet 통합과 별개의 절차입니다. 인증서 기반 커넥터가 Key Vault에 접근해야 한다면 에이전트 포털의 설정 화면에서 아웃바운드 IP 주소를 확인한 뒤 Key Vault 방화벽의 허용 목록에 각 IP 주소를 개별적으로 추가해야 합니다.
@@ -554,29 +806,60 @@ NSG 규칙에 막히거나 경로가 없어 아웃바운드 요청이 거부되�
 - [네트워크 요구 사항](https://learn.microsoft.com/azure/sre-agent/network-requirements)
 - [Key Vault 방화벽 허용 목록 구성](https://learn.microsoft.com/azure/sre-agent/allow-list-key-vault-firewall)
 
-## 인시던트 대응 외에 무엇을 자동화할 수 있나요?
+## 지속 운영과 효과 측정
 
-### 예약 작업
+### 인시던트 대응 외에 무엇을 자동화할 수 있나요?
+
+#### 예약 작업
 
 일정에 따라 에이전트가 스스로 점검을 수행하도록 예약할 수 있습니다. 작업 내용은 자연어로 작성하며, 실행할 때마다 조사 대화와 요약 결과가 남습니다. 매일 서비스 상태 점검, 비용 이상 탐지, 보안 구성 점검, 배포 후 확인처럼 경고가 발생하기 전에 문제를 찾는 용도로 사용합니다.
 
-### 심층 조사
+#### 심층 조사
 
 영향 범위가 크거나 원인이 여러 개일 수 있는 상황에서는 심층 조사를 사용할 수 있습니다. 가설을 여러 개 세우고 검증 과정을 단계별로 보여주며, 제외한 가설도 함께 정리합니다. 일반 조사보다 토큰 사용량이 많으므로 중요한 인시던트에 선택적으로 사용하는 편이 좋습니다.
 
-### 팀 지식 온보딩
+#### 팀 지식 온보딩
 
 에이전트에 팀 구조, 서비스 아키텍처, 문제 해결 절차를 미리 학습시킬 수 있습니다. 대화형 온보딩을 진행하거나 운영 문서를 업로드하면 이후 조사에서 해당 내용을 근거로 활용합니다.
 
-### Agent Hooks
+#### Agent Hooks
 
-Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 도구 실행 직후에 자체 검증을 추가할 수 있습니다. 위험한 명령을 차단하거나, 결론에 근거가 충분한지 확인해 다시 조사하도록 만들 수 있습니다. 실행 수준이 *무엇을 할 수 있는지*를 정한다면, Agent Hooks는 *어떻게 수행해야 하는지*를 정합니다.
+Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 도구 실행 직후에
+자체 검증을 추가할 수 있습니다. 예를 들어 `Stop` Hook으로 영향 범위·근거·복구
+확인이 빠진 최종 응답을 거부하고 조사를 계속하도록 할 수 있습니다.
+도구 실행을 사전에 제한하는 정책과 사후 품질 검증은 목적이 다르므로
+[권한·승인 설계](#governance)와 함께 적용하세요.
 
-### 도구 용량 관리
+#### 도구 용량 관리
 
-하나의 에이전트가 사용할 수 있는 도구는 기본 도구와 MCP 도구를 합쳐 최대 **80개**입니다. 외부 관찰 도구와 사내 시스템을 폭넓게 연결할 계획이라면 도구 수를 미리 설계하세요.
+주 에이전트와 각 사용자 지정 에이전트는 각각 기본 도구와 MCP 도구를 합쳐
+최대 **80개**를 사용할 수 있습니다. 커넥터 하나당 80개가 아니며 여러 커넥터의
+선택 도구를 합산합니다. 외부 시스템을 폭넓게 연결할 때는 필요한 도구만
+노출하고 전문 에이전트별 역할을 나누세요.
 
-## 에이전트가 한 일을 어떻게 감사하나요?
+#### 반복 사용과 팀 확장에 유용한 기능
+
+처음부터 모두 설정할 필요는 없습니다. 한 서비스의 조사 품질을 확인한 뒤,
+반복되는 운영 요구에 맞춰 다음 기능을 추가할 수 있습니다.
+
+| 운영 요구 | 현재 Learn에서 안내하는 기능 | 함께 확인할 경계 |
+|---|---|---|
+| 같은 구성을 여러 환경에 재현 | [IaC 배포](https://learn.microsoft.com/azure/sre-agent/deploy-iac): Bicep·Terraform·PowerShell·azd 기반 배포와 export·diff·verify | ARM 배포와 별도 data plane 설정이 나뉘므로 일부 단계가 생략되지 않았는지 확인 |
+| 팀이 검토한 스킬·MCP 구성을 배포 | [Plugin marketplace](https://learn.microsoft.com/azure/sre-agent/plugin-marketplace): 공개·비공개 GitHub 저장소와 커밋 고정 | 업데이트는 명시적으로 수행하며, 플러그인 설치와 MCP 커넥터 인증·연결은 별도 |
+| IDE·CLI에서 기존 조사를 이어가기 | [SRE Agent MCP server](https://learn.microsoft.com/azure/sre-agent/mcp-server): Azure MCP Server를 통해 에이전트에 요청 | 호출자의 기존 권한을 사용하며 자동 승인 조사 모드는 운영 변경까지 승인할 수 있음 |
+| 같은 운영 화면을 반복 조회 | [Live Reports(미리 보기)](https://learn.microsoft.com/azure/sre-agent/live-reports): 저장된 차트·표의 데이터를 새로 고침 | 커넥터 조회만 하는 새로 고침과 달리 모델 분석을 포함하면 활성 AAU 발생 |
+
+**MCP 연결 방향을 구분하세요.** MCP 커넥터는 *SRE Agent가 외부 도구를 호출*하는
+방향이고, SRE Agent MCP 서버는 *IDE·CLI가 SRE Agent를 호출*하는 방향입니다.
+후자를 연결해도 호출자의 Azure 권한이 높아지지는 않습니다.
+
+비공개 marketplace는 등록한 연결의 자격 증명을 설치 사용자들이 공유합니다.
+개별 사용자의 GitHub 접근 권한을 설치 때마다 다시 검사하는 구조로 가정하지
+말고, 에이전트의 설치 권한과 저장소 연결의 범위를 함께 관리하세요.
+Live Reports 역시 연결된 원본만 조회할 수 있으며, 보고서 작성·수정과
+모델을 사용하는 새로 고침은 유료라는 점을 구분해야 합니다.
+
+### 에이전트가 한 일을 어떻게 감사하나요?
 
 에이전트의 활동은 조직이 소유한 Application Insights의 `customEvents` 테이블에 기록됩니다. 모델 호출, 도구 실행, Azure CLI 명령, 승인 결정, 인시던트 처리 결과를 각각 확인할 수 있어 KQL로 조회하고 보고서로 활용할 수 있습니다.
 
@@ -588,30 +871,44 @@ Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 
 
 > 출처: [Operations Hub](https://learn.microsoft.com/azure/sre-agent/operations-hub)
 
-## 도입 전에 무엇을 확인해야 하나요?
+Operations Hub에서는 **Overview**로 에이전트·연결 상태와 대기 작업을,
+**Incident Analytics**로 대응 효과를, **Automation**으로 예약 작업과 트리거의
+성공률·실행 시간을 구분해 봅니다. “얼마나 많이 실행했는가”와 “실제로 도움이
+되었는가”를 따로 평가할 수 있습니다.
 
-### 조사 범위
+절감 시간은 추정치이고 `Intent Met`은 자동 평가 점수입니다. 이 값만으로 실제
+복구나 비용 절감이 입증되었다고 판단하지 말고, 원본 스레드·서비스 지표·사람의
+검토를 함께 확인하세요. 이 자료의 실증에서도 Blob 권한 복구 후 확인 대상을
+잘못 고른 한계를 별도로 남겼습니다.
+
+## 도입 체크리스트와 한계
+
+### 도입 전에 무엇을 확인해야 하나요?
+
+#### 조사 범위
 
 - [ ] 필요한 구독과 리소스 그룹만 연결하세요.
 - [ ] Application Insights와 Log Analytics에 필요한 데이터가 들어오는지 확인하세요.
 - [ ] 실제 배포에 사용한 소스 분기와 운영 절차서를 연결하세요.
 
-### 인시던트 전달
+#### 인시던트 전달
 
 - [ ] Azure Monitor, PagerDuty, ServiceNow 중 사용할 인시던트 플랫폼을 정하세요.
 - [ ] 심각도, 서비스, 제목 기준으로 대응 계획을 만드세요.
 - [ ] 사용자 정의 대응 계획을 만들었다면 빠른 시작 대응 계획을 삭제하세요.
 - [ ] 처음에는 검토 모드로 시작하세요.
 
-### 권한과 안전
+#### 권한과 안전
 
 - [ ] 읽기 권한부터 시작하세요.
 - [ ] 변경 작업은 필요한 리소스 범위에만 허용하세요.
 - [ ] 삭제와 변경 작업은 승인을 받도록 설정하세요.
 - [ ] 커넥터에는 필요한 작업만 노출하세요.
 - [ ] 메일 수신자와 프로젝트 키처럼 중요한 값은 고정하세요.
+- [ ] 외부 전송의 `Ask`, 이를 우회할 수 있는 `Allow`·Hook, 자동화별 실행 모드를 함께 확인하세요.
+- [ ] 도구 결과·메모리·감사 로그의 보존과 모델 추론 위치를 검토하세요.
 
-### 조사 품질
+#### 조사 품질
 
 - [ ] 영향을 받은 서비스와 발생 시각이 정확한지 확인하세요.
 - [ ] 결론에 근거가 포함되어 있는지 확인하세요.
@@ -619,7 +916,7 @@ Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 
 - [ ] 조치 방안이 최소 범위이며 되돌릴 수 있는지 확인하세요.
 - [ ] 올바른 서비스와 API에서 복구를 확인하는지 확인하세요.
 
-## 알아두어야 할 제한 사항
+### 알아두어야 할 제한 사항
 
 - AI가 잘못된 결론이나 적절하지 않은 조치 방안을 제시할 수 있습니다.
 - 연결한 소스가 실제 배포 분기와 다르면 코드 변경을 정확히 찾지 못할 수 있습니다.
@@ -670,6 +967,12 @@ Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 
 - [커넥터](https://learn.microsoft.com/azure/sre-agent/connectors)
 - [관리형 커넥터(미리 보기)](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 - [MCP 커넥터](https://learn.microsoft.com/azure/sre-agent/mcp-connectors)
+- [도구 접근 정책](https://learn.microsoft.com/azure/sre-agent/tool-access-policies)
+- [IaC 배포](https://learn.microsoft.com/azure/sre-agent/deploy-iac)
+- [Plugin marketplace](https://learn.microsoft.com/azure/sre-agent/plugin-marketplace)
+- [SRE Agent MCP 서버](https://learn.microsoft.com/azure/sre-agent/mcp-server)
+- [Live Reports(미리 보기)](https://learn.microsoft.com/azure/sre-agent/live-reports)
+- [평가 혜택과 과금 조건](https://learn.microsoft.com/azure/sre-agent/evaluate)
 
 ### 실증 자료
 
