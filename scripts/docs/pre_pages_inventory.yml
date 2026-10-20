@@ -1926,6 +1926,7 @@ documents:
     reviewed_changes: {}
   - baseline_path: monitor/azure-sre-agent.md
     pages_path: guides/azure-monitor/azure-sre-agent-overview/index.md
+    # Review reasons use 2026-10-21 KST, equivalent to the guide's 2026-10-20 UTC metadata.
     reviewed_changes:
       prose:
         4bec483512901718e6622d30e27194e0b4b2171f64a4eaf52e9e6f45d5d1daab:
@@ -2159,6 +2160,18 @@ documents:
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
               fingerprint: b57dd90d308a5c1820ef98f11dbb471a6dbee39cedb7480bee5c83c062bcbe39
+              count: 1
+        cadd069fdd0ec48338da80b234ff997e4b4a9c465c5a4c44e8b2bf0b12009309:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, operations-hub:
+            incident effectiveness metrics belong to Incident Analytics; preserve the Overview screenshot
+            as an agent-health and pending-actions example. Corrected after independent review.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: e8159996b8c1b2a4691ced4c902ab19fca110c6c9353787253397cff08e176dd
               count: 1
       tables:
         fad197d04290651d6d7f0d87d79e1d37b234a1a37c67da1f1b4e220ed3e1fc6c:

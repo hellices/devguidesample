@@ -83,12 +83,12 @@ official_sources:
 document_type: guide
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-21
-last_verified: 2026-10-21
+sources_checked_at: 2026-10-20
+last_verified: 2026-10-20
 review_cycle_days: 180
 applies_to:
 - Azure SRE Agent 제품 소개와 도입 검토
-- 2026-10-21 Microsoft Learn 문서 기준
+- 2026-10-20 UTC Microsoft Learn 문서 기준
 title: Azure SRE Agent 개요
 description: Azure SRE Agent의 조사 흐름, 권한·승인 경계, 운영 확장 기능과 실증 사례를 구분해 설명합니다.
 technologies:
@@ -107,7 +107,7 @@ Azure SRE Agent는 Azure 운영 환경에서 발생한 인시던트를 자동으
 
 이 문서에서는 Azure SRE Agent가 인시던트를 조사하는 방식과 실제 활용 예시를 소개합니다. 제품에서 제공하는 표준 기능과 이번 실증에서 확인한 내용을 구분해 설명합니다.
 
-> **읽는 기준:** 제품 설명은 **2026-10-21 Microsoft Learn** 기준입니다.
+> **읽는 기준:** 제품 설명은 **2026-10-20 UTC(한국시간 10월 21일) Microsoft Learn** 기준입니다.
 > 실증 수치와 HTTP Trigger 연결 사례는 **2026-08-12의 관측 기록**이며,
 > 현재 제품의 처리 시간이나 성공률을 보장하지 않습니다. 화면 캡처의 메뉴와
 > 기본값은 현재 포털과 다를 수 있으므로 본문의 조건과 공식 절차를 함께 확인하세요.
@@ -865,7 +865,8 @@ Live Reports 역시 연결된 원본만 조회할 수 있으며, 보고서 작�
 
 또한 인시던트 지표 화면에서 처리한 인시던트 수, 에이전트가 완화한 비율, 담당자가 처리한 비율, 절감한 시간, 근본 원인 분포를 확인할 수 있습니다. 도입 효과를 정량적으로 설명해야 할 때 활용하기 좋습니다.
 
-이 지표는 왼쪽 사이드바의 Operations Hub 개요 탭에서 한 화면으로 확인할 수 있습니다.
+Operations Hub의 **Incident Analytics** 탭에서 대응 효과 지표를 확인할 수 있습니다.
+아래 **Overview** 화면은 에이전트 상태와 대기 중인 작업을 보여 주는 예시입니다.
 
 ![Operations Hub 개요 탭 화면입니다. 왼쪽 사이드바에서는 Operations Hub 항목이 선택되어 강조되어 있고 그 아래로 인시던트, 예약 작업, Builder, 모니터, 기능, 설정 메뉴가 이어집니다. 오른쪽 본문에는 개요와 인시던트 분석, 자동화 탭이 있고 기간은 최근 7일로 지정되어 있으며, 원본별 일일 처리량을 선택한 차트 영역에는 값이 그려지지 않고 선택한 기간에 표시할 데이터가 없다는 안내만 나타납니다. 그 아래에는 대기 중인 작업 41건 카드와 실시간 시스템 상태 카드가 놓여 주요 지표를 한 화면에서 확인할 수 있습니다.](images/operations-hub-overview-tab.png)
 
