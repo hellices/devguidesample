@@ -2173,6 +2173,18 @@ documents:
               category: prose
               fingerprint: e8159996b8c1b2a4691ced4c902ab19fca110c6c9353787253397cff08e176dd
               count: 1
+        8329d2763ca13afb7b85568753c887b29ec1d1e1ebf22fc3b076a58496755fe9:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            limit NSG, firewall, DNS and audit coverage to calls actually routed through the VNet.
+            Distinguish immutable platform routing and configurable infrastructure bypass after PR review.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: 03a6f8da767c493500ee45da57a5f2e87c38cec8a16c95ace1ad119186875e8a
+              count: 1
       tables:
         fad197d04290651d6d7f0d87d79e1d37b234a1a37c67da1f1b4e220ed3e1fc6c:
           missing_count: 1
@@ -2250,6 +2262,18 @@ documents:
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: tables
               fingerprint: 3a07c39547ae469749aa791123f9cfe27c5416d76e3331ba286222ee29aed129
+              count: 1
+        66795e1b9282f18d55b815b53caa21b91f0dccab1629b1a41cfb11de7975ed25:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Learn MCP full-text review 2026-10-21, network-integration:
+            align the Azure VNet mode summary with platform, connector and explicitly allowed
+            infrastructure-path exceptions instead of promising all non-platform traffic crosses the VNet.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: 4004fe15d72a26ea0f6aff43aa79a0ee9fb39cd4565b62a3a2eebb157e72635a
               count: 1
       local_link_labels:
         c1ca913091c95d35a8482f0216524d86a34dd4070a62f9ca3ec7a89bef6abd81:
