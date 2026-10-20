@@ -534,3 +534,5 @@ HMRC가 “voiceprint는 복제·도난될 수 없다”고 설명하는 문구�
 추가 맥락: [FTC Safeguards Rule](https://www.ftc.gov/legal-library/browse/rules/safeguards-rule) · [한국 생체정보 안내서](https://pipc.go.kr/np/cmm/fms/FileDown.do?atchFileId=FILE_000000000559107&fileSn=1) · [NIST SP 800-92 로그관리](https://csrc.nist.gov/pubs/sp/800/92/final). 보안 지침이 음성 녹음·로그의 일률적인 법정 기간을 부여하지 않는다.
 
 </details>
+
+<!-- End of the supplementary voice-record-management evidence block. -->
