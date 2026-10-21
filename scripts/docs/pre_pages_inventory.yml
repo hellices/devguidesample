@@ -1928,6 +1928,18 @@ documents:
     pages_path: guides/azure-monitor/azure-sre-agent-overview/index.md
     # Original review ran after 15:00 UTC on 2026-10-20, hence the 2026-10-21 KST reasons.
     reviewed_changes:
+      title:
+        065ecae0fb7a7ab45732bccb77f9eacadee85a0fdfb87867e37f5ec727b68ee6:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            user-approved product-first overview uses the title Azure SRE Agent 개요.
+            The original azure-sre-agent fragment remains explicit; incident evidence remains below concepts and use cases.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: title
+              fingerprint: 82bb9e0842f9c18ad6ea5d69e316823cfe0e217bb596879ac4f68bd984047c89
+              count: 1
       headings:
         c5449be003135ecb287461769ec9927148d714522894b22a2a9b60e94b5ea5e5:
           missing_count: 1
@@ -2605,6 +2617,29 @@ documents:
             fingerprint: e858d65a383ee2a0ce664ffa0581bad2aced1430d9076b653a276a23ed535d54
             count: 1
       prose:
+        7364212db0cd931f8a371fc15b75b9e2ffb50cc95b0c9ee63512f5c973264235:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            Microsoft Learn overview full text describes investigation/advice, scheduled workflows and incidents.
+            Replace the incident-only definition with these documented operating patterns and permission boundaries.
+            The historical incident workflow, measurements and assets remain in their own sections.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: aed5c91be6a7127ea1d5f50b8c5c22f79c7900f7b6f48b64cfddbe07c965c967
+              count: 1
+        9381b0c27e285e2f7fe291d97a5d0cd5dc0ac80eb3db89460aa9da20d5871079:
+          missing_count: 1
+          reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
+            explain the approved concepts-first reading order and distinguish official use cases from
+            measured incident examples. No new lab results or unsupported product capabilities are asserted.'
+          evidence:
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: b165c6eb7eda49a8b6afee1117ad76665fb606af26a9141c748ca0c2be925225
+              count: 1
         4bec483512901718e6622d30e27194e0b4b2171f64a4eaf52e9e6f45d5d1daab:
           missing_count: 1
           reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
@@ -2615,7 +2650,7 @@ documents:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: 5aef2fce99edb7a5dc5d6201b2fdb302edd93fae03d1d1114120e2aac5dade45
+              fingerprint: b7af33878a30181d9c23d0730405c2f0d8426ff78edb56bfd52312fbea4ace0b
               count: 1
         1ede05cf7beb2712536c8f07845cabdc26d66555d1135093a7297d805b429210:
           missing_count: 1
