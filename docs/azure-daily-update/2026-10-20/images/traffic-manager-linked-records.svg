@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="500" viewBox="0 0 960 500" role="img" aria-labelledby="tm-linked-title tm-linked-desc">
+  <title id="tm-linked-title">Traffic Manager linked record: A record resolution</title>
+  <desc id="tm-linked-desc">Azure DNS resolves a linked Traffic Manager profile internally and returns the selected IPv4 address to the DNS resolver with the profile TTL, without an intermediate trafficmanager.net response.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#eb6c36"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
+  </defs>
+  <rect width="960" height="500" fill="#f5f5f5"/>
+  <g font-family="Arial, sans-serif">
+    <text x="32" y="40" font-size="24" font-weight="600" fill="#2d3142">Traffic Manager linked records</text>
+    <text x="32" y="68" font-size="16" fill="#4f5d75">A-record example: DNS resolution, not application traffic</text>
+    <g stroke="#bfc0c0" stroke-width="1.5" stroke-dasharray="4 5">
+      <line x1="144" y1="168" x2="144" y2="420"/>
+      <line x1="464" y1="168" x2="464" y2="420"/>
+      <line x1="800" y1="168" x2="800" y2="420"/>
+    </g>
+    <g fill="none" stroke-width="2">
+      <path d="M144 220H464" stroke="#2e5aa8" marker-end="url(#arrow-link)"/>
+      <path d="M464 276H800" stroke="#4f5d75" marker-end="url(#arrow)"/>
+      <path d="M800 332H464" stroke="#4f5d75" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+      <path d="M464 388H144" stroke="#eb6c36" marker-end="url(#arrow-accent)"/>
+    </g>
+    <g fill="#f5f5f5">
+      <rect x="196" y="184" width="216" height="28"/>
+      <rect x="512" y="240" width="240" height="28"/>
+      <rect x="516" y="296" width="232" height="28"/>
+      <rect x="168" y="352" width="272" height="28"/>
+    </g>
+    <g font-size="17" text-anchor="middle" fill="#2d3142">
+      <text x="304" y="204">1. Query A record</text>
+      <text x="632" y="260">2. Resolve linked profile</text>
+      <text x="632" y="316">3. Selected IPv4 target</text>
+      <text x="304" y="372">4. A response + profile TTL</text>
+    </g>
+    <rect x="48" y="104" width="192" height="64" rx="6" fill="#ececec" stroke="#4f5d75"/>
+    <rect x="352" y="104" width="224" height="64" rx="6" fill="#fff" stroke="#2d3142"/>
+    <rect x="672" y="104" width="256" height="64" rx="6" fill="#fff" stroke="#2d3142"/>
+    <g font-size="19" font-weight="600" text-anchor="middle" fill="#2d3142">
+      <text x="144" y="143">DNS resolver</text>
+      <text x="464" y="143">Azure DNS</text>
+      <text x="800" y="133">Traffic Manager</text>
+      <text x="800" y="155" font-size="16" font-weight="400">linked profile</text>
+    </g>
+    <line x1="32" y1="440" x2="928" y2="440" stroke="#bfc0c0"/>
+    <text x="32" y="469" font-size="16" fill="#4f5d75">No intermediate trafficmanager.net response. Based on Microsoft Learn; independently redrawn.</text>
+  </g>
+</svg>
