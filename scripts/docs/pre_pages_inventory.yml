@@ -2632,13 +2632,19 @@ documents:
         9381b0c27e285e2f7fe291d97a5d0cd5dc0ac80eb3db89460aa9da20d5871079:
           missing_count: 1
           reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
-            explain the approved concepts-first reading order and distinguish official use cases from
-            measured incident examples. No new lab results or unsupported product capabilities are asserted.'
+            remove editorial narration about the page composition at the user request.
+            The direct product definition and explicit official-example versus measured-result boundary
+            preserve the introduction scope without summarizing the authoring conversation.'
           evidence:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: b165c6eb7eda49a8b6afee1117ad76665fb606af26a9141c748ca0c2be925225
+              fingerprint: aed5c91be6a7127ea1d5f50b8c5c22f79c7900f7b6f48b64cfddbe07c965c967
+              count: 1
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: prose
+              fingerprint: c741a50db368ca79b18a1d3f25a0bd1d1369db99ea20e55b8dbf5660df114724
               count: 1
         4bec483512901718e6622d30e27194e0b4b2171f64a4eaf52e9e6f45d5d1daab:
           missing_count: 1
@@ -2795,7 +2801,7 @@ documents:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: 569389113f08dae36ae45bb49597207b60143554a0888799dfc398638bd26437
+              fingerprint: 9727ccca0ec37f27e7ad2e4f4c5e1a00a7efb590a9c3626c14f2d324aa75cc66
               count: 1
         b8d3e12c313934a2a504522399a6b0fde1186dc3d831794ffe5b5c2da558222c:
           missing_count: 1
@@ -2806,7 +2812,7 @@ documents:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: ff780070e1bf3ff6b1a3c4e290dcea5cbbba986416944f3d5dba98307073c255
+              fingerprint: 7bacc04abd9dc8e34717fe8513279c12ad0d49a1f4e7ad5ea215f32c986df6f6
               count: 1
         f4d34702d0c83896a9d5d0941ec76940ca3d905b9b78dbcfa6a0abfae1a29115:
           missing_count: 1
@@ -2862,7 +2868,7 @@ documents:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: cdabea9f32ea37d9d3d238641f6ab5c56673ea9df02d8b40c426c9e4383fae6b
+              fingerprint: b1b2b5b7536a4a041ed7d3a8aebcac9003446ce704fe950e27f366ebb8d2ce04
               count: 1
         67cabb7f67011c9654e5b850941c0b26a26da853675300045e38efd38b531bfb:
           missing_count: 1
