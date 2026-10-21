@@ -2707,13 +2707,13 @@ documents:
           reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
             Learn MCP full-text review 2026-10-21, managed-connectors and tool-access-policies:
             mail approval needs Ask plus Review without an overriding Allow policy.
-            Follow-up review leaves the Hook event-to-policy mapping explicitly unresolved,
-            rather than asserting that Stop or PostToolUse bypasses approval.'
+            Verify approval behavior in the applied configuration before sending.
+            Unsupported extrapolation from lifecycle Hook events to approval bypass is removed.'
           evidence:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: 3b4320ce05d63adad890f3ecf33eb5821294d668351e4714a24c43361f91837a
+              fingerprint: 4cdb633659bddc7ac688f68cbd7147bcf7f81f7f6244eccc6fe847c1fd4dd4b8
               count: 1
         60ed1edb8ecb55b1508c2a18546dd0596fe84dd75096ac031ad5c3c962fb5751:
           missing_count: 1
@@ -2861,14 +2861,25 @@ documents:
         b006bdc12ee728f3349dbe0baa606c9b93af60d832bbd12552e2861c436aa345:
           missing_count: 1
           reason: 'In docs/services/azure-monitor/azure-sre-agent/index.md:
-            Learn MCP full-text review 2026-10-21, agent-hooks and tool-access-policies:
-            distinguish Stop completeness checks from preventive policy and post-execution validation.
-            Follow-up review explicitly leaves the mapping to Hook approval-policy precedence unresolved.'
+            Learn MCP full-text review 2026-10-21, agent-hooks:
+            replace broad command-blocking and approval claims with the explicitly documented Stop
+            and PostToolUse event timing and result handling. No lifecycle-to-approval override mapping
+            is asserted; execution permission and tool approval are described separately.'
           evidence:
             - kind: structure
               path: docs/services/azure-monitor/azure-sre-agent/index.md
               category: prose
-              fingerprint: b1b2b5b7536a4a041ed7d3a8aebcac9003446ce704fe950e27f366ebb8d2ce04
+              fingerprint: fdc5c83536a271bef5161282e0bd7376afe9058217623f7e86b401c2240a0ab0
+              count: 1
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: eb61cf989fff3d4acf6e85473d75f77385c2359a89e2af0653d9934c7a131a81
+              count: 1
+            - kind: structure
+              path: docs/services/azure-monitor/azure-sre-agent/index.md
+              category: tables
+              fingerprint: 8710d33c6d1ca28a1f6a8f2fb479d67fec6bdaa28bf80c6062a40282df583f5f
               count: 1
         67cabb7f67011c9654e5b850941c0b26a26da853675300045e38efd38b531bfb:
           missing_count: 1

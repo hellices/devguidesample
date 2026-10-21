@@ -83,14 +83,14 @@ official_sources:
 - title: Alert rules with dynamic thresholds overview
   url: https://learn.microsoft.com/azure/azure-monitor/alerts/alerts-dynamic-thresholds
 document_type: guide
-status: needs-review
-verification_status: needs-review
-sources_checked_at: 2026-10-20
-last_verified: null
+status: current
+verification_status: verified
+sources_checked_at: 2026-10-21
+last_verified: 2026-10-21
 review_cycle_days: 180
 applies_to:
 - Azure SRE Agent 제품 소개와 도입 검토
-- 2026-10-20 UTC Microsoft Learn 문서 기준
+- 2026-10-21 UTC Microsoft Learn 문서 기준
 title: Azure SRE Agent 개요
 description: Azure SRE Agent의 기능·개념과 팀 온보딩·정기 점검·비용 분석 활용을 소개하고, 인시던트 처리 사례와 도입 조건을 구분해 설명합니다.
 technologies:
@@ -112,15 +112,10 @@ redirect_from:
 
 **공식 근거:** [제품 개요와 세 가지 작업 방식](https://learn.microsoft.com/azure/sre-agent/overview#what-you-can-do)
 
-> **읽는 기준:** 제품 설명은 **2026-10-20 UTC Microsoft Learn** 기준입니다.
+> **읽는 기준:** 제품 설명은 **2026-10-21 UTC Microsoft Learn** 기준입니다.
 > 실증 수치와 HTTP Trigger 연결 사례는 **2026-08-12의 관측 기록**이며,
 > 현재 제품의 처리 시간이나 성공률을 보장하지 않습니다. 화면 캡처의 메뉴와
 > 기본값은 현재 포털과 다를 수 있으므로 본문의 조건과 공식 절차를 함께 확인하세요.
-
-> **검증 보류 범위:** 공식 문서의 Hook 우선순위 설명과 지원 이벤트 설명을
-> 연결할 근거가 충분하지 않습니다. [권한·승인 설계](#governance)에 남긴 이
-> 쟁점 때문에 문서의 검증 상태는 `needs-review`입니다. 승인 우회 동작을
-> 확인한 것으로 해석하지 마세요.
 
 **읽는 순서**
 
@@ -129,22 +124,27 @@ redirect_from:
 - [인시던트 처리 예시](#incident-workflow) → [기존 실증과 관측 결과](#evidence)
 - [도입 조건과 상세 운영 참고](#adoption)
 
-## 로그·코드·운영 지식을 연결하는 AI 조사 { #product-overview }
+## Azure SRE Agent 기본 기능 { #product-overview }
 
 Azure Monitor가 로그·메트릭·경고를 제공한다면, Azure SRE Agent는 그 신호에
 소스 코드와 운영 지식을 연결해 **조사하고, 근거를 설명하고, 허용된 조치를
 제안하거나 실행하는 역할**을 맡습니다. 모니터링 데이터 수집을 대신하거나,
 연결하지 않은 시스템까지 자동으로 이해하는 서비스는 아닙니다.
 
-| 작업 방식 | 공식 문서에서 설명하는 입력 | 수행 내용 |
-|---|---|---|
-| 대화형 조사·조언 | 환경의 변경 사항이나 서비스 상태에 관한 자연어 질문 | 관련 데이터를 조회하고 근거와 함께 설명 |
-| 예약 작업 | 점검할 내용, 대상과 실행 일정 | 정기 상태 점검·비용 이상 분석·배포 후 확인 결과 |
-| 인시던트 자동 대응 | 인시던트 플랫폼의 경고와 대응 계획 | 조건에 맞는 조사 스레드와 완화 제안 또는 허용된 조치 |
+| 기능 | 수행 내용 |
+|---|---|
+| 대화형 조사·조언 | 포털 또는 Teams에서 질문하고, 관련 데이터를 조회한 근거와 설명을 확인 |
+| 예약 작업 | 지정한 일정에 상태 점검·비용 이상 분석·배포 후 확인 실행 |
+| 인시던트·경고 대응 | 인시던트 플랫폼, webhook 또는 경고로 시작한 조사와 완화 제안·허용된 조치 |
+| 일일 요약 | 에이전트 활동의 자동 일일 요약 |
+| 보안·운영 권고 | 보안과 운영에 관한 권고 제공 |
+| 설정 테스트 | Test playground에서 프롬프트·도구 구성·에이전트 동작 확인 |
+
+**공식 근거:** [대화·자동화·보고 기능](https://learn.microsoft.com/azure/sre-agent/threads#thread-sources) ·
+[제품의 작업 방식](https://learn.microsoft.com/azure/sre-agent/overview#what-you-can-do)
 
 | 구성 요소 | 역할 | 예 |
 |---|---|---|
-| Threads | 작업의 대화 맥락과 결과를 유지 | 직접 시작한 대화, 예약 작업과 인시던트의 결과 |
 | 커넥터·도구 | 데이터 조회와 작업 실행 | GitHub 검색, 외부 로그 조회, Teams 알림 |
 | 지식 파일·메모리 | 팀 문서와 이전 경험을 참고 | 런북, 아키텍처 문서, 이전 조사에서 얻은 교훈 |
 | 스킬·사용자 지정 에이전트 | 절차와 전문성을 재사용 | 배포 점검 절차, 데이터베이스 전문 조사 |
@@ -155,27 +155,6 @@ Azure Monitor가 로그·메트릭·경고를 제공한다면, Azure SRE Agent�
 사람이 확인해야 합니다.
 
 ## 주요 기능과 동작 개념 { #concepts }
-
-### Threads — 작업의 맥락과 결과를 이어가는 대화 단위 { #threads }
-
-Thread는 에이전트와의 대화입니다. 새 질문이나 조사를 시작하면 스레드가
-만들어지고, 대화가 이어지는 동안 맥락을 유지합니다.
-
-| 시작 경로 | 공식 문서의 스레드 원본 | 용도 |
-|---|---|---|
-| 직접 질문 | Conversation, Teams | 포털 대화 또는 Teams 채널·메시지에서 에이전트 호출 |
-| 일정에 따른 실행 | Scheduled task | 예약 작업의 출력 확인 |
-| 이벤트에 따른 실행 | Incident, Alert | 인시던트 플랫폼, webhook 또는 경고에서 시작한 작업 |
-| 요약과 권고 | Daily report, Best practices | 에이전트 활동의 일일 요약, 보안·운영 권고 |
-| 설정 시험 | Playground | 테스트 playground에서 만든 대화 |
-
-스레드는 진행 중(`In Progress`), 사용자 입력·승인 대기(`Pending User Input`),
-완료(`Complete`) 상태로 구분합니다. 제목이나 스레드 ID로 검색하고,
-즐겨찾기에 고정하거나 링크를 복사해 팀과 공유할 수 있습니다.
-기본 `Mine` 필터는 자신이 시작한 대화만 보여 주므로, 예약 작업이나 에이전트가
-시작한 결과를 확인할 때는 이 필터를 해제해야 합니다.
-
-**공식 근거:** [Threads](https://learn.microsoft.com/azure/sre-agent/threads)
 
 ### 에이전트 추론 — 요청 이해·맥락 수집·도구 실행 { #reasoning }
 
@@ -429,7 +408,7 @@ Azure 인프라 변경 승인과 권한 부족 시의 사용자 위임(OBO)은
 - 삭제나 변경 작업은 승인을 받도록 설정합니다.
 - 자율 모드에서는 일부 승인 절차가 생략될 수 있으므로 별도의 최소 권한 연결을 사용합니다.
 
-#### 도구 정책의 평가 순서와 Hooks 검증 보류 범위 { #hooks }
+#### 도구별 Allow·Ask·Deny와 승인 조건 { #hooks }
 
 [Tool access policies](https://learn.microsoft.com/azure/sre-agent/tool-access-policies)는
 도구 이름과 지원되는 명령 인수 패턴에 `Allow`, `Ask`, `Deny` 규칙을 적용합니다.
@@ -439,25 +418,15 @@ Azure 인프라 변경 승인과 권한 부족 시의 사용자 위임(OBO)은
 - **도구 정책 안에서는 `Deny > Allow > Ask` 순서**로 평가합니다.
   `Allow`에 일치하면 Review에서도 기본 승인 대기를 건너뜁니다.
   따라서 `Ask`만으로 변경 불가능한 금지 경계를 만들 수는 없습니다.
-- [Agent Hooks](https://learn.microsoft.com/azure/sre-agent/agent-hooks)의
-  `Stop`은 최종 응답의 완전성을 확인하고, `PostToolUse`는 성공한 도구 호출
-  **이후** 결과를 검증·감사합니다. 사후 검증을 이미 실행된 작업의 예방이나
-  자동 롤백으로 해석하지 마세요.
+- `Ask`에 일치하는 도구 정책은 Review에서 승인을 요청하지만,
+  Autonomous에서는 자동 승인됩니다.
 
-**공식 문서 간 연결 설명은 추가 확인이 필요합니다.**
-[도구 정책 문서](https://learn.microsoft.com/azure/sre-agent/tool-access-policies#how-policies-work-with-other-controls)는
-`Hooks → 도구 정책 → 기본 승인 → 실행 모드` 순서와 사용자 정의 Hook의
-명시적 `Allow`가 전역 `Deny`까지 재정의한다는 규칙을 설명합니다.
-그러나 이 설명을 위의 `Stop`·`PostToolUse` 중 어떤 이벤트에 적용하는지,
-어떤 이벤트 식별자로 실행 전 승인에 개입하는지는 확인한 원문에 명시되어
-있지 않습니다. 따라서 두 이벤트가 `Ask`를 우회한다고 단정하거나,
-문서에 없는 사전 실행 Hook을 구성하도록 안내하지 않습니다.
-이는 우회가 불가능하다는 확인도 아닙니다. Hook을 승인 통제로 사용하려면
-관리자가 적용 이벤트와 실제 평가 순서를 제품 지원 경로로 확인하고,
-승인 필요·거부·허용 조건을 비운영 환경에서 검증해야 합니다.
+도구 정책, 커넥터의 승인 설정, 실행 모드를 함께 확인해야 합니다.
+관리형 커넥터는 사용할 작업을 선택하고 수신자·대상 같은 매개변수를
+고정할 수 있습니다. Azure 리소스 접근 범위는 관리 ID의 RBAC로 제한합니다.
 
-운영 도입 시에는 **실제 RBAC 범위 → 노출한 도구 → Hooks·도구 정책 →
-커넥터 승인 설정 → 실행 모드**를 함께 점검해야 합니다.
+**공식 근거:** [도구 정책의 평가 규칙](https://learn.microsoft.com/azure/sre-agent/tool-access-policies#how-tool-access-policy-rules-are-evaluated) ·
+[관리형 커넥터의 작업·매개변수·승인 제어](https://learn.microsoft.com/azure/sre-agent/managed-connectors)
 
 관리 ID 권한이 부족할 때 담당자 승인으로 넘어가는 세부 과정은 다음 그림과 같습니다.
 
@@ -467,11 +436,18 @@ Azure 인프라 변경 승인과 권한 부족 시의 사용자 위임(OBO)은
 
 #### Stop·PostToolUse로 응답과 도구 결과 검증 { #agent-hooks }
 
-Agent Hooks를 사용하면 에이전트가 결과를 반환하기 직전이나 도구 실행 직후에
-자체 검증을 추가할 수 있습니다. 예를 들어 `Stop` Hook으로 영향 범위·근거·복구
-확인이 빠진 최종 응답을 거부하고 조사를 계속하도록 할 수 있습니다.
-Hook 우선순위와 지원 이벤트의 관계는 [권한·승인 설계](#governance)에
-명시한 검증 보류 사항입니다.
+Agent Hooks는 에이전트의 응답이나 도구 결과에 검증·감사 절차를 추가합니다.
+
+| 이벤트 | 실행 시점 | 기능 |
+|---|---|---|
+| `Stop` | 에이전트가 최종 응답을 반환하기 직전 | 응답의 완전성을 검사하고, 거부 사유를 전달해 작업을 계속하도록 요청 |
+| `PostToolUse` | 도구 호출이 성공한 직후 | 도구 사용을 감사하고, 결과를 차단하거나 추가 맥락을 전달 |
+
+검증 로직은 LLM 기반 Prompt Hook 또는 스크립트 기반 Command Hook으로
+구현할 수 있습니다. `PostToolUse`의 결과 차단은 도구 실행 이후의 처리이며,
+이미 실행된 작업을 취소하는 기능으로 해석하지 않아야 합니다.
+
+**공식 근거:** [Hook 이벤트와 실행 방식](https://learn.microsoft.com/azure/sre-agent/agent-hooks#how-agent-hooks-work)
 
 ### Application Insights 감사와 Operations Hub 효과 측정 { #_41 }
 
@@ -522,12 +498,13 @@ Team onboarding은 **에이전트에 팀을 소개하는 과정**입니다.
 공식 문서의 Container Apps 예시는 최근 24시간의 재시작, 메모리 사용량,
 오류율을 확인하고 지난주 평균 오류율과 비교합니다.
 
-반복 점검은 **무엇을 확인할지 정한 예약 작업**이고, Threads의 `Daily report`는
-**일일 요약의 원본 유형**입니다. 일일 보고서가 있다는 사실만으로 원하는 점검
+반복 점검은 **확인할 항목과 일정을 지정하는 작업**이고,
+일일 요약은 **에이전트의 활동을 정리한 결과**입니다.
+일일 보고서가 있다는 사실만으로 원하는 점검
 항목이 모두 예약되었다고 해석하지 말고, 작업 지시와 실행 일정을 따로 확인하세요.
 
 **공식 근거:** [예약 작업의 일일 점검 예시](https://learn.microsoft.com/azure/sre-agent/scheduled-tasks#example-use-cases) ·
-[스레드 원본](https://learn.microsoft.com/azure/sre-agent/threads#thread-sources)
+[일일 요약](https://learn.microsoft.com/azure/sre-agent/threads#thread-sources)
 
 ### 보안 점검 — 구성 오류·만료 인증서·열린 포트 검토 { #security-checks }
 
@@ -765,7 +742,7 @@ Issue에는 다음 내용을 포함했습니다.
 
 - 받는 사람은 담당자 또는 배포 목록으로 고정합니다.
 - 제목과 본문은 에이전트가 조사 결과를 바탕으로 작성하도록 설정할 수 있습니다.
-- 전송 전 사람의 검토가 필요하면 관리형 커넥터의 전송 작업을 `Ask`로 설정하고 Review에서 동작시킵니다. 기본 승인 대기를 건너뛰는 `Allow` 정책이 없는지 확인하고, Hook도 구성했다면 위의 검증 보류 사항을 해소한 뒤 승인 동작을 검증합니다.
+- 전송 전 사람의 검토가 필요하면 관리형 커넥터의 전송 작업을 `Ask`로 설정하고 Review에서 동작시킵니다. 기본 승인 대기를 건너뛰는 `Allow` 정책을 확인하고, 실제 전송 전에 적용된 설정에서 승인 요청이 발생하는지 검증합니다.
 - 자율 모드에는 중요한 수신자나 작업을 별도의 최소 권한 연결로 분리합니다.
 
 ### HTTP 500·지연·Blob 권한 오류의 결과와 한계 { #_21 }
@@ -1025,7 +1002,7 @@ NSG 규칙에 막히거나 경로가 없어 아웃바운드 요청이 거부되�
 - [ ] 커넥터에는 필요한 작업만 노출하세요.
 - [ ] 메일 수신자와 프로젝트 키처럼 중요한 값은 고정하세요.
 - [ ] 외부 전송의 `Ask`, 기본 승인 대기를 건너뛰는 `Allow` 정책, 자동화별 실행 모드를 함께 확인하세요.
-- [ ] Hook을 구성했다면 위의 검증 보류 사항을 해소하고, 실제 이벤트와 승인 평가 순서를 비운영 환경에서 검증하세요. `PostToolUse` 사후 검증을 사전 승인 통제로 가정하지 마세요.
+- [ ] Hook의 응답·결과 검증과 작업 실행 전 승인을 구분하세요.
 - [ ] 도구 결과·메모리·감사 로그의 보존과 모델 추론 위치를 검토하세요.
 
 #### 조사 품질 { #_46 }
