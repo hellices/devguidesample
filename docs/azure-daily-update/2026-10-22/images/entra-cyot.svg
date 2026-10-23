@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" role="img" aria-labelledby="cyot-title cyot-desc">
+  <title id="cyot-title">Microsoft Entra CYOT의 역할 분담</title>
+  <desc id="cyot-desc">Entra ID가 인증 정책과 인증 경험을 조정하고 선택한 통신사가 사용자에게 SMS와 음성을 전달한다. 조직은 통신사 선택과 계약, 구성, 모니터링을 담당한다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#4f5d75"/>
+    </marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#2e5aa8"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; fill: #172554; font-size: 23px; }
+      .heading { font-size: 29px; font-weight: 700; }
+      .detail { font-size: 21px; fill: #4f5d75; }
+      .flow { fill: none; stroke: #4f5d75; stroke-width: 3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="960" height="480" fill="#ffffff"/>
+  <text x="40" y="52" class="heading">CYOT: 인증 정책과 전화 전달 서비스의 역할 분리</text>
+  <text x="40" y="88" class="detail">2026-10-30 구성 제공 예정 · 역할 분담을 표현한 개념도</text>
+  <path d="M280 200 H360" class="flow"/>
+  <path d="M600 200 H680" class="flow"/>
+  <path d="M480 352 V264" class="flow" stroke-dasharray="6 5"/>
+  <rect x="48" y="136" width="232" height="128" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="2"/>
+  <text x="164" y="176" text-anchor="middle" font-weight="700">Microsoft Entra ID</text>
+  <text x="164" y="212" text-anchor="middle" class="detail">인증 수단 정책</text>
+  <text x="164" y="244" text-anchor="middle" class="detail">인증 경험 조정</text>
+  <rect x="360" y="136" width="240" height="128" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="480" y="176" text-anchor="middle" font-weight="700">선택한 통신사</text>
+  <text x="480" y="212" text-anchor="middle" class="detail">SMS 메시지 또는</text>
+  <text x="480" y="244" text-anchor="middle" class="detail">음성 전화 전달</text>
+  <rect x="680" y="136" width="232" height="128" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="2"/>
+  <text x="796" y="184" text-anchor="middle" font-weight="700">사용자</text>
+  <text x="796" y="224" text-anchor="middle" class="detail">전화 기반 인증 수행</text>
+  <rect x="176" y="352" width="608" height="80" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="2"/>
+  <text x="480" y="384" text-anchor="middle" font-weight="700">조직의 책임</text>
+  <text x="480" y="416" text-anchor="middle" class="detail">Security Store에서 선택 · 계약 · 구성 · 모니터링</text>
+</svg>

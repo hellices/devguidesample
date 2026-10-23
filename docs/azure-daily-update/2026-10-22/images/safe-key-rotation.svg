@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 580" role="img" aria-labelledby="safe-key-title safe-key-desc">
+  <title id="safe-key-title">Safe Key Rotation의 변경 전 검사</title>
+  <desc id="safe-key-desc">보호 기능을 활성화하면 key 재생성 전에 사용 이력을 검사한다. 최근 12시간 사용이 있으면 오류로 차단하고 기존 key를 유지하며, 검사를 통과한 뒤에만 재생성한다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#4f5d75"/>
+    </marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 L8 3 L0 6 Z" fill="#2e5aa8"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; fill: #172554; font-size: 23px; }
+      .heading { font-size: 29px; font-weight: 700; }
+      .detail { font-size: 21px; fill: #4f5d75; }
+      .flow { fill: none; stroke: #4f5d75; stroke-width: 3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="960" height="580" fill="#ffffff"/>
+  <text x="40" y="52" class="heading">Safe Key Rotation: 먼저 검사하고, 나중에 변경</text>
+  <text x="40" y="88" class="detail">보호 기능을 활성화한 account의 기본 key 재생성 흐름</text>
+  <path d="M480 184 V224" class="flow"/>
+  <path d="M320 304 H240 Q232 304 232 312 V416" class="flow"/>
+  <path d="M640 304 H728 Q736 304 736 312 V416" class="flow"/>
+  <rect x="248" y="256" width="64" height="32" fill="#ffffff"/>
+  <text x="280" y="280" text-anchor="middle">있음</text>
+  <rect x="648" y="256" width="64" height="32" fill="#ffffff"/>
+  <text x="680" y="280" text-anchor="middle">없음</text>
+  <rect x="320" y="120" width="320" height="64" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="2"/>
+  <text x="480" y="160" text-anchor="middle">Key 재생성 요청</text>
+  <path d="M480 224 L640 304 L480 384 L320 304 Z" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="480" y="296" text-anchor="middle" font-weight="700">최근 12시간</text>
+  <text x="480" y="328" text-anchor="middle">해당 key 사용?</text>
+  <rect x="72" y="416" width="320" height="96" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="232" y="454" text-anchor="middle" font-weight="700">요청 차단 · 오류 반환</text>
+  <text x="232" y="488" text-anchor="middle" class="detail">기존 key는 변경 없이 유효</text>
+  <rect x="576" y="416" width="320" height="96" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="2"/>
+  <text x="736" y="454" text-anchor="middle" font-weight="700">검사 통과 후 재생성</text>
+  <text x="736" y="488" text-anchor="middle" class="detail">앱의 인증 전환은 별도 수행</text>
+  <text x="40" y="556" class="detail">주의: 12시간 사용 없음이 드물게 실행하는 작업의 의존성까지 배제하지는 않습니다.</text>
+</svg>
