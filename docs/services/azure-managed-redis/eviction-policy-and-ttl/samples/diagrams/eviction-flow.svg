@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 -24 876 782" width="876" height="782" role="img" aria-label="메모리 한도에 도달했을 때 eviction policy별 쓰기 처리 흐름" font-family="&#x27;Segoe UI&#x27;, &#x27;Malgun Gothic&#x27;, &#x27;Apple SD Gothic Neo&#x27;, &#x27;Noto Sans KR&#x27;, sans-serif">
+<title>메모리 한도에 도달했을 때 eviction policy별 쓰기 처리 흐름</title>
+<defs><marker id="eviction-flow-head-1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
+<rect x="16" y="-24" width="876" height="782" fill="#ffffff"/>
+<rect x="270" y="0" width="300" height="50" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="420.0" y="25.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">메모리를 늘리는 쓰기 (SET 등)</text>
+<polyline points="420,50 420,90" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<polygon points="420.0,90 530,145.0 420.0,200 310,145.0" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="420.0" y="135.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 메모리가</text>
+<text x="420.0" y="154.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">한도를 넘었나?</text>
+<rect x="640" y="120" width="190" height="50" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="735.0" y="145.0" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">그대로 저장</text>
+<polyline points="530,145 640,145" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="559.5" y="133.9" width="51.0" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="585.0" y="145.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">아니요</text>
+<polyline points="420,200 420,250" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="407.5" y="213.9" width="25.0" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="420.0" y="225.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">예</text>
+<polygon points="420.0,250 530,305.0 420.0,360 310,305.0" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="420.0" y="305.0" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">eviction policy</text>
+<rect x="40" y="450" width="200" height="64" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="140.0" y="472.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">쓰기 거부</text>
+<text x="140.0" y="491.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(OOM 오류 반환)</text>
+<polyline points="310,305 140,305 140,450" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="174.1" y="293.9" width="84.8" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="216.5" y="305.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">noeviction</text>
+<polyline points="420,360 420,420" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="377.6" y="378.9" width="84.8" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="420.0" y="390.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">volatile-*</text>
+<polygon points="420.0,420 530,480.0 420.0,540 310,480.0" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="420.0" y="470.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">TTL이 있는 키가</text>
+<text x="420.0" y="489.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">있는가?</text>
+<polyline points="310,480 240,480" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="256.0" y="468.9" width="38.0" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="275.0" y="480.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">없음</text>
+<polyline points="420,540 420,590" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="401.0" y="553.9" width="38.0" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="420.0" y="565.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">있음</text>
+<rect x="300" y="590" width="240" height="64" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="420.0" y="612.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">TTL 있는 키 중에서</text>
+<text x="420.0" y="631.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">골라 삭제 후 저장</text>
+<rect x="600" y="450" width="240" height="64" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="720.0" y="472.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">모든 키 중에서</text>
+<text x="720.0" y="491.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">골라 삭제 후 저장</text>
+<polyline points="530,305 720,305 720,450" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
+<rect x="576.7" y="293.9" width="77.5" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="615.5" y="305.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">allkeys-*</text>
+<text x="40.0" y="698.8" font-size="14" fill="#868e96" text-anchor="start" dominant-baseline="central" xml:space="preserve">삭제할 키 고르는 기준:  *-lru 오래 안 쓴 키  ·  *-lfu 적게 쓴 키  ·  *-random 무작위  ·  volatile-ttl 만료 임박</text>
+<text x="40.0" y="724.8" font-size="14" fill="#868e96" text-anchor="start" dominant-baseline="central" xml:space="preserve">Azure Managed Redis는 샤드마다 메모리를 따로 보고 eviction을 판단합니다.</text>
+</svg>

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 -24 747 538" width="747" height="538" role="img" aria-label="Azure Managed Redis 클러스터링 정책별 연결 모델" font-family="&#x27;Segoe UI&#x27;, &#x27;Malgun Gothic&#x27;, &#x27;Apple SD Gothic Neo&#x27;, &#x27;Noto Sans KR&#x27;, sans-serif">
+<title>Azure Managed Redis 클러스터링 정책별 연결 모델</title>
+<defs><marker id="clustering-policies-head-1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
+<rect x="-24" y="-24" width="747" height="538" fill="#ffffff"/>
+<rect x="0" y="0" width="225" height="490" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="112.5" y="24.6" font-size="17" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">OSS 정책</text>
+<rect x="6" y="60" width="182" height="60" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="97.0" y="80.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">애플리케이션</text>
+<text x="97.0" y="99.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(클러스터 클라이언트)</text>
+<rect x="128" y="160" width="90" height="50" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="173.0" y="176.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">엔드포인트</text>
+<text x="173.0" y="193.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">:10000</text>
+<polyline points="150,120 173,160" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="8" y="330" width="66" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="41.0" y="351.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 A</text>
+<text x="41.0" y="368.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">:85XX</text>
+<polyline points="70,120 41,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="80" y="330" width="66" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="113.0" y="351.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 B</text>
+<text x="113.0" y="368.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">:85XX</text>
+<polyline points="70,120 113,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="34.6" y="272.7" width="137.8" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="103.5" y="283.8" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">② 샤드에 직접 연결</text>
+<rect x="152" y="330" width="66" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="185.0" y="351.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 C</text>
+<text x="185.0" y="368.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">:85XX</text>
+<polyline points="70,120 185,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="118.6" y="212.0" width="108.8" height="34.0" rx="4" fill="#f8f9fa" fill-opacity="0.95"/>
+<text x="173.0" y="221.5" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">① 토폴로지 조회</text>
+<text x="173.0" y="236.5" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(CLUSTER NODES)</text>
+<text x="10.0" y="413.1" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 클라이언트가 slot → 샤드</text>
+<text x="10.0" y="429.4" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">  매핑을 관리</text>
+<text x="10.0" y="445.6" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• MOVED / ASK 처리</text>
+<text x="10.0" y="461.9" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 처리량이 가장 높음</text>
+<rect x="237" y="0" width="225" height="490" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="349.5" y="24.6" font-size="17" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Enterprise 정책</text>
+<rect x="263" y="60" width="172" height="60" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="349.0" y="80.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">애플리케이션</text>
+<text x="349.0" y="99.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(일반 클라이언트)</text>
+<rect x="247" y="180" width="205" height="60" rx="10" fill="#e5dbff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="349.5" y="201.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Redis proxy :10000</text>
+<text x="349.5" y="218.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(샤드로 라우팅)</text>
+<polyline points="349,120 349,180" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="315.6" y="139.5" width="66.7" height="21.0" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="349.0" y="150.0" font-size="12" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">단일 연결</text>
+<rect x="245" y="330" width="66" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="278.0" y="360.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 A</text>
+<polyline points="349,240 278,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="317" y="330" width="66" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="350.0" y="360.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 B</text>
+<polyline points="349,240 350,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="389" y="330" width="66" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="422.0" y="360.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 C</text>
+<polyline points="349,240 422,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<text x="247.0" y="413.1" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 엔드포인트 하나만 연결</text>
+<text x="247.0" y="429.4" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• CLUSTER NODES·SLOTS</text>
+<text x="247.0" y="445.6" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">  명령 차단</text>
+<text x="247.0" y="461.9" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 프록시가 병목이 될 수 있음</text>
+<rect x="474" y="0" width="225" height="490" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="586.5" y="24.6" font-size="17" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Non-clustered 정책</text>
+<rect x="500" y="60" width="172" height="60" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="586.0" y="80.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">애플리케이션</text>
+<text x="586.0" y="99.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(일반 클라이언트)</text>
+<rect x="501" y="180" width="170" height="60" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="586.0" y="210.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">엔드포인트 :10000</text>
+<polyline points="586,120 586,180" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<rect x="552.6" y="139.5" width="66.7" height="21.0" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="586.0" y="150.0" font-size="12" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">단일 연결</text>
+<rect x="496" y="330" width="180" height="60" rx="10" fill="#ffd8a8" stroke="#1e1e1e" stroke-width="2"/>
+<text x="586.0" y="351.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Redis 프로세스 1개</text>
+<text x="586.0" y="368.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(샤딩 없음)</text>
+<polyline points="586,240 586,330" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#clustering-policies-head-1e1e1e)"/>
+<text x="484.0" y="413.1" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 25GB 이하에서만 사용</text>
+<text x="484.0" y="429.4" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• CROSSSLOT 제한 없음</text>
+<text x="484.0" y="445.6" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 성능이 가장 낮음</text>
+</svg>
