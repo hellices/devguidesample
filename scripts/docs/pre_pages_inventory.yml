@@ -5136,61 +5136,70 @@ documents:
       headings:
         63abb15d7932a8cdf26828f4af76652b02d5b882f28f979551e076c7466768f6:
           missing_count: 1
-          reason: "방안 2 제목은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md에서 '방안 2: OSS Cluster 유지 + 연결 재생성 로직 추가'로 바꿨습니다. node-redis createCluster에는 주기적 토폴로지 갱신 옵션이 없어 연결 재생성 방식으로 대체했습니다."
+          reason: "방안 2 제목은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md에서 '방안 2: OSS Cluster 유지 + 클라이언트의 토폴로지 갱신 기능 사용'으로 바꿨고, 직접 구현 대신 node-redis 6.0.0의 공식 토폴로지 갱신 기능을 사용하도록 했습니다."
           evidence:
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: headings
-              fingerprint: 2141c10c066570a3bae2d56f7d4ad3e5255c29511d78b0f143b18e2b07c9b5c5
+              fingerprint: 53cdaed6491de172e48437e35e58c5bdb007392aced33a14824f7ce2357464d0
               count: 1
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: prose
-              fingerprint: 369f3a6d2ec93a6864ded6e3017d0ea526a4e9a15a135de7292d057c869c5165
+              fingerprint: 477eca12d1b9dc221cc2955898aae78b70b23aee3d5a1e1878bd8de3388174f3
               count: 1
       prose:
         c0dfe572f598c6319a7d7f78550498435bafbdbebfd308f0ce4cf15d736cfd74:
           missing_count: 1
-          reason: "OSS Cluster 유지 시 topology refresh 보완 문장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2에서 createCluster 갱신 옵션 부재와 Microsoft Learn·Azure Node.js 가이드의 연결 재생성 권장 문장으로 대체했습니다."
+          reason: "클라이언트 레벨 topology refresh 보완 문장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2에서 라이브러리 공식 기능 사용 원칙과 node-redis 6.0.0 topologyRefreshOnReconnectionAttemptStrategy 동작 설명으로 대체했습니다."
           evidence:
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: prose
-              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              fingerprint: 477eca12d1b9dc221cc2955898aae78b70b23aee3d5a1e1878bd8de3388174f3
               count: 1
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: prose
-              fingerprint: 369f3a6d2ec93a6864ded6e3017d0ea526a4e9a15a135de7292d057c869c5165
+              fingerprint: 040dbfaec5343e739e6705c5c73ae62e0449b8b5337ebd1303e40a44da168b7a
+              count: 1
+        ad9a28bb713ef158898ba7eb97e36fcdbe3e1a331be994b0f857b531c07ab6f0:
+          missing_count: 1
+          reason: "reconnectStrategy 지수 백오프 항목은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 보완 포인트에서 node-redis 기본 reconnectStrategy(최대 2000ms 지수 백오프와 0~200ms 지터)와 기본 connectTimeout 5000ms 사용 안내로 대체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c03794072ad5da22f2ea6ce634d148fe1bcfa3b3ed65780b8f1d6437af3777fe
               count: 1
         ca3ad44d16c9333004b05f79ae9acda04977a3e6229a75ec6ce01b465a78afbe:
           missing_count: 1
-          reason: "주기적 topology refresh 보완 항목은 @redis/client 5.11.0에서 CLUSTER SLOTS 호출이 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 갱신 옵션 부재 설명과 5초 connectTimeout·지터 항목으로 대체했습니다."
+          reason: "주기적 topology refresh 항목은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2에서 node-redis 6.0.0 재연결 계기 토폴로지 갱신 설명과 topologyRefreshOnReconnectionAttemptStrategy 설정 예제로 대체했습니다."
           evidence:
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: prose
-              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              fingerprint: 040dbfaec5343e739e6705c5c73ae62e0449b8b5337ebd1303e40a44da168b7a
               count: 1
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
-              category: prose
-              fingerprint: 73d81e04b7b7a1cffa38936c6ebaab14ffd1f69459e6f98ae24288dec410c945
+              category: code
+              fingerprint: ec63afd3fc00da39ab5f8c6e0187b27946e5f37b6f91f82dff85ef06f12c4640
               count: 1
       code:
         05599af62d6c5c83afb73ece6d48b53ebda53473fef9ab6547379224f9c83ee9:
           missing_count: 1
-          reason: "CLUSTER SLOTS를 30초마다 호출하던 createCluster 예제는 slot 맵을 갱신하지 못해 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 REQUEST_TIMEOUT_MS 요청 전체 제한, 노드별 연결 상태 감시, CONNECT_TIMEOUT_MS 연결 제한과 세대별 요청 추적으로 RECREATE_AFTER_MS 후 클라이언트를 재생성하는 예제로 교체했습니다."
+          reason: "CLUSTER SLOTS를 30초마다 호출하던 createCluster 예제는 내부 slot 맵을 갱신하지 못해 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 topologyRefreshOnReconnectionAttemptStrategy 설정 예제(node-redis 6.0.0)로 교체했습니다."
           evidence:
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: code
-              fingerprint: d375e280ebc5b942809be0522ab951fa4ccb34cda646a77511108804dd279374
+              fingerprint: ec63afd3fc00da39ab5f8c6e0187b27946e5f37b6f91f82dff85ef06f12c4640
               count: 1
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: prose
-              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              fingerprint: 040dbfaec5343e739e6705c5c73ae62e0449b8b5337ebd1303e40a44da168b7a
               count: 1
       local_link_labels:
         1b08bfef216eff6b14e0ccca69a06c7914498e7563355de0e674d34ee3cc9b7b:

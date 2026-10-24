@@ -44,6 +44,10 @@ official_sources:
   url: https://learn.microsoft.com/cli/azure/redisenterprise
 - title: az redisenterprise database
   url: https://learn.microsoft.com/cli/azure/redisenterprise/database
+- title: node-redis Clustering
+  url: https://github.com/redis/node-redis/blob/master/docs/clustering.md
+- title: node-redis createClient configuration
+  url: https://github.com/redis/node-redis/blob/master/docs/client-configuration.md
 last_verified: 2026-10-24
 review_cycle_days: 180
 applies_to:
@@ -152,7 +156,7 @@ Azure Managed Redis는 Redis Enterprise 기반이며 모든 인스턴스가 내�
 
 | 라이브러리 | Enterprise / Non-clustered | OSS | OSS 토폴로지 갱신 동작 |
 |---|---|---|---|
-| node-redis (`redis`, `@redis/client`) | `createClient({ url })` | `createCluster({ rootNodes: [{ url }] })` | `MOVED`·`ASK` 응답을 받을 때 slot 맵을 다시 읽습니다. 주기적 갱신 옵션은 없고, 노드 연결 오류만으로는 다시 읽지 않습니다(`@redis/client` 5.11.0 구현 기준). |
+| node-redis (`redis`, `@redis/client`) | `createClient({ url })` | `createCluster({ rootNodes: [{ url }] })` | `MOVED`·`ASK` 응답을 받을 때 slot 맵을 다시 읽습니다. 6.0.0부터는 `topologyRefreshOnReconnectionAttemptStrategy`(기본 5000ms)에 따라 노드가 재연결을 시작하면 토폴로지도 다시 읽습니다. 5.x에는 이 기능이 없습니다. |
 | ioredis | `new Redis(url)` | `new Redis.Cluster([{ host, port: 10000 }], options)` | `MOVED` 응답 시 갱신합니다. `slotsRefreshInterval`을 설정하면 주기적으로 갱신하며 기본값은 비활성입니다. |
 
 OSS 정책에서 TLS를 사용할 때는 다음을 확인합니다.
@@ -171,15 +175,11 @@ const host = process.env.REDIS_HOST; // <cache-name>.<region>.redis.azure.net
 const client = createClient({
   url: `rediss://${host}:10000`,
   credentialsProvider, // Microsoft Entra ID 또는 액세스 키
-  pingInterval: 60_000,
-  // 전송 전 offline queue 대기만 제한한다. 응답 대기는 애플리케이션에서 따로 제한한다
-  commandOptions: { timeout: 3_000 },
+  pingInterval: 60_000, // Azure Node.js 모범 사례: 10분 유휴 연결 종료 방지
   socket: {
     tls: true,
     servername: host,
-    connectTimeout: 5_000,
-    reconnectStrategy: (retries) =>
-      Math.min(2 ** retries * 100, 5_000) + Math.floor(Math.random() * 500),
+    // connectTimeout(기본 5000ms)과 reconnectStrategy(지수 백오프 + 지터)는 기본값을 사용한다
   },
 });
 client.on('error', (err) => console.error('redis error', err));
@@ -196,19 +196,14 @@ const host = process.env.REDIS_HOST;
 
 const cluster = createCluster({
   rootNodes: [{ url: `rediss://${host}:10000` }],
-  // 모든 노드 명령의 전송 전 queue 대기를 제한한다. 전송 후 응답 대기는 제한하지 않는다
-  commandOptions: { timeout: 3_000 },
   defaults: {
     credentialsProvider,
     pingInterval: 60_000,
-    socket: {
-      tls: true,
-      servername: host,
-      connectTimeout: 5_000,
-      reconnectStrategy: (retries) =>
-        Math.min(2 ** retries * 100, 5_000) + Math.floor(Math.random() * 500),
-    },
+    // TLS 설정은 rootNodes가 아니라 defaults에 둬야 발견된 노드 연결에도 적용된다
+    socket: { tls: true, servername: host },
   },
+  // node-redis 6.0.0+: 노드가 재연결을 시작하면 5000ms 뒤 다른 노드에서 토폴로지를 다시 읽는다(기본값)
+  topologyRefreshOnReconnectionAttemptStrategy: 5_000,
   // 노드 주소가 IP로 오면 TLS 검증을 위해 캐시 호스트 이름으로 바꾼다
   nodeAddressMap: (address) => {
     const [nodeHost, port] = address.split(':');
@@ -219,7 +214,7 @@ cluster.on('error', (err) => console.error('redis cluster error', err));
 await cluster.connect();
 ```
 
-node-redis로 OSS 정책을 사용할 때는 [장애 사례의 연결 재생성 패턴](../index.md#option-recreate-connection)도 함께 적용합니다. 이 패턴은 응답 대기까지 포함한 요청 전체 시간을 제한하고, 명령 결과와 별개로 노드별 연결 상태를 감시해 클라이언트를 재생성합니다.
+node-redis로 OSS 정책을 사용한다면 6.0.0 이상을 사용합니다. 5.x에서는 노드가 사라져도 토폴로지를 다시 읽지 않아 [장애 사례](../index.md#option-topology-refresh)와 같은 미복구가 생길 수 있습니다. `socket` 옵션의 기본값과 동작은 [node-redis client configuration](https://github.com/redis/node-redis/blob/master/docs/client-configuration.md)과 [clustering](https://github.com/redis/node-redis/blob/master/docs/clustering.md) 문서를 따릅니다.
 
 ### 2.2 Java { #java }
 
@@ -325,6 +320,12 @@ RedisClusterClient jedis = RedisClusterClient.builder()
         .build();
 ```
 
+근거는 다음과 같습니다.
+
+- `connectionTimeoutMillis`(5000 이상)와 `socketTimeoutMillis`(1000) 값은 [Azure Jedis 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Java-Jedis.md)를 따릅니다.
+- `RedisClusterClient`와 `topologyRefreshPeriod`는 Jedis 공식 API([`ClusterClientBuilder`](https://github.com/redis/jedis/blob/master/src/main/java/redis/clients/jedis/builders/ClusterClientBuilder.java))입니다.
+- Jedis는 갱신 주기 권장값을 제시하지 않으므로 Azure Lettuce 모범 사례의 5초 주기에 맞췄습니다.
+
 7.2.0보다 이전 버전을 사용한다면 다음과 같이 대응합니다.
 
 - Enterprise / Non-clustered: `new JedisPooled(new HostAndPort(host, 10000), config)`를 사용합니다.
@@ -354,19 +355,22 @@ spring.data.redis.lettuce.cluster.refresh.dynamic-refresh-sources=false
 spring.data.redis.lettuce.cluster.refresh.adaptive=true
 ```
 
+OSS 설정의 토폴로지 갱신 값(5초 주기, dynamic refresh sources 끄기, adaptive 켜기)은 [Azure Lettuce 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Lettuce%20Best%20Practices.md)의 설정을 Spring Boot 공식 속성([Application Properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html)의 `spring.data.redis.lettuce.cluster.refresh.*`)으로 옮긴 것입니다.
+
 #### Redisson
 
 Redisson을 사용한다면 Enterprise / Non-clustered 정책에는 `useSingleServer()`, OSS 정책에는 `useClusterServers()`를 사용합니다. Microsoft Learn은 다음을 권장합니다.
 
 - 3.14.1 이상을 사용합니다.
 - `scanInterval`로 토폴로지를 주기적으로 스캔합니다. Microsoft Learn의 클러스터 기준 설정 예시는 `1000`ms입니다.
+- 전체 기준 설정(`clusterServersConfig`)은 [Best practices for Redisson (Java)](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-best-practices-client-libraries#best-practices-for-redisson-java)의 YAML을 그대로 사용하고, `nodeAddresses`만 `rediss://<cache-name>.<region>.redis.azure.net:10000`으로 바꿉니다.
 
 ### 2.3 정책과 무관한 공통 연결 설정
 
 | 항목 | 권장 값 | 이유 |
 |---|---|---|
 | Connect timeout | 5초 | 너무 짧으면 높은 CPU 상황에서 *연결 → 실패 → 재시도* 루프에 빠집니다. |
-| Command timeout | 5초 미만에서 시작해 조정 | 값 크기와 지연 요구에 맞춥니다. node-redis `commandOptions.timeout`은 전송 전 offline queue 대기만 제한하고 전송 후 응답 대기는 제한하지 않으므로, 요청 전체 제한은 [애플리케이션에서 따로](../index.md#option-recreate-connection) 둡니다. Lettuce·Jedis의 command/socket timeout은 응답 대기를 제한합니다. |
+| Command timeout | 5초 미만에서 시작해 조정 | 값 크기와 지연 요구에 맞춥니다. node-redis의 `commandOptions.timeout`(6.0.0부터 기본 5000ms)은 아직 전송하지 못한 명령의 대기 시간만 제한합니다. |
 | Keepalive / ping | 10분 미만(예: node-redis `pingInterval: 60000`) | Azure Managed Redis는 10분 동안 유휴 상태인 연결을 닫습니다. |
 | 재시도 | 지수 백오프 + 지터 | 동시에 재연결하면 연결 생성 속도 제한에 걸립니다. |
 | Linux `net.ipv4.tcp_retries2` | `5` | 기본값에서는 비정상 종료된 연결을 13분 이상 감지하지 못할 수 있습니다. |
@@ -517,6 +521,9 @@ Bicep이나 ARM 템플릿을 사용하면 `Microsoft.Cache/redisEnterprise/datab
 **클라이언트 라이브러리**
 
 - [node-redis Clustering](https://github.com/redis/node-redis/blob/master/docs/clustering.md)
+- [node-redis createClient configuration](https://github.com/redis/node-redis/blob/master/docs/client-configuration.md)
+- [Jedis ClusterClientBuilder](https://github.com/redis/jedis/blob/master/src/main/java/redis/clients/jedis/builders/ClusterClientBuilder.java)
+- [Spring Boot Application Properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html)
 - [ioredis Cluster](https://github.com/redis/ioredis#cluster)
 - [Lettuce Redis Cluster](https://redis.github.io/lettuce/ha-sharding/#redis-cluster)
 - [Jedis: Connect to a Redis cluster](https://redis.io/docs/latest/develop/clients/jedis/connect/)

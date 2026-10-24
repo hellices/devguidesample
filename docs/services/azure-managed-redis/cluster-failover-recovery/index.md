@@ -12,6 +12,10 @@ official_sources:
   url: https://learn.microsoft.com/azure/redis/best-practices-connection
 - title: 'Quickstart: Connect to Azure Managed Redis in a Node.js app'
   url: https://learn.microsoft.com/azure/redis/nodejs-get-started
+- title: node-redis Clustering
+  url: https://github.com/redis/node-redis/blob/master/docs/clustering.md
+- title: node-redis v5 to v6 migration guide
+  url: https://github.com/redis/node-redis/blob/redis@6.0.0/docs/v5-to-v6.md
 document_type: case
 status: resolved
 verification_status: verified
@@ -140,6 +144,8 @@ OSS 정책에서는 클라이언트가 샤드 주소(IP:85XX)에 직접 연결�
 3. 사라진 노드(8503)로는 연결 자체가 실패하므로 `MOVED` 응답을 받을 기회가 없습니다. 그래서 slot 맵이 갱신되지 않고 해당 slot의 명령이 계속 실패했습니다.
 4. 재기동하면 `rootNodes`(10000 포트)에서 토폴로지를 새로 읽기 때문에 새 노드(8500)에 정상 연결됐습니다.
 
+이 동작은 node-redis 6.0.0에서 재연결을 계기로 토폴로지를 다시 읽는 기능으로 보완됐습니다(방안 2 참고).
+
 **악화 요인**
 
 - `connectTimeout: 1000`은 Microsoft Learn 권장값(5초)보다 짧습니다. Failover 직후처럼 부하가 높은 상황에서 재연결 실패를 늘릴 수 있습니다.
@@ -178,130 +184,45 @@ const redisClient = createClient({
 
 ---
 
-### 방안 2: OSS Cluster 유지 + 연결 재생성 로직 추가 { #option-recreate-connection }
+### 방안 2: OSS Cluster 유지 + 클라이언트의 토폴로지 갱신 기능 사용 { #option-topology-refresh }
 
-node-redis `createCluster`에는 주기적 토폴로지 갱신 옵션이 없습니다. 애플리케이션에서 `CLUSTER SLOTS`를 직접 호출해도 클라이언트 내부 slot 맵은 바뀌지 않습니다.
+OSS 정책을 유지한다면 노드가 사라졌을 때 클라이언트가 스스로 토폴로지를 다시 읽어야 합니다. 직접 갱신 로직을 만들기보다 각 클라이언트 라이브러리가 공식으로 제공하는 기능을 사용합니다. 애플리케이션에서 `CLUSTER SLOTS`를 직접 호출해도 node-redis 내부 slot 맵은 바뀌지 않으므로 기존 예제의 주기 호출은 효과가 없습니다.
 
-Microsoft Learn과 Azure Node.js 가이드는 오류가 일정 시간 이상 지속되면 **연결 객체를 새로 만들라**고 권장합니다. 새 클러스터 클라이언트는 `10000` 포트에서 최신 토폴로지를 다시 읽습니다.
+**node-redis 6.0.0 이상으로 업그레이드 (권장)**
 
-재생성 판단과 요청 처리를 명령 결과에 의존하지 않도록 다음 네 가지를 분리합니다(`@redis/client` 5.11.0 구현 기준).
+node-redis 6.0.0([redis/node-redis#3223](https://github.com/redis/node-redis/pull/3223))에는 이 장애에 해당하는 상황을 처리하는 `createCluster` 옵션 `topologyRefreshOnReconnectionAttemptStrategy`가 추가됐습니다. [공식 문서](https://github.com/redis/node-redis/blob/master/docs/clustering.md)와 6.x 구현에 따르면 다음과 같이 동작합니다.
 
-- **요청 전체 시간 제한**: 클러스터 옵션 `commandOptions.timeout`은 아직 전송하지 못하고 offline queue에서 기다리는 시간만 제한합니다. 명령이 전송되면 타이머가 해제되므로 응답을 기다리는 시간은 제한하지 않고, `connectTimeout`도 명령 대기에는 적용되지 않습니다. 그래서 모든 Redis 호출을 `runRedis()`로 감싸 응답 대기까지 포함한 전체 시간(`REQUEST_TIMEOUT_MS`)을 애플리케이션에서 제한합니다. `commandOptions.timeout`은 offline queue에 쌓인 명령을 정리하는 용도로 함께 둡니다.
-- **노드별 상태 감시**: 정상 샤드에 대한 명령 성공으로 다른 샤드의 실패 기록이 지워지지 않도록, 타이머가 `cluster.masters`의 노드별 연결 상태(`isReady`)를 직접 확인합니다. 실패 시작 시각은 노드 주소별로 기록하고, 해당 노드가 회복되거나 클러스터를 재생성할 때만 지웁니다.
-- **새 client 연결 시간 제한**: 초기 `connect()`도 `reconnectStrategy`에 따라 재시도하므로, 새 client가 발견한 샤드가 연결 전에 사라지면 `next.connect()`가 끝나지 않을 수 있습니다. 연결 전체에 `CONNECT_TIMEOUT_MS`를 두고, 넘으면 새 client를 파기해 재시도를 멈춘 뒤 다음 검사에서 최신 토폴로지로 다시 시도합니다.
-- **이전 client 정리**: client 세대별로 진행 중인 요청을 추적합니다. 새 client로 바꾼 뒤에는 이전 client의 요청이 모두 끝나거나 `REQUEST_TIMEOUT_MS`가 지날 때까지 기다렸다가 정리합니다. 그 시점에는 남은 요청이 이미 호출자에게 시간 초과로 반환된 상태입니다. `close()`는 queue가 비기를 기다리는데, 사라진 노드에서는 이 조건이 충족되지 않을 수 있어 사용하지 않습니다.
+- 한 번 연결됐던 노드 client가 재연결을 시작하면, 기본 5000ms 뒤에 백그라운드에서 클러스터 토폴로지를 다시 읽습니다.
+- 토폴로지는 재연결 중인 노드를 제외한 다른 노드에서 읽고, 새 토폴로지에 없는 노드의 연결은 정리합니다.
+- 이번 사례처럼 8503 노드가 사라져도 다른 샤드를 통해 새 노드(8500)를 찾아 slot 맵을 갱신합니다.
 
 ```javascript
-const QUEUE_TIMEOUT_MS = 3_000;    // buildCluster()의 commandOptions.timeout: 전송 전 queue 대기만 제한
-const REQUEST_TIMEOUT_MS = 5_000;  // 응답 대기까지 포함한 요청 전체 제한
-const CONNECT_TIMEOUT_MS = 15_000; // 새 client의 토폴로지 조회와 샤드 연결 전체 제한
-const RECREATE_AFTER_MS = 30_000;
-const CHECK_INTERVAL_MS = 5_000;
-
-class RequestTimeoutError extends Error {}
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function withTimeout(promise, ms, createError) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(createError()), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-function safeDestroy(client) {
-  try {
-    client.destroy(); // 연결 재시도를 멈추고 남은 명령을 실패로 끝낸다
-  } catch {
-    // 이미 닫힌 client
-  }
-}
-
-// OSS 정책용 createCluster 클라이언트를 반환하는 함수
-let cluster = buildCluster();
-await cluster.connect();
-
-const pending = new Map([[cluster, new Set()]]); // client 세대 → 진행 중인 요청
-const failingSince = new Map(); // 노드 주소 → 연결 실패가 처음 관측된 시각
-let recreating = false;
-
-// 모든 Redis 호출은 이 함수를 거친다.
-function runRedis(command) {
-  const client = cluster;
-  const operations = pending.get(client);
-  const operation = command(client);
-  operations.add(operation);
-  operation.catch(() => {}).finally(() => operations.delete(operation));
-  return withTimeout(operation, REQUEST_TIMEOUT_MS,
-    () => new RequestTimeoutError('Redis request timed out'));
-}
-
-function checkNodes() {
-  if (recreating) return;
-  const now = Date.now();
-  const current = new Set();
-  for (const node of cluster.masters) {
-    current.add(node.address);
-    if (!node.client || node.client.isReady) {
-      failingSince.delete(node.address); // 이 노드가 회복된 경우에만 기록을 지운다
-    } else if (!failingSince.has(node.address)) {
-      failingSince.set(node.address, now);
-    }
-  }
-  for (const address of failingSince.keys()) {
-    if (!current.has(address)) failingSince.delete(address);
-  }
-  for (const since of failingSince.values()) {
-    if (now - since >= RECREATE_AFTER_MS) {
-      void recreateCluster();
-      return;
-    }
-  }
-}
-
-async function recreateCluster() {
-  if (recreating) return;
-  recreating = true;
-  const next = buildCluster();
-  try {
-    // 10000 포트에서 토폴로지를 새로 읽고 샤드에 연결한다
-    await withTimeout(next.connect(), CONNECT_TIMEOUT_MS,
-      () => new Error('Redis cluster connect timed out'));
-  } catch {
-    safeDestroy(next); // 다음 검사에서 최신 토폴로지로 다시 시도한다
-    recreating = false;
-    return;
-  }
-  const previous = cluster;
-  pending.set(next, new Set());
-  cluster = next; // 이후 요청은 새 client로 보낸다
-  failingSince.clear();
-  recreating = false;
-  void retire(previous);
-}
-
-async function retire(previous) {
-  const operations = pending.get(previous) ?? new Set();
-  await Promise.race([Promise.allSettled([...operations]), sleep(REQUEST_TIMEOUT_MS)]);
-  pending.delete(previous);
-  safeDestroy(previous);
-}
-
-setInterval(checkNodes, CHECK_INTERVAL_MS).unref();
-
-// 사용 예: client 참조를 따로 보관하지 말고 항상 runRedis()로 호출한다.
-// const value = await runRedis((c) => c.get('key'));
+const cluster = createCluster({
+  rootNodes: [{ url: `rediss://${host}:10000` }],
+  defaults: { /* TLS, 인증, reconnectStrategy 등: 가이드의 Node.js 절 참고 */ },
+  // node-redis 6.0.0+. 기본값이 5000이므로 생략해도 같다. false 또는 0이면 꺼진다
+  topologyRefreshOnReconnectionAttemptStrategy: 5_000,
+});
 ```
 
-`buildCluster()`의 TLS·`nodeAddressMap`·`commandOptions` 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다. `RequestTimeoutError`·`TimeoutError` 같은 요청 실패는 아래 **Failover Plan 권장**의 대체 경로나 Circuit Breaker로 처리합니다.
+6.0.0으로 올릴 때는 [v5 → v6 마이그레이션 가이드](https://github.com/redis/node-redis/blob/redis@6.0.0/docs/v5-to-v6.md)의 다음 변경을 함께 확인합니다.
 
-!!! warning "시간 초과된 쓰기는 결과가 확정되지 않습니다"
-    `RequestTimeoutError`를 받았거나 이전 client 정리로 요청이 끊긴 경우, 명령이 이미 전송됐다면 Redis에 반영됐는지 알 수 없습니다. 쓰기는 같은 값을 다시 써도 결과가 같은 형태(`SET key value`, 고유 키에 `SET ... NX`)로 설계하고, `INCR`·`LPUSH`처럼 반복하면 결과가 달라지는 명령은 무조건 재시도하지 말고 다시 읽어 확인하거나 요청 ID로 중복을 막습니다.
+- Node.js 20 이상이 필요합니다.
+- 기본 프로토콜이 RESP3로 바뀌어 일부 명령의 반환 형식이 달라집니다.
+- `commandOptions.timeout` 기본값이 5000ms가 됩니다. 이 값은 전송 전 queue 대기 시간을 제한합니다.
+- RESP3에서는 `maintNotifications`가 `"auto"`가 되어 maintenance 알림을 구독합니다. 다만 [Smart client handoffs](https://redis.io/docs/latest/develop/clients/sch/) 지원 서버는 Redis Cloud와 Redis Software로 안내되어 있고 Azure Managed Redis는 목록에 없으므로, 이 기능에 의존하지 않습니다.
+
+**node-redis 5.x를 유지해야 한다면**
+
+- node-redis 5.x에는 노드 연결 실패를 계기로 토폴로지를 다시 읽는 기능이 없습니다. node-redis가 공식 제공하는 재생성 예제도 없습니다.
+- Microsoft Learn의 [Failover and patching for Azure Managed Redis](https://learn.microsoft.com/azure/redis/failover)와 [Azure Node.js 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Node-js.md)는 연결 오류가 일정 시간(예: 30초) 이상 지속되면 **연결 객체를 새로 만들라**고 권장합니다. 새 클러스터 client는 `10000` 포트에서 최신 토폴로지를 다시 읽습니다.
+- 다만 재생성 중 처리 중인 요청의 정리, 연결 시도와 토폴로지 조회의 시간 제한까지 안전하게 직접 구현하기는 까다롭습니다. 가능하면 6.0.0 업그레이드나 방안 1을 우선 검토합니다.
+- 다른 클라이언트를 쓸 수 있다면 ioredis의 공식 옵션 [`slotsRefreshInterval`](https://github.com/redis/ioredis#cluster)(기본 비활성)로 주기적 토폴로지 갱신을 켤 수 있습니다.
+
+`buildCluster()`에 해당하는 TLS·`nodeAddressMap` 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다. 요청 실패는 아래 **Failover Plan 권장**의 대체 경로나 Circuit Breaker로 처리합니다.
 
 **보완 포인트**:
-- `reconnectStrategy`에서 최대 재시도 횟수 제한 및 exponential backoff 적용
-- `connectTimeout`을 5초로 늘리고 `reconnectStrategy`에 지터를 추가
-- 인스턴스가 많으면 재생성 기준 시간에도 지터를 넣어 동시 재연결 방지
+- 기존 코드의 `connectTimeout: 1000`을 제거하고 node-redis 기본값을 사용합니다. `connectTimeout`은 기본 5000ms로 Microsoft Learn 권장값과 같고, `reconnectStrategy`는 기본으로 지수 백오프(최대 2000ms)에 0~200ms 지터를 더합니다.
 - Health Check에서 cluster 상태 모니터링
 
 ### 같은 상황을 Java에서 겪는다면
@@ -325,7 +246,7 @@ setInterval(checkNodes, CHECK_INTERVAL_MS).unref();
 - 해당 기능은 현재 Enterprise Redis에 대해 **점진적으로 도입 중**인 기능
 - 클라이언트 업데이트만으로 즉시 문제 해결을 보장하지는 않음
 - 향후 유지보수 관점에서는 도움이 될 가능성 있음
-- 위 연결 재생성 로직과 함께 사용합니다
+- Smart client handoffs 지원 서버 목록(Redis Cloud, Redis Software)에 Azure Managed Redis는 없으므로, 방안 2의 토폴로지 갱신 기능과 별개로 봅니다
 
 ### Failover Plan 권장
 
@@ -396,3 +317,6 @@ async function safeRedisGet(key) {
 - [Azure Managed Redis - Best Practices for Connection Resilience](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-best-practices-connection)
 - [node-redis Cluster Guide](https://github.com/redis/node-redis/blob/master/docs/clustering.md)
 - [@redis/client 5.11.0 Release Notes](https://github.com/redis/node-redis/releases/tag/%40redis%2Fclient%405.11.0)
+- [node-redis v5 to v6 migration guide](https://github.com/redis/node-redis/blob/redis@6.0.0/docs/v5-to-v6.md)
+- [redis/node-redis#3223: cluster topology refresh after node reconnects](https://github.com/redis/node-redis/pull/3223)
+- [Smart client handoffs](https://redis.io/docs/latest/develop/clients/sch/)
