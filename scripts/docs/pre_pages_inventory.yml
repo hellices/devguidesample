@@ -5133,6 +5133,1478 @@ documents:
   - baseline_path: redis/nodejs/cluster_failover_recovery.md
     pages_path: cases/azure-managed-redis/cluster-failover-recovery/index.md
     reviewed_changes:
+      title:
+        c604c83484ecabc2e0a70d4b0f5d50267426f98693f5fde15e0fca4ca0b28c53:
+          missing_count: 1
+          reason: "제목을 정책·마이그레이션 범위로 넓혔고 장애 분석은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '사례: OSS 정책 + node-redis createCluster의 Failover 미복구' 장으로 옮겼습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: title
+              fingerprint: af38c0862d02c8ba97a111b31980663ff9afeaa996dd76a51e765e58739cf743
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: bf057329e2034c0d598bd3afa25a09917fa78e1739fe457a1918d1113c0cf6a0
+              count: 1
+      headings:
+        54f15ee5a1d4443bf19794b19ed3737d075d4d26250206e7b4a5055d8b328f1f:
+          missing_count: 1
+          reason: "문제 정의 문단은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '발생 환경과 영향' 표로 재구성해 OSS 정책, Planned Maintenance 계기와 재기동까지 이어진 장애 영향을 행별로 기록했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 718d38ec1fd33b01bc7d13ac2a51f5780497b00909737ae30ee935774b73fa46
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: 2f6473d14b3aec42871bbe858217a90f4789d7a9ddb3c8eefce612eaa14e0818
+              count: 1
+        86f2b3bd58fbf842765a89350fc4f08db37e67d7269f11ca48f290a5c6e698fb:
+          missing_count: 1
+          reason: "클러스터링 구성 방식 소개는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '세 가지 클러스터링 정책'과 '정책별 연결 모델' 절로 확장했고 Microsoft Learn 정책 비교 기준으로 다시 썼습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: b8542e1881cd710f14f88855583237fdf79b3bf9a7f59c46202ed391bcd9253c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: d0ef39e4db5de53a0de2212d76afcc8f0047ba71fb3f5ce9cd6a010927f5a5c6
+              count: 1
+        7386b3ecbee1377fd0f4b79ffc1d0bad4b2e38000ed39a6f6412b8b3e6a4c633:
+          missing_count: 1
+          reason: "Non-clustered 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 목록과 비교표 '연결 모델' 행으로 옮겼고 25GB 상한을 함께 적었습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4e5009129b2a8bb3554ed8018602a59675a98578004a266a019f4d072161b90d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: de7ccf38a4e5b268c5e82df7150c4e04d28065eab9633b83b5f7398e5aff1477
+              count: 1
+        109c0f789a47492685a325dce9c24e6b7384edd853168a6049e1b4824ff26f6c:
+          missing_count: 1
+          reason: "OSS 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 OSS 목록으로 옮겼습니다. 10000 포트 초기 연결, 85XX 샤드 직접 연결, slot 매핑과 MOVED·ASK 처리 책임을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4c623b7692a66d2692ea8dd5bab6aaa589674c27e56512c456a0e66faa471534
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 31defb330a22f4c70b4bc8e6b67f15d0669f2d560cd1dd2ebdd388f476f6b05c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 05744c7e0464067a4dc465e637d9d76da6e4c3ad7ce6c1595fd8dc017c166bb8
+              count: 1
+        fc102ecd99866eaa187d5bd474ff9575885bfc569592fb3e3fba907700996051:
+          missing_count: 1
+          reason: "Enterprise 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 Enterprise 목록으로 옮겼고 단일 10000 엔드포인트와 프록시 라우팅을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cd6756408385e75eb015e6b14b1b5d73320dd2dfa5015d555d8f95f1b55dc2c3
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: dc5f25a1674c554f3fca84fbd2a79afa3635d3bd9dd9010407334b270084f4cd
+              count: 1
+        ebda7e86ce32856a41959bc68a3909e8c84c054b200ba7c0d64dcb8b25bad575:
+          missing_count: 1
+          reason: "기존 createCluster 코드는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 발생 환경 표 클라이언트 행(connectTimeout 1000, reconnectStrategy)과 nodeAddressMap을 포함한 OSS node-redis 예제로 대체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: ce682ec2176e9b684246946f9c9a29edfd1b2be024a29af4a7cb29dbd5fa062c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 1e7f8a5bd794fc18a4fa2434e45c7381b05ae3862d1e65762d393dfba0829f35
+              count: 1
+        cbf93f32d8e88f1e7ea97d4b62b0d841dc0b43a8225f2693f638da730c3788aa:
+          missing_count: 1
+          reason: "장애 증상 타임라인은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '타임라인' 표에 같은 시각과 8503 포트 재연결 실패 행으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 41ad01d1d6fc426efedfbefa3b56cf43f452dcf509d12507af0362d4530a0612
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: 2c1558985fdc37fc8b2a90fb4fef99f212d381f30559430e6980d35ebab879c8
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: d2ffe46b6284bd8d3a7bcddfb310e631d513be4e3e4d7b4b5e36868e31d4e266
+              count: 1
+        b441e97719a0afbf6fe6a858df28de59fcd5eb0fbb571f40a046bcb67379f38e:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        3ead44c64a9f7acef6afa8474f31ee9b24ebd9ec96f7b11839831673eeb675ee:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        63abb15d7932a8cdf26828f4af76652b02d5b882f28f979551e076c7466768f6:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        cea369b67b1042c85126d3fc22eedf809b9be69915571f029ca8c4f56022ab7b:
+          missing_count: 1
+          reason: "@redis/client 5.11.0 Smart Client Handoffs 참고 내용은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2 보완 목록 한 항목으로 합쳐 점진 도입과 재생성 로직 병행 권장을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba7bb4572ab102f3280bf03843e68df7c6a69733c46e7ea7ca0d80252a848ca0
+              count: 1
+        280e1bb2e4fe0af9d0b4d08af75516952da5fb6bc74a2a1f836d1cdfaf6cd063:
+          missing_count: 1
+          reason: "@redis/client 5.11.0 Smart Client Handoffs 참고 내용은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2 보완 목록 한 항목으로 합쳐 점진 도입과 재생성 로직 병행 권장을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba7bb4572ab102f3280bf03843e68df7c6a69733c46e7ea7ca0d80252a848ca0
+              count: 1
+        fafffb0b9070e62b2d952f3d7667d03049fef9bc32c3c77579ec8fd32bae14b5:
+          missing_count: 1
+          reason: "Failover Plan 권장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '애플리케이션 수준 대비' 절로 옮겼고 대체 경로·세션 대체·Circuit Breaker 항목과 캐시 조회 대체를 포함한 Circuit Breaker 예제로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: e43ec3f487eb44bf081ba56da4125db77e1ef37eb88a5aa8ae2fd4e15decaff7
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 2727681c21c77e6050ebef9522a6dda4f1abb7102c69d74745e07a3f75e0a147
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fac94e5f2ea9532a041b2d2ba6b189cd0731a35302ae6de255677b9db09b2b22
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fa70bbedd6408b7c7cc7edbcb771dcbc43437551e98336c841cfb2d9367c7c80
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 2ee9b414d11023f7d6e4c8d5f8916beff11289ad00c0a5074a221413f7d8d8b4
+              count: 1
+      prose:
+        5910f10f9905e41bb5610b1e1d20b6d0d481f68e33868d69745af3489ca852f9:
+          missing_count: 1
+          reason: "문제 정의 문단은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '발생 환경과 영향' 표로 재구성해 OSS 정책, Planned Maintenance 계기와 재기동까지 이어진 장애 영향을 행별로 기록했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 718d38ec1fd33b01bc7d13ac2a51f5780497b00909737ae30ee935774b73fa46
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: 2f6473d14b3aec42871bbe858217a90f4789d7a9ddb3c8eefce612eaa14e0818
+              count: 1
+        5321eb889095ab46f6251fbecc31fae46dc0ea82e3269d3b8076d36cd8551fe2:
+          missing_count: 1
+          reason: "클러스터링 구성 방식 소개는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '세 가지 클러스터링 정책'과 '정책별 연결 모델' 절로 확장했고 Microsoft Learn 정책 비교 기준으로 다시 썼습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: b8542e1881cd710f14f88855583237fdf79b3bf9a7f59c46202ed391bcd9253c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: d0ef39e4db5de53a0de2212d76afcc8f0047ba71fb3f5ce9cd6a010927f5a5c6
+              count: 1
+        9873a864b28bf58fe558f32b32a95ba277c9fd7c10d151c2af4a7c942ec36ac9:
+          missing_count: 1
+          reason: "Non-clustered 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 목록과 비교표 '연결 모델' 행으로 옮겼고 25GB 상한을 함께 적었습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4e5009129b2a8bb3554ed8018602a59675a98578004a266a019f4d072161b90d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: de7ccf38a4e5b268c5e82df7150c4e04d28065eab9633b83b5f7398e5aff1477
+              count: 1
+        1696af7134076ca69fe7aae0c8372ed852a9ed3338d50a8e0c6281c7a3c6e287:
+          missing_count: 1
+          reason: "Non-clustered 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 목록과 비교표 '연결 모델' 행으로 옮겼고 25GB 상한을 함께 적었습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4e5009129b2a8bb3554ed8018602a59675a98578004a266a019f4d072161b90d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: de7ccf38a4e5b268c5e82df7150c4e04d28065eab9633b83b5f7398e5aff1477
+              count: 1
+        862228ec453ae9e5fde37f6660605e1afd50903f76878c23304ca05b66b30758:
+          missing_count: 1
+          reason: "OSS 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 OSS 목록으로 옮겼습니다. 10000 포트 초기 연결, 85XX 샤드 직접 연결, slot 매핑과 MOVED·ASK 처리 책임을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4c623b7692a66d2692ea8dd5bab6aaa589674c27e56512c456a0e66faa471534
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 31defb330a22f4c70b4bc8e6b67f15d0669f2d560cd1dd2ebdd388f476f6b05c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 05744c7e0464067a4dc465e637d9d76da6e4c3ad7ce6c1595fd8dc017c166bb8
+              count: 1
+        a68b334c3b736916e4068f9b5ad577cef6ea5a56adec2e657cbd142b256f1483:
+          missing_count: 1
+          reason: "OSS 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 OSS 목록으로 옮겼습니다. 10000 포트 초기 연결, 85XX 샤드 직접 연결, slot 매핑과 MOVED·ASK 처리 책임을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4c623b7692a66d2692ea8dd5bab6aaa589674c27e56512c456a0e66faa471534
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 31defb330a22f4c70b4bc8e6b67f15d0669f2d560cd1dd2ebdd388f476f6b05c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 05744c7e0464067a4dc465e637d9d76da6e4c3ad7ce6c1595fd8dc017c166bb8
+              count: 1
+        25d95ce70fa35b601a2e52bfc02a7f4bc5bbd03287e010270924cb4a17f9e55b:
+          missing_count: 1
+          reason: "OSS 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 OSS 목록으로 옮겼습니다. 10000 포트 초기 연결, 85XX 샤드 직접 연결, slot 매핑과 MOVED·ASK 처리 책임을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4c623b7692a66d2692ea8dd5bab6aaa589674c27e56512c456a0e66faa471534
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 31defb330a22f4c70b4bc8e6b67f15d0669f2d560cd1dd2ebdd388f476f6b05c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 05744c7e0464067a4dc465e637d9d76da6e4c3ad7ce6c1595fd8dc017c166bb8
+              count: 1
+        ac6c318aed5dd231b5713878c2e473477b2f6f4dd1ab42b2bf779330a4caf52f:
+          missing_count: 1
+          reason: "OSS 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 OSS 목록으로 옮겼습니다. 10000 포트 초기 연결, 85XX 샤드 직접 연결, slot 매핑과 MOVED·ASK 처리 책임을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4c623b7692a66d2692ea8dd5bab6aaa589674c27e56512c456a0e66faa471534
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 31defb330a22f4c70b4bc8e6b67f15d0669f2d560cd1dd2ebdd388f476f6b05c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 05744c7e0464067a4dc465e637d9d76da6e4c3ad7ce6c1595fd8dc017c166bb8
+              count: 1
+        490d074e249ff6d90e57cde45bc7cf639f2557b16f7d5184acb99c5d6191ea07:
+          missing_count: 1
+          reason: "Enterprise 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 Enterprise 목록으로 옮겼고 단일 10000 엔드포인트와 프록시 라우팅을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cd6756408385e75eb015e6b14b1b5d73320dd2dfa5015d555d8f95f1b55dc2c3
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: dc5f25a1674c554f3fca84fbd2a79afa3635d3bd9dd9010407334b270084f4cd
+              count: 1
+        5f2b907fd4884b55478e5454ebaf7134bab95a86ca62bd8a7c96cb4c3060479c:
+          missing_count: 1
+          reason: "Enterprise 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 Enterprise 목록으로 옮겼고 단일 10000 엔드포인트와 프록시 라우팅을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cd6756408385e75eb015e6b14b1b5d73320dd2dfa5015d555d8f95f1b55dc2c3
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: dc5f25a1674c554f3fca84fbd2a79afa3635d3bd9dd9010407334b270084f4cd
+              count: 1
+        7f90b36d3c4f8504c657cb0bba99759d0db7abbd9d3f531e8e6f75dab10b0591:
+          missing_count: 1
+          reason: "Enterprise 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 Enterprise 목록으로 옮겼고 단일 10000 엔드포인트와 프록시 라우팅을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cd6756408385e75eb015e6b14b1b5d73320dd2dfa5015d555d8f95f1b55dc2c3
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: dc5f25a1674c554f3fca84fbd2a79afa3635d3bd9dd9010407334b270084f4cd
+              count: 1
+        4e316599e5c08686b45309146e2dee621f29a6387e14a6879c57f34ecb29dc87:
+          missing_count: 1
+          reason: "Enterprise 정책 설명은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 정책별 연결 모델 Enterprise 목록으로 옮겼고 단일 10000 엔드포인트와 프록시 라우팅을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cd6756408385e75eb015e6b14b1b5d73320dd2dfa5015d555d8f95f1b55dc2c3
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: dc5f25a1674c554f3fca84fbd2a79afa3635d3bd9dd9010407334b270084f4cd
+              count: 1
+        fabac3039ccabb1e2a2b6bf94da8146983a4dc1834f8acc67b9311d903e3a229:
+          missing_count: 1
+          reason: "정책 추정과 변경 불가 경고는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '기본값은 OSS이고 생성 후 바꿀 수 없음' 절과 발생 환경 표의 캐시 정책 행으로 나눠 옮겼습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 5354c3b19bd45b3e2323a2c3d91cc6139b3b7016b41586b9bec2b718a7f28579
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: f6dadb61cbbe7cce3d6419b467193aa54c3f4ac59e6e4ed25b31b211aebba30b
+              count: 1
+        b115bb4ebc0665e8cbe47ee4b25e547a5af9d4b40b856adb7437f213b0f45d14:
+          missing_count: 1
+          reason: "기존 createCluster 코드는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 발생 환경 표 클라이언트 행(connectTimeout 1000, reconnectStrategy)과 nodeAddressMap을 포함한 OSS node-redis 예제로 대체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: ce682ec2176e9b684246946f9c9a29edfd1b2be024a29af4a7cb29dbd5fa062c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 1e7f8a5bd794fc18a4fa2434e45c7381b05ae3862d1e65762d393dfba0829f35
+              count: 1
+        b5e6eafc13318e70d3e157dbcf649e4602499189f6a3ca73c1a240985075f2b5:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        54291cf289181ba4a9fcac44d011079e97d616939933dca277bad80aa5c84d88:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        c7296bf940074df87937bd40147b3c55b5c00b993d4755afce0f05f4ed509775:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        2780d4af7fe19b968ff064996dfc96f488cbc545fd110874f7fdd9b2bc43552f:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        c9201fd2b9e4ce9bab6649b26b4170ee793d942708bed785dccbd0654cb35fba:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        67a7560768f48f9a519a1e3d52d7326659eadd8dfca5846868e7de70731e1ab3:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        965e7fae37b9d55bb1f7b64e9a33ddcaa20ed3534240b192ecb25047c49d2e5d:
+          missing_count: 1
+          reason: "Failover 문제 흐름은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '원인 분석' 절로 옮겼고 @redis/client 5.11.0 구현에서 확인한 rediscover 조건과 8503→8500 전환 관측을 함께 정리했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ba785c02cf168bfe5b8c95103ab23973546dd59c5cd0f2e68cdfd27778b5d9ee
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 0e9d2dd6e0f626279ee63be0d15b4653d5f308ab7c7e5b72417b0830d5e729e9
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a580a07543292e606ddba1619aa9477097daea7798e54e399610f5914116aa2c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e9ae7023a658ba481ca61353328dbde626dce00b4d3be1540ef85c3818a6f32c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c6dda392a6c2238e45e5f5c0236290bc88806a3ab0fcb8cd3c856a38d9d419b7
+              count: 1
+        b1f36b2180891aa253bcc2c7fa983c63b92187ab3cbdbe619f6cf3dea2a28d8b:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        6c08be78a4ecf1129f1a52834bb8553cee5fcd1322bab6da0ab451330cdf0158:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        3ef30ec50a2f6a10b4d6cd3641fcff13ed25c7a5dda228653d4bf49e9fcf0444:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        79f674f6adc53c6c75de4271215c43d36021a4209e463bfb24019693d0fae1d6:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        4117d2ef97adb0e6cc760abe3e034afa4106a76517e46070c41caa2d84d7643d:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        67f883b9704096a55fc3ac7840cc48739ef75e8f5044af67fb7b011f0991bc68:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        94bc70b226ec02df314105d4f3c0f6477d3512a258dd9c6643f131285f6e7d2f:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        c0dfe572f598c6319a7d7f78550498435bafbdbebfd308f0ce4cf15d736cfd74:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        9c34df2e3f49fd032d43c72e0c0b253b15a6e1949c19fc9c9a904aba8ebfe857:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        ad9a28bb713ef158898ba7eb97e36fcdbe3e1a331be994b0f857b531c07ab6f0:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        ca3ad44d16c9333004b05f79ae9acda04977a3e6229a75ec6ce01b465a78afbe:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        e20839efc84fb192184b04f16a918be2928653058e6b55285abcb295402f11f6:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        ff236f203160603ed9354ccb1616e6a6b0bf3c4fa829d9880040d133a21bdfa3:
+          missing_count: 1
+          reason: "@redis/client 5.11.0 Smart Client Handoffs 참고 내용은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2 보완 목록 한 항목으로 합쳐 점진 도입과 재생성 로직 병행 권장을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba7bb4572ab102f3280bf03843e68df7c6a69733c46e7ea7ca0d80252a848ca0
+              count: 1
+        8cc13f2448319ac1b9e9c55e5beb45cf69ec9612c714cce4ed4d3110f9c02c58:
+          missing_count: 1
+          reason: "@redis/client 5.11.0 Smart Client Handoffs 참고 내용은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2 보완 목록 한 항목으로 합쳐 점진 도입과 재생성 로직 병행 권장을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba7bb4572ab102f3280bf03843e68df7c6a69733c46e7ea7ca0d80252a848ca0
+              count: 1
+        3543eb1bdaad0e83214e87a5eaf33e9a1c665c2125e1e1553d687f15bfe505f4:
+          missing_count: 1
+          reason: "@redis/client 5.11.0 Smart Client Handoffs 참고 내용은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2 보완 목록 한 항목으로 합쳐 점진 도입과 재생성 로직 병행 권장을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba7bb4572ab102f3280bf03843e68df7c6a69733c46e7ea7ca0d80252a848ca0
+              count: 1
+        cc4d1bc3c77ec1c7ffbcc4f41bbb37c4d56b08630bca67cbfc9706ab73f2cd27:
+          missing_count: 1
+          reason: "@redis/client 5.11.0 Smart Client Handoffs 참고 내용은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 방안 2 보완 목록 한 항목으로 합쳐 점진 도입과 재생성 로직 병행 권장을 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba7bb4572ab102f3280bf03843e68df7c6a69733c46e7ea7ca0d80252a848ca0
+              count: 1
+        04a08a4ec36c7d79390dc5838947096c182a45d2874f013be775114610a513f5:
+          missing_count: 1
+          reason: "Failover Plan 권장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '애플리케이션 수준 대비' 절로 옮겼고 대체 경로·세션 대체·Circuit Breaker 항목과 캐시 조회 대체를 포함한 Circuit Breaker 예제로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: e43ec3f487eb44bf081ba56da4125db77e1ef37eb88a5aa8ae2fd4e15decaff7
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 2727681c21c77e6050ebef9522a6dda4f1abb7102c69d74745e07a3f75e0a147
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fac94e5f2ea9532a041b2d2ba6b189cd0731a35302ae6de255677b9db09b2b22
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fa70bbedd6408b7c7cc7edbcb771dcbc43437551e98336c841cfb2d9367c7c80
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 2ee9b414d11023f7d6e4c8d5f8916beff11289ad00c0a5074a221413f7d8d8b4
+              count: 1
+        0a44d24465b01ad2d658d484b68b787eb522192c29f30a3b4c95c02ac63c8011:
+          missing_count: 1
+          reason: "Failover Plan 권장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '애플리케이션 수준 대비' 절로 옮겼고 대체 경로·세션 대체·Circuit Breaker 항목과 캐시 조회 대체를 포함한 Circuit Breaker 예제로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: e43ec3f487eb44bf081ba56da4125db77e1ef37eb88a5aa8ae2fd4e15decaff7
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 2727681c21c77e6050ebef9522a6dda4f1abb7102c69d74745e07a3f75e0a147
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fac94e5f2ea9532a041b2d2ba6b189cd0731a35302ae6de255677b9db09b2b22
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fa70bbedd6408b7c7cc7edbcb771dcbc43437551e98336c841cfb2d9367c7c80
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 2ee9b414d11023f7d6e4c8d5f8916beff11289ad00c0a5074a221413f7d8d8b4
+              count: 1
+        b7201c6bbbcda3462732a2211ab01d6251b0fce135c8563c62f859362709b949:
+          missing_count: 1
+          reason: "Failover Plan 권장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '애플리케이션 수준 대비' 절로 옮겼고 대체 경로·세션 대체·Circuit Breaker 항목과 캐시 조회 대체를 포함한 Circuit Breaker 예제로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: e43ec3f487eb44bf081ba56da4125db77e1ef37eb88a5aa8ae2fd4e15decaff7
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 2727681c21c77e6050ebef9522a6dda4f1abb7102c69d74745e07a3f75e0a147
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fac94e5f2ea9532a041b2d2ba6b189cd0731a35302ae6de255677b9db09b2b22
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fa70bbedd6408b7c7cc7edbcb771dcbc43437551e98336c841cfb2d9367c7c80
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 2ee9b414d11023f7d6e4c8d5f8916beff11289ad00c0a5074a221413f7d8d8b4
+              count: 1
+        46f7313757a8e83d32774ff47c41532542021cdea10f2e7b6a00f923315ff71c:
+          missing_count: 1
+          reason: "Failover Plan 권장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '애플리케이션 수준 대비' 절로 옮겼고 대체 경로·세션 대체·Circuit Breaker 항목과 캐시 조회 대체를 포함한 Circuit Breaker 예제로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: e43ec3f487eb44bf081ba56da4125db77e1ef37eb88a5aa8ae2fd4e15decaff7
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 2727681c21c77e6050ebef9522a6dda4f1abb7102c69d74745e07a3f75e0a147
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fac94e5f2ea9532a041b2d2ba6b189cd0731a35302ae6de255677b9db09b2b22
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fa70bbedd6408b7c7cc7edbcb771dcbc43437551e98336c841cfb2d9367c7c80
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 2ee9b414d11023f7d6e4c8d5f8916beff11289ad00c0a5074a221413f7d8d8b4
+              count: 1
+        7497a1325f7f9f9927207957ebcd4b861fe31b08cd25e66b9df7ccbe1d3c155d:
+          missing_count: 1
+          reason: "코드 샘플 안내는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '코드 샘플' 절에 같은 cluster_example 링크와 연결 방식 비교·토폴로지 조회·Failover 복구 테스트 목록으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: c11bec2a937203e774f20c859711265165e7853b86a034b3975daad72ddad8e2
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 3f79f7fb8770bba42e750ff3d3a04607f3be3b5f7022d5a97e985607dbbe658d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbcbe276f97a72c1cdc5166d78616a78e992812fe819b5b32b63a9693a3def17
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e2aea9a2e8d91f33bbba8efcef1992b2832ed2c4edc0d193bb021ab6f63d1922
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cce15f1c681d807e62fde50fc04b5c8a2620e010d5a852d7584a369b75b13055
+              count: 1
+        ce3ab73a6e3a10f71f2b69e0556d41362e023853dc4b8ac7196dc2b82845c57e:
+          missing_count: 1
+          reason: "코드 샘플 안내는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '코드 샘플' 절에 같은 cluster_example 링크와 연결 방식 비교·토폴로지 조회·Failover 복구 테스트 목록으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: c11bec2a937203e774f20c859711265165e7853b86a034b3975daad72ddad8e2
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 3f79f7fb8770bba42e750ff3d3a04607f3be3b5f7022d5a97e985607dbbe658d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbcbe276f97a72c1cdc5166d78616a78e992812fe819b5b32b63a9693a3def17
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e2aea9a2e8d91f33bbba8efcef1992b2832ed2c4edc0d193bb021ab6f63d1922
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cce15f1c681d807e62fde50fc04b5c8a2620e010d5a852d7584a369b75b13055
+              count: 1
+        1e99ed6628b0baff5e93546ce710758c5ef1cbf04db782160095cfabbc57e7d7:
+          missing_count: 1
+          reason: "코드 샘플 안내는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '코드 샘플' 절에 같은 cluster_example 링크와 연결 방식 비교·토폴로지 조회·Failover 복구 테스트 목록으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: c11bec2a937203e774f20c859711265165e7853b86a034b3975daad72ddad8e2
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 3f79f7fb8770bba42e750ff3d3a04607f3be3b5f7022d5a97e985607dbbe658d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbcbe276f97a72c1cdc5166d78616a78e992812fe819b5b32b63a9693a3def17
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e2aea9a2e8d91f33bbba8efcef1992b2832ed2c4edc0d193bb021ab6f63d1922
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cce15f1c681d807e62fde50fc04b5c8a2620e010d5a852d7584a369b75b13055
+              count: 1
+        981f0e206b95f329bb704aa5c20da4782e370ff9d3888d9021389fcf3c759bc2:
+          missing_count: 1
+          reason: "코드 샘플 안내는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '코드 샘플' 절에 같은 cluster_example 링크와 연결 방식 비교·토폴로지 조회·Failover 복구 테스트 목록으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: c11bec2a937203e774f20c859711265165e7853b86a034b3975daad72ddad8e2
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 3f79f7fb8770bba42e750ff3d3a04607f3be3b5f7022d5a97e985607dbbe658d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbcbe276f97a72c1cdc5166d78616a78e992812fe819b5b32b63a9693a3def17
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: e2aea9a2e8d91f33bbba8efcef1992b2832ed2c4edc0d193bb021ab6f63d1922
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: cce15f1c681d807e62fde50fc04b5c8a2620e010d5a852d7584a369b75b13055
+              count: 1
+        834ba63bf3bfd78c8131fe3a96c8cc537d0c6a286ba06ddf15dfacce9000ad35:
+          missing_count: 1
+          reason: "참고 자료 링크는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '참고 자료' 절에서 Microsoft Learn 원문 제목(Scale an Azure Cache for Redis instance, Connection resilience with Azure Managed Redis)과 node-redis Clustering 링크로 바꿨습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ef9aaca535344de2ef2eb7231d78eeaa4a46343b36b01cf2ff2d3173ed1e63fe
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 6e912259f0be77ebc95d8352d8396fdb5abe6789baecdaead2d7cbd02106fb02
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a615eee5266a6d9ada10835971354f913e8c7d66c431f97e988860b354a18a00
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ecd564dfbf9a96bf6616427b7dec3b6253009a8a34edc63163cabd548084adc3
+              count: 1
+        2d5f4e3b61b7ec79c06f2f299cdd084e469bbcdcb098bd6c07c4c793d29dc3c4:
+          missing_count: 1
+          reason: "참고 자료 링크는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '참고 자료' 절에서 Microsoft Learn 원문 제목(Scale an Azure Cache for Redis instance, Connection resilience with Azure Managed Redis)과 node-redis Clustering 링크로 바꿨습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ef9aaca535344de2ef2eb7231d78eeaa4a46343b36b01cf2ff2d3173ed1e63fe
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 6e912259f0be77ebc95d8352d8396fdb5abe6789baecdaead2d7cbd02106fb02
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a615eee5266a6d9ada10835971354f913e8c7d66c431f97e988860b354a18a00
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ecd564dfbf9a96bf6616427b7dec3b6253009a8a34edc63163cabd548084adc3
+              count: 1
+        9ec6b11c0c2f14e3eb0a3463dc85002d50b7c42aea1d00885c315aeb3e5353a1:
+          missing_count: 1
+          reason: "참고 자료 링크는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '참고 자료' 절에서 Microsoft Learn 원문 제목(Scale an Azure Cache for Redis instance, Connection resilience with Azure Managed Redis)과 node-redis Clustering 링크로 바꿨습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: ef9aaca535344de2ef2eb7231d78eeaa4a46343b36b01cf2ff2d3173ed1e63fe
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 6e912259f0be77ebc95d8352d8396fdb5abe6789baecdaead2d7cbd02106fb02
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: a615eee5266a6d9ada10835971354f913e8c7d66c431f97e988860b354a18a00
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ecd564dfbf9a96bf6616427b7dec3b6253009a8a34edc63163cabd548084adc3
+              count: 1
+      code:
+        24b8b3bb50785b58d0fe0e16f8baec214569f484c1405d03f474bd9dedaa4376:
+          missing_count: 1
+          reason: "기존 createCluster 코드는 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 발생 환경 표 클라이언트 행(connectTimeout 1000, reconnectStrategy)과 nodeAddressMap을 포함한 OSS node-redis 예제로 대체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: ce682ec2176e9b684246946f9c9a29edfd1b2be024a29af4a7cb29dbd5fa062c
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 1e7f8a5bd794fc18a4fa2434e45c7381b05ae3862d1e65762d393dfba0829f35
+              count: 1
+        2683d9b48e4164b0d5b7d5e957a7c417cfcb909f4531443eb29839a391dc4c6d:
+          missing_count: 1
+          reason: "Enterprise 전환 방안은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 1: Enterprise 정책으로 재생성' 절로 옮겼고 createClient 예제, 재생성·데이터 이전 제약과 CROSSSLOT·프록시 처리량 제약을 추가했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 656ece6b00354d138a436af403860dd685d28b416b6cc490b9da6e8b65a67526
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: ba61b53d4ad2c547a0524389554c10a4fb337cb7aff929b9d912b8286d29ea71
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 4dc967c69f5078517fdc766a64725dc74687cae261e52eaece29c04646adfc69
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: bbedfaf2c453650e89cda19a5b1b689839879f9c394aaa47153ab71366476693
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 739f1c4e7359229586f6b831af7f2ed3e0925962898d70d6c37092e63bae15ea
+              count: 1
+        05599af62d6c5c83afb73ece6d48b53ebda53473fef9ab6547379224f9c83ee9:
+          missing_count: 1
+          reason: "OSS 유지 방안의 CLUSTER SLOTS 주기 호출 예제는 내부 slot 맵을 갱신하지 않아 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '방안 2: OSS 정책 유지 + 연결 재생성 로직 추가' 절의 연결 재생성 예제와 5초 connectTimeout·지터 권장으로 교체했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 6b06ad435d9e1d877c518d25eb7036dc647eb538568172bd807bbab541cf7962
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 049f3d6a917fe9b3f112cdf8ff457fc59580f7b19df0549c3a6aff376722a68d
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 87837d7ee46c20035e3ccf54c56a1f451bd21255fc2b16c7f7195c62d0656a3b
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: c17fd5943f23e588825ceec2d210190890e924c4baccde9955cba40754530668
+              count: 1
+        c7405937090958e7bae3de9d4d3bbd0cb3b8243dbd59bd2e79dbec58c2c69f80:
+          missing_count: 1
+          reason: "Failover Plan 권장은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '애플리케이션 수준 대비' 절로 옮겼고 대체 경로·세션 대체·Circuit Breaker 항목과 캐시 조회 대체를 포함한 Circuit Breaker 예제로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: e43ec3f487eb44bf081ba56da4125db77e1ef37eb88a5aa8ae2fd4e15decaff7
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: 2727681c21c77e6050ebef9522a6dda4f1abb7102c69d74745e07a3f75e0a147
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fac94e5f2ea9532a041b2d2ba6b189cd0731a35302ae6de255677b9db09b2b22
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: prose
+              fingerprint: fa70bbedd6408b7c7cc7edbcb771dcbc43437551e98336c841cfb2d9367c7c80
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: code
+              fingerprint: 2ee9b414d11023f7d6e4c8d5f8916beff11289ad00c0a5074a221413f7d8d8b4
+              count: 1
+      tables:
+        7f4ab2b2af51c804e646f3dc7a974d9c5224b7a8b9fe95d4b4bf424e41060ca0:
+          missing_count: 1
+          reason: "장애 증상 타임라인은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '타임라인' 표에 같은 시각과 8503 포트 재연결 실패 행으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 41ad01d1d6fc426efedfbefa3b56cf43f452dcf509d12507af0362d4530a0612
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: 2c1558985fdc37fc8b2a90fb4fef99f212d381f30559430e6980d35ebab879c8
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: d2ffe46b6284bd8d3a7bcddfb310e631d513be4e3e4d7b4b5e36868e31d4e266
+              count: 1
+        b21ef7521b5edaf99d7819adbe4e8b7e3839f5120d4d10f60ca632860de26ccf:
+          missing_count: 1
+          reason: "장애 증상 타임라인은 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 '타임라인' 표에 같은 시각과 8503 포트 재연결 실패 행으로 유지했습니다."
+          evidence:
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: headings
+              fingerprint: 41ad01d1d6fc426efedfbefa3b56cf43f452dcf509d12507af0362d4530a0612
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: 2c1558985fdc37fc8b2a90fb4fef99f212d381f30559430e6980d35ebab879c8
+              count: 1
+            - kind: structure
+              path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
+              category: tables
+              fingerprint: d2ffe46b6284bd8d3a7bcddfb310e631d513be4e3e4d7b4b5e36868e31d4e266
+              count: 1
       local_link_labels:
         1b08bfef216eff6b14e0ccca69a06c7914498e7563355de0e674d34ee3cc9b7b:
           missing_count: 1

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 -24 747 538" width="747" height="538" role="img" aria-label="OSS 정책에서 노드 교체 후 createCluster가 복구되지 않은 과정" font-family="&#x27;Segoe UI&#x27;, &#x27;Malgun Gothic&#x27;, &#x27;Apple SD Gothic Neo&#x27;, &#x27;Noto Sans KR&#x27;, sans-serif">
+<title>OSS 정책에서 노드 교체 후 createCluster가 복구되지 않은 과정</title>
+<defs><marker id="failover-incident-head-1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker><marker id="failover-incident-head-868e96" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#868e96"/></marker><marker id="failover-incident-head-e03131" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e03131"/></marker></defs>
+<rect x="-24" y="-24" width="747" height="538" fill="#ffffff"/>
+<rect x="0" y="0" width="225" height="490" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="112.5" y="24.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">① Maintenance 전</text>
+<rect x="237" y="0" width="225" height="490" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="349.5" y="24.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">② Maintenance 중 (노드 교체)</text>
+<rect x="474" y="0" width="225" height="490" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="586.5" y="24.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">③ 재기동 또는 연결 재생성</text>
+<rect x="22" y="60" width="180" height="56" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="112.0" y="79.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Node.js 앱</text>
+<text x="112.0" y="96.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">createCluster</text>
+<rect x="8" y="130" width="209" height="56" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="112.5" y="149.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">slot 맵 캐시</text>
+<text x="112.5" y="166.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">slot X → 노드 A :8503</text>
+<rect x="32" y="300" width="160" height="60" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="112.0" y="321.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">노드 A</text>
+<text x="112.0" y="338.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 :8503</text>
+<polyline points="112,186 112,300" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#failover-incident-head-1e1e1e)"/>
+<rect x="78.6" y="232.5" width="66.7" height="21.0" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="112.0" y="243.0" font-size="12" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">정상 연결</text>
+<rect x="259" y="60" width="180" height="56" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="349.0" y="79.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Node.js 앱</text>
+<text x="349.0" y="96.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">createCluster</text>
+<rect x="245" y="130" width="209" height="56" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="349.5" y="150.5" font-size="12" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">slot 맵 캐시 (갱신 안 됨)</text>
+<text x="349.5" y="165.5" font-size="12" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">slot X → 노드 A :8503</text>
+<rect x="243" y="300" width="100" height="60" rx="10" fill="#e9ecef" stroke="#868e96" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="293.0" y="322.5" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">노드 A 제거됨</text>
+<text x="293.0" y="337.5" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">:8503 ✕</text>
+<rect x="356" y="300" width="100" height="60" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="406.0" y="321.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">새 노드 B</text>
+<text x="406.0" y="338.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 :8500</text>
+<polyline points="327,186 293,300" fill="none" stroke="#e03131" stroke-width="2" stroke-dasharray="8 6" marker-end="url(#failover-incident-head-e03131)"/>
+<rect x="255.3" y="232.5" width="109.4" height="21.0" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="310.0" y="243.0" font-size="12" fill="#e03131" text-anchor="middle" dominant-baseline="central" xml:space="preserve">재연결 반복 실패</text>
+<polyline points="343,330 356,330" fill="none" stroke="#868e96" stroke-width="2" stroke-dasharray="8 6" marker-end="url(#failover-incident-head-868e96)"/>
+<text x="349.0" y="373.5" font-size="12" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 이동</text>
+<text x="247.0" y="404.1" font-size="13" fill="#e03131" text-anchor="start" dominant-baseline="central" xml:space="preserve">연결 자체가 실패해 MOVED</text>
+<text x="247.0" y="420.4" font-size="13" fill="#e03131" text-anchor="start" dominant-baseline="central" xml:space="preserve">응답을 받지 못함</text>
+<text x="247.0" y="436.6" font-size="13" fill="#e03131" text-anchor="start" dominant-baseline="central" xml:space="preserve">→ slot 맵을 다시 읽지 않음</text>
+<text x="247.0" y="452.9" font-size="13" fill="#e03131" text-anchor="start" dominant-baseline="central" xml:space="preserve">→ 해당 slot 명령 계속 실패</text>
+<rect x="496" y="60" width="180" height="56" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="586.0" y="79.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">새 클라이언트</text>
+<text x="586.0" y="96.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">createCluster</text>
+<rect x="482" y="130" width="209" height="56" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="586.5" y="149.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">slot 맵 새로 생성</text>
+<text x="586.5" y="166.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">slot X → 노드 B :8500</text>
+<rect x="506" y="300" width="160" height="60" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="586.0" y="321.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">노드 B</text>
+<text x="586.0" y="338.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 :8500</text>
+<polyline points="586,186 586,300" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#failover-incident-head-1e1e1e)"/>
+<rect x="552.6" y="232.5" width="66.7" height="21.0" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="586.0" y="243.0" font-size="12" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">정상 연결</text>
+<text x="484.0" y="404.1" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">rootNodes(:10000)에서</text>
+<text x="484.0" y="420.4" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">토폴로지를 처음부터 다시</text>
+<text x="484.0" y="436.6" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">조회해 복구 (재기동 대신</text>
+<text x="484.0" y="452.9" font-size="13" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">연결 재생성으로 자동화)</text>
+</svg>

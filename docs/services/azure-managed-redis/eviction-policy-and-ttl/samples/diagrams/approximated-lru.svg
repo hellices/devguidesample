@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 16 968 480" width="968" height="480" role="img" aria-label="Redis 근사 LRU 알고리즘의 샘플링과 후보 풀 동작" font-family="&#x27;Segoe UI&#x27;, &#x27;Malgun Gothic&#x27;, &#x27;Apple SD Gothic Neo&#x27;, &#x27;Noto Sans KR&#x27;, sans-serif">
+<title>Redis 근사 LRU 알고리즘의 샘플링과 후보 풀 동작</title>
+<defs><marker id="approximated-lru-head-1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker><marker id="approximated-lru-head-868e96" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#868e96"/></marker></defs>
+<rect x="-24" y="16" width="968" height="480" fill="#ffffff"/>
+<rect x="0" y="40" width="300" height="280" rx="10" fill="#f8f9fa" stroke="#868e96" stroke-width="1" stroke-dasharray="8 6"/>
+<text x="150.0" y="62.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드의 키 공간</text>
+<rect x="20" y="90" width="80" height="54" rx="10" fill="#ffffff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="60.0" y="108.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k1</text>
+<text x="60.0" y="125.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 3초</text>
+<rect x="112" y="90" width="80" height="54" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="152.0" y="108.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k2</text>
+<text x="152.0" y="125.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 12초</text>
+<rect x="204" y="90" width="80" height="54" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="244.0" y="108.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k3</text>
+<text x="244.0" y="125.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 95초</text>
+<rect x="20" y="162" width="80" height="54" rx="10" fill="#ffffff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="60.0" y="180.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k4</text>
+<text x="60.0" y="197.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 1초</text>
+<rect x="112" y="162" width="80" height="54" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="152.0" y="180.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k5</text>
+<text x="152.0" y="197.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 30초</text>
+<rect x="204" y="162" width="80" height="54" rx="10" fill="#ffffff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="244.0" y="180.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k6</text>
+<text x="244.0" y="197.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 7초</text>
+<rect x="20" y="234" width="80" height="54" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="60.0" y="252.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k7</text>
+<text x="60.0" y="269.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 120초</text>
+<rect x="112" y="234" width="80" height="54" rx="10" fill="#ffffff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="152.0" y="252.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k8</text>
+<text x="152.0" y="269.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 2초</text>
+<rect x="204" y="234" width="80" height="54" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="244.0" y="252.9" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k9</text>
+<text x="244.0" y="269.1" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">유휴 40초</text>
+<text x="150.0" y="308.1" font-size="13" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">파란색 = 이번에 샘플링된 키</text>
+<polyline points="300,180 440,180" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#approximated-lru-head-1e1e1e)"/>
+<rect x="311.2" y="168.9" width="117.6" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="370.0" y="180.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">① 무작위 샘플링</text>
+<rect x="440" y="80" width="220" height="200" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="550.0" y="127.5" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">② 후보 풀</text>
+<text x="550.0" y="145.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(유휴 시간 순)</text>
+<text x="550.0" y="162.5" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve"></text>
+<text x="550.0" y="180.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k7  유휴 120초</text>
+<text x="550.0" y="197.5" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k3  유휴 95초</text>
+<text x="550.0" y="215.0" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k9  유휴 40초</text>
+<text x="550.0" y="232.5" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">k5  유휴 30초</text>
+<polyline points="660,180 720,180" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#approximated-lru-head-1e1e1e)"/>
+<rect x="720" y="140" width="200" height="80" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="820.0" y="170.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">③ 유휴 시간이</text>
+<text x="820.0" y="189.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">가장 긴 키(k7) 삭제</text>
+<polyline points="820,220 820,380 150,380 150,320" fill="none" stroke="#868e96" stroke-width="2" stroke-dasharray="8 6" marker-end="url(#approximated-lru-head-868e96)"/>
+<rect x="350.3" y="368.9" width="269.4" height="22.2" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="485.0" y="380.0" font-size="13" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">메모리가 한도 아래로 내려갈 때까지 반복</text>
+<text x="0.0" y="428.8" font-size="14" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 모든 키를 접근 순서대로 정렬하지 않아 메모리를 아끼고, 후보 풀로 정확한 LRU에 가깝게 동작</text>
+<text x="0.0" y="446.2" font-size="14" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• 일부 키에 접근이 몰리는 패턴에서는 정확한 LRU와 차이가 거의 없음 (Redis 문서)</text>
+<text x="0.0" y="463.8" font-size="14" fill="#1e1e1e" text-anchor="start" dominant-baseline="central" xml:space="preserve">• Azure Managed Redis에서는 샘플 수(maxmemory-samples)를 바꿀 수 없음</text>
+</svg>

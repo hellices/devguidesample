@@ -1,0 +1,12 @@
+title: Eviction and TTL diagrams
+description: Editable Excalidraw sources and SVG exports for the eviction flow, approximated LRU, and TTL lifecycle diagrams.
+kind: artifact
+used_by:
+- index
+publish:
+- source: eviction-flow.svg
+  target: images/eviction-flow.svg
+- source: approximated-lru.svg
+  target: images/approximated-lru.svg
+- source: ttl-lifecycle.svg
+  target: images/ttl-lifecycle.svg

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 -24 1038 632" width="1038" height="632" role="img" aria-label="클라이언트가 설정한 TTL이 Redis 서버에서 유지·연장·제거·만료되는 수명주기" font-family="&#x27;Segoe UI&#x27;, &#x27;Malgun Gothic&#x27;, &#x27;Apple SD Gothic Neo&#x27;, &#x27;Noto Sans KR&#x27;, sans-serif">
+<title>클라이언트가 설정한 TTL이 Redis 서버에서 유지·연장·제거·만료되는 수명주기</title>
+<defs><marker id="ttl-lifecycle-head-1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
+<rect x="-24" y="-24" width="1038" height="632" fill="#ffffff"/>
+<rect x="0" y="140" width="210" height="70" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="105.0" y="165.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">클라이언트</text>
+<text x="105.0" y="184.4" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">SET key v EX 600</text>
+<text x="105.0" y="230.1" font-size="13" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">연결이 끊겨도</text>
+<text x="105.0" y="246.4" font-size="13" fill="#868e96" text-anchor="middle" dominant-baseline="central" xml:space="preserve">서버가 만료를 처리</text>
+<polyline points="210,175 290,175" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<rect x="290" y="130" width="240" height="90" rx="10" fill="#e5dbff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="410.0" y="156.2" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">Redis 서버</text>
+<text x="410.0" y="175.0" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">키 + 만료 시각(절대 시각)</text>
+<text x="410.0" y="193.8" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">= volatile 키</text>
+<rect x="640" y="0" width="270" height="64" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
+<text x="775.0" y="23.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">EXPIRE 재호출 / 세션 touch</text>
+<text x="775.0" y="40.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">→ 만료 시각 연장 (sliding)</text>
+<polyline points="480,130 480,32 640,32" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<rect x="640" y="145" width="270" height="64" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
+<text x="775.0" y="168.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">SET 덮어쓰기 (EX 없음)</text>
+<text x="775.0" y="185.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">→ TTL 제거, 영구 키가 됨</text>
+<polyline points="530,177 640,177" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<rect x="640" y="290" width="270" height="56" rx="10" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
+<text x="775.0" y="318.0" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">만료 시각 경과</text>
+<polyline points="480,220 480,318 640,318" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<rect x="560" y="400" width="200" height="64" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="660.0" y="423.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">접근할 때 삭제</text>
+<text x="660.0" y="440.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(passive)</text>
+<rect x="790" y="400" width="200" height="64" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="890.0" y="423.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">주기적 샘플링으로 삭제</text>
+<text x="890.0" y="440.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">(active)</text>
+<polyline points="740,346 660,400" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<polyline points="810,346 890,400" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<rect x="640" y="520" width="270" height="64" rx="10" fill="#e9ecef" stroke="#1e1e1e" stroke-width="2"/>
+<text x="775.0" y="543.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">키 삭제</text>
+<text x="775.0" y="560.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">복제본·AOF에 DEL 전파</text>
+<polyline points="660,464 740,520" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<polyline points="890,464 810,520" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
+<text x="0.0" y="308.8" font-size="14" fill="#868e96" text-anchor="start" dominant-baseline="central" xml:space="preserve">INCR · LPUSH · HSET 등 값 일부 변경은 TTL 유지</text>
+<text x="0.0" y="326.2" font-size="14" fill="#868e96" text-anchor="start" dominant-baseline="central" xml:space="preserve">PERSIST는 TTL 제거, RENAME은 TTL을 새 키로 이동</text>
+</svg>
