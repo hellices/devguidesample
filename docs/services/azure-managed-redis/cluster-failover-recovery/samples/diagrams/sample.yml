@@ -3,10 +3,13 @@ description: Editable Excalidraw sources and SVG exports for the clustering poli
 kind: artifact
 used_by:
 - index
+- clustering-policies-and-migration
 publish:
 - source: clustering-policies.svg
   target: images/clustering-policies.svg
-- source: migration-flow.svg
-  target: images/migration-flow.svg
 - source: failover-incident.svg
   target: images/failover-incident.svg
+- source: clustering-policies.svg
+  target: clustering-policies-and-migration/images/clustering-policies.svg
+- source: migration-flow.svg
+  target: clustering-policies-and-migration/images/migration-flow.svg

@@ -39,6 +39,8 @@ applies_to:
 - Azure Managed Redis (Redis 7.4)
 related_cases:
 - ../cluster-failover-recovery/index.md
+related_guides:
+- ../cluster-failover-recovery/clustering-policies-and-migration/index.md
 ---
 
 # Azure Managed Redis Eviction Policy와 TTL 설계 가이드
@@ -357,7 +359,8 @@ Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys
 
 ## 관련 문서
 
-- [Azure Managed Redis 클러스터링 정책별 연결·마이그레이션과 Failover 복구](../cluster-failover-recovery/index.md): 클러스터링 정책과 샤드별 동작을 함께 확인합니다.
+- [Azure Managed Redis 클러스터링 정책별 연결과 마이그레이션 가이드](../cluster-failover-recovery/clustering-policies-and-migration/index.md): 클러스터링 정책과 샤드별 동작을 함께 확인합니다.
+- [Azure Managed Redis Cluster Failover 장애 분석 및 복구 전략](../cluster-failover-recovery/index.md): OSS 정책에서 노드 교체 후 연결이 복구되지 않은 장애 사례입니다.
 
 ## 공식 참고 자료
 

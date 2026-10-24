@@ -6,498 +6,120 @@ official_sources:
   url: https://learn.microsoft.com/azure/redis/choose-clustering-policy
 - title: Azure Managed Redis architecture
   url: https://learn.microsoft.com/azure/redis/architecture
-- title: Azure Managed Redis Client libraries
-  url: https://learn.microsoft.com/azure/redis/best-practices-client-libraries
-- title: Connection resilience with Azure Managed Redis
-  url: https://learn.microsoft.com/azure/redis/best-practices-connection
 - title: Failover and patching for Azure Managed Redis
   url: https://learn.microsoft.com/azure/redis/failover
-- title: Understand the differences - Basic, Standard, and Premium tiers versus Azure Managed Redis
-  url: https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand
-- title: Understand the differences - Azure Cache for Redis Enterprise versus Azure Managed Redis
-  url: https://learn.microsoft.com/azure/redis/migrate/migrate-redis-enterprise-understand
-- title: Scale an Azure Cache for Redis instance
-  url: https://learn.microsoft.com/azure/azure-cache-for-redis/cache-how-to-scale
-- title: Client libraries for Azure Cache for Redis
-  url: https://learn.microsoft.com/azure/azure-cache-for-redis/cache-best-practices-client-libraries
+- title: Connection resilience with Azure Managed Redis
+  url: https://learn.microsoft.com/azure/redis/best-practices-connection
 - title: 'Quickstart: Connect to Azure Managed Redis in a Node.js app'
   url: https://learn.microsoft.com/azure/redis/nodejs-get-started
-- title: 'Quickstart: Use Azure Managed Redis in Java with Jedis Redis client'
-  url: https://learn.microsoft.com/azure/redis/java-get-started
-- title: Connect a Spring Boot application to Azure Cache for Redis
-  url: https://learn.microsoft.com/azure/developer/java/spring-framework/configure-spring-boot-initializer-java-app-with-redis-cache
-- title: az redisenterprise
-  url: https://learn.microsoft.com/cli/azure/redisenterprise
-- title: az redisenterprise database
-  url: https://learn.microsoft.com/cli/azure/redisenterprise/database
 document_type: case
 status: resolved
 verification_status: verified
 sources_checked_at: 2026-10-24
-title: Azure Managed Redis 클러스터링 정책별 연결·마이그레이션과 Failover 복구
-description: OSS·Enterprise·Non-clustered 정책별 Node.js·Java 연결 방식, Azure Cache for Redis에서 옮길 때의 판단 기준, OSS 정책 Failover 미복구 사례를 한곳에 정리합니다.
+title: Azure Managed Redis Cluster Failover 분석
+description: Azure Managed Redis cluster failover 장애의 분석과 복구 전략을 기록합니다.
 technologies:
 - nodejs
-- java
-- spring-boot
 - redis
 tags:
 - operate
 - diagnose
-- migrate
 occurred_at: 2026-02-22
 related_guides:
+- clustering-policies-and-migration/index.md
 - ../eviction-policy-and-ttl/index.md
 redirect_from:
 - cases/azure-managed-redis/cluster-failover-recovery/index.md
 ---
 
-# Azure Managed Redis 클러스터링 정책별 연결·마이그레이션과 Failover 복구
+# Azure Managed Redis Cluster Failover 장애 분석 및 복구 전략
 
-Azure Managed Redis는 **OSS**, **Enterprise**, **Non-clustered** 세 가지 클러스터링 정책을 제공합니다. 어떤 정책을 쓰는지에 따라 클라이언트 생성 방식, 장애 시 토폴로지 갱신 책임과 Azure Cache for Redis에서 옮길 때 바꿔야 할 코드가 달라집니다.
+## 문제 정의
 
-이 문서는 OSS 정책과 node-redis `createCluster` 조합에서 Planned Maintenance 이후 연결이 복구되지 않은 사례를 출발점으로, 아래 내용을 한 문서에 정리합니다.
+Azure Managed Redis를 **OSS Cluster 정책**으로 운영 중, **Planned Maintenance(Failover)** 이후 클라이언트가 연결을 복구하지 못해 애플리케이션 재기동 시점까지 장애가 지속되는 현상이 발생했습니다.
 
-- 세 가지 정책의 차이와 기본값
-- Node.js와 Java 라이브러리별 연결 방식과 토폴로지 갱신 동작
-- Azure Cache for Redis에서 옮길 때 기존 연결 형태(단일/클러스터)별 마이그레이션 방법
-- 실제 장애 사례와 대응 방법
-
-!!! note "기준 시점"
-    Microsoft Learn과 클라이언트 라이브러리 내용은 2026-10-24에 확인했습니다. 라이브러리 기본값은 버전마다 다르므로 사용 중인 버전의 문서도 함께 확인합니다.
+!!! tip "정책별 연결 방식과 마이그레이션"
+    세 가지 클러스터링 정책의 차이, Node.js·Java 라이브러리별 연결 방식, Azure Cache for Redis에서 옮길 때의 판단 기준은 [클러스터링 정책별 연결과 마이그레이션 가이드](clustering-policies-and-migration/index.md)에 정리했습니다.
 
 ---
 
-## 한눈에 보기: 내 구성에서 확인할 것 { #at-a-glance }
+## Azure Managed Redis 클러스터링 구성 방식
 
-먼저 아래 표에서 현재 구성에 해당하는 행을 찾은 뒤, 오른쪽 열에 연결된 섹션을 확인합니다.
-
-| 현재 구성 | 클라이언트 연결 형태 | Azure Managed Redis 정책 | 필요한 코드 변경 | 반드시 확인할 것 |
-|---|---|---|---|---|
-| Azure Cache for Redis Basic/Standard 또는 클러스터를 쓰지 않는 Premium | 단일 엔드포인트 | **Enterprise** (변경 최소) | 호스트·포트·인증 정보 | 기본값 OSS로 만들면 `MOVED` 오류 발생, 일부 멀티키 명령 `CROSSSLOT` → [3.2](#migrate-from-single-endpoint) |
-| 〃 | 〃 | **OSS** (성능 우선) | 클러스터 클라이언트로 전환 | 해시 태그, 토폴로지 갱신 설정 → [2장](#client-libraries), [3.2](#migrate-from-single-endpoint) |
-| 〃 | 〃 | **Non-clustered** (25GB 이하) | 호스트·포트·인증 정보 | 크기 상한, 성능 → [3.2](#migrate-from-single-endpoint) |
-| 클러스터를 사용하는 Azure Cache for Redis Premium | 클러스터 클라이언트 | **OSS** | 호스트·포트·인증 정보 | 85XX 포트 하드코딩 금지, 토폴로지 갱신 → [3.3](#migrate-from-cluster-client) |
-| 〃 | 〃 | **Enterprise** | 단일 엔드포인트 클라이언트로 **반드시** 전환 | `CLUSTER NODES`·`CLUSTER SLOTS` 차단 → [3.3](#migrate-from-cluster-client) |
-| Azure Cache for Redis Enterprise/Enterprise Flash | OSS 정책이면 클러스터, Enterprise 정책이면 단일 엔드포인트 | 원본과 **같은 정책을 명시** | 호스트(DNS 접미사)·인증 정보 | 정책을 지정하지 않으면 OSS로 생성 → [3.4](#migrate-from-enterprise-tier) |
-| Azure Managed Redis OSS 운영 중 (이 사례) | 클러스터 클라이언트 | 유지 또는 Enterprise로 재생성 | 토폴로지 갱신·연결 재생성 로직 | Planned Maintenance 후 미복구 → [4장](#incident) |
-| Azure Managed Redis Enterprise 운영 중 | 단일 엔드포인트 | 유지 | 없음 | 프록시 처리량 한계, 일부 멀티키 `CROSSSLOT` → [1.2](#policy-comparison) |
-
----
-
-## 1. 세 가지 클러스터링 정책 { #cluster-policies }
-
-Azure Managed Redis는 Redis Enterprise 기반이며 모든 인스턴스가 내부적으로 클러스터 구성을 사용합니다. 각 노드(VM)는 여러 Redis 프로세스(샤드)를 실행하고, 주 샤드와 복제본 샤드를 노드에 나눠 배치하며, 노드마다 Redis proxy가 연결을 관리합니다.
-
-![Azure Managed Redis 아키텍처. 클라이언트가 Load Balancer를 거쳐 두 Azure VM에 연결되고, 각 VM에는 Azure agent, Redis proxy, 여러 개의 Primary·Replica Redis Server 샤드가 있으며 VM 사이에 비동기 데이터 복제가 이루어진다.](images/managed-redis-architecture.png)
-
-*그림: Azure Managed Redis 아키텍처. 출처: [Microsoft Learn – Azure Managed Redis architecture](https://learn.microsoft.com/azure/redis/architecture)*
-
-클러스터링 정책은 **클라이언트가 이 구성에 어떤 방식으로 연결하는지**를 정합니다.
-
-### 1.1 정책별 연결 모델
+Azure Managed Redis는 클러스터링 구성 방식을 크게 세 가지로 구분합니다.
 
 [![세 가지 클러스터링 정책의 연결 모델. OSS 정책은 클라이언트가 10000 포트 엔드포인트에서 토폴로지를 조회한 뒤 85XX 포트의 각 샤드에 직접 연결한다. Enterprise 정책은 클라이언트가 10000 포트의 Redis proxy에만 연결하고 proxy가 샤드로 라우팅한다. Non-clustered 정책은 10000 포트 엔드포인트 뒤에 샤딩되지 않은 Redis 프로세스 하나가 있다.](images/clustering-policies.svg)](images/clustering-policies.svg)
 
-**OSS 정책**
+### 1. Non-clustered
 
-- Redis Cluster API를 그대로 노출합니다.
-- 클라이언트는 `10000` 포트로 처음 연결한 뒤 `CLUSTER NODES` 등으로 샤드 위치를 알아내고, 각 샤드(85XX 포트)에 **직접** 연결합니다.
-- slot과 노드의 매핑, `MOVED`·`ASK` 리디렉션 처리는 **클라이언트 라이브러리 책임**입니다.
-- 85XX 포트는 바뀔 수 있으므로 애플리케이션에 하드코딩하지 않습니다.
+- 데이터를 샤딩하지 않는 단일 인스턴스 구성
+- 별도의 클러스터 관리 불필요
 
-**Enterprise 정책**
+### 2. Clustered - OSS API (default)
 
-- 모든 연결에 **단일 엔드포인트**(`10000` 포트)를 제공합니다.
-- 노드의 프록시가 요청을 올바른 샤드로 라우팅하므로 클라이언트에는 비클러스터 Redis처럼 보입니다.
-- 클러스터를 지원하지 않는 클라이언트도 사용할 수 있습니다.
-- RediSearch 모듈을 쓰려면 이 정책이 필요합니다.
+- Redis OSS API 기반 클러스터
+- 클라이언트가 초기에는 **gateway(10000 포트)** 에 연결
+- **MOVED/ASK 응답**을 통해 각 shard node(예: 8500~8599 포트)에 **직접 연결**
+- 클라이언트가 **slot → node 매핑 정보를 캐시 및 관리**
 
-**Non-clustered 정책**
+### 3. Clustered - Enterprise API (Proxy 기반)
 
-- 데이터를 샤딩하지 않는 전통적인 단일 프로세스 Redis처럼 동작합니다.
-- 25GB 이하 캐시에서만 사용할 수 있습니다.
+- **단일 엔드포인트**(기본 포트 10000)를 제공
+- 클라이언트는 **proxy 계층**을 통해 Redis 클러스터에 접근
+- 클러스터 **topology 관리는 Azure 서비스에서 수행**
+- 클라이언트는 단일 연결만 관리하면 됨
 
-### 1.2 정책별 비교 { #policy-comparison }
+> 기존 소스에서 `createCluster` 구성을 사용한 점으로 보아, **Enterprise 정책이 아닌 OSS Cluster 정책으로 생성**되었을 가능성이 높습니다.  
+> ⚠️ 클러스터 정책은 **생성 후 변경이 불가**합니다.
 
-| 항목 | OSS | Enterprise | Non-clustered |
-|---|---|---|---|
-| 연결 모델 | 클라이언트가 샤드에 직접 연결 | 단일 엔드포인트 + 내부 프록시 | 단일 엔드포인트, 샤딩 없음 |
-| 클라이언트 요구 사항 | Redis Cluster API 지원 필수 | 모든 표준 클라이언트 | 모든 표준 클라이언트 |
-| 성능 | 일반적으로 가장 높은 처리량, 가장 낮은 지연 | 단일 프록시 노드가 병목이 될 수 있음 | 멀티샤드 병렬 처리를 쓰지 못해 일반적으로 가장 낮음 |
-| 멀티키 명령 | 모든 키가 같은 slot이어야 함 | `DEL`, `MSET`, `MGET`, `EXISTS`, `UNLINK`, `TOUCH`만 slot을 넘어 허용 | 제한 없음 |
-| `CLUSTER NODES`/`CLUSTER SLOTS` | 사용 가능(클라이언트 탐색용) | **차단** | 해당 없음 |
-| RediSearch | 지원 안 함 | **필수** | 지원 안 함 |
-| 최대 크기 | 제한 없음 | 제한 없음 | 25GB |
-| 생성 후 정책 변경 | **불가**(삭제 후 재생성) | **불가**(삭제 후 재생성) | 클러스터 정책으로 변경 가능(active geo-replication 그룹 제외) |
-
-!!! warning "Active geo-replication과 Enterprise 정책의 멀티키 명령"
-    Enterprise 정책에서 active geo-replication을 사용하면 `DEL`, `MSET`, `UNLINK` 같은 멀티키 쓰기 명령도 같은 slot의 키에만 실행할 수 있습니다. slot을 넘어 허용되는 명령은 `MGET`, `EXISTS`, `TOUCH`뿐입니다.
-
-### 1.3 기본값은 OSS이고 생성 후 바꿀 수 없음
-
-- Azure CLI(`az redisenterprise create --clustering-policy`)와 ARM/SDK의 `clusteringPolicy` 기본값은 `OSSCluster`입니다. Azure Portal에서는 **Advanced** 탭의 **Clustering policy**에서 선택합니다.
-- 템플릿이나 스크립트에서 정책을 지정하지 않으면 **OSS 정책으로 생성**됩니다.
-- OSS와 Enterprise 정책은 생성 후 바꿀 수 없습니다. 바꾸려면 캐시를 삭제하고 다시 만들어야 합니다.
-
-따라서 **단일 엔드포인트 클라이언트를 그대로 쓸 계획이라면 Enterprise(또는 Non-clustered) 정책을 반드시 명시**해야 합니다. 자세한 절차는 [3.5](#set-and-check-policy)를 참고합니다.
+Azure CLI와 ARM의 기본 클러스터링 정책은 OSS(`OSSCluster`)이므로, 정책을 지정하지 않고 만든 캐시는 OSS 정책이 됩니다. 정책별 비교와 생성 시 정책을 명시하는 방법은 [가이드](clustering-policies-and-migration/index.md#policy-comparison)를 참고합니다.
 
 ---
 
-## 2. 언어별 클라이언트 연결 방식 { #client-libraries }
-
-정책은 클라이언트 생성자 선택으로 이어집니다. Enterprise와 Non-clustered는 같은 단일 엔드포인트 클라이언트를 쓰고, OSS는 클러스터 클라이언트를 써야 합니다.
-
-### 2.1 Node.js { #nodejs }
-
-| 라이브러리 | Enterprise / Non-clustered | OSS | OSS 토폴로지 갱신 동작 |
-|---|---|---|---|
-| node-redis (`redis`, `@redis/client`) | `createClient({ url })` | `createCluster({ rootNodes: [{ url }] })` | `MOVED`·`ASK` 응답을 받을 때 slot 맵을 다시 읽습니다. 주기적 갱신 옵션은 없고, 노드 연결 오류만으로는 다시 읽지 않습니다(`@redis/client` 5.11.0 구현 기준). |
-| ioredis | `new Redis(url)` | `new Redis.Cluster([{ host, port: 10000 }], options)` | `MOVED` 응답 시 갱신합니다. `slotsRefreshInterval`을 설정하면 주기적으로 갱신하며 기본값은 비활성입니다. |
-
-OSS 정책에서 TLS를 사용할 때는 다음을 확인합니다.
-
-- 클러스터가 노드 주소를 IP로 알려 줄 수 있습니다. TLS 인증서는 캐시 호스트 이름으로 발급되므로 인증서 검증에 호스트 이름을 사용해야 합니다.
-- node-redis: Microsoft Learn Node.js 빠른 시작처럼 `nodeAddressMap`에서 IP를 캐시 호스트 이름으로 바꿉니다.
-- ioredis: `redisOptions.tls.servername`에 캐시 호스트 이름을 지정합니다.
-
-**Enterprise / Non-clustered (node-redis)**
+## 기존 코드 (문제 발생 부분)
 
 ```javascript
-const { createClient } = require('redis');
-
-const host = process.env.REDIS_HOST; // <cache-name>.<region>.redis.azure.net
-
-const client = createClient({
-  url: `rediss://${host}:10000`,
-  credentialsProvider, // Microsoft Entra ID 또는 액세스 키
-  pingInterval: 60_000,
-  socket: {
-    tls: true,
-    servername: host,
-    connectTimeout: 5_000,
-    reconnectStrategy: (retries) =>
-      Math.min(2 ** retries * 100, 5_000) + Math.floor(Math.random() * 500),
-  },
-});
-client.on('error', (err) => console.error('redis error', err));
-await client.connect();
-```
-
-**OSS (node-redis)**
-
-```javascript
-const net = require('node:net');
-const { createCluster } = require('redis');
-
-const host = process.env.REDIS_HOST;
-
-const cluster = createCluster({
-  rootNodes: [{ url: `rediss://${host}:10000` }],
-  defaults: {
-    credentialsProvider,
-    pingInterval: 60_000,
-    socket: {
-      tls: true,
-      servername: host,
-      connectTimeout: 5_000,
-      reconnectStrategy: (retries) =>
-        Math.min(2 ** retries * 100, 5_000) + Math.floor(Math.random() * 500),
+redisClient = createCluster({
+    rootNodes: [{ url: `rediss://${redisUrl.hostname}:${redisUrl.port}` }],
+    defaults: {
+        credentialsProvider: provider,
+        socket: {
+            tls: true,
+            servername: redisUrl.hostname,
+            connectTimeout: 1000,
+            reconnectStrategy,
+        },
     },
-  },
-  // 노드 주소가 IP로 오면 TLS 검증을 위해 캐시 호스트 이름으로 바꾼다
-  nodeAddressMap: (address) => {
-    const [nodeHost, port] = address.split(':');
-    return { host: net.isIP(nodeHost) ? host : nodeHost, port: Number(port) };
-  },
 });
-cluster.on('error', (err) => console.error('redis cluster error', err));
-await cluster.connect();
 ```
 
-node-redis로 OSS 정책을 사용할 때는 [4.4의 연결 재생성 패턴](#option-recreate-connection)도 함께 적용합니다.
-
-### 2.2 Java { #java }
-
-Java에서는 주로 **Lettuce**와 **Jedis**를 사용합니다. 두 라이브러리 모두 Microsoft Learn의 Azure Managed Redis 클라이언트 라이브러리 목록에 있으며, Azure가 라이브러리별 모범 사례 가이드를 제공합니다. Spring Boot는 기본으로 Lettuce를 사용합니다.
-
-#### Lettuce와 Jedis 비교 { #lettuce-vs-jedis }
-
-| 항목 | Lettuce | Jedis |
-|---|---|---|
-| 구조 | Netty 기반이며 스레드 안전합니다. 블로킹·트랜잭션 명령을 쓰지 않으면 여러 스레드가 연결 하나를 공유할 수 있습니다. | 연결 풀 기반입니다. 최신 `RedisClient`는 풀을 내장하고 있습니다. |
-| API 형태 | 동기, 비동기, 리액티브 | 동기 (파이프라인은 별도 API) |
-| Spring Boot | 기본 클라이언트 (`spring-boot-starter-data-redis`) | `spring.data.redis.client-type=jedis` 설정과 Jedis 의존성 추가 |
-| Enterprise / Non-clustered | `RedisClient.create(redisUri)` | 7.2.0 이상: `RedisClient.builder().hostAndPort(host, 10000)`<br>이전: `JedisPooled`, `UnifiedJedis` |
-| OSS | `RedisClusterClient.create(redisUri)` | 7.2.0 이상: `RedisClusterClient.builder().nodes(nodes)`<br>이전: `JedisCluster` (7.2.0부터 deprecated) |
-| OSS 토폴로지 기본 동작 | 주기적 갱신은 기본 비활성입니다. 적응형(adaptive) 갱신은 6.x에서 기본 비활성, 7.0부터 기본 활성입니다. | `MOVED` 응답과 연속 연결 실패 시 slot 캐시를 다시 읽습니다. 주기적 갱신은 기본으로 하지 않습니다. |
-| 주기적 갱신 설정 | `ClusterTopologyRefreshOptions.enablePeriodicRefresh(...)` | `topologyRefreshPeriod(...)` (5.1.0 이상) |
-| OSS + TLS 노드 주소 매핑 | `MappingSocketAddressResolver` | `DefaultJedisClientConfig.hostAndPortMapper(...)` |
-| Azure 가이드 | [Lettuce Best Practices](https://github.com/Azure/AzureCacheForRedis/blob/main/Lettuce%20Best%20Practices.md) | [Jedis Best Practices](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Java-Jedis.md) |
-
-어떤 클라이언트를 고를지는 다음 기준으로 판단합니다.
-
-- **Spring Boot 애플리케이션**: 기본값인 Lettuce를 유지합니다. Jedis로 바꾸면 Spring Boot 속성은 풀 설정(`spring.data.redis.jedis.pool.*`)만 제공하고 클러스터 토폴로지 갱신 속성은 제공하지 않습니다.
-- **비동기·리액티브 처리 또는 적은 연결 수**: Lettuce를 사용합니다.
-- **단순한 동기 코드나 기존 Jedis 코드**: Jedis를 유지하되 7.2.0 이상의 `RedisClient`·`RedisClusterClient`로 옮기는 것을 검토합니다.
-- **OSS 정책**: 어느 쪽이든 주기적 토폴로지 갱신을 **명시적으로 켭니다**. 이번 사례처럼 노드가 교체되면 리디렉션 응답 없이 연결만 실패할 수 있기 때문입니다.
-
-#### Lettuce { #lettuce }
-
-**Enterprise / Non-clustered**
-
-```java
-RedisURI uri = RedisURI.Builder.redis(host, 10000)
-        .withSsl(true)
-        .withAuthentication(username, password) // 또는 Microsoft Entra ID 자격 증명 공급자
-        .build();
-
-RedisClient client = RedisClient.create(uri);
-client.setOptions(ClientOptions.builder()
-        .socketOptions(SocketOptions.builder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .keepAlive(true)
-                .build())
-        .build());
-StatefulRedisConnection<String, String> connection = client.connect();
-```
-
-**OSS**
-
-Azure의 Lettuce 모범 사례가 권장하는 토폴로지 갱신 설정을 적용한 예입니다.
-
-```java
-RedisClusterClient client = RedisClusterClient.create(uri);
-
-ClusterTopologyRefreshOptions refresh = ClusterTopologyRefreshOptions.builder()
-        .enablePeriodicRefresh(Duration.ofSeconds(5))
-        .enableAllAdaptiveRefreshTriggers()
-        .adaptiveRefreshTriggersTimeout(Duration.ofSeconds(5))
-        .dynamicRefreshSources(false)
-        .build();
-
-client.setOptions(ClusterClientOptions.builder()
-        .topologyRefreshOptions(refresh)
-        .socketOptions(SocketOptions.builder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .keepAlive(true)
-                .build())
-        .build());
-StatefulRedisClusterConnection<String, String> connection = client.connect();
-```
-
-TLS 인증서 검증에 실패하면 Azure Lettuce 가이드의 `MappingSocketAddressResolver` 예제처럼 노드 IP를 캐시 호스트 이름으로 매핑합니다.
-
-#### Jedis { #jedis }
-
-Microsoft Learn의 Java 빠른 시작은 Jedis와 `redis-authx-entraid`로 Microsoft Entra ID 인증을 구성합니다. 아래 예는 Jedis 7.2.0 이상의 빌더 API를 사용합니다.
-
-```java
-JedisClientConfig config = DefaultJedisClientConfig.builder()
-        .ssl(true)
-        .user(username)
-        .password(password)           // 또는 .authXManager(...)로 Microsoft Entra ID 사용
-        .connectionTimeoutMillis(5_000)
-        .socketTimeoutMillis(1_000)
-        .build();
-```
-
-**Enterprise / Non-clustered**
-
-```java
-RedisClient jedis = RedisClient.builder()
-        .hostAndPort(host, 10000)
-        .clientConfig(config)
-        .build();
-```
-
-**OSS**
-
-```java
-RedisClusterClient jedis = RedisClusterClient.builder()
-        .nodes(Set.of(new HostAndPort(host, 10000)))
-        .clientConfig(config)
-        .topologyRefreshPeriod(Duration.ofSeconds(5))
-        .build();
-```
-
-7.2.0보다 이전 버전을 사용한다면 다음과 같이 대응합니다.
-
-- Enterprise / Non-clustered: `new JedisPooled(new HostAndPort(host, 10000), config)`를 사용합니다.
-- OSS: `topologyRefreshPeriod`를 받는 `JedisCluster` 생성자를 사용합니다(5.1.0 이상).
-- OSS에서 TLS 인증서 검증에 실패하면 `DefaultJedisClientConfig.builder().hostAndPortMapper(...)`로 노드 IP를 캐시 호스트 이름으로 매핑합니다.
-- 풀을 직접 구성한다면 Azure Jedis 가이드에 따라 유휴 연결 제거 시간(`minEvictableIdleTimeMillis`)을 10분보다 짧게 둡니다.
-
-#### Spring Boot { #spring-boot }
-
-!!! tip "Spring Boot 예제를 그대로 옮길 때"
-    Microsoft Learn의 Spring Boot 연결 예제는 `spring.data.redis.host`와 `spring.data.redis.port=10000`을 사용하는 **단일 엔드포인트 설정**입니다. 이 설정은 Enterprise 또는 Non-clustered 정책과 맞습니다. 기본값인 OSS 정책으로 만든 캐시에서는 `spring.data.redis.cluster.nodes`를 사용합니다. Spring Boot 2.x는 접두사가 `spring.redis.*`입니다.
-
-```properties
-# Enterprise / Non-clustered
-spring.data.redis.host=<cache-name>.<region>.redis.azure.net
-spring.data.redis.port=10000
-spring.data.redis.ssl.enabled=true
-```
-
-```properties
-# OSS (기본 클라이언트인 Lettuce 기준)
-spring.data.redis.cluster.nodes=<cache-name>.<region>.redis.azure.net:10000
-spring.data.redis.ssl.enabled=true
-spring.data.redis.lettuce.cluster.refresh.period=5s
-spring.data.redis.lettuce.cluster.refresh.dynamic-refresh-sources=false
-# Spring Boot 3.x 속성. 4.x에서는 제거되어 Lettuce 기본값을 사용
-spring.data.redis.lettuce.cluster.refresh.adaptive=true
-```
-
-#### Redisson
-
-Redisson을 사용한다면 Enterprise / Non-clustered 정책에는 `useSingleServer()`, OSS 정책에는 `useClusterServers()`를 사용합니다. Microsoft Learn은 다음을 권장합니다.
-
-- 3.14.1 이상을 사용합니다.
-- `scanInterval`로 토폴로지를 주기적으로 스캔합니다. Microsoft Learn의 클러스터 기준 설정 예시는 `1000`ms입니다.
-
-### 2.3 정책과 무관한 공통 연결 설정
-
-| 항목 | 권장 값 | 이유 |
-|---|---|---|
-| Connect timeout | 5초 | 너무 짧으면 높은 CPU 상황에서 *연결 → 실패 → 재시도* 루프에 빠집니다. |
-| Command timeout | 5초 미만에서 시작해 조정 | 값 크기와 지연 요구에 맞춥니다. |
-| Keepalive / ping | 10분 미만(예: node-redis `pingInterval: 60000`) | Azure Managed Redis는 10분 동안 유휴 상태인 연결을 닫습니다. |
-| 재시도 | 지수 백오프 + 지터 | 동시에 재연결하면 연결 생성 속도 제한에 걸립니다. |
-| Linux `net.ipv4.tcp_retries2` | `5` | 기본값에서는 비정상 종료된 연결을 13분 이상 감지하지 못할 수 있습니다. |
-| 연결 재생성 | 오류가 일정 시간 이상 지속되면 연결 객체를 새로 만들기 | 라이브러리가 복구 불가능한 상태에 빠질 수 있습니다. Azure Node.js 가이드는 약 30초를 예로 듭니다. |
-| 이전 연결 정리 | 재생성 시 기존 연결 종료 | 티어별 연결 수 한도가 있습니다. |
+이 경우 Redis cluster(sharding) 정보에 대한 관리를 **클라이언트에서 수행**하게 됩니다.
 
 ---
 
-## 3. Azure Cache for Redis에서 마이그레이션
+## 장애 증상
 
-Azure Cache for Redis의 Basic, Standard, Premium 티어는 노드마다 단일 스레드 Redis 프로세스 하나를 실행하고 주 노드와 복제본 노드로 구성됩니다. 반면 Azure Managed Redis는 [1장의 그림](#cluster-policies)처럼 노드마다 여러 샤드를 실행합니다. 마이그레이션에서 클라이언트 설정을 다시 봐야 하는 이유가 이 구조 차이입니다.
-
-![Azure Cache for Redis 아키텍처. 클라이언트가 Load Balancer를 거쳐 두 Azure VM에 연결되고, 한 VM에는 Redis Server Primary, 다른 VM에는 Redis Server Replica가 하나씩 있으며 둘 사이에 비동기 데이터 복제가 이루어진다.](images/cache-architecture.png)
-
-*그림: Azure Cache for Redis(Basic·Standard·Premium) 아키텍처. 출처: [Microsoft Learn – Azure Managed Redis architecture](https://learn.microsoft.com/azure/redis/architecture)*
-
-아래 흐름에서 현재 구성에 맞는 경로를 찾은 뒤 3.2~3.4의 해당 섹션을 확인합니다.
-
-[![마이그레이션 시 클러스터링 정책 선택 흐름. Enterprise 또는 Enterprise Flash 티어이면 원본과 같은 정책을 명시해 생성한다. 아니면 클러스터 클라이언트로 연결 중인지 확인해 그렇다면 OSS 정책을 유지한다. 단일 엔드포인트 클라이언트라면 클러스터 클라이언트로 바꿀 수 있을 때 OSS 정책, 25GB 이하이고 cross-slot 명령이 많으면 Non-clustered 정책, 그 외에는 Enterprise 정책을 명시해 생성한다. 정책을 지정하지 않으면 OSS로 생성되며 OSS와 Enterprise는 생성 후 바꿀 수 없다.](images/migration-flow.svg)](images/migration-flow.svg)
-
-### 3.1 먼저 확인할 현재 구성
-
-| 확인 항목 | 확인 방법 | 영향 |
-|---|---|---|
-| 원본 티어 | Portal 개요 또는 리소스 종류(`Microsoft.Cache/redis` 또는 `Microsoft.Cache/redisEnterprise`) | 마이그레이션 경로 결정 |
-| Premium 클러스터 사용 여부 | Portal의 클러스터 설정 또는 `az redis show` 결과의 `shardCount` | 3.2 또는 3.3 선택 |
-| Enterprise 티어 정책 | `az redisenterprise database show` 결과의 `clusteringPolicy` | 3.4 |
-| 클라이언트 생성자 | 코드에서 `createCluster`, `Redis.Cluster`, `RedisClusterClient`, `JedisCluster`, `useClusterServers`, `spring.data.redis.cluster.nodes` 검색 | 실제 연결 형태 확인 |
-| 멀티키·트랜잭션·Lua 사용 | `MGET`, `MSET`, `MULTI`, `EVAL`, `SUNION` 등 사용 위치 검색 | `CROSSSLOT` 위험 |
-| 여러 DB 사용 | `SELECT`, `database` 설정 | Azure Managed Redis는 DB 0만 지원 |
-| 포트·TLS 모드 | 연결 문자열 | 6380/6379 → 10000, TLS 또는 비TLS 중 하나만 지원 |
-
-공통으로 바뀌는 연결 정보는 다음과 같습니다.
-
-| 항목 | Azure Cache for Redis | Azure Managed Redis |
-|---|---|---|
-| DNS 접미사 | `.redis.cache.windows.net` (Enterprise: `redisenterprise.cache.azure.net`) | `<region>.redis.azure.net` |
-| 포트 | TLS 6380 / 비TLS 6379 | 10000 (TLS 또는 비TLS 중 하나만) |
-| 노드 직접 연결 포트 | Premium 클러스터: 130XX/150XX 범위 | 85XX 범위(OSS 정책, 변경 가능) |
-| 데이터베이스 | 여러 개(Basic/Standard/Premium) | DB 0만 |
-| 네트워크 격리 | VNet 주입 가능 | VNet 주입·IP 방화벽 미지원, Private Link 사용 |
-
-### 3.2 단일 엔드포인트로 연결하던 경우 { #migrate-from-single-endpoint }
-
-Basic, Standard, 클러스터를 쓰지 않는 Premium에서 `createClient`, `new Redis()`, `RedisClient`, `JedisPooled`, `spring.data.redis.host`처럼 **단일 엔드포인트**로 연결하던 애플리케이션입니다.
-
-Azure Managed Redis는 기본적으로 클러스터 구성입니다. 기본값인 OSS 정책을 그대로 선택하면 클러스터를 지원하지 않는 클라이언트는 다른 샤드에 있는 키에서 `MOVED` 오류를 받습니다. 세 가지 선택지 중 하나를 고릅니다.
-
-| 선택지 | 클라이언트 변경 | 장점 | 주의할 점 |
-|---|---|---|---|
-| **A. Enterprise 정책** | 호스트·포트·인증 정보만 | 기존 클라이언트 구조 유지, 크기 제한 없음 | 생성 시 정책 **명시 필수**. `MULTI`, Lua, `SUNION` 등 허용 목록 밖의 멀티키 명령은 `CROSSSLOT` 발생. 프록시 처리량 한계. |
-| **B. OSS 정책** (Microsoft 권장, 성능 우선) | 클러스터 클라이언트로 전환(2장) | 가장 높은 처리량 | 모든 멀티키 명령의 키를 해시 태그(`{user1}:a`, `{user1}:b`)로 같은 slot에 배치. 토폴로지 갱신 설정 필요. |
-| **C. Non-clustered 정책** | 호스트·포트·인증 정보만 | 기존 Redis와 가장 비슷하고 `CROSSSLOT` 없음 | 25GB 이하. 성능이 가장 낮음. 확장하려면 정책을 먼저 바꿔야 함. |
-
-선택 기준은 다음과 같습니다.
-
-1. 25GB 이하이고 slot을 넘는 트랜잭션·Lua·멀티키 명령을 많이 사용하면 **C**
-2. 코드 변경을 최소화하면서 크기 제한이 없어야 하면 **A**
-3. 클라이언트 전환과 키 설계 변경을 감수하고 성능이 중요하면 **B**
-
-### 3.3 클러스터 클라이언트로 연결하던 경우 { #migrate-from-cluster-client }
-
-클러스터를 사용하는 Premium에서 `createCluster`, `Redis.Cluster`, `RedisClusterClient`, `JedisCluster`, `spring.data.redis.cluster.nodes` 등으로 연결하던 애플리케이션입니다.
-
-| 선택지 | 클라이언트 변경 | 주의할 점 |
-|---|---|---|
-| **OSS 정책** (자연스러운 경로) | 호스트를 `<cache-name>.<region>.redis.azure.net:10000`로 변경하고 인증 정보 교체 | 노드 포트가 130XX/150XX에서 85XX로 바뀌므로 하드코딩한 노드 주소 제거. TLS 호스트 이름 매핑과 토폴로지 갱신 설정을 다시 검증(2장). |
-| **Enterprise 정책** | 단일 엔드포인트 클라이언트로 **반드시 전환** | Enterprise 정책은 `CLUSTER NODES`, `CLUSTER SLOTS` 등 탐색 명령을 차단하므로 클러스터 클라이언트가 토폴로지를 읽지 못합니다. |
-
-Enterprise 정책으로 바꿀 때 언어별로 바꿀 위치는 다음과 같습니다.
-
-| 언어 | 변경 전(클러스터) | 변경 후(단일 엔드포인트) |
-|---|---|---|
-| Node.js node-redis | `createCluster({ rootNodes })` | `createClient({ url })` |
-| Node.js ioredis | `new Redis.Cluster([...])` | `new Redis(url)` |
-| Java Lettuce | `RedisClusterClient` | `RedisClient` |
-| Java Jedis | `JedisCluster` / `RedisClusterClient` | `JedisPooled` / `RedisClient` |
-| Java Redisson | `useClusterServers()` | `useSingleServer()` |
-| Spring Boot | `spring.data.redis.cluster.nodes` | `spring.data.redis.host` + `port` |
-
-### 3.4 Azure Cache for Redis Enterprise 티어에서 옮기는 경우 { #migrate-from-enterprise-tier }
-
-Enterprise와 Enterprise Flash 티어는 Azure Managed Redis와 같은 Redis Enterprise 스택을 사용합니다. OSS와 Enterprise 정책만 지원하므로 **원본과 같은 정책을 선택하면 클러스터 동작이 그대로 유지**됩니다. 주로 호스트 이름과 인증 정보만 바꾸면 됩니다.
-
-!!! warning "원본이 Enterprise 정책이면 새 캐시에도 Enterprise 정책을 명시"
-    Azure Managed Redis의 기본 정책은 OSS입니다. 원본이 Enterprise 정책이었는데 IaC나 CLI에서 정책을 지정하지 않으면 새 캐시는 OSS 정책으로 생성됩니다. 이 경우 단일 엔드포인트 클라이언트는 `MOVED` 오류를 받습니다. 정책은 생성 후 바꿀 수 없으므로 캐시를 다시 만들어야 합니다.
-
-    원본 정책은 `az redisenterprise database show` 출력의 `clusteringPolicy`로 확인한 뒤, 새 캐시를 만들 때 같은 값을 지정합니다.
-
-### 3.5 정책을 명시해 생성하고 기존 정책을 확인하는 방법 { #set-and-check-policy }
-
-```bash
-# 기존 캐시(Azure Cache for Redis Enterprise 또는 Azure Managed Redis)의 정책 확인
-az redisenterprise database show \
-  --cluster-name <cache-name> \
-  --resource-group <resource-group> \
-  --output json
-# 출력의 clusteringPolicy 값: OSSCluster | EnterpriseCluster | NoCluster
-```
-
-```bash
-# 정책을 명시해 Azure Managed Redis 생성
-az redisenterprise create \
-  --cluster-name <cache-name> \
-  --resource-group <resource-group> \
-  --location <region> \
-  --sku Balanced_B10 \
-  --clustering-policy EnterpriseCluster \
-  --public-network-access Disabled
-```
-
-Bicep이나 ARM 템플릿을 사용하면 `Microsoft.Cache/redisEnterprise/databases` 리소스의 `clusteringPolicy` 속성을 반드시 지정합니다. 지정하지 않으면 `OSSCluster`가 적용됩니다.
-
----
-
-## 4. 사례: OSS 정책 + node-redis createCluster의 Failover 미복구 { #incident }
-
-### 4.1 발생 환경과 영향
-
-| 항목 | 내용 |
-|---|---|
-| 캐시 정책 | Azure Managed Redis **OSS 정책**. 기존 코드가 `createCluster`를 사용한 점으로 판단 |
-| 클라이언트 | Node.js, node-redis `createCluster`, `connectTimeout: 1000`, 지수 백오프 `reconnectStrategy` |
-| 계기 | Azure Planned Maintenance(Failover) |
-| 영향 | Maintenance 이후 Redis 명령이 계속 실패했고, 애플리케이션을 재기동할 때까지 장애가 이어짐 |
-
-### 4.2 타임라인
+### 타임라인
 
 | 시각 | 이벤트 |
-|---|---|
-| 2026-02-15 10:18:53 | Azure Planned Maintenance 시작, Failover 발생 |
-| Maintenance 중 | 기존 노드(8503 포트) 연결이 끊기고 재연결 실패 |
+|------|--------|
+| 2026-02-15 10:18:53 | Azure Planned Maintenance 시작 → Failover |
+| Maintenance 중 | 기존 node(8503 포트) 연결 끊김, reconnect 실패 |
 | 재기동 시점 | 애플리케이션 재기동 후 8500 포트로 정상 연결 |
 
-### 4.3 원인 분석
+### Failover 과정에서의 문제 흐름
+
+1. **Planned Maintenance** 과정에서 기존 Redis node가 교체됨
+2. 기존 node에 연결되어 있던 **TCP 연결이 종료**됨 (로그 상 기존 연결은 **8503 포트**로 확인)
+3. Redis client(`createCluster`)는 기존에 인지하고 있던 endpoint(**8503 포트**)에 대해 `reconnectStrategy`를 기반으로 재연결 시도
+4. 해당 endpoint는 **node 교체 이후 더 이상 유효하지 않음**
+5. 이 과정에서 **MOVED/ASK 응답을 정상적으로 수신하지 못해** cluster topology(rediscover)가 갱신되지 않았을 가능성
+6. 결과적으로 클라이언트 레벨에서 **연결 복구가 이루어지지 않고**, 애플리케이션 재기동 시점까지 **장애 상태가 유지**된 것으로 추정
+
+> 참고: 재기동 후 **8500 포트**로 연결된 것을 확인할 수 있으며, 8503 포트로 식별되던 기존 Redis node에 대한 연결은 Maintenance 이후 더 이상 유효하지 않았을 가능성이 있습니다.
+
+### 원인 분석 보강 { #root-cause }
+
+이후 Microsoft Learn 문서와 `@redis/client` 5.11.0 구현을 확인해 위 추정을 다음과 같이 보강했습니다(2026-10-24 확인).
 
 [![장애 진행 과정. Maintenance 전에는 createCluster의 slot 맵이 노드 A의 8503 포트를 가리키고 정상 연결된다. Maintenance 중 노드 A가 제거되고 샤드가 새 노드 B의 8500 포트로 이동하지만, slot 맵은 갱신되지 않아 8503 재연결을 반복하다 실패하고 MOVED 응답도 받지 못한다. 재기동하거나 연결을 재생성하면 10000 포트에서 토폴로지를 다시 조회해 노드 B에 정상 연결된다.](images/failover-incident.svg)](images/failover-incident.svg)
 
@@ -522,20 +144,41 @@ OSS 정책에서는 클라이언트가 샤드 주소(IP:85XX)에 직접 연결�
 
 - `connectTimeout: 1000`은 Microsoft Learn 권장값(5초)보다 짧습니다. Failover 직후처럼 부하가 높은 상황에서 재연결 실패를 늘릴 수 있습니다.
 
-### 4.4 대응 방안
+---
 
-#### 방안 1: Enterprise 정책으로 재생성 (구조적 해결, 권장)
+## 대응 방안
 
-- Enterprise 정책 캐시를 새로 만들고 `createCluster`를 `createClient`로 바꿉니다([2.1](#nodejs)).
-- 토폴로지는 프록시가 관리하므로 클라이언트는 `10000` 포트의 단일 엔드포인트에만 재연결하면 됩니다.
+### 방안 1: Enterprise Cluster 전환 (권장)
 
-제약 사항은 다음과 같습니다.
+Enterprise Cluster 전환 및 `createCluster` → `createClient` 방식으로 연동할 경우, 운영 중 topology 관리 이슈를 **구조적으로 회피**할 수 있어 가장 확실한 대응 방안입니다.
 
-- 정책은 변경할 수 없으므로 **재생성과 데이터 이전**이 필요합니다.
-- slot을 넘는 멀티키 명령 중 허용 목록 밖의 명령은 `CROSSSLOT`이 발생하므로 사용 여부를 확인합니다.
-- 처리량이 매우 높으면 프록시가 병목이 될 수 있습니다.
+```javascript
+// Enterprise Cluster - proxy 기반 단일 엔드포인트 연결
+const { createClient } = require('@redis/client');
 
-#### 방안 2: OSS 정책 유지 + 연결 재생성 로직 추가 { #option-recreate-connection }
+const redisClient = createClient({
+    url: `rediss://${redisUrl.hostname}:${redisUrl.port}`,
+    password: accessKey,
+    socket: {
+        tls: true,
+        servername: redisUrl.hostname,
+        connectTimeout: 1000,
+        reconnectStrategy,
+    },
+});
+```
+
+**장점**:
+- 클라이언트가 cluster topology를 관리할 필요 없음
+- Failover 시 proxy 계층이 자동으로 라우팅
+- 단일 엔드포인트로 운영 복잡도 감소
+
+**제약**:
+- ⚠️ 클러스터 정책은 생성 시 설정으로 **변경 불가**, Redis **재생성 필요**
+
+---
+
+### 방안 2: OSS Cluster 유지 + 연결 재생성 로직 추가 { #option-recreate-connection }
 
 node-redis `createCluster`에는 주기적 토폴로지 갱신 옵션이 없습니다. 애플리케이션에서 `CLUSTER SLOTS`를 직접 호출해도 클라이언트 내부 slot 맵은 바뀌지 않습니다.
 
@@ -544,7 +187,7 @@ Microsoft Learn과 Azure Node.js 가이드는 오류가 일정 시간 이상 지
 ```javascript
 const RECREATE_AFTER_MS = 30_000;
 
-let cluster = buildCluster(); // 2.1의 OSS 설정으로 createCluster를 반환하는 함수
+let cluster = buildCluster(); // OSS 정책용 createCluster 클라이언트를 반환하는 함수
 await cluster.connect();
 let failingSince;
 let recreating = false;
@@ -583,106 +226,103 @@ async function recreateCluster() {
 // 사용 예: await runRedis((c) => c.get('key'));
 ```
 
-함께 적용할 사항은 다음과 같습니다.
+`buildCluster()`의 TLS·`nodeAddressMap` 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다.
 
-- `connectTimeout`을 5초로 늘리고 `reconnectStrategy`에 지터를 추가합니다.
-- 인스턴스가 많으면 재생성 기준 시간에도 지터를 넣어 동시 재연결을 피합니다.
-- `@redis/client` 5.11.0 릴리스 노트의 *Smart Client Handoffs*(maintenance 알림 기반 사전 이동)는 점진적으로 도입되는 기능입니다. 클라이언트 업데이트만으로 문제가 해결된다고 보장할 수 없으므로 위 재생성 로직과 함께 사용합니다.
+**보완 포인트**:
+- `reconnectStrategy`에서 최대 재시도 횟수 제한 및 exponential backoff 적용
+- `connectTimeout`을 5초로 늘리고 `reconnectStrategy`에 지터를 추가
+- 인스턴스가 많으면 재생성 기준 시간에도 지터를 넣어 동시 재연결 방지
+- Health Check에서 cluster 상태 모니터링
 
-#### 같은 상황을 Java에서 겪는다면
+### 같은 상황을 Java에서 겪는다면
 
 | 라이브러리 | 대응 |
 |---|---|
-| Lettuce | `enablePeriodicRefresh`와 `enableAllAdaptiveRefreshTriggers`를 명시합니다([Lettuce](#lettuce)). 주기적 갱신이 있으면 사라진 노드도 다음 갱신 주기에 토폴로지에서 제외됩니다. |
-| Jedis | 연속 연결 실패 시 slot 캐시를 다시 읽지만, `topologyRefreshPeriod`로 주기적 갱신도 설정해 둡니다([Jedis](#jedis)). |
-| Spring Boot | 기본 Lettuce를 유지하고 `spring.data.redis.lettuce.cluster.refresh.*`를 설정합니다([Spring Boot](#spring-boot)). |
+| Lettuce | `enablePeriodicRefresh`와 `enableAllAdaptiveRefreshTriggers`를 명시합니다([Lettuce](clustering-policies-and-migration/index.md#lettuce)). 주기적 갱신이 있으면 사라진 노드도 다음 갱신 주기에 토폴로지에서 제외됩니다. |
+| Jedis | 연속 연결 실패 시 slot 캐시를 다시 읽지만, `topologyRefreshPeriod`로 주기적 갱신도 설정해 둡니다([Jedis](clustering-policies-and-migration/index.md#jedis)). |
+| Spring Boot | 기본 Lettuce를 유지하고 `spring.data.redis.lettuce.cluster.refresh.*`를 설정합니다([Spring Boot](clustering-policies-and-migration/index.md#spring-boot)). |
 | Redisson | `scanInterval`을 짧게(Azure 기준 예시 1000ms) 유지합니다. |
 | 공통 | 오류가 일정 시간 이상 지속되면 클라이언트를 재생성하는 안전장치를 둡니다. |
 
-### 4.5 애플리케이션 수준 대비
+---
 
-Redis를 세션 저장소나 캐시로 쓰더라도 Redis 장애가 전체 장애로 번지지 않게 합니다.
+## 참고
 
-- **대체 경로**: 캐시 조회에 실패하면 원본 데이터 소스를 직접 조회합니다.
-- **세션 대체**: 필요한 경우 Redis 장애 시 제한적인 인메모리 세션으로 전환합니다.
-- **Circuit Breaker**: 반복 실패 시 Redis 호출을 잠시 차단했다가 다시 시도합니다.
+### @redis/client 5.11.0 - Smart Client Handoffs
+
+`@redis/client` **5.11.0 release note**를 보면 **Smart Client Handoffs for Enterprise OSS API**에 대한 소개가 있습니다.
+
+- 해당 기능은 현재 Enterprise Redis에 대해 **점진적으로 도입 중**인 기능
+- 클라이언트 업데이트만으로 즉시 문제 해결을 보장하지는 않음
+- 향후 유지보수 관점에서는 도움이 될 가능성 있음
+- 위 연결 재생성 로직과 함께 사용합니다
+
+### Failover Plan 권장
+
+Redis를 세션 또는 캐시로 사용하는 아키텍처에서는 장애 발생 시 **단일 장애 지점(SPOF)** 이 되지 않도록, 애플리케이션 레벨에서 다음을 사전에 수립할 것을 권장합니다:
+
+- **내장 세션 처리**: Redis 장애 시 인메모리 세션으로 대체
+- **대체 경로(Fallback)**: 캐시 미스 시 원본 데이터소스에서 직접 조회
+- **Circuit Breaker**: 반복 장애 시 Redis 호출 차단 후 일정 시간 뒤 재시도
 
 ```javascript
+// Circuit Breaker 패턴 예시
+let redisAvailable = true;
+let failureCount = 0;
 const FAILURE_THRESHOLD = 5;
-const OPEN_DURATION_MS = 30_000;
-let failures = 0;
-let openUntil = 0;
+const RECOVERY_TIMEOUT = 30000;
 
-async function cachedGet(key, loadFromSource) {
-  if (Date.now() < openUntil) return loadFromSource(key);
-  try {
-    const value = await runRedis((c) => c.get(key));
-    failures = 0;
-    return value ?? loadFromSource(key);
-  } catch {
-    if (++failures >= FAILURE_THRESHOLD) {
-      openUntil = Date.now() + OPEN_DURATION_MS;
-      failures = 0;
+async function safeRedisGet(key) {
+    if (!redisAvailable) {
+        return null; // fallback: 캐시 미사용
     }
-    return loadFromSource(key);
-  }
+    try {
+        const value = await redisClient.get(key);
+        failureCount = 0;
+        return value;
+    } catch (err) {
+        failureCount++;
+        if (failureCount >= FAILURE_THRESHOLD) {
+            redisAvailable = false;
+            console.warn('Redis circuit breaker OPEN - falling back');
+            setTimeout(() => {
+                redisAvailable = true;
+                failureCount = 0;
+                console.info('Redis circuit breaker CLOSED - retrying');
+            }, RECOVERY_TIMEOUT);
+        }
+        return null;
+    }
 }
 ```
-
-### 4.6 재발 방지와 운영 점검
-
-- 캐시의 Activity Log에서 maintenance 시작 시 기록되는 `healthevent` 이벤트에 알림을 설정합니다.
-- 여러 캐시가 같은 리전에서 동시에 패치되지 않도록 예약 유지 관리(미리 보기)를 검토합니다.
-- 클러스터 클라이언트를 사용하면 노드 연결 오류, 재연결 횟수, 재생성 횟수를 지표로 남깁니다.
-- 새 캐시를 만들 때 정책을 IaC에 명시하고, 코드의 클라이언트 생성자와 정책이 맞는지 배포 전에 점검합니다([한눈에 보기](#at-a-glance)).
 
 ---
 
 ## 코드 샘플
 
-이 사례를 검증한 예제는 [`cluster_example/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/nodejs-cluster/cluster_example)에 있습니다.
+이 이슈를 검증하기 위한 예제 코드는 [`cluster_example/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/nodejs-cluster/cluster_example) 디렉토리에 포함되어 있습니다.
 
-- OSS 정책(`createCluster`)과 Enterprise 정책(`createClient`) 연결 방식 비교
-- 클러스터 토폴로지 조회와 모니터링
-- Failover 시뮬레이션과 복구 테스트
+- OSS Cluster(`createCluster`) vs Enterprise(`createClient`) 연결 방식 비교
+- Cluster topology 조회 및 모니터링
+- Failover 시뮬레이션 및 복구 테스트
 - Health Check Probe
 
-이 문서의 직접 작성한 그림은 Excalidraw 원본으로 [`samples/diagrams/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/diagrams)에 있습니다. 수정 방법은 해당 폴더의 README를 참고합니다.
+그림의 Excalidraw 원본은 [`samples/diagrams/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/diagrams)에 있습니다.
+
+---
 
 ## 관련 문서
 
+- [Azure Managed Redis 클러스터링 정책별 연결과 마이그레이션 가이드](clustering-policies-and-migration/index.md): 정책 선택, Node.js·Java 연결 방식, Azure Cache for Redis 마이그레이션을 다룹니다.
 - [Azure Managed Redis Eviction Policy와 TTL 설계 가이드](../eviction-policy-and-ttl/index.md): 메모리 한도에서의 키 삭제 정책과 TTL 설계를 다룹니다.
 
 ---
 
 ## 참고 자료
 
-**Microsoft Learn**
-
 - [Choose a clustering policy for Azure Managed Redis](https://learn.microsoft.com/azure/redis/choose-clustering-policy)
-- [Azure Managed Redis architecture](https://learn.microsoft.com/azure/redis/architecture)
-- [Azure Managed Redis Client libraries](https://learn.microsoft.com/azure/redis/best-practices-client-libraries)
-- [Connection resilience with Azure Managed Redis](https://learn.microsoft.com/azure/redis/best-practices-connection)
 - [Failover and patching for Azure Managed Redis](https://learn.microsoft.com/azure/redis/failover)
-- [Understand the differences - Basic, Standard, and Premium tiers versus Azure Managed Redis](https://learn.microsoft.com/azure/redis/migrate/migrate-basic-standard-premium-understand)
-- [Understand the differences - Azure Cache for Redis Enterprise versus Azure Managed Redis](https://learn.microsoft.com/azure/redis/migrate/migrate-redis-enterprise-understand)
-- [Scale an Azure Cache for Redis instance](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-how-to-scale)
-- [Client libraries for Azure Cache for Redis (Redisson)](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-best-practices-client-libraries#best-practices-for-redisson-java)
-- [Quickstart: Connect to Azure Managed Redis in a Node.js app](https://learn.microsoft.com/azure/redis/nodejs-get-started)
-- [Quickstart: Use Azure Managed Redis in Java with Jedis](https://learn.microsoft.com/azure/redis/java-get-started)
-- [Connect a Spring Boot application to Azure Cache for Redis](https://learn.microsoft.com/azure/developer/java/spring-framework/configure-spring-boot-initializer-java-app-with-redis-cache)
-- [az redisenterprise](https://learn.microsoft.com/cli/azure/redisenterprise), [az redisenterprise database](https://learn.microsoft.com/cli/azure/redisenterprise/database)
-
-**Azure 클라이언트 가이드 (Microsoft Learn에서 링크)**
-
-- [Lettuce Best Practices](https://github.com/Azure/AzureCacheForRedis/blob/main/Lettuce%20Best%20Practices.md)
-- [Jedis Best Practices](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Java-Jedis.md)
-- [Node.js Best Practices](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Node-js.md)
-
-**클라이언트 라이브러리**
-
-- [node-redis Clustering](https://github.com/redis/node-redis/blob/master/docs/clustering.md)
+- [Azure Managed Redis - Clustering](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-how-to-premium-clustering)
+- [Azure Managed Redis - Best Practices for Connection Resilience](https://learn.microsoft.com/azure/azure-cache-for-redis/cache-best-practices-connection)
+- [node-redis Cluster Guide](https://github.com/redis/node-redis/blob/master/docs/clustering.md)
 - [@redis/client 5.11.0 Release Notes](https://github.com/redis/node-redis/releases/tag/%40redis%2Fclient%405.11.0)
-- [ioredis Cluster](https://github.com/redis/ioredis#cluster)
-- [Lettuce Redis Cluster](https://redis.github.io/lettuce/ha-sharding/#redis-cluster)
-- [Jedis: Connect to a Redis cluster](https://redis.io/docs/latest/develop/clients/jedis/connect/)
