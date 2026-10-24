@@ -386,49 +386,18 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
-python scripts/docs/audit_pre_pages.py
 ```
 
-`audit_pre_pages.py`는 고정된 pre-Pages 기준선과 현재 built site를 함께
-대조해 과거 공개 콘텐츠와 호환 URL이 계속 보존되는지 검사합니다.
-보존 inventory는 `a4e6801` 시점의 **기준선 문서 62개**를 현재 canonical
-문서에 일대일로 연결합니다. 신규 문서는 이 기준선 inventory에 추가하지
-않으며, 현재 문서 수가 늘어났다는 이유로 감사가 실패하지 않습니다.
-각 연결은 `rename_similarity`로 계산한 기준선 → 최초 Pages commit의
-실제 Git `R` 기록과 원본·대상 경로가 일치해야 합니다. 양쪽 파일이
-존재한다는 사실만으로는 이관 계보를 인정하지 않습니다.
-과거 구조 비교와 JSON의 `document_count`·`details.documents`는 이 62개만
-대상으로 합니다. `current_document_count`는 현재 카탈로그에서 계산합니다.
-검토된 disposition은 Git에서 실제로 삭제된 기준선 경로에만 적용합니다.
-비어 있지 않은 `current_paths`는 `HEAD`에 저장된 `docs/services/**` 또는
-`tests/docs/**`의 일반 소스 파일이어야 합니다. 추적되지 않은 파일, ignore된
-파일, 생성 결과물과 심볼릭 링크는 대체 근거로 사용할 수 없습니다.
-빈 `current_paths`는 삭제된 로컬 상태를 제외할 때만 허용합니다.
-가시성 감사는 닫힌 `<details>`를 첫 직접 자식 `<summary>` 또는 브라우저의
-기본 컨트롤로 펼칠 수 있는지 검사합니다. 작성된 summary가 없어도
-컨트롤이 보이고 상호작용 가능하면 본문을 인정합니다. 상속된 `inert`,
-`hidden`, `display:none`, `aria-hidden` 등의 접근 제한은 계속 반영합니다.
-다른 요소 뒤에 오는 첫 `<summary>`도 인정하며, 이미 `open`인 본문은
-별도로 가시성을 확인합니다.
+PR CI도 같은 명령을 실행하므로 로컬에서 통과하면 PR에서도 같은 결과를
+기대할 수 있습니다. 같은 PR에 새 commit을 push하면 진행 중인 이전 실행은
+취소됩니다. `main`에 직접 push한 변경은 PR CI를 거치지 않으므로 Pages 배포가
+검증 스크립트, 이전 URL 검사, strict build와 검색 인덱스 검증을 통과해야
+배포됩니다.
 
-전체 감사는 기준선 밖의 신규 문서까지 포함해 현재 canonical 문서 **전체**의
-본문 가시성, 검색, 서비스별 주제 진입점, 글 찾기 연결과 로컬 자산을 검사합니다.
-각 문서가 선언한 모든 `redirect_from`도 확인하며, inventory에 기록된
-기준선 Pages 경로 62개는 계속 필수입니다. 현재 문서가 66개인 경우의 성공
-출력은 다음과 같습니다. 현재 문서 수는 고정된 제한이 아닙니다.
-
-```text
-Audited 359 baseline files and 73 Markdown files: 62/62 baseline documents mapped and preserved; 66 current documents searchable and visible; declared redirects and local assets verified.
-```
-
-`--content-only`는 기준선 구조 보존만 검사하며 built site를 확인했다고
-표현하지 않습니다. 이 검사는
-`a4e6801`과 `9ace9667` commit object를 직접 읽으므로 전체 Git 이력이
-필수입니다. 로컬 clone이 얕으면 검사를 건너뛰지 말고
-`git fetch --unshallow` 또는 동등한 전체 이력 fetch를 수행한 뒤 다시
-실행합니다. CI에서는 checkout `fetch-depth: 0`으로 같은 조건을 보장합니다.
-필수 감사 step과 이를 포함한 validate/build job에는 실행을 건너뛸 수 있는
-`if`를 두지 않으며, `continue-on-error`로 감사 실패를 무시하지 않습니다.
+이전에 공개한 URL은 `tests/docs/test_legacy_urls.py`의 목록으로 보존합니다.
+목록의 각 경로는 현재 문서의 `redirect_from`에 계속 선언되어 있어야
+합니다. 문서를 옮기거나 합칠 때는 기존 `redirect_from`을 새 canonical
+문서로 함께 옮깁니다. URL을 의도적으로 폐기할 때만 목록에서 제거합니다.
 
 생성된 `site/`과 검색 인덱스는 커밋하지 않습니다. 실패한 검증을 무시하지
 않습니다.
