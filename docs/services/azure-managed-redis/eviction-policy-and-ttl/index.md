@@ -113,7 +113,7 @@ Azure Managed Redis는 Redis Enterprise 기반이므로 `CONFIG SET`으로 `maxm
 
 ### 2.3 샤드 구조와 제약 사항 { #constraints }
 
-![Azure Managed Redis 아키텍처. 클라이언트가 Load Balancer를 거쳐 두 Azure VM에 연결되고, 각 VM에는 Azure agent, Redis proxy, 여러 개의 Primary·Replica Redis Server 샤드가 있으며 VM 사이에 비동기 데이터 복제가 이루어진다.](images/managed-redis-architecture.png)
+![Azure Managed Redis 아키텍처. 클라이언트가 Load Balancer를 거쳐 두 Azure VM에 연결되고, 각 VM에는 Azure agent, Redis proxy, 여러 개의 Primary·Replica Redis Server 샤드가 있으며 VM 사이에 비동기 데이터 복제가 이루어진다.](../cluster-failover-recovery/clustering-policies-and-migration/images/managed-redis-architecture.png)
 
 *그림: Azure Managed Redis 아키텍처. 출처: [Microsoft Learn – Azure Managed Redis architecture](https://learn.microsoft.com/azure/redis/architecture)*
 
