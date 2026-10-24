@@ -146,12 +146,20 @@ redirect_from:
 ```
 
 redirect 경로는 `cases`, `guides`, `labs`, `research` 중 하나로 시작하는
-기존 4단계 `index.md` 경로여야 합니다. 해당 경로에 원본 Markdown을 다시
-만들지 않습니다. 빌드가 redirect page를 생성하며 검색과 서비스/topic
-탐색에서는 제외합니다.
+기존 4단계 `index.md` 경로 또는 이동 전의
+`services/<service>/<topic>[/<child>]/index.md` 경로입니다.
+현재 canonical 문서와 충돌하거나 둘 이상의 문서가 같은 이전 주소를
+소유할 수 없습니다. redirect의 Markdown·HTML 경로와 sample 게시 자산도
+서로 겹칠 수 없습니다. 해당 경로에 원본 Markdown을 다시 만들지 않습니다.
+빌드가 redirect page를 생성하며 검색과 서비스/topic 탐색에서는 제외합니다.
+JavaScript를 사용할 수 있으면 query와 fragment를 유지해서 이동하고,
+그렇지 않으면 meta refresh와 직접 링크로 canonical 문서에 접근합니다.
+문서를 분리할 때는 이전의 주요 fragment에 대응하는 섹션이나 새 문서로
+가는 안내를 목적지에 남깁니다.
 이전 collection/service 색인 주소도 유지하며, 현재 소속과 이전 소속이
 겹치면 canonical 문서를 중복 없이 합칩니다. 이 호환 색인에서는 topic
 카드와 함께 해당 자식 문서로 바로 가는 링크도 제공합니다.
+서비스 문서의 이전 주소로는 collection 호환 색인을 만들지 않습니다.
 
 `document_type`은 collection 호환 색인과 수명주기 요구사항을 선택하지만
 물리 경로를 결정하지 않습니다. `services/`, `explore/`와 collection 호환

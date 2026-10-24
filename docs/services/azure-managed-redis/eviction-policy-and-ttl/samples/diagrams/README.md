@@ -14,4 +14,4 @@
 2. 그림을 수정하고 같은 이름의 SVG로 내보내 이 폴더의 SVG를 교체합니다.
 3. 저장소 루트에서 `mkdocs build --strict`를 실행해 게시 결과를 확인합니다.
 
-Azure Managed Redis 아키텍처 PNG는 Microsoft Learn의 [Azure Managed Redis architecture](https://learn.microsoft.com/azure/redis/architecture) 그림이며, 같은 파일을 중복 저장하지 않도록 `cluster-failover-recovery/clustering-policies-and-migration/images/`의 파일을 참조합니다.
+Azure Managed Redis의 공통 아키텍처 그림은 [클러스터링 정책 개요](../../../clustering-policies/index.md#cluster-policies)에서만 게시합니다. 이 sample에는 eviction·TTL에 필요한 그림만 둡니다.
