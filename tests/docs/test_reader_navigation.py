@@ -404,6 +404,10 @@ def test_topic_pages_render_context_outline_and_related_samples(
     assert 'class="dg-sample-card"' in setup_rendered
     assert "Event lab" in setup_rendered
     assert (
+        '<h3><a href="https://github.com/example/devguidesample/tree/main/'
+        "docs/services/azure-monitor/new-topic/samples/event-lab\">Event lab</a></h3>"
+    ) in setup_rendered
+    assert (
         "https://github.com/example/devguidesample/tree/main/"
         "docs/services/azure-monitor/new-topic/samples/event-lab"
     ) in setup_rendered

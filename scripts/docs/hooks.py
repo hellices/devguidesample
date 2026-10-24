@@ -145,15 +145,16 @@ def _sample_cards(document_path: PurePosixPath, catalog: TopicCatalog, config: M
         '<section class="dg-related-samples" aria-label="관련 샘플" data-search-exclude="true">'
     ]
     cards.append('<p class="dg-eyebrow">RELATED SAMPLES</p>')
-    cards.append('<div class="dg-sample-grid" markdown="1">')
+    cards.append('<div class="dg-sample-grid">')
     for sample in samples:
         href = (
             f"{repo_url}/tree/main/"
             f"{(docs_prefix + '/' if docs_prefix else '')}{sample.relative_path.as_posix()}"
         )
-        cards.append('<article class="dg-sample-card" markdown="1">')
-        cards.append(f"### [{escape(sample.title)}]({escape(href, quote=True)})")
-        cards.append("")
+        cards.append('<article class="dg-sample-card">')
+        cards.append(
+            f'<h3><a href="{escape(href, quote=True)}">{escape(sample.title)}</a></h3>'
+        )
         cards.append(f'<p class="dg-doc-summary">{escape(sample.description)}</p>')
         cards.append(f'<p class="dg-card-count">{escape(sample.kind)}</p>')
         cards.append("</article>")
