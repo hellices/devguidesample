@@ -137,7 +137,7 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
-python scripts/docs/audit_pre_pages.py
 ```
 
-The daily automation runs the same commands before every direct push.
+The daily automation runs the `Required validation` commands in `AGENTS.md`
+before every direct push.

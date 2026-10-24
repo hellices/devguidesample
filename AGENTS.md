@@ -37,7 +37,9 @@
 - 페이지에서 렌더링할 이미지만 같은 bundle의 `images/`에 두며 의미 있는
   대체 텍스트를 작성한다.
 - 이전 공개 URL은 canonical 문서의 `redirect_from`으로 보존한다. redirect
-  경로에 원본 Markdown을 다시 만들지 않는다.
+  경로에 원본 Markdown을 다시 만들지 않는다. 보존 대상은
+  `tests/docs/test_legacy_urls.py` 목록이며 URL을 의도적으로 폐기할 때만
+  목록에서 제거한다.
 
 ## Publishing automation
 
@@ -112,10 +114,8 @@ python scripts/docs/validate_links.py
 python scripts/docs/validate_public_safety.py
 mkdocs build --strict
 python scripts/docs/validate_search_index.py
-python scripts/docs/audit_pre_pages.py
 ```
 
 테스트나 검증 실패를 무시하거나 생성된 `site/` 및 검색 인덱스를 커밋하지
-않는다. `python scripts/docs/audit_pre_pages.py`는 전체 Git 이력이
-필요하며 자세한 기준과 실행 지침은 `docs/contributing/index.md`를 따른다.
+않는다. 자세한 기준과 실행 지침은 `docs/contributing/index.md`를 따른다.
 sample 애플리케이션의 별도 테스트나 의존성은 해당 sample 변경 범위에서만 실행한다.

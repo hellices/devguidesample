@@ -23,8 +23,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -43,14 +41,14 @@ jobs:
           python scripts/docs/validate_links.py
           python scripts/docs/validate_public_safety.py
 
+      - name: Check legacy URL redirects
+        run: python -m pytest tests/docs/test_legacy_urls.py -q
+
       - name: Build site strictly
         run: mkdocs build --strict
 
       - name: Validate search index
         run: python scripts/docs/validate_search_index.py
-
-      - name: Audit pre-Pages content preservation
-        run: python scripts/docs/audit_pre_pages.py
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
