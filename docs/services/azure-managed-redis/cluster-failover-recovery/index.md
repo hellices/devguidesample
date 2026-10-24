@@ -188,6 +188,7 @@ Microsoft Learn과 Azure Node.js 가이드는 오류가 일정 시간 이상 지
 
 - **명령 대기 시간 제한**: `reconnectStrategy`가 재시도를 계속하는 동안 node-redis는 보내지 못한 명령을 offline queue에 쌓아 두므로, 시간 제한이 없으면 `await`가 끝나지 않을 수 있습니다. `connectTimeout`은 연결 시도에만 적용되고 명령 대기에는 적용되지 않습니다. 클러스터 옵션 `commandOptions.timeout`을 지정하면 대기 중인 명령도 그 시간 안에 `TimeoutError`로 끝나고 queue에서 제거됩니다(`@redis/client` 5.11.0 구현 기준).
 - **노드별 상태 감시**: 정상 샤드에 대한 명령 성공으로 다른 샤드의 실패 기록이 지워지지 않도록, 타이머가 `cluster.masters`의 노드별 연결 상태(`isReady`)를 직접 확인합니다. 실패 시작 시각은 노드 주소별로 기록하고, 해당 노드가 회복되거나 클러스터를 재생성할 때만 지웁니다.
+- **이전 client 정리 유예**: 새 client로 바꾼 직후 이전 client를 `destroy()`하면 이전 client로 이미 보낸 명령이 정상 샤드에서 처리 중이어도 실패합니다. 명령 대기 시간 제한이 있으므로 그 시간이 지난 뒤 정리합니다. `close()`는 대기 중인 명령이 비기를 기다리는데, 사라진 노드에서는 이 조건이 충족되지 않을 수 있어 사용하지 않습니다.
 
 ```javascript
 const COMMAND_TIMEOUT_MS = 3_000;
@@ -232,9 +233,11 @@ async function recreateCluster() {
   try {
     await next.connect(); // 10000 포트에서 토폴로지를 새로 읽음
     const previous = cluster;
-    cluster = next;
+    cluster = next; // 이후 요청은 새 client로 보낸다
     failingSince.clear();
-    previous.destroy(); // 대기 중인 명령을 끝내고 이전 연결을 정리해 연결 수 누적 방지
+    // 이전 client로 이미 보낸 명령은 COMMAND_TIMEOUT_MS 안에 끝나거나 TimeoutError가 된다.
+    // 그 유예 시간이 지난 뒤 정리해야 정상 샤드로 처리 중인 명령이 연결 파기로 실패하지 않는다.
+    setTimeout(() => previous.destroy(), COMMAND_TIMEOUT_MS + 1_000).unref();
   } catch {
     next.destroy();
   } finally {
@@ -244,7 +247,7 @@ async function recreateCluster() {
 
 setInterval(checkNodes, CHECK_INTERVAL_MS).unref();
 
-// 사용 예: 명령은 항상 현재 cluster 변수를 통해 보낸다.
+// 사용 예: 명령은 항상 현재 cluster 변수를 통해 보내고, client 참조를 따로 보관하지 않는다.
 // await cluster.get('key'); // 최대 COMMAND_TIMEOUT_MS 후 TimeoutError
 ```
 

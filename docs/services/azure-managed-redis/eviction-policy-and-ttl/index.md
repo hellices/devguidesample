@@ -48,7 +48,7 @@ related_guides:
 Redis는 메모리가 가득 차면 **eviction policy**에 따라 키를 지우고, 키에 **TTL**이 있으면 그 시간이 지난 뒤 키를 지웁니다. 두 가지 모두 "키가 사라지는" 동작이지만 목적과 결과가 다릅니다. 이 가이드는 Azure Managed Redis에서 두 동작을 어떻게 설정하고 용도별로 어떻게 조합할지 정리합니다.
 
 !!! warning "Azure Managed Redis의 기본 eviction policy는 `volatile-lru`입니다"
-    `volatile-lru`는 **TTL이 있는 키만** 지웁니다. TTL을 걸지 않은 키로 메모리가 가득 차면 지울 키가 없어 쓰기 명령이 오류로 실패합니다. 순수 캐시로 사용한다면 정책을 `allkeys-lru`로 **직접 변경**합니다. `allkeys-lru`는 Redis 공식 문서가 캐시의 기본 선택으로 권장하는 정책입니다.
+    `volatile-lru`는 **TTL이 있는 키만** 지웁니다. TTL을 걸지 않은 키로 메모리가 가득 차면 지울 키가 없어 메모리를 늘리는 쓰기 명령이 오류로 실패합니다. 순수 캐시로 사용한다면 정책을 `allkeys-lru`로 **직접 변경**합니다. `allkeys-lru`는 Redis 공식 문서가 캐시의 기본 선택으로 권장하는 정책입니다.
 
 ---
 
@@ -128,9 +128,9 @@ Azure Managed Redis는 노드마다 여러 Redis 프로세스(샤드)를 실행�
 
 ## 3. 정책별 동작 { #policies }
 
-아래 그림은 메모리 한도에 도달한 샤드에 쓰기 명령이 들어왔을 때 정책별로 어떻게 처리되는지 보여 줍니다.
+아래 그림은 메모리 한도에 도달한 샤드에 메모리를 늘리는 쓰기 명령(`SET` 등)이 들어왔을 때 정책별로 어떻게 처리되는지 보여 줍니다.
 
-[![쓰기 명령이 들어오면 샤드 메모리가 한도를 넘었는지 먼저 확인한다. 넘지 않았으면 그대로 저장한다. 넘었으면 noeviction은 OOM 오류로 쓰기를 거부하고, volatile 정책은 TTL 있는 키가 있으면 그중에서 삭제 후 저장하고 없으면 쓰기를 거부하며, allkeys 정책은 모든 키 중에서 삭제 후 저장한다.](images/eviction-flow.svg)](images/eviction-flow.svg)
+[![메모리를 늘리는 쓰기 명령이 들어오면 샤드 메모리가 한도를 넘었는지 먼저 확인한다. 넘지 않았으면 그대로 저장한다. 넘었으면 noeviction은 OOM 오류로 쓰기를 거부하고, volatile 정책은 TTL 있는 키가 있으면 그중에서 삭제 후 저장하고 없으면 쓰기를 거부하며, allkeys 정책은 모든 키 중에서 삭제 후 저장한다.](images/eviction-flow.svg)](images/eviction-flow.svg)
 
 | 정책 | 지우는 대상 | 선택 기준 | 주로 쓰는 경우 |
 |---|---|---|---|
@@ -189,7 +189,7 @@ Redis 4.0부터 제공되며, 키마다 접근 빈도를 추적해 **적게 쓰�
 TTL이 있는 키 중에서 가장 오래 사용하지 않은 키를 지웁니다. TTL이 없는 키는 **절대 지우지 않습니다**.
 
 - 캐시 키(TTL 있음)와 지워지면 안 되는 키(TTL 없음)를 한 인스턴스에 둘 때 유용합니다. Redis 문서는 이런 경우에도 가능하면 인스턴스를 나누라고 권장합니다.
-- 애플리케이션이 TTL을 거의 쓰지 않는다면 사실상 `noeviction`과 같습니다. 메모리가 가득 차면 쓰기 명령이 **out of memory 오류**로 실패합니다.
+- 애플리케이션이 TTL을 거의 쓰지 않는다면 사실상 `noeviction`과 같습니다. 메모리가 가득 차면 메모리를 늘리는 쓰기 명령이 **out of memory 오류**로 실패합니다. `DEL`처럼 메모리를 늘리지 않는 명령과 읽기는 계속 동작합니다.
 
 ### 3.4 volatile-ttl과 random 계열
 
@@ -249,7 +249,7 @@ Redis에만 원본이 있는 데이터(카운터, 순위표, 상태 저장 등)�
 
 ## 5. 클라이언트에서 TTL을 건다는 의미 { #client-ttl }
 
-[![클라이언트가 SET key v EX 600을 보내면 Redis 서버가 키와 만료 시각을 저장해 volatile 키가 된다. 이후 EXPIRE 재호출이나 세션 touch는 만료 시각을 연장하고, EX 없는 SET 덮어쓰기는 TTL을 제거해 영구 키로 만든다. 만료 시각이 지나면 접근할 때 삭제되거나 주기적 샘플링으로 삭제되고, 삭제는 복제본과 AOF에 DEL로 전파된다.](images/ttl-lifecycle.svg)](images/ttl-lifecycle.svg)
+[![클라이언트가 SET key v EX 600을 보내면 Redis 서버가 키와 만료 시각을 저장해 volatile 키가 된다. 이후 EXPIRE 재호출이나 세션 touch는 그 시점부터 만료 시각을 다시 설정하고, EX 없는 SET 덮어쓰기는 TTL을 제거해 영구 키로 만든다. 만료 시각이 지나면 접근할 때 삭제되거나 주기적 샘플링으로 삭제되고, 삭제는 복제본과 AOF에 DEL로 전파된다.](images/ttl-lifecycle.svg)](images/ttl-lifecycle.svg)
 
 ### 5.1 TTL은 서버에 저장되는 키 속성입니다
 
@@ -265,7 +265,7 @@ Redis에만 원본이 있는 데이터(카운터, 순위표, 상태 저장 등)�
 
 ```text
 SET product:42 "{...}" EX 600      # 값과 TTL(600초)을 한 번에 설정
-EXPIRE session:abc 1800            # 기존 키의 TTL을 설정·연장
+EXPIRE session:abc 1800            # 지금부터 1800초 뒤로 만료 시각을 재설정
 TTL product:42                     # 남은 초. -1: TTL 없음, -2: 키 없음
 ```
 
@@ -300,7 +300,7 @@ Spring Cache에서 `time-to-live`를 설정하지 않으면 캐시 항목이 TTL
 | `SET`으로 값을 덮어씀 | **TTL 제거** (`KEEPTTL` 옵션을 주면 유지) |
 | `DEL`, `GETSET`, `*STORE` 명령 | 키 삭제·교체로 TTL 제거 |
 | `INCR`, `LPUSH`, `HSET` 등 값 일부 변경 | **TTL 유지** |
-| `EXPIRE`를 다시 호출 | 새 TTL로 갱신 (sliding expiration에 사용) |
+| `EXPIRE`를 다시 호출 | 호출 시점부터 새 TTL로 재설정. 남은 TTL보다 짧게 주면 오히려 앞당겨짐(`GT` 옵션으로 연장만 허용 가능) |
 | `PERSIST` | TTL 제거, 영구 키가 됨 |
 | `RENAME` | TTL이 새 키 이름으로 이동 |
 | `EXPIRE`에 0 이하 값 지정 | 즉시 삭제 |
@@ -339,7 +339,7 @@ Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys
 
 1. **적중률이 낮고 Evicted Keys가 높다**: 메모리가 부족하거나 정책이 잘못된 키를 지우고 있습니다. 확장 또는 `allkeys-lru`/`allkeys-lfu` 전환을 검토합니다.
 2. **Evicted Keys는 낮은데 Expired Keys가 높다**: TTL이 너무 짧거나 잘못된 키에 걸려 있을 수 있습니다.
-3. **쓰기 명령이 out of memory 오류로 실패한다**: `noeviction`이거나 `volatile-*` 정책인데 TTL 있는 키가 부족한 상태입니다. 몇 개의 키를 골라 `TTL <key>`가 `-1`(TTL 없음)인지 확인합니다.
+3. **메모리를 늘리는 쓰기 명령이 out of memory 오류로 실패한다**: `noeviction`이거나 `volatile-*` 정책인데 TTL 있는 키가 부족한 상태입니다. 몇 개의 키를 골라 `TTL <key>`가 `-1`(TTL 없음)인지 확인합니다.
 4. **전체 사용률은 낮은데 eviction이 발생한다**: 특정 샤드에 데이터가 몰렸을 가능성이 있습니다. 해시 태그 사용과 큰 키를 점검합니다. 키 하나의 실제 메모리는 `MEMORY USAGE <key>`로 확인합니다.
 
 ---

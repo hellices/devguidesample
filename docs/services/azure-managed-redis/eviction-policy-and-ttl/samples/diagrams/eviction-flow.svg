@@ -2,8 +2,8 @@
 <title>메모리 한도에 도달했을 때 eviction policy별 쓰기 처리 흐름</title>
 <defs><marker id="eviction-flow-head-1e1e1e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e1e1e"/></marker></defs>
 <rect x="16" y="-24" width="876" height="782" fill="#ffffff"/>
-<rect x="290" y="0" width="260" height="50" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
-<text x="420.0" y="25.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">쓰기 명령 (SET 등)</text>
+<rect x="270" y="0" width="300" height="50" rx="10" fill="#a5d8ff" stroke="#1e1e1e" stroke-width="2"/>
+<text x="420.0" y="25.0" font-size="16" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">메모리를 늘리는 쓰기 (SET 등)</text>
 <polyline points="420,50 420,90" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#eviction-flow-head-1e1e1e)"/>
 <polygon points="420.0,90 530,145.0 420.0,200 310,145.0" fill="#ffec99" stroke="#1e1e1e" stroke-width="2"/>
 <text x="420.0" y="135.6" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">샤드 메모리가</text>

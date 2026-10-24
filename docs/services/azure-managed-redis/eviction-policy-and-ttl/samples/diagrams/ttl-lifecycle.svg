@@ -14,7 +14,7 @@
 <text x="410.0" y="193.8" font-size="15" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">= volatile 키</text>
 <rect x="640" y="0" width="270" height="64" rx="10" fill="#b2f2bb" stroke="#1e1e1e" stroke-width="2"/>
 <text x="775.0" y="23.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">EXPIRE 재호출 / 세션 touch</text>
-<text x="775.0" y="40.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">→ 만료 시각 연장 (sliding)</text>
+<text x="775.0" y="40.8" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">→ 만료 시각 재설정 (sliding)</text>
 <polyline points="480,130 480,32 640,32" fill="none" stroke="#1e1e1e" stroke-width="2" marker-end="url(#ttl-lifecycle-head-1e1e1e)"/>
 <rect x="640" y="145" width="270" height="64" rx="10" fill="#ffc9c9" stroke="#1e1e1e" stroke-width="2"/>
 <text x="775.0" y="168.2" font-size="14" fill="#1e1e1e" text-anchor="middle" dominant-baseline="central" xml:space="preserve">SET 덮어쓰기 (EX 없음)</text>

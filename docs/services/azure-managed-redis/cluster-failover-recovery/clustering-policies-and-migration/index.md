@@ -404,7 +404,7 @@ Azure Cache for Redis의 Basic, Standard, Premium 티어는 노드마다 단일 
 | 항목 | Azure Cache for Redis | Azure Managed Redis |
 |---|---|---|
 | DNS 접미사 | `.redis.cache.windows.net` (Enterprise: `redisenterprise.cache.azure.net`) | `<region>.redis.azure.net` |
-| 포트 | TLS 6380 / 비TLS 6379 | 10000 (TLS 또는 비TLS 중 하나만) |
+| 포트 | Basic/Standard/Premium: TLS 6380 / 비TLS 6379<br>Enterprise/Enterprise Flash: 10000 | 10000 (TLS 또는 비TLS 중 하나만) |
 | 노드 직접 연결 포트 | Premium 클러스터: 130XX/150XX 범위 | 85XX 범위(OSS 정책, 변경 가능) |
 | 데이터베이스 | 여러 개(Basic/Standard/Premium) | DB 0만 |
 | 네트워크 격리 | VNet 주입 가능 | VNet 주입·IP 방화벽 미지원, Private Link 사용 |

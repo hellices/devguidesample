@@ -5185,7 +5185,7 @@ documents:
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: code
-              fingerprint: 4ffd34aa07fed799dd84e3f795f500022d4cfa318ef3a5bfce375d86e24322d2
+              fingerprint: 9f92743816e3aa579ad5599cc475035679f7a25f6a24077c7cf97e8b544d5da4
               count: 1
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
