@@ -116,7 +116,15 @@ def test_contributing_pages_artifact_reference_matches_workflow_version() -> Non
 
 
 def test_pages_deploy_checks_legacy_urls_for_direct_pushes() -> None:
-    steps = workflow_jobs()["pages.yml"]["build"]
-    runs = [step.get("run") for step in steps]
-    assert "python -m pytest tests/docs/test_legacy_urls.py -q" in runs
-    assert runs.index("python -m pytest tests/docs/test_legacy_urls.py -q") < runs.index("mkdocs build --strict")
+    workflow = yaml.safe_load((WORKFLOWS / "pages.yml").read_text(encoding="utf-8"))
+    # PyYAML reads the bare `on` key as boolean True.
+    triggers = workflow.get("on", workflow.get(True))
+    assert "main" in (triggers.get("push") or {}).get("branches", [])
+    build = workflow["jobs"]["build"]
+    runs = [step.get("run") for step in build["steps"]]
+    command = "python -m pytest tests/docs/test_legacy_urls.py -q"
+    assert command in runs
+    assert runs.index(command) < runs.index("mkdocs build --strict")
+    for gate in (build, build["steps"][runs.index(command)]):
+        assert "if" not in gate
+        assert gate.get("continue-on-error", False) is False
