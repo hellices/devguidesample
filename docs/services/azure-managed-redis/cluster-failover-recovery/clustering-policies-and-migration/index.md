@@ -172,7 +172,7 @@ const client = createClient({
   url: `rediss://${host}:10000`,
   credentialsProvider, // Microsoft Entra ID 또는 액세스 키
   pingInterval: 60_000,
-  // 재연결 중 offline queue에 쌓인 명령도 이 시간 안에 TimeoutError로 끝낸다
+  // 전송 전 offline queue 대기만 제한한다. 응답 대기는 애플리케이션에서 따로 제한한다
   commandOptions: { timeout: 3_000 },
   socket: {
     tls: true,
@@ -196,7 +196,7 @@ const host = process.env.REDIS_HOST;
 
 const cluster = createCluster({
   rootNodes: [{ url: `rediss://${host}:10000` }],
-  // 모든 노드 명령에 적용된다. 사라진 노드로 보낸 명령도 무한정 대기하지 않는다
+  // 모든 노드 명령의 전송 전 queue 대기를 제한한다. 전송 후 응답 대기는 제한하지 않는다
   commandOptions: { timeout: 3_000 },
   defaults: {
     credentialsProvider,
@@ -219,7 +219,7 @@ cluster.on('error', (err) => console.error('redis cluster error', err));
 await cluster.connect();
 ```
 
-node-redis로 OSS 정책을 사용할 때는 [장애 사례의 연결 재생성 패턴](../index.md#option-recreate-connection)도 함께 적용합니다. 이 패턴은 명령 결과와 별개로 노드별 연결 상태를 감시해 클라이언트를 재생성합니다.
+node-redis로 OSS 정책을 사용할 때는 [장애 사례의 연결 재생성 패턴](../index.md#option-recreate-connection)도 함께 적용합니다. 이 패턴은 응답 대기까지 포함한 요청 전체 시간을 제한하고, 명령 결과와 별개로 노드별 연결 상태를 감시해 클라이언트를 재생성합니다.
 
 ### 2.2 Java { #java }
 
@@ -366,7 +366,7 @@ Redisson을 사용한다면 Enterprise / Non-clustered 정책에는 `useSingleSe
 | 항목 | 권장 값 | 이유 |
 |---|---|---|
 | Connect timeout | 5초 | 너무 짧으면 높은 CPU 상황에서 *연결 → 실패 → 재시도* 루프에 빠집니다. |
-| Command timeout | 5초 미만에서 시작해 조정(예: node-redis `commandOptions: { timeout: 3_000 }`) | 값 크기와 지연 요구에 맞춥니다. node-redis는 재연결 중 명령을 offline queue에 보관하므로, 이 값이 없으면 명령이 끝나지 않을 수 있습니다. |
+| Command timeout | 5초 미만에서 시작해 조정 | 값 크기와 지연 요구에 맞춥니다. node-redis `commandOptions.timeout`은 전송 전 offline queue 대기만 제한하고 전송 후 응답 대기는 제한하지 않으므로, 요청 전체 제한은 [애플리케이션에서 따로](../index.md#option-recreate-connection) 둡니다. Lettuce·Jedis의 command/socket timeout은 응답 대기를 제한합니다. |
 | Keepalive / ping | 10분 미만(예: node-redis `pingInterval: 60000`) | Azure Managed Redis는 10분 동안 유휴 상태인 연결을 닫습니다. |
 | 재시도 | 지수 백오프 + 지터 | 동시에 재연결하면 연결 생성 속도 제한에 걸립니다. |
 | Linux `net.ipv4.tcp_retries2` | `5` | 기본값에서는 비정상 종료된 연결을 13분 이상 감지하지 못할 수 있습니다. |

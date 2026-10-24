@@ -5180,12 +5180,12 @@ documents:
       code:
         05599af62d6c5c83afb73ece6d48b53ebda53473fef9ab6547379224f9c83ee9:
           missing_count: 1
-          reason: "CLUSTER SLOTS를 30초마다 호출하던 createCluster 예제는 slot 맵을 갱신하지 못해 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 COMMAND_TIMEOUT_MS 명령 대기 제한과 노드별 연결 상태를 감시해 RECREATE_AFTER_MS 후 클라이언트를 재생성하는 예제로 교체했습니다."
+          reason: "CLUSTER SLOTS를 30초마다 호출하던 createCluster 예제는 slot 맵을 갱신하지 못해 docs/services/azure-managed-redis/cluster-failover-recovery/index.md의 REQUEST_TIMEOUT_MS 요청 전체 제한, 노드별 연결 상태 감시, CONNECT_TIMEOUT_MS 연결 제한과 세대별 요청 추적으로 RECREATE_AFTER_MS 후 클라이언트를 재생성하는 예제로 교체했습니다."
           evidence:
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md
               category: code
-              fingerprint: 9f92743816e3aa579ad5599cc475035679f7a25f6a24077c7cf97e8b544d5da4
+              fingerprint: d375e280ebc5b942809be0522ab951fa4ccb34cda646a77511108804dd279374
               count: 1
             - kind: structure
               path: docs/services/azure-managed-redis/cluster-failover-recovery/index.md

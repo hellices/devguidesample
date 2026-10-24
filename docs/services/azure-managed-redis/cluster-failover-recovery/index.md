@@ -184,24 +184,57 @@ node-redis `createCluster`에는 주기적 토폴로지 갱신 옵션이 없습�
 
 Microsoft Learn과 Azure Node.js 가이드는 오류가 일정 시간 이상 지속되면 **연결 객체를 새로 만들라**고 권장합니다. 새 클러스터 클라이언트는 `10000` 포트에서 최신 토폴로지를 다시 읽습니다.
 
-재생성 판단은 명령 결과에 의존하지 않도록 두 가지를 분리합니다.
+재생성 판단과 요청 처리를 명령 결과에 의존하지 않도록 다음 네 가지를 분리합니다(`@redis/client` 5.11.0 구현 기준).
 
-- **명령 대기 시간 제한**: `reconnectStrategy`가 재시도를 계속하는 동안 node-redis는 보내지 못한 명령을 offline queue에 쌓아 두므로, 시간 제한이 없으면 `await`가 끝나지 않을 수 있습니다. `connectTimeout`은 연결 시도에만 적용되고 명령 대기에는 적용되지 않습니다. 클러스터 옵션 `commandOptions.timeout`을 지정하면 대기 중인 명령도 그 시간 안에 `TimeoutError`로 끝나고 queue에서 제거됩니다(`@redis/client` 5.11.0 구현 기준).
+- **요청 전체 시간 제한**: 클러스터 옵션 `commandOptions.timeout`은 아직 전송하지 못하고 offline queue에서 기다리는 시간만 제한합니다. 명령이 전송되면 타이머가 해제되므로 응답을 기다리는 시간은 제한하지 않고, `connectTimeout`도 명령 대기에는 적용되지 않습니다. 그래서 모든 Redis 호출을 `runRedis()`로 감싸 응답 대기까지 포함한 전체 시간(`REQUEST_TIMEOUT_MS`)을 애플리케이션에서 제한합니다. `commandOptions.timeout`은 offline queue에 쌓인 명령을 정리하는 용도로 함께 둡니다.
 - **노드별 상태 감시**: 정상 샤드에 대한 명령 성공으로 다른 샤드의 실패 기록이 지워지지 않도록, 타이머가 `cluster.masters`의 노드별 연결 상태(`isReady`)를 직접 확인합니다. 실패 시작 시각은 노드 주소별로 기록하고, 해당 노드가 회복되거나 클러스터를 재생성할 때만 지웁니다.
-- **이전 client 정리 유예**: 새 client로 바꾼 직후 이전 client를 `destroy()`하면 이전 client로 이미 보낸 명령이 정상 샤드에서 처리 중이어도 실패합니다. 명령 대기 시간 제한이 있으므로 그 시간이 지난 뒤 정리합니다. `close()`는 대기 중인 명령이 비기를 기다리는데, 사라진 노드에서는 이 조건이 충족되지 않을 수 있어 사용하지 않습니다.
+- **새 client 연결 시간 제한**: 초기 `connect()`도 `reconnectStrategy`에 따라 재시도하므로, 새 client가 발견한 샤드가 연결 전에 사라지면 `next.connect()`가 끝나지 않을 수 있습니다. 연결 전체에 `CONNECT_TIMEOUT_MS`를 두고, 넘으면 새 client를 파기해 재시도를 멈춘 뒤 다음 검사에서 최신 토폴로지로 다시 시도합니다.
+- **이전 client 정리**: client 세대별로 진행 중인 요청을 추적합니다. 새 client로 바꾼 뒤에는 이전 client의 요청이 모두 끝나거나 `REQUEST_TIMEOUT_MS`가 지날 때까지 기다렸다가 정리합니다. 그 시점에는 남은 요청이 이미 호출자에게 시간 초과로 반환된 상태입니다. `close()`는 queue가 비기를 기다리는데, 사라진 노드에서는 이 조건이 충족되지 않을 수 있어 사용하지 않습니다.
 
 ```javascript
-const COMMAND_TIMEOUT_MS = 3_000;
+const QUEUE_TIMEOUT_MS = 3_000;    // buildCluster()의 commandOptions.timeout: 전송 전 queue 대기만 제한
+const REQUEST_TIMEOUT_MS = 5_000;  // 응답 대기까지 포함한 요청 전체 제한
+const CONNECT_TIMEOUT_MS = 15_000; // 새 client의 토폴로지 조회와 샤드 연결 전체 제한
 const RECREATE_AFTER_MS = 30_000;
 const CHECK_INTERVAL_MS = 5_000;
 
-// OSS 정책용 createCluster 클라이언트를 반환하는 함수.
-// 옵션에 commandOptions: { timeout: COMMAND_TIMEOUT_MS }를 포함한다.
+class RequestTimeoutError extends Error {}
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function withTimeout(promise, ms, createError) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(createError()), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function safeDestroy(client) {
+  try {
+    client.destroy(); // 연결 재시도를 멈추고 남은 명령을 실패로 끝낸다
+  } catch {
+    // 이미 닫힌 client
+  }
+}
+
+// OSS 정책용 createCluster 클라이언트를 반환하는 함수
 let cluster = buildCluster();
 await cluster.connect();
 
+const pending = new Map([[cluster, new Set()]]); // client 세대 → 진행 중인 요청
 const failingSince = new Map(); // 노드 주소 → 연결 실패가 처음 관측된 시각
 let recreating = false;
+
+// 모든 Redis 호출은 이 함수를 거친다.
+function runRedis(command) {
+  const client = cluster;
+  const operations = pending.get(client);
+  const operation = command(client);
+  operations.add(operation);
+  operation.catch(() => {}).finally(() => operations.delete(operation));
+  return withTimeout(operation, REQUEST_TIMEOUT_MS,
+    () => new RequestTimeoutError('Redis request timed out'));
+}
 
 function checkNodes() {
   if (recreating) return;
@@ -231,27 +264,39 @@ async function recreateCluster() {
   recreating = true;
   const next = buildCluster();
   try {
-    await next.connect(); // 10000 포트에서 토폴로지를 새로 읽음
-    const previous = cluster;
-    cluster = next; // 이후 요청은 새 client로 보낸다
-    failingSince.clear();
-    // 이전 client로 이미 보낸 명령은 COMMAND_TIMEOUT_MS 안에 끝나거나 TimeoutError가 된다.
-    // 그 유예 시간이 지난 뒤 정리해야 정상 샤드로 처리 중인 명령이 연결 파기로 실패하지 않는다.
-    setTimeout(() => previous.destroy(), COMMAND_TIMEOUT_MS + 1_000).unref();
+    // 10000 포트에서 토폴로지를 새로 읽고 샤드에 연결한다
+    await withTimeout(next.connect(), CONNECT_TIMEOUT_MS,
+      () => new Error('Redis cluster connect timed out'));
   } catch {
-    next.destroy();
-  } finally {
+    safeDestroy(next); // 다음 검사에서 최신 토폴로지로 다시 시도한다
     recreating = false;
+    return;
   }
+  const previous = cluster;
+  pending.set(next, new Set());
+  cluster = next; // 이후 요청은 새 client로 보낸다
+  failingSince.clear();
+  recreating = false;
+  void retire(previous);
+}
+
+async function retire(previous) {
+  const operations = pending.get(previous) ?? new Set();
+  await Promise.race([Promise.allSettled([...operations]), sleep(REQUEST_TIMEOUT_MS)]);
+  pending.delete(previous);
+  safeDestroy(previous);
 }
 
 setInterval(checkNodes, CHECK_INTERVAL_MS).unref();
 
-// 사용 예: 명령은 항상 현재 cluster 변수를 통해 보내고, client 참조를 따로 보관하지 않는다.
-// await cluster.get('key'); // 최대 COMMAND_TIMEOUT_MS 후 TimeoutError
+// 사용 예: client 참조를 따로 보관하지 말고 항상 runRedis()로 호출한다.
+// const value = await runRedis((c) => c.get('key'));
 ```
 
-`buildCluster()`의 TLS·`nodeAddressMap`·`commandOptions` 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다. `TimeoutError` 같은 명령 실패는 아래 **Failover Plan 권장**의 대체 경로나 Circuit Breaker로 처리합니다.
+`buildCluster()`의 TLS·`nodeAddressMap`·`commandOptions` 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다. `RequestTimeoutError`·`TimeoutError` 같은 요청 실패는 아래 **Failover Plan 권장**의 대체 경로나 Circuit Breaker로 처리합니다.
+
+!!! warning "시간 초과된 쓰기는 결과가 확정되지 않습니다"
+    `RequestTimeoutError`를 받았거나 이전 client 정리로 요청이 끊긴 경우, 명령이 이미 전송됐다면 Redis에 반영됐는지 알 수 없습니다. 쓰기는 같은 값을 다시 써도 결과가 같은 형태(`SET key value`, 고유 키에 `SET ... NX`)로 설계하고, `INCR`·`LPUSH`처럼 반복하면 결과가 달라지는 명령은 무조건 재시도하지 말고 다시 읽어 확인하거나 요청 ID로 중복을 막습니다.
 
 **보완 포인트**:
 - `reconnectStrategy`에서 최대 재시도 횟수 제한 및 exponential backoff 적용
