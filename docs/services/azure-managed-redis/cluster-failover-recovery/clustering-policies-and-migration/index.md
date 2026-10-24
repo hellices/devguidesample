@@ -263,10 +263,18 @@ StatefulRedisConnection<String, String> connection = client.connect();
 
 **OSS**
 
-Azure의 Lettuce 모범 사례가 권장하는 토폴로지 갱신 설정을 적용한 예입니다.
+Azure의 Lettuce 모범 사례가 권장하는 노드 주소 매핑과 토폴로지 갱신 설정을 적용한 예입니다. Lettuce는 TLS에서 기본으로 호스트 이름까지 검증하므로 IP로 알려진 노드를 캐시 호스트 이름으로 연결해야 합니다. 매핑 조건은 Microsoft Learn Node.js 빠른 시작의 `nodeAddressMap`과 같이 "IP 주소이면 캐시 호스트 이름으로 바꾸기"를 사용합니다.
 
 ```java
-RedisClusterClient client = RedisClusterClient.create(uri);
+// Azure Lettuce 모범 사례의 MappingSocketAddressResolver 방식
+ClientResources resources = DefaultClientResources.builder()
+        .socketAddressResolver(MappingSocketAddressResolver.create(DnsResolvers.JVM_DEFAULT,
+                hap -> hap.getHostText().matches("\\d{1,3}(\\.\\d{1,3}){3}")
+                        ? HostAndPort.of(host, hap.getPort())
+                        : hap))
+        .build();
+
+RedisClusterClient client = RedisClusterClient.create(resources, uri);
 
 ClusterTopologyRefreshOptions refresh = ClusterTopologyRefreshOptions.builder()
         .enablePeriodicRefresh(Duration.ofSeconds(5))
@@ -285,15 +293,16 @@ client.setOptions(ClusterClientOptions.builder()
 StatefulRedisClusterConnection<String, String> connection = client.connect();
 ```
 
-TLS 인증서 검증에 실패하면 Azure Lettuce 가이드의 `MappingSocketAddressResolver` 예제처럼 노드 IP를 캐시 호스트 이름으로 매핑합니다.
-
 #### Jedis { #jedis }
 
 Microsoft Learn의 Java 빠른 시작은 Jedis와 `redis-authx-entraid`로 Microsoft Entra ID 인증을 구성합니다. 아래 예는 Jedis 7.2.0 이상의 빌더 API를 사용합니다.
 
 ```java
 JedisClientConfig config = DefaultJedisClientConfig.builder()
-        .ssl(true)
+        .sslOptions(SslOptions.builder().build())  // 인증서와 호스트 이름 검증(SslVerifyMode.FULL)
+        .hostAndPortMapper(hap -> hap.getHost().matches("\\d{1,3}(\\.\\d{1,3}){3}")
+                ? new HostAndPort(host, hap.getPort())  // OSS: IP로 알려진 노드를 캐시 호스트 이름으로
+                : hap)
         .user(username)
         .password(password)           // 또는 .authXManager(...)로 Microsoft Entra ID 사용
         .connectionTimeoutMillis(5_000)
@@ -325,12 +334,13 @@ RedisClusterClient jedis = RedisClusterClient.builder()
 - `connectionTimeoutMillis`(5000 이상)와 `socketTimeoutMillis`(1000) 값은 [Azure Jedis 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Java-Jedis.md)를 따릅니다.
 - `RedisClusterClient`와 `topologyRefreshPeriod`는 Jedis 공식 API([`ClusterClientBuilder`](https://github.com/redis/jedis/blob/master/src/main/java/redis/clients/jedis/builders/ClusterClientBuilder.java))입니다.
 - Jedis는 갱신 주기 권장값을 제시하지 않으므로 Azure Lettuce 모범 사례의 5초 주기에 맞췄습니다.
+- Microsoft Learn 빠른 시작의 `.ssl(true)`는 Jedis 7.5.0부터 호스트 이름까지 검증합니다([redis/jedis#4495](https://github.com/redis/jedis/pull/4495)). 7.4.x 이하에서는 인증서 체인만 확인하므로 위 예처럼 `SslOptions`(6.0.0 이상)를 사용합니다.
+- 호스트 이름을 검증하면 IP로 알려진 OSS 노드 연결이 실패하므로 `hostAndPortMapper`로 캐시 호스트 이름에 연결합니다. Microsoft Learn Node.js 빠른 시작의 `nodeAddressMap`과 같은 규칙이며, Jedis는 이 매퍼를 클러스터 노드 소켓에도 적용합니다([`DefaultJedisSocketFactory`](https://github.com/redis/jedis/blob/master/src/main/java/redis/clients/jedis/DefaultJedisSocketFactory.java)).
 
 7.2.0보다 이전 버전을 사용한다면 다음과 같이 대응합니다.
 
 - Enterprise / Non-clustered: `new JedisPooled(new HostAndPort(host, 10000), config)`를 사용합니다.
 - OSS: `topologyRefreshPeriod`를 받는 `JedisCluster` 생성자를 사용합니다(5.1.0 이상).
-- OSS에서 TLS 인증서 검증에 실패하면 `DefaultJedisClientConfig.builder().hostAndPortMapper(...)`로 노드 IP를 캐시 호스트 이름으로 매핑합니다.
 - 풀을 직접 구성한다면 Azure Jedis 가이드에 따라 유휴 연결 제거 시간(`minEvictableIdleTimeMillis`)을 10분보다 짧게 둡니다.
 
 #### Spring Boot { #spring-boot }
@@ -356,6 +366,20 @@ spring.data.redis.lettuce.cluster.refresh.adaptive=true
 ```
 
 OSS 설정의 토폴로지 갱신 값(5초 주기, dynamic refresh sources 끄기, adaptive 켜기)은 [Azure Lettuce 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Lettuce%20Best%20Practices.md)의 설정을 Spring Boot 공식 속성([Application Properties](https://docs.spring.io/spring-boot/appendix/application-properties/index.html)의 `spring.data.redis.lettuce.cluster.refresh.*`)으로 옮긴 것입니다.
+
+노드 IP를 캐시 호스트 이름으로 매핑하는 [Lettuce](#lettuce)의 resolver는 속성으로 설정할 수 없습니다. Spring Boot 공식 문서([Connecting to Redis](https://docs.spring.io/spring-boot/reference/data/nosql.html#data.nosql.redis.connecting))가 안내하는 `ClientResourcesBuilderCustomizer` 빈으로 등록합니다.
+
+```java
+@Bean
+ClientResourcesBuilderCustomizer mapNodeIpToCacheHost() {
+    String host = "<cache-name>.<region>.redis.azure.net";
+    return builder -> builder.socketAddressResolver(
+            MappingSocketAddressResolver.create(DnsResolvers.JVM_DEFAULT,
+                    hap -> hap.getHostText().matches("\\d{1,3}(\\.\\d{1,3}){3}")
+                            ? HostAndPort.of(host, hap.getPort())
+                            : hap));
+}
+```
 
 #### Redisson
 
