@@ -219,7 +219,7 @@ const cluster = createCluster({
 - 다만 재생성 중 처리 중인 요청의 정리, 연결 시도와 토폴로지 조회의 시간 제한까지 안전하게 직접 구현하기는 까다롭습니다. 가능하면 6.0.0 업그레이드나 방안 1을 우선 검토합니다.
 - 다른 클라이언트를 쓸 수 있다면 ioredis의 공식 옵션 [`slotsRefreshInterval`](https://github.com/redis/ioredis#cluster)(기본 비활성)로 주기적 토폴로지 갱신을 켤 수 있습니다.
 
-`buildCluster()`에 해당하는 TLS·`nodeAddressMap` 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다. 요청 실패는 아래 **Failover Plan 권장**의 대체 경로나 Circuit Breaker로 처리합니다.
+`defaults`에 넣을 TLS·인증과 `nodeAddressMap`까지 포함한 전체 설정 예는 [가이드의 Node.js 절](clustering-policies-and-migration/index.md#nodejs)에 있습니다. 요청 실패는 아래 **Failover Plan 권장**의 대체 경로나 Circuit Breaker로 처리합니다.
 
 **보완 포인트**:
 - 기존 코드의 `connectTimeout: 1000`을 제거하고 node-redis 기본값을 사용합니다. `connectTimeout`은 기본 5000ms로 Microsoft Learn 권장값과 같고, `reconnectStrategy`는 기본으로 지수 백오프(최대 2000ms)에 0~200ms 지터를 더합니다.
