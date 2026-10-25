@@ -370,6 +370,11 @@ Microsoft 또는 Azure의 동작, 지원 상태, 제한, 버전, 구성 단계�
 `verification_status: needs-review`로 남깁니다. Kubernetes·CNCF 세부
 동작은 필요한 경우 upstream 공식 문서도 함께 확인합니다.
 
+날짜만 기록하는 `sources_checked_at`과 `last_verified`는 **KST(UTC+09:00)**
+기준으로 작성합니다. 로컬·PR CI·Pages의 검증기도 같은 기준으로 오늘 날짜를
+판정하며, KST 기준의 미래 날짜는 허용하지 않습니다. 실행 환경의 시간대
+차이를 피하려고 실제 확인일을 앞당기거나 검증 날짜를 삭제하지 않습니다.
+
 ## 본문과 공개 안전성
 
 - 페이지마다 하나의 H1을 사용하고 H2/H3 순서를 건너뛰지 않습니다.

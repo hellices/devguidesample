@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Iterable, Mapping
@@ -13,6 +13,7 @@ import yaml
 
 
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+DOCUMENTATION_TIMEZONE = timezone(timedelta(hours=9), "KST")
 COMMON_REQUIRED_FIELDS = (
     "title",
     "description",
@@ -187,6 +188,10 @@ def iter_public_documents(
         yield load_document(path, docs_dir=root)
 
 
+def _documentation_today() -> date:
+    return datetime.now(DOCUMENTATION_TIMEZONE).date()
+
+
 def _is_date(value: Any) -> bool:
     return isinstance(value, date) and not isinstance(value, datetime)
 
@@ -256,7 +261,7 @@ def validate_source_metadata(
     today: date | None = None,
 ) -> list[str]:
     """Validate official-source evidence without validating other page fields."""
-    current_date = today or date.today()
+    current_date = today or _documentation_today()
     errors: list[str] = []
     if "sources_checked_at" not in metadata:
         errors.append("missing required field: sources_checked_at")
@@ -280,7 +285,7 @@ def validate_document(
     today: date | None = None,
 ) -> list[str]:
     """Return every content-contract violation for one public document."""
-    current_date = today or date.today()
+    current_date = today or _documentation_today()
     metadata = document.metadata
     errors: list[str] = []
 
