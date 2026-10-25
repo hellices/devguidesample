@@ -1,5 +1,5 @@
 ---
-title: Azure Managed Redis Eviction Policy와 TTL 설계 가이드
+title: "Azure Managed Redis Eviction·TTL: 메모리 부족 처리와 키 만료 설계"
 description: Azure Managed Redis의 eviction policy 설정과 기본값, allkeys-lru 등 주요 정책의 동작 원리, 일반 캐시·세션·영구 저장소별 권장 정책과 클라이언트 TTL의 의미를 정리합니다.
 document_type: guide
 services:
@@ -43,7 +43,7 @@ related_guides:
 - ../clustering-policies/index.md
 ---
 
-# Azure Managed Redis Eviction Policy와 TTL 설계 가이드
+# Azure Managed Redis Eviction·TTL: 메모리 부족 처리와 키 만료 설계 { #azure-managed-redis-eviction-policy-ttl }
 
 Redis는 메모리가 가득 차면 **eviction policy**에 따라 키를 지우고, 키에 **TTL**이 있으면 그 시간이 지난 뒤 키를 지웁니다. 두 가지 모두 "키가 사라지는" 동작이지만 목적과 결과가 다릅니다. 이 가이드는 Azure Managed Redis에서 두 동작을 어떻게 설정하고 용도별로 어떻게 조합할지 정리합니다.
 
@@ -52,7 +52,7 @@ Redis는 메모리가 가득 차면 **eviction policy**에 따라 키를 지우�
 
 ---
 
-## 한눈에 보기 { #at-a-glance }
+## 캐시·세션·원본 데이터별 Eviction·TTL·알림 설정 { #at-a-glance }
 
 | 용도 | 권장 정책 | TTL | 함께 설정할 것 |
 |---|---|---|---|
@@ -65,7 +65,7 @@ Redis는 메모리가 가득 차면 **eviction policy**에 따라 키를 지우�
 
 ---
 
-## 1. Eviction과 TTL의 차이 { #eviction-vs-ttl }
+## 1. TTL은 키 수명, Eviction 정책은 메모리 부족 시 동작을 결정 { #eviction-vs-ttl }
 
 | 구분 | TTL(만료) | Eviction(축출) |
 |---|---|---|
@@ -79,9 +79,9 @@ Microsoft Learn은 키에 만료 시간을 설정하라고 권장합니다. 만�
 
 ---
 
-## 2. Azure Managed Redis에서의 eviction 설정 { #amr-settings }
+## 2. 기본 volatile-lru와 Azure 관리 경로의 정책 설정 { #amr-settings }
 
-### 2.1 지원 정책과 기본값
+### 2.1 기본값은 VolatileLRU, 지원 목록에서 정책 선택 { #21 }
 
 Azure Managed Redis는 다음 8개 정책을 지원하며 기본값은 `VolatileLRU`입니다.
 
@@ -89,7 +89,7 @@ Azure Managed Redis는 다음 8개 정책을 지원하며 기본값은 `Volatile
 
 Redis 8.6에 추가된 `allkeys-lrm`·`volatile-lrm`(최근 수정 기준)은 Azure Managed Redis(Redis 7.4)에서 선택할 수 없습니다.
 
-### 2.2 설정 방법
+### 2.2 Portal·CLI·IaC에서 evictionPolicy 설정 { #22 }
 
 - **Azure Portal**: 캐시 리소스의 **Settings > Advanced settings**에서 **Eviction Policy**를 바꿉니다.
 - **Azure CLI**: 생성 시 `az redisenterprise create --eviction-policy`, 생성 후 `az redisenterprise database update --eviction-policy`를 사용합니다.
@@ -111,7 +111,7 @@ az redisenterprise database show \
 
 Azure Managed Redis는 Redis Enterprise 기반이므로 `CONFIG SET`으로 `maxmemory-policy`, `maxmemory-samples`, `lfu-log-factor`, `lfu-decay-time` 같은 eviction 관련 값을 바꿀 수 없습니다. Redis Software가 지원하는 설정 목록에 이 값들이 없습니다. 정책은 위의 관리 경로로만 바꿉니다.
 
-### 2.3 샤드 구조와 제약 사항 { #constraints }
+### 2.3 샤드별 메모리 압박과 RediSearch·지역 복제 제약 { #constraints }
 
 노드와 샤드의 구조는 [클러스터링 정책 개요의 아키텍처 그림](../clustering-policies/index.md#cluster-policies)을 참고합니다.
 
@@ -124,7 +124,7 @@ Azure Managed Redis는 노드마다 여러 Redis 프로세스(샤드)를 실행�
 
 ---
 
-## 3. 정책별 동작 { #policies }
+## 3. 삭제 후보·선택 기준·쓰기 거부 여부로 구분하는 정책 { #policies }
 
 아래 그림은 메모리 한도에 도달한 샤드에 메모리를 늘리는 쓰기 명령(`SET` 등)이 들어왔을 때 정책별로 어떻게 처리되는지 보여 줍니다.
 
@@ -143,7 +143,7 @@ Azure Managed Redis는 노드마다 여러 Redis 프로세스(샤드)를 실행�
 
 `volatile-*` 정책은 **TTL이 있는 키가 하나도 없으면 `noeviction`처럼 동작**합니다.
 
-### 3.1 allkeys-lru: Redis의 근사 LRU 알고리즘 { #allkeys-lru }
+### 3.1 allkeys-lru: 샘플링으로 오래 접근하지 않은 키 선택 { #allkeys-lru }
 
 [![샤드의 키 공간에서 일부 키를 무작위로 샘플링해 유휴 시간 순으로 정렬된 후보 풀에 넣고, 유휴 시간이 가장 긴 키를 삭제한다. 메모리가 한도 아래로 내려갈 때까지 이 과정을 반복한다.](images/approximated-lru.svg)](images/approximated-lru.svg)
 
@@ -172,7 +172,7 @@ Redis Open Source에서는 `maxmemory-samples`(기본 5)를 10으로 올려 정�
 - 대량 일회성 조회(전체 스캔, 배치 읽기)가 있으면 최근 접근한 일회성 키가 오래 쓰던 인기 키를 밀어낼 수 있습니다. 이런 경우 `allkeys-lfu`를 검토합니다.
 - eviction이 상시 발생한다면 메모리가 부족하다는 신호입니다. TTL과 SKU 크기를 함께 조정합니다.
 
-### 3.2 allkeys-lfu: 접근 빈도 기반 { #allkeys-lfu }
+### 3.2 allkeys-lfu: 접근 빈도가 낮은 키를 우선 선택 { #allkeys-lfu }
 
 Redis 4.0부터 제공되며, 키마다 접근 빈도를 추적해 **적게 쓰인 키**를 지웁니다.
 
@@ -182,28 +182,28 @@ Redis 4.0부터 제공되며, 키마다 접근 빈도를 추적해 **적게 쓰�
 
 인기 키 집합이 비교적 안정적이고 일회성 대량 접근이 섞이는 캐시에서 `allkeys-lru`보다 적중률이 높을 수 있습니다. Azure Managed Redis에서는 `lfu-log-factor`, `lfu-decay-time`을 조정할 수 없으므로 기본 동작으로 비교합니다.
 
-### 3.3 volatile-lru: Azure Managed Redis 기본값 { #volatile-lru }
+### 3.3 volatile-lru: TTL 있는 키만 축출하는 기본 정책 { #volatile-lru }
 
 TTL이 있는 키 중에서 가장 오래 사용하지 않은 키를 지웁니다. TTL이 없는 키는 **절대 지우지 않습니다**.
 
 - 캐시 키(TTL 있음)와 지워지면 안 되는 키(TTL 없음)를 한 인스턴스에 둘 때 유용합니다. Redis 문서는 이런 경우에도 가능하면 인스턴스를 나누라고 권장합니다.
 - 애플리케이션이 TTL을 거의 쓰지 않는다면 사실상 `noeviction`과 같습니다. 메모리가 가득 차면 메모리를 늘리는 쓰기 명령이 **out of memory 오류**로 실패합니다. `DEL`처럼 메모리를 늘리지 않는 명령과 읽기는 계속 동작합니다.
 
-### 3.4 volatile-ttl과 random 계열
+### 3.4 volatile-ttl은 남은 TTL, random 계열은 무작위로 선택 { #34-volatile-ttl-random }
 
 - **`volatile-ttl`**: 남은 TTL이 가장 짧은 키부터 지웁니다. 애플리케이션이 "덜 중요한 데이터에는 짧은 TTL"을 주는 식으로 삭제 순서를 직접 표시할 수 있을 때 씁니다.
 - **`allkeys-random`**: 모든 키를 비슷한 빈도로 순환하며 읽는 패턴처럼 LRU·LFU가 의미 없는 경우에 씁니다.
 - **`volatile-random`**: 실무에서 선택할 이유가 거의 없습니다.
 
-### 3.5 noeviction: 지우지 않고 쓰기를 거부 { #noeviction }
+### 3.5 noeviction: 메모리 부족 시 키 삭제 대신 쓰기 오류 { #noeviction }
 
 메모리가 가득 차면 키를 지우지 않고 **새 데이터를 쓰는 명령을 오류로 거부**합니다. 읽기 명령은 정상 동작합니다. 데이터 유실보다 쓰기 실패가 나은 경우에 사용하며, 애플리케이션이 쓰기 오류를 처리하고 운영자가 메모리 사용률을 감시해야 합니다.
 
 ---
 
-## 4. 용도별 권장 정책 { #by-workload }
+## 4. 재생성 가능한 캐시와 보존할 원본을 구분해 정책 선택 { #by-workload }
 
-### 4.1 일반 캐시 (cache-aside) { #general-cache }
+### 4.1 일반 캐시: allkeys-lru와 신선도 기준 TTL { #general-cache }
 
 원본 데이터가 DB 등에 따로 있고 Redis에는 복사본만 두는 경우입니다.
 
@@ -211,7 +211,7 @@ TTL이 있는 키 중에서 가장 오래 사용하지 않은 키를 지웁니�
 - **TTL**: **데이터 신선도** 기준으로 설정합니다(예: 상품 정보 10분). TTL이 있으면 메모리 한도에 덜 도달합니다.
 - **애플리케이션**: 캐시에 키가 없으면 원본에서 읽어 다시 채웁니다. eviction은 단지 캐시 미스로 나타납니다.
 
-### 4.2 세션 저장소 { #session-store }
+### 4.2 세션: 모든 키에 TTL을 설정하고 축출 발생을 감시 { #session-store }
 
 웹 애플리케이션의 로그인 세션처럼 **만료 시간이 본질적인 데이터**입니다. 세션 키가 eviction으로 지워지면 사용자는 **예고 없이 로그아웃**됩니다.
 
@@ -225,7 +225,7 @@ TTL이 있는 키 중에서 가장 오래 사용하지 않은 키를 지웁니�
     - 세션에 큰 객체를 넣지 않습니다.
 - **세션 유실을 허용할 수 없다면**(장바구니, 다단계 결제 진행 상태 등) 그 데이터는 4.3의 영구 저장소 기준으로 다루거나 원본 DB에 저장합니다.
 
-### 4.3 영구 저장소로 사용 { #primary-store }
+### 4.3 원본 데이터: noeviction·지속성·정기 내보내기로 복구 대비 { #primary-store }
 
 Redis에만 원본이 있는 데이터(카운터, 순위표, 상태 저장 등)입니다.
 
@@ -237,7 +237,7 @@ Redis에만 원본이 있는 데이터(카운터, 순위표, 상태 저장 등)�
 - **애플리케이션**: 메모리가 가득 차면 쓰기가 오류로 실패하므로 재시도·알림·대체 처리 로직을 둡니다.
 - **운영**: Used Memory Percentage가 계속 75%를 넘으면 상위 SKU로 확장합니다(Microsoft Learn 권장).
 
-### 4.4 캐시와 영구 데이터를 한 인스턴스에 둘 때 { #mixed }
+### 4.4 혼합 인스턴스: TTL은 캐시 키에만 적용하고 분리 검토 { #mixed }
 
 - **정책**: `volatile-lru`(기본값)
 - **규칙**: 캐시 키에는 **반드시** TTL을 걸고, 영구 키에는 TTL을 걸지 않습니다. 캐시 키에 TTL을 빠뜨리면 그 키는 영구 키처럼 메모리를 차지합니다.
@@ -245,7 +245,7 @@ Redis에만 원본이 있는 데이터(카운터, 순위표, 상태 저장 등)�
 
 ---
 
-## 5. 클라이언트에서 TTL을 건다는 의미 { #client-ttl }
+## 5. TTL은 클라이언트 타이머가 아니라 서버의 키 만료 정보 { #client-ttl }
 
 [![클라이언트가 SET key v EX 600을 보내면 Redis 서버가 키와 만료 시각을 저장해 volatile 키가 된다. 이후 EXPIRE 재호출이나 세션 touch는 그 시점부터 만료 시각을 다시 설정하고, EX 없는 SET 덮어쓰기는 TTL을 제거해 영구 키로 만든다. 만료 시각이 지나면 접근할 때 삭제되거나 주기적 샘플링으로 삭제되고, 삭제는 복제본과 AOF에 DEL로 전파된다.](images/ttl-lifecycle.svg)](images/ttl-lifecycle.svg)
 
@@ -257,7 +257,7 @@ Redis에만 원본이 있는 데이터(카운터, 순위표, 상태 저장 등)�
 - TTL은 **키 단위** 속성입니다. Hash나 List에 TTL을 걸면 키 전체가 함께 만료됩니다.
 - Redis 용어로 TTL이 있는 키를 *volatile* 키라고 부릅니다. `volatile-*` 정책이 대상으로 삼는 키가 바로 이 키입니다.
 
-### 5.2 TTL을 설정하는 방법
+### 5.2 값과 TTL을 SET에서 함께 지정해 만료 누락 방지 { #52-ttl }
 
 값을 쓰는 명령과 TTL을 **한 번에** 설정합니다. `SET` 후 `EXPIRE`를 따로 보내면 그 사이에 애플리케이션이 죽었을 때 TTL 없는 키가 남습니다.
 
@@ -291,7 +291,7 @@ spring.cache.redis.time-to-live=10m
 
 Spring Cache에서 `time-to-live`를 설정하지 않으면 캐시 항목이 TTL 없이 저장됩니다. 기본 정책 `volatile-lru`와 만나면 eviction 대상이 되지 않으므로 특히 주의합니다.
 
-### 5.3 TTL이 유지되거나 사라지는 경우
+### 5.3 TTL 옵션 없는 SET 덮어쓰기는 기존 TTL 제거 { #53-ttl }
 
 | 동작 | TTL 변화 |
 |---|---|
@@ -305,7 +305,7 @@ Spring Cache에서 `time-to-live`를 설정하지 않으면 캐시 항목이 TTL
 
 가장 흔한 실수는 캐시를 갱신할 때 `SET`만 다시 호출해 **TTL이 사라지는 것**입니다. 갱신할 때도 `EX`를 함께 주거나 `KEEPTTL`을 사용합니다.
 
-### 5.4 만료된 키가 실제로 지워지는 시점
+### 5.4 만료된 키는 조회와 주기적 검사로 삭제 { #54 }
 
 Redis는 두 가지 방식으로 만료된 키를 지웁니다.
 
@@ -314,7 +314,7 @@ Redis는 두 가지 방식으로 만료된 키를 지웁니다.
 
 따라서 만료 시각이 지난 키가 **잠시 메모리에 남아 있을 수는 있지만 클라이언트에 반환되지는 않습니다**. 만료는 주 노드에서 처리되며 복제본과 AOF에는 `DEL`로 전달됩니다.
 
-### 5.5 TTL 설계 팁
+### 5.5 신선도 기준으로 TTL을 정하고 대량 동시 만료 분산 { #55-ttl }
 
 - **신선도 기준으로 정합니다.** 원본 데이터가 바뀐 뒤 얼마 동안 이전 값을 보여 줘도 되는지가 TTL의 기준입니다.
 - **만료 시각을 분산합니다.** 같은 시점에 대량으로 캐시를 채우면서 같은 TTL을 주면 한꺼번에 만료되어 원본 DB에 부하가 몰릴 수 있습니다. TTL에 작은 무작위 값을 더하는 방식이 일반적으로 쓰입니다.
@@ -322,7 +322,7 @@ Redis는 두 가지 방식으로 만료된 키를 지웁니다.
 
 ---
 
-## 6. 검증과 모니터링 { #monitoring }
+## 6. 메모리 사용률·축출·만료·적중률로 원인 구분 { #monitoring }
 
 Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys, Cache Hits, Cache Misses는 초당 비율로 표시됩니다.
 
@@ -342,7 +342,7 @@ Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys
 
 ---
 
-## 7. 정책 변경과 롤백
+## 7. 정책 변경 전 TTL 없는 키의 축출 위험과 쓰기 실패 조건 확인 { #7 }
 
 - 정책은 Portal이나 `az redisenterprise database update --eviction-policy`로 바꾸며, 이전 값으로 다시 바꾸면 롤백됩니다. 정책 변경 자체는 기존 키를 지우지 않고, 다음에 메모리 한도에 도달했을 때 어떤 키를 지울지만 바꿉니다.
 - `noeviction`이나 `volatile-*`에서 `allkeys-*`로 바꾸면 **TTL 없는 키도 삭제 대상**이 됩니다. 영구 데이터가 섞여 있지 않은지 먼저 확인합니다.
@@ -357,8 +357,8 @@ Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys
 
 ## 관련 문서
 
-- [Azure Managed Redis 클러스터링 정책 이해와 선택](../clustering-policies/index.md): 클러스터링 정책과 샤드별 동작을 함께 확인합니다.
-- [Azure Managed Redis Cluster Failover 장애 분석 및 복구 전략](../cluster-failover-recovery/index.md): OSS 정책에서 노드 교체 후 연결이 복구되지 않은 장애 사례입니다.
+- [Azure Managed Redis 클러스터링 정책: 연결 방식·명령 제약에 따른 선택](../clustering-policies/index.md): 클러스터링 정책과 샤드별 동작을 함께 확인합니다.
+- [Azure Managed Redis OSS: 유지보수 후 재연결 실패와 재기동 복구](../cluster-failover-recovery/index.md): OSS 정책에서 노드 교체 후 연결이 복구되지 않은 장애 사례입니다.
 
 ## 공식 참고 자료
 

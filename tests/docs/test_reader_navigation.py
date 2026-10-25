@@ -3,6 +3,7 @@ from __future__ import annotations
 from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
+import re
 from types import SimpleNamespace
 from urllib.parse import urljoin
 
@@ -197,6 +198,33 @@ def targets(markdown: str) -> list[str]:
     parser = Links()
     parser.feed(renderer.convert(body))
     return parser.targets
+
+
+@pytest.mark.parametrize("mkdocs_mode", [False, True], ids=["plain-markdown", "mkdocs"])
+def test_heading_guidance_anchor_works_without_mkdocs_attributes(mkdocs_mode: bool) -> None:
+    root = Path(__file__).parents[2]
+    source = (root / "docs/contributing/index.md").read_text(encoding="utf-8")
+    body = source.split("---", 2)[2]
+    fragment = "content-first-headings"
+    named_anchor = f'<a name="{fragment}"></a>'
+    if mkdocs_mode:
+        config = load_config(config_file=str(root / "mkdocs.yml"))
+        renderer = Markdown(
+            extensions=config.markdown_extensions, extension_configs=config.mdx_configs
+        )
+    else:
+        renderer = Markdown()
+
+    rendered = renderer.convert(body)
+
+    assert rendered.count(named_anchor) == 1
+    assert re.search(
+        re.escape(named_anchor) + rf"\s*\n## [^\n]+\{{ #{fragment} \}}",
+        body,
+    )
+    if mkdocs_mode:
+        assert f'<h2 id="{fragment}">' in rendered
+        assert rendered.count(f'id="{fragment}"') == 1
 
 
 @pytest.mark.parametrize("path", ["services/azure-monitor/index.md", "services/azure-storage/index.md"])

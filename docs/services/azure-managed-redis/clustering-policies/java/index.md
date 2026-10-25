@@ -1,5 +1,5 @@
 ---
-title: Azure Managed Redis Java 정책별 연결 가이드
+title: "Azure Managed Redis Java: 정책별 클라이언트 선택과 토폴로지 갱신"
 description: Lettuce·Jedis의 정책별 연결과 TLS·토폴로지 갱신을 설명하고 Spring Boot·Redisson의 적용 지점을 구분합니다.
 document_type: guide
 topic_order: 2
@@ -60,11 +60,11 @@ related_guides:
 - ../../migration-from-azure-cache/index.md
 ---
 
-# Azure Managed Redis Java 정책별 연결 가이드
+# Azure Managed Redis Java: 정책별 클라이언트 선택과 토폴로지 갱신 { #azure-managed-redis-java }
 
 Java에서는 라이브러리 선택과 Azure Managed Redis의 정책을 함께 확인합니다. 정책 자체의 설명은 [정책 개요](../index.md), 서비스 이전 절차는 [마이그레이션 가이드](../../migration-from-azure-cache/index.md)에 모아 두었습니다.
 
-## 전제 조건과 예제 범위
+## 예제는 접근 키 인증 기준이며 Entra ID에는 토큰 갱신 필요 { #_1 }
 
 아래 Java 코드는 기존 프로젝트의 초기화 코드에 넣는 **구성 단편**입니다. import·클래스 선언·애플리케이션 수명주기는 생략하되, 사용되는 입력과 타입은 다음과 같이 구분합니다.
 
@@ -86,7 +86,7 @@ if (host == null || host.isBlank() || password == null || password.isBlank()) {
 String username = "default";
 ```
 
-## Lettuce와 Jedis의 연결 선택 { #lettuce-vs-jedis }
+## Lettuce·Jedis: RedisClient와 RedisClusterClient를 정책에 맞게 선택 { #lettuce-vs-jedis }
 
 | 항목 | Lettuce | Jedis 7.2.0 예제 |
 |---|---|---|
@@ -98,9 +98,9 @@ String username = "default";
 
 두 라이브러리에 **이름이 같은 클래스**가 있습니다. 아래 절에서는 생성자의 패키지를 명시해 구분합니다. 일반 연결인지 클러스터 연결인지는 이름만이 아니라 실제 리소스 정책과 맞춰야 합니다.
 
-## Lettuce { #lettuce }
+## Lettuce: TLS 주소 매핑과 주기적·적응형 토폴로지 갱신 { #lettuce }
 
-### 공통 연결 정보
+### RedisURI와 SocketOptions로 인증·TLS·연결 timeout 설정 { #_2 }
 
 이 절의 `RedisURI`, `SocketOptions`는 `io.lettuce.core` 타입이고, `Duration`은 `java.time.Duration`입니다.
 
@@ -115,7 +115,7 @@ SocketOptions socketOptions = SocketOptions.builder()
         .build();
 ```
 
-### Enterprise / Non-clustered
+### Enterprise·Non-clustered: RedisClient로 단일 엔드포인트 연결 { #enterprise-non-clustered }
 
 ```java
 io.lettuce.core.RedisClient client = io.lettuce.core.RedisClient.create(uri);
@@ -129,7 +129,7 @@ try (var connection = client.connect()) {
 }
 ```
 
-### OSS
+### OSS: RedisClusterClient에 주소 매핑과 갱신 옵션 적용 { #oss }
 
 `ClientResources`, `DefaultClientResources`, `MappingSocketAddressResolver`, `DnsResolvers`는 `io.lettuce.core.resource`, `HostAndPort`는 `io.lettuce.core.internal` 타입입니다. 아래 매핑은 **IPv4로 알려진 노드 주소**를 캐시 호스트 이름으로 바꾸는 예입니다. IPv6 등 다른 주소 형식을 사용한다면 그 형식도 처리해야 합니다.
 
@@ -166,9 +166,9 @@ try (var connection = client.connect()) {
 
 5초 주기는 갱신 설정이지 5초 복구 보장이 아닙니다. 기본값은 라이브러리 버전별로 달라질 수 있으므로 사용할 갱신 정책을 명시합니다. 예제는 일회성 확인 후 정리하지만 실제 서버에서는 연결·클라이언트·리소스를 재사용하고 종료 시 닫습니다.
 
-## Jedis { #jedis }
+## Jedis 7.2.0: TLS 검증과 주기적 슬롯 갱신을 빌더로 구성 { #jedis }
 
-### 공통 인증·TLS 설정
+### SslOptions와 주소 매핑으로 TLS 호스트 이름 검증 { #tls }
 
 이 절의 `DefaultJedisClientConfig`, `SslOptions`, `SslVerifyMode`, `HostAndPort`는 모두 `redis.clients.jedis` 타입입니다. `Set`은 `java.util.Set`입니다.
 
@@ -190,7 +190,7 @@ var config = DefaultJedisClientConfig.builder()
 
 `SslOptions`로 인증서와 호스트 이름 검증을 명시합니다. IPv4 주소 매핑은 OSS의 발견된 노드 연결에도 적용됩니다. timeout의 시작 값은 [Azure Jedis 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Java-Jedis.md)를 따르되 실제 지연 요구에 맞춥니다.
 
-### Enterprise / Non-clustered
+### Enterprise·Non-clustered: RedisClient 빌더로 일반 연결 { #enterprise-non-clustered_1 }
 
 ```java
 try (var client = redis.clients.jedis.RedisClient.builder()
@@ -201,7 +201,7 @@ try (var client = redis.clients.jedis.RedisClient.builder()
 }
 ```
 
-### OSS
+### OSS: RedisClusterClient와 topologyRefreshPeriod 설정 { #oss_1 }
 
 ```java
 try (var client = redis.clients.jedis.RedisClusterClient.builder()
@@ -217,7 +217,7 @@ try (var client = redis.clients.jedis.RedisClusterClient.builder()
 
 위 빌더 예제는 Jedis **7.2.0** API를 기준으로 합니다. 이전 버전의 `JedisPooled`·`JedisCluster` 생성자를 사용하는 프로젝트는 자기 버전의 API와 업그레이드 변경 사항을 확인합니다. 라이브러리만 바꿨다고 기존 연결 풀·인증 설정이 자동으로 동일해지는 것은 아닙니다.
 
-## Spring Boot { #spring-boot }
+## Spring Boot 3.5·4.0: 정책별 연결 속성과 Lettuce 갱신 설정 { #spring-boot }
 
 `spring-boot-starter-data-redis`의 기본 클라이언트는 Lettuce입니다. 다음 속성 예제는 **Spring Boot 3.5와 4.0**의 Redis 속성을 기준으로 합니다. `spring.data.redis.url` 등 기존 설정이 남아 새 host·port 설정을 덮어쓰지 않는지도 확인합니다.
 
@@ -269,11 +269,11 @@ mapRedisNodeAddresses() {
 
 이 빈 예제의 패키지는 Boot 3.5 기준입니다. Boot 4 계열로 옮길 때는 자동 구성 패키지 변경도 확인합니다. Jedis를 선택했다면 Lettuce 전용 속성으로 Jedis의 갱신이 설정된다고 기대하지 않습니다.
 
-## Redisson을 사용하는 프로젝트 { #redisson }
+## Redisson: 일반·클러스터 연결 모드와 scanInterval 선택 { #redisson }
 
 이미 Redisson을 사용한다면 일반 연결의 `useSingleServer()`와 OSS용 `useClusterServers()`를 구분합니다. 주기적 토폴로지 스캔은 `scanInterval`을 검토합니다. 구체적인 버전·TLS·풀 설정은 [Redisson 공식 구성 문서](https://redisson.pro/docs/configuration/)를 따릅니다. Lettuce·Jedis의 옵션 이름을 그대로 적용하지 않습니다.
 
-## 적용 후 확인
+## PING 이후 실제 키 접근·연결 복구·토큰 갱신 검증 { #_3 }
 
 1. 위 `PING`은 초기 연결 확인일 뿐입니다. 실제 애플리케이션에서 TTL 있는 테스트 키의 쓰기·읽기와, OSS라면 여러 슬롯의 키 접근을 확인합니다.
 2. 토폴로지 갱신 설정이 실제 생성된 클라이언트에 적용되는지 확인합니다. Spring Boot에서는 선택한 라이브러리와 활성 프로필도 확인합니다.
