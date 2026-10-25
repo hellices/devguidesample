@@ -76,6 +76,7 @@ research/microsoft-foundry/agent-memory-overview/index.md
 research/microsoft-foundry/agent-memory-pipeline-retrieval/index.md
 research/microsoft-foundry/agent-memory-production-evaluation/index.md
 research/microsoft-foundry/agent-memory-taxonomy/index.md
+services/azure-managed-redis/cluster-failover-recovery/clustering-policies-and-migration/index.md
 """.split()
 
 

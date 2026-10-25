@@ -336,6 +336,8 @@ def test_repository_legacy_hdinsight_index_links_to_canonical_benchmark() -> Non
     assert "../../services/azure-monitor/hdinsight-kafka-monitoring/catch-up-benchmark/index.md" in legacy
     assert "kafka-catchup-sku-fetch-benchmark/index.md" not in legacy
     for redirect, canonical in catalog.redirects.items():
+        if redirect.parts[0] == "services":
+            continue
         service_index = redirect.parent.parent / "index.md"
         assert service_index in pages
         assert f"../../{canonical.as_posix()}" in pages[service_index]
@@ -756,6 +758,28 @@ def test_redirect_pages_point_to_canonical_topic_entries_and_stay_out_of_indexes
 
     pages = build_index_pages(documents, taxonomy, catalog=catalog)
     assert all("old-topic" not in content for content in pages.values())
+
+
+def test_moved_service_child_does_not_generate_an_index_over_its_former_topic(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    old_entry = "services/azure-monitor/incident/index.md"
+    old_child = "services/azure-monitor/incident/combined-guide/index.md"
+    new_entry = "services/azure-monitor/policies/index.md"
+    write_topic_document(tmp_path, old_entry, "Incident", tags=[])
+    write_topic_document(
+        tmp_path, new_entry, "Policies", tags=[], redirect_from=[old_child],
+    )
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+
+    pages = build_index_pages(catalog.documents, taxonomy, catalog=catalog)
+    redirects = build_redirect_pages(catalog)
+
+    assert PurePosixPath(old_entry) not in pages
+    assert PurePosixPath(old_child) not in pages
+    assert all("combined-guide" not in content for content in pages.values())
+    assert 'href="../../policies/"' in redirects[PurePosixPath(old_child)]
+    assert yaml.safe_load(redirects[PurePosixPath(old_child)].split("---", 2)[1])["search"]["exclude"]
 
 
 def test_secondary_service_pages_show_the_matching_service_on_topic_cards(

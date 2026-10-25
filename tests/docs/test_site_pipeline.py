@@ -5,6 +5,9 @@ from datetime import date
 from html.parser import HTMLParser
 import json
 from pathlib import Path, PurePosixPath
+import re
+import shutil
+import subprocess
 from types import SimpleNamespace
 from urllib.parse import urljoin
 
@@ -717,8 +720,16 @@ def test_topic_catalog_integration_preserves_public_path_filter(tmp_path: Path) 
     assert "AKS 네트워크 진단" not in pages[PurePosixPath("articles/index.md")]
 
 
+@pytest.mark.parametrize(
+    ("redirect", "target"),
+    [
+        ("guides/aks/old-topic/index.md", "../../../services/aks/network-diagnosis/"),
+        ("services/aks/old-topic/index.md", "../network-diagnosis/"),
+        ("services/aks/old-topic/old-child/index.md", "../../network-diagnosis/"),
+    ],
+)
 def test_on_post_page_injects_head_redirect_tags_when_theme_canonical_is_missing(
-    tmp_path: Path,
+    tmp_path: Path, redirect: str, target: str,
 ) -> None:
     docs = tmp_path / "docs"
     docs.mkdir()
@@ -740,16 +751,33 @@ def test_on_post_page_injects_head_redirect_tags_when_theme_canonical_is_missing
     (canonical / "index.md").write_text(
         SEARCH_DOCUMENT.replace(
             "last_verified: 2026-09-12",
-            "redirect_from: [guides/aks/old-topic/index.md]\nlast_verified: 2026-09-12",
+            f"redirect_from: [{redirect}]\nlast_verified: 2026-09-12",
         ),
         encoding="utf-8",
     )
-    page = SimpleNamespace(file=SimpleNamespace(src_uri="guides/aks/old-topic/index.md"))
+    page = SimpleNamespace(file=SimpleNamespace(src_uri=redirect))
 
     rendered = on_post_page("<html><head></head><body></body></html>", page, {"docs_dir": str(docs)})
 
-    assert '<link rel="canonical" href="../../../services/aks/network-diagnosis/">' in rendered
-    assert '<meta http-equiv="refresh" content="0; url=../../../services/aks/network-diagnosis/">' in rendered
+    assert f'<link rel="canonical" href="{target}">' in rendered
+    assert f'<meta http-equiv="refresh" content="0; url={target}">' in rendered
+
+    script = re.search(r'<script id="dg-document-redirect">(.*?)</script>', rendered, re.DOTALL)
+    assert script is not None
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is unavailable")
+    result = subprocess.run(
+        [
+            node, "-e",
+            "const vm = require('node:vm');"
+            "const location = {search: '?text=redis', hash: '#nodejs',"
+            "replace: target => process.stdout.write(target)};"
+            f"vm.runInNewContext({json.dumps(script.group(1))}, {{location}});",
+        ],
+        capture_output=True, text=True, check=True,
+    )
+    assert result.stdout == target + "?text=redis#nodejs"
 
 
 def test_on_post_page_advertises_daily_update_feed() -> None:

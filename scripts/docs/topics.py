@@ -137,15 +137,20 @@ def _normalize_redirects(document: Document) -> tuple[list[PurePosixPath], list[
             )
             continue
         path = PurePosixPath(raw.strip())
+        legacy_path = (
+            len(path.parts) == 4
+            and path.parts[0] in LEGACY_COLLECTIONS
+            and path.parts[-1] == "index.md"
+        )
         if (
             path.is_absolute()
             or ".." in path.parts
-            or len(path.parts) != 4
-            or path.parts[-1] != "index.md"
-            or path.parts[0] not in LEGACY_COLLECTIONS
+            or not (legacy_path or _is_canonical_document_path(path))
         ):
             errors.append(
-                f"{document.relative_path.as_posix()}: redirect_from must use <collection>/<service>/<topic>/index.md"
+                f"{document.relative_path.as_posix()}: redirect_from must use "
+                "<collection>/<service>/<topic>/index.md or "
+                "services/<service>/<topic>[/<child>]/index.md"
             )
             continue
         paths.append(path)
@@ -449,6 +454,15 @@ def build_topic_catalog(
             if redirect_path in redirects:
                 errors.append(
                     f"{document.relative_path.as_posix()}: redirect_from path is already used"
+                )
+                continue
+            if any(
+                _paths_overlap(path, target)
+                for path in (redirect_path, redirect_path.with_suffix(".html"))
+                for target in published_assets
+            ):
+                errors.append(
+                    f"{document.relative_path.as_posix()}: redirect_from collides with a published asset"
                 )
                 continue
             redirects[redirect_path] = document.relative_path

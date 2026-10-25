@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+import time
 
 import pytest
 import yaml
 
-from scripts.docs import validate_links, validate_metadata, validate_sources
+from scripts.docs import content, validate_links, validate_metadata, validate_sources
 
 
 VALID_GUIDE = """\
@@ -114,6 +115,59 @@ def test_validation_gates_accept_a_publishable_repository(tmp_path: Path) -> Non
 
     assert all(result.document_count == 1 for result in results)
     assert all(result.errors == [] for result in results)
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="Host timezone simulation requires tzset")
+@pytest.mark.parametrize("host_timezone", ["UTC", "Asia/Seoul", "Pacific/Kiritimati"])
+@pytest.mark.parametrize(
+    ("instant", "checked_day", "reference_day", "is_future"),
+    [
+        ("2026-10-24T14:59:59+00:00", "2026-10-25", None, True),
+        ("2026-10-24T15:00:00+00:00", "2026-10-25", None, False),
+        ("2026-10-24T23:40:18+00:00", "2026-10-25", None, False),
+        ("2026-10-24T23:40:18+00:00", "2026-10-26", None, True),
+        ("2026-10-24T23:40:18+00:00", "2026-10-25", date(2026, 10, 24), True),
+    ],
+)
+def test_date_validation_uses_kst_independently_of_host_timezone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    host_timezone: str,
+    instant: str,
+    checked_day: str,
+    reference_day: date | None,
+    is_future: bool,
+) -> None:
+    root = make_repository(tmp_path)
+    relative = "docs/services/aks/network-diagnosis/index.md"
+    (root / relative).write_text(VALID_GUIDE.replace("2026-09-12", checked_day), encoding="utf-8")
+    frozen_instant = datetime.fromisoformat(instant)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return frozen_instant.astimezone().replace(tzinfo=None)
+            return frozen_instant.astimezone(tz)
+
+    try:
+        with monkeypatch.context() as clock:
+            clock.setenv("TZ", host_timezone)
+            time.tzset()
+            clock.setattr(time, "time", lambda: frozen_instant.timestamp())
+            clock.setattr(content, "datetime", FrozenDateTime)
+            metadata = validate_metadata.validate_repository(root, today=reference_day)
+            sources = validate_sources.validate_repository(root, today=reference_day)
+    finally:
+        time.tzset()
+
+    source_errors = [f"{relative}: sources_checked_at cannot be in the future"] if is_future else []
+    metadata_errors = source_errors + (
+        [f"{relative}: last_verified cannot be in the future"] if is_future else []
+    )
+    assert metadata.document_count == sources.document_count == 1
+    assert metadata.errors == metadata_errors
+    assert sources.errors == source_errors
 
 
 @pytest.mark.parametrize("tags", [None, 123])

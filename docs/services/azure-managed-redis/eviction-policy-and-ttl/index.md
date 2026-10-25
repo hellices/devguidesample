@@ -40,7 +40,7 @@ applies_to:
 related_cases:
 - ../cluster-failover-recovery/index.md
 related_guides:
-- ../cluster-failover-recovery/clustering-policies-and-migration/index.md
+- ../clustering-policies/index.md
 ---
 
 # Azure Managed Redis Eviction Policy와 TTL 설계 가이드
@@ -113,9 +113,7 @@ Azure Managed Redis는 Redis Enterprise 기반이므로 `CONFIG SET`으로 `maxm
 
 ### 2.3 샤드 구조와 제약 사항 { #constraints }
 
-![Azure Managed Redis 아키텍처. 클라이언트가 Load Balancer를 거쳐 두 Azure VM에 연결되고, 각 VM에는 Azure agent, Redis proxy, 여러 개의 Primary·Replica Redis Server 샤드가 있으며 VM 사이에 비동기 데이터 복제가 이루어진다.](../cluster-failover-recovery/clustering-policies-and-migration/images/managed-redis-architecture.png)
-
-*그림: Azure Managed Redis 아키텍처. 출처: [Microsoft Learn – Azure Managed Redis architecture](https://learn.microsoft.com/azure/redis/architecture)*
+노드와 샤드의 구조는 [클러스터링 정책 개요의 아키텍처 그림](../clustering-policies/index.md#cluster-policies)을 참고합니다.
 
 Azure Managed Redis는 노드마다 여러 Redis 프로세스(샤드)를 실행합니다. 그래서 eviction도 **샤드 단위**로 일어납니다.
 
@@ -359,7 +357,7 @@ Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys
 
 ## 관련 문서
 
-- [Azure Managed Redis 클러스터링 정책별 연결과 마이그레이션 가이드](../cluster-failover-recovery/clustering-policies-and-migration/index.md): 클러스터링 정책과 샤드별 동작을 함께 확인합니다.
+- [Azure Managed Redis 클러스터링 정책 이해와 선택](../clustering-policies/index.md): 클러스터링 정책과 샤드별 동작을 함께 확인합니다.
 - [Azure Managed Redis Cluster Failover 장애 분석 및 복구 전략](../cluster-failover-recovery/index.md): OSS 정책에서 노드 교체 후 연결이 복구되지 않은 장애 사례입니다.
 
 ## 공식 참고 자료

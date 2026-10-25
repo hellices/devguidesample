@@ -572,6 +572,8 @@ def build_index_pages(
     if catalog is not None:
         by_path = {document.relative_path: document for document in docs}
         for redirect_path, canonical_path in sorted(catalog.redirects.items()):
+            if redirect_path.parts[0] not in LEGACY_COLLECTIONS:
+                continue
             document = by_path.get(canonical_path)
             if document is not None:
                 service_path = redirect_path.parent.parent / "index.md"

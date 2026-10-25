@@ -1,0 +1,8 @@
+title: Clustering policy diagram
+description: Single editable source for the three Azure Managed Redis connection models.
+kind: artifact
+used_by:
+- index
+publish:
+- source: clustering-policies.svg
+  target: images/clustering-policies.svg

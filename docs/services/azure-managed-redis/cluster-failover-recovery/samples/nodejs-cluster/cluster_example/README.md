@@ -1,8 +1,8 @@
 # Redis Cluster Example - Azure Managed Redis
 
-Azure Managed Redis에서 **OSS Cluster(createCluster)** vs **Enterprise Cluster(createClient)** 연결 방식에 따른 Failover 동작 차이를 검증하기 위한 예제입니다.
+Azure Managed Redis에서 **OSS Cluster(createCluster)**와 **Enterprise Cluster(createClient)**의 이전 연결 설정을 비교하는 실험 예제입니다. 당시 설정을 보존한 자료이지 현재 권장 운영 코드가 아닙니다.
 
-관련 분석 문서: [`../cluster_failover_recovery.md`](../cluster_failover_recovery.md)
+관련 문서: [장애 사례](../../../index.md), [현재 Node.js 연결 가이드](../../../../clustering-policies/nodejs/index.md).
 
 ## 배경
 
@@ -33,15 +33,15 @@ Azure Managed Redis를 OSS Cluster 정책으로 운영 중, Planned Maintenance(
 
 ```bash
 # 의존성 설치
-npm install
+npm ci
 
 # 로컬 Redis (standalone)
-node server.js
+REDIS_URL=redis://localhost:6379 node server.js
 
-# Azure - OSS Cluster 모드 (기존 문제 재현)
+# Azure - OSS 정책의 테스트 캐시 (REDIS_URL·REDIS_ACCESS_KEY를 먼저 설정)
 PROFILE=DEVE REDIS_MODE=oss-cluster node server.js
 
-# Azure - Enterprise 모드 (권장 방안 검증)
+# Azure - Enterprise 정책으로 별도 생성한 테스트 캐시
 PROFILE=DEVE REDIS_MODE=enterprise node server.js
 ```
 
@@ -68,10 +68,9 @@ PROFILE=DEVE REDIS_MODE=enterprise node server.js
 
 ## Failover 테스트 시나리오
 
-### 1. OSS Cluster 모드에서 장애 재현
+### 1. OSS Cluster 모드에서 연결 변화 관찰
 
-> ⚠️ `CLUSTER FAILOVER` 명령은 동일 노드 간 master/slave 역할만 교체하므로 실제 Planned Maintenance(노드 교체 → endpoint 무효화) 시나리오를 재현할 수 없습니다.
-> 실제 재현을 위해서는 Azure의 **Planned Maintenance가 발생하는 시점**에 테스트하거나, Azure Support를 통해 maintenance를 요청해야 합니다. Azure Managed Redis는 수동 Reboot/Failover 트리거 기능을 제공하지 않습니다.
+> 이 sample의 API는 연결과 요청 결과를 관찰하며 Azure 유지보수를 발생시키지 않습니다. 테스트 결과를 실제 노드 교체의 재현이나 특정 정책의 복구 보장으로 해석하지 않습니다. 사용 가능한 관리 기능은 [현재 Microsoft Learn 문서](https://learn.microsoft.com/azure/redis/failover)를 확인합니다.
 
 ```bash
 # 1) OSS Cluster 모드로 서버 시작
@@ -80,15 +79,12 @@ PROFILE=DEVE REDIS_MODE=oss-cluster node server.js
 # 2) Failover 복구 테스트 시작 (충분한 시간 확보, 예: 300초)
 curl "http://localhost:3000/redis/failover-recovery?duration=300&interval=2"
 
-# 3) Azure Managed Redis는 수동 Reboot/Failover 기능을 제공하지 않음
-#    실제 Planned Maintenance가 발생할 때까지 대기하거나,
-#    Azure Support를 통해 maintenance를 요청해야 함
-#    (실제 node가 교체되며 기존 shard endpoint가 무효화됨)
+# 3) 테스트 환경의 연결 변화와 유지보수 이벤트를 함께 관찰
 
-# 4) write/read 실패 → topology cache stale → 복구 불가 관찰
+# 4) write/read 실패·재연결·복구 시점을 기록 (실패나 미복구를 미리 단정하지 않음)
 ```
 
-### 2. Enterprise 모드에서 안정성 확인
+### 2. Enterprise 모드에서 연결 변화 관찰
 
 ```bash
 # 1) Enterprise 모드로 서버 시작
@@ -99,7 +95,7 @@ curl "http://localhost:3000/redis/failover-recovery?duration=300&interval=2"
 
 # 3) 동일하게 Planned Maintenance 발생 시 관찰
 
-# 4) proxy가 자동으로 새 node로 라우팅 → 일시 끊김 후 빠른 복구 관찰
+# 4) 일시 오류의 범위와 실제 복구 시간을 기록
 ```
 
 ### 3. 연결 방식 비교

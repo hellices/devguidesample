@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from functools import partial
 from html import escape
+import json
 from pathlib import Path, PurePosixPath
 import posixpath
 import re
@@ -485,6 +486,13 @@ def on_post_page(output: str, page: Any, config: Mapping[str, Any]) -> str:
     head_match = re.search(r"<head>(.*?)</head>", output, flags=re.DOTALL)
     head_html = head_match.group(1) if head_match else ""
     additions: list[str] = []
+    if canonical_path is not None and 'id="dg-document-redirect"' not in head_html:
+        script_target = json.dumps(destination).replace("<", "\\u003c")
+        additions.append(
+            '<script id="dg-document-redirect">'
+            f"location.replace({script_target} + location.search + location.hash);"
+            "</script>"
+        )
     if 'rel="canonical"' not in head_html:
         additions.append(f'<link rel="canonical" href="{target}">')
     if f'content="0; url={target}"' not in head_html:

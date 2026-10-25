@@ -21,14 +21,15 @@ from scripts.docs.topics import build_topic_catalog
 ROOT = Path(__file__).parents[2]
 
 
-def test_repository_tracked_topic_assets_have_no_duplicate_hashes() -> None:
-    tracked = subprocess.check_output(
-        ["git", "ls-files", "-z", "--", "docs/services"], cwd=ROOT
+def test_repository_topic_assets_have_no_duplicate_hashes() -> None:
+    candidates = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "docs/services"],
+        cwd=ROOT,
     ).decode().split("\0")
     by_hash: dict[str, list[str]] = defaultdict(list)
-    for relative in filter(None, tracked):
+    for relative in sorted(set(filter(None, candidates))):
         path = ROOT / relative
-        if path.stat().st_size >= 1024:
+        if path.is_file() and path.stat().st_size >= 1024:
             by_hash[hashlib.sha256(path.read_bytes()).hexdigest()].append(relative)
     duplicates = [paths for paths in by_hash.values() if len(paths) > 1]
     assert not duplicates, f"{len(duplicates)} duplicate groups >=1KB: {duplicates}"
@@ -1087,6 +1088,119 @@ def test_repository_uses_only_canonical_topic_packages() -> None:
         for topic_key, redirect in moved_documents.items()
         if catalog.topics[topic_key].entry.metadata.get("redirect_from") == [redirect]
     } == set(moved_documents.values())
+
+
+@pytest.mark.parametrize(
+    "redirect",
+    [
+        "services/azure-monitor/old-topic/index.md",
+        "services/azure-monitor/old-topic/old-child/index.md",
+    ],
+)
+def test_moved_service_pages_redirect_to_canonical_topics(
+    tmp_path: Path, taxonomy: dict, redirect: str
+) -> None:
+    canonical = "services/azure-monitor/new-topic/index.md"
+    write_document(tmp_path, canonical, "New topic", redirect_from=[redirect])
+
+    catalog = build_topic_catalog(tmp_path, taxonomy)
+
+    assert catalog.redirects == {PurePosixPath(redirect): PurePosixPath(canonical)}
+    assert len(catalog.documents) == 1
+    assert catalog.by_document[PurePosixPath(redirect)].entry.relative_path == PurePosixPath(canonical)
+
+
+@pytest.mark.parametrize(
+    "redirect",
+    [
+        "services/azure-monitor/index.md",
+        "services/azure-monitor/old-topic/child/grandchild/index.md",
+        "services/azure-monitor/old-topic/samples/index.md",
+        "services/azure-monitor/old-topic/../index.md",
+        "services/azure-monitor/Old-Topic/index.md",
+        "services/azure-monitor/.hidden/index.md",
+        "/services/azure-monitor/old-topic/index.md",
+        "services\\azure-monitor\\old-topic\\index.md",
+    ],
+)
+def test_moved_service_redirects_reject_invalid_paths(
+    tmp_path: Path, taxonomy: dict, redirect: str
+) -> None:
+    write_document(
+        tmp_path, "services/azure-monitor/new-topic/index.md", "New topic",
+        redirect_from=[redirect],
+    )
+
+    with pytest.raises(DocumentFormatError, match="redirect_from must use"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+def test_moved_service_redirect_cannot_replace_an_existing_document(
+    tmp_path: Path, taxonomy: dict
+) -> None:
+    existing = "services/azure-monitor/existing-topic/index.md"
+    write_document(tmp_path, existing, "Existing topic")
+    write_document(
+        tmp_path, "services/azure-monitor/new-topic/index.md", "New topic",
+        redirect_from=[existing],
+    )
+
+    with pytest.raises(DocumentFormatError, match="collides with a canonical document"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+@pytest.mark.parametrize("asset_target", ["old/index.md", "old/index.html", "old"])
+def test_moved_service_redirect_cannot_overlap_a_published_asset(
+    tmp_path: Path, taxonomy: dict, asset_target: str
+) -> None:
+    published_sample(tmp_path, [{"source": "diagram.svg", "target": asset_target}])
+    write_document(
+        tmp_path, "services/azure-monitor/new-topic/index.md", "New topic",
+        redirect_from=["services/azure-monitor/agent-topic/old/index.md"],
+    )
+
+    with pytest.raises(DocumentFormatError, match="redirect_from collides with a published asset"):
+        build_topic_catalog(tmp_path, taxonomy)
+
+
+def test_redis_guides_have_distinct_content_and_asset_owners() -> None:
+    catalog = build_topic_catalog(ROOT / "docs", load_taxonomy(ROOT / "docs-taxonomy.yml"))
+    policies = catalog.topics[("azure-managed-redis", "clustering-policies")]
+    case = catalog.topics[("azure-managed-redis", "cluster-failover-recovery")]
+    migration = catalog.topics[("azure-managed-redis", "migration-from-azure-cache")]
+
+    assert policies.entry.metadata["document_type"] == "guide"
+    assert "topic_order" not in policies.entry.metadata
+    assert [member.relative_path.parent.name for member in policies.members[1:]] == ["nodejs", "java"]
+    assert [member.metadata["topic_order"] for member in policies.members[1:]] == [1, 2]
+    assert case.entry.metadata["document_type"] == "case"
+    assert len(case.members) == len(migration.members) == 1
+    assert migration.entry.metadata["document_type"] == "guide"
+    for entry in (policies.entry, migration.entry):
+        assert "```javascript" not in entry.body
+        assert "```java\n" not in entry.body
+
+    old_guide = PurePosixPath(
+        "services/azure-managed-redis/cluster-failover-recovery/"
+        "clustering-policies-and-migration/index.md"
+    )
+    assert catalog.redirects[old_guide] == policies.entry.relative_path
+    assert not (ROOT / "docs" / old_guide).exists()
+    diagram_targets = [
+        path for path in catalog.published_assets
+        if path.name == "clustering-policies.svg"
+    ]
+    assert diagram_targets == [policies.entry.relative_path.parent / "images/clustering-policies.svg"]
+    assert all(sample.relative_path.parts[2] == "cluster-failover-recovery" for sample in case.samples)
+
+    code_owners: dict[str, PurePosixPath] = {}
+    for document in (*policies.members, case.entry, migration.entry):
+        for code in re.findall(r"```(?:javascript|java)\n(.*?)\n```", document.body, re.DOTALL):
+            if len(code) < 150:
+                continue
+            digest = hashlib.sha256(code.strip().encode()).hexdigest()
+            assert digest not in code_owners, f"duplicated code in {document.relative_path} and {code_owners[digest]}"
+            code_owners[digest] = document.relative_path
 
 
 def test_mobile_upload_commands_use_the_canonical_sample_path() -> None:
