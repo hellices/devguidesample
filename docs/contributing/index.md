@@ -299,6 +299,9 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
    원본 폴더가 없는지 확인합니다. `publish`를 사용하면 선언한 target만
    게시되며 원본과 바이트가 같은지도 확인합니다.
 
+<!-- GitHub uses the named anchor; MkDocs uses the heading ID below. -->
+<a name="content-first-headings"></a>
+
 ## 제목은 본문의 핵심 내용을 요약합니다 { #content-first-headings }
 
 **제목은 단순한 항목 이름이 아니라, 그 아래 내용에서 독자가 가져가야 할
