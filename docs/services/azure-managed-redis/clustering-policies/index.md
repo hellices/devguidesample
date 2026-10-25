@@ -1,5 +1,5 @@
 ---
-title: Azure Managed Redis 클러스터링 정책 이해와 선택
+title: "Azure Managed Redis 클러스터링 정책: 연결 방식·명령 제약에 따른 선택"
 description: OSS·Enterprise·Non-clustered의 연결 구조와 제약을 비교하고, 정책 선택에서 언어별 연결과 마이그레이션으로 이어지는 출발점입니다.
 document_type: guide
 services:
@@ -40,13 +40,13 @@ redirect_from:
 - services/azure-managed-redis/cluster-failover-recovery/clustering-policies-and-migration/index.md
 ---
 
-# Azure Managed Redis 클러스터링 정책 이해와 선택
+# Azure Managed Redis 클러스터링 정책: 연결 방식·명령 제약에 따른 선택 { #azure-managed-redis }
 
 Azure Managed Redis를 만들 때는 **OSS**, **Enterprise**, **Non-clustered** 중 하나의 클러스터링 정책을 선택합니다. 이 선택은 제품의 Redis 구현을 바꾸는 것이 아니라, **데이터를 샤딩할지, 클라이언트가 샤드에 직접 연결할지, 프록시를 거칠지**를 정합니다.
 
 이 문서는 정책 선택에 집중합니다. 특정 애플리케이션의 코드나 장애 사례를 먼저 읽을 필요는 없습니다. 구현은 [Node.js](nodejs/index.md) 또는 [Java](java/index.md), 기존 서비스 이전은 [마이그레이션 가이드](../migration-from-azure-cache/index.md)로 이어집니다.
 
-## 연결 구조부터 이해하기 { #cluster-policies }
+## 클러스터 운영은 Azure가, 샤드 연결 방식은 정책이 결정 { #cluster-policies }
 
 Azure Managed Redis는 Redis Enterprise 기반입니다. 노드(VM)는 여러 Redis 프로세스인 **샤드**를 실행할 수 있고, 샤드는 데이터를 나누어 처리합니다. 작은 구성은 샤드 하나만 사용할 수도 있습니다.
 
@@ -80,7 +80,7 @@ Azure Managed Redis는 Redis Enterprise 기반입니다. 노드(VM)는 여러 Re
 
 Enterprise와 클라이언트 형태는 같지만 데이터 배치는 다릅니다. **25GB 이하**에서만 사용할 수 있고, 여러 샤드의 병렬 처리 이점을 얻지 못합니다. 또한 Non-clustered는 **HA 비활성화와 다른 설정**입니다. 샤딩 여부만으로 복제본이나 장애 조치가 없다고 판단하지 않습니다.
 
-## 정책별 제약 비교 { #policy-comparison }
+## 정책별 클라이언트·멀티키 명령·크기·변경 제약 { #policy-comparison }
 
 | 확인 항목 | OSS | Enterprise | Non-clustered |
 |---|---|---|---|
@@ -100,7 +100,7 @@ Enterprise에서 active geo-replication을 사용하지 않으면 `DEL`, `MSET`,
 !!! warning "Enterprise 정책과 Enterprise 티어는 다른 개념입니다"
     여기서 Enterprise는 Azure Managed Redis의 **클러스터링 정책**입니다. 이전 제품인 Azure Cache for Redis의 Enterprise/Enterprise Flash 티어 이름과 혼동하지 않습니다.
 
-## 어떤 정책을 선택할까 { #at-a-glance }
+## RediSearch·멀티키 요구·성능 목표로 정책 선택 { #at-a-glance }
 
 먼저 기능 제약을 확인한 뒤 성능과 클라이언트 변경 비용을 비교합니다.
 
@@ -112,7 +112,7 @@ Enterprise에서 active geo-replication을 사용하지 않으면 `DEL`, `MSET`,
 
 특정 장애 사례에서 Enterprise를 선택했다고 해서 모든 워크로드에 가장 적합한 것은 아닙니다. 반대로 OSS의 토폴로지 갱신 요구를 제품 장애 자체로 해석하지 않습니다.
 
-## 생성 전에 정책을 명시하고 확인하기 { #set-and-check-policy }
+## CLI 기본값은 OSSCluster: 생성 시 원하는 정책을 명시 { #set-and-check-policy }
 
 Azure CLI의 `az redisenterprise create --clustering-policy` 기본값은 `OSSCluster`입니다. 원하는 연결 형태를 정했다면 기본값에 의존하지 말고 명시합니다.
 
@@ -145,7 +145,7 @@ az redisenterprise create \
 
 OSS와 Enterprise는 기존 캐시에서 정책을 바꿀 수 없습니다. 전환은 원하는 정책의 **별도 캐시를 준비하고 연결을 이전**하는 작업으로 계획합니다. Non-clustered의 변경 예외는 위 비교표와 공식 정책 문서를 따릅니다.
 
-## 모든 정책에 공통인 연결 원칙 { #connection-resilience }
+## 정책과 무관하게 인증 갱신·timeout·재시도 구성 { #connection-resilience }
 
 | 항목 | 기준 |
 |---|---|
@@ -160,24 +160,24 @@ Linux에서 연결 단절 감지가 오래 걸린다면 [TCP 설정 권장 사�
 
 프록시를 사용하는 Enterprise도 일시적인 연결 오류를 완전히 없애지는 않습니다. 지속적인 오류에는 Circuit Breaker나 허용 가능한 대체 경로를 설계하되, **캐시 조회 실패와 세션·락·업무 데이터 유실을 같은 방식으로 처리하지 않습니다.**
 
-## 연결 구현과 다음 단계 { #client-libraries }
+## Node.js·Java 연결 구현과 Azure Cache for Redis 이전 절차 { #client-libraries }
 
 이전 통합 문서의 링크로 들어왔다면 아래에서 분리된 문서로 이동할 수 있습니다. 정책 설명과 비교표는 이 페이지에서만 유지합니다.
 
-### Node.js { #nodejs }
+### Node.js: 정책별 생성자와 토폴로지 갱신 { #nodejs }
 
-[Node.js 정책별 연결 가이드](nodejs/index.md): node-redis·ioredis의 연결 예제와 버전별 토폴로지 갱신을 다룹니다.
+[Node.js의 클라이언트 선택과 토폴로지 갱신](nodejs/index.md): node-redis·ioredis의 연결 예제와 버전별 토폴로지 갱신을 다룹니다.
 
-### Java { #java }
+### Java: 라이브러리별 연결과 Spring Boot 설정 { #java }
 
 <span id="lettuce-vs-jedis"></span>
 <span id="lettuce"></span>
 <span id="jedis"></span>
 <span id="spring-boot"></span>
 
-[Java 정책별 연결 가이드](java/index.md): [Lettuce](java/index.md#lettuce), [Jedis](java/index.md#jedis), [Spring Boot](java/index.md#spring-boot), [Redisson](java/index.md#redisson)의 설정을 다룹니다.
+[Java의 클라이언트 선택과 토폴로지 갱신](java/index.md): [Lettuce](java/index.md#lettuce), [Jedis](java/index.md#jedis), [Spring Boot](java/index.md#spring-boot), [Redisson](java/index.md#redisson)의 설정을 다룹니다.
 
-### 마이그레이션
+### Azure Cache for Redis: 연결·데이터 전환과 롤백 { #_1 }
 
 <span id="migrate-from-single-endpoint"></span>
 <span id="migrate-from-cluster-client"></span>
@@ -185,7 +185,7 @@ Linux에서 연결 단절 감지가 오래 걸린다면 [TCP 설정 권장 사�
 
 [Azure Cache for Redis에서 마이그레이션](../migration-from-azure-cache/index.md): 원본 구성에 따른 변경 사항, 데이터 처리와 전환 검증을 다룹니다.
 
-### 장애 사례와 메모리 설계
+### 재연결 실패 사례와 Eviction·TTL 설계 { #_2 }
 
 - [OSS 정책의 Failover 후 재연결 실패 사례](../cluster-failover-recovery/index.md): 당시 연결 설정·관측·원인 추정을 보존합니다.
 - [Eviction Policy와 TTL 설계](../eviction-policy-and-ttl/index.md): 메모리 한도와 키 수명주기를 다룹니다.

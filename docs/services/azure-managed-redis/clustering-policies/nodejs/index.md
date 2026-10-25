@@ -1,5 +1,5 @@
 ---
-title: Azure Managed Redis Node.js 정책별 연결 가이드
+title: "Azure Managed Redis Node.js: 정책별 클라이언트 선택과 토폴로지 갱신"
 description: node-redis와 ioredis의 정책별 클라이언트 선택, 인증·TLS 구성, 토폴로지 갱신과 연결 검증 방법을 설명합니다.
 document_type: guide
 topic_order: 1
@@ -48,18 +48,18 @@ related_guides:
 - ../../migration-from-azure-cache/index.md
 ---
 
-# Azure Managed Redis Node.js 정책별 연결 가이드
+# Azure Managed Redis Node.js: 정책별 클라이언트 선택과 토폴로지 갱신 { #azure-managed-redis-nodejs }
 
 이 문서는 Azure Managed Redis에 연결할 **Node.js 코드**를 작성하는 독자를 위한 가이드입니다. 정책의 선택 기준과 명령 제약은 [정책 개요](../index.md#policy-comparison), 기존 Azure Cache for Redis에서 바꾸어야 할 항목은 [마이그레이션 가이드](../../migration-from-azure-cache/index.md)에서 확인합니다.
 
-## 시작 전에 확인할 것
+## 실제 정책·캐시 호스트·인증 사용자 확인 { #_1 }
 
 - 캐시의 실제 정책을 [조회](../index.md#set-and-check-policy)합니다. 아래 예제의 `REDIS_POLICY`는 코드 분기용 값이며 **리소스 정책을 변경하지 않습니다.**
 - `REDIS_HOST`에는 `<cache-name>.<region>.redis.azure.net` 형태의 호스트만 넣습니다. URL 스킴이나 포트는 넣지 않습니다.
 - 실행 환경에서 캐시와 발견된 샤드에 접근할 수 있어야 합니다. TLS 인증서 검증을 끄는 방식으로 연결 오류를 우회하지 않습니다.
 - node-redis 예제는 **Node.js 20 이상, node-redis 6.x**를 기준으로 합니다. 인증에 사용하는 사용자·서비스 주체는 캐시의 Microsoft Entra 인증 사용자로 등록해야 합니다.
 
-## 라이브러리별 연결 선택
+## OSS는 클러스터 생성자, Enterprise·Non-clustered는 일반 생성자 { #_2 }
 
 | 라이브러리 | OSS | Enterprise / Non-clustered |
 |---|---|---|
@@ -68,7 +68,7 @@ related_guides:
 
 Enterprise에 클러스터 클라이언트를 연결하거나 OSS에 일반 클라이언트를 연결하지 않습니다. 이 표는 생성자 선택만 보여주며 인증·TLS·복구 설정까지 완료했다는 의미는 아닙니다.
 
-## node-redis: Microsoft Entra ID 연결 예제 { #node-redis }
+## node-redis: Entra ID 인증·TLS·정책별 생성자를 함께 구성 { #node-redis }
 
 다음은 인증 공급자 생성부터 연결·쓰기·읽기·정리까지 포함한 **독립 실행 예제**입니다. 기존 애플리케이션에 정의된 `provider`나 `reconnectStrategy`를 전제로 하지 않습니다.
 
@@ -147,7 +147,7 @@ OSS의 인증·TLS 설정은 `rootNodes` 하나에만 넣지 않고 `defaults`�
 
 예제는 연결 확인 후 종료하는 프로그램입니다. 실제 서버에서는 요청마다 클라이언트를 만들지 말고 재사용하며, 종료 시 정리합니다. 재시도는 node-redis의 기본 백오프·지터를 사용합니다. 빠른 시작의 실패 즉시 중단하는 `reconnectStrategy`를 운영 설정으로 그대로 가져오지 않습니다.
 
-## ioredis: 접근 키를 사용하는 대안 { #ioredis }
+## ioredis: 접근 키 인증과 OSS 슬롯 갱신 주기 설정 { #ioredis }
 
 이미 ioredis를 사용하는 프로젝트라면 생성자와 갱신 옵션을 확인합니다. 아래 코드는 **키 인증을 허용한 테스트 캐시**에 대한 별도 예제입니다. Microsoft Entra 토큰을 고정된 비밀번호처럼 넣어 두는 예제가 아니며, Entra 인증은 토큰 갱신까지 구현해야 합니다.
 
@@ -198,7 +198,7 @@ main().catch((error) => {
 
 `slotsRefreshInterval`의 기본값은 비활성입니다. 위의 5초는 이 가이드의 시작 예시이지 ioredis나 Azure가 보장하는 복구 시간이 아닙니다. 운영에서는 [공통 연결 원칙](../index.md#connection-resilience)에 따라 유휴 연결 유지와 재시도 간격도 조정합니다.
 
-## 재연결과 토폴로지 갱신을 구분하기 { #topology-refresh }
+## 기존 주소 재연결과 새 샤드 발견은 별도 동작 { #topology-refresh }
 
 소켓을 같은 주소에 다시 연결하는 일과, **새 샤드 주소를 발견하는 일**은 다릅니다. OSS에서는 둘 다 확인해야 합니다.
 
@@ -219,7 +219,7 @@ node-redis 6.0.0의 5000ms는 **재연결 시도 시 평가하는 갱신 기준*
 
 오류가 지속되면 [Azure Node.js 모범 사례](https://github.com/Azure/AzureCacheForRedis/blob/main/Redis-BestPractices-Node-js.md)가 설명하는 연결 재생성을 검토합니다. 문서의 약 30초는 예시이며, 애플리케이션의 허용 중단 시간에 맞춰 정합니다. 재생성 중인 요청 처리와 기존 연결 정리를 설계하지 않은 단순 반복 재생성은 피합니다.
 
-## 적용 후 확인
+## 여러 슬롯·연결 단절·토큰 갱신까지 검증 { #_3 }
 
 1. 선택한 정책과 생성자가 맞는지 확인하고 예제의 TTL 있는 키 쓰기·읽기를 실행합니다.
 2. OSS에서는 `PING` 성공만 보지 말고 서로 다른 슬롯에 속한 키들로 요청합니다. 여러 샤드에 대한 네트워크·TLS 연결을 확인하기 위해서입니다.

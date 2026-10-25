@@ -5,6 +5,10 @@
 `document_type`은 `case`, `guide`, `lab`, `research` 중 문서의 수명주기에
 맞게 선택하지만 물리 폴더에는 사용하지 않습니다.
 
+문서 제목과 절 제목은 항목 이름이 아니라 **본문의 핵심 내용**을 요약합니다.
+[제목 작성 기준](docs/contributing/index.md#content-first-headings)에 따라
+제목만 읽어도 요지와 논리 흐름이 드러나는지 검토합니다.
+
 자동화가 생성하는 `Azure Daily Update`만
 `docs/azure-daily-update/YYYY-MM-DD/index.md`를 사용합니다. 상세한
 front matter와 날짜 규칙은 공개 문서 작성 계약을 따릅니다.

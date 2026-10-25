@@ -1,5 +1,5 @@
 ---
-title: Azure Managed Redis OSS 정책의 Failover 후 재연결 실패 사례
+title: "Azure Managed Redis OSS: 유지보수 후 재연결 실패와 재기동 복구"
 description: 유지보수 이후 연결이 복구되지 않았던 사례의 축약 코드, 관측된 증상과 원인 추정을 구분해 기록합니다.
 document_type: case
 services:
@@ -30,12 +30,12 @@ redirect_from:
 - cases/azure-managed-redis/cluster-failover-recovery/index.md
 ---
 
-# Azure Managed Redis OSS 정책의 Failover 후 재연결 실패 사례
+# Azure Managed Redis OSS: 유지보수 후 재연결 실패와 재기동 복구 { #azure-managed-redis-oss-failover }
 
 !!! tip "처음 연결하거나 정책을 선택하는 독자라면"
-    [클러스터링 정책 이해와 선택](../clustering-policies/index.md)에서 시작합니다. 이 페이지는 일반 연결 가이드가 아니라 **특정 시점의 장애 기록**입니다. 현재 설정은 [Node.js 연결 가이드](../clustering-policies/nodejs/index.md)에서 관리합니다.
+    [연결 방식·명령 제약에 따른 정책 선택](../clustering-policies/index.md)에서 시작합니다. 이 페이지는 일반 연결 가이드가 아니라 **특정 시점의 장애 기록**입니다. 현재 설정은 [Node.js 연결 가이드](../clustering-policies/nodejs/index.md)에서 관리합니다.
 
-## 어떤 상황이었나 { #_1 }
+## OSS·Node.js 사례이며 정확한 실행 버전·원본 로그는 미공개 { #_1 }
 
 원문에는 Azure Managed Redis를 OSS 정책으로 사용하던 애플리케이션이 **Planned Maintenance 이후 재연결하지 못했고, 애플리케이션 재기동 뒤 복구됐다**고 기록되어 있습니다.
 
@@ -50,7 +50,7 @@ redirect_from:
 
 `createCluster` 사용만으로 리소스가 OSS 정책임을 확정할 수는 없습니다. 실제 환경을 진단할 때는 [리소스 정책 조회](../clustering-policies/index.md#set-and-check-policy)와 클라이언트 버전을 함께 확인합니다.
 
-## 사례의 연결 설정 — 설명을 위한 축약 예시 { #_2 }
+## 당시 createCluster 코드: 연결 timeout 1초와 재연결 콜백 { #_2 }
 
 다음은 원문에 있던 연결 구성입니다. **실행 가능한 전체 코드나 현재 권장 예제가 아닙니다.** 원래 애플리케이션을 모르는 독자를 위해 생략된 입력을 아래에 설명합니다.
 
@@ -81,9 +81,9 @@ redisClient = createCluster({
 
 `connectTimeout: 1000`은 현재 Microsoft Learn의 5초 권장값보다 짧습니다. 재연결 실패를 악화시킬 수 있는 설정이지만, 이 값 하나만으로 장기 장애의 원인을 확정하지 않습니다.
 
-## 관측된 증상 { #_3 }
+## 관측된 연결 포트 변화와 토폴로지 갱신 실패 가설 { #_3 }
 
-### 원문 타임라인 { #_4 }
+### 8503 재연결 실패 후 재기동으로 8500에 연결 { #_4 }
 
 | 시점 | 원문에 기록된 내용 |
 |---|---|
@@ -93,7 +93,7 @@ redisClient = createCluster({
 
 여기서 포트 번호는 당시 관측값이지 고정된 샤드 주소가 아닙니다. `8503`에서 `8500`으로 달라졌다는 사실만으로 VM의 정체나 클라이언트 내부 상태까지 확인되지는 않습니다.
 
-### 관측을 설명하는 가설 { #root-cause }
+### 가설: 사라진 샤드 주소 재연결 중 토폴로지 갱신도 실패 { #root-cause }
 
 [![재연결 실패의 설명 모델. 유지보수 전 클라이언트가 8503 포트의 샤드에 연결하다가 노드 교체 뒤 기존 주소로 재연결을 반복하고, 클라이언트를 새로 만들면 최신 토폴로지를 읽어 8500 포트로 연결하는 흐름이다. 내부 상태 전체를 당시 로그로 입증한 그림은 아니다.](images/failover-incident.svg)](images/failover-incident.svg)
 
@@ -108,17 +108,17 @@ Microsoft Learn의 [패치 과정](https://learn.microsoft.com/azure/redis/failo
 
 다만 원문만으로 네트워크·인증·재시도 중단 조건을 모두 배제하거나 slot 맵이 갱신되지 않았음을 단정할 수는 없습니다. 재발 조사에서는 유지보수 이벤트, 실행 버전, 재연결·토폴로지 갱신 로그와 접근 가능 주소를 함께 수집합니다.
 
-## 복구 결과와 현재 가이드 { #_5 }
+## 재기동 복구는 확인됐지만 재발 방지 조치의 효과는 미확인 { #_5 }
 
 이 기록에서 관측된 복구는 **애플리케이션 재기동 후 연결 정상화**입니다. 정책 전환이나 라이브러리 업그레이드를 당시 적용해 재발 방지까지 검증했다고 기록된 것은 아닙니다.
 
-### OSS를 유지할 때 확인할 설정 { #option-topology-refresh }
+### OSS 유지 시 버전별 토폴로지 갱신과 연결 재생성 검토 { #option-topology-refresh }
 
 [Node.js의 재연결·토폴로지 갱신](../clustering-policies/nodejs/index.md#topology-refresh)에서 버전별 기능과 지속 실패 시 연결 재생성을 확인합니다. 현재 코드 예제도 그 문서에만 둡니다.
 
 다른 정책을 검토한다면 [정책별 제약과 선택 기준](../clustering-policies/index.md#policy-comparison)을 비교합니다. Enterprise의 프록시는 클라이언트의 샤드 라우팅 부담을 줄이지만 모든 요청 실패를 없애는 해법은 아닙니다. Java를 사용하는 독자는 [Java 연결 가이드](../clustering-policies/java/index.md)를 참고합니다.
 
-## 당시 동작을 살펴보는 샘플 { #_7 }
+## 샘플은 이전 연결 설정 비교용이며 장애 재현을 보장하지 않음 { #_7 }
 
 이 topic의 Node.js 샘플은 이전 연결 설정을 비교하기 위한 실험 자료입니다. 현재 권장 설정의 배포 템플릿이나 이 장애를 결정적으로 재현하는 자동 테스트가 아닙니다.
 

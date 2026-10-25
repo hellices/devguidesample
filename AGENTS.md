@@ -3,6 +3,11 @@
 ## Public documentation contract
 
 - 상세 기준은 `docs/contributing/index.md`를 단일 설명 문서로 사용한다.
+- 문서 `title`·H1과 본문 절 제목은 해당 내용의 핵심 결론·조치·차이를
+  요약한다. 일반적인 항목명이나 저자의 작성 순서·생각 흐름을 제목으로
+  대신하지 않는다. 제목만 읽어도 문서의 요지가 드러나는지 확인하며,
+  구체적인 기준과 예시는
+  [제목 작성 기준](docs/contributing/index.md#content-first-headings)을 따른다.
 - 공개 기술 문서는
   `docs/services/<service>/<topic>[/<child>]/index.md` topic package로
   작성한다.
