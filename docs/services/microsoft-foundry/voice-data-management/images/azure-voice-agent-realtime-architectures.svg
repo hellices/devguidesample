@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="920" viewBox="0 0 1280 920" role="img" aria-labelledby="azure-realtime-architectures-title azure-realtime-architectures-desc">
+  <title id="azure-realtime-architectures-title">Azure 음성 에이전트의 네이티브 Realtime과 분리형 파이프라인</title>
+  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 같은 입력 오디오를 별도 전사 모델로 보낼 수 있는 경로입니다. 입력 전사는 모델 내부 텍스트 추출이 아닙니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent store, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
+  <defs>
+    <marker id="azure-realtime-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
+    </marker>
+    <marker id="azure-realtime-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#0284c7"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#0f172a}
+      .title{font-size:28px;font-weight:700}
+      .subtitle{font-size:13px;fill:#475569}
+      .source{font-size:12px;fill:#64748b}
+      .zone-label{font-size:12px;font-weight:700;fill:#475569;letter-spacing:.04em}
+      .node{font-size:16px;font-weight:700}
+      .body{font-size:13px;fill:#334155}
+      .small{font-size:12px;fill:#64748b}
+      .tag{font-size:12px;font-weight:700;letter-spacing:.04em}
+      .label{font-size:12px;font-weight:700;fill:#475569}
+      .legend{font-size:12px;fill:#64748b}
+    </style>
+  </defs>
+
+  <rect width="1280" height="920" fill="#ffffff"/>
+  <text x="40" y="44" class="title">실시간 음성 처리 구조 비교</text>
+  <text x="40" y="70" class="subtitle">네이티브 Realtime과 STT → 텍스트 모델·에이전트 → TTS 경로를 분리</text>
+  <text x="1240" y="70" text-anchor="end" class="source">공식 문서를 기반으로 한 종합 구성 예시</text>
+
+  <!-- Zones -->
+  <rect x="40" y="100" width="1200" height="346" rx="8" fill="#eff6ff" fill-opacity=".58" stroke="#93c5fd"/>
+  <rect x="52" y="108" width="520" height="22" rx="3" fill="#ffffff"/>
+  <text x="64" y="124" class="zone-label">네이티브 REALTIME · 직접 API 또는 Voice Live + Realtime 모델</text>
+
+  <rect x="40" y="466" width="1200" height="350" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <rect x="52" y="474" width="668" height="22" rx="3" fill="#ffffff"/>
+  <text x="64" y="490" class="zone-label">분리형 PIPELINE · Voice Live + 텍스트 입출력 모델 또는 애플리케이션 조합</text>
+
+  <!-- Native realtime connectors -->
+  <path d="M280 179 H430" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M430 217 H280" fill="none" stroke="#0284c7" stroke-width="1.8" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path d="M710 179 H910" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M910 217 H710" fill="none" stroke="#0284c7" stroke-width="1.8" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-input-to-transcription" d="M220 237 V316 H340" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-input-to-records" d="M110 237 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-transcription-to-records" d="M490 350 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-model-to-records" d="M670 247 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-tools-to-records" d="M1040 237 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+
+  <!-- Cascaded connectors -->
+  <path d="M250 552 H300" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M460 552 H510" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M760 552 H810" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M970 552 H1040" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M600 594 V632" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#azure-realtime-arrow)"/>
+  <path d="M690 632 V594" fill="none" stroke="#0284c7" stroke-width="1.8" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="pipeline-input-to-records" d="M110 594 V750" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="pipeline-stt-to-records" d="M335 594 V750" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="pipeline-model-to-records" d="M760 575 H785 V750" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="pipeline-tools-to-records" d="M635 690 V750" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="pipeline-tts-to-records" d="M890 594 V750" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+
+  <!-- Connector labels -->
+  <text x="355" y="167" text-anchor="middle" class="label">입력 오디오</text>
+  <text x="355" y="239" text-anchor="middle" class="label">음성 응답</text>
+  <text x="810" y="167" text-anchor="middle" class="label">필요 시 도구 호출</text>
+  <text x="810" y="239" text-anchor="middle" class="label">업무 결과</text>
+  <text x="235" y="270" class="label">같은 입력 오디오</text>
+  <text x="125" y="355" class="label">원음</text>
+  <text x="685" y="343" class="label">응답·세션 이벤트</text>
+  <text x="1055" y="343" class="label">도구 이벤트</text>
+
+  <text x="275" y="538" text-anchor="middle" class="label">음성</text>
+  <text x="485" y="538" text-anchor="middle" class="label">텍스트</text>
+  <text x="785" y="538" text-anchor="middle" class="label">응답문</text>
+  <text x="1005" y="538" text-anchor="middle" class="label">오디오</text>
+  <text x="550" y="619" class="label">호출</text>
+  <text x="704" y="619" class="label">결과</text>
+  <text x="125" y="728" class="label">원음</text>
+  <text x="350" y="728" class="label">STT 결과</text>
+  <text x="650" y="728" class="label">도구 이벤트</text>
+  <text x="797" y="728" class="label">모델 응답</text>
+  <text x="905" y="728" class="label">출력 오디오</text>
+
+  <!-- Native realtime nodes -->
+  <rect id="native-input" x="80" y="155" width="200" height="82" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="100" y="177" class="tag" fill="#475569">CHANNEL</text>
+  <text x="180" y="203" text-anchor="middle" class="node">단말 · 전화</text>
+  <text x="180" y="223" text-anchor="middle" class="small">오디오 입출력 종단</text>
+
+  <rect id="native-model" x="430" y="145" width="280" height="102" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="1.6"/>
+  <text x="450" y="169" class="tag" fill="#075985">NATIVE AUDIO MODEL</text>
+  <text x="570" y="197" text-anchor="middle" class="node">Realtime 음성 모델</text>
+  <text x="570" y="221" text-anchor="middle" class="body">오디오 직접 처리 · 음성 응답</text>
+
+  <rect id="native-tools" x="910" y="155" width="260" height="82" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="930" y="177" class="tag" fill="#166534">BUSINESS</text>
+  <text x="1040" y="203" text-anchor="middle" class="node">도구 · 업무 시스템</text>
+  <text x="1040" y="223" text-anchor="middle" class="small">호출 결과와 저장 이력은 구분</text>
+
+  <rect id="native-transcription" x="340" y="282" width="300" height="68" rx="8" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
+  <text x="358" y="301" class="tag" fill="#075985">OPTIONAL INPUT TRANSCRIPTION</text>
+  <text x="490" y="323" text-anchor="middle" class="node">별도 입력 전사 모델</text>
+  <text x="490" y="342" text-anchor="middle" class="small">모델 내부 텍스트 추출 아님</text>
+
+  <rect id="native-records" x="80" y="380" width="1090" height="50" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
+  <text x="625" y="400" text-anchor="middle" class="body">공통 선택 기록 · 원음 · 입력 전사 · 모델 응답 · 도구 이벤트</text>
+  <text x="625" y="421" text-anchor="middle" class="small">앱 녹음 · Foundry voice agent store · tracing은 각각 별도 설정</text>
+
+  <!-- Cascaded nodes -->
+  <rect id="pipeline-input" x="80" y="516" width="170" height="78" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="100" y="538" class="tag" fill="#475569">CHANNEL</text>
+  <text x="165" y="564" text-anchor="middle" class="node">단말 · 전화</text>
+  <text x="165" y="584" text-anchor="middle" class="small">입력 오디오</text>
+
+  <rect id="pipeline-stt" x="300" y="516" width="160" height="78" rx="8" fill="#ffffff" stroke="#0284c7"/>
+  <text x="320" y="538" class="tag" fill="#075985">STT</text>
+  <text x="380" y="568" text-anchor="middle" class="node">음성 인식</text>
+
+  <rect id="pipeline-model" x="510" y="506" width="250" height="88" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="1.6"/>
+  <text x="530" y="530" class="tag" fill="#075985">TEXT MODEL</text>
+  <text x="635" y="558" text-anchor="middle" class="node">텍스트 모델 · 에이전트</text>
+  <text x="635" y="582" text-anchor="middle" class="small">텍스트 입력 · 도구 판단</text>
+
+  <rect id="pipeline-tts" x="810" y="516" width="160" height="78" rx="8" fill="#ffffff" stroke="#0284c7"/>
+  <text x="830" y="538" class="tag" fill="#075985">TTS</text>
+  <text x="890" y="564" text-anchor="middle" class="node">음성 합성</text>
+  <text x="890" y="584" text-anchor="middle" class="small">출력 오디오</text>
+
+  <rect x="1040" y="516" width="170" height="78" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="1060" y="538" class="tag" fill="#475569">CHANNEL</text>
+  <text x="1125" y="564" text-anchor="middle" class="node">응답 재생</text>
+  <text x="1125" y="584" text-anchor="middle" class="small">단말 · 전화</text>
+
+  <rect id="pipeline-tools" x="510" y="632" width="250" height="58" rx="8" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="530" y="654" class="tag" fill="#166534">BUSINESS · 필요 시 호출</text>
+  <text x="635" y="678" text-anchor="middle" class="node">도구 · 업무 시스템</text>
+
+  <rect id="pipeline-records" x="80" y="750" width="1130" height="50" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
+  <text x="645" y="770" text-anchor="middle" class="body">공통 선택 기록 · 원음 · STT 전사 · 모델 응답 · 도구 이벤트 · TTS 출력</text>
+  <text x="645" y="791" text-anchor="middle" class="small">단계별로 노출된 데이터만 수집 · 앱 녹음·store·추적의 보유·삭제는 별도 정책</text>
+
+  <text x="40" y="842" class="small">점선은 선택 전사·저장·관측 경로입니다. 서비스/API가 노출한 데이터만 수집하며 관리형 내부 단계 접근을 보장하지 않습니다.</text>
+  <text x="40" y="864" class="small">요약·분석·사본은 구현에 따라 세션 중 또는 종료 후 생성·저장됩니다. 공통 기록 영역은 단일 저장 스위치나 기본 녹음을 뜻하지 않습니다.</text>
+
+  <!-- Legend -->
+  <line x1="40" y1="882" x2="1240" y2="882" stroke="#cbd5e1"/>
+  <line x1="64" y1="900" x2="112" y2="900" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
+  <text x="124" y="904" class="legend">실시간 처리</text>
+  <line x1="246" y1="900" x2="294" y2="900" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <text x="306" y="904" class="legend">선택 분기·저장·관측</text>
+  <text x="1240" y="904" text-anchor="end" class="source">원문 확인 2026-10-20 UTC · 모델·리전·기능별 지원 범위 별도 확인</text>
+</svg>
