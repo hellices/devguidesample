@@ -23,6 +23,9 @@ scraped by a Prometheus agent that remote-writes to an Azure Monitor workspace
 with the VM's managed identity, and Azure Managed Grafana shows the
 `SQL Server VM 상태` dashboard.
 
+Settings, design decisions, verification steps, and troubleshooting are in
+[CONFIGURATION.md](CONFIGURATION.md) (Korean).
+
 Follow the lab instructions for the
 [SRE Agent health check](../../sql-server-vm-health-check/index.md) and the
 [exporter and Grafana dashboard](../../sql-server-vm-grafana/index.md) for the
@@ -54,6 +57,7 @@ architecture, permissions, verification, and cleanup.
 | `scripts/verify_dashboard_queries.py` | Runs every dashboard query against the Azure Monitor workspace |
 | `scripts/generate-load.sh`, `scripts/vm/load.ps1` | Starts a `cpu`, `blocking`, `longrun`, `badlogin`, or `growth` demo workload as a scheduled task |
 | `scripts/cleanup.sh` | Deletes the resource group and purges the Key Vault |
+| `CONFIGURATION.md` | Network, permissions, deployment steps, verification, and troubleshooting details (Korean) |
 | `assets/architecture.svg` | Architecture diagram published to both lab pages through `sample.yml` |
 | `tests/` | Unit tests for the tools, collectors, dashboard, and renderers |
 

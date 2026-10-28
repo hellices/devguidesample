@@ -83,8 +83,8 @@ TLS로 SQL Server에 접속합니다.
 
 2026-10-27 Korea Central에서 실제로 배포해 확인한 결과는 다음과 같습니다.
 
-- 도구 연결은 에이전트 서브넷의 `10.42.2.5`에서 SQL Server `10.42.1.4:1433`으로
-  들어왔고, SQL Server가 보고한 연결 암호화(`encrypt_option`)는 `TRUE`였습니다.
+- SQL Server가 보고한 도구 연결의 출발지는 에이전트 위임 서브넷이었고, 연결
+  암호화(`encrypt_option`)는 `TRUE`였습니다.
 - CPU 부하 상태에서 에이전트는 도구를 12번 호출해 로그 사용률 96%, 백업 기록
   부재, `Orders(CustomerId)` 누락 인덱스, 데이터 파일 쓰기 지연, 최대 서버 메모리
   미설정을 근거로 **주의**를 판정했습니다.
@@ -145,6 +145,13 @@ TLS로 SQL Server에 접속합니다.
 
 ![추적 보기 화면. SqlServerMetricsQuery 도구에 PromQL이 전달된 호출](images/trace-metricsquery.png)
 
+### 장시간 쿼리와 SQL Agent 작업 실패 확인
+
+"오래 돌고 있는 쿼리와 오늘 SQL Agent 작업 실패"를 물으면 `long_running`, `jobs` operation으로
+실행 중인 세션과 작업별 실패 횟수·메시지를 정리합니다.
+
+![SRE Agent 채팅 답변. 세션 66이 106초째 실행 중인 Note 검색 쿼리와 sre-demo-nightly-check 작업이 오늘 10회 실패한 내용을 표로 보여 준다](images/chat-longrun-jobs.png)
+
 ### 정해 둔 점검으로 계정 상태 확인
 
 잠긴 계정이나 로그인 실패처럼 자주 보는 항목은 `SqlServerHealthCheck`의 `security`,
@@ -183,17 +190,8 @@ exporter 쪽 수집 주기와 항목은 [Grafana 실습](../sql-server-vm-grafan
 정리했습니다. VM 안의 sql_exporter는 비밀번호 없이 Windows 인증
 (`NT SERVICE\SqlExporterSvc`)으로 접속합니다.
 
-| 결정 | 이유 |
-| --- | --- |
-| 에이전트를 Azure VNet 모드로 통합 | 이 모드에서는 비플랫폼 아웃바운드 트래픽이 위임 서브넷을 지나며, NSG·사설 DNS·네트워크 로그가 그대로 적용됩니다. |
-| 에이전트 전용 /27 서브넷을 `Microsoft.App/environments`에 위임 | Azure VNet 모드의 서브넷 요구 사항입니다. 다른 서비스와 공유할 수 없습니다. |
-| SQL 연결 유형 Private, NSG에서 에이전트 서브넷만 1433 허용 | Private 연결은 VNet 안에서 SQL Server에 접속하게 하고 외부용 NSG 규칙을 만들지 않습니다. 같은 VNet의 다른 서브넷도 명시적 거부 규칙으로 막습니다. |
-| 에이전트 전용 SQL 로그인 `sre_monitor` | 서버 상태·메타데이터 읽기 권한과 `msdb`의 백업·작업 이력 SELECT만 부여합니다. 사용자 DB에는 연결만 할 수 있고 테이블 데이터는 읽지 못합니다. |
-| 비밀번호를 Private Endpoint 전용 Key Vault에 저장 | Python 도구 코드에 비밀을 넣지 않고, 공용 네트워크에서 데이터 평면 접근을 막습니다. |
-| TLS 필수(`encryption='require'`)와 `read_only=True` | VNet 내부에서도 자격 증명과 결과를 평문으로 보내지 않습니다. 첫 배포에서는 기본값으로 연결해 `encrypt_option=FALSE`가 관측되었습니다. |
-| SQL 드라이버 `pymssql`을 sandbox에 사전 설치 | 도구 정의의 `dependencies`만으로는 Azure VNet 모드에서 설치되지 않았습니다(관측). 공식 `zava-aks-postgres` lab과 같은 방식으로 `sandboxConfiguration.packages`를 씁니다. |
-| 고정 점검과 직접 SQL 도구를 분리 | 반복 점검은 `SqlServerHealthCheck`의 고정 `operation`으로 같은 기준을 유지하고, 세부 원인은 `SqlServerQuery`로 에이전트가 쓴 T-SQL을 실행합니다. 직접 SQL도 같은 읽기 전용 로그인으로 실행되며 항상 롤백됩니다. |
-| 시점 비교는 exporter 시계열에 맡김 | 행 증가량처럼 과거 값이 필요한 점검은 [Grafana 실습](../sql-server-vm-grafana/index.md)이 쌓는 시계열을 `SqlServerMetricsQuery`로 PromQL 조회합니다. SQL Server에 이력 테이블을 만들지 않습니다. |
+네트워크·권한·패키지 설치에 대한 설계 결정과 근거는 sample의
+[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md)에 정리했습니다.
 
 ## SRE Agent 등록 구독과 서브넷 조인 권한 준비
 
@@ -218,88 +216,22 @@ exporter 쪽 수집 주기와 항목은 [Grafana 실습](../sql-server-vm-grafan
 
 실습이 끝나면 바로 [정리](#lab-cleanup)를 실행합니다.
 
-## 세 서브넷과 NSG로 1433을 에이전트 서브넷에만 개방
+## 1433 포트는 에이전트 서브넷에만 열고 Key Vault는 Private Endpoint로만 접근
 
-| 서브넷 | 주소 | 용도 | 아웃바운드 |
-| --- | --- | --- | --- |
-| `snet-sql` | `10.42.1.0/24` | SQL Server VM, 고정 사설 IP `10.42.1.4` | NAT Gateway |
-| `snet-agent` | `10.42.2.0/27` | SRE Agent 위임 서브넷 | NAT Gateway |
-| `snet-endpoint` | `10.42.3.0/27` | Key Vault Private Endpoint `10.42.3.4` | 없음 |
+가상 네트워크에는 SQL Server VM, SRE Agent 위임 서브넷, Key Vault Private Endpoint용
+서브넷 세 개가 있습니다. SQL 서브넷의 NSG는 1433 포트를 에이전트 서브넷에서 오는 연결만
+허용하고, 같은 VNet의 다른 서브넷도 막습니다. VM과 서브넷에는 공용 IP가 없고 아웃바운드는
+NAT Gateway로만 나갑니다. 주소 범위, NSG 규칙, 에이전트 Bicep 설정은
+[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#네트워크)를 참고합니다.
 
-`snet-sql` NSG의 인바운드 규칙은 다음 두 개입니다. 기본 규칙
-`AllowVnetInBound`보다 우선순위가 높아 같은 VNet의 다른 서브넷도 1433에
-접근하지 못합니다.
+## 에이전트와 SQL 로그인은 읽기 권한만 가진다
 
-| 우선순위 | 이름 | 원본 | 포트 | 동작 |
-| --- | --- | --- | --- | --- |
-| 100 | `allow-sql-from-sre-agent` | `10.42.2.0/27` | 1433 | 허용 |
-| 200 | `deny-sql-from-other-sources` | `*` | 1433 | 거부 |
+에이전트 관리 ID는 리소스 그룹 읽기, Key Vault 비밀 읽기, Azure Monitor workspace 조회
+권한만 가지며 VM에서 명령을 실행할 권한이 없습니다. SQL 로그인 `sre_monitor`는 서버 상태와
+메타데이터, `msdb`의 백업·작업 이력만 읽을 수 있고, 사용자 테이블을 SELECT하면 권한 오류(229)가
+납니다. 권한별 필요 이유는 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#권한)에 있습니다.
 
-모든 서브넷은 `defaultOutboundAccess: false`인 private subnet입니다. SQL VM의
-Windows Update·정품 인증과 에이전트의 ARM·Log Analytics 호출은 NAT Gateway로
-나갑니다. Key Vault는 `privatelink.vaultcore.azure.net` 사설 DNS 영역을 VNet에
-연결하고, 에이전트의 **VNet 사설 DNS 사용**(`usePrivateDnsResolution: true`)으로
-사설 IP를 해석합니다.
-
-에이전트 리소스의 네트워크 설정은 다음과 같습니다.
-
-```bicep
-vnetConfiguration: {
-  subnetResourceId: agentSubnetId
-}
-sandboxConfiguration: {
-  egress: {
-    mode: 'AzureVNet'
-    allowedHosts: []
-    allowedRegistries: [ 'pypi' ]
-    allowedCodeRepositories: []
-    allowHttpMcpServerNetworkAccess: false
-    vnetConfiguration: { usePrivateDnsResolution: true }
-  }
-  packages: [
-    { name: 'pymssql', version: '2.4.5', packageManager: 'pip' }
-  ]
-}
-```
-
-`allowedRegistries`의 `pypi`는 패키지 설치만 에이전트 인프라 네트워크로 보내는
-우회 설정입니다. 원격 MCP와 코드 저장소 우회는 끕니다.
-
-## 에이전트 관리 ID는 리소스 그룹 읽기와 Key Vault 비밀 읽기만 보유
-
-| 주체 | 범위 | 역할 |
-| --- | --- | --- |
-| 에이전트 UAMI·시스템 MI | 실습 리소스 그룹 | Reader, Monitoring Reader, Log Analytics Reader |
-| 에이전트 UAMI | Key Vault | Key Vault Secrets User |
-| 에이전트 UAMI | Azure Monitor workspace | Monitoring Data Reader (PromQL 조회) |
-| 에이전트 UAMI | 에이전트 리소스 | SRE Agent Administrator (공식 템플릿과 동일) |
-| 배포한 사용자 | 에이전트 리소스 | SRE Agent Administrator |
-
-에이전트는 VM에서 명령을 실행할 Azure 권한이 없습니다. SQL Server 안에서도
-`sre_monitor`는 다음 권한만 가집니다.
-
-```sql
-GRANT VIEW SERVER STATE, VIEW ANY DEFINITION, CONNECT ANY DATABASE TO [sre_monitor];
-USE msdb;
-CREATE USER [sre_monitor] FOR LOGIN [sre_monitor];
-GRANT SELECT ON dbo.backupset TO [sre_monitor];
-GRANT SELECT ON dbo.sysjobs TO [sre_monitor];
-GRANT SELECT ON dbo.sysjobhistory TO [sre_monitor];
-```
-
-| 권한 | 필요한 점검 | 근거 |
-| --- | --- | --- |
-| `VIEW SERVER STATE` | 대기, 요청, 잠금(`sys.dm_tran_locks`), 이벤트 파일 읽기 | 서버 범위 DMV 요구 권한. SQL Server 2022에서는 하위 권한인 `VIEW SERVER PERFORMANCE STATE`를 포함 |
-| `VIEW ANY DEFINITION` | 다른 SQL 로그인의 잠금 상태(`sys.sql_logins`), 테이블 이름과 행 수(`sys.dm_db_partition_stats`), 파일 목록 | `sys.sql_logins`는 자신과 `sa` 외 로그인을 보려면 추가 권한이 필요하고, `sys.dm_db_partition_stats`는 성능 상태와 보안 정의 권한을 함께 요구 |
-| `CONNECT ANY DATABASE` | 사용자 DB의 Query Store와 테이블 메타데이터 | 현재·미래의 모든 DB에 연결만 허용. 데이터 읽기 권한은 주지 않음 |
-| `msdb` 세 테이블 SELECT | 마지막 백업, SQL Agent 작업 목록과 실행 이력 | 백업·작업 이력은 `msdb` 테이블에만 있음 |
-
-SQL Server 2022의 세분화된 권한(`VIEW SERVER PERFORMANCE STATE`,
-`VIEW ANY PERFORMANCE DEFINITION`)만으로 시험했을 때는 `sys.dm_db_partition_stats`에서
-테이블 이름을 얻지 못했습니다(관측). 그래서 위 조합으로 정했고, 같은 VM에서
-`sre_monitor`로 테이블 데이터를 SELECT하면 권한 오류가 나는 것을 확인했습니다.
-
-## deploy.sh 한 번으로 인프라·SQL 준비·도구 등록 완료
+## deploy.sh 한 번으로 인프라·SQL 준비·도구 등록까지 끝난다
 
 sample은 [samples/sqlvm-health-lab](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
 
@@ -308,44 +240,10 @@ cd docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab
 ./scripts/deploy.sh rg-sqlvm-sre-lab koreacentral
 ```
 
-1. `infra/main.bicep`을 구독 범위로 배포합니다. VNet·NSG·NAT Gateway, SQL Server
-   2022 Developer on Windows Server 2022(`MicrosoftSQLServer:sql2022-ws2022:sqldev-gen2`),
-   SQL IaaS Agent 등록(Private, 1433), Key Vault와 Private Endpoint·사설 DNS,
-   Log Analytics·Application Insights, 에이전트 UAMI와 VNet 통합
-   `Microsoft.App/agents`, 역할 할당을 만듭니다.
-2. `scripts/configure-sql.sh`가 VMAccess로 로컬 관리자 비밀번호를 일회용 값으로
-   재설정하고, managed Run Command를 그 계정으로 실행해 다음을 처리합니다.
-   - SQL Server 인증 모드를 혼합 모드로 바꾸고 서비스를 한 번 재시작
-   - `sre_monitor` 로그인 생성 또는 비밀번호 교체와 권한 부여
-   - `SreDemo` DB(FULL 복구 모델, 50만 행 `dbo.Orders`, `CustomerId` 인덱스 없음,
-     증가 관찰용 `dbo.AuditEvents`) 생성
-   - `configure-checks.ps1`: 로그인 감사용 Extended Events 세션 `sre_login_audit`,
-     점검 대상 데모 로그인, 데모 SQL Agent 작업 생성(아래 표)
-
-   이어서 `sre_monitor` 비밀번호를 ARM(`management.azure.com`) 경로로 Key Vault
-   비밀 `sql-monitor-password`에 씁니다. Key Vault 방화벽은 데이터 평면에만
-   적용되므로 공용 액세스가 꺼진 상태에서도 제어 평면으로 비밀을 만들 수
-   있습니다. 일회용 관리자 비밀번호는 저장하지 않습니다.
-3. `scripts/apply-agent-config.sh`가 에이전트 데이터 평면에 Python 도구와 스킬을
-   등록합니다.
-
-| `configure-checks.ps1`이 만드는 대상 | 점검 목적 |
-| --- | --- |
-| XE 세션 `sre_login_audit`: `error_reported`(오류 18456)와 풀 재사용이 아닌 `login`(`is_cached = 0`) 이벤트, 오류 로그 폴더의 `event_file` 대상(10MB × 4개) | 로그인 실패·성공의 계정, 클라이언트 주소, 호스트, 애플리케이션 |
-| `app_user` (`CHECK_POLICY = ON`) | 잘못된 비밀번호로 잠기는 계정. SQL 로그인은 Windows 계정 잠금 정책을 따르며, 이 VM은 임계값 10회·잠금 10분(관측) |
-| `legacy_report` (`DISABLE`) | 사용 중지 계정 |
-| SQL Agent 작업 `sre-demo-nightly-check`(30분마다 실패), `sre-demo-update-stats`(매시 성공) | 작업 실패와 오류 메시지 |
-
-| 등록 대상 | 데이터 평면 요청 |
-| --- | --- |
-| `SqlServerHealthCheck`, `SqlServerQuery`, `SqlServerMetricsQuery` (`PythonFunctionTool`) | `PUT /api/v1/extendedAgent/apply`, `ToolList` 본문, `application/x-yaml` |
-| `sql-server-vm-health-check` 스킬 | `PUT /api/v2/extendedAgent/skills/{name}` |
-
-두 경로는 공식 `microsoft/sre-agent` 저장소의 lab 스크립트 방식을 따릅니다.
-도구 코드의 `@@SQL_HOST@@`, `@@KEY_VAULT_NAME@@`, `@@AGENT_CLIENT_ID@@`,
-`@@PROMETHEUS_QUERY_ENDPOINT@@` 같은 값은 등록 직전에 `scripts/render_agent_config.py`가 채웁니다. 등록 응답은
-HTTP 202이므로, 도구를 바꾼 직후 호출하면 이전 버전이 실행될 수 있습니다.
-`GET /api/v1/extendedAgent/tools`로 반영을 확인한 뒤 새 대화에서 호출합니다.
+스크립트가 Bicep으로 인프라를 만들고, SQL Server에 점검용 로그인·데모 DB·로그인 감사 세션·
+데모 작업을 준비한 뒤, 에이전트에 Python 도구 3개와 스킬을 등록합니다. 같은 배포가
+[Grafana 실습](../sql-server-vm-grafana/index.md)의 지표 파이프라인과 대시보드도 구성합니다.
+단계별 동작과 데이터 평면 API는 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#배포-단계)를 참고합니다.
 
 ## CPU·잠금·장시간 쿼리·로그인 실패·행 증가 부하 주입
 
@@ -413,18 +311,6 @@ HTTP 202이므로, 도구를 바꾼 직후 호출하면 이전 버전이 실행�
 | SQL을 직접 실행해 지금 락 웨잇, 차단 세션의 열린 트랜잭션과 로그 사용량, 실행한 SQL을 보여 달라 | `sys.dm_os_waiting_tasks` ⨝ `sys.dm_tran_locks`(`lock_owner_address = resource_address`), 열린 트랜잭션 조회, `SreDemo` 문맥의 `sys.partitions` 조회 | 체인 `78 → 82 → 80, 81`. 세션 78이 `PK_Orders` 키(HoBT `72057594045726720`)에 `X`/`GRANT`, 나머지는 같은 키에 `S`/`WAIT`로 약 14초 대기. 세션 78의 트랜잭션 로그 사용 120,128바이트, 로그 레코드 1,001개. 두 스냅샷에서 트랜잭션 시작 시각이 달라 한 트랜잭션이 아니라 반복되는 차단으로 판정 |
 | `UPDATE SreDemo.dbo.Orders ...`를 그대로 실행하고, 테이블 행 수와 인덱스 사용 통계를 조회하라 | `UPDATE` 전달 후 `database=SreDemo`로 `sys.dm_db_partition_stats`, `sys.dm_db_index_usage_stats` 조회 | `UPDATE`는 도구가 거부해 실행되지 않음. `Orders` 500,000행·`PK_Orders` scan 70,944회, `AuditEvents` 240,000행을 실행한 SQL과 함께 보고 |
 
-## 연결 출처 10.42.2.5와 TLS 적용을 SQL Server가 직접 보고
-
-SQL Server가 보는 도구 연결 정보를 `overview` 결과에 포함했습니다. 에이전트에게
-값만 그대로 보여 달라고 요청한 결과입니다.
-
-| 필드 | 값 |
-| --- | --- |
-| `success` | `true` |
-| `sql_server` | `10.42.1.4:1433` |
-| `data.overview.tool_client_address` | `10.42.2.5` (`snet-agent`) |
-| `data.overview.tool_connection_encrypted` | `TRUE` |
-
 ## CPU 부하에서 로그·백업·인덱스 근거로 주의 판정
 
 sre.azure.com에서 에이전트 채팅을 열고 다음처럼 요청합니다.
@@ -488,7 +374,7 @@ sqlsre-sqlvm에서 지금 쿼리가 멈춘 것 같다는 제보가 있어. sql-s
 
 | 확인 항목 | 통과 기준 |
 | --- | --- |
-| VNet 경로 | `overview.tool_client_address`가 `snet-agent` 범위(`10.42.2.0/27`) |
+| VNet 경로 | `overview.tool_client_address`가 에이전트 위임 서브넷 `snet-agent` 범위 |
 | 암호화 | `overview.tool_connection_encrypted`가 `TRUE` |
 | 네트워크 격리 | VM 공용 IP 없음, `snet-sql` NSG가 1433을 `snet-agent`에만 허용, Key Vault `publicNetworkAccess: Disabled` |
 | 도구 실행 | 모든 호출이 `success: true`이고 `section_errors` 없음 |
@@ -518,26 +404,10 @@ az keyvault show -n <key-vault-name> --query properties.publicNetworkAccess -o t
 soft-delete 상태의 Key Vault를 영구 삭제한 뒤 로컬 `.lab-state.json`을 지웁니다.
 `az group exists -n rg-sqlvm-sre-lab`이 `false`를 반환하면 정리가 끝난 것입니다.
 
-## 배포·실행 중 만난 오류와 대응
+## 배포·실행 중 만난 오류는 구성 상세에 정리
 
-| 증상 | 원인 | 대응 |
-| --- | --- | --- |
-| 도구가 `pymssql is not installed` 반환, 에이전트는 판정 불가 보고 | 도구 정의의 `dependencies`가 Azure VNet 모드에서 설치되지 않음(관측) | `sandboxConfiguration.packages`로 `pymssql`을 sandbox에 사전 설치합니다. |
-| SQL Server에서 도구 연결의 `encrypt_option`이 `FALSE` | `pymssql` 기본 암호화 설정 `request`로는 TLS가 협상되지 않음(관측) | `tds_version='7.4'`, `encryption='require'`를 지정합니다. |
-| 도구를 바꾼 직후 새 필드가 결과에 없음 | 도구 등록 API가 비동기(HTTP 202)로 반영됨 | 저장된 도구 코드를 조회해 반영을 확인한 뒤 새 대화에서 호출합니다. |
-| Key Vault를 공용 액세스로 만들었는데 `Disabled`로 바뀜 | 테넌트 수준 보안 통제가 공용 액세스를 끔(이 실습 구독에서 관측) | 처음부터 공용 액세스를 끄고 Private Endpoint와 사설 DNS로만 접근합니다. 비밀 쓰기는 ARM 제어 평면을 씁니다. |
-| `az deployment sub create`가 끝났는데 배포는 계속 `Running` | SQL IaaS Agent 등록이 오래 걸림 | `deploy.sh`는 `--no-wait` 후 `az deployment sub wait`로 최종 상태를 확인합니다. |
-| 재배포 뒤 SQL 로그인 `Login failed` | 연결 유형이 같으면 SQL IaaS Agent가 바뀐 SQL 인증 비밀번호를 다시 적용하지 않음(관측) | SQL IaaS Agent의 SQL 인증 설정을 쓰지 않고, 설정 스크립트가 매번 `sre_monitor` 비밀번호를 교체해 Key Vault에 씁니다. |
-| 잠금 부하에서 차단이 보이지 않음 | `SET Status = Status`는 값이 바뀌지 않아 충돌 잠금이 유지되지 않음 | 부하 스크립트는 실제 값을 바꾼 뒤 롤백합니다. |
-| 에이전트가 "잠금 보유 세션과 테이블을 확정할 수 없다"고 보고 | 잠금 요약이 DB·모드별 개수만 반환 | `locks`에 세션별 테이블 잠금(`held_table_locks`)을 추가하고, `KEY`·`PAGE`·`RID` 잠금은 `sys.partitions.hobt_id`로 테이블 이름을 찾습니다. |
-| 에이전트가 계정 상태 결과가 잘려 잠긴 계정 여부를 확정하지 못함 | 긴 도구 결과의 앞부분이 잘림(관측) | `security`가 `locked`, `disabled` 같은 결론 목록을 먼저 반환하고 빈 값을 제거합니다. |
-| 로그인 실패가 있었는데 0건 | `ring_buffer` 대상의 XML이 `truncated=1`로 잘려 새 이벤트가 빠짐(관측) | `event_file` 대상으로 바꾸고 `sys.fn_xe_file_target_read_file`로 읽습니다. |
-| 이벤트 파일을 `timestamp_utc > ...`로 거르면 0건 | 같은 조건을 `CASE`로 세면 287건인데 `WHERE`에서는 0건(SQL Server 2022, 관측) | 공식 예제처럼 `CAST(timestamp_utc AS datetime2(7))`로 비교합니다. |
-| 이벤트 XML을 읽는 쿼리가 오류 1934 | XML 데이터 형식 메서드는 `QUOTED_IDENTIFIER ON`이 필요한데 드라이버 세션 기본값이 아님 | 쿼리 앞에 `SET QUOTED_IDENTIFIER ON;`을 둡니다. |
-| 로그인 실패가 두 배로 집계 | 실패 한 번에 오류 18456 이벤트가 두 번 발생. 오류 로그용 메시지에만 `[CLIENT: ...]`가 있음 | 메시지에 `[CLIENT: ...]`가 있는 이벤트만 셉니다. |
-| 금일 상위 쿼리에 점검 쿼리가 나옴 | exporter와 도구가 DB마다 실행하는 메타데이터 쿼리도 Query Store에 기록됨 | `query_store_runtime_stats`, `dm_db_partition_stats`, `sys.database_files`를 포함한 문장을 제외합니다. |
-| 관리자 RunAs 스크립트가 출력 없이 `System error ... 'Incorrect function.'` | 스크립트가 종료 코드 1로 끝나면 managed Run Command가 이 메시지만 반환(관측) | 스크립트를 `try`/`catch`로 감싸 `C:\SreLab`에 로그를 남기고, SYSTEM으로 실행한 별도 Run Command로 로그를 읽습니다. |
-| 실습 중 VM이 `Deallocated`로 바뀜 | 실습과 무관한 구독 자동화(서비스 주체)가 VM 할당을 해제함(활동 로그에서 관측) | `az vm start`로 시작합니다. SQL Server, exporter 서비스, Prometheus 예약 작업은 자동으로 다시 시작됩니다. |
+`pymssql` 설치, TLS 협상, 로그인 감사 이벤트 누락, Run Command 오류처럼 실습 중 만난 문제와
+대응은 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#문제-해결)에 모았습니다.
 
 ## 공식 참고 자료
 

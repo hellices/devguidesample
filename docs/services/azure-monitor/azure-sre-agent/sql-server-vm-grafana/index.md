@@ -98,11 +98,11 @@ Monitor workspace로 보냅니다. Azure Managed Grafana에서는 `SQL Server VM
 
 ![잠금 상세 행. 보유·대기 중인 잠금, 리소스 유형별 잠금 대기 시간, 현재 차단 관계 표](images/dashboard-locks.png)
 
-![세션·장시간 쿼리와 금일 쿼리 행. 30초 이상 실행 중인 요청과 Query Store 기준 금일 상위 쿼리](images/dashboard-sessions-queries.png)
+![I/O, 세션·장시간 쿼리, 금일 쿼리 행. 30초 이상 실행 중인 요청 1건과 Query Store 기준 금일 상위 쿼리의 총 시간·실행 수·평균·최대](images/dashboard-sessions-queries.png)
 
-![보안·접속 행. SQL 로그인 잠김·사용 중지 상태, sysadmin 구성원, 최근 1시간 로그인 실패와 성공](images/dashboard-security.png)
+![보안·접속 행. SQL 로그인별 잠김·사용 중지·만료·잘못된 비밀번호 횟수, sysadmin 구성원, 최근 1시간 로그인 성공 목록과 스토리지 행](images/dashboard-security.png)
 
-![스토리지와 테이블 증가 행. 볼륨 사용률, DB 파일 크기, 테이블 행 수와 1시간 증가량](images/dashboard-storage-tables.png)
+![스토리지, 테이블 증가, SQL Agent 작업 행. 볼륨 사용률, DB 파일 크기, 테이블 행 수와 1시간 증가량, 작업별 마지막 결과와 오늘 실패 횟수](images/dashboard-storage-tables.png)
 
 같은 지표를 SRE Agent도 `SqlServerMetricsQuery` 도구로 조회합니다. 채팅 예시는
 [SRE Agent 실습](../sql-server-vm-health-check/index.md)에 있습니다.
@@ -215,60 +215,15 @@ SRE Agent)은 저장된 시계열을 필요할 때 PromQL로 읽습니다.
 | Prometheus remote write | VM 관리 ID 토큰으로 workspace 기본 DCR에 전송 (push, HTTPS, NAT Gateway 경유) | 기본 설정으로 샘플을 묶어 최대 약 5초 안에 전송 | 실패하면 WAL에서 재시도 |
 | Azure Managed Grafana 대시보드 | 패널별 PromQL 조회 (pull) | 대시보드가 열려 있는 동안 30초 | 기본 시간 범위 최근 1시간 |
 
-| 결정 | 이유 |
-| --- | --- |
-| exporter와 Prometheus는 루프백 주소에만 바인딩 | 지표 엔드포인트를 네트워크에 노출하지 않습니다. NSG 규칙도 추가하지 않습니다. |
-| sql_exporter를 가상 서비스 계정 `NT SERVICE\SqlExporterSvc`로 실행 | DSN에 사용자가 없으면 go-mssqldb가 Windows에서 SSO를 사용합니다. 저장할 비밀번호가 없습니다. |
-| 해당 로그인에 `VIEW SERVER STATE`, `VIEW ANY DEFINITION`, `CONNECT ANY DATABASE`와 `msdb`의 `backupset`·`sysjobs`·`sysjobhistory` SELECT만 부여 | 로그인 상태, 테이블 행 수, 각 DB의 Query Store와 파일 사용량을 읽는 최소 조합입니다. 사용자 테이블을 SELECT하면 오류 229로 거부됩니다(관측). 권한별 근거는 [SRE Agent 실습](../sql-server-vm-health-check/index.md)에 정리했습니다. |
-| Prometheus는 agent 모드(`--agent`) | 로컬 쿼리·저장 없이 수집과 remote write만 합니다. |
-| VM 전용 사용자 할당 관리 ID로 remote write | Azure VM의 사용자 할당 관리 ID 인증은 Prometheus 2.45 이상에서 지원합니다. 이 실습은 3.15.1을 씁니다. |
-| Monitoring Metrics Publisher는 workspace의 기본 DCR에만 부여 | 공식 절차가 지정한 범위입니다. |
-| Grafana 관리 ID의 Monitoring Data Reader는 workspace에만 부여 | Bicep으로 만든 Grafana에는 이 할당 하나만 있었습니다(관측). 포털 흐름처럼 구독 범위로 넓히지 않습니다. |
-| 다운로드 파일은 버전과 SHA256으로 고정 | GitHub 릴리스 자산의 digest와 일치할 때만 설치합니다. |
+exporter 바인딩, 서비스 계정, 권한, 관리 ID 범위에 대한 설계 결정은
+[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#지표-파이프라인)에 정리했습니다.
 
 ## 같은 deploy.sh가 지표 파이프라인과 대시보드까지 구성
 
-sample은 [samples/sqlvm-health-lab](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
-
-```bash
-cd docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab
-./scripts/deploy.sh rg-sqlvm-sre-lab koreacentral
-```
-
-SRE Agent 실습의 단계 뒤에 다음이 이어집니다.
-
-1. Bicep이 Azure Monitor workspace(`Microsoft.Monitor/accounts`), Azure Managed
-   Grafana(`Microsoft.Dashboard/grafana`, Standard, 시스템 관리 ID), VM의 지표용
-   사용자 할당 관리 ID를 만듭니다. Grafana에는
-   `grafanaIntegrations.azureMonitorWorkspaceIntegrations`로 workspace를 연결해
-   Prometheus 데이터 원본을 자동으로 만듭니다.
-2. `scripts/configure-monitoring.sh`가 workspace의 기본 DCR·DCE에서 remote write
-   URL을 조합하고, VM 관리 ID에 DCR의 Monitoring Metrics Publisher를 부여합니다.
-3. 같은 스크립트가 managed Run Command로 VM에서 두 단계를 실행합니다.
-   - `configure-monitoring.ps1` (LocalSystem): 세 바이너리 다운로드·SHA256 확인,
-     windows_exporter MSI 설치, sql_exporter 서비스 등록, Prometheus 에이전트
-     예약 작업 등록
-   - `grant-exporter-login.ps1` (일회용 비밀번호로 재설정한 로컬 관리자): SQL
-     Server 로그인 생성과 권한 부여, sql_exporter 재시작, remote write 카운터 보고
-
-   sql_exporter는 세 collector 파일을 읽습니다. `mssql_health`(30초마다),
-   `mssql_audit`(로그인 이벤트, 1분 캐시), `mssql_inventory`(Query Store·스토리지·
-   테이블, 5분 캐시)입니다. 로그인 이벤트는 SRE Agent 실습의 `configure-checks.ps1`이
-   만든 XE 세션 `sre_login_audit`에서 읽습니다.
-4. `scripts/import-dashboard.sh`가 Grafana의 Prometheus 데이터 원본 UID를 찾아
-   대시보드를 가져옵니다.
-
-`configure-monitoring.sh`의 마지막 출력에서 remote write 상태를 확인합니다.
-
-```text
-prometheus_remote_storage_samples_failed_total{...} 0
-prometheus_remote_storage_samples_retried_total{...} 0
-prometheus_remote_storage_samples_total{...} 7242
-```
-
-공식 문서에 따르면 역할 할당이 적용되기까지 약 30분이 걸릴 수 있고, 그동안
-Prometheus 로그에 HTTP 403이 보일 수 있습니다. 이 실습에서는 첫 실행부터 실패가
-없었습니다.
+[SRE Agent 실습](../sql-server-vm-health-check/index.md)의 `deploy.sh`가 Azure Monitor
+workspace, Azure Managed Grafana, VM의 지표용 관리 ID를 만들고, VM에 exporter와 Prometheus
+에이전트를 설치한 뒤 대시보드를 가져옵니다. 설치 단계와 remote write 확인 방법은
+[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#지표-파이프라인-배포)를 참고합니다.
 
 ## 대시보드 패널과 확인할 신호
 
@@ -292,46 +247,11 @@ Prometheus 로그에 HTTP 403이 보일 수 있습니다. 이 실습에서는 �
 모든 쿼리는 Prometheus 외부 레이블 `sql_vm`으로 VM을 구분하므로, 같은
 workspace에 여러 SQL Server VM을 보내면 대시보드 상단 변수로 전환할 수 있습니다.
 
-## 패널 쿼리를 workspace와 Grafana 양쪽에서 실행해 검증
+## 모든 패널 쿼리를 workspace와 Grafana에서 실행해 검증
 
-`scripts/verify_dashboard_queries.py`는 대시보드의 모든 패널 쿼리를 Azure
-Monitor workspace의 PromQL 엔드포인트에 실행합니다. CPU 부하
-(`./scripts/generate-load.sh cpu 30`) 중의 결과 일부입니다.
-
-| 패널 | 결과 |
-| --- | --- |
-| 수집 상태 | `1` (UP) |
-| Batch requests/s | 약 61 |
-| CPU 사용률 (VM 전체) | 약 77.9% |
-| Page life expectancy | 14,688초 |
-| Signal wait 비율 | 약 0.99 |
-| 상위 10개 대기 유형 | 10개 시계열 |
-| 마지막 백업 | 4개 DB × 전체·로그 = 8개 행 |
-| 데이터베이스 크기 | 7개 DB × 데이터·로그 = 14개 시계열 |
-| 문제 DB: 오프라인·로그 재사용 대기 | 0개 (정상) |
-
-확장 패널은 데모 부하를 함께 실행한 2026-10-27 17:3x~17:5x UTC에 같은 스크립트로
-확인했습니다.
-
-| 패널 | 결과 |
-| --- | --- |
-| SQL 로그인 상태 | `app_user` 잠김 1·잘못된 비밀번호 10회(`badlogin` 직후), `legacy_report`·`sa` 사용 중지 |
-| 로그인 실패 (최근 1시간) | `app_user`(비밀번호 불일치)·`scanner`(로그인 없음) 각 48건, 클라이언트 `127.0.0.1` |
-| 1시간 행 증가량 | `dbo.AuditEvents` 약 234,000행, `dbo.Orders` 0 |
-| 작업 상태 | `sre-demo-nightly-check` 금일 실패 5회 |
-| 금일 상위 쿼리 | `SreDemo`의 6개 `query_hash`. 점검 쿼리는 제외됨 |
-| 보유·대기 중인 잠금 (`blocking` 중) | `S`/`WAIT` 3, `IX`/`GRANT` 31, `IS`/`GRANT` 6 |
-| 현재 차단 관계 (`blocking` 중) | 차단 세션 77(`sre-demo-load`), 대기 리소스 `KEY` |
-
-Grafana 쪽 경로는 Grafana HTTP API `/api/ds/query`를 Microsoft Entra 토큰으로
-호출해 확인했습니다. 두 쿼리 모두 HTTP 200을 반환했고 상위 대기는
-`sos_scheduler_yield`였습니다.
-
-```bash
-TOKEN=$(az account get-access-token --resource ce34e7e5-485f-4d76-964f-b3d2b16d1e4f --query accessToken -o tsv)
-curl -sS -X POST "$GRAFANA_ENDPOINT/api/ds/query" -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" --data @query.json
-```
+`scripts/verify_dashboard_queries.py`가 대시보드의 모든 패널 쿼리를 workspace에 실행하고,
+Grafana HTTP API로도 같은 데이터 원본을 조회했습니다. 측정값과 실행 방법은
+[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#대시보드-검증)에 있습니다.
 
 ## remote write·패널 데이터·Grafana 경로·최소 권한이 모두 확인되면 통과
 
@@ -368,21 +288,10 @@ Azure Monitor workspace와 Grafana도 같은 리소스 그룹에 있으므로 �
 `MA_<workspace>_<region>_managed` 리소스 그룹에 있습니다(관측). 스크립트는 정리
 후 이 리소스 그룹이 남아 있으면 알려 줍니다.
 
-## 구성 중 만난 오류와 대응
+## 구성 중 만난 오류는 구성 상세에 정리
 
-| 증상 | 원인 | 대응 |
-| --- | --- | --- |
-| windows_exporter 서비스가 시작 직후 중지, 이벤트 로그에 `unknown collector cs` | v0.32.0에 `cs` collector가 없음(관측) | 수집기 목록을 `cpu,logical_disk,memory,net,os,system,mssql`로 지정합니다. |
-| RunAs로 실행한 스크립트가 출력 없이 `System error ... 'Incorrect function.'` | 스크립트가 종료 코드 1로 끝나면 managed Run Command가 이 메시지만 반환(관측). 처음에는 스크립트 크기 문제로 오인했음 | 스크립트를 `try`/`catch`로 감싸 로그 파일을 남기고 SYSTEM Run Command로 읽어 실제 오류를 확인합니다. 설치는 LocalSystem, SQL 로그인 생성만 RunAs로 나눈 구성은 유지합니다. |
-| 재실행 시 `prometheus.exe ... being used by another process` | 예약 작업의 재시작 설정이 중지한 Prometheus를 다시 띄움(관측) | 바이너리 교체 전에 예약 작업을 비활성화하고, 같은 해시의 바이너리는 복사하지 않습니다. |
-| sql_exporter 설정을 읽지 못함 | `job`, `instance`는 Prometheus가 예약한 레이블 | SQL Agent 작업 이름 레이블을 `job_name`으로 씁니다. |
-| 로그인 실패 패널이 비어 있음 | 세 가지가 겹침(관측): `ring_buffer` XML이 잘림(`truncated=1`), 이벤트 파일을 `WHERE timestamp_utc > ...`로 거르면 0건, XML 메서드가 `QUOTED_IDENTIFIER` 기본값에서 오류 1934 | `event_file` 대상, 공식 예제의 `CAST(timestamp_utc AS datetime2(7))` 비교, 쿼리 앞 `SET QUOTED_IDENTIFIER ON;`을 적용합니다. |
-| 로그인 실패가 두 배로 집계 | 실패 한 번에 오류 18456 이벤트가 두 번 발생하고, 오류 로그용 메시지에만 `[CLIENT: ...]`가 있음 | 해당 문자열이 있는 이벤트만 셉니다. |
-| 금일 상위 쿼리에 exporter 자체 쿼리가 보임 | DB마다 실행하는 메타데이터 쿼리도 Query Store에 기록됨 | `query_store_runtime_stats`, `dm_db_partition_stats`, `sys.database_files`를 포함한 문장을 제외합니다. |
-| 설치 직후 sql_exporter `/metrics`가 HTTP 500 | 서비스 계정의 SQL Server 로그인이 아직 없음 | 설치 단계는 시작 페이지만 확인하고, 로그인 생성 뒤 `/metrics`를 확인합니다. |
-| 쿼리 결과의 DB 이름이 `SreDemo`가 아니라 `sredemo` | managed Prometheus는 대소문자를 구분하지 않으며 반환되는 대소문자가 일정하지 않음 | 레이블 값 비교가 대소문자에 의존하지 않게 작성합니다. |
-| 테이블에 `microsoft.amwresourceid` 열이 보임 | workspace가 반환하는 시계열에 workspace 리소스 ID 레이블이 붙음(관측) | 테이블 변환에서 해당 열을 숨깁니다. |
-| `az grafana data-source query`가 `Invalid time range` 오류 | CLI가 보낸 시간 범위를 workspace가 거부(관측) | Grafana HTTP API `/api/ds/query`에 밀리초 단위 `from`·`to`를 직접 지정합니다. |
+windows_exporter 수집기 이름, sql_exporter 예약 레이블, 로그인 감사 이벤트 읽기, Prometheus
+바이너리 교체 같은 문제와 대응은 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#문제-해결)에 모았습니다.
 
 ## 공식 참고 자료
 

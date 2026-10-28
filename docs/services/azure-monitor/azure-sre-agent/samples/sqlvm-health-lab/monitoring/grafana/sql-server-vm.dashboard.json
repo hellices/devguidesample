@@ -2302,7 +2302,8 @@
               "job": true,
               "instance": true,
               "sql_vm": true,
-              "microsoft.amwresourceid": true
+              "microsoft.amwresourceid": true,
+              "query_hash": true
             },
             "renameByName": {
               "db": "DB",
@@ -2377,7 +2378,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_query_today_duration_seconds{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_query_today_duration_seconds{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2389,7 +2390,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_query_today_executions{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_query_today_executions{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2401,7 +2402,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_query_today_avg_duration_seconds{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_query_today_avg_duration_seconds{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2413,7 +2414,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_query_today_max_duration_seconds{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_query_today_max_duration_seconds{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2425,7 +2426,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_query_today_avg_cpu_seconds{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_query_today_avg_cpu_seconds{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2437,7 +2438,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_query_today_avg_logical_reads{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_query_today_avg_logical_reads{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2458,7 +2459,8 @@
               "job": true,
               "instance": true,
               "sql_vm": true,
-              "microsoft.amwresourceid": true
+              "microsoft.amwresourceid": true,
+              "query_hash": true
             },
             "renameByName": {
               "db": "DB",
@@ -2623,7 +2625,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_sql_login_locked{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_sql_login_locked{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2635,7 +2637,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_sql_login_disabled{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_sql_login_disabled{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2647,7 +2649,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_sql_login_expired{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_sql_login_expired{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2659,7 +2661,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_sql_login_bad_password_count{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_sql_login_bad_password_count{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -2671,7 +2673,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_sql_login_last_bad_password_timestamp_seconds{sql_vm=\"$sql_vm\"} * 1000",
+          "expr": "max without (__name__) (mssql_sql_login_last_bad_password_timestamp_seconds{sql_vm=\"$sql_vm\"} * 1000)",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3018,7 +3020,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_db_file_size_bytes{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_db_file_size_bytes{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3030,7 +3032,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_db_file_used_bytes{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_db_file_used_bytes{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3042,7 +3044,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_db_file_max_size_bytes{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_db_file_max_size_bytes{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3423,7 +3425,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_job_last_run_succeeded{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_job_last_run_succeeded{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3435,7 +3437,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_job_last_run_timestamp_seconds{sql_vm=\"$sql_vm\"} * 1000",
+          "expr": "max without (__name__) (mssql_job_last_run_timestamp_seconds{sql_vm=\"$sql_vm\"} * 1000)",
           "legendFormat": "",
           "range": false,
           "instant": true,
@@ -3447,7 +3449,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "mssql_job_failures_today{sql_vm=\"$sql_vm\"}",
+          "expr": "max without (__name__) (mssql_job_failures_today{sql_vm=\"$sql_vm\"})",
           "legendFormat": "",
           "range": false,
           "instant": true,
