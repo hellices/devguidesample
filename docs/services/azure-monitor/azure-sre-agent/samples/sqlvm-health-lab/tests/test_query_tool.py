@@ -137,6 +137,13 @@ class FakeCursor:
         return None
 
 
+class BinaryCellTests(unittest.TestCase):
+    def test_large_binary_is_truncated(self):
+        value = query.to_json_value(b"\x01" * 10000)
+        self.assertTrue(value.endswith("...(truncated)"))
+        self.assertLessEqual(len(value), query.MAX_CELL_CHARS + 20)
+
+
 class ResultSetTests(unittest.TestCase):
     def test_reads_every_result_set_and_truncates(self):
         cursor = FakeCursor([

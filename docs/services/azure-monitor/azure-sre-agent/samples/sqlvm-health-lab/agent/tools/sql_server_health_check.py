@@ -575,14 +575,16 @@ LEFT JOIN baseline AS b ON b.query_hash = t.query_hash
 WHERE t.avg_ms >= @slow_ms OR t.avg_ms >= @ratio * b.avg_ms_7d
 ORDER BY t.avg_ms DESC;
 """,
-    # Log usage comes from sys.dm_db_log_space_usage (active log), not from
-    # allocated pages. max_size 0 means no growth, so the limit is the current size.
+    # Log usage is the size of the active VLFs in each log file (sys.dm_db_log_info),
+    # not allocated pages. max_size 0 means no growth, so the limit is the current size.
     "files": """
 WITH f AS (
-    SELECT name, type, type_desc, physical_name, size, max_size, growth, is_percent_growth,
-           CASE WHEN type = 1 THEN (SELECT used_log_space_in_bytes FROM sys.dm_db_log_space_usage) / 8192.0
-                ELSE FILEPROPERTY(name, 'SpaceUsed') END AS used_pages
-    FROM sys.database_files)
+    SELECT df.name, df.type, df.type_desc, df.physical_name, df.size, df.max_size, df.growth, df.is_percent_growth,
+           CASE WHEN df.type = 1
+                THEN ISNULL((SELECT SUM(li.vlf_size_mb) * 128 FROM sys.dm_db_log_info(DB_ID()) AS li
+                             WHERE li.file_id = df.file_id AND li.vlf_active = 1), 0)
+                ELSE FILEPROPERTY(df.name, 'SpaceUsed') END AS used_pages
+    FROM sys.database_files AS df)
 SELECT name AS [file], type_desc AS file_type, physical_name,
        CAST(size / 128.0 AS decimal(18, 1)) AS size_mb,
        CAST(used_pages / 128.0 AS decimal(18, 1)) AS used_mb,

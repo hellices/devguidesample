@@ -161,13 +161,16 @@ queries:
       BEGIN
           SET @sql = N'USE ' + QUOTENAME(@db) + N';
           INSERT #f
-          SELECT DB_NAME(), name, CASE type WHEN 0 THEN ''data'' WHEN 1 THEN ''log'' ELSE ''other'' END,
-                 CAST(size AS bigint) * 8192,
-                 CASE WHEN type = 1 THEN (SELECT used_log_space_in_bytes FROM sys.dm_db_log_space_usage)
-                      ELSE CAST(FILEPROPERTY(name, ''SpaceUsed'') AS bigint) * 8192 END,
-                 CASE WHEN max_size = -1 THEN -1 WHEN max_size = 0 THEN CAST(size AS bigint) * 8192
-                      ELSE CAST(max_size AS bigint) * 8192 END
-          FROM sys.database_files;';
+          SELECT DB_NAME(), df.name, CASE df.type WHEN 0 THEN ''data'' WHEN 1 THEN ''log'' ELSE ''other'' END,
+                 CAST(df.size AS bigint) * 8192,
+                 CASE WHEN df.type = 1
+                      THEN ISNULL((SELECT CAST(SUM(li.vlf_size_mb) * 1048576 AS bigint)
+                                   FROM sys.dm_db_log_info(DB_ID()) AS li
+                                   WHERE li.file_id = df.file_id AND li.vlf_active = 1), 0)
+                      ELSE CAST(FILEPROPERTY(df.name, ''SpaceUsed'') AS bigint) * 8192 END,
+                 CASE WHEN df.max_size = -1 THEN -1 WHEN df.max_size = 0 THEN CAST(df.size AS bigint) * 8192
+                      ELSE CAST(df.max_size AS bigint) * 8192 END
+          FROM sys.database_files AS df;';
           EXEC sys.sp_executesql @sql;
           FETCH NEXT FROM dbs INTO @db;
       END

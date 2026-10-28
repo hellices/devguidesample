@@ -141,7 +141,8 @@ def to_json_value(value):
     if isinstance(value, decimal.Decimal):
         return float(value)
     if isinstance(value, (bytes, bytearray)):
-        return "0x" + value.hex()
+        limit = MAX_CELL_CHARS // 2
+        return "0x" + bytes(value[:limit]).hex() + ("...(truncated)" if len(value) > limit else "")
     if isinstance(value, str) and len(value) > MAX_CELL_CHARS:
         return value[:MAX_CELL_CHARS] + "...(truncated)"
     return value
