@@ -1076,3 +1076,5 @@ Log Analytics 작업 영역이나 AKS를 비공개 네트워크로만 노출한 
 
 - [실제 동작 검증 결과](validation-results/index.md)
 - [실험 환경과 재현 방법](event-lab/index.md)
+- [VNet 통합 에이전트로 사설 SQL Server VM 상태 점검하기](sql-server-vm-health-check/index.md)
+- [SQL Server VM을 exporter와 Azure Managed Grafana로 모니터링하기](sql-server-vm-grafana/index.md)

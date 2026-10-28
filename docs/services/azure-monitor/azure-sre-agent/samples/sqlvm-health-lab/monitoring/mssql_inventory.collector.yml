@@ -1,0 +1,196 @@
+# Inventory metrics that need per-database context: today's Query Store
+# statistics, volume and database file space, and table row counts.
+# Each query loops over online databases with dynamic SQL (CONNECT ANY
+# DATABASE) and returns one result set. Query Store is on by default for new
+# databases starting with SQL Server 2022.
+collector_name: mssql_inventory
+
+# These queries scan catalog views in every database, so they run at most every 5 minutes.
+min_interval: 300s
+
+metrics:
+  # Equivalent of postgres_exporter's pg_stat_statements: top 10 statements per
+  # database since midnight UTC, grouped by query_hash so that statements that
+  # differ only in literal values are counted together.
+  - metric_name: mssql_query_today_executions
+    type: gauge
+    help: 'Executions since midnight UTC (Query Store), top 10 statements per database by total duration.'
+    key_labels: [db, query_hash, query_text]
+    values: [executions]
+    query_ref: mssql_query_store_today
+  - metric_name: mssql_query_today_duration_seconds
+    type: gauge
+    help: 'Total duration since midnight UTC (Query Store).'
+    key_labels: [db, query_hash, query_text]
+    values: [total_seconds]
+    query_ref: mssql_query_store_today
+  - metric_name: mssql_query_today_avg_duration_seconds
+    type: gauge
+    help: 'Average duration per execution since midnight UTC (Query Store).'
+    key_labels: [db, query_hash, query_text]
+    values: [avg_seconds]
+    query_ref: mssql_query_store_today
+  - metric_name: mssql_query_today_max_duration_seconds
+    type: gauge
+    help: 'Longest single execution since midnight UTC (Query Store).'
+    key_labels: [db, query_hash, query_text]
+    values: [max_seconds]
+    query_ref: mssql_query_store_today
+  - metric_name: mssql_query_today_avg_cpu_seconds
+    type: gauge
+    help: 'Average CPU time per execution since midnight UTC (Query Store).'
+    key_labels: [db, query_hash, query_text]
+    values: [avg_cpu_seconds]
+    query_ref: mssql_query_store_today
+  - metric_name: mssql_query_today_avg_logical_reads
+    type: gauge
+    help: 'Average logical reads per execution since midnight UTC (Query Store).'
+    key_labels: [db, query_hash, query_text]
+    values: [avg_logical_reads]
+    query_ref: mssql_query_store_today
+
+  - metric_name: mssql_volume_size_bytes
+    type: gauge
+    help: 'Size of each volume that holds database files.'
+    key_labels: [volume]
+    values: [total_bytes]
+    query_ref: mssql_volumes
+  - metric_name: mssql_volume_available_bytes
+    type: gauge
+    help: 'Free space on each volume that holds database files.'
+    key_labels: [volume]
+    values: [available_bytes]
+    query_ref: mssql_volumes
+
+  - metric_name: mssql_db_file_size_bytes
+    type: gauge
+    help: 'Allocated size of each database file.'
+    key_labels: [db, file, file_type]
+    values: [size_bytes]
+    query_ref: mssql_db_files
+  - metric_name: mssql_db_file_used_bytes
+    type: gauge
+    help: 'Used space in each database file.'
+    key_labels: [db, file, file_type]
+    values: [used_bytes]
+    query_ref: mssql_db_files
+  - metric_name: mssql_db_file_max_size_bytes
+    type: gauge
+    help: 'Maximum size of each database file. -1 means unlimited growth.'
+    key_labels: [db, file, file_type]
+    values: [max_bytes]
+    query_ref: mssql_db_files
+
+  # Growth comes from the time series, for example delta(mssql_table_rows[1h]).
+  - metric_name: mssql_table_rows
+    type: gauge
+    help: 'Rows in the heap or clustered index, top 20 tables per user database.'
+    key_labels: [db, schema, table]
+    values: [row_count]
+    query_ref: mssql_tables
+  - metric_name: mssql_table_reserved_bytes
+    type: gauge
+    help: 'Reserved space including indexes, top 20 tables per user database.'
+    key_labels: [db, schema, table]
+    values: [reserved_bytes]
+    query_ref: mssql_tables
+
+queries:
+  - query_name: mssql_query_store_today
+    query: |
+      SET NOCOUNT ON;
+      DECLARE @today datetimeoffset = TODATETIMEOFFSET(CAST(CAST(SYSUTCDATETIME() AS date) AS datetime2), 0);
+      DECLARE @db sysname, @sql nvarchar(max);
+      CREATE TABLE #q (db sysname, query_hash varchar(20), query_text nvarchar(120), executions bigint,
+                       total_seconds float, avg_seconds float, max_seconds float,
+                       avg_cpu_seconds float, avg_logical_reads float);
+      DECLARE dbs CURSOR LOCAL FAST_FORWARD FOR
+          SELECT name FROM sys.databases WHERE database_id > 4 AND state = 0 AND is_query_store_on = 1;
+      OPEN dbs;
+      FETCH NEXT FROM dbs INTO @db;
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+          SET @sql = N'USE ' + QUOTENAME(@db) + N';
+          INSERT #q
+          SELECT TOP (10) DB_NAME(), CONVERT(varchar(20), q.query_hash, 1),
+                 LEFT(REPLACE(REPLACE(REPLACE(MIN(CAST(qt.query_sql_text AS nvarchar(400))),
+                      NCHAR(13), N'' ''), NCHAR(10), N'' ''), NCHAR(9), N'' ''), 120),
+                 SUM(rs.count_executions),
+                 SUM(rs.avg_duration * rs.count_executions) / 1e6,
+                 SUM(rs.avg_duration * rs.count_executions) / NULLIF(SUM(rs.count_executions), 0) / 1e6,
+                 MAX(rs.max_duration) / 1e6,
+                 SUM(rs.avg_cpu_time * rs.count_executions) / NULLIF(SUM(rs.count_executions), 0) / 1e6,
+                 SUM(rs.avg_logical_io_reads * rs.count_executions) / NULLIF(SUM(rs.count_executions), 0)
+          FROM sys.query_store_runtime_stats AS rs
+          JOIN sys.query_store_runtime_stats_interval AS i ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
+          JOIN sys.query_store_plan AS p ON p.plan_id = rs.plan_id
+          JOIN sys.query_store_query AS q ON q.query_id = p.query_id
+          JOIN sys.query_store_query_text AS qt ON qt.query_text_id = q.query_text_id
+          WHERE i.end_time > @today
+            -- Exclude the monitoring queries themselves (this collector and the SRE Agent tool).
+            AND qt.query_sql_text NOT LIKE N''%query_store_runtime_stats%''
+            AND qt.query_sql_text NOT LIKE N''%dm_db_partition_stats%''
+            AND qt.query_sql_text NOT LIKE N''%sys.database_files%''
+          GROUP BY q.query_hash
+          ORDER BY SUM(rs.avg_duration * rs.count_executions) DESC;';
+          EXEC sys.sp_executesql @sql, N'@today datetimeoffset', @today = @today;
+          FETCH NEXT FROM dbs INTO @db;
+      END
+      SELECT db, query_hash, query_text, executions, total_seconds, avg_seconds, max_seconds,
+             avg_cpu_seconds, avg_logical_reads
+      FROM #q;
+
+  - query_name: mssql_volumes
+    query: |
+      SELECT DISTINCT vs.volume_mount_point AS volume, vs.total_bytes, vs.available_bytes
+      FROM sys.master_files AS mf
+      CROSS APPLY sys.dm_os_volume_stats(mf.database_id, mf.file_id) AS vs
+
+  - query_name: mssql_db_files
+    query: |
+      SET NOCOUNT ON;
+      DECLARE @db sysname, @sql nvarchar(max);
+      CREATE TABLE #f (db sysname, [file] sysname, file_type varchar(10),
+                       size_bytes bigint, used_bytes bigint, max_bytes bigint);
+      DECLARE dbs CURSOR LOCAL FAST_FORWARD FOR SELECT name FROM sys.databases WHERE state = 0;
+      OPEN dbs;
+      FETCH NEXT FROM dbs INTO @db;
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+          SET @sql = N'USE ' + QUOTENAME(@db) + N';
+          INSERT #f
+          SELECT DB_NAME(), name, CASE type WHEN 0 THEN ''data'' WHEN 1 THEN ''log'' ELSE ''other'' END,
+                 CAST(size AS bigint) * 8192,
+                 CAST(FILEPROPERTY(name, ''SpaceUsed'') AS bigint) * 8192,
+                 CASE WHEN max_size = -1 THEN -1 ELSE CAST(max_size AS bigint) * 8192 END
+          FROM sys.database_files;';
+          EXEC sys.sp_executesql @sql;
+          FETCH NEXT FROM dbs INTO @db;
+      END
+      SELECT db, [file], file_type, size_bytes, ISNULL(used_bytes, 0) AS used_bytes, max_bytes FROM #f;
+
+  - query_name: mssql_tables
+    query: |
+      SET NOCOUNT ON;
+      DECLARE @db sysname, @sql nvarchar(max);
+      CREATE TABLE #t ([db] sysname, [schema] sysname, [table] sysname, row_count bigint, reserved_bytes bigint);
+      DECLARE dbs CURSOR LOCAL FAST_FORWARD FOR SELECT name FROM sys.databases WHERE database_id > 4 AND state = 0;
+      OPEN dbs;
+      FETCH NEXT FROM dbs INTO @db;
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+          SET @sql = N'USE ' + QUOTENAME(@db) + N';
+          INSERT #t
+          SELECT TOP (20) DB_NAME(), s.name, t.name,
+                 SUM(CASE WHEN ps.index_id IN (0, 1) THEN ps.row_count ELSE 0 END),
+                 SUM(ps.reserved_page_count) * 8192
+          FROM sys.dm_db_partition_stats AS ps
+          JOIN sys.tables AS t ON t.object_id = ps.object_id
+          JOIN sys.schemas AS s ON s.schema_id = t.schema_id
+          WHERE t.is_ms_shipped = 0
+          GROUP BY s.name, t.name
+          ORDER BY SUM(CASE WHEN ps.index_id IN (0, 1) THEN ps.row_count ELSE 0 END) DESC;';
+          EXEC sys.sp_executesql @sql;
+          FETCH NEXT FROM dbs INTO @db;
+      END
+      SELECT [db], [schema], [table], row_count, reserved_bytes FROM #t;

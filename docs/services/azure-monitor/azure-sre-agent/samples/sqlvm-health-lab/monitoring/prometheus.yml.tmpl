@@ -1,0 +1,24 @@
+# Prometheus in agent mode on the SQL Server VM: scrapes the two local
+# exporters and remote-writes to the Azure Monitor workspace with the VM's
+# user-assigned managed identity. Placeholders are filled by
+# scripts/render_monitoring_script.py.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 25s
+  external_labels:
+    sql_vm: '@@VM_NAME@@'
+
+scrape_configs:
+  - job_name: windows_exporter
+    static_configs:
+      - targets: ['127.0.0.1:9182']
+  - job_name: sql_exporter
+    static_configs:
+      - targets: ['127.0.0.1:9399']
+
+remote_write:
+  - url: '@@REMOTE_WRITE_URL@@'
+    azuread:
+      cloud: AzurePublic
+      managed_identity:
+        client_id: '@@METRICS_CLIENT_ID@@'

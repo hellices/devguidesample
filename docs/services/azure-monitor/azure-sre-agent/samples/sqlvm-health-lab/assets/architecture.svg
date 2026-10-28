@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" font-family="Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Segoe UI, sans-serif">
+<title>SQL Server VM 점검 실습 구성도</title>
+<desc>운영자가 Azure SRE Agent에 질문하면 VNet의 에이전트 서브넷에서 Python 도구가 실행되어 Private Endpoint 뒤 Key Vault의 비밀번호로 SQL Server에 직접 SQL을 실행한다. SQL Server VM의 exporter 지표는 Prometheus 에이전트가 Azure Monitor workspace로 보내고, Azure Managed Grafana와 에이전트가 PromQL로 조회한다.</desc>
+<defs>
+<marker id="a-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+<marker id="a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+<marker id="a-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+<marker id="a-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+<marker id="a-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0891b2"/></marker>
+<marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/></marker>
+<marker id="a-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker>
+<marker id="a-line" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+</defs>
+<rect width="1200" height="640" fill="#ffffff"/>
+<rect x="30" y="70" width="170" height="70" rx="10" fill="#ffffff" stroke="#334155" stroke-width="1.8"/>
+<text x="115.0" y="102.0" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">운영자</text>
+<text x="115.0" y="123.0" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">채팅 · 대시보드</text>
+<rect x="240" y="40" width="600" height="570" rx="12" fill="#f8fafc" stroke="#475569" stroke-width="1.5" stroke-dasharray="0"/>
+<text x="254" y="62" font-size="13" font-weight="bold" fill="#475569" text-anchor="start">가상 네트워크 (공용 IP 없음)</text>
+<rect x="260" y="75" width="560" height="170" rx="12" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="274" y="97" font-size="13" font-weight="bold" fill="#2563eb" text-anchor="start">에이전트 서브넷</text>
+<rect x="280" y="110" width="250" height="115" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+<text x="405.0" y="164.5" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">Azure SRE Agent</text>
+<text x="405.0" y="185.5" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">Python 도구 3개 · 스킬</text>
+<text x="405" y="205" font-size="12" font-weight="bold" fill="#2563eb" text-anchor="middle">질문할 때만 실행</text>
+<rect x="560" y="110" width="240" height="115" rx="12" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="574" y="132" font-size="13" font-weight="bold" fill="#7c3aed" text-anchor="start"></text>
+<rect x="575" y="125" width="210" height="85" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.8"/>
+<text x="680.0" y="164.5" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">Key Vault</text>
+<text x="680.0" y="185.5" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">Private Endpoint · 비밀번호</text>
+<rect x="260" y="285" width="560" height="305" rx="12" fill="none" stroke="#b45309" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="274" y="307" font-size="13" font-weight="bold" fill="#b45309" text-anchor="start"></text>
+<text x="806" y="307" font-size="13" font-weight="bold" fill="#b45309" text-anchor="end">SQL 서브넷 · 1433은 에이전트 서브넷만 허용</text>
+<rect x="280" y="325" width="240" height="245" rx="10" fill="#fffbeb" stroke="#b45309" stroke-width="1.8"/>
+<text x="400.0" y="452.5" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle"></text>
+<text x="400" y="360" font-size="16" font-weight="bold" fill="#1f2937" text-anchor="middle">SQL Server 2022</text>
+<text x="400" y="385" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">읽기 전용 로그인</text>
+<rect x="300" y="405" width="200" height="30" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="400" y="425" font-size="12.5" font-weight="normal" fill="#1f2937" text-anchor="middle">DMV · 잠금 · 세션</text>
+<rect x="300" y="443" width="200" height="30" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="400" y="463" font-size="12.5" font-weight="normal" fill="#1f2937" text-anchor="middle">Query Store</text>
+<rect x="300" y="481" width="200" height="30" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="400" y="501" font-size="12.5" font-weight="normal" fill="#1f2937" text-anchor="middle">로그인 감사 (XE)</text>
+<rect x="300" y="519" width="200" height="30" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="400" y="539" font-size="12.5" font-weight="normal" fill="#1f2937" text-anchor="middle">msdb 작업 이력</text>
+<rect x="580" y="325" width="220" height="70" rx="10" fill="#ffffff" stroke="#334155" stroke-width="1.8"/>
+<text x="690.0" y="357.0" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">windows_exporter</text>
+<text x="690.0" y="378.0" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">성능 카운터 · OS</text>
+<rect x="580" y="412" width="220" height="70" rx="10" fill="#ffffff" stroke="#334155" stroke-width="1.8"/>
+<text x="690.0" y="444.0" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">sql_exporter</text>
+<text x="690.0" y="465.0" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">DMV 쿼리 → 지표</text>
+<rect x="580" y="500" width="220" height="70" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.8"/>
+<text x="690.0" y="532.0" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">Prometheus 에이전트</text>
+<text x="690.0" y="553.0" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">30초마다 scrape · 관리 ID로 전송</text>
+<rect x="900" y="320" width="270" height="90" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+<text x="1035.0" y="362.0" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">Azure Monitor workspace</text>
+<text x="1035.0" y="383.0" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">managed Prometheus</text>
+<rect x="900" y="110" width="270" height="90" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="1.8"/>
+<text x="1035.0" y="152.0" font-size="15" font-weight="bold" fill="#1f2937" text-anchor="middle">Azure Managed Grafana</text>
+<text x="1035.0" y="173.0" font-size="12" font-weight="normal" fill="#6b7280" text-anchor="middle">SQL Server VM 상태 대시보드</text>
+<path d="M200,105 H276" fill="none" stroke="#2563eb" stroke-width="2.4" marker-end="url(#a-blue)"/>
+<rect x="221.6" y="78" width="32.8" height="22" rx="11" fill="#ffffff" stroke="#2563eb" stroke-width="1"/>
+<text x="238" y="94" font-size="12" font-weight="bold" fill="#2563eb" text-anchor="middle">질문</text>
+<path d="M530,150 H571" fill="none" stroke="#7c3aed" stroke-width="2.4" marker-end="url(#a-purple)"/>
+<text x="552" y="140" font-size="13" font-weight="bold" fill="#7c3aed" text-anchor="middle">①</text>
+<path d="M405,225 V321" fill="none" stroke="#2563eb" stroke-width="2.4" marker-end="url(#a-blue)"/>
+<rect x="338.2" y="261" width="133.60000000000002" height="22" rx="11" fill="#ffffff" stroke="#2563eb" stroke-width="1"/>
+<text x="405" y="277" font-size="12" font-weight="bold" fill="#2563eb" text-anchor="middle">② 직접 SQL (TLS)</text>
+<path d="M690,500 V486" fill="none" stroke="#16a34a" stroke-width="2.4" marker-end="url(#a-green)"/>
+<path d="M800,535 H812 V360 H804" fill="none" stroke="#16a34a" stroke-width="2.4" marker-end="url(#a-green)"/>
+<path d="M580,447 H524" fill="none" stroke="#94a3b8" stroke-width="2.4" marker-end="url(#a-line)"/>
+<path d="M580,360 H524" fill="none" stroke="#94a3b8" stroke-width="2.4" marker-end="url(#a-line)"/>
+<text x="552" y="440" font-size="11" font-weight="normal" fill="#6b7280" text-anchor="middle">쿼리</text>
+<text x="552" y="353" font-size="11" font-weight="normal" fill="#6b7280" text-anchor="middle">카운터</text>
+<path d="M800,555 H850 V380 H896" fill="none" stroke="#ea580c" stroke-width="2.4" marker-end="url(#a-orange)"/>
+<rect x="783.2" y="456" width="133.60000000000002" height="22" rx="11" fill="#ffffff" stroke="#ea580c" stroke-width="1"/>
+<text x="850" y="472" font-size="12" font-weight="bold" fill="#ea580c" text-anchor="middle">③ remote write</text>
+<path d="M1035,200 V316" fill="none" stroke="#0891b2" stroke-width="2.4" marker-end="url(#a-teal)"/>
+<rect x="1001.8" y="244" width="66.4" height="22" rx="11" fill="#ffffff" stroke="#0891b2" stroke-width="1"/>
+<text x="1035" y="260" font-size="12" font-weight="bold" fill="#0891b2" text-anchor="middle">PromQL</text>
+<path d="M530,212 H545 V236 H868 V345 H896" fill="none" stroke="#0891b2" stroke-width="2.4" stroke-dasharray="6,4" marker-end="url(#a-teal)"/>
+<rect x="830.6" y="271" width="74.80000000000001" height="22" rx="11" fill="#ffffff" stroke="#0891b2" stroke-width="1"/>
+<text x="868" y="287" font-size="12" font-weight="bold" fill="#0891b2" text-anchor="middle">④ 추세 조회</text>
+<path d="M115,70 V25 H1035 V106" fill="none" stroke="#0891b2" stroke-width="2.4" marker-end="url(#a-teal)"/>
+<rect x="602.6" y="11" width="74.80000000000001" height="22" rx="11" fill="#ffffff" stroke="#0891b2" stroke-width="1"/>
+<text x="640" y="27" font-size="12" font-weight="bold" fill="#0891b2" text-anchor="middle">대시보드 보기</text>
+</svg>

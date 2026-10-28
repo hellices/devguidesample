@@ -1,0 +1,19 @@
+# sql_exporter runs on the SQL Server VM as the virtual service account
+# NT SERVICE\SqlExporterSvc. The DSN has no user, so go-mssqldb uses Windows
+# integrated authentication and no password is stored anywhere.
+global:
+  scrape_timeout: 20s
+  scrape_timeout_offset: 500ms
+  # Health queries run at most once per scrape interval.
+  min_interval: 25s
+  max_connections: 2
+  max_idle_connections: 2
+  max_connection_lifetime: 5m
+
+target:
+  data_source_name: 'sqlserver://localhost:1433?database=master&app+name=sql_exporter&encrypt=disable'
+  # mssql_audit and mssql_inventory set their own min_interval (60s and 300s).
+  collectors: [mssql_health, mssql_audit, mssql_inventory]
+
+collector_files:
+  - '*.collector.yml'

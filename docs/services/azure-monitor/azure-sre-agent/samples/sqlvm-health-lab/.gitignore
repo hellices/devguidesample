@@ -1,0 +1,6 @@
+# Written by scripts/deploy.sh. Contains real subscription and resource IDs.
+.lab-state.json
+# Compiled ARM output when `az bicep build` runs without --stdout.
+infra/main.json
+infra/resources.json
+__pycache__/

@@ -1,0 +1,80 @@
+# Login attempts from the Extended Events session sre_login_audit (created by
+# scripts/vm/configure-checks.ps1): failed logins (error 18456) and new
+# successful logins during the last hour, read from the session's event files.
+# sys.fn_xe_file_target_read_file needs VIEW SERVER PERFORMANCE STATE
+# (included in VIEW SERVER STATE) on SQL Server 2022.
+#
+# The relative file name reads the default log folder. timestamp_utc is
+# compared through CAST as in the documented example; a direct comparison
+# returned no rows on SQL Server 2022 (observed).
+#
+# Events are filtered by timestamp_utc, copied into a temp table, and then
+# shredded; XML methods are not allowed in GROUP BY. XML data type methods
+# require QUOTED_IDENTIFIER ON, which is not the default for this driver's
+# session (error 1934), so each query sets it.
+collector_name: mssql_audit
+
+# Reading and shredding event files is more expensive than a DMV read.
+min_interval: 60s
+
+metrics:
+  - metric_name: mssql_failed_logins_last_hour
+    type: gauge
+    help: 'Failed login attempts (error 18456) in the last hour, by login, client address, and reason.'
+    key_labels: [login, client, reason]
+    values: [attempts]
+    query_ref: mssql_login_events_failed
+  - metric_name: mssql_successful_logins_last_hour
+    type: gauge
+    help: 'New (not pooled) successful logins in the last hour, by login, client host, and application.'
+    key_labels: [login, host, app]
+    values: [logins]
+    query_ref: mssql_login_events_succeeded
+
+queries:
+  - query_name: mssql_login_events_failed
+    query: |
+      SET NOCOUNT ON;
+      SET QUOTED_IDENTIFIER ON;
+      SELECT CAST(f.event_data AS xml).value('(event/data[@name="message"]/value)[1]', 'nvarchar(512)') AS message
+      INTO #failed_events
+      FROM sys.fn_xe_file_target_read_file(N'sre_login_audit*.xel', NULL, NULL, NULL) AS f
+      WHERE f.object_name = N'error_reported' AND CAST(f.timestamp_utc AS datetime2(7)) > DATEADD(HOUR, -1, SYSUTCDATETIME());
+      WITH positions AS (
+          SELECT message,
+                 CHARINDEX(N'user ''', message) + 6 AS login_start,
+                 CHARINDEX(N'Reason: ', message) AS reason_start,
+                 CHARINDEX(N'[CLIENT: ', message) AS client_start
+          FROM #failed_events
+          -- Each failure raises error 18456 twice; only the error log copy has [CLIENT: ...].
+          WHERE CHARINDEX(N'[CLIENT: ', message) > 0),
+      parsed AS (
+          SELECT CASE WHEN login_start > 6
+                      THEN SUBSTRING(message, login_start, CHARINDEX(N'''', message, login_start) - login_start)
+                      ELSE N'unknown' END AS login,
+                 CASE WHEN client_start > 0
+                      THEN SUBSTRING(message, client_start + 9, CHARINDEX(N']', message, client_start) - client_start - 9)
+                      ELSE N'unknown' END AS client,
+                 CASE WHEN reason_start > 0
+                      THEN LEFT(SUBSTRING(message, reason_start + 8, CHARINDEX(N'.', message + N'.', reason_start) - reason_start - 8), 80)
+                      ELSE N'unknown' END AS reason
+          FROM positions)
+      SELECT login, client, reason, COUNT(*) AS attempts
+      FROM parsed
+      GROUP BY login, client, reason;
+
+  - query_name: mssql_login_events_succeeded
+    query: |
+      SET NOCOUNT ON;
+      SET QUOTED_IDENTIFIER ON;
+      SELECT x.value('(event/action[@name="server_principal_name"]/value)[1]', 'nvarchar(128)') AS login,
+             x.value('(event/action[@name="client_hostname"]/value)[1]', 'nvarchar(128)') AS host,
+             x.value('(event/action[@name="client_app_name"]/value)[1]', 'nvarchar(128)') AS app
+      INTO #login_events
+      FROM (SELECT CAST(f.event_data AS xml) AS x
+            FROM sys.fn_xe_file_target_read_file(N'sre_login_audit*.xel', NULL, NULL, NULL) AS f
+            WHERE f.object_name = N'login' AND CAST(f.timestamp_utc AS datetime2(7)) > DATEADD(HOUR, -1, SYSUTCDATETIME())) AS e;
+      SELECT ISNULL(login, N'unknown') AS login, ISNULL(host, N'') AS host, LEFT(ISNULL(app, N''), 60) AS app,
+             COUNT(*) AS logins
+      FROM #login_events
+      GROUP BY ISNULL(login, N'unknown'), ISNULL(host, N''), LEFT(ISNULL(app, N''), 60);
