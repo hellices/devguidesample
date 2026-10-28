@@ -1,0 +1,11 @@
+title: SQL Server VM health check with a VNet-integrated Azure SRE Agent
+description: Deploys a private SQL Server VM, a VNet-integrated Azure SRE Agent whose Python tools check health, locks, long-running and slow queries, logins, storage, table growth, and SQL Agent jobs, and an exporter pipeline to Azure Monitor managed Prometheus with an Azure Managed Grafana dashboard.
+kind: runnable
+used_by:
+- sql-server-vm-health-check
+- sql-server-vm-grafana
+publish:
+- source: assets/architecture.svg
+  target: sql-server-vm-health-check/images/architecture.svg
+- source: assets/architecture.svg
+  target: sql-server-vm-grafana/images/architecture.svg

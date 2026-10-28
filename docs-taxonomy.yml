@@ -42,6 +42,7 @@ services:
   azure-hdinsight: Azure HDInsight
   azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
+  azure-managed-grafana: Azure Managed Grafana
   azure-managed-redis: Azure Managed Redis
   azure-monitor: Azure Monitor
   azure-openai: Azure OpenAI
@@ -75,6 +76,7 @@ technologies:
   redis: Redis
   rest-api: REST API
   spring-boot: Spring Boot
+  sql-server: SQL Server
 
 tags:
   design: 설계

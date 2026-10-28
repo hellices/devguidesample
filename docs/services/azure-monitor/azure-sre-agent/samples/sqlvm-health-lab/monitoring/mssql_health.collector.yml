@@ -1,0 +1,416 @@
+# Health metrics for SQL Server, built from the DMV checks that well-known
+# administration scripts start with (wait statistics, current locks, blocking,
+# long-running requests, open transactions, database state, log usage, backup
+# recency, file I/O latency, CPU history, missing-index suggestions, SQL login
+# lockout, sysadmin members, and SQL Agent job outcomes). Runs on every scrape.
+#
+# Required permissions for the exporter login (no table data access):
+#   GRANT VIEW SERVER STATE, VIEW ANY DEFINITION, CONNECT ANY DATABASE TO [<login>];
+#   USE msdb; CREATE USER [<login>] FOR LOGIN [<login>];
+#   GRANT SELECT ON dbo.backupset, dbo.sysjobs, dbo.sysjobhistory TO [<login>];
+# (the three msdb grants are separate statements in scripts/vm/grant-exporter-login.ps1)
+collector_name: mssql_health
+
+metrics:
+  - metric_name: mssql_instance_info
+    type: gauge
+    help: 'SQL Server version and edition. Value is always 1.'
+    key_labels: [version, update_level, edition]
+    values: [one]
+    query: |
+      SELECT CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(32)) AS version,
+             ISNULL(CAST(SERVERPROPERTY('ProductUpdateLevel') AS nvarchar(16)), 'RTM') AS update_level,
+             CAST(SERVERPROPERTY('Edition') AS nvarchar(64)) AS edition,
+             1 AS one
+
+  - metric_name: mssql_start_time_seconds
+    type: gauge
+    help: 'SQL Server start time as Unix time.'
+    values: [start_time]
+    query: |
+      SELECT DATEDIFF_BIG(SECOND, '19700101', CONVERT(datetime2, sqlserver_start_time AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC')) AS start_time
+      FROM sys.dm_os_sys_info
+
+  - metric_name: mssql_max_server_memory_bytes
+    type: gauge
+    help: 'Configured max server memory. 2147483647 MB means no limit.'
+    values: [max_memory]
+    query: |
+      SELECT CAST(value_in_use AS bigint) * 1048576 AS max_memory
+      FROM sys.configurations WHERE name = 'max server memory (MB)'
+
+  - metric_name: mssql_cpu_percent
+    type: gauge
+    help: 'CPU use in the latest scheduler monitor sample (about once a minute), by consumer.'
+    key_labels: [consumer]
+    values: [pct]
+    query: |
+      WITH latest AS (
+          SELECT TOP (1) CONVERT(xml, record) AS record
+          FROM sys.dm_os_ring_buffers
+          WHERE ring_buffer_type = N'RING_BUFFER_SCHEDULER_MONITOR' AND record LIKE N'%<SystemHealth>%'
+          ORDER BY [timestamp] DESC)
+      SELECT 'sqlserver' AS consumer,
+             record.value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]', 'int') AS pct
+      FROM latest
+      UNION ALL
+      SELECT 'other',
+             100 - record.value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]', 'int')
+                 - record.value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]', 'int')
+      FROM latest
+
+  - metric_name: mssql_wait_time_seconds_total
+    type: counter
+    help: 'Cumulative wait time by wait type since SQL Server started (benign idle waits excluded).'
+    key_labels: [wait_type]
+    values: [wait_seconds]
+    query_ref: mssql_waits
+  - metric_name: mssql_signal_wait_time_seconds_total
+    type: counter
+    help: 'Cumulative signal (runnable queue) wait time by wait type.'
+    key_labels: [wait_type]
+    values: [signal_seconds]
+    query_ref: mssql_waits
+  - metric_name: mssql_waiting_tasks_total
+    type: counter
+    help: 'Cumulative number of waits by wait type.'
+    key_labels: [wait_type]
+    values: [tasks]
+    query_ref: mssql_waits
+
+  - metric_name: mssql_user_requests
+    type: gauge
+    help: 'Current user requests by status.'
+    key_labels: [status]
+    values: [requests]
+    query: |
+      SELECT r.status, COUNT(*) AS requests
+      FROM sys.dm_exec_requests AS r
+      JOIN sys.dm_exec_sessions AS s ON s.session_id = r.session_id
+      WHERE s.is_user_process = 1
+      GROUP BY r.status
+
+  - metric_name: mssql_blocked_requests
+    type: gauge
+    help: 'Requests currently waiting on another session.'
+    values: [blocked]
+    query_ref: mssql_blocking
+  - metric_name: mssql_head_blockers
+    type: gauge
+    help: 'Sessions that block others but are not blocked themselves.'
+    values: [head_blockers]
+    query_ref: mssql_blocking
+  - metric_name: mssql_longest_blocked_wait_seconds
+    type: gauge
+    help: 'Longest current wait among blocked requests.'
+    values: [longest_wait]
+    query_ref: mssql_blocking
+
+  # Equivalent of postgres_exporter's pg_locks_count{datname, mode}: the lock
+  # manager's current requests, granted (GRANT) or waiting (WAIT/CONVERT).
+  - metric_name: mssql_locks
+    type: gauge
+    help: 'Current lock requests by database, resource type, mode, and status (sys.dm_tran_locks).'
+    key_labels: [db, resource_type, mode, status]
+    values: [locks]
+    query: |
+      SELECT ISNULL(DB_NAME(resource_database_id), 'none') AS db,
+             resource_type, request_mode AS mode, request_status AS status,
+             COUNT(*) AS locks
+      FROM sys.dm_tran_locks
+      WHERE request_session_id <> @@SPID
+      GROUP BY resource_database_id, resource_type, request_mode, request_status
+
+  # One series per blocked request while blocking lasts; no series otherwise.
+  # Session IDs make these series short-lived, so keep the scrape scope small.
+  - metric_name: mssql_blocking_wait_seconds
+    type: gauge
+    help: 'Current wait of each blocked request, labeled with its blocker and the waited resource.'
+    key_labels: [db, blocked_session, blocking_session, wait_type, wait_resource, blocking_program]
+    values: [wait_seconds]
+    query: |
+      SELECT ISNULL(DB_NAME(r.database_id), 'none') AS db,
+             CAST(r.session_id AS varchar(10)) AS blocked_session,
+             CAST(r.blocking_session_id AS varchar(10)) AS blocking_session,
+             ISNULL(r.wait_type, '') AS wait_type,
+             LEFT(ISNULL(r.wait_resource, ''), 80) AS wait_resource,
+             ISNULL(LEFT(b.program_name, 60), '') AS blocking_program,
+             r.wait_time / 1000.0 AS wait_seconds
+      FROM sys.dm_exec_requests AS r
+      LEFT JOIN sys.dm_exec_sessions AS b ON b.session_id = r.blocking_session_id
+      WHERE r.blocking_session_id > 0
+
+  # Long-running user requests (30 seconds or more). Streaming Extended Events
+  # readers (XE_LIVE_TARGET_TVF) run for hours by design and are excluded.
+  - metric_name: mssql_long_running_request_seconds
+    type: gauge
+    help: 'Elapsed time of user requests running for 30 seconds or more (top 20).'
+    key_labels: [db, session, login, program, status, command, wait_type, query_hash]
+    values: [elapsed]
+    query: |
+      SELECT TOP (20) ISNULL(DB_NAME(r.database_id), 'none') AS db,
+             CAST(r.session_id AS varchar(10)) AS session, s.login_name AS login,
+             LEFT(ISNULL(s.program_name, ''), 60) AS program, r.status, r.command,
+             ISNULL(r.wait_type, '') AS wait_type,
+             ISNULL(CONVERT(varchar(20), r.query_hash, 1), '') AS query_hash,
+             r.total_elapsed_time / 1000.0 AS elapsed
+      FROM sys.dm_exec_requests AS r
+      JOIN sys.dm_exec_sessions AS s ON s.session_id = r.session_id
+      WHERE s.is_user_process = 1 AND r.session_id <> @@SPID
+        AND r.total_elapsed_time >= 30000 AND ISNULL(r.wait_type, '') <> 'XE_LIVE_TARGET_TVF'
+      ORDER BY r.total_elapsed_time DESC
+
+  - metric_name: mssql_oldest_open_transaction_seconds
+    type: gauge
+    help: 'Age of the oldest open user transaction. 0 when none.'
+    values: [age]
+    query: |
+      SELECT ISNULL(MAX(DATEDIFF(SECOND, at.transaction_begin_time, GETDATE())), 0) AS age
+      FROM sys.dm_tran_active_transactions AS at
+      JOIN sys.dm_tran_session_transactions AS st ON st.transaction_id = at.transaction_id
+      JOIN sys.dm_exec_sessions AS s ON s.session_id = st.session_id
+      WHERE s.is_user_process = 1
+
+  - metric_name: mssql_database_online
+    type: gauge
+    help: '1 when the database state is ONLINE, otherwise 0.'
+    key_labels: [db, state, recovery_model]
+    values: [online]
+    query: |
+      SELECT name AS db, state_desc AS state, recovery_model_desc AS recovery_model,
+             CASE state WHEN 0 THEN 1 ELSE 0 END AS online
+      FROM sys.databases
+
+  - metric_name: mssql_database_size_bytes
+    type: gauge
+    help: 'Database data and log file size.'
+    key_labels: [db]
+    value_label: file_type
+    values: [data, log]
+    query_ref: mssql_database_counters
+  - metric_name: mssql_log_used_percent
+    type: gauge
+    help: 'Percent of the transaction log in use.'
+    key_labels: [db]
+    values: [log_used_pct]
+    query_ref: mssql_database_counters
+
+  - metric_name: mssql_log_reuse_waiting
+    type: gauge
+    help: '1 for the current reason the log cannot be truncated (NOTHING means no wait).'
+    key_labels: [db, log_reuse_wait]
+    values: [one]
+    query: |
+      SELECT name AS db, log_reuse_wait_desc AS log_reuse_wait, 1 AS one
+      FROM sys.databases
+
+  - metric_name: mssql_last_backup_timestamp_seconds
+    type: gauge
+    help: 'Finish time of the latest backup as Unix time. 0 when no backup is recorded in msdb.'
+    key_labels: [db, backup_type]
+    values: [finished]
+    query: |
+      SELECT d.name AS db, t.backup_type,
+             ISNULL(DATEDIFF_BIG(SECOND, '19700101', CONVERT(datetime2, MAX(b.backup_finish_date) AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC')), 0) AS finished
+      FROM sys.databases AS d
+      JOIN sys.database_recovery_status AS rs ON rs.database_id = d.database_id
+      CROSS JOIN (VALUES ('D', 'full'), ('I', 'differential'), ('L', 'log')) AS t(code, backup_type)
+      -- Matched by GUID so that a dropped and re-created database with the same
+      -- name does not inherit the old backups.
+      LEFT JOIN msdb.dbo.backupset AS b ON b.database_guid = rs.database_guid AND b.type = t.code
+      WHERE d.name <> 'tempdb'
+      GROUP BY d.name, t.backup_type
+
+  - metric_name: mssql_io_stall_seconds_total
+    type: counter
+    help: 'Cumulative I/O stall time per database file and operation.'
+    key_labels: [db, file_id]
+    value_label: operation
+    values: [read, write]
+    query_ref: mssql_file_io
+  - metric_name: mssql_io_operations_total
+    type: counter
+    help: 'Cumulative I/O operations per database file and operation.'
+    key_labels: [db, file_id]
+    value_label: operation
+    values: [reads, writes]
+    query_ref: mssql_file_io
+
+  # SQL authentication logins. Lockout follows the Windows password policy when
+  # CHECK_POLICY = ON. Times are converted from server local time to Unix time.
+  - metric_name: mssql_sql_login_locked
+    type: gauge
+    help: '1 when the SQL login is locked out.'
+    key_labels: [login]
+    values: [locked]
+    query_ref: mssql_sql_logins
+  - metric_name: mssql_sql_login_disabled
+    type: gauge
+    help: '1 when the SQL login is disabled.'
+    key_labels: [login]
+    values: [disabled]
+    query_ref: mssql_sql_logins
+  - metric_name: mssql_sql_login_expired
+    type: gauge
+    help: '1 when the SQL login password has expired.'
+    key_labels: [login]
+    values: [expired]
+    query_ref: mssql_sql_logins
+  - metric_name: mssql_sql_login_bad_password_count
+    type: gauge
+    help: 'Consecutive failed password attempts counted by the password policy.'
+    key_labels: [login]
+    values: [bad_password_count]
+    query_ref: mssql_sql_logins
+  - metric_name: mssql_sql_login_last_bad_password_timestamp_seconds
+    type: gauge
+    help: 'Time of the last failed password attempt as Unix time. 0 when none.'
+    key_labels: [login]
+    values: [bad_password_time]
+    query_ref: mssql_sql_logins
+
+  - metric_name: mssql_sysadmin_member
+    type: gauge
+    help: 'Members of the sysadmin fixed server role. Value is always 1.'
+    key_labels: [login, login_type]
+    values: [one]
+    query: |
+      SELECT p.name AS login, p.type_desc AS login_type, 1 AS one
+      FROM sys.server_role_members AS m
+      JOIN sys.server_principals AS r ON r.principal_id = m.role_principal_id
+      JOIN sys.server_principals AS p ON p.principal_id = m.member_principal_id
+      WHERE r.name = N'sysadmin'
+
+  - metric_name: mssql_agent_running
+    type: gauge
+    help: '1 when SQL Server Agent is running.'
+    values: [running]
+    query: |
+      SELECT ISNULL(MAX(CASE WHEN status = 4 THEN 1 ELSE 0 END), 0) AS running
+      FROM sys.dm_server_services WHERE servicename LIKE N'SQL Server Agent%'
+  - metric_name: mssql_job_last_run_succeeded
+    type: gauge
+    help: 'Outcome of the latest SQL Agent job run: 1 succeeded, 0 failed, -1 other or never.'
+    key_labels: [job_name, enabled]
+    values: [succeeded]
+    query_ref: mssql_jobs
+  - metric_name: mssql_job_last_run_timestamp_seconds
+    type: gauge
+    help: 'Start time of the latest SQL Agent job run as Unix time. 0 when never.'
+    key_labels: [job_name, enabled]
+    values: [last_run]
+    query_ref: mssql_jobs
+  - metric_name: mssql_job_failures_today
+    type: gauge
+    help: 'Failed SQL Agent job runs since midnight (server time).'
+    key_labels: [job_name, enabled]
+    values: [failures_today]
+    query_ref: mssql_jobs
+
+  - metric_name: mssql_missing_index_suggestions
+    type: gauge
+    help: 'Missing-index suggestions with at least 50 percent estimated impact, by database.'
+    key_labels: [db]
+    values: [suggestions]
+    query: |
+      SELECT DB_NAME(mid.database_id) AS db, COUNT(*) AS suggestions
+      FROM sys.dm_db_missing_index_details AS mid
+      JOIN sys.dm_db_missing_index_groups AS mig ON mig.index_handle = mid.index_handle
+      JOIN sys.dm_db_missing_index_group_stats AS migs ON migs.group_handle = mig.index_group_handle
+      WHERE migs.avg_user_impact >= 50
+      GROUP BY mid.database_id
+
+queries:
+  - query_name: mssql_waits
+    query: |
+      SELECT wait_type,
+             wait_time_ms / 1000.0 AS wait_seconds,
+             signal_wait_time_ms / 1000.0 AS signal_seconds,
+             waiting_tasks_count AS tasks
+      FROM sys.dm_os_wait_stats
+      WHERE waiting_tasks_count > 0
+        AND wait_type NOT IN (
+          N'BROKER_EVENTHANDLER', N'BROKER_RECEIVE_WAITFOR', N'BROKER_TASK_STOP', N'BROKER_TO_FLUSH',
+          N'BROKER_TRANSMITTER', N'CHECKPOINT_QUEUE', N'CHKPT', N'CLR_AUTO_EVENT', N'CLR_MANUAL_EVENT',
+          N'CLR_SEMAPHORE', N'DIRTY_PAGE_POLL', N'DISPATCHER_QUEUE_SEMAPHORE', N'EXECSYNC', N'FSAGENT',
+          N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'FT_IFTSHC_MUTEX', N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',
+          N'HADR_LOGCAPTURE_WAIT', N'HADR_NOTIFICATION_DEQUEUE', N'HADR_TIMER_TASK', N'HADR_WORK_QUEUE',
+          N'KSOURCE_WAKEUP', N'LAZYWRITER_SLEEP', N'LOGMGR_QUEUE', N'MEMORY_ALLOCATION_EXT',
+          N'ONDEMAND_TASK_QUEUE', N'PARALLEL_REDO_DRAIN_WORKER', N'PARALLEL_REDO_LOG_CACHE',
+          N'PARALLEL_REDO_TRAN_LIST', N'PARALLEL_REDO_WORKER_SYNC', N'PARALLEL_REDO_WORKER_WAIT_WORK',
+          N'PREEMPTIVE_OS_FLUSHFILEBUFFERS', N'PREEMPTIVE_XE_GETTARGETSTATE', N'PVS_PREALLOCATE',
+          N'PWAIT_ALL_COMPONENTS_INITIALIZED', N'PWAIT_DIRECTLOGCONSUMER_GETNEXT',
+          N'PWAIT_EXTENSIBILITY_CLEANUP_TASK', N'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', N'QDS_ASYNC_QUEUE',
+          N'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', N'QDS_SHUTDOWN_QUEUE',
+          N'REDO_THREAD_PENDING_WORK', N'REQUEST_FOR_DEADLOCK_SEARCH', N'RESOURCE_QUEUE',
+          N'SERVER_IDLE_CHECK', N'SLEEP_BPOOL_FLUSH', N'SLEEP_DBSTARTUP', N'SLEEP_DCOMSTARTUP',
+          N'SLEEP_MASTERDBREADY', N'SLEEP_MASTERMDREADY', N'SLEEP_MASTERUPGRADED', N'SLEEP_MSDBSTARTUP',
+          N'SLEEP_SYSTEMTASK', N'SLEEP_TASK', N'SLEEP_TEMPDBSTARTUP', N'SNI_HTTP_ACCEPT',
+          N'SOS_WORK_DISPATCHER', N'SP_SERVER_DIAGNOSTICS_SLEEP', N'SQLTRACE_BUFFER_FLUSH',
+          N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'STARTUP_DEPENDENCY_MANAGER',
+          N'VDI_CLIENT_OTHER', N'WAIT_FOR_RESULTS', N'WAITFOR', N'WAITFOR_TASKSHUTDOWN',
+          N'WAIT_XTP_HOST_WAIT', N'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', N'WAIT_XTP_CKPT_CLOSE',
+          N'WAIT_XTP_RECOVERY', N'XE_DISPATCHER_JOIN', N'XE_DISPATCHER_WAIT', N'XE_LIVE_TARGET_TVF',
+          N'XE_TIMER_EVENT', N'SOS_WORKER_MIGRATION')
+
+  - query_name: mssql_blocking
+    query: |
+      SELECT COUNT(CASE WHEN r.blocking_session_id > 0 THEN 1 END) AS blocked,
+             (SELECT COUNT(DISTINCT b.blocking_session_id)
+              FROM sys.dm_exec_requests AS b
+              WHERE b.blocking_session_id > 0
+                AND NOT EXISTS (SELECT 1 FROM sys.dm_exec_requests AS h
+                                WHERE h.session_id = b.blocking_session_id AND h.blocking_session_id > 0)) AS head_blockers,
+             ISNULL(MAX(CASE WHEN r.blocking_session_id > 0 THEN r.wait_time END), 0) / 1000.0 AS longest_wait
+      FROM sys.dm_exec_requests AS r
+
+  - query_name: mssql_database_counters
+    query: |
+      SELECT RTRIM(instance_name) AS db,
+             MAX(CASE WHEN counter_name = 'Data File(s) Size (KB)' THEN cntr_value END) * 1024 AS data,
+             MAX(CASE WHEN counter_name = 'Log File(s) Size (KB)' THEN cntr_value END) * 1024 AS log,
+             MAX(CASE WHEN counter_name = 'Percent Log Used' THEN cntr_value END) AS log_used_pct
+      FROM sys.dm_os_performance_counters
+      WHERE object_name LIKE '%:Databases%'
+        AND counter_name IN ('Data File(s) Size (KB)', 'Log File(s) Size (KB)', 'Percent Log Used')
+        AND instance_name NOT IN ('_Total', 'mssqlsystemresource')
+      GROUP BY RTRIM(instance_name)
+
+  - query_name: mssql_file_io
+    query: |
+      SELECT DB_NAME(database_id) AS db, CAST(file_id AS varchar(10)) AS file_id,
+             io_stall_read_ms / 1000.0 AS [read], io_stall_write_ms / 1000.0 AS [write],
+             num_of_reads AS reads, num_of_writes AS writes
+      FROM sys.dm_io_virtual_file_stats(NULL, NULL)
+
+  - query_name: mssql_sql_logins
+    query: |
+      SELECT name AS login,
+             CAST(is_disabled AS int) AS disabled,
+             ISNULL(CAST(LOGINPROPERTY(name, 'IsLocked') AS int), 0) AS locked,
+             ISNULL(CAST(LOGINPROPERTY(name, 'IsExpired') AS int), 0) AS expired,
+             ISNULL(CAST(LOGINPROPERTY(name, 'BadPasswordCount') AS int), 0) AS bad_password_count,
+             CASE WHEN CAST(LOGINPROPERTY(name, 'BadPasswordTime') AS datetime) > '20000101'
+                  THEN DATEDIFF_BIG(SECOND, '19700101',
+                       CONVERT(datetime2, CAST(LOGINPROPERTY(name, 'BadPasswordTime') AS datetime) AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC'))
+                  ELSE 0 END AS bad_password_time
+      FROM sys.sql_logins
+      WHERE name NOT LIKE N'##%'
+
+  - query_name: mssql_jobs
+    query: |
+      WITH runs AS (
+          SELECT h.job_id, h.run_status, h.run_date,
+                 DATEADD(SECOND, h.run_time / 10000 * 3600 + h.run_time / 100 % 100 * 60 + h.run_time % 100,
+                         CONVERT(datetime2(0), CAST(h.run_date AS char(8)), 112)) AS started,
+                 ROW_NUMBER() OVER (PARTITION BY h.job_id ORDER BY h.instance_id DESC) AS rn
+          FROM msdb.dbo.sysjobhistory AS h
+          WHERE h.step_id = 0)
+      SELECT j.name AS job_name, CAST(j.enabled AS varchar(1)) AS enabled,
+             CASE WHEN last.run_status = 1 THEN 1 WHEN last.run_status = 0 THEN 0 ELSE -1 END AS succeeded,
+             ISNULL(DATEDIFF_BIG(SECOND, '19700101', CONVERT(datetime2, last.started AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC')), 0) AS last_run,
+             (SELECT COUNT(*) FROM runs AS f
+              WHERE f.job_id = j.job_id AND f.run_status = 0
+                AND f.run_date = CAST(CONVERT(char(8), GETDATE(), 112) AS int)) AS failures_today
+      FROM msdb.dbo.sysjobs AS j
+      LEFT JOIN runs AS last ON last.job_id = j.job_id AND last.rn = 1

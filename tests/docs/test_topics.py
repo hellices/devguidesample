@@ -928,6 +928,8 @@ def test_repository_connected_topics_have_canonical_layout() -> None:
                 "validation-results",
                 "incident-runbook",
                 "dynamic-thresholds",
+                "sql-server-vm-health-check",
+                "sql-server-vm-grafana",
             ],
             "redirects": [
                 "guides/azure-monitor/azure-sre-agent-overview/index.md",
@@ -940,6 +942,9 @@ def test_repository_connected_topics_have_canonical_layout() -> None:
                 "research/azure-monitor/sre-agent-validation-results/index.md",
                 "guides/azure-monitor/sre-agent-incident-runbook/index.md",
                 "guides/azure-monitor/sre-agent-dynamic-thresholds/index.md",
+                # Added after the topic migration, so they have no legacy URL.
+                None,
+                None,
             ],
         },
         ("azure-ai-search", "custom-vectorization"): {
@@ -984,7 +989,10 @@ def test_repository_connected_topics_have_canonical_layout() -> None:
         assert "topic_order" not in topic.entry.metadata
         assert [
             member.metadata.get("redirect_from") for member in topic.members
-        ] == [[redirect] for redirect in topic_expected["redirects"]]
+        ] == [
+            [redirect] if redirect else None
+            for redirect in topic_expected["redirects"]
+        ]
 
 
 def test_repository_uses_only_canonical_topic_packages() -> None:
