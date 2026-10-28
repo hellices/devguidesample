@@ -49,6 +49,28 @@ WINDOWS_EXPORTER_METRICS = {
 WRITE_KEYWORDS = re.compile(r"\b(INSERT|UPDATE|DELETE|MERGE|DROP|ALTER|CREATE|EXEC|EXECUTE|KILL|GRANT|TRUNCATE)\b", re.I)
 
 
+SQL_LITERAL = re.compile(r"N?'((?:[^']|'')*)'")
+ALLOWED_WRITES = re.compile(r"INSERT\s+#\w+|CREATE TABLE\s+#\w+|EXEC sys\.sp_executesql", re.I)
+
+
+def write_statements(sql):
+    """Write keywords in sql, including dynamic SQL passed as string literals (checked recursively)."""
+    found = []
+    for literal in SQL_LITERAL.findall(sql):
+        found += write_statements(literal.replace("''", "'"))
+    code = ALLOWED_WRITES.sub("", SQL_LITERAL.sub("''", sql))
+    return found + [word.upper() for word in WRITE_KEYWORDS.findall(code)]
+
+
+METRIC_TOKEN = re.compile(r"\b((?:mssql|windows)_[a-z_]+|up)\b(?!\s*\()")
+
+
+def metric_selectors(expr):
+    """Every metric name in a PromQL expression and the text that follows it (label values removed)."""
+    code = re.sub(r'"[^"]*"', '""', expr)
+    return [(m.group(1), code[m.end():].lstrip()) for m in METRIC_TOKEN.finditer(code)]
+
+
 def collector_metric_names():
     return {metric["metric_name"] for collector in COLLECTORS for metric in collector["metrics"]}
 
@@ -77,11 +99,14 @@ class CollectorTests(unittest.TestCase):
 
     def test_queries_do_not_change_data(self):
         # Allowed: temp tables for per-database loops and sp_executesql that runs
-        # the read-only statement inside each database.
-        allowed = re.compile(r"INSERT\s+#\w+|CREATE TABLE\s+#\w+|EXEC sys\.sp_executesql", re.I)
+        # the read-only statement inside each database. Dynamic SQL is checked too.
         for sql in collector_sql_texts():
-            without_literals = re.sub(r"'[^']*'", "''", allowed.sub("", sql))
-            self.assertIsNone(WRITE_KEYWORDS.search(without_literals), sql[:80])
+            self.assertEqual(write_statements(sql), [], sql[:80])
+
+    def test_dynamic_sql_writes_are_detected(self):
+        self.assertEqual(write_statements("EXEC sys.sp_executesql N'DELETE FROM dbo.t'"), ["DELETE"])
+        self.assertEqual(
+            write_statements("SET @sql = N'USE x; INSERT #f SELECT ''a'''; EXEC sys.sp_executesql @sql"), [])
 
     def test_counters_end_with_total(self):
         for collector in COLLECTORS:
@@ -113,9 +138,18 @@ class DashboardTests(unittest.TestCase):
     def test_every_expression_uses_known_metrics(self):
         known = collector_metric_names() | WINDOWS_EXPORTER_METRICS | {"up"}
         for title, expr in dashboard_exprs():
-            names = set(re.findall(r"\b((?:mssql|windows)_[a-z_]+|up)\{", expr))
+            selectors = metric_selectors(expr)
+            names = {name for name, _ in selectors}
             self.assertTrue(names, title)
+            for name, rest in selectors:
+                self.assertTrue(rest.startswith("{") and 'sql_vm="' in rest.split("}")[0],
+                                f"{title}: {name} is not scoped to the selected VM")
             self.assertLessEqual(names, known, f"{title}: {names - known}")
+
+    def test_unscoped_metric_is_detected(self):
+        selectors = metric_selectors('mssql_table_rows{sql_vm="$sql_vm"} + windows_memory_available_bytes')
+        self.assertEqual([name for name, rest in selectors if not rest.startswith("{")],
+                         ["windows_memory_available_bytes"])
 
     def test_every_query_is_scoped_to_the_selected_vm(self):
         for title, expr in dashboard_exprs():

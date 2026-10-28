@@ -1,7 +1,7 @@
 """Run every dashboard query against the Azure Monitor workspace and report results.
 
 Usage:
-    python3 verify_dashboard_queries.py <state.json> [--min-panels N]
+    python3 verify_dashboard_queries.py <state.json>
 
 Requires the signed-in Azure CLI user to have Monitoring Data Reader on the
 workspace (granted by infra/resources.bicep). Exits non-zero when a panel query
@@ -21,6 +21,7 @@ DASHBOARD = SAMPLE_DIR / "monitoring/grafana/sql-server-vm.dashboard.json"
 EXPECTED_EMPTY = {
     "문제 DB: 오프라인·로그 재사용 대기",
     "누락 인덱스 제안 (영향 50% 이상)",
+    "보유·대기 중인 잠금 (모드·상태별)",
     "대기 중인 잠금 (DB·리소스·모드별)",
     "리소스 유형별 잠금 대기 시간 (초/초)",
     "현재 차단 관계",

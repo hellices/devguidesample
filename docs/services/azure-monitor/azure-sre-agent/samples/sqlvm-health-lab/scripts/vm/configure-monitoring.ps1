@@ -90,9 +90,14 @@ Write-Base64File (Join-Path $sqlExporterDir 'mssql_inventory.collector.yml') '@@
 if (-not $existing) {
     $binaryPath = "`"$sqlExporterDir\sql_exporter.exe`" --config.file=`"$sqlExporterDir\sql_exporter.yml`" --web.listen-address=127.0.0.1:9399"
     New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName 'Prometheus SQL Exporter' | Out-Null
+    # Native commands do not throw on failure, so check their exit codes.
     & sc.exe config $serviceName obj= "NT SERVICE\$serviceName" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "sc.exe config failed: $LASTEXITCODE" }
     & sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "sc.exe failure failed: $LASTEXITCODE" }
 }
+$account = (Get-CimInstance Win32_Service -Filter "Name='$serviceName'").StartName
+if ($account -ne "NT SERVICE\$serviceName") { throw "$serviceName runs as $account" }
 & icacls.exe $sqlExporterDir /grant "NT SERVICE\${serviceName}:(OI)(CI)RX" | Out-Null
 # Until grant-exporter-login.ps1 creates the SQL Server login, /metrics returns
 # HTTP 500, so only the landing page is checked here.

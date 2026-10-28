@@ -28,7 +28,7 @@ metrics:
     help: 'SQL Server start time as Unix time.'
     values: [start_time]
     query: |
-      SELECT DATEDIFF_BIG(SECOND, '19700101', DATEADD(MINUTE, -DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), sqlserver_start_time)) AS start_time
+      SELECT DATEDIFF_BIG(SECOND, '19700101', CONVERT(datetime2, sqlserver_start_time AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC')) AS start_time
       FROM sys.dm_os_sys_info
 
   - metric_name: mssql_max_server_memory_bytes
@@ -211,11 +211,13 @@ metrics:
     values: [finished]
     query: |
       SELECT d.name AS db, t.backup_type,
-             ISNULL(DATEDIFF_BIG(SECOND, '19700101',
-                 DATEADD(MINUTE, -DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), MAX(b.backup_finish_date))), 0) AS finished
+             ISNULL(DATEDIFF_BIG(SECOND, '19700101', CONVERT(datetime2, MAX(b.backup_finish_date) AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC')), 0) AS finished
       FROM sys.databases AS d
+      JOIN sys.database_recovery_status AS rs ON rs.database_id = d.database_id
       CROSS JOIN (VALUES ('D', 'full'), ('I', 'differential'), ('L', 'log')) AS t(code, backup_type)
-      LEFT JOIN msdb.dbo.backupset AS b ON b.database_name = d.name AND b.type = t.code
+      -- Matched by GUID so that a dropped and re-created database with the same
+      -- name does not inherit the old backups.
+      LEFT JOIN msdb.dbo.backupset AS b ON b.database_guid = rs.database_guid AND b.type = t.code
       WHERE d.name <> 'tempdb'
       GROUP BY d.name, t.backup_type
 
@@ -389,8 +391,8 @@ queries:
              ISNULL(CAST(LOGINPROPERTY(name, 'IsExpired') AS int), 0) AS expired,
              ISNULL(CAST(LOGINPROPERTY(name, 'BadPasswordCount') AS int), 0) AS bad_password_count,
              CASE WHEN CAST(LOGINPROPERTY(name, 'BadPasswordTime') AS datetime) > '20000101'
-                  THEN DATEDIFF_BIG(SECOND, '19700101', DATEADD(MINUTE, -DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()),
-                       CAST(LOGINPROPERTY(name, 'BadPasswordTime') AS datetime)))
+                  THEN DATEDIFF_BIG(SECOND, '19700101',
+                       CONVERT(datetime2, CAST(LOGINPROPERTY(name, 'BadPasswordTime') AS datetime) AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC'))
                   ELSE 0 END AS bad_password_time
       FROM sys.sql_logins
       WHERE name NOT LIKE N'##%'
@@ -406,8 +408,7 @@ queries:
           WHERE h.step_id = 0)
       SELECT j.name AS job_name, CAST(j.enabled AS varchar(1)) AS enabled,
              CASE WHEN last.run_status = 1 THEN 1 WHEN last.run_status = 0 THEN 0 ELSE -1 END AS succeeded,
-             ISNULL(DATEDIFF_BIG(SECOND, '19700101',
-                 DATEADD(MINUTE, -DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), last.started)), 0) AS last_run,
+             ISNULL(DATEDIFF_BIG(SECOND, '19700101', CONVERT(datetime2, last.started AT TIME ZONE CURRENT_TIMEZONE_ID() AT TIME ZONE 'UTC')), 0) AS last_run,
              (SELECT COUNT(*) FROM runs AS f
               WHERE f.job_id = j.job_id AND f.run_status = 0
                 AND f.run_date = CAST(CONVERT(char(8), GETDATE(), 112) AS int)) AS failures_today

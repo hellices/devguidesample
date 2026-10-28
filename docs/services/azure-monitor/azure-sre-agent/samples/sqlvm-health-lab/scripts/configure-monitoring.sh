@@ -26,29 +26,16 @@ fi
 
 python3 "$SAMPLE_DIR/scripts/render_monitoring_script.py" "$STATE_FILE" "$REMOTE_WRITE_URL" > "$TMP/configure-monitoring.ps1"
 
-# Runs a managed Run Command, prints its result, deletes it, and fails on error.
-run_on_vm() {
-  local name="$1" script="$2"; shift 2
-  az vm run-command create -g "$RG" --vm-name "$VM_NAME" --name "$name" --script @"$script" \
-    --timeout-in-seconds 1800 --async-execution false -o none "$@" || true
-  az vm run-command show -g "$RG" --vm-name "$VM_NAME" --name "$name" --instance-view \
-    --query "instanceView.{state:executionState, exitCode:exitCode, output:output, error:error}" -o json
-  local code
-  code="$(az vm run-command show -g "$RG" --vm-name "$VM_NAME" --name "$name" --instance-view --query instanceView.exitCode -o tsv)"
-  az vm run-command delete -g "$RG" --vm-name "$VM_NAME" --name "$name" --yes -o none
-  [[ "$code" == "0" ]] || { echo "${name} failed" >&2; exit 1; }
-}
-
 # Installing software needs only local administrator rights, so it runs as
 # LocalSystem. Only the SQL Server login step needs sysadmin and runs as the
 # local administrator. With RunAs, a script failure is reported only as
 # "Incorrect function" (exit code 1) without the script's error output.
 echo "==> Installing windows_exporter, sql_exporter, and Prometheus agent on ${VM_NAME}"
-run_on_vm configure-monitoring "$TMP/configure-monitoring.ps1"
+run_on_vm configure-monitoring "$TMP/configure-monitoring.ps1" 1800
 
 echo "==> Resetting ${ADMIN_USER} to a one-time password (VMAccess extension)"
 az vm user update -g "$RG" -n "$VM_NAME" -u "$ADMIN_USER" -p "$ONE_TIME_PASSWORD" -o none
 
 echo "==> Creating the SQL Server login for NT SERVICE\\SqlExporterSvc and checking remote_write"
-run_on_vm grant-exporter-login "$SAMPLE_DIR/scripts/vm/grant-exporter-login.ps1" \
+run_on_vm grant-exporter-login "$SAMPLE_DIR/scripts/vm/grant-exporter-login.ps1" 1800 \
   --run-as-user "$ADMIN_USER" --run-as-password "$ONE_TIME_PASSWORD"

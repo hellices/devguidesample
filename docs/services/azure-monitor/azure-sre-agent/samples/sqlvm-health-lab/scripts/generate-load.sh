@@ -10,6 +10,7 @@ MODE="${1:-cpu}"
 MINUTES="${2:-15}"
 [[ "$MODE" =~ ^(cpu|blocking|longrun|badlogin|growth)$ ]] || { echo "mode must be cpu, blocking, longrun, badlogin, or growth" >&2; exit 1; }
 [[ "$MINUTES" =~ ^[0-9]+$ ]] || { echo "minutes must be an integer" >&2; exit 1; }
+MINUTES=$((10#$MINUTES))
 LOAD_B64="$(base64 < "$SAMPLE_DIR/scripts/vm/load.ps1" | tr -d '\n')"
 
 # A scheduled task keeps the workload running after Run Command returns.

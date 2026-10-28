@@ -131,6 +131,14 @@ CROSS APPLY sys.dm_exec_plan_attributes(qs.plan_handle) AS pa
 WHERE pa.attribute = N'dbid' AND CONVERT(int, pa.value) > 4
 ORDER BY qs.total_worker_time DESC;
 """,
+    # Uncapped and lightweight: blocking counts and head blockers are computed
+    # from every request, while the detailed list below is capped.
+    "request_graph": """
+SELECT r.session_id AS sid, r.blocking_session_id AS blocked_by
+FROM sys.dm_exec_requests AS r
+JOIN sys.dm_exec_sessions AS s ON s.session_id = r.session_id
+WHERE s.is_user_process = 1 AND r.session_id <> @@SPID;
+""",
     "active_requests": """
 SELECT TOP (20) r.session_id AS sid, r.blocking_session_id AS blocked_by, r.status, r.command,
        r.wait_type, r.wait_time AS wait_ms, r.wait_resource, r.cpu_time AS cpu_ms,
@@ -160,11 +168,16 @@ LEFT JOIN pc ON pc.db = d.name
 GROUP BY d.name, d.state_desc, d.recovery_model_desc, d.log_reuse_wait_desc
 ORDER BY d.name;
 """,
+    # Matched by database GUID so that a re-created database does not inherit old backups.
     "backups": """
 SELECT d.name, d.recovery_model_desc AS recovery,
-       (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset AS b WHERE b.database_name = d.name AND b.type = 'D') AS last_full_backup,
-       (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset AS b WHERE b.database_name = d.name AND b.type = 'L') AS last_log_backup
-FROM sys.databases AS d WHERE d.name <> 'tempdb' ORDER BY d.name;
+       (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset AS b
+        WHERE b.database_guid = rs.database_guid AND b.type = 'D') AS last_full_backup,
+       (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset AS b
+        WHERE b.database_guid = rs.database_guid AND b.type = 'L') AS last_log_backup
+FROM sys.databases AS d
+JOIN sys.database_recovery_status AS rs ON rs.database_id = d.database_id
+WHERE d.name <> 'tempdb' ORDER BY d.name;
 """,
     "io": """
 SELECT TOP (10) DB_NAME(vfs.database_id) AS db, vfs.file_id,
@@ -237,9 +250,13 @@ def _rows(cursor, sql):
     return [{name: to_json_value(value) for name, value in zip(columns, row)} for row in cursor.fetchall()]
 
 
-def summarize_requests(rows):
-    """Add blocking counts and head blockers (sessions that block others but are not blocked)."""
-    blocked_by = {row["sid"]: row.get("blocked_by") or 0 for row in rows}
+def summarize_requests(rows, graph=None):
+    """Add blocking counts and head blockers (sessions that block others but are not blocked).
+
+    graph is the uncapped (sid, blocked_by) list; rows is the capped detail list.
+    """
+    graph = rows if graph is None else graph
+    blocked_by = {row["sid"]: row.get("blocked_by") or 0 for row in graph}
     blockers = sorted({value for value in blocked_by.values() if value > 0})
     return {
         "count": len(rows),
@@ -297,6 +314,7 @@ def collect(cursor, operation):
     cursor.execute("SET LOCK_TIMEOUT 2000; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;")
     if operation in EXTRA_OPERATIONS:
         section(operation, lambda: collect_extra(cursor, operation))
+        errors.update(_nested_errors(result.get(operation)))
         if errors:
             result["section_errors"] = errors
         return result
@@ -317,14 +335,15 @@ def collect(cursor, operation):
                 if name == "memory":
                     return {row["counter"]: row["value"] for row in rows}
                 if name == "active_requests":
-                    summary = summarize_requests(rows)
+                    summary = summarize_requests(rows, _rows(cursor, QUERIES["request_graph"]))
                     summary["top"] = rows[:limit]
                     return summary
                 return rows[:limit] if limit else rows
             section(name, run)
     elif operation != "overview":
         if operation == "active_requests":
-            section(operation, lambda: summarize_requests(_rows(cursor, QUERIES[operation])))
+            section(operation, lambda: summarize_requests(
+                _rows(cursor, QUERIES[operation]), _rows(cursor, QUERIES["request_graph"])))
         else:
             section(operation, lambda: _rows(cursor, QUERIES[operation]))
     if errors:
@@ -511,7 +530,7 @@ JOIN sys.query_store_runtime_stats_interval AS i ON i.runtime_stats_interval_id 
 JOIN sys.query_store_plan AS p ON p.plan_id = rs.plan_id
 JOIN sys.query_store_query AS q ON q.query_id = p.query_id
 JOIN sys.query_store_query_text AS qt ON qt.query_text_id = q.query_text_id
-WHERE i.end_time > @today
+WHERE i.start_time >= @today
   -- Exclude the monitoring queries themselves (the exporter and this tool).
   AND qt.query_sql_text NOT LIKE N'%query_store_runtime_stats%'
   AND qt.query_sql_text NOT LIKE N'%dm_db_partition_stats%'
@@ -531,7 +550,7 @@ WITH today AS (
     JOIN sys.query_store_plan AS p ON p.plan_id = rs.plan_id
     JOIN sys.query_store_query AS q ON q.query_id = p.query_id
     JOIN sys.query_store_query_text AS qt ON qt.query_text_id = q.query_text_id
-    WHERE i.end_time > @today
+    WHERE i.start_time >= @today
       -- Exclude the monitoring queries themselves (the exporter and this tool).
       AND qt.query_sql_text NOT LIKE N'%query_store_runtime_stats%'
       AND qt.query_sql_text NOT LIKE N'%dm_db_partition_stats%'
@@ -556,15 +575,23 @@ LEFT JOIN baseline AS b ON b.query_hash = t.query_hash
 WHERE t.avg_ms >= @slow_ms OR t.avg_ms >= @ratio * b.avg_ms_7d
 ORDER BY t.avg_ms DESC;
 """,
+    # Log usage comes from sys.dm_db_log_space_usage (active log), not from
+    # allocated pages. max_size 0 means no growth, so the limit is the current size.
     "files": """
+WITH f AS (
+    SELECT name, type, type_desc, physical_name, size, max_size, growth, is_percent_growth,
+           CASE WHEN type = 1 THEN (SELECT used_log_space_in_bytes FROM sys.dm_db_log_space_usage) / 8192.0
+                ELSE FILEPROPERTY(name, 'SpaceUsed') END AS used_pages
+    FROM sys.database_files)
 SELECT name AS [file], type_desc AS file_type, physical_name,
        CAST(size / 128.0 AS decimal(18, 1)) AS size_mb,
-       CAST(FILEPROPERTY(name, 'SpaceUsed') / 128.0 AS decimal(18, 1)) AS used_mb,
-       CAST(100.0 * FILEPROPERTY(name, 'SpaceUsed') / NULLIF(size, 0) AS decimal(5, 1)) AS used_pct,
-       CASE WHEN max_size = -1 THEN NULL ELSE CAST(max_size / 128.0 AS decimal(18, 1)) END AS max_mb,
+       CAST(used_pages / 128.0 AS decimal(18, 1)) AS used_mb,
+       CAST(100.0 * used_pages / NULLIF(size, 0) AS decimal(5, 1)) AS used_pct,
+       CASE WHEN max_size = -1 THEN NULL WHEN max_size = 0 THEN CAST(size / 128.0 AS decimal(18, 1))
+            ELSE CAST(max_size / 128.0 AS decimal(18, 1)) END AS max_mb,
        CASE WHEN is_percent_growth = 1 THEN CONCAT(growth, '%')
             ELSE CONCAT(CAST(growth / 128.0 AS decimal(18, 1)), ' MB') END AS autogrowth
-FROM sys.database_files;
+FROM f;
 """,
     "tables": """
 SELECT TOP (20) s.name AS [schema], t.name AS [table],
@@ -719,6 +746,18 @@ def _per_db(cursor, key, query_store=False, user_only=True, with_today=False, ex
     if errors:
         results["errors"] = errors
     return results
+
+
+def _nested_errors(value, path=""):
+    """Find per-database errors that _per_db recorded inside a section result."""
+    found = {}
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "errors" and isinstance(item, dict):
+                found.update({f"{path}{db}": message for db, message in item.items()})
+            else:
+                found.update(_nested_errors(item, f"{path}{key}."))
+    return found
 
 
 def collect_extra(cursor, operation):

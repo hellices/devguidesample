@@ -11,7 +11,9 @@ min_interval: 300s
 metrics:
   # Equivalent of postgres_exporter's pg_stat_statements: top 10 statements per
   # database since midnight UTC, grouped by query_hash so that statements that
-  # differ only in literal values are counted together.
+  # differ only in literal values are counted together. Only runtime intervals
+  # that start at or after midnight are counted, so the interval that spans
+  # midnight (1 hour by default) is left out.
   - metric_name: mssql_query_today_executions
     type: gauge
     help: 'Executions since midnight UTC (Query Store), top 10 statements per database by total duration.'
@@ -126,7 +128,7 @@ queries:
           JOIN sys.query_store_plan AS p ON p.plan_id = rs.plan_id
           JOIN sys.query_store_query AS q ON q.query_id = p.query_id
           JOIN sys.query_store_query_text AS qt ON qt.query_text_id = q.query_text_id
-          WHERE i.end_time > @today
+          WHERE i.start_time >= @today
             -- Exclude the monitoring queries themselves (this collector and the SRE Agent tool).
             AND qt.query_sql_text NOT LIKE N''%query_store_runtime_stats%''
             AND qt.query_sql_text NOT LIKE N''%dm_db_partition_stats%''
@@ -161,8 +163,10 @@ queries:
           INSERT #f
           SELECT DB_NAME(), name, CASE type WHEN 0 THEN ''data'' WHEN 1 THEN ''log'' ELSE ''other'' END,
                  CAST(size AS bigint) * 8192,
-                 CAST(FILEPROPERTY(name, ''SpaceUsed'') AS bigint) * 8192,
-                 CASE WHEN max_size = -1 THEN -1 ELSE CAST(max_size AS bigint) * 8192 END
+                 CASE WHEN type = 1 THEN (SELECT used_log_space_in_bytes FROM sys.dm_db_log_space_usage)
+                      ELSE CAST(FILEPROPERTY(name, ''SpaceUsed'') AS bigint) * 8192 END,
+                 CASE WHEN max_size = -1 THEN -1 WHEN max_size = 0 THEN CAST(size AS bigint) * 8192
+                      ELSE CAST(max_size AS bigint) * 8192 END
           FROM sys.database_files;';
           EXEC sys.sp_executesql @sql;
           FETCH NEXT FROM dbs INTO @db;

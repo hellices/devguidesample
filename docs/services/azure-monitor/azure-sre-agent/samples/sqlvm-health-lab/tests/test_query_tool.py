@@ -68,6 +68,7 @@ class ValidateSqlTests(unittest.TestCase):
             "EXEC xp_cmdshell 'dir'",
             "sp_configure 'show advanced options', 1",
             "DBCC FREEPROCCACHE",
+            "DBCC SQLPERF('sys.dm_os_wait_stats', CLEAR)",
             "SELECT 1; WAITFOR DELAY '00:10:00'",
             "SELECT * FROM OPENROWSET('SQLNCLI', 'x', 'SELECT 1')",
             "SELECT 1; USE SreDemo; SELECT 2",
@@ -126,9 +127,7 @@ class FakeCursor:
         return rows
 
     def fetchall(self):
-        rows = self.result_sets[self.index][1][self.position:]
-        self.position = len(self.result_sets[self.index][1])
-        return rows
+        raise AssertionError("fetchall would materialize every remaining row")
 
     def nextset(self):
         if self.index + 1 < len(self.result_sets):

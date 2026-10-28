@@ -47,6 +47,9 @@ def _labels(metric):
 
 def summarize(result_type, result):
     """Keep labels plus the instant value, or first/last/min/max for range results."""
+    if result_type in ("scalar", "string"):
+        # Shaped as [timestamp, "value"], not a list of series.
+        return {"result_type": result_type, "series_total": 1, "series": [{"labels": {}, "value": result[1]}]}
     series = []
     for item in result[:MAX_SERIES]:
         entry = {"labels": _labels(item.get("metric", {}))}
@@ -63,8 +66,8 @@ def summarize(result_type, result):
 
 def main(promql: str, lookback_minutes: int = 0, step_seconds: int = 300) -> dict:
     try:
-        lookback_minutes = int(lookback_minutes or 0)
-        step_seconds = int(step_seconds or 300)
+        lookback_minutes = 0 if lookback_minutes in (None, "") else int(lookback_minutes)
+        step_seconds = 300 if step_seconds in (None, "") else int(step_seconds)
         validate(promql, lookback_minutes, step_seconds)
         headers = {"Authorization": f"Bearer {_token()}"}
         if lookback_minutes:

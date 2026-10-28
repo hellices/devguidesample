@@ -42,9 +42,10 @@ SQL Server를 점검할 때 사용한다. 에이전트는 Azure VNet 모드로 �
 | 볼륨 여유 공간 | `mssql_volume_available_bytes{sql_vm="@@VM_NAME@@"}` | 0 |
 | 데이터 파일 사용률 | `mssql_db_file_used_bytes{sql_vm="@@VM_NAME@@"} / mssql_db_file_size_bytes{sql_vm="@@VM_NAME@@"}` | 0 |
 
-`mssql_table_rows`, Query Store, 파일 지표는 5분마다 갱신된다. managed
-Prometheus는 레이블 값의 대소문자를 구분하지 않으므로 DB·테이블 이름은 소문자로
-보일 수 있다.
+`mssql_table_rows`, Query Store, 파일 지표는 5분마다 갱신된다. Azure Monitor
+managed Prometheus는 공식 문서상 레이블 이름과 값을 대소문자 구분 없이 저장·비교하며,
+결과의 대소문자가 원본과 다를 수 있다(예: `SreDemo`가 `sredemo`로 반환). 조회는
+원본 이름 그대로 써도 되지만 결과를 비교할 때는 대소문자를 무시한다.
 
 ## SqlServerQuery로 직접 조회
 
@@ -128,8 +129,11 @@ FROM sys.dm_db_session_space_usage ORDER BY tempdb_kb DESC;
 | 작업 | `jobs.jobs[].last_outcome`, `failures_today` | 실패 1회 이상이면 `failures_today[].message` 인용 |
 | 백업 | `backups[]` | FULL 복구 모델인데 로그 백업이 없음, 전체 백업 없음 또는 24시간 초과 |
 
-대기·쿼리 통계는 SQL Server 시작 이후 누적값이다. `overview.uptime_min`이
-짧으면 결론의 신뢰도가 낮다고 밝힌다.
+대기 통계, 계획 캐시 기반 `top_queries`, I/O·인덱스 DMV는 SQL Server 시작 이후
+누적값이다. `overview.uptime_min`이 짧으면 이 항목들의 신뢰도가 낮다고 밝힌다.
+Query Store(`today_queries`, `slow_queries`)는 재시작 후에도 보존되므로 이 제약을
+적용하지 않는다. `today_queries`는 UTC 자정 이후 시작한 Query Store 집계 구간만
+합산한다.
 
 ## 보고 형식
 

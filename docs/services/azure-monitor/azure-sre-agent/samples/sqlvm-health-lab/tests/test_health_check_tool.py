@@ -142,6 +142,20 @@ class BlockingTests(unittest.TestCase):
         self.assertEqual(summary["blocked"], 3)
         self.assertEqual(summary["head_blockers"], [54])
 
+    def test_counts_come_from_uncapped_graph(self):
+        # Session 61 is outside the capped detail list but still blocks others.
+        graph = [{"sid": 61, "blocked_by": 54}] + [{"sid": 100 + i, "blocked_by": 61} for i in range(25)]
+        summary = tool.summarize_requests(graph[-20:], graph)
+        self.assertEqual(summary["blocked"], 26)
+        self.assertEqual(summary["head_blockers"], [54])
+        self.assertEqual(len(summary["top"]), 20)
+
+
+class NestedErrorTests(unittest.TestCase):
+    def test_per_database_errors_are_reported(self):
+        data = {"volumes": [], "database_files": {"SreDemo": [], "errors": {"Other": "OperationalError: denied"}}}
+        self.assertEqual(tool._nested_errors(data), {"database_files.Other": "OperationalError: denied"})
+
 
 class CollectTests(unittest.TestCase):
     def test_section_error_does_not_drop_other_sections(self):
@@ -221,8 +235,6 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("@@", content)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class MetricsToolTests(unittest.TestCase):
@@ -247,3 +259,16 @@ class MetricsToolTests(unittest.TestCase):
         series = summary["series"][0]
         self.assertEqual(series["labels"], {"__name__": "mssql_table_rows", "table": "orders"})
         self.assertEqual((series["first"], series["last"], series["change"], series["points"]), (100.0, 180.0, 80.0, 3))
+
+    def test_scalar_result(self):
+        summary = self.metrics.summarize("scalar", [1700000000, "42"])
+        self.assertEqual(summary["series"], [{"labels": {}, "value": "42"}])
+
+    def test_explicit_zero_step_is_rejected(self):
+        result = self.metrics.main("up", lookback_minutes=1, step_seconds=0)
+        self.assertFalse(result["success"])
+        self.assertIn("step_seconds", result["error"])
+
+
+if __name__ == "__main__":
+    unittest.main()

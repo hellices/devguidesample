@@ -14,15 +14,16 @@ $cs = 'Server=localhost;Database=SreDemo;Integrated Security=SSPI;Application Na
 $end = (Get-Date).AddMinutes($Minutes)
 
 $worker = {
-    param($cs, $sql, $end)
+    param($cs, $sql, $end, $once = $false)
     $connection = New-Object System.Data.SqlClient.SqlConnection $cs
     $connection.Open()
-    while ((Get-Date) -lt $end) {
+    # $once runs the batch exactly once, regardless of how long the job took to start.
+    do {
         $command = $connection.CreateCommand()
         $command.CommandTimeout = 0
         $command.CommandText = $sql.Replace('@@CUSTOMER@@', [string](Get-Random -Maximum 20000))
         try { [void]$command.ExecuteScalar() } catch { Start-Sleep -Seconds 1 }
-    }
+    } while (-not $once -and (Get-Date) -lt $end)
     $connection.Dispose()
 }
 
@@ -44,7 +45,7 @@ switch ($Mode) {
         $sql = "DECLARE @end datetime2 = DATEADD(MINUTE, $Minutes, SYSDATETIME()), @n bigint;
 WHILE SYSDATETIME() < @end
     SELECT @n = COUNT(*) FROM dbo.Orders WHERE Note LIKE '%x%' OPTION (MAXDOP 1);"
-        $jobs += Start-Job -ScriptBlock $worker -ArgumentList ($cs.Replace('sre-demo-load', 'sre-demo-report')), $sql, (Get-Date).AddSeconds(5)
+        $jobs += Start-Job -ScriptBlock $worker -ArgumentList ($cs.Replace('sre-demo-load', 'sre-demo-report')), $sql, $end, $true
     }
     'badlogin' {
         while ((Get-Date) -lt $end) {

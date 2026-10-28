@@ -10,6 +10,7 @@ Run Command script can write them on the VM without quoting issues.
 import base64
 import json
 import re
+import urllib.parse
 import sys
 from pathlib import Path
 
@@ -22,7 +23,10 @@ def _b64(text):
 
 
 def render_prometheus_config(state, remote_write_url):
-    if not remote_write_url.startswith("https://") or "/api/v1/write" not in remote_write_url:
+    url = urllib.parse.urlparse(remote_write_url)
+    if (url.scheme != "https" or not url.hostname
+            or not url.hostname.endswith(".metrics.ingest.monitor.azure.com")
+            or not url.path.endswith("/streams/Microsoft-PrometheusMetrics/api/v1/write")):
         raise ValueError("remote write URL must be the Azure Monitor workspace ingestion URL")
     text = (SAMPLE_DIR / "monitoring/prometheus.yml.tmpl").read_text(encoding="utf-8")
     values = {

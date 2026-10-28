@@ -75,9 +75,23 @@ IF NOT EXISTS (SELECT 1 FROM dbo.sysjobservers AS s JOIN dbo.sysjobs AS j ON j.j
 # freq_subday_type 4 = minutes, 8 = hours.
 Add-DemoJob 'sre-demo-nightly-check' "RAISERROR(N'Demo failure: 3 orphan orders found', 16, 1);" 'every 30 minutes' 4 30
 Add-DemoJob 'sre-demo-update-stats' 'UPDATE STATISTICS dbo.Orders;' 'hourly' 8 1
+# Start each job once unless it is still running from an earlier run of this script.
 Invoke-Sql @"
-EXEC dbo.sp_start_job @job_name = N'sre-demo-nightly-check';
-EXEC dbo.sp_start_job @job_name = N'sre-demo-update-stats';
+DECLARE @name sysname;
+DECLARE jobs CURSOR LOCAL FAST_FORWARD FOR
+    SELECT j.name FROM dbo.sysjobs AS j
+    WHERE j.name IN (N'sre-demo-nightly-check', N'sre-demo-update-stats')
+      AND NOT EXISTS (SELECT 1 FROM dbo.sysjobactivity AS a
+                      WHERE a.job_id = j.job_id
+                        AND a.session_id = (SELECT MAX(session_id) FROM dbo.syssessions)
+                        AND a.start_execution_date IS NOT NULL AND a.stop_execution_date IS NULL);
+OPEN jobs;
+FETCH NEXT FROM jobs INTO @name;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    EXEC dbo.sp_start_job @job_name = @name;
+    FETCH NEXT FROM jobs INTO @name;
+END
 "@ 'msdb'
 
 Write-Output 'Login audit session, demo logins, and demo jobs are ready.'

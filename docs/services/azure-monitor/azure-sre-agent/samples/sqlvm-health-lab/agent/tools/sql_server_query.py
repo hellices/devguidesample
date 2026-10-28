@@ -47,6 +47,7 @@ MAX_ROWS = 1000
 MAX_RESULT_SETS = 5
 MAX_CELL_CHARS = 1000
 MAX_SQL_CHARS = 20000
+DRAIN_BATCH_ROWS = 500
 
 BLOCKED_KEYWORDS = (
     "INSERT", "UPDATE", "DELETE", "MERGE", "DROP", "ALTER", "CREATE", "TRUNCATE",
@@ -54,6 +55,8 @@ BLOCKED_KEYWORDS = (
     "CHECKPOINT", "USE", "BULK", "OPENROWSET", "OPENQUERY", "OPENDATASOURCE",
     "WAITFOR", "COMMIT", "ROLLBACK", "SETUSER", "REVERT",
     "UPDATETEXT", "WRITETEXT", "INTO", "EXEC", "EXECUTE", "DBCC",
+    # DBCC SQLPERF(..., CLEAR) resets wait or latch statistics.
+    "CLEAR",
 )
 BLOCKED_PHRASES = re.compile(
     r"\b(?:BEGIN\s+(?:DISTRIBUTED\s+)?TRAN(?:SACTION)?|SAVE\s+TRAN(?:SACTION)?|(?:ENABLE|DISABLE)\s+TRIGGER)\b",
@@ -152,8 +155,9 @@ def read_result_sets(cursor, max_rows):
             columns = [column[0] or f"column{index + 1}" for index, column in enumerate(cursor.description)]
             rows = cursor.fetchmany(max_rows + 1)
             truncated = len(rows) > max_rows
-            if truncated:
-                cursor.fetchall()
+            # Discard the rest in bounded batches so a huge result never sits in memory.
+            while truncated and cursor.fetchmany(DRAIN_BATCH_ROWS):
+                pass
             result_sets.append({
                 "columns": columns,
                 "rows": [[to_json_value(value) for value in row] for row in rows[:max_rows]],

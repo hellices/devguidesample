@@ -40,10 +40,12 @@ if ((Get-ItemProperty $loginModePath).LoginMode -ne 2) {
     Start-Sleep -Seconds 10
 }
 
+# Bracket-escaped for identifiers, quote-escaped for string literals.
 $login = $MonitorLogin.Replace(']', ']]')
+$loginLiteral = $MonitorLogin.Replace("'", "''")
 $password = $MonitorPassword.Replace("'", "''")
 Invoke-NonQuery @"
-IF SUSER_ID(N'$login') IS NULL
+IF SUSER_ID(N'$loginLiteral') IS NULL
     CREATE LOGIN [$login] WITH PASSWORD = N'$password', CHECK_POLICY = ON, DEFAULT_DATABASE = master;
 ELSE
     ALTER LOGIN [$login] WITH PASSWORD = N'$password';
@@ -53,7 +55,7 @@ GRANT VIEW SERVER STATE, VIEW ANY DEFINITION, CONNECT ANY DATABASE TO [$login];
 "@
 Invoke-NonQuery @"
 USE msdb;
-IF USER_ID(N'$login') IS NULL CREATE USER [$login] FOR LOGIN [$login];
+IF USER_ID(N'$loginLiteral') IS NULL CREATE USER [$login] FOR LOGIN [$login];
 GRANT SELECT ON dbo.backupset TO [$login];
 GRANT SELECT ON dbo.sysjobs TO [$login];
 GRANT SELECT ON dbo.sysjobhistory TO [$login];
@@ -84,10 +86,10 @@ BEGIN
         SELECT TOP (500000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS i
         FROM sys.all_objects AS a CROSS JOIN sys.all_objects AS b)
     INSERT dbo.Orders (CustomerId, OrderDate, Status, Amount, Note)
-    SELECT ABS(CHECKSUM(NEWID())) % 20000,
+    SELECT ABS(CONVERT(bigint, CHECKSUM(NEWID()))) % 20000,
            DATEADD(MINUTE, -CAST(i AS int), SYSUTCDATETIME()),
            CAST(i % 5 AS tinyint),
-           CAST(ABS(CHECKSUM(NEWID())) % 100000 / 100.0 AS decimal(10, 2)),
+           CAST(ABS(CONVERT(bigint, CHECKSUM(NEWID()))) % 100000 / 100.0 AS decimal(10, 2)),
            'demo'
     FROM n;
 END

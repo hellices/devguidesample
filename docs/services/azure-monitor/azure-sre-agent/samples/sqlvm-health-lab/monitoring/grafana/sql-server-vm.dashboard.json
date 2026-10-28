@@ -88,7 +88,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "min(up{sql_vm=\"$sql_vm\"})",
+          "expr": "(count(up{sql_vm=\"$sql_vm\"} == 1) or vector(0)) == bool 2",
           "legendFormat": "",
           "range": false,
           "instant": true

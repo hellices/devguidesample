@@ -20,3 +20,21 @@ VM_METRICS_CLIENT_ID="$(state vmMetricsClientId)"
 VM_METRICS_PRINCIPAL_ID="$(state vmMetricsPrincipalId)"
 MONITOR_WORKSPACE_ID="$(state monitorWorkspaceId)"
 GRAFANA_NAME="$(state grafanaName)"
+
+# Runs a managed Run Command synchronously, prints its result, deletes it, and
+# exits on failure. Any leftover command with the same name is deleted first,
+# so a failed create can never report the result of an earlier run.
+# Usage: run_on_vm <name> <script> <timeout-seconds> [extra az vm run-command create args]
+run_on_vm() {
+  local name="$1" script="$2" timeout="$3"; shift 3
+  az vm run-command delete -g "$RG" --vm-name "$VM_NAME" --name "$name" --yes -o none 2>/dev/null || true
+  # A script failure also makes create return non-zero; the result is read below.
+  az vm run-command create -g "$RG" --vm-name "$VM_NAME" --name "$name" --script @"$script" \
+    --timeout-in-seconds "$timeout" --async-execution false -o none "$@" || true
+  local view
+  view="$(az vm run-command show -g "$RG" --vm-name "$VM_NAME" --name "$name" --instance-view \
+    --query "instanceView.{state:executionState, exitCode:exitCode, output:output, error:error}" -o json)"
+  echo "$view"
+  az vm run-command delete -g "$RG" --vm-name "$VM_NAME" --name "$name" --yes -o none
+  [[ "$(jq -r .exitCode <<<"$view")" == "0" ]] || { echo "${name} failed" >&2; exit 1; }
+}
