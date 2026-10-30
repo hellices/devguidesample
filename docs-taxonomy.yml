@@ -62,6 +62,8 @@ technologies:
   grafana: Grafana
   java: Java
   kafka: Apache Kafka
+  karpenter: Karpenter
+  keda: KEDA
   kubernetes: Kubernetes
   mcp: Model Context Protocol
   micrometer: Micrometer
@@ -137,6 +139,8 @@ official_source_hosts:
   - blog.google
   - openjdk.org
   - kubernetes.io
+  - karpenter.sh
+  - keda.sh
   - www.cncf.io
   - cncf.io
   - github.com

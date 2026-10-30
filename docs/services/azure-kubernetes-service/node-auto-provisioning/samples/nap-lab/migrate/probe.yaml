@@ -1,0 +1,102 @@
+# 마이그레이션 중 가용성을 확인하는 대상 앱(podinfo)과 0.2초 간격 요청 클라이언트
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: migrate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: migrate
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: web
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.15.0
+          ports:
+            - containerPort: 9898
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9898
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: "1"
+              memory: 256Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  namespace: migrate
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: migrate
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 9898
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: migrate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client
+  template:
+    metadata:
+      labels:
+        app: client
+    spec:
+      # 마이그레이션 대상 노드 밖(system pool)에서 요청을 보냅니다.
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+      containers:
+        - name: curl
+          image: mcr.microsoft.com/azurelinux/base/core:3.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              while true; do
+                code=$(curl -s -o /dev/null -m 1 -w '%{http_code}' http://web.migrate.svc/healthz || true)
+                echo "$(date -u +%FT%T.%3NZ) $code"
+                sleep 0.2
+              done
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
