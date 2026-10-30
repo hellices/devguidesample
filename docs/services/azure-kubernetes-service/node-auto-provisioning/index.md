@@ -25,6 +25,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/cluster-autoscaler
   - title: Karpenter NodePools
     url: https://karpenter.sh/docs/concepts/nodepools/
+  - title: Karpenter Settings
+    url: https://karpenter.sh/docs/reference/settings/
+  - title: Cluster Autoscaler 1.36 static_autoscaler.go
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go
   - title: Karpenter Disruption
     url: https://karpenter.sh/docs/concepts/disruption/
 last_verified: 2026-10-30
@@ -47,25 +51,30 @@ NAP는 Pending Pod의 requests를 보고 **VM 크기와 개수를 함께 정해*
 |---|---|---|
 | 확장 단위 | 노드 풀(VMSS) 하나당 VM 크기 하나 | Pod 요구에 맞춰 허용 범위 안의 여러 VM 크기 |
 | 설정 위치 | `az aks nodepool`·autoscaler profile | Kubernetes CRD(`NodePool`, `AKSNodeClass`) |
-| 판단 방식 | 주기 스캔(기본 10초) 후 풀 선택(expander) | Pending Pod 이벤트 기반 |
+| 판단 방식 | Pending Pod 이벤트 + 새 Pod는 다음 scan(기본 10초)까지 대기, 풀 선택(expander) | Pending Pod 이벤트 기반, 1초 batch 후 결정 |
 | 축소 | 10분 미사용 + 추가 후 10분 지연(기본값) | consolidation: 빈 노드 삭제, 여러 노드를 하나로 합치거나 더 저렴한 노드로 교체 |
 | 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget |
 | 다른 VM 크기가 필요할 때 | 풀을 새로 추가 | `NodePool` requirements만 수정 |
 
-## 실측에서 NAP는 노드를 더 빨리 만들지 않았고 더 빨리 정리했다
+## NAP는 확장 결정이 빠르지만 Pod 준비 시간은 VM 부팅이 좌우한다
 
-1 vCPU Pod 20개를 같은 조건으로 확장·축소한 중앙값입니다(AKS 1.36.5, 3회).
+`Standard_D4ds_v7` on-demand 조건에서 1 vCPU Pod 20개를 0개부터 확장한 중앙값입니다
+(AKS 1.36.5).
 
-| 시나리오 | 첫 노드 Ready | 전체 Pod Ready | 만든 노드 | 축소 완료 |
+| 시나리오 | 확장 결정 | 첫 노드 Ready | 전체 Pod Ready | 만든 노드 |
 |---|---|---|---|---|
-| CAS, D4 풀 | 74초 | 99초 | D4 × 7 | 812초 |
-| NAP, D4 고정 | 87초 | 133초 | D4 × 7 | 335초 |
-| NAP, D 계열 자유 선택 | 99초 | 116초 | D32pls_v6(Arm64) × 1 | 87초 |
+| CAS, D4 풀 | 15초 | 81초 | 108초 | D4 × 7 |
+| NAP, D4 고정 | 3초 | 83초 | 119초 | D4 × 7 |
+| NAP, v7 D 계열 자유 선택 | 2초 | 88초 | 103초 | D32als_v7 × 1 |
 
-두 방식 모두 결국 Azure VM을 만들기 때문에 노드 준비 시간은 비슷했습니다.
-NAP의 이점은 **빈 노드를 빨리 정리하고, 허용 범위 안에서 VM 크기를 골라 노드
-수를 줄이는 것**입니다. 측정 방법과 해석의 한계는
-[CAS와 NAP 확장·축소 실측](scale-out-benchmark/index.md)에 있습니다.
+- **Karpenter가 빠르다는 근거는 확장 결정 단계입니다.** CAS는 새 Pending Pod를 보고도
+  다음 scan 주기(10초)까지 기다리고, NAP는 1초 동안 Pod가 더 생기지 않으면 바로 결정합니다.
+- 결정 뒤 VM이 노드로 준비되는 60~80초는 두 방식이 같아서, Pod 준비 시간은 비슷했습니다.
+- NAP가 분명히 앞선 것은 **VM 크기 선택**(큰 Pod, 노드 수 축소)과 **budget을 조정한 축소**
+  (56~92초)였습니다.
+
+측정 방법과 해석의 한계는 [CAS와 NAP 확장 실측](scale-out-benchmark/index.md)에,
+Pod 대기 시간을 줄이는 방법은 [확장 지연 줄이기](scale-up-optimization/index.md)에 있습니다.
 
 ## NodePool은 허용할 VM 범위를, AKSNodeClass는 Azure 노드 설정을 정한다
 
@@ -178,4 +187,6 @@ kubectl get events -A --field-selector source=karpenter -w
 - [Networking configurations for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-networking)
 - [Use the cluster autoscaler in AKS](https://learn.microsoft.com/azure/aks/cluster-autoscaler)
 - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/)
+- [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
+- [Cluster Autoscaler 1.36 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go)
 - [Karpenter Disruption](https://karpenter.sh/docs/concepts/disruption/)

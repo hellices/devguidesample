@@ -21,12 +21,15 @@ spec:
         - key: kubernetes.io/os
           operator: In
           values: [linux]
-        - key: karpenter.sh/capacity-type
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: karpenter.sh/capacity-type   # spot을 섞지 않도록 명시
           operator: In
           values: [on-demand]
         - key: karpenter.azure.com/sku-name
           operator: In
-          values: [Standard_D4ds_v6]
+          values: [Standard_D4ds_v7]
       startupTaints:
         - key: node.cilium.io/agent-not-ready
           effect: NoExecute

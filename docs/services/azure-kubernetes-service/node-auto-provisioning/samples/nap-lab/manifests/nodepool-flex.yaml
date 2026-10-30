@@ -21,12 +21,18 @@ spec:
         - key: kubernetes.io/os
           operator: In
           values: [linux]
-        - key: karpenter.sh/capacity-type
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: karpenter.sh/capacity-type   # spot을 섞지 않도록 명시
           operator: In
           values: [on-demand]
         - key: karpenter.azure.com/sku-family
           operator: In
           values: [D]
+        - key: karpenter.azure.com/sku-version
+          operator: In
+          values: ["7"]
         - key: karpenter.azure.com/sku-cpu
           operator: Lt
           values: ["33"]

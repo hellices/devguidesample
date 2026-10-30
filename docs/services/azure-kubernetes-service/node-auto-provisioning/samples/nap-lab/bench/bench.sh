@@ -1,58 +1,82 @@
 #!/usr/bin/env bash
-# 사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector key=value] >> results.csv
-# 워크로드 노드(kubernetes.azure.com/mode=user)가 0개인 상태에서 시작해 scale-out/in 시간을 초 단위로 기록합니다.
+# 사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector key=value]
+#   CPU=1            Pod당 CPU 요청
+#   WAVES="5 5 5 5"  지정하면 replica를 여러 번에 나눠 늘림(WAVE_INTERVAL초 간격)
+#   OUT=<dir>        실행별 원본 스냅샷 저장 위치
+#   SCALE_IN_COUNT="<cmd>"  남은 VM 수를 출력하는 명령. 0이 되는 시각을 축소 완료로 기록
+#                    예) CAS: az vmss list-instances -g <MC_rg> -n <vmss> --query "length(@)" -o tsv
+#                        NAP: kubectl get nodeclaims -l karpenter.sh/nodepool=bench-fixed --no-headers | wc -l
+# 실행마다 시작 시각과 Pod·노드·NodeClaim·이벤트 스냅샷을 남기고 analyze.py로 단계별 시간을 계산합니다.
 set -euo pipefail
 CTX=$1 SCENARIO=$2 REPLICAS=$3 RUNS=$4 SELECTOR=${5:-}
-TIMEOUT=${TIMEOUT:-1800}
+CPU=${CPU:-1} TIMEOUT=${TIMEOUT:-1800} WAVE_INTERVAL=${WAVE_INTERVAL:-30}
+OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
 k() { kubectl --context "$CTX" "$@"; }
-log() { echo "[$(date -u +%T)] $*" >&2; }
+log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-workload_nodes() { k get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l | tr -d ' '; }
-ready_workload_nodes() {
-  k get nodes -l kubernetes.azure.com/mode=user \
+NODE_SEL=${SELECTOR:-kubernetes.azure.com/mode=user}
+ready_nodes() {
+  k get nodes -l "$NODE_SEL" \
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true
 }
 ready_pods() {
   k -n bench get pods -l app=inflate \
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true
 }
-wait_until() { # wait_until <description> <command...>; 경과 초를 출력
+wait_for() { # wait_for <desc> <predicate...>
   local desc=$1; shift; local start; start=$(date +%s)
   until "$@"; do
-    (( $(date +%s) - start > TIMEOUT )) && { log "timeout: $desc"; echo -1; return; }
+    (( $(date +%s) - start > TIMEOUT )) && { log "timeout: $desc"; return 1; }
     sleep 2
   done
-  echo $(( $(date +%s) - start ))
 }
+no_ready_nodes() { [[ $(ready_nodes) -eq 0 ]]; }
+pods_ready() { [[ $(ready_pods) -ge $REPLICAS ]]; }
 
-k apply -f "$(dirname "$0")/../manifests/inflate.yaml" >/dev/null
-if [[ -n $SELECTOR ]]; then
-  k -n bench patch deployment inflate --type merge \
-    -p "{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}}}}" >/dev/null
-fi
+k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
+patch="{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"pause\",\"resources\":{\"requests\":{\"cpu\":\"$CPU\",\"memory\":\"1Gi\"}}}]"
+[[ -n $SELECTOR ]] && patch+=",\"nodeSelector\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}"
+patch+="}}}}"
+k -n bench patch deployment inflate --type strategic -p "$patch" >/dev/null
 
-[[ -n ${HEADER:-} ]] && echo "scenario,run,replicas,first_node_ready_s,all_pods_ready_s,new_nodes,skus,scale_in_s"
+# 삭제·할당 해제된 VM의 node 객체는 NotReady로 남을 수 있으므로 Ready 워크로드 노드 0개를 시작 조건으로 씁니다.
+baseline=no_ready_nodes
+
 for run in $(seq 1 "$RUNS"); do
-  log "$SCENARIO run $run: waiting for zero workload nodes"
-  wait_until "baseline" bash -c "[[ \$(kubectl --context $CTX get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l) -eq 0 ]]" >/dev/null
+  dir="$OUT/$SCENARIO/run$run"; mkdir -p "$dir"
+  log "run $run: waiting for baseline"
+  wait_for baseline "$baseline"
+  k -n bench delete events --all >/dev/null 2>&1 || true
 
-  t0=$(date +%s)
-  k -n bench scale deployment inflate --replicas "$REPLICAS" >/dev/null
-  first_node="" all_ready=""
-  while [[ -z $all_ready ]]; do
-    now=$(( $(date +%s) - t0 ))
-    (( now > TIMEOUT )) && { all_ready=-1; break; }
-    [[ -z $first_node && $(ready_workload_nodes) -gt 0 ]] && first_node=$now && log "first node ready ${now}s"
-    [[ $(ready_pods) -ge $REPLICAS ]] && all_ready=$now
-    sleep 2
-  done
-  log "all pods ready ${all_ready}s"
-  nodes=$(workload_nodes)
-  skus=$(k get nodes -l kubernetes.azure.com/mode=user \
-    -o jsonpath='{range .items[*]}{.metadata.labels.node\.kubernetes\.io/instance-type}{"\n"}{end}' | sort | uniq -c | awk '{printf "%s%sx%s", sep, $2, $1; sep=" "}')
+  t0=$(now); echo "$t0" > "$dir/t0"
+  if [[ -n ${WAVES:-} ]]; then
+    total=0; : > "$dir/waves"
+    for w in $WAVES; do
+      total=$((total + w)); echo "$(now) $total" >> "$dir/waves"
+      k -n bench scale deployment inflate --replicas "$total" >/dev/null
+      if [[ $total -lt $REPLICAS ]]; then sleep "$WAVE_INTERVAL"; fi
+    done
+  else
+    k -n bench scale deployment inflate --replicas "$REPLICAS" >/dev/null
+  fi
+  wait_for "pods ready" pods_ready || true
+  log "run $run: pods ready"
 
+  k -n bench get pods -o json > "$dir/pods.json"
+  k get nodes -o json > "$dir/nodes.json"
+  k get nodeclaims -o json > "$dir/nodeclaims.json" 2>/dev/null || echo '{"items":[]}' > "$dir/nodeclaims.json"
+  k get events -A -o json > "$dir/events.json"
+
+  now > "$dir/scale_in_start"
   k -n bench scale deployment inflate --replicas 0 >/dev/null
-  scale_in=$(wait_until "scale-in" bash -c "[[ \$(kubectl --context $CTX get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l) -eq 0 ]]")
-  log "scale-in ${scale_in}s"
-  echo "$SCENARIO,$run,$REPLICAS,$first_node,$all_ready,$nodes,$skus,$scale_in"
+  # CAS는 VM 삭제 뒤에도 node 객체가 NotReady로 몇 분 남으므로 node 수가 아니라 VM 수로 완료를 판단합니다.
+  if [[ -n ${SCALE_IN_COUNT:-} ]]; then
+    vms_gone() { [[ $(bash -c "$SCALE_IN_COUNT" 2>/dev/null | tr -d ' ') == 0 ]]; }
+    if wait_for "scale-in" vms_gone; then now > "$dir/scale_in_end"; fi
+  fi
+  wait_for "no ready nodes" no_ready_nodes || true
+  [[ -f "$dir/scale_in_end" ]] || now > "$dir/scale_in_end"
+  log "run $run: scale-in done"
+  python3 "$HERE/analyze.py" "$dir" "$SCENARIO" "$run" "$NODE_SEL"
 done
