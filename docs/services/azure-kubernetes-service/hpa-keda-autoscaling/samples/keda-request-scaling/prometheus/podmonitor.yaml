@@ -1,0 +1,17 @@
+# Managed Prometheus는 OSS PodMonitor와 같은 스펙을 쓰되 API group만 azmonitoring.coreos.com/v1입니다.
+apiVersion: azmonitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
+  selector:
+    matchLabels:
+      app: podinfo
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

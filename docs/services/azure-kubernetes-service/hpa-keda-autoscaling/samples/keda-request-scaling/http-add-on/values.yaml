@@ -1,0 +1,20 @@
+# HTTP Add-on 구성 요소를 시스템 풀에 고정합니다.
+# NAP consolidation이나 spot 회수로 interceptor가 옮겨지면 cold start 중 보류된 요청이 끊깁니다.
+interceptor:
+  nodeSelector:
+    kubernetes.azure.com/mode: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+scaler:
+  nodeSelector:
+    kubernetes.azure.com/mode: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+operator:
+  nodeSelector:
+    kubernetes.azure.com/mode: system
+  tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists

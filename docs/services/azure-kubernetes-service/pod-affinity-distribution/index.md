@@ -24,7 +24,7 @@ redirect_from:
 
 # ✅ AKS에서 Pod 분산 예제
 
-**PodAntiAffinity + TopologySpreadConstraints + HPA 예시**
+**PodAntiAffinity + TopologySpreadConstraints 예시와 HPA 연계**
 
 ***
 
@@ -78,28 +78,12 @@ spec:
 
 ***
 
-## ✅ HPA YAML
+## ✅ HPA로 replica 수 조정
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: my-app-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: my-app
-  minReplicas: 4
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60
-```
+분산된 Deployment의 replica 수를 부하에 맞추는 HPA 예시, 동작 기본값과
+KEDA를 이용한 요청 수 기반 확장은
+[AKS HPA와 KEDA로 지표별 Pod 확장 방식 고르기](../hpa-keda-autoscaling/index.md)에서
+다룹니다.
 
 ***
 
@@ -110,7 +94,7 @@ spec:
 *   `ScheduleAnyway` 옵션으로 스케줄링 실패 방지.
 *   라벨(`app: my-app`)은 Deployment와 Constraints 모두 동일하게 유지.
 *   AZ 기반 분산: `topologyKey: topology.kubernetes.io/zone`로 변경 가능.
-*   HPA와 함께 사용 시 **Cluster Autoscaler 활성화** 권장.
+*   HPA와 함께 사용 시 노드 autoscaler(Cluster Autoscaler 또는 [NAP](../node-auto-provisioning/index.md)) 활성화 권장. NAP는 `ScheduleAnyway` spread도 우선 지키려고 노드를 더 만들 수 있습니다.
 
 ***
 
