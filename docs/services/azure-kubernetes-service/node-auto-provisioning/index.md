@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [operate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Overview of Node Auto-Provisioning (NAP) in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/node-auto-provisioning
@@ -23,6 +23,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning
   - title: Use the cluster autoscaler in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/cluster-autoscaler
+  - title: Azure Kubernetes Service (AKS) scaling overview — HPA, VPA, Cluster Autoscaler, and KEDA
+    url: https://learn.microsoft.com/azure/aks/concepts-scale
+  - title: Karpenter Concepts
+    url: https://karpenter.sh/docs/concepts/
   - title: Karpenter NodePools
     url: https://karpenter.sh/docs/concepts/nodepools/
   - title: Karpenter Settings
@@ -31,7 +35,15 @@ official_sources:
     url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go
   - title: Karpenter Disruption
     url: https://karpenter.sh/docs/concepts/disruption/
-last_verified: 2026-10-30
+  - title: Karpenter provider Azure offering error handlers
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/offerings/commonerrorhandlers.go
+  - title: Karpenter provider Azure quota provider
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/quota/quota.go
+  - title: Cluster Autoscaler 1.36 Azure scale set instance cache
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go
+  - title: Cluster Autoscaler FAQ
+    url: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md
+last_verified: 2026-10-31
 review_cycle_days: 180
 applies_to: [AKS 1.36, Azure CLI 2.76+]
 featured: true
@@ -56,25 +68,40 @@ NAP는 Pending Pod의 requests를 보고 **VM 크기와 개수를 함께 정해*
 | 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget |
 | 다른 VM 크기가 필요할 때 | 풀을 새로 추가 | `NodePool` requirements만 수정 |
 
-## NAP는 확장 결정이 빠르지만 Pod 준비 시간은 VM 부팅이 좌우한다
+## Karpenter가 빠르다는 말은 VM 부팅이 아니라 결정·재시도 속도를 뜻한다
 
-`Standard_D4ds_v7` on-demand 조건에서 1 vCPU Pod 20개를 0개부터 확장한 중앙값입니다
-(AKS 1.36.5).
+공식 소개 문서는 "VM이 더 빨리 뜬다"고 말하지 않습니다.
 
-| 시나리오 | 확장 결정 | 첫 노드 Ready | 전체 Pod Ready | 만든 노드 |
-|---|---|---|---|---|
-| CAS, D4 풀 | 15초 | 81초 | 108초 | D4 × 7 |
-| NAP, D4 고정 | 3초 | 83초 | 119초 | D4 × 7 |
-| NAP, v7 D 계열 자유 선택 | 2초 | 88초 | 103초 | D32als_v7 × 1 |
+| 출처 | 속도 관련 표현 |
+|---|---|
+| Karpenter 문서 | node group 없이 인스턴스를 직접 관리하므로 **용량이 없을 때 몇 분이 아니라 밀리초 단위로 재시도**한다 |
+| Microsoft Learn NAP 개요 | Pending Pod에 맞는 VM 구성을 **효율적이고 비용 효과적으로** 제공한다. 속도 보장은 AKS Automatic의 Pod 준비 SLA(99.9%를 5분 안)로 제시 |
+| Microsoft Learn CAS→NAP 마이그레이션 | 전환 이유로 VM 크기 유연성, 비용, 관리 부담, 노드 수명 관리를 든다. 속도는 언급하지 않음 |
+| Microsoft Learn AKS scaling overview | VM 기반 노드는 생성에 몇 분이 걸리므로 급증에는 ACI virtual node를 고려하라 |
 
-- **Karpenter가 빠르다는 근거는 확장 결정 단계입니다.** CAS는 새 Pending Pod를 보고도
-  다음 scan 주기(10초)까지 기다리고, NAP는 1초 동안 Pod가 더 생기지 않으면 바로 결정합니다.
-- 결정 뒤 VM이 노드로 준비되는 60~80초는 두 방식이 같아서, Pod 준비 시간은 비슷했습니다.
-- NAP가 분명히 앞선 것은 **VM 크기 선택**(큰 Pod, 노드 수 축소)과 **budget을 조정한 축소**
-  (56~92초)였습니다.
+VM이 노드로 준비되는 60~80초는 어느 autoscaler든 같습니다. 같은 VM 크기의 Pod 20개를
+0개부터 확장한 실측(중앙값, AKS 1.36.5, `Standard_D4ds_v7` on-demand)에서도 전체 시간은
+비슷했습니다.
 
-측정 방법과 해석의 한계는 [CAS와 NAP 확장 실측](scale-out-benchmark/index.md)에,
-Pod 대기 시간을 줄이는 방법은 [확장 지연 줄이기](scale-up-optimization/index.md)에 있습니다.
+| 시나리오 | 확장 결정 | 첫 노드 Ready | 전체 Pod Ready |
+|---|---|---|---|
+| CAS, D4 풀 | 15초 | 81초 | 108초 |
+| NAP, D4 고정 | 3초 | 83초 | 119초 |
+| NAP, v7 D 계열 자유 선택 | 2초 | 88초 | 103초 (D32als_v7 × 1) |
+
+NAP가 실제로 빨라지는 상황은 세 가지입니다.
+
+| 상황 | CAS | NAP | 실측 |
+|---|---|---|---|
+| 새 Pending Pod를 보고 확장 결정 | 새 Pod가 2초 미만이면 다음 scan(10초)까지 대기, GPU Pod는 30초 | 1초 동안 Pod가 더 없으면 결정 | CAS 12~27초, NAP 2~5초 |
+| 필요한 VM 크기가 기존 풀에 없음 | 확장하지 않음. 풀을 추가해야 함 | 허용 범위에서 맞는 VM 선택 | 6 vCPU Pod: CAS 확장 안 함, NAP 96초 |
+| 선호 VM을 만들 수 없음 (quota·용량) | quota 오류처럼 즉시 실패하면 다음 loop에서 다른 풀로 대체. VM이 만들어진 뒤 할당에 실패하면 기본 설정에서 노드 등록 제한 시간(15분)까지 기다릴 수 있음 | 계열 quota가 부족한 SKU는 미리 제외하고, 할당 실패한 SKU는 일정 시간 제외한 뒤 바로 다른 SKU로 재시도 | quota 초과: CAS 23~24초 뒤 대체, NAP 2~3초 만에 대체 |
+
+**정리하면** 워크로드가 균일하고 풀을 미리 잘 설계했으며 용량이 넉넉하면 CAS(VMSS)도
+속도 면에서 충분합니다. NAP의 장점은 VM 크기가 다양한 워크로드, 용량이 부족해지기 쉬운
+SKU(GPU, 특정 계열, spot), 풀을 많이 관리해야 하는 환경에서 커집니다. 측정 방법과 한계는
+[CAS와 NAP 확장 실측](scale-out-benchmark/index.md)에, Pod 대기 시간을 줄이는 방법은
+[확장 지연 줄이기](scale-up-optimization/index.md)에 있습니다.
 
 ## NodePool은 허용할 VM 범위를, AKSNodeClass는 Azure 노드 설정을 정한다
 
@@ -186,6 +213,12 @@ kubectl get events -A --field-selector source=karpenter -w
 - [Configure node disruption policies for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-disruption)
 - [Networking configurations for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-networking)
 - [Use the cluster autoscaler in AKS](https://learn.microsoft.com/azure/aks/cluster-autoscaler)
+- [AKS scaling overview](https://learn.microsoft.com/azure/aks/concepts-scale)
+- [Karpenter Concepts (Quick node provisioning)](https://karpenter.sh/docs/concepts/)
+- [Karpenter provider Azure offering error handlers](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/offerings/commonerrorhandlers.go)
+- [Karpenter provider Azure quota provider](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/quota/quota.go)
+- [Cluster Autoscaler 1.36 Azure scale set instance cache](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go)
+- [Cluster Autoscaler FAQ](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md)
 - [Karpenter NodePools](https://karpenter.sh/docs/concepts/nodepools/)
 - [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
 - [Cluster Autoscaler 1.36 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go)

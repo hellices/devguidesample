@@ -79,6 +79,27 @@ kubectl --context aks-nap patch nodepool bench-fixed --type merge \
 CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler` 범주를 Log Analytics로
 보내면 `AzureDiagnostics | where Category == "cluster-autoscaler"`로 볼 수 있습니다.
 
+## 선호 VM 실패 시 대체 속도
+
+리전 vCPU 한도(100)를 넘는 `Standard_D96ds_v7`을 1순위, `Standard_D4ds_v7`을 대체로 둡니다.
+
+```bash
+# CAS: big 풀을 priority expander로 우선 시도
+az aks update -g $RG -n aks-cas --cluster-autoscaler-profile expander=priority
+az aks nodepool update -g $RG --cluster-name aks-cas -n user --labels bench=q
+az aks nodepool add -g $RG --cluster-name aks-cas -n big --node-vm-size Standard_D96ds_v7 \
+  --labels bench=q --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 2
+kubectl --context aks-cas apply -f manifests/cas-priority-expander.yaml
+
+# NAP: weight 100(D96) / weight 10(D4) NodePool
+kubectl --context aks-nap apply -f manifests/nodepool-quota-fallback.yaml
+
+OUT=./out ./bench/bench.sh aks-cas cas-quota 20 2 bench=q
+OUT=./out ./bench/bench.sh aks-nap nap-quota 20 2 bench=q
+python3 bench/fallback.py ./out/cas-quota/run1 cas-quota 1 aks-user   # 대체 VMSS 이름 일부
+python3 bench/fallback.py ./out/nap-quota/run1 nap-quota 1 fallback   # 대체 NodePool 이름
+```
+
 ## CAS → NAP 전환 리허설
 
 ```bash
@@ -92,6 +113,7 @@ kubectl --context aks-cas -n migrate logs deploy/client > results/probe.log
 |---|---|
 | `results/scale-out-v7.csv` | v7 on-demand 조건의 시나리오별 단계 시간 |
 | `results/overprovisioning.csv` | placeholder가 있을 때 Pod 시작과 placeholder 복구 시간 |
+| `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간 |
 | `results/scale-out-v6-initial.csv` | 첫 측정(v6). 단계별 시간이 없고 CAS 축소를 node 객체 기준으로 재 과대 측정 |
 | `results/migration-timeline.md` | 전환 단계별 시각과 요청 실패 수 |
 

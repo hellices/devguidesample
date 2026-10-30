@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [evaluate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Overview of Node Auto-Provisioning (NAP) in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/node-auto-provisioning
@@ -27,8 +27,16 @@ official_sources:
     url: https://karpenter.sh/docs/reference/settings/
   - title: AKS node bootstrap design for Karpenter provider Azure
     url: https://github.com/Azure/karpenter-provider-azure/blob/main/designs/0001-aks-node-bootstrap.md
-  - title: Karpenter provider Azure cache.go
-    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/cache/cache.go
+  - title: Karpenter provider Azure offering error handlers
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/offerings/commonerrorhandlers.go
+  - title: Karpenter provider Azure quota provider
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/quota/quota.go
+  - title: Karpenter provider Azure quota controller
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go
+  - title: Cluster Autoscaler 1.36 Azure scale set instance cache
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go
+  - title: Cluster Autoscaler 1.36 Azure config
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_config.go
 published_at: 2026-10-30
 topic_order: 1
 ---
@@ -143,6 +151,39 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 값은 각 wav
   적은 AMD v7(`Dals`)을 골랐습니다. `arch`를 지정하지 않았던 v6 측정에서는 Arm64
   VM을 골랐습니다.
 
+## 선호 VM을 만들 수 없을 때 NAP는 시도 없이 2~3초 만에 대체했다
+
+Karpenter 문서가 말하는 "빠른 노드 생성"은 용량이 없을 때 다른 후보로 넘어가는 속도입니다.
+선호 VM 생성이 실패하도록 리전 vCPU 한도(100)를 넘는 96 vCPU VM을 1순위로 두고, 실패하면
+`Standard_D4ds_v7`로 넘어가게 구성했습니다(1 vCPU Pod 20개).
+
+| 구성 | 1순위 | 대체 |
+|---|---|---|
+| CAS | `Standard_D96ds_v7` 풀, priority expander 50 | `Standard_D4ds_v7` 풀, priority 10 |
+| NAP | NodePool `weight: 100`, `sku-name: Standard_D96ds_v7` | NodePool `weight: 10`, `sku-name: Standard_D4ds_v7` |
+
+| 측정 (2회) | 1순위 실패 확인 | 대체 결정 | 첫 노드 Ready | 전체 Pod Ready |
+|---|---|---|---|---|
+| CAS | 13초 (`OperationNotAllowed`: 리전 vCPU quota 초과) | 23~24초 | 66~76초 | 104~112초 |
+| NAP | 시도하지 않음 (`NoCompatibleInstanceTypes`) | 2~3초 | 83초 | 96~130초 |
+
+- CAS는 12초에 big 풀 확장을 요청했고, 1초 뒤 quota 오류를 받아 그 풀을 backoff한 다음 loop
+  (약 10초 뒤)에서 대체 풀을 늘렸습니다. quota 오류는 VMSS 요청 즉시 돌아오는 동기 오류라
+  CAS도 빨리 넘어갑니다.
+- NAP는 VM 계열 quota를 10분마다 조회해 남은 quota로 만들 수 없는 SKU를 미리 뺍니다.
+  시스템 노드가 같은 `Ddsv7` 계열 16 vCPU를 쓰고 있어 96 vCPU는 처음부터 후보가 아니었습니다.
+- 반대로 quota가 풀린 뒤에도 최대 10분은 이전 사용량으로 판단합니다. 리전 여유가 84 vCPU로
+  돌아온 직후 1순위를 64 vCPU VM으로 바꿨지만 NAP는 이를 제외하고 대체 VM을 만들었습니다.
+- 대체로 넘어간 뒤의 노드·Pod 준비 시간은 앞의 burst 결과와 같은 범위였습니다. 이 실측에서
+  NAP가 줄인 시간은 약 20초입니다.
+
+VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현하지 못해 소스로 동작을 확인했습니다.
+
+| 구분 | 비동기 할당 실패 처리 |
+|---|---|
+| CAS 1.36 Azure provider | 생성에 실패한 VMSS VM을 기본적으로 Running으로 취급합니다. 실험 옵션 `EnableFastDeleteOnFailedProvisioning`이 꺼져 있으면 노드가 등록되지 않은 채 `max-node-provision-time`(기본 15분)까지 기다린 뒤 다른 풀을 시도합니다. AKS 관리형 CAS의 이 옵션 설정은 공개 문서에서 확인하지 못했습니다. |
+| NAP (Karpenter provider Azure) | `AllocationFailure`, `ZonalAllocationFailure`, `SKUNotAvailable`, quota 오류를 구분해 해당 SKU·zone·용량 유형을 10분~23시간 동안 후보에서 빼고 다음 후보로 바로 재시도합니다. |
+
 ## 축소 속도는 autoscaler보다 설정이 결정했다
 
 | 방식과 설정 | 축소 완료 |
@@ -184,9 +225,9 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 값은 각 wav
   모두 같은 zone 조건으로 맞추면 꼬리 지연 차이는 달라질 수 있습니다.
 - `pause` 컨테이너라 이미지 pull 시간이 거의 없습니다. 큰 이미지에서는 Pod 시작 시간이
   더 길어집니다.
-- 대규모 확장(수십~수백 노드), Azure API throttling, SKU 용량 부족 상황은 측정하지
-  않았습니다. 이 경우 NAP의 SKU 대체(실패한 SKU·zone 조합을 3분간 제외)와 CAS의
-  `max-node-provision-time`(기본 15분) 차이가 커질 수 있습니다.
+- 대규모 확장(수십~수백 노드), Azure API throttling, VM이 만들어진 뒤의 할당 실패
+  (AllocationFailed)는 재현하지 못했습니다. 할당 실패에서는 아래 절의 소스 분석처럼 CAS와
+  NAP의 차이가 몇 분 단위로 커질 수 있습니다.
 - 같은 날 v6 VM으로 처음 측정한 결과(`results/scale-out-v6-initial.csv`)는 CAS 축소를
   node 객체가 사라질 때까지로 재 과대 측정했고, 단계별 시간이 없어 이 문서의 결론에서
   제외했습니다.
@@ -202,4 +243,8 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 값은 각 wav
 - [Cluster Autoscaler 1.36 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go)
 - [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
 - [AKS node bootstrap design for Karpenter provider Azure](https://github.com/Azure/karpenter-provider-azure/blob/main/designs/0001-aks-node-bootstrap.md)
-- [Karpenter provider Azure cache.go (`UnavailableOfferingsTTL`)](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/cache/cache.go)
+- [Karpenter provider Azure offering error handlers](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/offerings/commonerrorhandlers.go)
+- [Karpenter provider Azure quota provider](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/quota/quota.go)
+- [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
+- [Cluster Autoscaler 1.36 Azure scale set instance cache](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go)
+- [Cluster Autoscaler 1.36 Azure config](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_config.go)
