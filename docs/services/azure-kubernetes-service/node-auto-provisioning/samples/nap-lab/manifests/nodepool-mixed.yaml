@@ -1,0 +1,22 @@
+# A1: D·E·F v7 계열에서 Pod 크기에 맞는 VM을 고르게 합니다.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: mix
+spec:
+  limits: {cpu: "100"}
+  disruption: {consolidationPolicy: WhenEmptyOrUnderutilized, consolidateAfter: 0s, budgets: [{nodes: "100%"}]}
+  template:
+    metadata:
+      labels: {bench: mix, kubernetes.azure.com/ebpf-dataplane: cilium}
+    spec:
+      expireAfter: Never
+      requirements:
+        - {key: kubernetes.io/arch, operator: In, values: [amd64]}
+        - {key: karpenter.sh/capacity-type, operator: In, values: [on-demand]}
+        - {key: karpenter.azure.com/sku-family, operator: In, values: [D, E, F]}
+        - {key: karpenter.azure.com/sku-version, operator: In, values: ["7"]}
+        - {key: karpenter.azure.com/sku-cpu, operator: Lt, values: ["33"]}
+      startupTaints:
+        - {key: node.cilium.io/agent-not-ready, effect: NoExecute, value: "true"}
+      nodeClassRef: {group: karpenter.azure.com, kind: AKSNodeClass, name: default}

@@ -1,0 +1,25 @@
+elapsed_s,nodes,vcpu,usd_per_hour,skus,pods,moved_pods
+-60,1,32,1.286,Standard_D32als_v7x1,20,0
+2,1,32,1.286,Standard_D32als_v7x1,3,0
+34,1,32,1.286,Standard_D32als_v7x1,3,0
+66,1,32,1.286,Standard_D32als_v7x1,3,0
+98,1,32,1.286,Standard_D32als_v7x1,3,0
+130,2,36,1.447,Standard_D32als_v7x1 Standard_D4als_v7x1,3,3
+162,2,36,1.447,Standard_D32als_v7x1 Standard_D4als_v7x1,3,3
+194,1,4,0.161,Standard_D4als_v7x1,3,3
+226,1,4,0.161,Standard_D4als_v7x1,3,3
+258,1,4,0.161,Standard_D4als_v7x1,3,3
+290,1,4,0.161,Standard_D4als_v7x1,3,3
+322,1,4,0.161,Standard_D4als_v7x1,3,3
+354,1,4,0.161,Standard_D4als_v7x1,3,3
+385,1,4,0.161,Standard_D4als_v7x1,3,3
+417,1,4,0.161,Standard_D4als_v7x1,3,3
+450,1,4,0.161,Standard_D4als_v7x1,3,3
+482,1,4,0.161,Standard_D4als_v7x1,3,3
+514,1,4,0.161,Standard_D4als_v7x1,3,3
+546,1,4,0.161,Standard_D4als_v7x1,3,3
+577,1,4,0.161,Standard_D4als_v7x1,3,3
+609,1,4,0.161,Standard_D4als_v7x1,3,3
+641,1,4,0.161,Standard_D4als_v7x1,3,3
+672,1,4,0.161,Standard_D4als_v7x1,3,3
+704,1,4,0.161,Standard_D4als_v7x1,3,3

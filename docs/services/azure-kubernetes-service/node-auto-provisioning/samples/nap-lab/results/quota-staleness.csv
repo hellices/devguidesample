@@ -1,0 +1,6 @@
+phase,elapsed_s,ddsv7_usage,chosen
+control,0,16, 7 alt;
+consumed,0,40, 7 alt;
+released,170,16, 7 alt;
+released,383,16, 7 alt;
+released,483,16, 1 pref64;

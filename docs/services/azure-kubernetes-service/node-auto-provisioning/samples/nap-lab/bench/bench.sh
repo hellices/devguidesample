@@ -35,10 +35,13 @@ no_ready_nodes() { [[ $(ready_nodes) -eq 0 ]]; }
 pods_ready() { [[ $(ready_pods) -ge $REPLICAS ]]; }
 
 k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
-patch="{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"pause\",\"resources\":{\"requests\":{\"cpu\":\"$CPU\",\"memory\":\"1Gi\"}}}]"
-[[ -n $SELECTOR ]] && patch+=",\"nodeSelector\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}"
-patch+="}}}}"
-k -n bench patch deployment inflate --type strategic -p "$patch" >/dev/null
+k -n bench patch deployment inflate --type strategic -p \
+  "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"pause\",\"resources\":{\"requests\":{\"cpu\":\"$CPU\",\"memory\":\"1Gi\"}}}]}}}}" >/dev/null
+# nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
+if [[ -n $SELECTOR ]]; then
+  k -n bench patch deployment inflate --type json -p \
+    "[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]" >/dev/null
+fi
 
 # 삭제·할당 해제된 VM의 node 객체는 NotReady로 남을 수 있으므로 Ready 워크로드 노드 0개를 시작 조건으로 씁니다.
 baseline=no_ready_nodes

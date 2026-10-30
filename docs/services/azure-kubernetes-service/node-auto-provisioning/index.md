@@ -43,6 +43,10 @@ official_sources:
     url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go
   - title: Cluster Autoscaler FAQ
     url: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md
+  - title: Karpenter provider Azure quota controller
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go
+  - title: Use Scale-down Mode to delete/deallocate nodes in Azure Kubernetes Service (AKS)
+    url: https://learn.microsoft.com/azure/aks/scale-down-mode
 last_verified: 2026-10-31
 review_cycle_days: 180
 applies_to: [AKS 1.36, Azure CLI 2.76+]
@@ -102,6 +106,23 @@ NAP가 실제로 빨라지는 상황은 세 가지입니다.
 SKU(GPU, 특정 계열, spot), 풀을 많이 관리해야 하는 환경에서 커집니다. 측정 방법과 한계는
 [CAS와 NAP 확장 실측](scale-out-benchmark/index.md)에, Pod 대기 시간을 줄이는 방법은
 [확장 지연 줄이기](scale-up-optimization/index.md)에 있습니다.
+
+## NAP는 비용과 VM 크기 선택에서 앞섰고 CAS는 노드 재시작과 적은 Pod 이동에서 나았다
+
+유불리 시나리오를 가설로 세우고 같은 환경에서 실측한 결과입니다.
+
+| 시나리오 | 결과 | 유리한 쪽 |
+|---|---|---|
+| 크기가 다른 Pod 20개 혼합 | NAP 2대 $1.78/h, CAS 풀 3개 $3.28~3.82/h | NAP |
+| 큰 VM에 Pod 몇 개만 남음 | NAP는 32 vCPU VM을 4 vCPU VM으로 교체(−87%), CAS 32 vCPU 풀은 그대로 | NAP |
+| 선호 VM quota 초과 | 대체 VM 선택 NAP 2~3초, CAS 23~24초 | NAP |
+| VMSS 10대·노드 풀 10개 제한 정책 | CAS 0→40 확장 거부, NAP 영향 없음 | NAP |
+| 같은 zone·같은 VM 확장 | 첫 노드 Ready NAP 54~59초, CAS 69~82초. 전체 Pod는 비슷 | 비슷 |
+| 축소 중 Pod 이동 | NAP 3개, CAS 1개 | CAS |
+| 할당 해제한 VM 재시작 | CAS `Deallocate` 50초, NAP 기능 없음 | CAS |
+| 다른 클러스터가 같은 계열 quota를 쓰고 반납 | NAP는 최대 10분 주기로 quota를 다시 읽어, 반납 뒤 6~8분 동안 1순위 VM 대신 대체 VM 사용 | CAS |
+
+자세한 가설, 조건과 수치는 [NAP와 CAS 시나리오별 실측](scenario-comparison/index.md)에 있습니다.
 
 ## NodePool은 허용할 VM 범위를, AKSNodeClass는 Azure 노드 설정을 정한다
 
@@ -223,3 +244,5 @@ kubectl get events -A --field-selector source=karpenter -w
 - [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
 - [Cluster Autoscaler 1.36 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go)
 - [Karpenter Disruption](https://karpenter.sh/docs/concepts/disruption/)
+- [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
+- [Use Scale-down Mode to delete/deallocate nodes](https://learn.microsoft.com/azure/aks/scale-down-mode)

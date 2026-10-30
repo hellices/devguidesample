@@ -7,12 +7,12 @@ CTX=$1 SCENARIO=$2 SELECTOR=$3 RUNS=${4:-2}
 HERE=$(cd "$(dirname "$0")" && pwd)
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
-sel="{\"spec\":{\"template\":{\"spec\":{\"nodeSelector\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}}}}"
+sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]"
 
 k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 k apply -f "$HERE/../manifests/overprovisioning.yaml" >/dev/null
-k -n bench patch deployment overprovisioning --type strategic -p "$sel" >/dev/null
-k -n bench patch deployment inflate --type strategic -p "$sel" >/dev/null
+k -n bench patch deployment overprovisioning --type json -p "$sel" >/dev/null
+k -n bench patch deployment inflate --type json -p "$sel" >/dev/null
 k -n bench patch deployment inflate --type strategic \
   -p '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"1","memory":"1Gi"}}}]}}}}' >/dev/null
 

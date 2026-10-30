@@ -100,6 +100,42 @@ python3 bench/fallback.py ./out/cas-quota/run1 cas-quota 1 aks-user   # 대체 V
 python3 bench/fallback.py ./out/nap-quota/run1 nap-quota 1 fallback   # 대체 NodePool 이름
 ```
 
+## 유불리 시나리오 실측
+
+```bash
+python3 bench/prices.py eastus2 prices.json _v7          # Azure Retail Prices API, Linux on-demand
+
+# A1 크기가 다른 Pod 혼합: CAS 풀 3개(D4as·E4as·F8as v7, label bench=mix) / NAP D·E·F v7 NodePool
+#    mixed.sh가 실행마다 analyze_mixed.py로 배치·요청/할당 비율·비용을 계산합니다.
+for p in "mixgen Standard_D4as_v7" "mixmem Standard_E4as_v7" "mixcpu Standard_F8as_v7"; do set -- $p
+  az aks nodepool add -g $RG --cluster-name aks-cas -n $1 --node-vm-size $2 --labels bench=mix \
+    --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10; done
+kubectl --context aks-nap apply -f manifests/nodepool-mixed.yaml
+PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools bench=mix 2
+PRICES=prices.json OUT=./out ./bench/mixed.sh aks-nap nap-def-v7 bench=mix 2
+
+# A2·B4 큰 노드 축소와 Pod 이동: 20 → 3 Pod, 12분 관찰(CAS 풀 big32는 Standard_D32als_v7)
+PRICES=prices.json ./bench/rightsize.sh aks-nap nap-flex bench=flex > rightsize-nap-flex.csv
+PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d32 agentpool=big32 > rightsize-cas-d32.csv
+
+# B1 같은 zone: CAS 풀 userz1(--zones 1) / NAP eastus2-1 NodePool
+kubectl --context aks-nap apply -f manifests/nodepool-zone1.yaml
+OUT=./out ./bench/bench.sh aks-cas cas-zone1 20 3 agentpool=userz1
+OUT=./out ./bench/bench.sh aks-nap nap-zone1 20 3 bench=zone1
+
+# B2 2 vCPU VM 40대: CAS는 max 10 풀 4개(d2~d2d, label bench=d2x) + balance-similar-node-groups=true
+kubectl --context aks-nap apply -f manifests/nodepool-d2.yaml
+OUT=./out ./bench/bench.sh aks-cas cas-d2x40 40 1 bench=d2x
+OUT=./out ./bench/bench.sh aks-nap nap-d2x40 40 1 bench=d2
+
+# B3 quota 정보 갱신 지연: CAS 풀로 같은 계열 quota를 점유했다가 반납
+BASELINE_USAGE=16 ./bench/quota-staleness.sh aks-nap aks-cas eastus2 > quota-staleness.csv
+```
+
+실험 구독에 VMSS 인스턴스 10대 초과와 노드 풀 10개 초과를 거부하는 Azure Policy가 있으면
+CAS 단일 풀 40대 확장과 11번째 풀 추가가 실패합니다. `BASELINE_USAGE`는 실험 전
+`StandardDdsv7Family` 사용량(두 클러스터 시스템 풀 합계)입니다.
+
 ## CAS → NAP 전환 리허설
 
 ```bash
@@ -116,6 +152,12 @@ kubectl --context aks-cas -n migrate logs deploy/client > results/probe.log
 | `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간 |
 | `results/scale-out-v6-initial.csv` | 첫 측정(v6). 단계별 시간이 없고 CAS 축소를 node 객체 기준으로 재 과대 측정 |
 | `results/migration-timeline.md` | 전환 단계별 시각과 요청 실패 수 |
+| `results/prices-eastus2.json` | 비용 계산에 쓴 v7 VM 시간당 가격(2026-10-31) |
+| `results/mixed-shapes.csv` | A1 혼합 Pod 배치·노드 구성·요청/할당 비율·비용 |
+| `results/rightsize-*.csv` | A2·B4 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
+| `results/zone1-burst.csv` | B1 같은 zone 확장 단계 시간 |
+| `results/burst-40-nodes.csv` | B2 40대 확장 단계 시간과 정책 거부 기록 |
+| `results/quota-staleness.csv` | B3 quota 점유·반납 후 NAP가 고른 NodePool |
 
 ## 정리
 

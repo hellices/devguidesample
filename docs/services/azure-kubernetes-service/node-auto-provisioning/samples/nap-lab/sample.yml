@@ -5,3 +5,4 @@ used_by:
   - scale-out-benchmark
   - cluster-autoscaler-migration
   - scale-up-optimization
+  - scenario-comparison
