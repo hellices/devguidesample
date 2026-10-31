@@ -66,6 +66,14 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
 echo "phase,elapsed_s,ddsv7_usage,chosen"   # elapsed_s: 반납 시점부터 NodePool 선택을 읽은 시각까지
 r=$(probe); echo "control,,$(usage),${r#* }"
 
+# 실패·중단으로 끝나도 quota를 점유하는 CAS 소비용 Pod와 NAP 확인용 Pod를 0으로 되돌립니다.
+cleanup() {
+  kubectl --context "$CAS" -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed: CAS inflate"
+  kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed: NAP inflate"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 kubectl --context "$CAS" apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 kubectl --context "$CAS" -n bench patch deployment inflate --type strategic -p \
   '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"1","memory":"1Gi"}}}]}}}}' >/dev/null
