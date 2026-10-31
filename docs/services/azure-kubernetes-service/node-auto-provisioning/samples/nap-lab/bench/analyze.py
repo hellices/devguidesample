@@ -68,13 +68,17 @@ def main():
 
     cas = [ev_time(e) for e in events if is_cas_decision(e) and ev_time(e) and ev_time(e) >= t0]
     decision = min(cas) if cas else (min(ts(c["metadata"]["creationTimestamp"]) for c in claims) if claims else None)
-    launched = [ts(cond(c, "Launched")["lastTransitionTime"]) for c in claims if cond(c, "Launched")]
+    # Launched는 status가 True일 때만 VM 생성 완료를 뜻합니다(False/Unknown은 실패·재시도 중).
+    launched = [ts(cond(c, "Launched")["lastTransitionTime"]) for c in claims
+                if (cond(c, "Launched") or {}).get("status") == "True"]
 
-    pod_ready = []
+    # (생성 시각, Ready 시각 또는 None). wave는 미준비 Pod를 포함한 전체 대상 Pod로 나눕니다.
+    pod_times = []
     for p in pods:
         c = cond(p, "Ready")
-        if c and c["status"] == "True":
-            pod_ready.append((ts(p["metadata"]["creationTimestamp"]), ts(c["lastTransitionTime"])))
+        ready_at = ts(c["lastTransitionTime"]) if c and c["status"] == "True" else None
+        pod_times.append((ts(p["metadata"]["creationTimestamp"]), ready_at))
+    pod_ready = [(c, r) for c, r in pod_times if r is not None]
     # timeout으로 일부 Pod만 Ready인 실행은 완료 시간으로 기록하지 않습니다.
     all_ready = max(r for _, r in pod_ready) if pods and len(pod_ready) == len(pods) else None
 
@@ -82,11 +86,12 @@ def main():
     wf = d / "waves"
     if wf.exists():
         waves = [(ts(line.split()[0]), int(line.split()[1])) for line in wf.read_text().split("\n") if line.strip()]
-        pod_ready.sort()
+        pod_times.sort(key=lambda x: x[0])
         out, prev = [], 0
         for wt, cum in waves:
-            batch = pod_ready[prev:cum]
-            out.append(str(round((max(r for _, r in batch) - wt).total_seconds())) if batch else "")
+            batch = pod_times[prev:cum]
+            done = batch and len(batch) == cum - prev and all(r is not None for _, r in batch)
+            out.append(str(round((max(r for _, r in batch) - wt).total_seconds())) if done else "")
             prev = cum
         wave_lat = "/".join(out)
 
