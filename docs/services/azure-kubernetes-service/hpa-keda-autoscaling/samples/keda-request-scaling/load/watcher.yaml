@@ -1,0 +1,81 @@
+# replica·HPA 지표·워크로드 노드 수를 클러스터 안에서 5초마다 기록하는 Job입니다.
+# 로컬 네트워크가 끊겨도 기록 간격이 흔들리지 않도록 시스템 노드에서 실행합니다.
+# postdeploy hook이 load/watch-replicas.sh로 ConfigMap watch-script를 만든 뒤 적용합니다.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: watcher
+  namespace: demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: demo-watcher
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: demo-watcher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: demo-watcher
+subjects:
+  - kind: ServiceAccount
+    name: watcher
+    namespace: demo
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: watcher
+  namespace: demo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: watcher
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+      containers:
+        - name: watch
+          image: mcr.microsoft.com/azurelinux/base/core:3.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              # 최소 이미지에는 공용 CA가 일부만 있어 kubectl 다운로드 전에 ca-certificates를 설치합니다.
+              tdnf -q -y install ca-certificates >/dev/null
+              curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+              chmod +x /tmp/kubectl
+              PATH=/tmp:$PATH exec bash /scripts/watch-replicas.sh
+          env:
+            - name: KUBECTL_VERSION
+              value: v1.36.5
+            - name: DURATION
+              value: "1200"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: watch-script

@@ -1,0 +1,6 @@
+scenario,run,preferred_attempt_s,preferred_failure_s,fallback_decision_s,first_node_ready_s,all_pods_ready_s,note
+cas-quota,1,12,13,23,66,104,big 풀(D96ds_v7) 확장 요청이 OperationNotAllowed(리전 vCPU quota 초과)로 즉시 실패 후 다음 loop에서 user 풀로 대체
+cas-quota,2,,13,24,76,112,1회차 뒤 약 9분 지나 backoff가 끝나 big 풀을 다시 시도
+nap-quota,1,,,3,83,130,계열 quota 사전 확인으로 D96ds_v7을 후보에서 제외(NoCompatibleInstanceTypes). 생성 시도 없음
+nap-quota,2,,,2,83,96,
+nap-d64-room,1,,,2,84,126,리전 여유가 있었지만 D64ds_v7도 제외. quota 정보 10분 주기 갱신으로 이전 사용량이 반영된 것으로 보임

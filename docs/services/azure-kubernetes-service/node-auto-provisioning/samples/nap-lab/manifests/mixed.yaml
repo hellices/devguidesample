@@ -1,0 +1,50 @@
+# 요구 크기가 다른 세 워크로드. replicas는 mixed.sh가 정합니다.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mixed
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: big, namespace: mixed}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: mix, kind: big}}
+  template:
+    metadata: {labels: {app: mix, kind: big}}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: mcr.microsoft.com/oss/kubernetes/pause:3.6
+          resources: {requests: {cpu: "6", memory: 8Gi}}      # CPU가 큰 Pod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mem, namespace: mixed}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: mix, kind: mem}}
+  template:
+    metadata: {labels: {app: mix, kind: mem}}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: mcr.microsoft.com/oss/kubernetes/pause:3.6
+          resources: {requests: {cpu: "1", memory: 8Gi}}      # 메모리가 큰 Pod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: small, namespace: mixed}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: mix, kind: small}}
+  template:
+    metadata: {labels: {app: mix, kind: small}}
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: mcr.microsoft.com/oss/kubernetes/pause:3.6
+          resources: {requests: {cpu: 500m, memory: 1Gi}}     # 작은 Pod

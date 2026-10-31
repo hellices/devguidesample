@@ -1,0 +1,40 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: bench-fixed
+spec:
+  limits:
+    cpu: "40"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 0s
+    budgets:
+      - nodes: "30%"
+  template:
+    metadata:
+      labels:
+        bench: fixed
+        kubernetes.azure.com/ebpf-dataplane: cilium
+    spec:
+      expireAfter: Never
+      requirements:
+        - key: kubernetes.io/os
+          operator: In
+          values: [linux]
+        - key: kubernetes.io/arch
+          operator: In
+          values: [amd64]
+        - key: karpenter.sh/capacity-type   # spot을 섞지 않도록 명시
+          operator: In
+          values: [on-demand]
+        - key: karpenter.azure.com/sku-name
+          operator: In
+          values: [Standard_D4ds_v7]
+      startupTaints:
+        - key: node.cilium.io/agent-not-ready
+          effect: NoExecute
+          value: "true"
+      nodeClassRef:
+        group: karpenter.azure.com
+        kind: AKSNodeClass
+        name: default

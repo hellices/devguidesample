@@ -1,0 +1,4 @@
+scenario,run,replicas,decision_s,vm_launched_s,first_node_ready_s,last_node_ready_s,all_pods_ready_s,new_nodes,skus,scale_in_s,wave_latency_s,note
+cas-d2x40-single-pool,1,40,,,,,,0,,,,Azure Policy(Deny VMSS deployment with instance count greater than 10)가 VMSS 0->40 요청을 거부. 풀 backoff 후 Pod 40개 Pending 유지
+cas-d2x40-4pools,1,40,3,,80,180,198,40,Standard_D2ds_v7x40,157,,풀 4개(max 10)와 balance-similar-node-groups=true로 우회
+nap-d2x40,1,40,3,6,73,196,221,40,Standard_D2ds_v7x40,203,,단독 VM 40대 생성. VMSS 정책 대상 아님

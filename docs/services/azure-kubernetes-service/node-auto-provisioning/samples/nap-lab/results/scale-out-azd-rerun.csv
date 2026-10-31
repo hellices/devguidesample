@@ -1,0 +1,7 @@
+scenario,run,replicas,decision_s,vm_launched_s,first_node_ready_s,last_node_ready_s,all_pods_ready_s,new_nodes,skus,scale_in_s,wave_latency_s
+cas-burst,1,20,12,,60,75,89,7,Standard_D4ds_v7x7,158,
+cas-burst,2,20,23,,74,86,99,7,Standard_D4ds_v7x7,296,
+cas-burst,3,20,18,,69,97,103,7,Standard_D4ds_v7x7,294,
+nap-burst,1,20,2,5,77,91,100,7,Standard_D4ds_v7x7,88,
+nap-burst,2,20,3,6,57,89,100,7,Standard_D4ds_v7x7,247,
+nap-burst,3,20,2,5,54,88,99,7,Standard_D4ds_v7x7,74,

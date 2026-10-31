@@ -1,0 +1,6 @@
+phase,recorded_s,probe_s_est,ddsv7_usage,chosen
+control,,,16, 7 alt;
+consumed,,,40, 7 alt;
+released,170,20,16, 7 alt;
+released,383,235,16, 7 alt;
+released,483,450,16, 1 pref64;

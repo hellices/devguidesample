@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 560" role="img" aria-labelledby="t d">
+  <title id="t">AKS 노드 autoscaler 선택 흐름</title>
+  <desc id="d">새 클러스터는 AKS Automatic 또는 NAP로 시작하고, 기존 CAS 클러스터는 NAP 미지원 구성과 CAS 고유 기능 필요 여부를 확인한 뒤 NAP로 전환하거나 CAS를 유지한다.</desc>
+  <style>
+    text { font-family: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; fill: #1b1f24; }
+    .q { fill: #eef4fb; stroke: #2f6db5; stroke-width: 2; }
+    .nap { fill: #e6f4ea; stroke: #2e7d32; stroke-width: 2; }
+    .cas { fill: #fff4e5; stroke: #c76a00; stroke-width: 2; }
+    .h { font-size: 17px; font-weight: 700; }
+    .b { font-size: 13.5px; }
+    .s { font-size: 12.5px; fill: #4a5561; }
+    .lbl { font-size: 13px; font-weight: 700; fill: #2f6db5; }
+    .ln { stroke: #5b6672; stroke-width: 2; fill: none; marker-end: url(#a); }
+  </style>
+  <rect id="bg" x="0" y="0" width="880" height="560" rx="12" fill="#ffffff"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5b6672"/>
+    </marker>
+  </defs>
+
+  <rect class="q" x="40" y="24" width="360" height="74" rx="10"/>
+  <text class="h" x="60" y="54">① 새 클러스터인가?</text>
+  <text class="s" x="60" y="80">새 프로덕션 워크로드는 AKS Automatic이 기본 권장</text>
+
+  <rect class="nap" x="480" y="24" width="360" height="74" rx="10"/>
+  <text class="h" x="500" y="54">AKS Automatic (NAP 기본 포함)</text>
+  <text class="s" x="500" y="80">세밀한 제어가 필요하면 AKS Standard + NAP</text>
+  <path class="ln" d="M400,61 H474"/>
+  <text class="lbl" x="420" y="52">예</text>
+
+  <path class="ln" d="M220,98 V140"/>
+  <text class="lbl" x="230" y="126">아니오 (기존 CAS 클러스터)</text>
+
+  <rect class="q" x="40" y="146" width="360" height="132" rx="10"/>
+  <text class="h" x="60" y="176">② NAP가 지원하지 않는 구성인가?</text>
+  <text class="b" x="60" y="202">· Windows 노드 GA 필요 (현재 preview)</text>
+  <text class="b" x="60" y="224">· 서비스 주체 ID, IPv6 단일 스택</text>
+  <text class="b" x="60" y="246">· kubenet, Calico, Pod Subnet 동적 할당</text>
+  <text class="b" x="60" y="268">· 클러스터 중지(stop) 운영, outbound type 변경</text>
+
+  <rect class="cas" x="480" y="160" width="360" height="104" rx="10"/>
+  <text class="h" x="500" y="190">CAS 유지</text>
+  <text class="b" x="500" y="216">또는 지원 구성으로 새 클러스터를 만들고</text>
+  <text class="b" x="500" y="238">트래픽을 단계적으로 이동 (경로 3)</text>
+  <path class="ln" d="M400,212 H474"/>
+  <text class="lbl" x="420" y="203">예</text>
+
+  <path class="ln" d="M220,278 V320"/>
+  <text class="lbl" x="230" y="306">아니오</text>
+
+  <rect class="q" x="40" y="326" width="360" height="110" rx="10"/>
+  <text class="h" x="60" y="356">③ CAS에만 있는 동작이 꼭 필요한가?</text>
+  <text class="b" x="60" y="382">· Deallocate로 중지한 VM을 빨리 재시작</text>
+  <text class="b" x="60" y="404">· 여러 클러스터가 같은 VM 계열 quota를 공유</text>
+  <text class="b" x="60" y="426">· 축소 중 Pod 이동을 최소화</text>
+
+  <rect class="cas" x="480" y="326" width="360" height="110" rx="10"/>
+  <text class="h" x="500" y="356">해당 풀만 CAS 유지 검토</text>
+  <text class="b" x="500" y="382">quota 이동·Pod 이동은 NAP에서도</text>
+  <text class="b" x="500" y="404">quota 여유, WhenEmpty, PDB,</text>
+  <text class="b" x="500" y="426">do-not-disrupt로 완화 가능</text>
+  <path class="ln" d="M400,381 H474"/>
+  <text class="lbl" x="420" y="372">예</text>
+
+  <path class="ln" d="M220,436 V476"/>
+  <text class="lbl" x="230" y="462">아니오</text>
+
+  <rect class="nap" x="40" y="482" width="800" height="62" rx="10"/>
+  <text class="h" x="60" y="510">NAP로 전환</text>
+  <text class="b" x="60" y="532">경로 1: CAS 끄고 NAP 켜기 · 경로 2: AllowClusterAutoscalerAndNAP로 동시 운영하며 워크로드별 이동</text>
+</svg>

@@ -1,0 +1,8 @@
+title: CAS·NAP 확장 단계별 실측과 전환 리허설
+description: azd로 VMSS Cluster Autoscaler와 NAP 클러스터를 v7 on-demand 조건으로 만들고 확장 결정·VM·노드·Pod 준비 시간, 유불리 시나리오, 무중단 전환을 측정합니다.
+kind: runnable
+used_by:
+  - scale-out-benchmark
+  - cluster-autoscaler-migration
+  - scale-up-optimization
+  - scenario-comparison

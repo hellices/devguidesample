@@ -1,0 +1,33 @@
+# <keda-client-id>: setup-keda-identity.sh 출력값
+# <amw-query-endpoint>: az monitor account show --query metrics.prometheusQueryEndpoint
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: azure-wi
+  namespace: demo
+spec:
+  podIdentity:
+    provider: azure-workload
+    identityId: <keda-client-id>
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  scaleTargetRef:
+    name: podinfo
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 120
+  triggers:
+    - type: prometheus
+      authenticationRef:
+        name: azure-wi
+      metadata:
+        serverAddress: <amw-query-endpoint>
+        # probe·scrape를 제외한 앱 요청(path="root")만 세고, Pod 하나가 초당 50건을 처리하도록 맞춥니다.
+        query: sum(rate(http_request_duration_seconds_count{namespace="demo", path="root"}[1m]))
+        threshold: "50"

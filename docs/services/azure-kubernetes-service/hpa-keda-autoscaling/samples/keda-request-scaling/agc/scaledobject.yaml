@@ -1,0 +1,38 @@
+# <alb-resource-name>, <node-resource-group>, <subscription-id>, <tenant-id>, <keda-client-id>를 실제 값으로 바꿉니다.
+# KEDA ID에는 AGC 리소스에 대한 Monitoring Reader 역할이 필요합니다.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: azure-wi
+  namespace: demo
+spec:
+  podIdentity:
+    provider: azure-workload
+    identityId: <keda-client-id>
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  scaleTargetRef:
+    name: podinfo
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  pollingInterval: 30
+  cooldownPeriod: 180
+  triggers:
+    - type: azure-monitor
+      authenticationRef:
+        name: azure-wi
+      metadata:
+        resourceURI: Microsoft.ServiceNetworking/trafficControllers/<alb-resource-name>
+        resourceGroupName: <node-resource-group>
+        subscriptionId: <subscription-id>
+        tenantId: <tenant-id>
+        metricName: TotalRequests
+        metricAggregationType: Total
+        metricAggregationInterval: "0:1:0"
+        # 1분 동안 Pod 하나당 3,000건(초당 50건)을 목표로 합니다.
+        targetValue: "3000"
