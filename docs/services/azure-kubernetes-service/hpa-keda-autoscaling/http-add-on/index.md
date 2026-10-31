@@ -98,8 +98,11 @@ triggers:
 ## cold start와 burst 부하를 따로 측정한다
 
 ```bash
-# 0개 상태에서 첫 요청
-curl -s -o /dev/null -D - -w '%{http_code} %{time_total}\n' \
+# 0개 상태에서 첫 요청. kube-system Service DNS는 클러스터 안에서만 해석되므로
+# k6와 같은 시스템 노드에 임시 curl Pod를 띄워 요청합니다(새 노드 생성에 영향을 주지 않음).
+kubectl run coldstart --rm -i --restart=Never --image=curlimages/curl:8.23.0 \
+  --overrides='{"spec":{"nodeSelector":{"kubernetes.azure.com/mode":"system"},"tolerations":[{"key":"CriticalAddonsOnly","operator":"Exists"}]}}' \
+  -- curl -s -o /dev/null -D - -w '%{http_code} %{time_total}\n' \
   -H 'Host: podinfo.example.com' http://keda-add-ons-http-interceptor-proxy.kube-system:8080/
 
 # k6 대상만 interceptor로 바꿔 초당 400건

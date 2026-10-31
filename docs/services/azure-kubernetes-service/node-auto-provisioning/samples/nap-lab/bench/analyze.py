@@ -75,7 +75,8 @@ def main():
         c = cond(p, "Ready")
         if c and c["status"] == "True":
             pod_ready.append((ts(p["metadata"]["creationTimestamp"]), ts(c["lastTransitionTime"])))
-    all_ready = max(r for _, r in pod_ready) if pod_ready else None
+    # timeout으로 일부 Pod만 Ready인 실행은 완료 시간으로 기록하지 않습니다.
+    all_ready = max(r for _, r in pod_ready) if pods and len(pod_ready) == len(pods) else None
 
     wave_lat = ""
     wf = d / "waves"

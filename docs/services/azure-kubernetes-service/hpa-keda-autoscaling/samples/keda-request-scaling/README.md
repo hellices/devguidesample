@@ -36,7 +36,7 @@ feature 등록이 `Registered`가 되기까지 몇 분 걸릴 수 있습니다.
 자세한 명령은 각 실습 문서에 있습니다.
 
 ```bash
-./load/watch-replicas.sh > results/<pattern>.csv &
+./load/watch-replicas.sh > results/<pattern>.csv &   # 기본 1200초 기록(DURATION으로 변경)
 kubectl --context $CTX apply -f load/k6-job.yaml   # TARGET_URL·HOST_HEADER를 패턴에 맞게 수정
 ```
 

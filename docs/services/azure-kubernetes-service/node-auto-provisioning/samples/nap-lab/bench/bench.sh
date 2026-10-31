@@ -48,6 +48,7 @@ baseline=no_ready_nodes
 
 for run in $(seq 1 "$RUNS"); do
   dir="$OUT/$SCENARIO/run$run"; mkdir -p "$dir"
+  rm -f "$dir/waves" "$dir/scale_in_start" "$dir/scale_in_end"   # 같은 OUT으로 다시 실행할 때 이전 산출물 제거
   log "run $run: waiting for baseline"
   wait_for baseline "$baseline"
   k -n bench delete events --all >/dev/null 2>&1 || true

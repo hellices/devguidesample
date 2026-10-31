@@ -87,7 +87,7 @@ PodMonitor는 OSS와 같은 스펙이지만 API group이 `azmonitoring.coreos.co
 ## 시스템 노드에서 k6로 초당 400건을 6분간 보낸다
 
 ```bash
-./load/watch-replicas.sh > results/prometheus-rps.csv &   # 5초 간격 replica·노드 기록
+./load/watch-replicas.sh > results/prometheus-rps.csv &   # 5초 간격, 기본 1200초 replica·노드 기록
 kubectl apply -f load/k6-job.yaml                          # 1분 ramp-up → 400 RPS 5분 유지 → 30초 감소
 ```
 

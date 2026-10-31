@@ -122,17 +122,27 @@ PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools-least-wast
 kubectl --context aks-nap apply -f manifests/nodepool-mixed.yaml
 PRICES=prices.json OUT=./out ./bench/mixed.sh aks-nap nap-def-v7 bench=mix 2
 
-# A2·B4 큰 노드 축소와 Pod 이동: 20 → 3 Pod, 12분 관찰(CAS 풀 big32는 Standard_D32als_v7)
+# 노드 풀 10개 제한 정책이 있으면 끝난 시나리오의 풀을 지운 뒤 다음 풀을 만듭니다.
+#   az aks nodepool delete -g $RG --cluster-name aks-cas -n <pool> --no-wait
+
+# A2·B4 큰 노드 축소와 Pod 이동: 20 → 3 Pod, 12분 관찰
+az aks nodepool add -g $RG --cluster-name aks-cas -n big32 --node-vm-size Standard_D32als_v7 \
+  --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 2
 PRICES=prices.json ./bench/rightsize.sh aks-nap nap-flex bench=flex > rightsize-nap-flex.csv
 PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d4 agentpool=user > rightsize-cas-d4.csv
 PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d32 agentpool=big32 > rightsize-cas-d32.csv
 
-# B1 같은 zone: CAS 풀 userz1(--zones 1) / NAP eastus2-1 NodePool
+# B1 같은 zone: CAS 풀 userz1(zone 1) / NAP eastus2-1 NodePool
+az aks nodepool add -g $RG --cluster-name aks-cas -n userz1 --node-vm-size Standard_D4ds_v7 --zones 1 \
+  --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10
 kubectl --context aks-nap apply -f manifests/nodepool-zone1.yaml
 OUT=./out ./bench/bench.sh aks-cas cas-zone1 20 3 agentpool=userz1
 OUT=./out ./bench/bench.sh aks-nap nap-zone1 20 3 bench=zone1
 
 # B2 2 vCPU VM 40대: CAS는 max 10 풀 4개(d2~d2d, label bench=d2x) + balance-similar-node-groups=true
+for p in d2 d2b d2c d2d; do az aks nodepool add -g $RG --cluster-name aks-cas -n $p --node-vm-size Standard_D2ds_v7 \
+  --labels bench=d2x --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10; done
+az aks update -g $RG -n aks-cas --cluster-autoscaler-profile balance-similar-node-groups=true
 kubectl --context aks-nap apply -f manifests/nodepool-d2.yaml
 OUT=./out ./bench/bench.sh aks-cas cas-d2x40 40 1 bench=d2x
 OUT=./out ./bench/bench.sh aks-nap nap-d2x40 40 1 bench=d2
@@ -146,6 +156,9 @@ CAS 단일 풀 40대 확장과 11번째 풀 추가가 실패합니다. `BASELINE
 `StandardDdsv7Family` 사용량(두 클러스터 시스템 풀 합계)입니다.
 
 ## CAS → NAP 전환 리허설
+
+`in-place.sh`는 CAS가 켜진 모든 풀의 CAS를 끈 뒤 NAP를 켭니다. 위 실측 풀이 남아 있으면
+그 풀도 고정 크기가 되므로, 리허설 전에 실측용 풀을 지우거나 `aks-cas`를 새로 만듭니다.
 
 ```bash
 ./migrate/in-place.sh | tee results/migration.log

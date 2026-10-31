@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 5초마다 시각, 원하는 replica, Ready replica, KEDA가 만든 HPA의 현재 메트릭과 워크로드 노드 수를 CSV로 기록합니다.
+# 기본 1200초 동안 기록합니다. Pod 축소(약 11~12분)와 노드 정리(약 16~17분)까지 보려면 줄이지 않습니다.
 set -euo pipefail
-CTX=${CTX:-aks-nap} NS=${NS:-demo} DEPLOY=${DEPLOY:-podinfo} DURATION=${DURATION:-600}
+CTX=${CTX:-aks-nap} NS=${NS:-demo} DEPLOY=${DEPLOY:-podinfo} DURATION=${DURATION:-1200}
 k() { kubectl --context "$CTX" "$@"; }
 echo "elapsed_s,desired,ready,hpa_metric,user_nodes"
 start=$(date +%s)

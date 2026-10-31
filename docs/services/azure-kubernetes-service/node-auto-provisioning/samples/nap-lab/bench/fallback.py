@@ -60,17 +60,20 @@ def main():
         c = [x for x in n["status"].get("conditions", []) if x["type"] == "Ready"]
         if c and c[0]["status"] == "True" and ts(c[0]["lastTransitionTime"]) >= t0:
             ready.append(ts(c[0]["lastTransitionTime"]))
-    pods = []
+    pods, targets = [], 0
     for p in load("pods.json"):
         if p["metadata"].get("labels", {}).get("app") != "inflate":
             continue
+        targets += 1
         c = [x for x in p["status"].get("conditions", []) if x["type"] == "Ready" and x["status"] == "True"]
         if c:
             pods.append(ts(c[0]["lastTransitionTime"]))
+    # timeout으로 일부 Pod만 Ready인 실행은 완료 시간으로 기록하지 않습니다.
+    all_ready = max(pods) if pods and len(pods) == targets else None
     msg = re.sub(r"/subscriptions/[^/]+", "/subscriptions/<subscription-id>", msg)
     msg = msg.replace(",", ";").replace("\n", " ")[:200]
     print(",".join([scenario, run, sec(first), sec(fail), sec(fb), sec(min(ready) if ready else None),
-                    sec(max(pods) if pods else None), msg]))
+                    sec(all_ready), msg]))
 
 
 if __name__ == "__main__":
