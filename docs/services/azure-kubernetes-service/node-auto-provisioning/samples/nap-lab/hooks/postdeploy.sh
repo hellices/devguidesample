@@ -145,7 +145,11 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
       python3 -c "import json,sys;print(sum(c['metadata']['creationTimestamp']<'$start' for c in json.load(sys.stdin)['items']))" <<<"$j"
     }
     local n
-    until n=$(old_claims) && [[ $n == 0 ]]; do sleep 15; done
+    local limit=$(( $(date +%s) + 3600 ))
+    until n=$(old_claims) && [[ $n == 0 ]]; do
+      (( $(date +%s) < limit )) || { log "drift $1: 60분 안에 교체가 끝나지 않았습니다"; return 1; }
+      sleep 15
+    done
     kubectl --context "$ctx" -n migrate rollout status deploy/web --timeout=15m >/dev/null
     local end; end=$(date -u +%FT%TZ)
     kubectl --context "$ctx" -n migrate logs deploy/client --since-time="$start" |

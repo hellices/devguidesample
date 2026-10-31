@@ -38,7 +38,11 @@ trap 'exit 143' TERM
 for run in $(seq 1 "$RUNS"); do
   dir="$OUT/$SCENARIO/run$run"; mkdir -p "$dir"
   log "run $run: waiting for zero ready workload nodes"
-  until n=$(ready_nodes) && [[ $n -eq 0 ]]; do sleep 5; done
+  wait_start=$(date +%s)
+  until n=$(ready_nodes) && [[ $n -eq 0 ]]; do
+    (( $(date +%s) - wait_start <= 1800 )) || { log "run $run: timeout waiting for zero ready workload nodes"; exit 1; }
+    sleep 5
+  done
   date -u +%Y-%m-%dT%H:%M:%SZ > "$dir/t0"
   k -n mixed scale deployment big --replicas "$BIG" >/dev/null
   k -n mixed scale deployment mem --replicas "$MEM" >/dev/null

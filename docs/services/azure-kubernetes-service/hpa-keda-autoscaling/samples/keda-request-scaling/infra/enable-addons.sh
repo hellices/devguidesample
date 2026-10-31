@@ -20,7 +20,9 @@ for f in ManagedGatewayAPIPreview ApplicationLoadBalancerPreview; do
   az feature register --namespace Microsoft.ContainerService --name "$f" -o none
 done
 for f in ManagedGatewayAPIPreview ApplicationLoadBalancerPreview; do
+  start=$(date +%s)
   until [[ $(az feature show --namespace Microsoft.ContainerService --name "$f" --query properties.state -o tsv) == Registered ]]; do
+    (( $(date +%s) - start <= 3600 )) || { echo "feature $f가 60분 안에 Registered가 되지 않았습니다" >&2; exit 1; }
     echo "feature $f 등록 대기"; sleep 30
   done
 done

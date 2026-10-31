@@ -55,7 +55,11 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
   seen=$(date +%s)
   kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null
   kubectl --context "$NAP" delete nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --wait=false >/dev/null 2>&1 || true
-  until [[ -z $(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --no-headers 2>/dev/null) ]]; do sleep 5; done
+  start=$(date +%s)
+  until left=$(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --no-headers) && [[ -z $left ]]; do
+    (( $(date +%s) - start <= 900 )) || { log "timeout: probe NodeClaims not deleted within 900s"; return 1; }
+    sleep 5
+  done
   echo "$seen $pools"
 }
 

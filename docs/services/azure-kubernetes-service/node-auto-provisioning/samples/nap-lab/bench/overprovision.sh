@@ -38,8 +38,10 @@ for run in $(seq 1 "$RUNS"); do
   log "run $run: waiting for placeholders on a single node"
   k -n bench rollout status deployment/overprovisioning --timeout="${TIMEOUT}s" >/dev/null
   # 빈 여유 노드가 남아 있으면 선점 없이 바로 배치되므로, placeholder가 있는 노드 1대만 남을 때까지 기다립니다.
-  stable=0
+  # placeholder 3개가 노드 1대에 들어가지 않는 VM 크기면 이 조건을 만족할 수 없으므로 TIMEOUT 뒤 실패로 종료합니다.
+  stable=0 deadline=$(( $(date +%s) + TIMEOUT ))
   until (( stable >= 3 )); do
+    (( $(date +%s) < deadline )) || { log "run $run: timeout waiting for placeholders on a single node"; exit 1; }
     n=$(k get nodes -l "$SELECTOR" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true)
     if [[ $n == 1 ]]; then stable=$((stable + 1)); else stable=0; fi
     sleep 10
