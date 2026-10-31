@@ -12,6 +12,10 @@ OUT=out/$AZURE_ENV_NAME; mkdir -p "$OUT"
 # 로컬 네트워크가 잠시 끊겨도 실험이 멈추지 않도록 kubectl을 최대 6번(10초 간격) 다시 시도합니다.
 # 반복해도 결과가 같은 조회·적용·삭제에만 씁니다. 요청을 보내는 cold start 측정은 kubectl을 직접 호출합니다.
 k() { local i; for i in 1 2 3 4 5 6; do kubectl --context "$CTX" "$@" && return 0; sleep 10; done; return 1; }
+# 표준 입력의 manifest를 한 번 읽어 두고 시도마다 같은 내용으로 적용합니다.
+kapply() { local m i; m=$(cat); for i in 1 2 3 4 5 6; do kubectl --context "$CTX" apply -f - <<<"$m" >/dev/null && return 0; sleep 10; done; return 1; }
+# kubectl 출력을 시도마다 파일에 새로 씁니다(부분 출력이 이어 붙지 않게).
+kto() { local f=$1 i; shift; for i in 1 2 3 4 5 6; do kubectl --context "$CTX" "$@" > "$f" && return 0; sleep 10; done; return 1; }
 log() { echo "[$(date -u +%T)] $*" >&2; }
 INTERCEPTOR=http://keda-add-ons-http-interceptor-proxy.kube-system:8080/
 HOST=podinfo.example.com
@@ -35,32 +39,33 @@ reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n
 }
 ready_scaledobject() { k -n demo wait scaledobject/podinfo --for=condition=Ready --timeout=5m >/dev/null; }
 apply_http_scaler() { # apply_http_scaler <minReplicaCount>
-  sed "s/minReplicaCount: 0/minReplicaCount: $1/" http-add-on/scaling.yaml | k apply -f - >/dev/null
+  sed "s/minReplicaCount: 0/minReplicaCount: $1/" http-add-on/scaling.yaml | kapply
   ready_scaledobject
 }
 run_load() { # run_load <결과 이름> <TARGET_URL> [Host 헤더]
   local name=$1 target=$2 host=${3:-}
   # 기록은 클러스터 안의 watcher Job이 합니다. 로컬 네트워크가 끊겨도 간격이 유지됩니다.
   k -n demo delete job watcher --ignore-not-found --wait >/dev/null
-  k -n demo create configmap watch-script --from-file=load/watch-replicas.sh --dry-run=client -o yaml | k apply -f - >/dev/null
-  sed "s|value: \"1200\"|value: \"${DURATION:-1200}\"|" load/watcher.yaml | k apply -f - >/dev/null
+  k -n demo create configmap watch-script --from-file=load/watch-replicas.sh --dry-run=client -o yaml | kapply
+  sed "s|value: \"1200\"|value: \"${DURATION:-1200}\"|" load/watcher.yaml | kapply
   # watcher가 첫 기록을 남긴 뒤 부하를 시작합니다(이미지 준비 시간만큼 기록이 늦게 시작되는 것을 막음).
   wait_until "watcher 시작" 300 bash -c "kubectl --context $CTX -n demo logs job/watcher 2>/dev/null | grep -qE '^[0-9]+,'"
-  sed -e "s|value: http://podinfo.demo.svc/|value: $target|" -e "s|value: \"\"|value: \"$host\"|" load/k6-job.yaml | k apply -f - >/dev/null
+  sed -e "s|value: http://podinfo.demo.svc/|value: $target|" -e "s|value: \"\"|value: \"$host\"|" load/k6-job.yaml | kapply
   log "$name: k6 부하 시작(6분 30초), replica·노드 기록 ${DURATION:-1200}초"
   wait_until "k6 시작" 300 bash -c "[[ -n \$(kubectl --context $CTX -n demo get pod -l job-name=k6 -o jsonpath='{.items[0].status.containerStatuses[0].state.*.startedAt}' 2>/dev/null) ]]"
   local started k6_start
   started=$(k -n demo get pod -l job-name=k6 -o jsonpath='{.items[0].status.containerStatuses[0].state.*.startedAt}')
   k6_start=$(python3 -c "import datetime,sys;print(int(datetime.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00')).timestamp()))" "$started")
   wait_until "k6 종료" 1200 bash -c "kubectl --context $CTX -n demo wait job/k6 --for=condition=complete --timeout=30s >/dev/null 2>&1"
-  k -n demo logs job/k6 > "$OUT/$name-k6.txt"
+  kto "$OUT/$name-k6.txt" -n demo logs job/k6
   wait_until "watcher 종료" $(( ${DURATION:-1200} + 300 )) bash -c "kubectl --context $CTX -n demo wait job/watcher --for=condition=complete --timeout=30s >/dev/null 2>&1"
   # epoch를 k6 컨테이너 시작 시각 기준 경과 초로 바꿉니다. 음수는 부하 전 기록입니다.
-  k -n demo logs job/watcher | awk -F, -v t0="$k6_start" 'BEGIN{OFS=","; print "elapsed_s,desired,ready,hpa_metric,user_nodes"} /^[0-9]+,/{$1=$1-t0; print}' > "$OUT/$name.csv"
+  kto "$OUT/$name.raw" -n demo logs job/watcher
+  awk -F, -v t0="$k6_start" 'BEGIN{OFS=","; print "elapsed_s,desired,ready,hpa_metric,user_nodes"} /^[0-9]+,/{$1=$1-t0; print}' "$OUT/$name.raw" > "$OUT/$name.csv"
 }
 pattern_prometheus_rps() {
   reset 1
-  sed -e "s|<keda-client-id>|$KEDA_CLIENT_ID|" -e "s|<amw-query-endpoint>|$AMW_QUERY_ENDPOINT|" prometheus/scaledobject.yaml | k apply -f - >/dev/null
+  sed -e "s|<keda-client-id>|$KEDA_CLIENT_ID|" -e "s|<amw-query-endpoint>|$AMW_QUERY_ENDPOINT|" prometheus/scaledobject.yaml | kapply
   ready_scaledobject
   run_load prometheus-rps http://podinfo.demo.svc/
 }
@@ -86,7 +91,7 @@ pattern_http_add_on_cold_start() {
   reset 1; apply_http_scaler 0
   # 기존 노드에 자리가 있는 경우: 작은 keeper Pod로 워크로드 노드 1대를 유지합니다.
   k -n demo create deployment keeper --image=registry.k8s.io/pause:3.10 --dry-run=client -o yaml |
-    k apply -f - >/dev/null
+    kapply
   k -n demo set resources deploy keeper --requests=cpu=100m,memory=64Mi >/dev/null
   k -n demo rollout status deploy keeper --timeout=10m >/dev/null
   for r in 1 2 3; do cold_request "$r"; done
@@ -103,7 +108,7 @@ pattern_azure_monitor_agc() {
   sub=$(az account show --query id -o tsv); tenant=$(az account show --query tenantId -o tsv)
   alb=$(az resource list -g "$mc" --resource-type Microsoft.ServiceNetworking/trafficControllers --query "[0].name" -o tsv)
   sed -e "s|<keda-client-id>|$KEDA_CLIENT_ID|" -e "s|<alb-resource-name>|$alb|" -e "s|<node-resource-group>|$mc|" \
-      -e "s|<subscription-id>|$sub|" -e "s|<tenant-id>|$tenant|" agc/scaledobject.yaml | k apply -f - >/dev/null
+      -e "s|<subscription-id>|$sub|" -e "s|<tenant-id>|$tenant|" agc/scaledobject.yaml | kapply
   ready_scaledobject
   addr=$(k -n demo get gateway web -o jsonpath='{.status.addresses[0].value}')
   # 서브넷 NSG는 클러스터 생성 뒤에 연결될 수 있으므로(구독 정책 등) 부하 직전에 다시 확인하고

@@ -66,9 +66,9 @@ exp_azurelinux() {
   nap_apply manifests/nodepool-azurelinux.yaml
   ./bench/bench.sh "$NAP" nap-azl 20 2 bench=azl | csv scale-out.csv "$BENCH_HEADER"
 }
-exp_overprovision() {
-  ./bench/overprovision.sh "$CAS" cas-overprov agentpool=user 2 | csv overprovisioning.csv scenario,run,pods_ready_s,placeholder_rescheduled_s
-  ./bench/overprovision.sh "$NAP" nap-overprov bench=fixed 2 | csv overprovisioning.csv scenario,run,pods_ready_s,placeholder_rescheduled_s
+exp_overprovision() { # overprovision.sh는 header를 직접 출력하므로 첫 줄을 떼고 붙입니다.
+  ./bench/overprovision.sh "$CAS" cas-overprov agentpool=user 2 | tail -n +2 | csv overprovisioning.csv scenario,run,pods_ready_s,placeholder_rescheduled_s
+  ./bench/overprovision.sh "$NAP" nap-overprov bench=fixed 2 | tail -n +2 | csv overprovisioning.csv scenario,run,pods_ready_s,placeholder_rescheduled_s
 }
 exp_quota_fallback() {
   # 리전·계열 quota를 넘는 Standard_D96ds_v7을 1순위, Standard_D4ds_v7을 대체로 둡니다(구독 quota에 따라 결과가 달라짐).
