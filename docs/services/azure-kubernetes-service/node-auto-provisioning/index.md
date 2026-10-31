@@ -173,8 +173,9 @@ NAP가 실제로 빨라지는 상황은 세 가지입니다.
 ## NodePool은 허용할 VM 범위를, AKSNodeClass는 Azure 노드 설정을 정한다
 
 NAP를 켜면 `default`(D 계열 on-demand)와 `system-surge` NodePool이 만들어집니다.
-워크로드 성격별로 NodePool을 추가하고, 하나의 Pod가 하나의 NodePool에만
-맞도록 requirements를 겹치지 않게 둡니다.
+워크로드 성격별로 NodePool을 추가할 때는 하나의 Pod가 하나의 NodePool에만 맞아야
+합니다. 아래 `general`은 전용 label·taint를 두어 `default`와 겹치지 않게 하고,
+운영 환경에 맞게 on-demand만 허용합니다.
 
 ```yaml
 apiVersion: karpenter.sh/v1
@@ -190,15 +191,22 @@ spec:
     budgets:
       - nodes: "20%"                 # 동시에 정리할 수 있는 노드 비율
   template:
+    metadata:
+      labels:
+        workload: general            # 워크로드 nodeSelector와 짝
     spec:
       expireAfter: Never
+      taints:
+        - key: workload              # 이 taint를 허용한 Pod만 배치되어 default와 겹치지 않음
+          value: general
+          effect: NoSchedule
       requirements:
         - key: kubernetes.io/arch
           operator: In
           values: [amd64]            # 생략하면 Arm64 SKU도 후보가 됨
         - key: karpenter.sh/capacity-type
           operator: In
-          values: [spot, on-demand]  # 둘 다 허용하면 spot 우선
+          values: [on-demand]        # 생략하거나 spot을 함께 넣으면 spot이 먼저 선택됨
         - key: karpenter.azure.com/sku-family
           operator: In
           values: [D, E]
@@ -220,12 +228,26 @@ spec:
   # vnetSubnetID: 사용자 지정 VNet에서 노드 서브넷을 분리할 때 지정
 ```
 
+이 NodePool을 쓸 워크로드에는 label과 taint에 맞는 선택 조건을 둡니다.
+
+```yaml
+spec:
+  template:
+    spec:
+      nodeSelector:
+        workload: general
+      tolerations:
+        - key: workload
+          value: general
+          effect: NoSchedule
+```
+
 ## NAP 기능은 VM 선택, 비용 정리, 수명 관리로 나뉜다
 
 | 기능 | 설정 | 동작 |
 |---|---|---|
 | VM 선택 | `sku-family`, `sku-name`, `sku-cpu`, `sku-memory`, zone, arch | 조건을 만족하는 SKU 중 Pending Pod를 담을 VM을 고름 |
-| Spot 혼합 | `karpenter.sh/capacity-type` | spot과 on-demand를 함께 허용하면 spot 우선 |
+| 용량 유형 | `karpenter.sh/capacity-type` | 운영 워크로드는 `on-demand`로 고정. spot을 함께 허용하면 spot이 먼저 선택됨 |
 | 상한 | `spec.limits.cpu/memory` | 상한에 닿으면 새 노드를 만들지 않음 |
 | 풀 우선순위 | `spec.weight` | 여러 NodePool이 맞으면 weight가 큰 풀 선택 |
 | Consolidation | `consolidationPolicy`, `consolidateAfter` | 빈 노드 삭제, 여러 노드를 하나로 합치기, 더 저렴한 SKU로 교체 |

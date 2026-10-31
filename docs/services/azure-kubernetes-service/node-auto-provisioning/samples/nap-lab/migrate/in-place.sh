@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 # Path 1 리허설: 모든 풀의 CAS 비활성화 → NAP 활성화 → 고정 user pool을 단계적으로 축소 → 풀 삭제
+#   AZURE_RESOURCE_GROUP, CAS_CLUSTER_NAME  필수. kube context 이름은 클러스터 이름과 같습니다(CTX로 변경).
+#   POOL=user  축소·삭제할 고정 풀
 set -euo pipefail
-RG=${RG:-rg-aks-autoscale-lab} CLUSTER=${CLUSTER:-aks-cas} POOL=${POOL:-user} CTX=${CTX:-aks-cas}
+RG=${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP이 필요합니다}
+CLUSTER=${CAS_CLUSTER_NAME:?CAS_CLUSTER_NAME이 필요합니다}
+POOL=${POOL:-user} CTX=${CTX:-$CLUSTER}
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $*"; }
 pool_count() { az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n "$POOL" --query count -o tsv; }
-wait_web_ready() { k -n migrate rollout status deploy/web --timeout=15m >/dev/null; k -n migrate wait --for=condition=Ready pod -l app=web --timeout=15m >/dev/null; }
+wait_web_ready() { # 원하는 replica가 모두 Ready·Available이 될 때까지(15분 제한). 일부 Pod 누락 상태로 진행하지 않습니다.
+  local deadline=$(( $(date +%s) + 900 )) s gen obs want ready avail
+  while :; do
+    s=$(k -n migrate get deploy web -o jsonpath='{.metadata.generation},{.status.observedGeneration},{.spec.replicas},{.status.readyReplicas},{.status.availableReplicas}') || s=""
+    IFS=, read -r gen obs want ready avail <<<"$s"
+    if [[ -n $want && $obs == "$gen" && ${ready:-0} == "$want" && ${avail:-0} == "$want" ]]; then return 0; fi
+    (( $(date +%s) < deadline )) || { log "timeout: web not ready (generation,observed,replicas,ready,available=$s)"; return 1; }
+    sleep 2
+  done
+}
 
 log "deploy probe"; k apply -f "$(dirname "$0")/probe.yaml" >/dev/null; wait_web_ready
 k -n migrate get pods -l app=web -o wide --no-headers | awk '{print $7}' | sort | uniq -c

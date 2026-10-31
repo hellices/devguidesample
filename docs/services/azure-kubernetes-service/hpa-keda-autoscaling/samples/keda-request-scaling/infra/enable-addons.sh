@@ -1,26 +1,34 @@
 #!/usr/bin/env bash
-# aks-nap 클러스터에 Workload Identity → KEDA → Managed Prometheus → Gateway API·AGC 순서로 기능을 켭니다.
-# KEDA add-on보다 Workload Identity를 먼저 켜는 것을 권장합니다. 순서가 바뀌면 keda-operator를 재시작해야 하며,
-# setup-keda-identity.sh가 annotation 뒤 keda-operator를 재시작합니다. AGC add-on은 Workload Identity가 필수입니다.
+# azd postprovision에서 호출: Bicep으로 만든 클러스터에 Managed Prometheus와 Gateway API·AGC add-on을 켭니다.
+# Workload Identity와 KEDA add-on은 Bicep이 클러스터 생성 시 함께 켭니다.
+#   AZURE_RESOURCE_GROUP, AKS_CLUSTER_NAME, AZURE_MONITOR_WORKSPACE_ID  필수
+#   ENABLE_AGC=false  AGC 실습을 하지 않으면 preview 등록과 add-on 활성화를 건너뜁니다.
 set -euo pipefail
-RG=${RG:-rg-aks-autoscale-lab} CLUSTER=${CLUSTER:-aks-nap} LOC=${LOC:-eastus2}
+RG=${AZURE_RESOURCE_GROUP:?} CLUSTER=${AKS_CLUSTER_NAME:?} AMW_ID=${AZURE_MONITOR_WORKSPACE_ID:?}
 
-az aks update -g "$RG" -n "$CLUSTER" --enable-oidc-issuer --enable-workload-identity -o none
-az aks update -g "$RG" -n "$CLUSTER" --enable-keda -o none
+if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "azureMonitorProfile.metrics.enabled" -o tsv) != true ]]; then
+  az aks update -g "$RG" -n "$CLUSTER" --enable-azure-monitor-metrics --azure-monitor-workspace-resource-id "$AMW_ID" -o none
+fi
 
-AMW_ID=$(az monitor account create -g "$RG" -n amw-autoscale-lab -l "$LOC" --query id -o tsv)
-az aks update -g "$RG" -n "$CLUSTER" --enable-azure-monitor-metrics --azure-monitor-workspace-resource-id "$AMW_ID" -o none
+[[ ${ENABLE_AGC:-true} == true ]] || exit 0
 
-# AGC add-on은 preview입니다. Learn quickstart와 같이 CLI extension, provider, preview feature를 준비합니다.
+# AGC add-on은 preview입니다. Learn quickstart와 같이 CLI extension, provider, preview feature를 준비하고
+# 모두 Registered가 된 뒤에 add-on을 켭니다.
 az extension add --name alb --upgrade -o none
 az extension add --name aks-preview --upgrade -o none
-for ns in Microsoft.ContainerService Microsoft.Network Microsoft.NetworkFunction Microsoft.ServiceNetworking; do
-  az provider register --namespace "$ns" -o none
-done
 for f in ManagedGatewayAPIPreview ApplicationLoadBalancerPreview; do
   az feature register --namespace Microsoft.ContainerService --name "$f" -o none
-  until [[ $(az feature show --namespace Microsoft.ContainerService --name "$f" --query properties.state -o tsv) == Registered ]]; do sleep 30; done
 done
-az provider register --namespace Microsoft.ContainerService -o none
+for f in ManagedGatewayAPIPreview ApplicationLoadBalancerPreview; do
+  until [[ $(az feature show --namespace Microsoft.ContainerService --name "$f" --query properties.state -o tsv) == Registered ]]; do
+    echo "feature $f 등록 대기"; sleep 30
+  done
+done
+# feature 등록 뒤 provider를 다시 등록해야 반영됩니다. --wait로 완료까지 기다립니다.
+for ns in Microsoft.ContainerService Microsoft.Network Microsoft.NetworkFunction Microsoft.ServiceNetworking; do
+  az provider register --namespace "$ns" --wait -o none
+done
 
-az aks update -g "$RG" -n "$CLUSTER" --enable-gateway-api --enable-application-load-balancer -o none
+if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "ingressProfile.applicationLoadBalancer.enabled" -o tsv 2>/dev/null) != true ]]; then
+  az aks update -g "$RG" -n "$CLUSTER" --enable-gateway-api --enable-application-load-balancer -o none
+fi

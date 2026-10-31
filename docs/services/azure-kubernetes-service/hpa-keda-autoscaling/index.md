@@ -119,8 +119,11 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 역할은 �
 
 - `minReplicaCount`가 1 이상이면 scaler는 항상 활성 상태이고 `activation*`
   값은 무시됩니다.
-- 같은 workload에 HPA와 `ScaledObject`를 함께 두지 않습니다. HPA가 먼저
-  있으면 `ScaledObject` 생성이 실패하고, 나중에 HPA를 만들면 둘이 경쟁합니다.
+- 같은 workload에 HPA와 `ScaledObject`를 함께 두지 않습니다. 같은 대상을 가리키는 HPA가
+  먼저 있으면 KEDA admission webhook이 `ScaledObject`를 거부하고, 나중에 HPA를 만들면
+  둘이 replica 수를 번갈아 바꿉니다. 기존 HPA에서 옮길 때는 HPA를 지우거나
+  `scaledobject.keda.sh/transfer-hpa-ownership: "true"` annotation과
+  `advanced.horizontalPodAutoscalerConfig.name`(기존 HPA 이름)으로 소유권을 넘깁니다.
 - AKS 1.36의 기본 HPA는 replica 0을 지원하지 않습니다(`HPAScaleToZero`
   feature gate가 1.36까지 alpha). 0까지 줄이려면 KEDA가 필요합니다.
   upstream Kubernetes 1.37부터 이 feature gate는 beta로 기본 활성화되어
@@ -150,19 +153,19 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 역할은 �
 ## 요청 수로 확장할 때는 지표 지연과 0개 지원 여부로 패턴을 고른다
 
 세 패턴 모두 같은 앱(podinfo)과 같은 부하(초당 400건, Pod당 목표 초당 50건)로
-패턴마다 1회 실측했습니다. 첫 확장 시간은 부하 시작 기준이며 5초 간격 기록이라
-구간으로 적습니다.
+패턴마다 1회 실측했습니다. 워크로드 노드는 모두 NAP `default` NodePool의 on-demand VM입니다.
+첫 확장 시간은 k6 시작 기준이며 5초 간격 기록이라 근삿값으로 적습니다.
 
 | 패턴 | 지표 경로 | KEDA 범위 | 첫 확장(1회 실측) | 0개 운영 | 적합한 경우 |
 |---|---|---|---|---|---|
-| [Managed Prometheus RPS](prometheus-rps/index.md) | 앱 `/metrics` → Managed Prometheus → `prometheus` scaler | core | 약 70–75초 | 부적합: Pod가 없으면 지표도 없음 | 앱이 Prometheus 지표를 내고 정밀한 query가 필요할 때 |
-| [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | 별도 add-on | 약 55–60초 | 가능: 첫 요청 보류 (노드 있으면 2초, 새 노드면 120초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
-| [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | core | 약 150초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
+| [Managed Prometheus RPS](prometheus-rps/index.md) | 앱 `/metrics` → Managed Prometheus → `prometheus` scaler | core | 약 70초 | 부적합: Pod가 없으면 지표도 없음 | 앱이 Prometheus 지표를 내고 정밀한 query가 필요할 때 |
+| [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | 별도 add-on | 약 40초 | 가능: 첫 요청 보류 (노드에 자리 있으면 5초 안쪽, 새 노드면 약 111초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
+| [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | core | 약 155초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
 
-0개에서 burst를 받으면 첫 Pod가 준비될 때까지 요청이 보류됩니다. 1회 실측에서
-기존 노드에 자리가 없어 새 노드가 필요했고, 첫 Pod가 Ready 되기까지 약
-95–100초 동안 계획한 요청의 약 14.6%가 실패하거나 아예 전송되지 못했습니다.
-`minReplicaCount: 1`에서는 실패가 없었습니다.
+0개에서 burst를 받으면 첫 Pod가 준비될 때까지 요청이 보류됩니다. Pod와 워크로드 노드가
+모두 없는 상태에서 시작한 1회 실측에서는 NAP 노드와 첫 Pod가 준비되기까지 약 110초 동안
+계획한 요청의 약 22%가 실패하거나 아예 전송되지 못했습니다. `minReplicaCount: 1`에서는
+실패가 없었습니다.
 
 ## Pod 확장 다음 단계는 노드 autoscaler가 맡는다
 

@@ -1,6 +1,6 @@
 ---
-title: AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 150초 걸렸다
-description: Application Gateway for Containers의 TotalRequests 메트릭을 KEDA azure-monitor scaler로 조회해 앱 수정 없이 진입점 트래픽으로 확장하고, 반응 시간과 frontend NSG 조건을 측정합니다.
+title: AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 155초 걸렸다
+description: Application Gateway for Containers의 TotalRequests 메트릭을 KEDA azure-monitor scaler로 조회해 앱 수정 없이 진입점 트래픽으로 확장하고, 반응 시간과 frontend NSG 조건을 확인합니다.
 document_type: lab
 services: [azure-kubernetes-service, azure-application-gateway-for-containers, azure-monitor]
 technologies: [kubernetes, keda]
@@ -37,13 +37,13 @@ cleanup_required: true
 topic_order: 3
 ---
 
-# AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 150초 걸렸다
+# AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 155초 걸렸다
 
 Application Gateway for Containers(AGC)는 frontend가 처리한 요청 수를
 `TotalRequests` 플랫폼 메트릭으로 내보냅니다. KEDA core의 `azure-monitor` scaler가
 이 값을 Workload Identity로 읽으면 앱에 지표를 추가하지 않고도 진입점 트래픽으로
 확장할 수 있습니다. 대신 1분 단위 집계와 게시 지연 때문에 1회 실측에서 Managed
-Prometheus 방식보다 첫 확장이 약 75–80초 늦었습니다.
+Prometheus 방식보다 첫 확장이 약 80초 늦었습니다.
 
 ## 1분 동안 Pod당 3,000건(초당 50건)을 넘으면 replica를 늘린다
 
@@ -62,23 +62,19 @@ Prometheus 방식보다 첫 확장이 약 75–80초 늦었습니다.
 Workload Identity로 읽으려면 Workload Identity를 먼저 켜는 것을 권장하며 순서가
 바뀌었으면 `keda-operator`를 재시작합니다.
 
-AGC add-on은 preview이므로 Learn quickstart와 같이 다음을 먼저 준비합니다.
-`infra/enable-addons.sh`가 이 단계를 포함합니다.
-
-```bash
-az extension add --name alb
-az extension add --name aks-preview
-for ns in Microsoft.ContainerService Microsoft.Network Microsoft.NetworkFunction Microsoft.ServiceNetworking; do
-  az provider register --namespace $ns
-done
-az feature register --namespace Microsoft.ContainerService --name ManagedGatewayAPIPreview
-az feature register --namespace Microsoft.ContainerService --name ApplicationLoadBalancerPreview
-```
+AGC add-on은 preview이므로 postprovision hook(`infra/enable-addons.sh`)이 Learn quickstart와
+같이 `alb`·`aks-preview` CLI extension을 설치하고, `ManagedGatewayAPIPreview`·
+`ApplicationLoadBalancerPreview` feature가 `Registered`가 될 때까지 기다린 뒤
+`Microsoft.ContainerService`, `Microsoft.Network`, `Microsoft.NetworkFunction`,
+`Microsoft.ServiceNetworking` provider 등록을 `--wait`로 완료하고 add-on을 켭니다.
+feature 등록은 처음 한 번 몇 분 걸릴 수 있습니다.
 
 AKS 관리 VNet에서는 add-on이 `Microsoft.ServiceNetworking/TrafficController`로
-delegation된 `aks-appgateway` 서브넷을 만듭니다. 이 실습에서는 이 서브넷에 이름에
-`appgateway`가 들어간 NSG가 연결된 것도 관측했습니다. NSG 생성은 Learn에 명시되어
-있지 않으므로 클러스터에서 직접 확인합니다.
+delegation된 `aks-appgateway` 서브넷을 만듭니다. 이 서브넷의 NSG는 add-on이 만든다고 Learn에
+명시되어 있지 않은데, 실습 구독에서는 서브넷이 생긴 뒤 이름에 `appgateway`가 들어간 NSG가
+기본 규칙만 가진 채 연결되었습니다. azd로 다시 만든 클러스터에서는 add-on 설정 직후에는 NSG가
+없다가 부하 실험 전에 연결되어 frontend가 막혔습니다. 구독 정책 등으로 NSG가 나중에 붙을 수
+있으므로 부하를 주기 직전에 서브넷 상태를 다시 확인합니다.
 
 ## 비용은 AGC·frontend·association 시간과 capacity unit, 추가 노드에 비례한다
 
@@ -89,46 +85,47 @@ AGC 과금 미터는 AGC 리소스 시간, frontend 시간, association 시간, 
 노드 비용이 더해집니다. 실습 후 Gateway와 `ApplicationLoadBalancer`를 지우면 ALB Controller가
 AGC 리소스를 삭제합니다.
 
-## AGC 생성, frontend NSG 허용, 권한, ScaledObject 순서로 배포한다
+## azd가 AGC Gateway, frontend NSG, 지표 읽기 권한, ScaledObject를 순서대로 적용한다
+
+postprovision hook이 AGC 준비를 끝냅니다.
+
+1. AKS 관리 VNet의 `aks-appgateway` 서브넷 ID로 `agc/gateway.yaml`의 `ApplicationLoadBalancer`
+   association을 채워 Gateway·HTTPRoute를 만들고 `Programmed` 상태를 기다립니다.
+2. `agc/allow-frontend.sh`가 `aks-appgateway` 서브넷에 NSG가 연결되어 있으면 TCP 80·443 inbound를
+   허용하고, 없으면 건너뜁니다. postdeploy hook은 부하 직전에 이 스크립트를 다시 실행하고
+   클러스터 안에서 frontend가 200을 돌려줄 때까지 기다립니다.
+3. ALB Controller가 node resource group에 만든 AGC(`trafficControllers`)에 KEDA ID의
+   `Monitoring Reader` 역할을 부여합니다.
+
+부하는 postdeploy hook으로 실행합니다.
 
 ```bash
-cd samples/keda-request-scaling
-MC=$(az aks show -g $RG -n aks-nap --query nodeResourceGroup -o tsv)
-SUBNET_ID=$(az network vnet subnet list -g $MC \
-  --vnet-name $(az network vnet list -g $MC --query "[0].name" -o tsv) \
-  --query "[?name=='aks-appgateway'].id" -o tsv)
-sed "s|<alb-subnet-id>|$SUBNET_ID|" agc/gateway.yaml | kubectl apply -f -
-kubectl -n demo get gateway web              # PROGRAMMED=True, ADDRESS=<hash>.<zone>.alb.azure.com
-
-./agc/allow-frontend.sh                      # aks-appgateway NSG에 TCP 80·443 inbound 허용
-
-ALB_ID=$(az resource list -g $MC --resource-type Microsoft.ServiceNetworking/trafficControllers --query "[0].id" -o tsv)
-az role assignment create --assignee-object-id $(az identity show -g $RG -n id-keda --query principalId -o tsv) \
-  --assignee-principal-type ServicePrincipal --role "Monitoring Reader" --scope $ALB_ID
-# agc/scaledobject.yaml의 <...> 값을 채워 적용
+azd env set PATTERN azure-monitor-agc
+azd hooks run postdeploy      # 결과: out/<환경 이름>/azure-monitor-agc.csv
 ```
 
-## frontend로 초당 400건을 6분간 보낸다
+hook은 `agc/scaledobject.yaml`의 `<...>` 값(AGC 이름, node resource group, 구독·테넌트, KEDA
+client ID)을 채워 적용하고, k6로 Gateway 주소(`http://<gateway-address>/`)에 초당 최대 400건을
+6분간 보냅니다.
 
-`load/k6-job.yaml`의 `TARGET_URL`을 Gateway 주소(`http://<gateway-address>/`)로
-바꿔 클러스터 안에서 실행했습니다.
+## 1회 실측에서 첫 확장은 약 155초, 전체 Ready는 약 320초였다
 
-## 1회 실측에서 첫 확장은 약 150초, 전체 Ready는 약 350초였다
-
-부하 시작을 0초로 둔 1회 관측값입니다(2026-10-30, AKS 1.36.5, ALB Controller 1.11.7).
-5초 간격 기록(`results/azure-monitor-agc.csv`, `results/prometheus-rps.csv`)이라 시점을
-구간으로 적습니다.
+k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, 워크로드 노드는 NAP `default`
+NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 기록한
+`results/azure-monitor-agc.csv`, `results/prometheus-rps.csv`라 시점을 근삿값으로 적습니다.
 
 | 시점 | AGC + Azure Monitor | 비교: Managed Prometheus |
 |---|---|---|
-| 첫 확장 | 약 145–155초 | 약 70–75초 |
-| 목표 replica 도달 | 약 220–225초 (8개) | 약 135–140초 (9개) |
-| 전체 Ready (NAP 노드 추가 포함) | 약 350초 | 약 250초 |
-| 축소 시작 | 부하 종료 후 약 7분 | 부하 종료 후 약 5분 |
+| 지표가 처음 0보다 커짐 | 약 95초 | 약 30초 |
+| 첫 확장 | 약 155초 | 약 70초 |
+| 목표 replica 8 도달 | 약 230초 | 약 130초 |
+| 전체 Ready (NAP 노드 추가 포함) | 약 320초 | 약 255초 |
+| 축소 시작 | 부하 종료 후 약 7분 | 부하 종료 후 약 3분 |
 
-- k6 결과(`results/k6-summary.csv`): 137,999건, 실패 0건, p99 3.5 ms
-- 각 분의 `TotalRequests`는 그 분이 끝나고 약 1–2분 뒤에 조회됐습니다. 그동안 KEDA는
-  값을 얻지 못하거나 이전 값을 썼습니다(HPA `TARGETS`가 잠시 비어 보임).
+- k6 결과(`results/k6-summary.csv`): 137,999건, 실패 0건, p99 2.58 ms
+- `TotalRequests`는 1분 단위로 집계되어 부하 시작 약 95초 뒤에 처음 값이 조회됐고, 이후에도
+  값이 갱신되기 전까지 KEDA는 이전 값을 썼습니다. 기록 중간에 HPA 지표가 잠시 비는 구간도
+  있었습니다.
 - 축소는 마지막 지표 반영, HPA 300초 안정화 창이 더해져 Prometheus 방식보다 늦었습니다.
 
 ## 지표가 늦으므로 급격한 증가보다 지속 트래픽에 맞다
@@ -144,20 +141,20 @@ az role assignment create --assignee-object-id $(az identity show -g $RG -n id-k
 - `kubectl -n demo get hpa keda-hpa-podinfo`: 부하 중 `<값>/3k (avg)`
 - 부하 중 replica가 `ceil(분당 요청 / 3000)` 근처에 머물고 요청 실패가 없어야 합니다.
 
-## 실습 후 Gateway와 ApplicationLoadBalancer를 먼저 지운다
+## 실습 후 azd down으로 리소스 그룹을 삭제한다
 
 ```bash
-kubectl -n demo delete scaledobject podinfo; kubectl -n demo delete triggerauthentication azure-wi
-kubectl -n demo delete httproute podinfo; kubectl -n demo delete gateway web
-kubectl -n alb-infra delete applicationloadbalancer alb-lab
-az group delete -n $RG --yes --no-wait
+azd down --purge --force
 ```
+
+클러스터를 남기고 AGC만 지울 때는 Gateway·HTTPRoute와 `ApplicationLoadBalancer`를 먼저
+삭제해 ALB Controller가 AGC 리소스를 정리하게 합니다.
 
 ## frontend가 응답하지 않으면 association 서브넷 NSG부터 본다
 
 | 증상 | 원인과 조치 |
 |---|---|
-| Gateway가 `Programmed=True`인데 frontend 연결이 timeout, `NewConnections` 0 | 2026-04-23 이후 만든 association에는 서브넷 NSG의 inbound·outbound 규칙이 모두 적용됩니다. 이 실습의 `aks-appgateway` NSG에는 기본 규칙(`AllowVNetInBound`, `AllowAzureLoadBalancerInBound`, `DenyAllInBound`)만 있어 Internet에서 오는 80·443이 `DenyAllInBound`에 막혔습니다. Internet → TCP 80·443 허용 규칙 추가. `AzureLoadBalancer` 허용도 유지 |
+| Gateway가 `Programmed=True`인데 frontend 연결이 timeout, `NewConnections` 0 | 2026-04-23 이후 만든 association에는 서브넷 NSG의 inbound·outbound 규칙이 모두 적용됩니다. 실습 구독에서 연결된 `aks-appgateway` NSG에는 기본 규칙(`AllowVNetInBound`, `AllowAzureLoadBalancerInBound`, `DenyAllInBound`)만 있어 Internet에서 오는 80·443이 `DenyAllInBound`에 막혔습니다. Internet → TCP 80·443 허용 규칙 추가. `AzureLoadBalancer` 허용도 유지 |
 | HPA `TARGETS`가 `<unknown>` | KEDA ID에 AGC 리소스 `Monitoring Reader`가 없거나 `resourceURI`·`resourceGroupName`이 노드 리소스 그룹(MC_)이 아님 |
 | ALB Controller 로그에 `no Pods found for Service` | 백엔드 Deployment가 0개. azure-monitor scaler는 `minReplicaCount: 1` 이상으로 둠 |
 

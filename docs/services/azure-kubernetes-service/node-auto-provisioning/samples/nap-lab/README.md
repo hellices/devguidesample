@@ -1,179 +1,104 @@
 # CAS·NAP 확장 단계별 실측과 전환 리허설
 
 같은 네트워크(Azure CNI Overlay + Cilium)와 같은 VM(`Standard_D4ds_v7`, on-demand)으로
-VMSS Cluster Autoscaler 클러스터(`aks-cas`)와 NAP 클러스터(`aks-nap`)를 만듭니다. 이어서
-Pending Pod를 만들어 확장 결정, VM 생성, 노드 Ready, Pod Ready, 축소 시간을 단계별로
-기록합니다. `aks-cas`를 NAP로 전환하는 리허설도 포함합니다.
+VMSS Cluster Autoscaler 클러스터와 NAP 클러스터를 만들고, Pending Pod를 만들어 확장 결정,
+VM 생성, 노드 Ready, Pod Ready, 축소 시간을 단계별로 기록합니다. CAS 클러스터를 NAP로
+전환하는 리허설도 포함합니다. 모든 단계는 Azure Developer CLI(`azd`)로 실행하며, 모든 CAS
+풀은 Regular(on-demand), 모든 NAP NodePool은 `karpenter.sh/capacity-type: on-demand`입니다.
 
 ## 준비
 
-- Azure CLI 2.76 이상, `kubectl`, Python 3.9 이상
-- 대상 리전에 약 100 vCPU quota(시스템 풀 4노드 16 vCPU + 실측 노드). B2는 시스템 풀을 포함해
-  96 vCPU를 쓰고, 선호 VM 실패·B3 시나리오는 한도를 넘기도록 구성합니다.
-- 리전에서 쓸 수 있는 VM 크기를 `SYS_SKU`, `USER_SKU`로 지정합니다(기본 `Standard_D4ds_v7`).
+- Azure Developer CLI 1.29 이상, Azure CLI 2.76 이상, `kubectl`, Python 3.9 이상
+- 대상 리전에 약 100 vCPU quota(시스템 풀 4노드 16 vCPU + 실측 노드). `burst40`은 시스템 풀을
+  포함해 96 vCPU를 쓰고, `quota-fallback`·`quota-staleness`는 quota 한도를 넘기도록 구성합니다.
 
-## 클러스터와 NodePool
-
-```bash
-export RG=rg-aks-autoscale-lab LOC=eastus2
-./infra/create-clusters.sh      # CAS: scan-interval 10s, scale-down-unneeded-time 1m
-
-# fixed: sku-name Standard_D4ds_v7 / flex: v7 D 계열 32 vCPU 이하 / azurelinux: AzureLinux AKSNodeClass
-kubectl --context aks-nap apply -f manifests/nodepool-fixed.yaml \
-  -f manifests/nodepool-flex.yaml -f manifests/nodepool-azurelinux.yaml
-```
-
-모든 NAP NodePool은 `karpenter.sh/capacity-type: on-demand`와 `kubernetes.io/arch: amd64`를
-명시합니다.
-
-## 확장 실측: `bench/bench.sh`
+## 클러스터 만들기
 
 ```bash
-# bench.sh <context> <scenario> <replicas> <runs> [nodeSelector]
-OUT=./out ./bench/bench.sh aks-cas cas-burst 20 3 agentpool=user
-OUT=./out ./bench/bench.sh aks-nap nap-burst 20 3 bench=fixed
-
-# 30초 간격으로 5개씩 추가
-OUT=./out WAVES="5 5 5 5" WAVE_INTERVAL=30 ./bench/bench.sh aks-nap nap-waves 20 2 bench=fixed
-
-# 6 vCPU Pod: CAS D4 풀은 확장하지 않음, NAP flex는 큰 VM 선택
-OUT=./out CPU=6 TIMEOUT=150 ./bench/bench.sh aks-cas cas-large 4 1 agentpool=user
-OUT=./out CPU=6 ./bench/bench.sh aks-nap nap-large 4 1 bench=flex
-
-# 축소 완료를 VM 기준으로 기록 (CAS는 VM 삭제 뒤에도 node 객체가 몇 분 남음)
-SCALE_IN_COUNT="az vmss list-instances -g <MC_rg> -n <vmss> --query 'length(@)' -o tsv" \
-  OUT=./out WAVES="5 5 5 5" WAVE_INTERVAL=30 ./bench/bench.sh aks-cas cas-waves 20 2 agentpool=user
+cd docs/services/azure-kubernetes-service/node-auto-provisioning/samples/nap-lab
+azd env new nap-lab --location eastus2      # 리소스 그룹 rg-<환경 이름>
+azd up
 ```
 
-실행마다 `OUT/<scenario>/run<n>/`에 Pod·노드·NodeClaim·이벤트 스냅샷을 남기고,
-`bench/analyze.py`가 다음 열의 CSV 한 줄을 출력합니다.
+- **Bicep(`infra/`):**
+  - CAS 클러스터: 시스템 풀 + `user` 풀(`Standard_D4ds_v7`, Regular, 0–10대), autoscaler profile
+    `scan-interval=10s`, `scale-down-unneeded-time=1m`, `scale-down-delay-after-add=0m`
+  - NAP 클러스터: 시스템 풀 + NAP(`default`·`system-surge` NodePool은 on-demand 전용)
+- **postprovision hook:** 두 클러스터의 kubeconfig context(이름 = 클러스터 이름)를 만들고 NAP에
+  `manifests/nodepool-fixed.yaml`(`Standard_D4ds_v7` 고정)과 `nodepool-flex.yaml`(v7 D 계열
+  32 vCPU 이하)을 적용합니다. 리전 가격 파일이 없으면 `bench/prices.py`로 만듭니다.
+
+`AKS_VERSION`(기본 1.36)과 `AKS_VM_SIZE`(기본 `Standard_D4ds_v7`)는 `azd env set`으로 바꿀 수
+있습니다.
+
+## 실험 실행
+
+`EXPERIMENT` 환경 값에 실험을 공백이나 쉼표로 나열하고 postdeploy hook을 실행합니다.
+결과 CSV와 실행별 원본 스냅샷은 `out/<환경 이름>/`에 남습니다.
+
+```bash
+azd env set EXPERIMENT "scale-out waves"
+azd env set RUNS 3                          # 반복 횟수(일부 실험은 고정)
+azd hooks run postdeploy                    # 또는 azd deploy
+```
+
+| `EXPERIMENT` | 내용 | 결과 파일 |
+|---|---|---|
+| `scale-out` | 1 vCPU Pod 20개 burst. CAS `user` 풀 vs NAP `bench-fixed` | `scale-out.csv` |
+| `waves` | 30초 간격으로 5개씩 4회 | `scale-out.csv` |
+| `large` | 6 vCPU Pod 4개. CAS D4 풀은 확장하지 못함, NAP flex는 큰 VM 선택 | `scale-out.csv` |
+| `dealloc` | CAS `--scale-down-mode Deallocate` 풀. 1회차 새 VM, 2회차부터 재시작 | `scale-out.csv` |
+| `azurelinux` | AzureLinux 노드 이미지 | `scale-out.csv` |
+| `overprovision` | placeholder Pod로 여유 노드 1대를 둔 상태에서 Pod 3개 추가 | `overprovisioning.csv` |
+| `quota-fallback` | quota를 넘는 `Standard_D96ds_v7`을 1순위, D4를 대체로 둠 | `quota-fallback.csv` |
+| `mixed` | 크기가 다른 Pod 20개(A1). CAS 풀 1개·3개(random, least-waste) vs NAP | `mixed-shapes.csv` |
+| `rightsize` | 20 → 3 Pod 축소 후 12분 관찰(A2·B4) | `rightsize-*.csv` |
+| `zone1` | 두 쪽 모두 zone 1에만 노드 생성(B1) | `zone1-burst.csv` |
+| `burst40` | 2 vCPU VM 40대(B2). CAS는 max 10 풀 4개 + `balance-similar-node-groups` | `burst-40-nodes.csv` |
+| `quota-staleness` | 같은 VM 계열 quota를 CAS 풀로 점유했다가 반납(B3) | `quota-staleness.csv` |
+| `migration` | CAS 클러스터에서 경로 1 전환 리허설 | `migration.log`, `migration-probe.log` |
+| `drift` | `migration` 뒤 NAP drift로 노드 전체 교체, `preStop` 없음 → 있음 | `drift.csv` |
+
+- 실험에 필요한 CAS 풀은 실험 안에서 만들고 끝나면 지웁니다. 노드 풀 10개·VMSS 10대 제한
+  정책이 있는 구독에서도 실행할 수 있게 하려는 것입니다.
+- `migration`은 CAS 클러스터에 NAP를 켜므로 CAS 실험을 모두 끝낸 뒤 실행합니다. `drift`는
+  그 다음에 실행합니다.
+- `quota-fallback`과 `quota-staleness`의 결과는 구독의 VM 계열·리전 quota에 따라 달라집니다.
+
+### 스크립트를 직접 실행할 때
+
+hook은 다음 스크립트를 호출합니다. azd 환경 값(`azd env get-values`)을 export하면 같은
+명령을 직접 실행할 수 있습니다.
+
+```bash
+eval "$(azd env get-values)"; export AZURE_RESOURCE_GROUP CAS_CLUSTER_NAME NAP_CLUSTER_NAME AZURE_LOCATION
+# bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector]
+OUT=./out ./bench/bench.sh "$NAP_CLUSTER_NAME" nap-burst 20 3 bench=fixed
+```
+
+`bench/analyze.py`가 실행마다 다음 열의 CSV 한 줄을 출력합니다.
 
 | 열 | 의미 |
 |---|---|
 | `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성 |
-| `vm_launched_s` | NAP NodeClaim `Launched` |
+| `vm_launched_s` | NAP NodeClaim `Launched=True` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
-| `all_pods_ready_s` | 모든 Pod Ready |
-| `scale_in_s` | 축소 시작부터 VM 0개(`SCALE_IN_COUNT`) 또는 Ready 노드 0개까지 |
-| `wave_latency_s` | wave별 추가 → 해당 Pod 모두 Ready |
-
-## 최적화 실측
-
-```bash
-# CAS: AzureLinux 풀, Deallocate 풀(Managed OS disk 필요)
-az aks nodepool add -g $RG --cluster-name aks-cas -n userazl --os-sku AzureLinux \
-  --node-vm-size Standard_D4ds_v7 --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10
-az aks nodepool add -g $RG --cluster-name aks-cas -n userdea --node-osdisk-type Managed \
-  --scale-down-mode Deallocate --node-vm-size Standard_D4ds_v7 --node-count 0 \
-  --enable-cluster-autoscaler --min-count 0 --max-count 10
-OUT=./out ./bench/bench.sh aks-cas cas-dealloc 20 3 agentpool=userdea   # 1회차 새 VM, 2·3회차 재시작
-
-# placeholder Pod 3개로 여유 노드 1대를 둔 상태에서 Pod 3개 추가
-./bench/overprovision.sh aks-cas cas-overprov agentpool=user 2
-./bench/overprovision.sh aks-nap nap-overprov bench=fixed 2
-
-# NAP budget을 100%로 올려 축소 시간 비교
-kubectl --context aks-nap patch nodepool bench-fixed --type merge \
-  -p '{"spec":{"disruption":{"budgets":[{"nodes":"100%"}]}}}'
-```
+| `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니면 빈 값 |
+| `scale_in_s` | 축소 시작부터 VM 0개(`SCALE_IN_COUNT`) 또는 Ready 노드 0개까지. timeout이면 빈 값 |
+| `wave_latency_s` | wave별 추가 → 해당 wave Pod 모두 Ready |
 
 CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler` 범주를 Log Analytics로
 보내면 `AzureDiagnostics | where Category == "cluster-autoscaler"`로 볼 수 있습니다.
-
-## 선호 VM 실패 시 대체 속도
-
-리전 vCPU 한도(100)를 넘는 `Standard_D96ds_v7`을 1순위, `Standard_D4ds_v7`을 대체로 둡니다.
-
-```bash
-# CAS: big 풀을 priority expander로 우선 시도
-az aks update -g $RG -n aks-cas --cluster-autoscaler-profile expander=priority
-az aks nodepool update -g $RG --cluster-name aks-cas -n user --labels bench=q
-az aks nodepool add -g $RG --cluster-name aks-cas -n big --node-vm-size Standard_D96ds_v7 \
-  --labels bench=q --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 2
-kubectl --context aks-cas apply -f manifests/cas-priority-expander.yaml
-
-# NAP: weight 100(D96) / weight 10(D4) NodePool
-kubectl --context aks-nap apply -f manifests/nodepool-quota-fallback.yaml
-
-OUT=./out ./bench/bench.sh aks-cas cas-quota 20 2 bench=q
-OUT=./out ./bench/bench.sh aks-nap nap-quota 20 2 bench=q
-python3 bench/fallback.py ./out/cas-quota/run1 cas-quota 1 aks-user   # 대체 VMSS 이름 일부
-python3 bench/fallback.py ./out/nap-quota/run1 nap-quota 1 fallback   # 대체 NodePool 이름
-```
-
-## 유불리 시나리오 실측
-
-```bash
-python3 bench/prices.py eastus2 prices.json _v7          # Azure Retail Prices API, Linux on-demand
-
-# A1 크기가 다른 Pod 혼합: CAS 풀 3개(D4as·E4as·F8as v7, label bench=mix) / NAP D·E·F v7 NodePool
-#    mixed.sh가 실행마다 analyze_mixed.py로 배치·노드 용량 대비 요청 비율·비용을 계산합니다.
-#    선호 VM 실패 실측에서 바꾼 expander를 AKS 기본값(random)으로 되돌립니다.
-az aks update -g $RG -n aks-cas --cluster-autoscaler-profile expander=random
-mixpool() { az aks nodepool add -g $RG --cluster-name aks-cas -n $1 --node-vm-size $2 --labels bench=mix \
-  --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10; }
-mixpool mixgen Standard_D4as_v7
-# 풀 1개(D4as_v7): 6 vCPU Pod는 배치되지 않으므로 TIMEOUT 뒤 그 시점 상태를 기록
-PRICES=prices.json OUT=./out TIMEOUT=420 ./bench/mixed.sh aks-cas cas-one-pool bench=mix 1
-mixpool mixmem Standard_E4as_v7; mixpool mixcpu Standard_F8as_v7
-PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools-random bench=mix 2
-az aks update -g $RG -n aks-cas --cluster-autoscaler-profile expander=least-waste
-PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools-least-waste bench=mix 2
-kubectl --context aks-nap apply -f manifests/nodepool-mixed.yaml
-PRICES=prices.json OUT=./out ./bench/mixed.sh aks-nap nap-def-v7 bench=mix 2
-
-# 노드 풀 10개 제한 정책이 있으면 끝난 시나리오의 풀을 지운 뒤 다음 풀을 만듭니다.
-#   az aks nodepool delete -g $RG --cluster-name aks-cas -n <pool> --no-wait
-
-# A2·B4 큰 노드 축소와 Pod 이동: 20 → 3 Pod, 12분 관찰
-az aks nodepool add -g $RG --cluster-name aks-cas -n big32 --node-vm-size Standard_D32als_v7 \
-  --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 2
-PRICES=prices.json ./bench/rightsize.sh aks-nap nap-flex bench=flex > rightsize-nap-flex.csv
-PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d4 agentpool=user > rightsize-cas-d4.csv
-PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d32 agentpool=big32 > rightsize-cas-d32.csv
-
-# B1 같은 zone: CAS 풀 userz1(zone 1) / NAP eastus2-1 NodePool
-az aks nodepool add -g $RG --cluster-name aks-cas -n userz1 --node-vm-size Standard_D4ds_v7 --zones 1 \
-  --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10
-kubectl --context aks-nap apply -f manifests/nodepool-zone1.yaml
-OUT=./out ./bench/bench.sh aks-cas cas-zone1 20 3 agentpool=userz1
-OUT=./out ./bench/bench.sh aks-nap nap-zone1 20 3 bench=zone1
-
-# B2 2 vCPU VM 40대: CAS는 max 10 풀 4개(d2~d2d, label bench=d2x) + balance-similar-node-groups=true
-for p in d2 d2b d2c d2d; do az aks nodepool add -g $RG --cluster-name aks-cas -n $p --node-vm-size Standard_D2ds_v7 \
-  --labels bench=d2x --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10; done
-az aks update -g $RG -n aks-cas --cluster-autoscaler-profile balance-similar-node-groups=true
-kubectl --context aks-nap apply -f manifests/nodepool-d2.yaml
-OUT=./out ./bench/bench.sh aks-cas cas-d2x40 40 1 bench=d2x
-OUT=./out ./bench/bench.sh aks-nap nap-d2x40 40 1 bench=d2
-
-# B3 quota 정보 갱신 지연: CAS 풀로 같은 계열 quota를 점유했다가 반납
-BASELINE_USAGE=16 ./bench/quota-staleness.sh aks-nap aks-cas eastus2 > quota-staleness.csv
-```
-
-실험 구독에 VMSS 인스턴스 10대 초과와 노드 풀 10개 초과를 거부하는 Azure Policy가 있으면
-CAS 단일 풀 40대 확장과 11번째 풀 추가가 실패합니다. `BASELINE_USAGE`는 실험 전
-`StandardDdsv7Family` 사용량(두 클러스터 시스템 풀 합계)입니다.
-
-## CAS → NAP 전환 리허설
-
-`in-place.sh`는 CAS가 켜진 모든 풀의 CAS를 끈 뒤 NAP를 켭니다. 위 실측 풀이 남아 있으면
-그 풀도 고정 크기가 되므로, 리허설 전에 실측용 풀을 지우거나 `aks-cas`를 새로 만듭니다.
-
-```bash
-./migrate/in-place.sh | tee results/migration.log
-kubectl --context aks-cas -n migrate logs deploy/client > results/probe.log
-```
 
 ## 결과 파일
 
 | 파일 | 내용 |
 |---|---|
 | `results/scale-out-v7.csv` | v7 on-demand 조건의 시나리오별 단계 시간 |
+| `results/scale-out-azd-rerun.csv` | `azd`로 새로 만든 클러스터에서 `EXPERIMENT=scale-out`을 다시 실행한 결과(3회씩) |
 | `results/overprovisioning.csv` | placeholder가 있을 때 Pod 시작과 placeholder 복구 시간 |
 | `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간 |
-| `results/scale-out-v6-initial.csv` | 첫 측정(v6). 단계별 시간이 없고 CAS 축소를 node 객체 기준으로 재 과대 측정 |
-| `results/migration-timeline.md` | 전환 단계별 시각과 요청 실패 수 |
+| `results/migration-timeline.md` | `EXPERIMENT="migration drift"` 전환 단계별 시각, drift 교체 시간과 요청 실패 수 |
 | `results/prices-eastus2.json` | 비용 계산에 쓴 v7 VM 시간당 가격(2026-10-31) |
 | `results/mixed-shapes.csv` | A1 혼합 Pod 배치·노드 구성·노드 용량 대비 요청 비율(`*_request_ratio`)·비용 |
 | `results/rightsize-*.csv` | A2·B4 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
@@ -187,7 +112,5 @@ kubectl --context aks-cas -n migrate logs deploy/client > results/probe.log
 ## 정리
 
 ```bash
-./infra/delete.sh
+azd down --purge --force
 ```
-
-리소스 그룹 삭제가 끝나면 `az group exists -n $RG`가 `false`를 반환합니다.

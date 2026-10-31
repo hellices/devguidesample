@@ -10,19 +10,9 @@ wave_latency_s       WAVES 사용 시 wave별 '추가 → 해당 Pod 모두 Read
 """
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-
-def ts(value):
-    if not value:
-        return None
-    value = value.replace("Z", "+00:00")
-    if "." in value:
-        head, tail = value.split(".", 1)
-        tz = tail[tail.index("+"):] if "+" in tail else "+00:00"
-        value = head + tz
-    return datetime.fromisoformat(value).astimezone(timezone.utc)
+from k8sutil import ts
 
 
 def cond(obj, ctype):

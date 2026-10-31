@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: aks-nap-lab
+infra:
+  provider: bicep
+  path: infra
+  module: main
+hooks:
+  # 클러스터 생성 뒤 kubeconfig context와 NAP NodePool을 준비합니다.
+  postprovision:
+    shell: sh
+    run: ./hooks/postprovision.sh
+    interactive: true
+  # EXPERIMENT 환경 값에 지정한 실험을 실행합니다(azd deploy 또는 azd hooks run postdeploy).
+  postdeploy:
+    shell: sh
+    run: ./hooks/postdeploy.sh
+    interactive: true

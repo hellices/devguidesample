@@ -1,4 +1,5 @@
 # 마이그레이션 중 가용성을 확인하는 대상 앱(podinfo)과 0.2초 간격 요청 클라이언트
+# 클라이언트는 응답을 기다리지 않고 0.2초 고정 주기로 요청을 시작하고(요청 timeout 1초), 요청 시작 시각과 HTTP 코드를 남깁니다.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -91,10 +92,17 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
+              # 실패 요청이 timeout까지 기다려도 다음 요청은 예약된 시각에 시작합니다.
+              next=$(date +%s%N)
               while true; do
-                code=$(curl -s -o /dev/null -m 1 -w '%{http_code}' http://web.migrate.svc/healthz || true)
-                echo "$(date -u +%FT%T.%3NZ) $code"
-                sleep 0.2
+                (
+                  at=$(date -u +%FT%T.%3NZ)
+                  code=$(curl -s -o /dev/null -m 1 -w '%{http_code}' http://web.migrate.svc/healthz || true)
+                  echo "$at $code"
+                ) &
+                next=$((next + 200000000))
+                wait_ns=$((next - $(date +%s%N)))
+                if (( wait_ns > 0 )); then sleep "$(printf '%d.%09d' $((wait_ns / 1000000000)) $((wait_ns % 1000000000)))"; fi
               done
           resources:
             requests:

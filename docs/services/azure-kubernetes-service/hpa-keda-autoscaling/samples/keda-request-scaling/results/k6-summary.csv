@@ -1,5 +1,5 @@
 run,target,min_replica,scheduled_iterations,http_reqs,not_sent,failed,failed_or_not_sent_pct,avg,p95,p99
-prometheus-rps,service,1,138000,137999,1,0,0.00,714.29us,905.18us,1.45ms
-http-add-on-min0,interceptor,0,138000,124053,13947,6166,14.57,540.23ms,9.67s,9.99s
-http-add-on-min1,interceptor,1,138000,137999,1,0,0.00,867.19us,1.32ms,1.6ms
-azure-monitor-agc,agc-frontend,1,138000,137999,1,0,0.00,1.62ms,2.1ms,3.5ms
+prometheus-rps,service,1,138000,137999,1,0,0.00,423.69µs,678.1µs,1ms
+http-add-on-min0,interceptor,0,138000,116065,21935,8859,22.31,806.87ms,9.99s,10s
+http-add-on-min1,interceptor,1,138000,137999,1,0,0.00,891.77µs,1.14ms,1.42ms
+azure-monitor-agc,agc-frontend,1,138000,137999,1,0,0.00,1.56ms,1.92ms,2.58ms

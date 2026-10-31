@@ -164,8 +164,7 @@ az aks nodepool add -g $RG --cluster-name $CLUSTER -n burst \
 - VM 여러 대를 동시에 만들면 가장 늦은 VM이 전체 완료 시간을 정합니다. 큰 VM 1대로 모으면
   그 위험이 줄어듭니다. 대신 노드 1대 장애의 영향이 커지므로 replica를 여러 노드에 나눠야
   하면 topology spread를 함께 둡니다.
-- `karpenter.sh/capacity-type`에 spot과 on-demand를 함께 허용하면 NAP는 spot을 먼저 고릅니다.
-  회수되면 안 되는 워크로드는 `on-demand`만 지정합니다.
+- `karpenter.sh/capacity-type`은 `on-demand`로 고정합니다. 생략하거나 spot을 함께 허용하면 NAP는 spot을 먼저 고르므로, 운영 워크로드의 확장 시간과 가용성이 spot 재고와 회수에 좌우됩니다.
 - 이미지가 amd64 전용이면 `kubernetes.io/arch: amd64`를 지정합니다. 지정하지 않으면 Arm64
   VM도 후보가 됩니다.
 

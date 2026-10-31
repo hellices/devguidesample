@@ -3,30 +3,21 @@
 
 출력: scenario,run,ready_big,ready_mem,ready_small,all_ready_s,nodes,skus,vcpu_alloc,mem_alloc_gib,
       cpu_request_ratio,mem_request_ratio,usd_per_hour
+usd_per_hour는 노드 SKU 중 하나라도 가격 파일에 없으면 unknown입니다.
 """
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-
-def ts(v):
-    return datetime.fromisoformat(v.replace("Z", "+00:00")).astimezone(timezone.utc)
-
-
-def qty(v):
-    v = str(v)
-    units = {"Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "m": 1e-3}
-    for u, f in units.items():
-        if v.endswith(u):
-            return float(v[: -len(u)]) * f
-    return float(v)
+from k8sutil import qty, ts
 
 
 d, scenario, run, sel, prices_file = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 t0 = ts((d / "t0").read_text().strip())
 key, _, val = sel.partition("=")
-prices = json.loads(Path(prices_file).read_text()) if Path(prices_file).exists() else {}
+if not Path(prices_file).is_file():
+    sys.exit(f"가격 파일이 없습니다: {prices_file}")
+prices = json.loads(Path(prices_file).read_text())
 pods = json.loads((d / "pods.json").read_text())["items"]
 nodes = [n for n in json.loads((d / "nodes.json").read_text())["items"]
          if n["metadata"]["labels"].get(key) == val
@@ -48,18 +39,24 @@ for p in pods:
     else:
         all_ready = False
 
-skus, cpu, mem, cost = {}, 0.0, 0.0, 0.0
+skus, cpu, mem, cost, unpriced = {}, 0.0, 0.0, 0.0, set()
 for n in nodes:
     sku = n["metadata"]["labels"].get("node.kubernetes.io/instance-type", "?")
     skus[sku] = skus.get(sku, 0) + 1
     cpu += qty(n["status"]["capacity"]["cpu"])
     mem += qty(n["status"]["capacity"]["memory"])
-    cost += prices.get(sku, 0.0)
+    if sku in prices:
+        cost += prices[sku]
+    else:
+        unpriced.add(sku)
+if unpriced:
+    print(f"가격 없는 SKU: {' '.join(sorted(unpriced))}", file=sys.stderr)
 
 print(",".join([
     scenario, run, str(ready["big"]), str(ready["mem"]), str(ready["small"]),
     str(round((last - t0).total_seconds())) if all_ready and last else "not-all-ready",
     str(len(nodes)), " ".join(f"{k}x{v}" for k, v in sorted(skus.items())),
     str(round(cpu)), str(round(mem / 2**30, 1)),
-    f"{req_cpu / cpu:.2f}" if cpu else "", f"{req_mem / mem:.2f}" if mem else "", f"{cost:.3f}",
+    f"{req_cpu / cpu:.2f}" if cpu else "", f"{req_mem / mem:.2f}" if mem else "",
+    "unknown" if unpriced else f"{cost:.3f}",
 ]), flush=True)

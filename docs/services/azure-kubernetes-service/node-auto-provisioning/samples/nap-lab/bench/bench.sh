@@ -8,7 +8,8 @@
 #                        NAP: kubectl get nodeclaims -l karpenter.sh/nodepool=bench-fixed --no-headers | wc -l
 # 실행마다 시작 시각과 Pod·노드·NodeClaim·이벤트 스냅샷을 남기고 analyze.py로 단계별 시간을 계산합니다.
 set -euo pipefail
-CTX=$1 SCENARIO=$2 REPLICAS=$3 RUNS=$4 SELECTOR=${5:-}
+USAGE="사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector key=value]"
+CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} REPLICAS=${3:?$USAGE} RUNS=${4:?$USAGE} SELECTOR=${5:-}
 CPU=${CPU:-1} TIMEOUT=${TIMEOUT:-1800} WAVE_INTERVAL=${WAVE_INTERVAL:-30}
 OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
 k() { kubectl --context "$CTX" "$@"; }
@@ -16,9 +17,11 @@ log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 NODE_SEL=${SELECTOR:-kubernetes.azure.com/mode=user}
-ready_nodes() {
-  k get nodes -l "$NODE_SEL" \
-    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true
+ready_nodes() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
+  local out
+  out=$(k get nodes -l "$NODE_SEL" \
+    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
+  grep -c True <<<"$out" || true
 }
 ready_pods() {
   k -n bench get pods -l app=inflate \
@@ -31,7 +34,7 @@ wait_for() { # wait_for <desc> <predicate...>
     sleep 2
   done
 }
-no_ready_nodes() { [[ $(ready_nodes) -eq 0 ]]; }
+no_ready_nodes() { local n; n=$(ready_nodes) || return 1; [[ $n -eq 0 ]]; }
 pods_ready() { [[ $(ready_pods) -ge $REPLICAS ]]; }
 
 k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null

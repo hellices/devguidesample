@@ -82,8 +82,12 @@ NAP를 켠 **새 클러스터를 만들어 트래픽을 단계적으로 넘깁�
 ## 경로 1은 CAS를 끄고 NAP를 켠 뒤 기존 풀을 한 대씩 줄인다
 
 ```bash
-# 1. CAS를 끄면 user 풀은 현재 노드 수로 고정됩니다.
-az aks nodepool update -g $RG --cluster-name $CLUSTER -n user --disable-cluster-autoscaler
+# 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
+#    하나라도 남아 있으면 AllowClusterAutoscalerAndNAP 없이는 NAP를 켤 수 없습니다.
+for p in $(az aks nodepool list -g $RG --cluster-name $CLUSTER --query "[?enableAutoScaling].name" -o tsv); do
+  az aks nodepool update -g $RG --cluster-name $CLUSTER -n $p --disable-cluster-autoscaler
+done
+az aks nodepool list -g $RG --cluster-name $CLUSTER --query "[?enableAutoScaling].name" -o tsv   # 빈 결과 확인
 
 # 2. NAP 활성화. default·system-surge NodePool이 생성됩니다.
 az aks update -g $RG -n $CLUSTER --node-provisioning-mode Auto
@@ -106,25 +110,25 @@ az aks nodepool delete -g $RG --cluster-name $CLUSTER -n user
 실행합니다. drain은 eviction API를 쓰므로 PDB가 허용하는 만큼만 Pod를 내보내고,
 쫓겨난 Pod는 Pending이 되어 NAP가 새 노드를 만듭니다.
 
-## 실제 전환에서 기존 풀은 16분 만에 비었고 실패 요청은 Pod 종료 순간에만 생겼다
+## 실제 전환에서 기존 풀은 약 19분 만에 비었고 요청 실패는 NAP 활성화 중 1건이었다
 
-AKS 1.36.5 클러스터에서 user 풀(`Standard_D4ds_v6` 2대, CAS)에 1 vCPU Pod 6개,
-PDB `maxUnavailable: 1`을 두고 경로 1을 실행했습니다. 시스템 노드에서 0.2초마다
+azd로 만든 AKS 1.36.5 클러스터에서 user 풀(`Standard_D4ds_v7` 2대, on-demand, CAS)에 1 vCPU
+Pod 6개, PDB `maxUnavailable: 1`을 두고 경로 1을 실행했습니다. 시스템 노드에서 0.2초마다
 요청을 보냈습니다.
 
 | 단계 | 소요 |
 |---|---|
-| CAS 비활성화 | 38초 |
-| NAP 활성화 | 2분 40초 |
-| user 풀 2 → 1 → 0 | 6분 17초 + 6분 11초 |
+| CAS 비활성화 | 1분 12초 |
+| NAP 활성화 | 6분 46초 |
+| user 풀 2 → 1 → 0 | 5분 22초 + 4분 28초 |
 | 빈 풀 삭제 | 35초 |
 
-- 요청 4,691건 중 5건(0.11%)이 실패했습니다. 4건은 Pod가 종료되는 순간의 `503`,
-  1건은 NAP 활성화 중 timeout이었습니다.
-- 같은 앱에 `preStop` 10초 대기를 넣고 NAP drift로 노드 6대를 모두 교체하자
-  요청 3,978건 중 실패가 0건이었습니다. 대기가 없을 때는 2,838건 중 2건이
-  실패했습니다.
-- NAP는 Pod 6개를 2 vCPU 노드 6대에 하나씩 배치했습니다. Karpenter는
+- 요청 5,605건 중 1건(0.02%)이 NAP 활성화 중 timeout으로 실패했습니다. 풀을 줄이는 동안에는
+  실패가 없었습니다.
+- 같은 앱을 NAP drift로 노드 6대 모두 교체하자 `preStop` 대기가 없을 때 요청 2,470건 중
+  4건이 Pod 종료 순간의 `503`으로 실패했습니다. `preStop` 10초 대기를 넣고 rollout이 끝난 뒤
+  다시 교체하자 3,730건 중 실패가 0건이었습니다.
+- NAP는 Pod 6개를 on-demand 2 vCPU 노드 6대에 하나씩 배치했습니다. Karpenter는
   `whenUnsatisfiable: ScheduleAnyway` spread도 먼저 지키려고 노드를 더 만들기
   때문입니다. 노드 수를 줄이려면 spread 기준을 zone으로 바꾸거나 `maxSkew`를
   늘립니다.
@@ -183,15 +187,20 @@ consumer를 켜기 전에 이전 클러스터의 consumer를 멈춰 중복 처�
 
 ## NAP를 되돌리려면 NAP 노드를 먼저 비워야 한다
 
-NAP는 NAP 노드가 남아 있는 동안 끌 수 없습니다.
+NAP는 NAP 노드가 남아 있는 동안 끌 수 없습니다. 옮겨 갈 자리를 먼저 만들어 두면
+노드를 비우는 동안 Pod가 Pending으로 남지 않습니다.
 
-1. 모든 NodePool의 `spec.limits.cpu`를 `0`으로 바꿔 새 노드 생성을 막습니다.
-2. 모든 NodePool template에 `karpenter.azure.com/disable:NoSchedule` taint를
-   추가합니다. NAP가 PDB를 지키며 노드를 비웁니다.
-3. 고정 크기 AKS 풀을 늘려 옮겨 갈 자리를 만듭니다.
+1. 고정 크기 AKS 풀을 늘리거나 새로 만들고, 노드가 Ready이며 NAP 노드의 워크로드를
+   담을 수 있는지 확인합니다.
+2. 모든 NodePool의 `spec.limits.cpu`를 `0`으로 바꿔 새 NAP 노드 생성을 막습니다.
+3. 모든 NodePool template에 `karpenter.azure.com/disable:NoSchedule` taint를
+   추가합니다. NAP가 PDB와 disruption budget을 지키며 노드를 비웁니다.
 4. `kubectl get nodes -l karpenter.sh/nodepool`이 비면
    `az aks update --node-provisioning-mode Manual`을 실행하고 필요하면 CAS를
-   다시 켭니다.
+   다시 켭니다. NAP 노드가 남으면 고정 크기 용량이 부족한 것이므로 풀을 더 늘립니다.
+
+Learn 절차는 2·3단계 뒤에 고정 크기 풀을 늘리지만, 순서를 바꿔도 조건(노드 없음,
+`limits.cpu: 0`)은 같고 Pending 구간만 줄어듭니다.
 
 ## 공식 참고 자료
 

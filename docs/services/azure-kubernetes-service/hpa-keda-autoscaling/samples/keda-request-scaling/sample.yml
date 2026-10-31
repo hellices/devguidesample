@@ -1,5 +1,5 @@
 title: KEDA 요청 수 기반 확장 실습
-description: 같은 podinfo 앱과 k6 부하로 Managed Prometheus, KEDA HTTP Add-on, AGC Azure Monitor 메트릭 기반 확장을 재현합니다.
+description: azd로 NAP·KEDA 클러스터를 만들고 같은 podinfo 앱과 k6 부하로 Managed Prometheus, KEDA HTTP Add-on, AGC Azure Monitor 메트릭 기반 확장을 재현합니다.
 kind: runnable
 used_by:
   - prometheus-rps
