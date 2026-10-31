@@ -16,19 +16,20 @@ kubectl --context "$NAP" -n bench patch deployment inflate --type strategic -p \
 kubectl --context "$NAP" -n bench patch deployment inflate --type json -p \
   '[{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"bench":"stale"}}]' >/dev/null
 
-probe() { # 출력: 선택된 NodePool 목록
+probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
   kubectl --context "$NAP" -n bench scale deployment inflate --replicas 20 >/dev/null
   sleep 15
-  local pools
+  local pools seen
+  seen=$(date +%s)
   pools=$(kubectl --context "$NAP" get nodeclaims -o jsonpath='{range .items[*]}{.metadata.labels.karpenter\.sh/nodepool}{"\n"}{end}' | sort | uniq -c | tr -s ' ' | tr '\n' ';')
   kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null
   kubectl --context "$NAP" delete nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --wait=false >/dev/null 2>&1 || true
   until [[ -z $(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --no-headers 2>/dev/null) ]]; do sleep 5; done
-  echo "$pools"
+  echo "$seen $pools"
 }
 
-echo "phase,elapsed_s,ddsv7_usage,chosen"
-echo "control,0,$(fam),$(probe)"
+echo "phase,elapsed_s,ddsv7_usage,chosen"   # elapsed_s: 반납 시점부터 NodePool 선택을 읽은 시각까지
+r=$(probe); echo "control,,$(fam),${r#* }"
 
 kubectl --context "$CAS" apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 kubectl --context "$CAS" -n bench patch deployment inflate --type strategic -p \
@@ -39,15 +40,15 @@ kubectl --context "$CAS" -n bench scale deployment inflate --replicas 18 >/dev/n
 kubectl --context "$CAS" -n bench rollout status deployment/inflate --timeout=15m >/dev/null
 log "consumer nodes ready; Ddsv7 usage $(fam). waiting 11 minutes for NAP quota refresh"
 sleep 660
-echo "consumed,0,$(fam),$(probe)"
+r=$(probe); echo "consumed,,$(fam),${r#* }"
 
 kubectl --context "$CAS" -n bench scale deployment inflate --replicas 0 >/dev/null
 log "waiting for consumer VMs to be deleted"
 until [[ $(fam) -le ${BASELINE_USAGE:-16} ]]; do sleep 15; done  # 두 클러스터 시스템 풀(D4ds_v7 × 4)
 rel=$(date +%s); log "released; Ddsv7 usage $(fam)"
 while (( $(date +%s) - rel <= 1200 )); do
-  chosen=$(probe)
-  echo "released,$(( $(date +%s) - rel )),$(fam),$chosen"
+  r=$(probe); chosen=${r#* }
+  echo "released,$(( ${r%% *} - rel )),$(fam),$chosen"
   [[ $chosen == *pref64* ]] && break
   sleep 45
 done

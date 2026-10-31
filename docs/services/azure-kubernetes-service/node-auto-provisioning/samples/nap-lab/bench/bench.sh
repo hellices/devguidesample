@@ -75,12 +75,14 @@ for run in $(seq 1 "$RUNS"); do
   now > "$dir/scale_in_start"
   k -n bench scale deployment inflate --replicas 0 >/dev/null
   # CAS는 VM 삭제 뒤에도 node 객체가 NotReady로 몇 분 남으므로 node 수가 아니라 VM 수로 완료를 판단합니다.
+  # timeout이면 scale_in_end를 남기지 않아 analyze.py가 축소 시간을 빈 값으로 둡니다.
   if [[ -n ${SCALE_IN_COUNT:-} ]]; then
     vms_gone() { [[ $(bash -c "$SCALE_IN_COUNT" 2>/dev/null | tr -d ' ') == 0 ]]; }
     if wait_for "scale-in" vms_gone; then now > "$dir/scale_in_end"; fi
+    wait_for "no ready nodes" no_ready_nodes || true
+  elif wait_for "no ready nodes" no_ready_nodes; then
+    now > "$dir/scale_in_end"
   fi
-  wait_for "no ready nodes" no_ready_nodes || true
-  [[ -f "$dir/scale_in_end" ]] || now > "$dir/scale_in_end"
   log "run $run: scale-in done"
   python3 "$HERE/analyze.py" "$dir" "$SCENARIO" "$run" "$NODE_SEL"
 done

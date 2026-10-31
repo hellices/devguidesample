@@ -166,7 +166,7 @@ NAP가 실제로 빨라지는 상황은 세 가지입니다.
 | 같은 zone·같은 VM 확장 | 첫 노드 Ready NAP 54~59초, CAS 69~82초(차이 대부분은 확장 결정). 전체 Pod는 비슷 | 비슷 |
 | 축소 중 Pod 이동 | NAP 3개, CAS 1개 | CAS |
 | 할당 해제한 VM 재시작 | CAS `Deallocate` 50초, NAP 기능 없음 | CAS |
-| 다른 클러스터가 같은 계열 quota를 쓰고 반납 | NAP는 10분 주기로 quota를 다시 읽어, 1회 실측에서 반납 뒤 6~8분 동안 1순위 VM 대신 대체 VM 사용 | CAS |
+| 다른 클러스터가 같은 계열 quota를 쓰고 반납 | NAP는 10분 주기로 quota를 다시 읽어, 1회 실측에서 반납 약 4분 뒤까지 1순위 VM 대신 대체 VM 사용(약 7.5분 뒤 복귀) | CAS |
 
 자세한 가설, 조건과 수치는 [NAP와 CAS 시나리오별 실측](scenario-comparison/index.md)에 있습니다.
 

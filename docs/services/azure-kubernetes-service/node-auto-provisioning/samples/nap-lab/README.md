@@ -179,7 +179,7 @@ kubectl --context aks-cas -n migrate logs deploy/client > results/probe.log
 | `results/rightsize-*.csv` | A2·B4 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
 | `results/zone1-burst.csv` | B1 같은 zone 확장 단계 시간 |
 | `results/burst-40-nodes.csv` | B2 40대 확장 단계 시간과 정책 거부 기록 |
-| `results/quota-staleness.csv` | B3 quota 점유·반납 후 NAP가 고른 NodePool |
+| `results/quota-staleness.csv` | B3 quota 점유·반납 후 NAP가 고른 NodePool. `recorded_s`는 이전 스크립트가 확인용 NodeClaim 정리 뒤 기록한 시각, `probe_s_est`는 스크립트 순서로 역산한 선택 확인 시각(±5초) |
 | `results/nap-nodeclaim-phases.csv` | NAP burst·zone 1·40대 실측의 NodeClaim별 zone과 생성·`Launched`·`Registered`·`Initialized` 시각(실행 시작 기준 초). `bench.sh` 스냅샷의 `nodeclaims.json`에서 계산 |
 | `results/cas-node-object-linger.csv` | CAS 축소 노드별 `ScaleDown` → `NodeNotReady` → node 객체 삭제(`DeletingNode`) 간격(초). 여러 CAS 실측 스냅샷의 Node 이벤트에서 계산 |
 | `results/cas-dealloc-pod-scheduling.csv` | Deallocate 풀 실측의 Pod별 노드 Ready·Pod 배치·Pod Ready 시각(실행 시작 기준 초). `pods.json`·`nodes.json`에서 계산 |
