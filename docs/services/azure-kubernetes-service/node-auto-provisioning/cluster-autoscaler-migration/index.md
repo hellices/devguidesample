@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [migrate, operate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Migrate from cluster autoscaler to node auto-provisioning
     url: https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning
@@ -46,20 +46,30 @@ NAP를 켠 **새 클러스터를 만들어 트래픽을 단계적으로 넘깁�
 |---|---|---|
 | Azure CNI Overlay/Node Subnet, 관리 ID, Linux 풀 | **경로 1: CAS 끄기 → NAP 켜기 → 풀 단계 축소** | 가장 단순. 전환 중 기존 풀은 고정 크기 |
 | 워크로드별로 몇 주에 걸쳐 옮겨야 함 | **경로 2: CAS·NAP 동시 운영** | `AllowClusterAutoscalerAndNAP` feature flag 등록과 taint·toleration 관리 필요 |
-| kubenet, Calico, Pod Subnet 동적 할당, 서비스 주체 등 | **먼저 클러스터 설정 변경 검토**, 불가하면 **경로 3: 새 클러스터 blue-green** | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 비용이 두 배지만 롤백이 가장 빠름 |
+| kubenet, Calico, 서비스 주체 | **먼저 클러스터 설정 변경 검토**, 불가하면 **경로 3: 새 클러스터 blue-green** | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 비용이 두 배지만 롤백이 가장 빠름 |
+| Azure CNI Pod Subnet 동적 할당 | **경로 3만 가능** | Overlay로 바꿀 수 없고 NAP도 지원하지 않음 |
 
-예를 들어 kubenet은 `az aks update --network-plugin azure --network-plugin-mode overlay`로
-Azure CNI Overlay로 바꿀 수 있지만 되돌릴 수 없고, 모든 노드 풀이 동시에
-재이미지됩니다. network policy가 켜져 있으면 먼저 제거해야 합니다. 이런 위험을
-피하려면 경로 3을 택합니다.
+클러스터 설정 변경에는 다음 조건이 붙습니다.
+
+- **kubenet → Azure CNI Overlay:** `az aks update --network-plugin azure --network-plugin-mode overlay`로
+  바꿀 수 있지만 되돌릴 수 없고, 모든 노드 풀이 동시에 재이미지됩니다. network policy가
+  켜져 있으면 먼저 제거해야 하고, kubenet route table을 떼려면 **사용자 할당 관리 ID**가
+  필요합니다(시스템 할당 ID는 지원하지 않음).
+- **Calico → Cilium:** 데이터플레인을 Azure CNI Powered by Cilium으로 바꾸면 기존 network
+  policy 엔진이 Cilium으로 교체됩니다. kubenet은 Overlay로 먼저 바꾼 뒤 별도 작업으로
+  Cilium을 적용합니다.
+- **순서:** NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없습니다. 네트워크 변경을 먼저
+  끝내고 NAP를 켭니다.
+
+이런 위험을 피하려면 경로 3을 택합니다.
 
 ## 전환 전에 Pod가 어느 노드로든 옮겨질 수 있는지 확인한다
 
 - **requests:** NAP는 Pending Pod의 requests로 VM을 고릅니다. requests가 없으면
   너무 작은 노드에 몰립니다.
 - **PDB와 replica:** replica 2개 이상과 `maxUnavailable: 1` 같은 PDB가 있어야
-  drain 중에도 요청을 받습니다. replica 1개 + `minAvailable: 1`은 drain을 영원히
-  막습니다.
+  drain 중에도 요청을 받습니다. replica 1개 + `minAvailable: 1`이면 eviction이 계속
+  거부되어 drain이 진행되지 않습니다.
 - **종료 대기:** Pod가 Service endpoint에서 빠지기 전에 종료되면 짧은 `503`이
   생깁니다. 아래 실측처럼 `preStop` 대기를 둡니다.
 - **기존 풀 이름에 묶인 스케줄링:** `nodeSelector: agentpool: user`나 풀 전용 taint에

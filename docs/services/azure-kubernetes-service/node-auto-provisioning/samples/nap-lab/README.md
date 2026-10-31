@@ -8,7 +8,8 @@ Pending Pod를 만들어 확장 결정, VM 생성, 노드 Ready, Pod Ready, 축�
 ## 준비
 
 - Azure CLI 2.76 이상, `kubectl`, Python 3.9 이상
-- 대상 리전에 약 80 vCPU 여유 quota(시스템 풀 4노드 + 실측 노드)
+- 대상 리전에 약 100 vCPU quota(시스템 풀 4노드 16 vCPU + 실측 노드). B2는 시스템 풀을 포함해
+  96 vCPU를 쓰고, 선호 VM 실패·B3 시나리오는 한도를 넘기도록 구성합니다.
 - 리전에서 쓸 수 있는 VM 크기를 `SYS_SKU`, `USER_SKU`로 지정합니다(기본 `Standard_D4ds_v7`).
 
 ## 클러스터와 NodePool
@@ -41,7 +42,7 @@ OUT=./out CPU=6 ./bench/bench.sh aks-nap nap-large 4 1 bench=flex
 
 # 축소 완료를 VM 기준으로 기록 (CAS는 VM 삭제 뒤에도 node 객체가 몇 분 남음)
 SCALE_IN_COUNT="az vmss list-instances -g <MC_rg> -n <vmss> --query 'length(@)' -o tsv" \
-  OUT=./out ./bench/bench.sh aks-cas cas-waves 20 2 agentpool=user
+  OUT=./out WAVES="5 5 5 5" WAVE_INTERVAL=30 ./bench/bench.sh aks-cas cas-waves 20 2 agentpool=user
 ```
 
 실행마다 `OUT/<scenario>/run<n>/`에 Pod·노드·NodeClaim·이벤트 스냅샷을 남기고,
@@ -49,7 +50,7 @@ SCALE_IN_COUNT="az vmss list-instances -g <MC_rg> -n <vmss> --query 'length(@)' 
 
 | 열 | 의미 |
 |---|---|
-| `decision_s` | CAS `ScaledUpGroup`(setting group size) 또는 NAP NodeClaim 생성 |
+| `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성 |
 | `vm_launched_s` | NAP NodeClaim `Launched` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
 | `all_pods_ready_s` | 모든 Pod Ready |
@@ -106,16 +107,24 @@ python3 bench/fallback.py ./out/nap-quota/run1 nap-quota 1 fallback   # 대체 N
 python3 bench/prices.py eastus2 prices.json _v7          # Azure Retail Prices API, Linux on-demand
 
 # A1 크기가 다른 Pod 혼합: CAS 풀 3개(D4as·E4as·F8as v7, label bench=mix) / NAP D·E·F v7 NodePool
-#    mixed.sh가 실행마다 analyze_mixed.py로 배치·요청/할당 비율·비용을 계산합니다.
-for p in "mixgen Standard_D4as_v7" "mixmem Standard_E4as_v7" "mixcpu Standard_F8as_v7"; do set -- $p
-  az aks nodepool add -g $RG --cluster-name aks-cas -n $1 --node-vm-size $2 --labels bench=mix \
-    --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10; done
+#    mixed.sh가 실행마다 analyze_mixed.py로 배치·노드 용량 대비 요청 비율·비용을 계산합니다.
+#    선호 VM 실패 실측에서 바꾼 expander를 AKS 기본값(random)으로 되돌립니다.
+az aks update -g $RG -n aks-cas --cluster-autoscaler-profile expander=random
+mixpool() { az aks nodepool add -g $RG --cluster-name aks-cas -n $1 --node-vm-size $2 --labels bench=mix \
+  --node-count 0 --enable-cluster-autoscaler --min-count 0 --max-count 10; }
+mixpool mixgen Standard_D4as_v7
+# 풀 1개(D4as_v7): 6 vCPU Pod는 배치되지 않으므로 TIMEOUT 뒤 그 시점 상태를 기록
+PRICES=prices.json OUT=./out TIMEOUT=420 ./bench/mixed.sh aks-cas cas-one-pool bench=mix 1
+mixpool mixmem Standard_E4as_v7; mixpool mixcpu Standard_F8as_v7
+PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools-random bench=mix 2
+az aks update -g $RG -n aks-cas --cluster-autoscaler-profile expander=least-waste
+PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools-least-waste bench=mix 2
 kubectl --context aks-nap apply -f manifests/nodepool-mixed.yaml
-PRICES=prices.json OUT=./out ./bench/mixed.sh aks-cas cas-three-pools bench=mix 2
 PRICES=prices.json OUT=./out ./bench/mixed.sh aks-nap nap-def-v7 bench=mix 2
 
 # A2·B4 큰 노드 축소와 Pod 이동: 20 → 3 Pod, 12분 관찰(CAS 풀 big32는 Standard_D32als_v7)
 PRICES=prices.json ./bench/rightsize.sh aks-nap nap-flex bench=flex > rightsize-nap-flex.csv
+PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d4 agentpool=user > rightsize-cas-d4.csv
 PRICES=prices.json ./bench/rightsize.sh aks-cas cas-d32 agentpool=big32 > rightsize-cas-d32.csv
 
 # B1 같은 zone: CAS 풀 userz1(--zones 1) / NAP eastus2-1 NodePool
@@ -153,11 +162,14 @@ kubectl --context aks-cas -n migrate logs deploy/client > results/probe.log
 | `results/scale-out-v6-initial.csv` | 첫 측정(v6). 단계별 시간이 없고 CAS 축소를 node 객체 기준으로 재 과대 측정 |
 | `results/migration-timeline.md` | 전환 단계별 시각과 요청 실패 수 |
 | `results/prices-eastus2.json` | 비용 계산에 쓴 v7 VM 시간당 가격(2026-10-31) |
-| `results/mixed-shapes.csv` | A1 혼합 Pod 배치·노드 구성·요청/할당 비율·비용 |
+| `results/mixed-shapes.csv` | A1 혼합 Pod 배치·노드 구성·노드 용량 대비 요청 비율(`*_request_ratio`)·비용 |
 | `results/rightsize-*.csv` | A2·B4 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
 | `results/zone1-burst.csv` | B1 같은 zone 확장 단계 시간 |
 | `results/burst-40-nodes.csv` | B2 40대 확장 단계 시간과 정책 거부 기록 |
 | `results/quota-staleness.csv` | B3 quota 점유·반납 후 NAP가 고른 NodePool |
+| `results/nap-nodeclaim-phases.csv` | NAP burst·zone 1·40대 실측의 NodeClaim별 zone과 생성·`Launched`·`Registered`·`Initialized` 시각(실행 시작 기준 초). `bench.sh` 스냅샷의 `nodeclaims.json`에서 계산 |
+| `results/cas-node-object-linger.csv` | CAS 축소 노드별 `ScaleDown` → `NodeNotReady` → node 객체 삭제(`DeletingNode`) 간격(초). 여러 CAS 실측 스냅샷의 Node 이벤트에서 계산 |
+| `results/cas-dealloc-pod-scheduling.csv` | Deallocate 풀 실측의 Pod별 노드 Ready·Pod 배치·Pod Ready 시각(실행 시작 기준 초). `pods.json`·`nodes.json`에서 계산 |
 
 ## 정리
 

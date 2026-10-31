@@ -1,5 +1,5 @@
 ---
-title: KEDA HTTP Add-on은 0개에서 첫 요청을 보류하지만 새 노드가 필요하면 2분이 걸린다
+title: KEDA HTTP Add-on은 0개에서 첫 요청을 보류하며, 1회 실측에서 새 노드가 필요하면 첫 응답까지 약 2분 걸렸다
 description: AKS KEDA add-on 위에 별도 설치한 KEDA HTTP Add-on으로 요청률 기반 확장과 scale-to-zero를 재현하고, cold start 시간과 burst 부하의 실패 조건을 측정합니다.
 document_type: lab
 services: [azure-kubernetes-service]
@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [build, operate]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Simplified application autoscaling with Kubernetes Event-driven Autoscaling (KEDA) add-on
     url: https://learn.microsoft.com/azure/aks/keda-about
@@ -21,7 +21,7 @@ official_sources:
     url: https://keda.sh/http-add-on/0.16/user-guide/configure-cold-start/
   - title: KEDA ScaledObject specification
     url: https://keda.sh/docs/2.19/reference/scaledobject-spec/
-last_verified: 2026-10-30
+last_verified: 2026-10-31
 review_cycle_days: 90
 estimated_time: 60m
 cost: paid
@@ -29,13 +29,14 @@ cleanup_required: true
 topic_order: 2
 ---
 
-# KEDA HTTP Add-on은 0개에서 첫 요청을 보류하지만 새 노드가 필요하면 2분이 걸린다
+# KEDA HTTP Add-on은 0개에서 첫 요청을 보류하며, 1회 실측에서 새 노드가 필요하면 첫 응답까지 약 2분 걸렸다
 
 KEDA HTTP Add-on은 요청이 지나가는 interceptor에서 요청률을 직접 세므로 앱이나
-모니터링 수정 없이 HTTP 요청으로 확장하고 0개까지 줄일 수 있습니다. 노드가 있으면
-0개에서 첫 응답까지 2초 안쪽이었지만, NAP가 노드를 새로 만들어야 하면 120초가
-걸렸습니다. 같은 조건에서 초당 400건 burst를 보내자 요청의 5%가 client timeout으로
-실패했고, `minReplicaCount: 1`로 바꾸자 실패가 사라졌습니다.
+모니터링 수정 없이 HTTP 요청으로 확장하고 0개까지 줄일 수 있습니다. 기존 노드에
+자리가 있으면 0개에서 첫 응답까지 2초 안쪽(3회)이었지만, NAP가 노드를 새로 만들어야
+하면 120초(1회)가 걸렸습니다. 기존 노드에 자리가 없는 0개 상태에서 초당 400건
+burst를 보낸 1회 실측에서는 계획한 요청의 약 14.6%가 timeout으로 실패하거나 아예
+전송되지 못했고, `minReplicaCount: 1`로 바꾸자 실패가 사라졌습니다.
 
 ## HTTP Add-on은 AKS KEDA add-on에 포함되지 않는 별도 구성 요소다
 
@@ -107,27 +108,31 @@ curl -s -o /dev/null -D - -w '%{http_code} %{time_total}\n' \
 kubectl apply -f load/k6-job.yaml
 ```
 
-## 노드가 있으면 첫 응답은 2초, 새 노드가 필요하면 120초였다
+## 기존 노드에서는 첫 응답이 2초 안쪽, 새 노드가 필요하면 120초였다
 
-2026-10-30, AKS 1.36.5에서 측정했습니다. 응답에는
+2026-10-30, AKS 1.36.5에서 측정했습니다(`results/http-add-on-cold-start.txt`). 응답에는
 `X-KEDA-HTTP-Cold-Start: true` header가 붙었습니다.
 
 | 조건 | 첫 응답 | 결과 |
 |---|---|---|
 | replica 0, 기존 노드에 자리 있음 (3회) | 1.38–1.96초 | 200 |
-| replica 0, NAP가 노드를 새로 생성 | 119.8초 | 200 |
-| 이후 요청(warm) | 4–113 ms | 200 |
+| replica 0, NAP가 노드를 새로 생성 (1회) | 119.8초 | 200 |
+| 각 cold start 직후 요청(warm, 3회) | 4–113 ms | 200 |
 
-같은 초당 400건 부하를 두 설정으로 보냈습니다.
+같은 초당 400건 부하를 두 설정으로 1회씩 보냈습니다. k6 부하 계획은 138,000건이며
+결과는 `results/k6-summary.csv`, replica 변화는 `results/http-add-on-min0.csv`와
+`results/http-add-on-min1.csv`에 있습니다.
 
-| 설정 | 요청 | 실패 | p95 | 관측 |
+| 설정 | 전송 요청 | 실패 | p95 | 관측 |
 |---|---|---|---|---|
-| `minReplicaCount: 0`, 노드 없음 | 124,053 | 6,166 (4.97%) | 9.67초 | 첫 Pod가 Ready 되기까지 83초 동안 interceptor가 요청을 보류했고 k6 10초 timeout을 넘긴 요청이 실패 |
-| `minReplicaCount: 1` | 137,999 | 0 | 1.32 ms | 약 50초 후 첫 확장, 약 140초에 8개, 약 220초에 8개 Ready |
+| `minReplicaCount: 0`, 기존 노드에 자리가 없어 새 노드 필요 | 124,053 | 6,166 (전송 대비 4.97%) | 9.67초 | 첫 Pod가 Ready 되기까지 약 95–100초 동안 interceptor가 요청을 보류. k6 10초 timeout을 넘긴 요청이 실패했고, VU 한도(1,000)가 차서 13,947건은 보내지 못함. 실패와 미전송을 합치면 계획의 약 14.6% |
+| `minReplicaCount: 1` | 137,999 | 0 | 1.32 ms | 약 55–60초 후 첫 확장, 약 140–145초에 8개, 약 225–230초에 8개 Ready |
 
-- interceptor를 거친 p99는 1.6 ms로, Service로 직접 보낸 1.45 ms와 큰 차이가 없었습니다.
-- 부하가 끝난 뒤 HPA 안정화 창(300초)이 지나 1개로 줄었고, 그 뒤
-  `cooldownPeriod`(300초)가 지나 0개가 됐습니다.
+- interceptor를 거친 p99는 1.6 ms로, Service로 직접 보낸 [Managed Prometheus 실습](../prometheus-rps/index.md)의
+  1.45 ms와 큰 차이가 없었습니다.
+- `minReplicaCount: 0` 실행에서는 부하가 끝난 뒤 HPA 안정화 창(300초)이 지나 약
+  730초에 1개로 줄었고, 약 10초 뒤 0개가 됐습니다. `cooldownPeriod`(300초)는 trigger가
+  마지막으로 활성으로 보고된 때부터 세므로 HPA 안정화 창과 함께 흘렀습니다.
 
 ## 0개 운영은 첫 요청 대기를 감당할 수 있는 경로에만 쓴다
 

@@ -1,5 +1,5 @@
 ---
-title: AKS NAP는 확장 결정이 10초 이상 빨랐지만 VM 부팅 시간이 같아 Pod 준비 시간은 CAS와 비슷했다
+title: AKS NAP는 CAS가 한 주기를 기다린 만큼 확장 결정이 빨랐지만 VM 준비 시간이 좌우해 Pod 준비 시간은 CAS와 비슷했다
 description: v7 VM과 on-demand 고정 조건에서 VMSS Cluster Autoscaler와 NAP의 확장 결정·VM 생성·노드 준비·Pod 준비·축소 시간을 단계별로 나눠 측정하고, NAP가 실제로 앞선 상황과 그렇지 않은 상황을 정리합니다.
 document_type: research
 services: [azure-kubernetes-service]
@@ -21,8 +21,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/cluster-autoscaler-overview
   - title: Cluster Autoscaler FAQ
     url: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md
-  - title: Cluster Autoscaler 1.36 static_autoscaler.go
-    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go
+  - title: Cluster Autoscaler 1.35 static_autoscaler.go
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/core/static_autoscaler.go
   - title: Karpenter Settings
     url: https://karpenter.sh/docs/reference/settings/
   - title: Karpenter NodeClaims
@@ -35,22 +35,23 @@ official_sources:
     url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/quota/quota.go
   - title: Karpenter provider Azure quota controller
     url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go
-  - title: Cluster Autoscaler 1.36 Azure scale set instance cache
-    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go
-  - title: Cluster Autoscaler 1.36 Azure config
-    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_config.go
+  - title: Cluster Autoscaler 1.35 Azure scale set instance cache
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go
+  - title: Cluster Autoscaler 1.35 Azure config
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_config.go
 published_at: 2026-10-30
 topic_order: 1
 ---
 
-# AKS NAP는 확장 결정이 10초 이상 빨랐지만 VM 부팅 시간이 같아 Pod 준비 시간은 CAS와 비슷했다
+# AKS NAP는 CAS가 한 주기를 기다린 만큼 확장 결정이 빨랐지만 VM 준비 시간이 좌우해 Pod 준비 시간은 CAS와 비슷했다
 
-"Karpenter가 더 빠르다"는 말은 **확장을 결정하는 단계**에서는 맞았습니다. NAP는
-Pending Pod가 생기고 2~5초 만에 NodeClaim을 만들었고, VMSS Cluster
-Autoscaler(CAS)는 12~27초 뒤에 VMSS 크기를 바꿨습니다. 하지만 그 뒤 VM이 만들어지고
-노드가 Ready가 되기까지 65~80초가 걸려, Pod가 실행되기까지의 시간은 두 방식이
-비슷했습니다. NAP가 분명히 앞선 것은 VM 크기 선택, 기존 풀에 맞지 않는 큰 Pod,
-budget을 조정했을 때의 축소였습니다.
+"Karpenter가 더 빠르다"는 말은 이번 측정에서 **확장을 결정하는 단계**에만 맞았습니다.
+NAP는 Pending Pod가 생기고 2~5초 만에 NodeClaim을 만들었고, VMSS Cluster
+Autoscaler(CAS)는 새 Pending Pod를 보고 한 주기를 기다려 12~27초 뒤에 VMSS 크기를
+바꿨습니다. 하지만 결정 뒤 첫 노드가 Ready가 되기까지 CAS 63~66초, NAP 78~86초가 걸려
+Pod가 실행되기까지의 시간은 두 방식이 비슷했습니다. NAP가 분명히 앞선 것은 VM 크기 선택과
+기존 풀에 맞지 않는 큰 Pod였고, 축소 속도는 autoscaler보다 budget·profile 설정이
+좌우했습니다.
 
 | 시나리오 (1 vCPU Pod 20개, 중앙값) | 확장 결정 | 첫 노드 Ready | 전체 Pod Ready | 만든 노드 |
 |---|---|---|---|---|
@@ -66,8 +67,8 @@ budget을 조정했을 때의 축소였습니다.
 
 | 단계 | CAS 기준 | NAP 기준 |
 |---|---|---|
-| 확장 결정 | `ScaledUpGroup`(setting group size) 이벤트 | NodeClaim 생성 |
-| VM 생성 요청 완료 | 측정하지 않음 (VMSS PUT은 로그상 약 3초) | NodeClaim `Launched` |
+| 확장 결정 | `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 이벤트 중 이른 시각 | NodeClaim 생성 |
+| VM 생성 요청 완료 | 측정하지 않음 (로그상 scale-up plan → VMSS PUT 호출 약 3초) | NodeClaim `Launched` |
 | 노드 Ready | Node `Ready` 전환 | 같음 |
 | Pod Ready | 모든 Pod `Ready` 전환 | 같음 |
 | 축소 완료 | VMSS 인스턴스 0개 | NodeClaim 0개 또는 Ready 노드 0개 |
@@ -108,12 +109,13 @@ CAS control plane 로그에서 결정 지연의 원인을 확인했습니다.
 
 - CAS도 Pending Pod가 생기면 바로 loop를 돌립니다. 하지만 가장 오래된 Pending Pod가
   2초가 안 됐으면 Pod가 더 올 수 있다고 보고 다음 `scan-interval`(10초)까지 기다립니다.
-  GPU를 요청하는 Pod는 이 대기 시간이 30초입니다(CAS 1.36 소스의 `unschedulablePodTimeBuffer`,
+  GPU를 요청하는 Pod는 이 대기 시간이 30초입니다(AKS 1.35 이상이 쓰는 CAS v1.35 소스의 `unschedulablePodTimeBuffer`,
   `unschedulablePodWithGpuTimeBuffer`).
 - NAP는 첫 Pending Pod 이후 1초 동안 새 Pod가 없으면 바로 결정합니다(Karpenter
   `BATCH_IDLE_DURATION` 기본 1초, 최대 10초).
 - 그 결과 확장 결정은 CAS 12~27초, NAP 2~5초였습니다. **Karpenter가 빠르다는 근거는
-  이 10~20초 차이입니다.**
+  이 10~20초 차이입니다.** 다만 loop가 첫 Pending Pod보다 2초 이상 늦게 돌면 CAS도 기다리지
+  않습니다. 40대 확장 측정(1회)에서는 CAS와 NAP 모두 3초에 결정했습니다.
 
 ## zone 조건이 달랐던 첫 측정에서는 VMSS 노드가 조금 먼저 준비됐다
 
@@ -121,19 +123,22 @@ CAS control plane 로그에서 결정 지연의 원인을 확인했습니다.
 |---|---|---|
 | 결정 → 첫 노드 Ready | 약 63초 | 약 81초 |
 | NAP NodeClaim 생성 → Launched | - | 3~4초 |
-| NAP Launched → 노드 등록 | - | 약 70초 |
+| NAP Launched → 노드 등록 | - | 약 70초 (NodeClaim 35개, 64~146초) |
 
 - NAP는 VMSS를 거치지 않고 노드마다 VM을 따로 만듭니다. 이번 측정에서는 결정에서
-  얻은 10초 남짓의 이점을 VM 준비 시간에서 거의 돌려받았습니다.
+  얻은 10초 남짓의 이점을 VM 준비 시간에서 거의 돌려받았습니다. NodeClaim별 단계 시간은
+  `results/nap-nodeclaim-phases.csv`에 있습니다.
 - **꼬리 지연은 NAP가 더 컸습니다.** NAP는 노드를 zone 1~4에 나눠 만들었고, 7대 중
-  1~2대가 130~270초까지 늦어진 run이 있었습니다. 한 번은 zone 2의 VM 생성 요청 자체가
-  126초 걸렸습니다. CAS 풀은 zone을 지정하지 않은 regional VMSS여서 burst에서는
+  1~2대가 130~270초까지 늦어진 run이 있었습니다. 1회차에서는 zone 2 NodeClaim의 `Launched`가
+  126초에야 기록됐습니다. CAS 풀은 zone을 지정하지 않은 regional VMSS여서 burst에서는
   마지막 노드가 96~115초 안에 들어왔습니다.
 - 마지막 노드가 늦으면 그 노드에 배치될 Pod도 늦어지므로, 전체 Pod Ready 중앙값은
   NAP(119초)가 CAS(108초)보다 조금 길었습니다.
 - 이후 두 쪽 모두 zone 1에만 노드를 만들게 해 다시 측정하자 첫 노드 Ready는 NAP
-  54~59초, CAS 69~82초로 NAP가 앞섰고 꼬리 지연은 두 방식 모두 생겼습니다. 이 절의
-  차이는 단독 VM 방식이 아니라 zone 조건 차이에서 온 것으로 봅니다. 자세한 결과는
+  54~59초, CAS 69~82초로 NAP가 앞섰고 꼬리 지연은 두 방식 모두 생겼습니다. 이 차이의
+  대부분은 확장 결정 단계였고, 결정 → 첫 노드 Ready는 NAP 50~57초, CAS 55~69초로
+  비슷했습니다. 이 절의 차이는 단독 VM 방식보다 zone 조건 차이에서 왔을 가능성이 크지만,
+  다른 시간대의 3회 측정이라 단정하지 않습니다. 자세한 결과는
   [NAP와 CAS 시나리오별 실측](../scenario-comparison/index.md)에 있습니다.
 
 ## Pod가 30초 간격으로 늘어나도 VM 부팅이 결과를 좌우했다
@@ -150,7 +155,7 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 값은 각 wav
 - CAS 2회차에서는 Pod 5개가 Pending인데도 CAS가 약 2분 동안 `Schedulable pods present`로
   판단해 확장하지 않았고, VMSS 목록을 새로 고친 뒤에야 5→7로 늘렸습니다. CAS는 자체
   스케줄링 시뮬레이션과 VMSS 캐시를 기준으로 판단하므로 이런 지연이 생길 수 있습니다.
-- NAP는 wave마다 2초 안에 NodeClaim을 만들었지만, 노드 준비 시간이 같아 전체 시간은
+- NAP는 첫 wave에서 2초 만에 NodeClaim을 만들었지만, 노드 준비 시간이 비슷해 전체 시간은
   비슷했습니다.
 
 ## NAP는 VM 크기를 고를 수 있을 때 CAS가 못 하는 일을 했다
@@ -169,7 +174,8 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 값은 각 wav
 ## 선호 VM을 만들 수 없을 때 NAP는 시도 없이 2~3초 만에 대체했다
 
 Karpenter 문서가 말하는 "빠른 노드 생성"은 용량이 없을 때 다른 후보로 넘어가는 속도입니다.
-선호 VM 생성이 실패하도록 리전 vCPU 한도(100)를 넘는 96 vCPU VM을 1순위로 두고, 실패하면
+두 클러스터의 시스템 풀이 이미 같은 `Ddsv7` 계열 16 vCPU를 쓰는 상태에서 96 vCPU VM을
+1순위로 두어(합계 112 vCPU, 리전 vCPU 한도 100 초과) 선호 VM을 만들 수 없게 하고, 실패하면
 `Standard_D4ds_v7`로 넘어가게 구성했습니다(1 vCPU Pod 20개).
 
 | 구성 | 1순위 | 대체 |
@@ -185,18 +191,20 @@ Karpenter 문서가 말하는 "빠른 노드 생성"은 용량이 없을 때 다
 - CAS는 12초에 big 풀 확장을 요청했고, 1초 뒤 quota 오류를 받아 그 풀을 backoff한 다음 loop
   (약 10초 뒤)에서 대체 풀을 늘렸습니다. quota 오류는 VMSS 요청 즉시 돌아오는 동기 오류라
   CAS도 빨리 넘어갑니다.
-- NAP는 VM 계열 quota를 10분마다 조회해 남은 quota로 만들 수 없는 SKU를 미리 뺍니다.
-  시스템 노드가 같은 `Ddsv7` 계열 16 vCPU를 쓰고 있어 96 vCPU는 처음부터 후보가 아니었습니다.
+- NAP는 리전 전체 한도가 아니라 VM 계열별 quota(`StandardDdsv7Family`)를 10분마다 조회해
+  남은 quota로 만들 수 없는 SKU를 미리 뺍니다. 계열 한도 값은 기록하지 않았지만, 16 vCPU를
+  이미 쓴 계열에 96 vCPU가 남아 있지 않아 처음부터 후보가 아니었던 것으로 봅니다.
 - 반대로 quota가 풀린 뒤에도 최대 10분은 이전 사용량으로 판단합니다. 리전 여유가 84 vCPU로
   돌아온 직후 1순위를 64 vCPU VM으로 바꿨지만 NAP는 이를 제외하고 대체 VM을 만들었습니다.
-- 대체로 넘어간 뒤의 노드·Pod 준비 시간은 앞의 burst 결과와 같은 범위였습니다. 이 실측에서
-  NAP가 줄인 시간은 약 20초입니다.
+- NAP가 줄인 시간은 **대체 결정 단계의 약 20초**뿐입니다. 첫 노드 Ready는 CAS 66~76초,
+  NAP 83초였고 전체 Pod Ready도 CAS 104~112초, NAP 96~130초로 끝까지 빠르지는 않았습니다
+  (각 2회).
 
 VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현하지 못해 소스로 동작을 확인했습니다.
 
 | 구분 | 비동기 할당 실패 처리 |
 |---|---|
-| CAS 1.36 Azure provider | 생성에 실패한 VMSS VM을 기본적으로 Running으로 취급합니다. 실험 옵션 `EnableFastDeleteOnFailedProvisioning`이 꺼져 있으면 노드가 등록되지 않은 채 `max-node-provision-time`(기본 15분)까지 기다린 뒤 다른 풀을 시도합니다. AKS 관리형 CAS의 이 옵션 설정은 공개 문서에서 확인하지 못했습니다. |
+| CAS v1.35 Azure provider | 생성에 실패한 VMSS VM을 기본적으로 Running으로 취급합니다. 실험 옵션 `EnableFastDeleteOnFailedProvisioning`이 꺼져 있으면 노드가 등록되지 않은 채 `max-node-provision-time`(기본 15분)까지 기다린 뒤 다른 풀을 시도합니다. AKS 관리형 CAS의 이 옵션 설정은 공개 문서에서 확인하지 못했습니다. |
 | NAP (Karpenter provider Azure) | `AllocationFailure`, `ZonalAllocationFailure`, `SKUNotAvailable`, quota 오류를 구분해 해당 SKU·zone·용량 유형을 10분~23시간 동안 후보에서 빼고 다음 후보로 바로 재시도합니다. |
 
 ## 축소 속도는 autoscaler보다 설정이 결정했다
@@ -204,12 +212,16 @@ VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현�
 | 방식과 설정 | 축소 완료 |
 |---|---|
 | CAS, `scale-down-unneeded-time=1m` | 109~306초 (VM 제거 기준) |
-| NAP, budget 30% (노드 7대를 2대씩) | 214~344초 |
+| NAP, budget 30% | 214~344초 |
 | NAP, budget 100% | 56~92초 |
 | NAP, 노드 1대로 모은 경우 | 86~95초 |
 
+- budget 30%는 `roundup(노드 수 × 0.3)`에서 삭제 중·`NotReady` 노드를 뺀 수만큼 동시에
+  정리하므로 노드 7대에서는 최대 3대입니다. 이번 측정은 노드별 삭제 시각을 남기지 않아 실제
+  묶음 크기는 확인하지 못했습니다.
 - CAS 기본값(`scale-down-unneeded-time` 10분)이면 노드가 빈 뒤 10분 이상 남습니다.
-- CAS는 VM을 지운 뒤에도 Kubernetes node 객체가 `NotReady`로 약 5분 더 남았습니다.
+- CAS가 축소를 결정한 노드는 약 75초 동안 `Ready,SchedulingDisabled`였다가 VM이 지워진 뒤
+  `NotReady`로 중앙값 약 4분(노드 101대, 최대 7분) 더 남았습니다(`results/cas-node-object-linger.csv`).
   node 수로 축소를 판단하는 모니터링은 이 시간을 함께 셉니다. NAP는 VM 삭제와 node
   객체 삭제가 함께 끝났습니다.
 
@@ -239,11 +251,11 @@ VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현�
 - 한 리전에서 약 2시간 동안 시나리오별로 1~5회 반복했습니다. VM 할당 지연은 리전,
   zone, SKU 재고, 시간대에 따라 달라집니다.
 - NAP NodePool은 zone을 제한하지 않았고 CAS 풀은 zone을 지정하지 않았습니다. 같은 zone
-  조건의 재측정에서는 NAP가 첫 노드를 먼저 준비했습니다.
+  조건의 재측정에서는 NAP가 첫 노드를 먼저 준비했고, 차이의 대부분은 확장 결정 단계였습니다.
 - `pause` 컨테이너라 이미지 pull 시간이 거의 없습니다. 큰 이미지에서는 Pod 시작 시간이
   더 길어집니다.
 - 대규모 확장(수십~수백 노드), Azure API throttling, VM이 만들어진 뒤의 할당 실패
-  (AllocationFailed)는 재현하지 못했습니다. 할당 실패에서는 아래 절의 소스 분석처럼 CAS와
+  (AllocationFailed)는 재현하지 못했습니다. 할당 실패에서는 위 절의 소스 분석처럼 CAS와
   NAP의 차이가 몇 분 단위로 커질 수 있습니다.
 - 같은 날 v6 VM으로 처음 측정한 결과(`results/scale-out-v6-initial.csv`)는 CAS 축소를
   node 객체가 사라질 때까지로 재 과대 측정했고, 단계별 시간이 없어 이 문서의 결론에서
@@ -258,11 +270,11 @@ VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현�
 - [Use the cluster autoscaler in AKS](https://learn.microsoft.com/azure/aks/cluster-autoscaler)
 - [Cluster autoscaling in AKS overview](https://learn.microsoft.com/azure/aks/cluster-autoscaler-overview)
 - [Cluster Autoscaler FAQ](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md)
-- [Cluster Autoscaler 1.36 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go)
+- [Cluster Autoscaler 1.35 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/core/static_autoscaler.go)
 - [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
 - [AKS node bootstrap design for Karpenter provider Azure](https://github.com/Azure/karpenter-provider-azure/blob/main/designs/0001-aks-node-bootstrap.md)
 - [Karpenter provider Azure offering error handlers](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/offerings/commonerrorhandlers.go)
 - [Karpenter provider Azure quota provider](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/quota/quota.go)
 - [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
-- [Cluster Autoscaler 1.36 Azure scale set instance cache](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go)
-- [Cluster Autoscaler 1.36 Azure config](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/cloudprovider/azure/azure_config.go)
+- [Cluster Autoscaler 1.35 Azure scale set instance cache](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go)
+- [Cluster Autoscaler 1.35 Azure config](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_config.go)

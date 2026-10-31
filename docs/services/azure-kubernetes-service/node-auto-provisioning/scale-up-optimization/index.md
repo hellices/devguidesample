@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [optimize, operate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Azure Kubernetes Service (AKS) scaling overview — HPA, VPA, Cluster Autoscaler, and KEDA
     url: https://learn.microsoft.com/azure/aks/concepts-scale
@@ -31,11 +31,13 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/node-auto-provisioning
   - title: Cluster Autoscaler FAQ
     url: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md
-  - title: Cluster Autoscaler 1.36 static_autoscaler.go
-    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go
+  - title: Cluster Autoscaler 1.35 static_autoscaler.go
+    url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/core/static_autoscaler.go
   - title: Karpenter Settings
     url: https://karpenter.sh/docs/reference/settings/
-last_verified: 2026-10-30
+  - title: Karpenter Disruption
+    url: https://karpenter.sh/docs/concepts/disruption/
+last_verified: 2026-10-31
 review_cycle_days: 180
 applies_to: [AKS 1.36]
 topic_order: 3
@@ -45,7 +47,8 @@ topic_order: 3
 
 새 노드가 필요한 Pod는 autoscaler가 확장을 결정하고, VM이 만들어져 노드로 등록되고,
 Pod가 시작된 뒤에야 요청을 받습니다. 실측에서 이 시간의 대부분은 **VM 준비(60~80초)**였고,
-autoscaler 종류에 따른 차이는 10~20초였습니다. 그래서 가장 효과가 큰 방법은 VM을
+autoscaler 종류에 따른 차이는 CAS가 새 Pending Pod를 보고 한 주기를 기다릴 때 생긴 확장
+결정 단계의 10~20초였습니다. 그래서 가장 효과가 큰 방법은 VM을
 기다리지 않게 하는 것입니다.
 
 | 방법 | 대상 | 실측 효과 | 비용·제약 |
@@ -62,13 +65,16 @@ autoscaler 종류에 따른 차이는 10~20초였습니다. 그래서 가장 효
 
 | 단계 | CAS (VMSS) | NAP | 줄이는 방법 |
 |---|---|---|---|
-| 확장 결정 | 12~27초 | 2~5초 | CAS `scan-interval`, NAP는 기본 동작 |
-| VM 생성·노드 Ready | 결정 후 약 63초 | 결정 후 약 81초, 일부 노드 130~270초 | 여유 용량, VM 재사용 |
+| 확장 결정 | 12~27초 (대기가 없으면 3초) | 2~5초 | CAS `scan-interval`, NAP는 기본 동작 |
+| VM 생성·첫 노드 Ready | 결정 후 약 63초 (zone 1 고정 시 55~69초) | 결정 후 약 81초 (zone 1 고정 시 50~57초), 일부 노드 130~270초 | 여유 용량, VM 재사용 |
 | Pod 시작 | 수 초 + 이미지 pull | 같음 | 작은 이미지, artifact streaming |
 
 - CAS는 가장 오래된 Pending Pod가 2초 미만이면 다음 `scan-interval`(기본 10초)까지
   기다립니다. GPU Pod는 이 대기 시간이 30초입니다.
 - NAP는 Pending Pod가 1초 동안 더 생기지 않으면 결정합니다(최대 10초).
+- VM 준비 시간은 autoscaler보다 zone 조건과 측정 시점에 따라 달랐습니다. zone을 나누지 않은
+  첫 측정에서는 CAS가, zone 1로 고정한 측정에서는 NAP가 조금 빨랐습니다(각 3~5회).
+  자세한 조건은 [NAP와 CAS 시나리오별 실측](../scenario-comparison/index.md)에 있습니다.
 - AKS Automatic은 NAP가 기본 구성되어 있고, 적격 Pod 준비 작업의 99.9%가 5분 안에
   끝나는 SLA를 제공합니다.
 
@@ -122,7 +128,7 @@ Deployment 상태 갱신이 늦어 측정 스크립트에는 126초로 기록됐
 - NAP에서는 수요와 관계없이 노드 수를 고정하는 static NodePool(`spec.replicas`)로도 여유
   노드를 둘 수 있습니다.
 
-## CAS Deallocate 모드는 할당 해제한 VM을 다시 시작해 노드 준비를 30초 이상 앞당긴다
+## CAS Deallocate 모드는 할당 해제한 VM을 다시 시작해 첫 노드 Ready를 28~40초 앞당겼다
 
 `--scale-down-mode Deallocate` 풀은 축소할 때 VM을 지우지 않고 할당 해제(중지)합니다.
 다시 확장할 때는 새 VM보다 할당 해제된 VM을 먼저 시작합니다. 컨테이너 이미지도 디스크에
@@ -140,10 +146,11 @@ az aks nodepool add -g $RG --cluster-name $CLUSTER -n burst \
 | Deallocate 풀, 첫 확장(새 VM, Managed OS) | 104초 | 142초 |
 | Deallocate 풀, 재시작 2회 | 50초 | 82초, 123초 |
 
-- ephemeral OS disk를 쓸 수 없어 **처음 만드는 VM은 오히려 느립니다.** 확장·축소가 반복되는
-  풀에 씁니다.
+- ephemeral OS disk를 쓸 수 없어 처음 만드는 VM은 1회 측정에서 104초로 일반 풀보다
+  늦었습니다. 확장·축소가 반복되는 풀에 씁니다.
 - 할당 해제된 VM은 compute 비용은 없지만 OS 디스크 비용이 남습니다.
-- 재시작한 노드는 Ready가 된 뒤 약 20초 동안 taint가 남아 Pod 배치가 그만큼 늦었습니다.
+- 재시작한 노드는 Ready가 된 뒤에도 taint가 남아 Pod 배치가 중앙값 약 23초 늦었습니다
+  (`results/cas-dealloc-pod-scheduling.csv`, 재시작 2회).
 - 할당 해제된 노드는 `NotReady`로 API server에 남습니다. 노드 수를 세는 모니터링은 이를
   감안해야 합니다.
 
@@ -180,7 +187,7 @@ az aks nodepool add -g $RG --cluster-name $CLUSTER -n burst \
   `AKSNodeClass.spec.artifactStreaming.enabled`)에서 켜면, 시작에 필요한 부분만 먼저 받습니다.
   Linux AMD64 이미지와 tag 기반 pull만 지원하고 `imagePullSecrets`는 지원하지 않습니다.
 - **ephemeral OS disk:** 노드 확장을 빠르게 하므로 가능하면 사용합니다. CAS 풀은 VM이 지원하고
-  임시 저장소가 충분하면 기본값이고, NAP는 조건이 맞으면 자동으로 씁니다. 실측에서 Managed
+  임시 저장소가 충분하면 기본값이고, NAP는 조건이 맞으면 자동으로 씁니다. 1회 측정에서 Managed
   OS disk 새 VM은 첫 노드 Ready가 104초로 ephemeral(78~90초)보다 늦었습니다.
 - **OS 이미지:** AzureLinux로 바꿔도 노드 준비 시간 차이는 측정되지 않았습니다.
 
@@ -206,7 +213,11 @@ spec:
         duration: 10h
 ```
 
-여러 budget이 동시에 적용되면 가장 제한적인 값이 쓰입니다. 축소를 너무 빠르게 하면 급증이
+비율 budget은 `roundup(노드 수 × 비율)`에서 삭제 중·`NotReady` 노드를 뺀 수만큼 동시 정리를
+허용합니다(노드 7대에 30%면 3대). 여러 budget이 동시에 적용되면 가장 제한적인 값이 쓰입니다.
+Microsoft Learn의 NAP 예시 주석은 `consolidateAfter`를 `WhenEmpty`에서만 설정할 수 있다고
+적지만, Karpenter v1 문서는 두 정책 모두에 적용하며 이번 실측 NodePool도
+`WhenEmptyOrUnderutilized`와 함께 사용했습니다. 축소를 너무 빠르게 하면 급증이
 반복될 때 노드를 지웠다가 다시 만드는 일이 생깁니다. 부하가 몇 분 간격으로 오르내리면
 `consolidateAfter`나 `scale-down-unneeded-time`을 그 간격보다 길게 둡니다.
 
@@ -223,5 +234,6 @@ spec:
 - [Artifact Streaming on AKS](https://learn.microsoft.com/azure/aks/artifact-streaming)
 - [Overview of NAP (AKS Automatic SLA)](https://learn.microsoft.com/azure/aks/node-auto-provisioning)
 - [Cluster Autoscaler FAQ (overprovisioning)](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md)
-- [Cluster Autoscaler 1.36 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go)
+- [Cluster Autoscaler 1.35 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/core/static_autoscaler.go)
 - [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
+- [Karpenter Disruption](https://karpenter.sh/docs/concepts/disruption/)

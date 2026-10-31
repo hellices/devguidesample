@@ -21,11 +21,13 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/supported-kubernetes-versions
   - title: Horizontal Pod Autoscaling
     url: https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/
+  - title: Feature Gates
+    url: https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/
   - title: KEDA ScaledObject specification
     url: https://keda.sh/docs/2.19/reference/scaledobject-spec/
   - title: KEDA scaling deployments, StatefulSets and custom resources
     url: https://keda.sh/docs/2.19/concepts/scaling-deployments/
-last_verified: 2026-10-30
+last_verified: 2026-10-31
 review_cycle_days: 180
 applies_to: [AKS 1.36, KEDA add-on 2.19]
 ---
@@ -121,6 +123,9 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 역할은 �
   있으면 `ScaledObject` 생성이 실패하고, 나중에 HPA를 만들면 둘이 경쟁합니다.
 - AKS 1.36의 기본 HPA는 replica 0을 지원하지 않습니다(`HPAScaleToZero`
   feature gate가 1.36까지 alpha). 0까지 줄이려면 KEDA가 필요합니다.
+  upstream Kubernetes 1.37부터 이 feature gate는 beta로 기본 활성화되어
+  object·external 지표 HPA에 `minReplicas: 0`을 쓸 수 있습니다. AKS 1.37에서
+  실제로 허용되는지는 클러스터에서 따로 확인합니다.
 
 ## AKS KEDA add-on은 KEDA core만 관리하고 HTTP Add-on은 별도 설치다
 
@@ -136,24 +141,27 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 역할은 �
 | **별도 add-on·external scaler** | KEDA HTTP Add-on(beta), Azure Cosmos DB change feed external scaler 등 | Helm 등으로 직접 설치, 커뮤니티 지원 |
 
 - Workload Identity로 Azure 지표를 읽으려면 **KEDA add-on보다 Workload
-  Identity를 먼저 켭니다.** 이후 `keda-operator` service account에 federated
-  credential과 client ID annotation을 연결합니다.
+  Identity를 먼저 켜는 것을 권장합니다.** 순서가 바뀌었으면 `keda-operator`
+  Pod를 재시작해 환경 변수를 주입합니다. 이후 `keda-operator` service account에
+  federated credential과 client ID annotation을 연결합니다.
 - 클러스터에는 external metrics server가 하나만 있어야 합니다. KEDA를 Helm으로
   한 번 더 설치하거나 다른 external metrics adapter와 함께 쓰지 않습니다.
 
 ## 요청 수로 확장할 때는 지표 지연과 0개 지원 여부로 패턴을 고른다
 
 세 패턴 모두 같은 앱(podinfo)과 같은 부하(초당 400건, Pod당 목표 초당 50건)로
-실측했습니다. 첫 확장 시간은 부하 시작 기준입니다.
+패턴마다 1회 실측했습니다. 첫 확장 시간은 부하 시작 기준이며 5초 간격 기록이라
+구간으로 적습니다.
 
-| 패턴 | 지표 경로 | KEDA 범위 | 첫 확장 | 0개 운영 | 적합한 경우 |
+| 패턴 | 지표 경로 | KEDA 범위 | 첫 확장(1회 실측) | 0개 운영 | 적합한 경우 |
 |---|---|---|---|---|---|
-| [Managed Prometheus RPS](prometheus-rps/index.md) | 앱 `/metrics` → Managed Prometheus → `prometheus` scaler | core | 약 65초 | 부적합: Pod가 없으면 지표도 없음 | 앱이 Prometheus 지표를 내고 정밀한 query가 필요할 때 |
-| [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | 별도 add-on | 약 50초 | 가능: 첫 요청 보류 (노드 있으면 2초, 새 노드면 120초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
-| [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | core | 약 140초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
+| [Managed Prometheus RPS](prometheus-rps/index.md) | 앱 `/metrics` → Managed Prometheus → `prometheus` scaler | core | 약 70–75초 | 부적합: Pod가 없으면 지표도 없음 | 앱이 Prometheus 지표를 내고 정밀한 query가 필요할 때 |
+| [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | 별도 add-on | 약 55–60초 | 가능: 첫 요청 보류 (노드 있으면 2초, 새 노드면 120초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
+| [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | core | 약 150초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
 
-0개에서 burst를 받으면 첫 Pod가 준비될 때까지 요청이 보류됩니다. 실측에서
-새 노드가 필요한 83초 동안 요청 5%가 client timeout으로 실패했고,
+0개에서 burst를 받으면 첫 Pod가 준비될 때까지 요청이 보류됩니다. 1회 실측에서
+기존 노드에 자리가 없어 새 노드가 필요했고, 첫 Pod가 Ready 되기까지 약
+95–100초 동안 계획한 요청의 약 14.6%가 실패하거나 아예 전송되지 못했습니다.
 `minReplicaCount: 1`에서는 실패가 없었습니다.
 
 ## Pod 확장 다음 단계는 노드 autoscaler가 맡는다
@@ -185,4 +193,5 @@ NAP를 쓰면 이 두 번째 단계에서 Pending Pod에 맞는 VM 크기를 직
 - [Integrations with KEDA on AKS](https://learn.microsoft.com/azure/aks/keda-integrations)
 - [KEDA add-on and workload identity](https://learn.microsoft.com/azure/aks/keda-workload-identity)
 - [Kubernetes Horizontal Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/)
+- [Kubernetes Feature Gates (`HPAScaleToZero`)](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/)
 - [KEDA ScaledObject specification](https://keda.sh/docs/2.19/reference/scaledobject-spec/)

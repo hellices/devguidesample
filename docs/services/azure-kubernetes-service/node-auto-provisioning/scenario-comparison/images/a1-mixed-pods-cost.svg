@@ -43,7 +43,7 @@
   <rect class="nap" x="300" y="300" width="214" height="30" rx="4"/>
   <text class="val" x="522" y="321">$1.78</text>
   <text class="sub" x="580" y="321">D32as × 1 + D8als × 1</text>
-  <text class="sub" x="310" y="348">요청/할당 CPU 0.88 · 메모리 0.64 (CAS 풀 3개: 0.55~0.73 · 0.36~0.48)</text>
+  <text class="sub" x="310" y="348">요청/용량 CPU 0.88 · 메모리 0.64 (CAS 풀 3개: 0.55~0.73 · 0.36~0.48)</text>
 
   <text class="sub" x="24" y="384">CAS는 Pending Pod마다 풀 하나를 골라 그 VM 크기로 늘리고, NAP는 Pod 묶음 전체를 보고 VM 크기를 조합한다.</text>
 </svg>

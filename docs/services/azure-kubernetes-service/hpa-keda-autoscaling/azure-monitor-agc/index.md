@@ -1,5 +1,5 @@
 ---
-title: AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 첫 확장까지 약 140초 걸린다
+title: AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 150초 걸렸다
 description: Application Gateway for Containers의 TotalRequests 메트릭을 KEDA azure-monitor scaler로 조회해 앱 수정 없이 진입점 트래픽으로 확장하고, 반응 시간과 frontend NSG 조건을 측정합니다.
 document_type: lab
 services: [azure-kubernetes-service, azure-application-gateway-for-containers, azure-monitor]
@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [build, networking]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Integrations with Kubernetes Event-driven Autoscaling (KEDA) on Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/keda-integrations
@@ -19,11 +19,17 @@ official_sources:
     url: https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-create-application-gateway-for-containers-managed-by-alb-controller
   - title: Application Gateway for Containers components
     url: https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-components
-  - title: Azure Monitor metrics for Application Gateway for Containers
+  - title: Metrics for Application Gateway for Containers
     url: https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-metrics
+  - title: Understanding Pricing for Application Gateway for Containers
+    url: https://learn.microsoft.com/azure/application-gateway/for-containers/understanding-pricing
+  - title: Azure network security groups overview
+    url: https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview
+  - title: Simplified application autoscaling with Kubernetes Event-driven Autoscaling (KEDA) add-on
+    url: https://learn.microsoft.com/azure/aks/keda-about
   - title: KEDA Azure Monitor scaler
     url: https://keda.sh/docs/2.19/scalers/azure-monitor/
-last_verified: 2026-10-30
+last_verified: 2026-10-31
 review_cycle_days: 90
 estimated_time: 75m
 cost: paid
@@ -31,13 +37,13 @@ cleanup_required: true
 topic_order: 3
 ---
 
-# AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 첫 확장까지 약 140초 걸린다
+# AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 150초 걸렸다
 
 Application Gateway for Containers(AGC)는 frontend가 처리한 요청 수를
 `TotalRequests` 플랫폼 메트릭으로 내보냅니다. KEDA core의 `azure-monitor` scaler가
 이 값을 Workload Identity로 읽으면 앱에 지표를 추가하지 않고도 진입점 트래픽으로
-확장할 수 있습니다. 대신 1분 단위 집계와 게시 지연 때문에 Managed Prometheus
-방식보다 첫 확장이 약 75초 늦었습니다.
+확장할 수 있습니다. 대신 1분 단위 집계와 게시 지연 때문에 1회 실측에서 Managed
+Prometheus 방식보다 첫 확장이 약 75–80초 늦었습니다.
 
 ## 1분 동안 Pod당 3,000건(초당 50건)을 넘으면 replica를 늘린다
 
@@ -48,18 +54,39 @@ Application Gateway for Containers(AGC)는 frontend가 처리한 요청 수를
 | 인증 | KEDA Workload Identity + AGC 리소스 `Monitoring Reader` |
 | 범위 | AGC 전체 요청 수. 여러 앱이 같은 AGC를 쓰면 `metricFilter`로 frontend를 나눕니다. |
 
-## AGC add-on과 KEDA add-on은 모두 Workload Identity를 먼저 요구한다
+## AGC add-on은 Workload Identity가 필수이고 KEDA에는 Workload Identity를 먼저 켜는 것이 권장된다
 
 [Managed Prometheus 실습](../prometheus-rps/index.md)과 같은 클러스터·podinfo·KEDA ID를
-사용합니다. AGC add-on은 preview이므로 구독에
-`ManagedGatewayAPIPreview`, `ApplicationLoadBalancerPreview` feature와
-`Microsoft.ServiceNetworking`, `Microsoft.NetworkFunction` provider를 먼저 등록합니다.
-AKS 관리 VNet에서는 add-on이 delegation된 `aks-appgateway` 서브넷과 NSG를 만듭니다.
+사용합니다. AGC add-on은 Azure CNI 또는 Azure CNI Overlay와 Workload Identity가 켜진
+클러스터를 요구합니다. KEDA add-on은 Workload Identity 없이도 켜지지만, Azure 지표를
+Workload Identity로 읽으려면 Workload Identity를 먼저 켜는 것을 권장하며 순서가
+바뀌었으면 `keda-operator`를 재시작합니다.
 
-## 비용은 AGC 리소스, frontend 처리량, 노드에 비례한다
+AGC add-on은 preview이므로 Learn quickstart와 같이 다음을 먼저 준비합니다.
+`infra/enable-addons.sh`가 이 단계를 포함합니다.
 
-AGC 리소스와 frontend·association, 처리한 요청량, 확장 중 추가되는 노드가 과금
-대상입니다. 실습 후 Gateway와 `ApplicationLoadBalancer`를 지우면 ALB Controller가
+```bash
+az extension add --name alb
+az extension add --name aks-preview
+for ns in Microsoft.ContainerService Microsoft.Network Microsoft.NetworkFunction Microsoft.ServiceNetworking; do
+  az provider register --namespace $ns
+done
+az feature register --namespace Microsoft.ContainerService --name ManagedGatewayAPIPreview
+az feature register --namespace Microsoft.ContainerService --name ApplicationLoadBalancerPreview
+```
+
+AKS 관리 VNet에서는 add-on이 `Microsoft.ServiceNetworking/TrafficController`로
+delegation된 `aks-appgateway` 서브넷을 만듭니다. 이 실습에서는 이 서브넷에 이름에
+`appgateway`가 들어간 NSG가 연결된 것도 관측했습니다. NSG 생성은 Learn에 명시되어
+있지 않으므로 클러스터에서 직접 확인합니다.
+
+## 비용은 AGC·frontend·association 시간과 capacity unit, 추가 노드에 비례한다
+
+AGC 과금 미터는 AGC 리소스 시간, frontend 시간, association 시간, capacity unit
+네 가지입니다. capacity unit은 persistent connection 수와 처리량(Mbps) 중 사용률이
+높은 쪽으로 계산하며, 요청 수 자체는 미터가 아닙니다. Learn의 East US 2 예시
+단가에서는 association 시간이 가장 큰 고정 비용입니다. 여기에 확장 중 NAP가 추가하는
+노드 비용이 더해집니다. 실습 후 Gateway와 `ApplicationLoadBalancer`를 지우면 ALB Controller가
 AGC 리소스를 삭제합니다.
 
 ## AGC 생성, frontend NSG 허용, 권한, ScaledObject 순서로 배포한다
@@ -86,18 +113,20 @@ az role assignment create --assignee-object-id $(az identity show -g $RG -n id-k
 `load/k6-job.yaml`의 `TARGET_URL`을 Gateway 주소(`http://<gateway-address>/`)로
 바꿔 클러스터 안에서 실행했습니다.
 
-## 첫 확장은 약 140초, 전체 Ready는 약 345초였다
+## 1회 실측에서 첫 확장은 약 150초, 전체 Ready는 약 350초였다
 
-부하 시작을 0초로 둔 관측값입니다(2026-10-30, AKS 1.36.5, ALB Controller 1.11.7).
+부하 시작을 0초로 둔 1회 관측값입니다(2026-10-30, AKS 1.36.5, ALB Controller 1.11.7).
+5초 간격 기록(`results/azure-monitor-agc.csv`, `results/prometheus-rps.csv`)이라 시점을
+구간으로 적습니다.
 
 | 시점 | AGC + Azure Monitor | 비교: Managed Prometheus |
 |---|---|---|
-| 첫 확장 | 약 140초 | 약 65초 |
-| 목표 replica 도달 | 약 225초 (8개) | 약 130초 (9개) |
-| 전체 Ready (NAP 노드 추가 포함) | 약 345초 | 약 245초 |
+| 첫 확장 | 약 145–155초 | 약 70–75초 |
+| 목표 replica 도달 | 약 220–225초 (8개) | 약 135–140초 (9개) |
+| 전체 Ready (NAP 노드 추가 포함) | 약 350초 | 약 250초 |
 | 축소 시작 | 부하 종료 후 약 7분 | 부하 종료 후 약 5분 |
 
-- k6 결과: 137,999건, 실패 0건, p99 3.5 ms
+- k6 결과(`results/k6-summary.csv`): 137,999건, 실패 0건, p99 3.5 ms
 - 각 분의 `TotalRequests`는 그 분이 끝나고 약 1–2분 뒤에 조회됐습니다. 그동안 KEDA는
   값을 얻지 못하거나 이전 값을 썼습니다(HPA `TARGETS`가 잠시 비어 보임).
 - 축소는 마지막 지표 반영, HPA 300초 안정화 창이 더해져 Prometheus 방식보다 늦었습니다.
@@ -128,7 +157,7 @@ az group delete -n $RG --yes --no-wait
 
 | 증상 | 원인과 조치 |
 |---|---|
-| Gateway가 `Programmed=True`인데 frontend 연결이 timeout, `NewConnections` 0 | 2026-04-23 이후 만든 association은 서브넷 NSG를 그대로 적용합니다. add-on이 만든 `aks-appgateway` NSG에는 기본 `DenyAllInBound`만 있어 80·443이 막힙니다. Internet → TCP 80·443 허용 규칙 추가. `AzureLoadBalancer` 허용도 유지 |
+| Gateway가 `Programmed=True`인데 frontend 연결이 timeout, `NewConnections` 0 | 2026-04-23 이후 만든 association에는 서브넷 NSG의 inbound·outbound 규칙이 모두 적용됩니다. 이 실습의 `aks-appgateway` NSG에는 기본 규칙(`AllowVNetInBound`, `AllowAzureLoadBalancerInBound`, `DenyAllInBound`)만 있어 Internet에서 오는 80·443이 `DenyAllInBound`에 막혔습니다. Internet → TCP 80·443 허용 규칙 추가. `AzureLoadBalancer` 허용도 유지 |
 | HPA `TARGETS`가 `<unknown>` | KEDA ID에 AGC 리소스 `Monitoring Reader`가 없거나 `resourceURI`·`resourceGroupName`이 노드 리소스 그룹(MC_)이 아님 |
 | ALB Controller 로그에 `no Pods found for Service` | 백엔드 Deployment가 0개. azure-monitor scaler는 `minReplicaCount: 1` 이상으로 둠 |
 
@@ -139,5 +168,7 @@ az group delete -n $RG --yes --no-wait
 - [Deploy ALB Controller using AKS add-on](https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-addon)
 - [Create AGC managed by ALB Controller](https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-create-application-gateway-for-containers-managed-by-alb-controller)
 - [Application Gateway for Containers components (NSG)](https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-components)
-- [Azure Monitor metrics for AGC](https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-metrics)
+- [Metrics for AGC](https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-metrics)
+- [Understanding Pricing for AGC](https://learn.microsoft.com/azure/application-gateway/for-containers/understanding-pricing)
+- [Azure network security groups overview (기본 규칙)](https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview)
 - [KEDA Azure Monitor scaler](https://keda.sh/docs/2.19/scalers/azure-monitor/)
