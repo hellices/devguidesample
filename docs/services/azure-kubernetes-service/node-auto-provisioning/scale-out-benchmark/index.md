@@ -25,6 +25,8 @@ official_sources:
     url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.36/cluster-autoscaler/core/static_autoscaler.go
   - title: Karpenter Settings
     url: https://karpenter.sh/docs/reference/settings/
+  - title: Karpenter NodeClaims
+    url: https://karpenter.sh/docs/concepts/nodeclaims/
   - title: AKS node bootstrap design for Karpenter provider Azure
     url: https://github.com/Azure/karpenter-provider-azure/blob/main/designs/0001-aks-node-bootstrap.md
   - title: Karpenter provider Azure offering error handlers
@@ -69,6 +71,15 @@ budget을 조정했을 때의 축소였습니다.
 | 노드 Ready | Node `Ready` 전환 | 같음 |
 | Pod Ready | 모든 Pod `Ready` 전환 | 같음 |
 | 축소 완료 | VMSS 인스턴스 0개 | NodeClaim 0개 또는 Ready 노드 0개 |
+
+NAP 단계는 Karpenter NodeClaim의 상태 전환과 같습니다. Pending Pod를 본 Karpenter가
+NodeClaim을 만들고(확장 결정), 클라우드에 VM 생성을 요청해 `Launched`, 노드가 등록되면
+`Registered`, 준비가 끝나면 `Initialized`로 표시합니다.
+
+![Karpenter가 Pending Pod와 NodePool을 감시해 NodeClaim을 만들고, 인스턴스를 만든 뒤 Launched, Registered, Initialized 순서로 NodeClaim 상태를 갱신하는 흐름](images/karpenter-nodeclaim-lifecycle.png)
+
+*그림: [Karpenter NodeClaims](https://karpenter.sh/docs/concepts/nodeclaims/), Apache License 2.0.
+원본은 AWS 예시이며 AKS NAP에서는 EC2 Fleet·EC2 Instance 대신 Azure VM을 직접 만듭니다.*
 
 ## 2026-10-30 East US 2, AKS 1.36.5, v7 on-demand로 조건을 맞췄다
 
@@ -240,6 +251,7 @@ VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현�
 
 ## 공식 출처
 
+- [Karpenter NodeClaims](https://karpenter.sh/docs/concepts/nodeclaims/)
 - [Overview of Node Auto-Provisioning (NAP) in AKS](https://learn.microsoft.com/azure/aks/node-auto-provisioning)
 - [Configure node pools for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-node-pools)
 - [Configure node disruption policies for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-disruption)

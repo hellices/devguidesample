@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" role="img" aria-labelledby="t d">
+  <title id="t">크기가 다른 Pod 20개를 담은 노드 구성과 시간당 비용</title>
+  <desc id="d">CAS 풀 하나는 1.09달러로 Pod 16개만 배치했고, CAS 풀 3개는 3.28에서 3.82달러로 8 vCPU VM 6에서 11대를 만들었다. NAP는 32 vCPU와 8 vCPU VM 2대로 1.78달러였다.</desc>
+  <style>
+    text { font-family: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; fill: #1b1f24; }
+    .h { font-size: 17px; font-weight: 700; }
+    .lab { font-size: 14px; font-weight: 600; }
+    .sub { font-size: 12.5px; fill: #4a5561; }
+    .val { font-size: 14px; font-weight: 700; }
+    .axis { stroke: #c4cbd3; stroke-width: 1; }
+    .cas { fill: #f0a24a; }
+    .casw { fill: #f6c88f; }
+    .nap { fill: #3f9c4f; }
+  </style>
+  <rect id="bg" x="0" y="0" width="880" height="400" rx="12" fill="#ffffff"/>
+  <text class="h" x="24" y="32">A1. 크기가 다른 Pod 20개 (6 vCPU × 4, 1 vCPU·8 GiB × 6, 0.5 vCPU × 10)</text>
+  <text class="sub" x="24" y="54">막대: VM 시간당 비용 (East US 2, Linux on-demand, USD) · 오른쪽: 만든 노드</text>
+
+  <line class="axis" x1="300" y1="72" x2="300" y2="360"/>
+  <!-- scale: $1 = 120px -->
+
+  <text class="lab" x="24" y="98">CAS · D4as_v7 풀 1개</text>
+  <text class="sub" x="24" y="116">6 vCPU Pod 4개 배치 못 함 (16/20)</text>
+  <rect class="casw" x="300" y="86" width="131" height="30" rx="4"/>
+  <text class="val" x="440" y="107">$1.09</text>
+  <text class="sub" x="500" y="107">D4as × 6</text>
+
+  <text class="lab" x="24" y="160">CAS · 풀 3개 · random</text>
+  <text class="sub" x="24" y="178">AKS 기본 expander, 2회</text>
+  <rect class="cas" x="300" y="148" width="394" height="30" rx="4"/>
+  <rect class="cas" x="694" y="148" width="65" height="30" rx="0" opacity="0.45"/>
+  <text class="val" x="766" y="169">$3.28~3.82</text>
+  <text class="sub" x="310" y="196">F8as × 6 / D4as × 6 + F8as × 5</text>
+
+  <text class="lab" x="24" y="236">CAS · 풀 3개 · least-waste</text>
+  <text class="sub" x="24" y="254">2회 동일</text>
+  <rect class="cas" x="300" y="224" width="458" height="30" rx="4"/>
+  <text class="val" x="766" y="245">$3.82</text>
+  <text class="sub" x="310" y="272">F8as × 7 · 메모리용 E4as 풀은 쓰지 않음</text>
+
+  <text class="lab" x="24" y="312">NAP · D·E·F v7 NodePool 1개</text>
+  <text class="sub" x="24" y="330">2회 동일</text>
+  <rect class="nap" x="300" y="300" width="214" height="30" rx="4"/>
+  <text class="val" x="522" y="321">$1.78</text>
+  <text class="sub" x="580" y="321">D32as × 1 + D8als × 1</text>
+  <text class="sub" x="310" y="348">요청/할당 CPU 0.88 · 메모리 0.64 (CAS 풀 3개: 0.55~0.73 · 0.36~0.48)</text>
+
+  <text class="sub" x="24" y="384">CAS는 Pending Pod마다 풀 하나를 골라 그 VM 크기로 늘리고, NAP는 Pod 묶음 전체를 보고 VM 크기를 조합한다.</text>
+</svg>

@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [operate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-30
+sources_checked_at: 2026-10-31
 official_sources:
   - title: Azure Kubernetes Service (AKS) scaling overview — HPA, VPA, Cluster Autoscaler, and KEDA
     url: https://learn.microsoft.com/azure/aks/concepts-scale
@@ -45,6 +45,10 @@ Autoscaler)가 이어받습니다.
 ```
 
 ## HPA는 15초마다 현재 지표와 목표의 비율로 replica를 계산한다
+
+![HPA가 기존 노드 위에서 Pod 수를 늘리는 구조](images/learn-horizontal-pod-autoscaling.png)
+
+*그림: [Microsoft Learn, AKS scaling overview](https://learn.microsoft.com/azure/aks/concepts-scale), CC BY 4.0*
 
 HPA controller는 기본 15초 주기로 다음 식을 계산합니다.
 
@@ -102,6 +106,10 @@ HPA를 적용한 Deployment manifest에서는 `replicas`를 지워 배포 때마
 `ScaledObject`를 만들면 KEDA operator가 `keda-hpa-<이름>` HPA를 생성하고,
 KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 역할은 둘로 나뉩니다.
 
+![ScaledObject를 등록하면 KEDA가 외부 이벤트 소스를 확인해 0과 1 사이 전환을 직접 하고, 1에서 N 사이 확장은 KEDA metrics adapter가 지표를 넘긴 HPA가 담당하는 KEDA 구조](images/learn-keda-architecture.png)
+
+*그림: [Microsoft Learn, Kubernetes Event-driven Autoscaling (KEDA)](https://learn.microsoft.com/azure/aks/keda-about), CC BY 4.0*
+
 | 단계 | 담당 | 설정 |
 |---|---|---|
 | 활성화(0 ↔ 1) | KEDA operator | `activation*` 값, `pollingInterval`(기본 30초), `cooldownPeriod`(기본 300초) |
@@ -151,8 +159,17 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 역할은 �
 ## Pod 확장 다음 단계는 노드 autoscaler가 맡는다
 
 KEDA·HPA는 replica만 바꿉니다. 새 Pod가 들어갈 자리가 없으면 Pending이 되고,
-NAP가 그 requests를 보고 VM을 만듭니다. 노드를 새로 만들어야 하는 확장은
-VM 준비 시간만큼 늦어지므로 다음을 함께 정합니다.
+노드 autoscaler(Cluster Autoscaler 또는 NAP)가 그 requests를 보고 노드를 늘립니다.
+
+![HPA가 Pod를 늘리고, 들어갈 자리가 없으면 Cluster Autoscaler가 노드를 늘리며, 급증 시 virtual node로 Azure Container Instances에 Pod를 바로 띄우는 구조](images/learn-burst-scaling.png)
+
+*그림: [Microsoft Learn, AKS scaling overview](https://learn.microsoft.com/azure/aks/concepts-scale), CC BY 4.0*
+
+NAP를 쓰면 이 두 번째 단계에서 Pending Pod에 맞는 VM 크기를 직접 고릅니다. 노드를 새로
+만들어야 하는 확장은 VM 준비 시간만큼 늦어집니다. Learn은 이 시간을 보통 2~5분으로
+안내하고, [NAP 실측](../node-auto-provisioning/scale-out-benchmark/index.md)에서는 첫 노드까지 1~1.5분이었습니다.
+이 시간을 기다릴 수 없는 Linux 워크로드는 virtual node 제약을 만족할 때 ACI로 급증분을
+받을 수 있습니다. 노드 확장을 전제로 다음을 함께 정합니다.
 
 - 모든 container에 현실적인 `requests`를 둡니다. NAP와 HPA 모두 이 값을 기준으로
   계산합니다.
