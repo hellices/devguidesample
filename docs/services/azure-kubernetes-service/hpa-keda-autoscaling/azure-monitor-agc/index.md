@@ -69,7 +69,7 @@ AGC add-on은 preview이므로 postprovision hook(`infra/enable-addons.sh`)이 L
 `Microsoft.ServiceNetworking` provider 등록을 `--wait`로 완료하고 add-on을 켭니다.
 feature 등록은 처음 한 번 몇 분 걸릴 수 있습니다.
 
-AKS 관리 VNet에서는 add-on이 `Microsoft.ServiceNetworking/TrafficController`로
+AKS 관리 VNet에서는 add-on이 `Microsoft.ServiceNetworking/trafficControllers`로
 delegation된 `aks-appgateway` 서브넷을 만듭니다. 이 서브넷의 NSG는 add-on이 만든다고 Learn에
 명시되어 있지 않은데, 실습 구독에서는 서브넷이 생긴 뒤 이름에 `appgateway`가 들어간 NSG가
 기본 규칙만 가진 채 연결되었습니다. azd로 다시 만든 클러스터에서는 add-on 설정 직후에는 NSG가

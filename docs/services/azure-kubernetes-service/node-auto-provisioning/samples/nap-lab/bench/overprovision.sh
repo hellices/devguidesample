@@ -22,11 +22,12 @@ wait_ready3() { # wait_ready3 <deployment> <poll초>: readyReplicas가 3이 될 
 }
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]"
 
-k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
-k apply -f "$HERE/../manifests/overprovisioning.yaml" >/dev/null
+# 첫 리소스 변경 전에 등록해 apply·patch 부분 실패도 정리합니다.
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
+k apply -f "$HERE/../manifests/overprovisioning.yaml" >/dev/null
 k -n bench patch deployment overprovisioning --type json -p "$sel" >/dev/null
 k -n bench patch deployment inflate --type json -p "$sel" >/dev/null
 k -n bench patch deployment inflate --type strategic \

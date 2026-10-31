@@ -13,7 +13,8 @@ while (( $(date +%s) - start < DURATION )); do
   dep=$(k -n "$NS" get deploy "$DEPLOY" -o jsonpath='{.spec.replicas},{.status.readyReplicas}' 2>/dev/null) || dep=","
   desired=${dep%%,*} ready=${dep#*,}
   [[ -n $desired && -z $ready ]] && ready=0
-  metric=$(k -n "$NS" get hpa -o jsonpath='{.items[0].status.currentMetrics[0].external.current.averageValue}' 2>/dev/null) || metric=""
+  # namespace의 HPA 중 $DEPLOY를 대상으로 하는 것(KEDA가 만든 keda-hpa-*)의 지표만 읽습니다.
+  metric=$(k -n "$NS" get hpa -o jsonpath="{.items[?(@.spec.scaleTargetRef.name==\"$DEPLOY\")].status.currentMetrics[0].external.current.averageValue}" 2>/dev/null) || metric=""
   if nl=$(k get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null); then
     nodes=$(grep -c . <<<"$nl")
   else

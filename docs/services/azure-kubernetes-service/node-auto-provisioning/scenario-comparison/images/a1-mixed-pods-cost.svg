@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" role="img" aria-labelledby="t d">
   <title id="t">크기가 다른 Pod 20개를 담은 노드 구성과 시간당 비용</title>
-  <desc id="d">CAS 풀 하나는 1.09달러로 Pod 16개만 배치했고, CAS 풀 3개는 3.28에서 3.82달러로 8 vCPU VM 6에서 11대를 만들었다. NAP는 32 vCPU와 8 vCPU VM 2대로 1.78달러였다.</desc>
+  <desc id="d">CAS 풀 하나는 1.09달러로 Pod 16개만 배치했고, CAS 풀 3개는 3.28에서 3.82달러로 F8as 6대, D4as 6대와 F8as 5대, 또는 F8as 7대를 만들었다. NAP는 32 vCPU와 8 vCPU VM 2대로 1.78달러였다.</desc>
   <style>
     text { font-family: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; fill: #1b1f24; }
     .h { font-size: 17px; font-weight: 700; }

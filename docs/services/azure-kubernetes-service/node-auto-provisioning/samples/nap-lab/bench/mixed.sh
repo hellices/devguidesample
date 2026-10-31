@@ -24,7 +24,11 @@ ready_nodes() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
   grep -c True <<<"$out" || true
 }
-scale_zero() { for d in big mem small; do k -n mixed scale deployment $d --replicas 0 >/dev/null; done; }
+scale_zero() { # 모든 Deployment를 시도하고 하나라도 실패하면 nonzero
+  local d rc=0
+  for d in big mem small; do k -n mixed scale deployment $d --replicas 0 >/dev/null || rc=1; done
+  return "$rc"
+}
 
 k apply -f "$HERE/../manifests/mixed.yaml" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).

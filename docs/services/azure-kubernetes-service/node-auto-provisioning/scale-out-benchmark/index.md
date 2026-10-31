@@ -132,7 +132,8 @@ CAS control plane 로그에서 결정 지연의 원인을 확인했습니다.
 - NAP는 VMSS를 거치지 않고 노드마다 VM을 따로 만듭니다. 이번 측정에서는 결정에서
   얻은 10초 남짓의 이점을 VM 준비 시간에서 거의 돌려받았습니다. NodeClaim별 단계 시간은
   `results/nap-nodeclaim-phases.csv`에 있습니다.
-- **꼬리 지연은 NAP가 더 컸습니다.** NAP는 노드를 zone 1~4에 나눠 만들었고, 7대 중
+- **꼬리 지연은 NAP가 더 컸습니다.** NAP는 노드를 4개 zone(`topology.kubernetes.io/zone` 값
+  `eastus2-1`~`eastus2-4`, `results/nap-nodeclaim-phases.csv`)에 나눠 만들었고, 7대 중
   1~2대가 130~270초까지 늦어진 run이 있었습니다. 1회차에서는 zone 2 NodeClaim의 `Launched`가
   126초에야 기록됐습니다. CAS 풀은 zone을 지정하지 않은 regional VMSS여서 burst에서는
   마지막 노드가 96~115초 안에 들어왔습니다.
@@ -209,7 +210,7 @@ VM 생성 요청이 받아들여진 뒤 할당에 실패하는 경우는 재현�
 | 구분 | 비동기 할당 실패 처리 |
 |---|---|
 | CAS v1.35 Azure provider | 생성에 실패한 VMSS VM을 기본적으로 Running으로 취급합니다. 실험 옵션 `EnableFastDeleteOnFailedProvisioning`이 꺼져 있으면 노드가 등록되지 않은 채 `max-node-provision-time`(기본 15분)까지 기다린 뒤 다른 풀을 시도합니다. AKS 관리형 CAS의 이 옵션 설정은 공개 문서에서 확인하지 못했습니다. |
-| NAP (Karpenter provider Azure) | `AllocationFailure`, `ZonalAllocationFailure`, `SKUNotAvailable`, quota 오류를 구분해 해당 SKU·zone·용량 유형을 10분~23시간 동안 후보에서 빼고 다음 후보로 바로 재시도합니다. |
+| NAP (Karpenter provider Azure) | Azure 오류 코드 `AllocationFailed`, `ZonalAllocationFailed`, `SkuNotAvailable`, quota 오류를 구분해(provider 내부 reason은 `AllocationFailure`, `ZonalAllocationFailure`, `SKUNotAvailable`) 해당 SKU·zone·용량 유형을 10분~23시간 동안 후보에서 빼고 다음 후보로 바로 재시도합니다. |
 
 ## 축소 속도는 autoscaler보다 설정이 결정했다
 

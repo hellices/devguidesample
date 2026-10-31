@@ -182,8 +182,10 @@ NAP를 쓰면 이 두 번째 단계에서 Pending Pod에 맞는 VM 크기를 직
 이 시간을 기다릴 수 없는 Linux 워크로드는 virtual node 제약을 만족할 때 ACI로 급증분을
 받을 수 있습니다. 노드 확장을 전제로 다음을 함께 정합니다.
 
-- 모든 container에 현실적인 `requests`를 둡니다. NAP와 HPA 모두 이 값을 기준으로
-  계산합니다.
+- 모든 container에 현실적인 `requests`를 둡니다. NAP는 이 값으로 노드를 고르고, CPU·메모리
+  `Utilization` 방식의 HPA도 이 값 대비 비율로 계산합니다. 요청 수 패턴처럼 외부 지표를 쓰는
+  HPA는 scaler가 주는 현재 지표와 목표값으로 replica를 정하므로 `requests`가 계산에 들어가지
+  않습니다.
 - 급증 구간이 예측되면 `minReplicaCount`를 높이거나 KEDA `cron` trigger로 미리
   늘립니다.
 - 노드 생성 속도와 NAP 동작은 [AKS NAP 가이드](../node-auto-provisioning/index.md)를

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """bench.sh 스냅샷에서 선호 VM 실패 후 대체 VM으로 넘어간 시점(초)을 계산합니다.
 
-사용법: fallback.py <run-dir> <scenario> <run> <fallback-pool-pattern>
+사용법: fallback.py <run-dir> <scenario> <run> <fallback-pool-pattern> [nap|cas]
   fallback-pool-pattern: CAS는 대체 VMSS 이름 일부(예: aks-user), NAP는 NodePool 이름(예: fallback)
+  분석 모드는 마지막 인수로 지정하고, 생략하면 scenario 접두사(nap-/cas-)로 정합니다.
   failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS의 실패만, fallback_node_ready_s는 대체 노드만 봅니다.
 출력: scenario,run,first_attempt_s,failure_seen_s,fallback_decision_s,fallback_node_ready_s,all_pods_ready_s,failure_message
 """
@@ -19,6 +20,11 @@ GROUP = re.compile(r"group (\S+?):? ")
 
 def main():
     d, scenario, run, pattern = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+    # 스냅샷에 남은 NodeClaim 유무로 추정하지 않습니다. 실패한 NodeClaim이 모두 삭제된 NAP 실행도 NAP로 분석합니다.
+    mode = sys.argv[5] if len(sys.argv) > 5 else scenario.split("-", 1)[0]
+    if mode not in ("nap", "cas"):
+        sys.exit(f"분석 모드를 정할 수 없습니다(nap|cas 인수 또는 nap-/cas- scenario 필요): {scenario}")
+    nap = mode == "nap"
     t0 = ts((d / "t0").read_text().strip())
     load = lambda n: json.loads((d / n).read_text())["items"]
     sec = lambda t: "" if t is None else str(round((t - t0).total_seconds()))
@@ -29,8 +35,8 @@ def main():
 
     first = fail = fb = None
     msg = ""
-    if claims:  # NAP
-        first = min(ts(c["metadata"]["creationTimestamp"]) for c in claims)
+    if nap:
+        first = min((ts(c["metadata"]["creationTimestamp"]) for c in claims), default=None)
         fbs = [ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) == pattern]
         fb = min(fbs) if fbs else None
         # 선호 NodeClaim의 경고만 실패로 봅니다. 실패한 NodeClaim은 스냅샷 전에 삭제될 수 있으므로
@@ -72,7 +78,7 @@ def main():
     ready = []
     for n in load("nodes.json"):
         # 대체 노드만: NAP는 NodePool label, CAS는 providerID의 VMSS 이름으로 판별합니다.
-        if claims:
+        if nap:
             if n["metadata"].get("labels", {}).get("karpenter.sh/nodepool") != pattern:
                 continue
         else:

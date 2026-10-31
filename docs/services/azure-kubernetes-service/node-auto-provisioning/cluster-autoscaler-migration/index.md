@@ -1,5 +1,5 @@
 ---
-title: Cluster Autoscaler에서 NAP로 무중단 전환하고 불가능하면 새 클러스터로 옮기기
+title: Cluster Autoscaler에서 NAP로 중단을 최소화해 전환하고 불가능하면 새 클러스터로 옮기기
 description: VMSS Cluster Autoscaler 클러스터를 NAP로 전환하는 세 가지 경로, PDB를 지키며 Pod를 순차 이동하는 절차, 실제 전환 리허설 결과와 롤백 방법을 설명합니다.
 document_type: guide
 services: [azure-kubernetes-service]
@@ -33,7 +33,7 @@ applies_to: [AKS 1.36, Azure CLI 2.76+]
 topic_order: 2
 ---
 
-# Cluster Autoscaler에서 NAP로 무중단 전환하고 불가능하면 새 클러스터로 옮기기
+# Cluster Autoscaler에서 NAP로 중단을 최소화해 전환하고 불가능하면 새 클러스터로 옮기기
 
 NAP를 지원하는 네트워크·ID 구성이면 **같은 클러스터에서** CAS를 끄고 NAP를 켠
 뒤 기존 VMSS 풀을 단계적으로 줄입니다. Pod는 PDB를 지키며 NAP 노드로 옮겨집니다.
@@ -177,12 +177,14 @@ CAS와 NAP는 모두 Pending Pod에 반응하므로 같은 Pod를 두고 둘 다
    probe, requests, PDB가 있어야 NAP가 노드를 만들고 안전하게 정리합니다.
 3. **데이터 경로 확인:** 상태는 가능하면 클러스터 밖(Azure DB, Storage)에 두고,
    PV가 있으면 CSI snapshot, Azure Files, Velero로 복사·동기화합니다.
-4. **트래픽 비중 이동:** Front Door·Traffic Manager weight를 10 → 50 → 100%처럼
-   올리고 단계마다 5xx 비율, p95 지연, 재시작 수를 확인합니다. DNS 기반 전환은
-   TTL 동안 이전 클러스터로도 요청이 갑니다.
-5. **이전 클러스터 정리:** weight 0에서 관측 기간을 지난 뒤 삭제합니다.
+4. **트래픽 비중 이동:** Front Door origin과 Traffic Manager endpoint의 weight는 1~1000
+   정수이므로 green 비중을 상대 weight로 맞춥니다. 예를 들어 blue:green을 900:100(10%),
+   500:500(50%)으로 바꾸고 단계마다 5xx 비율, p95 지연, 재시작 수를 확인합니다. DNS 기반
+   전환은 TTL 동안 이전 클러스터로도 요청이 갑니다.
+5. **이전 클러스터 정리:** weight로는 0%를 만들 수 없으므로 blue origin·endpoint를
+   disable해 green 100%로 바꾸고, 관측 기간을 지난 뒤 blue를 삭제합니다.
 
-롤백은 weight를 blue로 되돌리는 것입니다. 큐 consumer나 batch는 새 클러스터에서
+롤백은 blue origin·endpoint를 다시 enable하고 weight를 blue 쪽으로 되돌리는 것입니다. 큐 consumer나 batch는 새 클러스터에서
 consumer를 켜기 전에 이전 클러스터의 consumer를 멈춰 중복 처리를 막습니다.
 
 ## NAP를 되돌리려면 NAP 노드를 먼저 비워야 한다
@@ -197,7 +199,10 @@ NAP는 NAP 노드가 남아 있는 동안 끌 수 없습니다. 옮겨 갈 자�
    추가합니다. NAP가 PDB와 disruption budget을 지키며 노드를 비웁니다.
 4. `kubectl get nodes -l karpenter.sh/nodepool`이 비면
    `az aks update --node-provisioning-mode Manual`을 실행하고 필요하면 CAS를
-   다시 켭니다. NAP 노드가 남으면 고정 크기 용량이 부족한 것이므로 풀을 더 늘립니다.
+   다시 켭니다. NAP 노드가 남으면 먼저 남은 NodeClaim의 `Drifted` 상태와 막는 조건을
+   확인합니다. NodePool disruption budget(`nodes: "0"` 등), eviction을 허용하지 않는 PDB,
+   `karpenter.sh/do-not-disrupt` annotation이 있으면 풀을 늘려도 노드가 비지 않습니다.
+   이런 조건이 없는데 Pod가 Pending이면 고정 크기 용량이 부족한 것이므로 풀을 더 늘립니다.
 
 Learn 절차는 2·3단계 뒤에 고정 크기 풀을 늘리지만, 순서를 바꿔도 조건(노드 없음,
 `limits.cpu: 0`)은 같고 Pending 구간만 줄어듭니다.

@@ -38,14 +38,18 @@ azd up                                        # Bicep 배포 + postprovision hoo
    - **앱과 HTTP Add-on:** podinfo·PodMonitor를 배포하고 HTTP Add-on을 Helm으로 설치합니다.
    - **AGC:** Gateway를 만들고 frontend NSG를 허용하며, AGC에 대한 `Monitoring Reader`를 부여합니다.
 
-AGC 실습을 하지 않으면 `azd env set ENABLE_AGC false`를 먼저 실행합니다.
+AGC 실습을 하지 않으면 `azd up` 전에 `azd env set ENABLE_AGC false`를 실행하고, 아래 `PATTERN`에서
+`azure-monitor-agc`를 뺍니다.
 
 패턴은 `PATTERN` 환경 값으로 고르고 `postdeploy` hook으로 실행합니다. 패턴마다 이전
 `ScaledObject`를 지우고 워크로드 노드가 줄어든 뒤 같은 부하를 주며, replica·노드 수를 5초마다
 1200초 동안 기록합니다.
 
 ```bash
+# ENABLE_AGC=true(기본값)일 때 5개 패턴 모두
 azd env set PATTERN "prometheus-rps http-add-on-min1 http-add-on-min0 http-add-on-cold-start azure-monitor-agc"
+# ENABLE_AGC=false이면 AGC 패턴을 뺍니다
+# azd env set PATTERN "prometheus-rps http-add-on-min1 http-add-on-min0 http-add-on-cold-start"
 azd hooks run postdeploy                      # 결과: out/<환경 이름>/
 ```
 

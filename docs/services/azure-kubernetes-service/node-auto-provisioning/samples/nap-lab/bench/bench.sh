@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector key=value]
 #   CPU=1            Pod당 CPU 요청
-#   WAVES="5 5 5 5"  지정하면 replica를 여러 번에 나눠 늘림(WAVE_INTERVAL초 간격)
+#   WAVES="5 5 5 5"  지정하면 replica를 여러 번에 나눠 늘림(WAVE_INTERVAL초 간격). 합계는 replicas와 같아야 함
 #   OUT=<dir>        실행별 원본 스냅샷 저장 위치
 #   SCALE_IN_COUNT="<cmd>"  남은 VM 수를 출력하는 명령. 0이 되는 시각을 축소 완료로 기록
 #                    예) CAS: az vmss list-instances -g <MC_rg> -n <vmss> --query "length(@)" -o tsv
@@ -12,6 +12,15 @@ USAGE="사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSele
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} REPLICAS=${3:?$USAGE} RUNS=${4:?$USAGE} SELECTOR=${5:-}
 CPU=${CPU:-1} TIMEOUT=${TIMEOUT:-1800} WAVE_INTERVAL=${WAVE_INTERVAL:-30}
 OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
+# WAVES 합계가 replicas와 다르면 측정 부하와 완료 조건이 어긋나므로 리소스를 바꾸기 전에 실패합니다.
+if [[ -n ${WAVES:-} ]]; then
+  sum=0
+  for w in $WAVES; do
+    [[ $w =~ ^[0-9]+$ ]] || { echo "WAVES는 정수 목록이어야 합니다: $WAVES" >&2; exit 1; }
+    sum=$((sum + w))
+  done
+  [[ $sum == "$REPLICAS" ]] || { echo "WAVES 합계($sum)가 replicas($REPLICAS)와 다릅니다: $WAVES" >&2; exit 1; }
+fi
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }

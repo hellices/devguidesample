@@ -24,13 +24,34 @@ log "deploy probe"; k apply -f "$(dirname "$0")/probe.yaml" >/dev/null; wait_web
 k -n migrate get pods -l app=web -o wide --no-headers | awk '{print $7}' | sort | uniq -c
 
 # AllowClusterAutoscalerAndNAP 없이 NAP를 켜려면 CAS가 켜진 풀이 하나도 없어야 합니다.
-for p in $(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv); do
+# 변경 전 각 풀의 min/max를 저장하고, NAP 활성화 전에 실패·중단하면 CAS를 원래 값으로 되돌립니다.
+cas_pools=$(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" \
+  --query "[?enableAutoScaling].[name,minCount,maxCount]" -o tsv)
+disabled=""   # "<풀> <min> <max>" 줄 목록. 실패한 변경도 일부 적용됐을 수 있어 호출 전에 기록합니다.
+rollback() {
+  local rc=$? p min max
+  trap '' INT TERM   # 복구 중 들어온 중단 신호로 복구가 끊기지 않게 합니다.
+  while read -r -u 3 p min max; do
+    [[ -n $p ]] || continue
+    log "rollback: enable cluster autoscaler on $p (min $min, max $max)"
+    az aks nodepool update -g "$RG" --cluster-name "$CLUSTER" -n "$p" --enable-cluster-autoscaler \
+      --min-count "$min" --max-count "$max" -o none || log "rollback failed: $p"
+  done 3<<<"$disabled"
+  exit "$rc"
+}
+trap rollback EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+while read -r -u 3 p min max; do
+  [[ -n $p ]] || continue
   log "disable cluster autoscaler on $p (count stays $(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n "$p" --query count -o tsv))"
+  disabled+="$p $min $max"$'\n'
   az aks nodepool update -g "$RG" --cluster-name "$CLUSTER" -n "$p" --disable-cluster-autoscaler -o none
-done
+done 3<<<"$cas_pools"
 
 log "enable NAP"
 az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto -o none
+trap - EXIT INT TERM   # NAP가 켜졌으므로 이후 실패는 CAS로 되돌리지 않습니다.
 log "NAP enabled"; k get nodepools.karpenter.sh
 
 while (( $(pool_count) > 0 )); do

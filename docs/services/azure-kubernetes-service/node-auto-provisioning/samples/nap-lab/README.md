@@ -85,7 +85,7 @@ OUT=./out ./bench/bench.sh "$NAP_CLUSTER_NAME" nap-burst 20 3 bench=fixed
 | `vm_launched_s` | NAP NodeClaim `Launched=True` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
 | `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니면 빈 값 |
-| `scale_in_s` | 축소 시작부터 VM 0개(`SCALE_IN_COUNT`) 또는 Ready 노드 0개까지. timeout이면 빈 값 |
+| `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값 |
 | `wave_latency_s` | wave별 추가 → 해당 wave Pod 모두 Ready |
 
 CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler` 범주를 Log Analytics로

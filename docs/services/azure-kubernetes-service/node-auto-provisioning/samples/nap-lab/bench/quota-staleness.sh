@@ -24,6 +24,19 @@ fam() { # 조회 실패나 정수가 아닌 출력은 nonzero
 }
 usage() { fam || echo unknown; }   # 기록용. 실패를 0으로 남기지 않습니다.
 
+# 실패·중단으로 끝나도 quota를 점유하는 CAS 소비용 Pod와 NAP 확인용 Pod를 0으로 되돌립니다.
+# 첫 리소스 변경과 첫 probe 전에 등록합니다. CAS는 소비용 Pod를 배포한 뒤에만 되돌립니다.
+cas_used=0
+cleanup() {
+  if (( cas_used )); then
+    kubectl --context "$CAS" -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed: CAS inflate"
+  fi
+  kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed: NAP inflate"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 kubectl --context "$NAP" apply -f "$HERE/../manifests/inflate.yaml" -f "$HERE/../manifests/nodepool-quota-staleness.yaml" >/dev/null
 kubectl --context "$NAP" -n bench patch deployment inflate --type strategic -p \
   '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"1","memory":"1Gi"}}}]}}}}' >/dev/null
@@ -35,6 +48,16 @@ claims() { # 대상 NodePool의 NodeClaim을 "<개수> <NodePool>;" 목록으로
   out=$(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' \
     -o jsonpath='{range .items[*]}{.metadata.labels.karpenter\.sh/nodepool}{"\n"}{end}') || return 1
   [[ -z $out ]] || sort <<<"$out" | uniq -c | tr -s ' ' | tr '\n' ';'
+}
+
+drop_claims() { # 확인용 NodeClaim을 삭제하고 사라질 때까지(최대 900초) 기다립니다. 남으면 nonzero
+  local left start
+  kubectl --context "$NAP" delete nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --wait=false >/dev/null 2>&1 || true
+  start=$(date +%s)
+  until left=$(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --no-headers) && [[ -z $left ]]; do
+    (( $(date +%s) - start <= 900 )) || { log "timeout: probe NodeClaims not deleted within 900s"; return 1; }
+    sleep 5
+  done
 }
 
 probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
@@ -49,31 +72,20 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
     if (( $(date +%s) - start > PROBE_TIMEOUT )); then
       log "timeout: no NodeClaim for pref64/alt within ${PROBE_TIMEOUT}s"
       kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || true
+      drop_claims || true   # timeout 전에 생긴 NodeClaim도 정상 경로와 같이 정리합니다.
       return 1
     fi
   done
   seen=$(date +%s)
   kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null
-  kubectl --context "$NAP" delete nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --wait=false >/dev/null 2>&1 || true
-  start=$(date +%s)
-  until left=$(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --no-headers) && [[ -z $left ]]; do
-    (( $(date +%s) - start <= 900 )) || { log "timeout: probe NodeClaims not deleted within 900s"; return 1; }
-    sleep 5
-  done
+  drop_claims || return 1
   echo "$seen $pools"
 }
 
 echo "phase,elapsed_s,ddsv7_usage,chosen"   # elapsed_s: 반납 시점부터 NodePool 선택을 읽은 시각까지
 r=$(probe); echo "control,,$(usage),${r#* }"
 
-# 실패·중단으로 끝나도 quota를 점유하는 CAS 소비용 Pod와 NAP 확인용 Pod를 0으로 되돌립니다.
-cleanup() {
-  kubectl --context "$CAS" -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed: CAS inflate"
-  kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed: NAP inflate"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+cas_used=1
 kubectl --context "$CAS" apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 kubectl --context "$CAS" -n bench patch deployment inflate --type strategic -p \
   '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"1","memory":"1Gi"}}}]}}}}' >/dev/null

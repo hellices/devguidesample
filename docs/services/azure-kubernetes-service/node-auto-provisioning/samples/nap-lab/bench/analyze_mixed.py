@@ -19,9 +19,9 @@ if not Path(prices_file).is_file():
     sys.exit(f"가격 파일이 없습니다: {prices_file}")
 prices = json.loads(Path(prices_file).read_text())
 pods = json.loads((d / "pods.json").read_text())["items"]
+# Ready 여부와 관계없이 selector와 일치하는 노드(생성 중·NotReady 포함)를 모두 구성·용량·비용에 넣습니다.
 nodes = [n for n in json.loads((d / "nodes.json").read_text())["items"]
-         if n["metadata"]["labels"].get(key) == val
-         and any(c["type"] == "Ready" and c["status"] == "True" for c in n["status"]["conditions"])]
+         if n["metadata"]["labels"].get(key) == val]
 
 ready = {"big": 0, "mem": 0, "small": 0}
 last, req_cpu, req_mem, all_ready = None, 0.0, 0.0, True

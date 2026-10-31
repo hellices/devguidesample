@@ -39,6 +39,15 @@ del_pool() { # 노드 풀 10개 제한 정책이 있는 구독을 위해 실험�
 profile() { az aks update -g "$RG" -n "$CAS" --cluster-autoscaler-profile "$@" -o none; }
 nap_apply() { kubectl --context "$NAP" apply -f "$@" >/dev/null; }
 nap_delete() { kubectl --context "$NAP" delete --ignore-not-found -f "$@" >/dev/null; }
+# 풀·autoscaler profile을 바꾸는 실험은 함수 본문을 subshell ( ... )로 실행하고 on_exit <정리 함수>를 등록합니다.
+# benchmark가 실패·중단돼도 정리 함수를 실행하고 원래 실패 상태로 끝납니다. 정리 실패는 성공만 실패로 바꿉니다.
+finish() {
+  local rc=$?
+  trap '' INT TERM   # 정리 중 들어온 중단 신호로 정리가 끊기지 않게 합니다.
+  "$@" || { log "정리 실패: $*"; (( rc )) || rc=1; }
+  exit "$rc"
+}
+on_exit() { trap "finish $1" EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; }
 
 exp_scale_out() {
   SCALE_IN_COUNT=$(vmss_count user) ./bench/bench.sh "$CAS" cas-burst 20 "$RUNS" agentpool=user | csv scale-out.csv "$BENCH_HEADER"
@@ -54,24 +63,34 @@ exp_large() { # 6 vCPU Pod: CAS D4 풀은 확장하지 못하고 NAP flex는 큰
   CPU=6 TIMEOUT=150 ./bench/bench.sh "$CAS" cas-large 4 1 agentpool=user | csv scale-out.csv "$BENCH_HEADER"
   CPU=6 ./bench/bench.sh "$NAP" nap-large 4 1 bench=flex | csv scale-out.csv "$BENCH_HEADER"
 }
-exp_dealloc() { # 1회차는 새 VM, 2회차부터 할당 해제한 VM 재시작
+exp_dealloc() ( # 1회차는 새 VM, 2회차부터 할당 해제한 VM 재시작
+  on_exit "del_pool userdea"
   add_pool userdea --node-vm-size Standard_D4ds_v7 --max-count 10 --node-osdisk-type Managed --scale-down-mode Deallocate
   ./bench/bench.sh "$CAS" cas-dealloc 20 "$RUNS" agentpool=userdea | csv scale-out.csv "$BENCH_HEADER"
-  del_pool userdea
-}
-exp_azurelinux() {
+)
+exp_azurelinux() (
+  on_exit "del_pool userazl"
   add_pool userazl --node-vm-size Standard_D4ds_v7 --max-count 10 --os-sku AzureLinux
   ./bench/bench.sh "$CAS" cas-azl 20 2 agentpool=userazl | csv scale-out.csv "$BENCH_HEADER"
   del_pool userazl
   nap_apply manifests/nodepool-azurelinux.yaml
   ./bench/bench.sh "$NAP" nap-azl 20 2 bench=azl | csv scale-out.csv "$BENCH_HEADER"
-}
+)
 exp_overprovision() { # overprovision.sh는 header를 직접 출력하므로 첫 줄을 떼고 붙입니다.
   ./bench/overprovision.sh "$CAS" cas-overprov agentpool=user 2 | tail -n +2 | csv overprovisioning.csv scenario,run,pods_ready_s,placeholder_rescheduled_s
   ./bench/overprovision.sh "$NAP" nap-overprov bench=fixed 2 | tail -n +2 | csv overprovisioning.csv scenario,run,pods_ready_s,placeholder_rescheduled_s
 }
-exp_quota_fallback() {
+undo_quota_fallback() {
+  local rc=0
+  nap_delete manifests/nodepool-quota-fallback.yaml || rc=1
+  del_pool big || rc=1
+  az aks nodepool update -g "$RG" --cluster-name "$CAS" -n user --labels "" -o none || rc=1
+  profile expander=random || rc=1
+  return "$rc"
+}
+exp_quota_fallback() (
   # 리전·계열 quota를 넘는 Standard_D96ds_v7을 1순위, Standard_D4ds_v7을 대체로 둡니다(구독 quota에 따라 결과가 달라짐).
+  on_exit undo_quota_fallback
   profile expander=priority
   az aks nodepool update -g "$RG" --cluster-name "$CAS" -n user --labels bench=q -o none
   add_pool big --node-vm-size Standard_D96ds_v7 --labels bench=q --max-count 2
@@ -83,13 +102,16 @@ exp_quota_fallback() {
     python3 bench/fallback.py "$OUT/cas-quota/run$r" cas-quota "$r" aks-user
     python3 bench/fallback.py "$OUT/nap-quota/run$r" nap-quota "$r" fallback
   done | csv quota-fallback.csv scenario,run,preferred_attempt_s,preferred_failure_s,fallback_decision_s,first_node_ready_s,all_pods_ready_s,note
-  nap_delete manifests/nodepool-quota-fallback.yaml
-  del_pool big
-  az aks nodepool update -g "$RG" --cluster-name "$CAS" -n user --labels "" -o none
-  profile expander=random
+)
+undo_mixed() {
+  local rc=0 p
+  for p in mixgen mixmem mixcpu; do del_pool $p || rc=1; done
+  profile expander=random || rc=1
+  return "$rc"
 }
-exp_mixed() {
+exp_mixed() (
   local h=scenario,run,ready_big,ready_mem,ready_small,all_ready_s,nodes,skus,vcpu_alloc,mem_alloc_gib,cpu_request_ratio,mem_request_ratio,usd_per_hour
+  on_exit undo_mixed
   profile expander=random
   add_pool mixgen --node-vm-size Standard_D4as_v7 --labels bench=mix --max-count 10
   TIMEOUT=420 ./bench/mixed.sh "$CAS" cas-one-pool bench=mix 1 | csv mixed-shapes.csv "$h"
@@ -98,33 +120,38 @@ exp_mixed() {
   ./bench/mixed.sh "$CAS" cas-three-pools-random bench=mix 2 | csv mixed-shapes.csv "$h"
   profile expander=least-waste
   ./bench/mixed.sh "$CAS" cas-three-pools-least-waste bench=mix 2 | csv mixed-shapes.csv "$h"
-  profile expander=random
   for p in mixgen mixmem mixcpu; do del_pool $p; done
   nap_apply manifests/nodepool-mixed.yaml
   ./bench/mixed.sh "$NAP" nap-def-v7 bench=mix 2 | csv mixed-shapes.csv "$h"
-}
-exp_rightsize() { # 20 → 3 Pod, 12분 관찰
+)
+exp_rightsize() ( # 20 → 3 Pod, 12분 관찰
+  on_exit "del_pool big32"
   add_pool big32 --node-vm-size Standard_D32als_v7 --max-count 2
   ./bench/rightsize.sh "$NAP" nap-flex bench=flex > "$OUT/rightsize-nap-flex.csv"
   ./bench/rightsize.sh "$CAS" cas-d4 agentpool=user > "$OUT/rightsize-cas-d4.csv"
   ./bench/rightsize.sh "$CAS" cas-d32 agentpool=big32 > "$OUT/rightsize-cas-d32.csv"
-  del_pool big32
-}
-exp_zone1() {
+)
+exp_zone1() (
+  on_exit "del_pool userz1"
   add_pool userz1 --node-vm-size Standard_D4ds_v7 --max-count 10 --zones 1
   sed "s/eastus2-1/$LOC-1/" manifests/nodepool-zone1.yaml | kubectl --context "$NAP" apply -f - >/dev/null
   ./bench/bench.sh "$CAS" cas-zone1 20 "$RUNS" agentpool=userz1 | csv zone1-burst.csv "$BENCH_HEADER"
   ./bench/bench.sh "$NAP" nap-zone1 20 "$RUNS" bench=zone1 | csv zone1-burst.csv "$BENCH_HEADER"
-  del_pool userz1
+)
+undo_burst40() { # 풀을 지우고 balance-similar-node-groups를 기본값 false로 되돌립니다.
+  local rc=0 p
+  for p in d2 d2b d2c d2d; do del_pool $p || rc=1; done
+  profile balance-similar-node-groups=false || rc=1
+  return "$rc"
 }
-exp_burst40() { # 2 vCPU VM 40대. VMSS 10대 제한 정책을 피하려고 CAS는 max 10 풀 4개를 균형 확장
+exp_burst40() ( # 2 vCPU VM 40대. VMSS 10대 제한 정책을 피하려고 CAS는 max 10 풀 4개를 균형 확장
+  on_exit undo_burst40
   for p in d2 d2b d2c d2d; do add_pool $p --node-vm-size Standard_D2ds_v7 --labels bench=d2x --max-count 10; done
   profile balance-similar-node-groups=true
   nap_apply manifests/nodepool-d2.yaml
   ./bench/bench.sh "$CAS" cas-d2x40 40 1 bench=d2x | csv burst-40-nodes.csv "$BENCH_HEADER"
   ./bench/bench.sh "$NAP" nap-d2x40 40 1 bench=d2 | csv burst-40-nodes.csv "$BENCH_HEADER"
-  for p in d2 d2b d2c d2d; do del_pool $p; done
-}
+)
 exp_quota_staleness() {
   BASELINE_USAGE=$(az vm list-usage -l "$LOC" --query "[?name.value=='StandardDdsv7Family'].currentValue | [0]" -o tsv) \
     ./bench/quota-staleness.sh "$NAP" "$CAS" "$LOC" > "$OUT/quota-staleness.csv"

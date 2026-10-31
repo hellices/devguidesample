@@ -11,6 +11,9 @@ data:
       scenarios: {
         ramp: {
           executor: 'ramping-arrival-rate',
+          // 공개 결과와 같은 조건을 유지하려고 maxVUs를 1000으로 둡니다. 400 RPS에서 평균 응답이 2.5초를 넘으면
+          // VU가 모자라 목표율을 유지하지 못하고 dropped_iterations가 생깁니다(HTTP Add-on 0개 시작에서 관측).
+          // 결과를 읽을 때는 http_reqs와 dropped_iterations를 함께 봅니다.
           startRate: 0, timeUnit: '1s', preAllocatedVUs: 200, maxVUs: 1000,
           stages: [
             { target: 400, duration: '1m' },

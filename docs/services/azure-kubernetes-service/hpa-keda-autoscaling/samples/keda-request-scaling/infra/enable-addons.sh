@@ -6,7 +6,16 @@
 set -euo pipefail
 RG=${AZURE_RESOURCE_GROUP:?} CLUSTER=${AKS_CLUSTER_NAME:?} AMW_ID=${AZURE_MONITOR_WORKSPACE_ID:?}
 
-if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "azureMonitorProfile.metrics.enabled" -o tsv) != true ]]; then
+# Managed Prometheus가 이미 켜져 있어도 이 sample의 workspace로 보내는 DCR이 연결되어 있지 않으면 다시 연결합니다.
+aks_id=$(az aks show -g "$RG" -n "$CLUSTER" --query id -o tsv)
+linked=false
+if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "azureMonitorProfile.metrics.enabled" -o tsv) == true ]]; then
+  for dcr in $(az monitor data-collection rule association list --resource "$aks_id" --query "[].dataCollectionRuleId" -o tsv); do
+    if az monitor data-collection rule show --ids "$dcr" --query "destinations.monitoringAccounts[].accountResourceId" -o tsv |
+      grep -qix "$AMW_ID"; then linked=true; break; fi
+  done
+fi
+if [[ $linked != true ]]; then
   az aks update -g "$RG" -n "$CLUSTER" --enable-azure-monitor-metrics --azure-monitor-workspace-resource-id "$AMW_ID" -o none
 fi
 

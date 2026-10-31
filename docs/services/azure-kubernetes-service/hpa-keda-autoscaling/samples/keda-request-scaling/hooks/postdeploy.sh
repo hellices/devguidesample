@@ -79,7 +79,8 @@ pattern_http_add_on_min0() {
   run_load http-add-on-min0 "$INTERCEPTOR" "$HOST"
 }
 cold_request() { # cold_request <run 이름>: 0개 상태에서 첫 요청과 직후 warm 요청을 시스템 노드의 임시 Pod에서 보냅니다.
-  wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.status.replicas}') =~ ^0?$ ]]"
+  # Deployment 집계가 0이어도 종료 중인 Pod가 남을 수 있으므로 Pod 객체가 모두 사라진 뒤 요청합니다.
+  wait_until "replica 0, Pod 0개" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.status.replicas}') =~ ^0?$ ]] && [[ -z \$(kubectl --context $CTX -n demo get pods -l app=podinfo --no-headers 2>/dev/null) ]]"
   local before; before=$(user_nodes)
   local r; r=$(kubectl --context "$CTX" run "coldstart-$RANDOM" --rm -i --restart=Never --image=curlimages/curl:8.23.0 --quiet \
     --overrides='{"spec":{"nodeSelector":{"kubernetes.azure.com/mode":"system"},"tolerations":[{"key":"CriticalAddonsOnly","operator":"Exists"}]}}' \
@@ -110,6 +111,8 @@ pattern_azure_monitor_agc() {
   sed -e "s|<keda-client-id>|$KEDA_CLIENT_ID|" -e "s|<alb-resource-name>|$alb|" -e "s|<node-resource-group>|$mc|" \
       -e "s|<subscription-id>|$sub|" -e "s|<tenant-id>|$tenant|" agc/scaledobject.yaml | kapply
   ready_scaledobject
+  # Gateway 주소는 비동기로 채워지므로 값이 생길 때까지 기다린 뒤 읽습니다.
+  wait_until "AGC Gateway 주소" 600 bash -c "[[ -n \$(kubectl --context $CTX -n demo get gateway web -o jsonpath='{.status.addresses[0].value}' 2>/dev/null) ]]"
   addr=$(k -n demo get gateway web -o jsonpath='{.status.addresses[0].value}')
   # 서브넷 NSG는 클러스터 생성 뒤에 연결될 수 있으므로(구독 정책 등) 부하 직전에 다시 확인하고
   # 클러스터 안에서 frontend가 응답할 때까지 기다립니다.

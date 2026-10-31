@@ -295,7 +295,7 @@ kubectl get events -A --field-selector source=karpenter -w   # AKS 1.36 실측 �
   아니므로 Windows 노드를 프로덕션에서 운영한다면 해당 풀은 CAS로 둡니다.
 
 기존 CAS 클러스터를 옮기는 절차와 위 조건 때문에 전환할 수 없을 때의 재생성
-전략은 [Cluster Autoscaler에서 NAP로 무중단 전환](cluster-autoscaler-migration/index.md)에
+전략은 [Cluster Autoscaler에서 NAP로 중단을 최소화해 전환](cluster-autoscaler-migration/index.md)에
 정리했습니다.
 
 ## 공식 참고 자료
