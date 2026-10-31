@@ -13,7 +13,7 @@ NodePool(on-demand 전용)에서 만들어지며 spot VM은 쓰지 않습니다.
 
 ## 준비
 
-- Azure Developer CLI 1.29 이상, Azure CLI 2.76 이상, `kubectl`, Helm 3
+- Azure Developer CLI 1.29 이상, Azure CLI 2.76 이상, `kubectl`, Helm 3, Python 3(`python3`)
 - 대상 리전에 약 40 vCPU quota(시스템 풀 2노드 + 워크로드 노드)
 
 ## 실행

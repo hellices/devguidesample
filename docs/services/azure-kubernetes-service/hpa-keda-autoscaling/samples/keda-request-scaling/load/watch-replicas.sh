@@ -22,5 +22,5 @@ while (( $(date +%s) - start < DURATION )); do
   echo "$now,$desired,$ready,$metric,$nodes"
   # 조회 시간과 관계없이 start + i×INTERVAL 시각에 다음 기록을 시작합니다.
   i=$((i + 1)); wait_s=$(( start + i * INTERVAL - $(date +%s) ))
-  (( wait_s > 0 )) && sleep "$wait_s"
+  if (( wait_s > 0 )); then sleep "$wait_s"; fi
 done

@@ -28,8 +28,9 @@ azd up
   `manifests/nodepool-fixed.yaml`(`Standard_D4ds_v7` 고정)과 `nodepool-flex.yaml`(v7 D 계열
   32 vCPU 이하)을 적용합니다. 리전 가격 파일이 없으면 `bench/prices.py`로 만듭니다.
 
-`AKS_VERSION`(기본 1.36)과 `AKS_VM_SIZE`(기본 `Standard_D4ds_v7`)는 `azd env set`으로 바꿀 수
-있습니다.
+`AKS_VERSION`(기본 1.36)과 `AKS_VM_SIZE`(기본 `Standard_D4ds_v7`)는 `azd up` 전에 `azd env set`으로
+바꿀 수 있습니다. `AKS_VM_SIZE`는 시스템 풀, CAS `user` 풀, NAP `bench-fixed` NodePool에 함께
+적용되어 `scale-out`·`waves`의 같은 VM 비교가 유지됩니다. 다른 실험은 문서의 VM 크기를 그대로 씁니다.
 
 ## 실험 실행
 

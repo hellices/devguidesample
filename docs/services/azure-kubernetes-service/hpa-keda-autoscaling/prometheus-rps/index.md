@@ -64,11 +64,14 @@ azd up
 - 관리 ID의 client ID와 workspace query endpoint는 azd 환경 값(`KEDA_CLIENT_ID`,
   `AMW_QUERY_ENDPOINT`)으로 남아 다음 단계가 그대로 씁니다.
 
-## 비용은 노드, Azure Monitor workspace 수집량, 부하 시간에 비례한다
+## 비용은 노드, Azure Monitor workspace 수집량, AGC, 부하 시간에 비례한다
 
-- AKS 시스템 노드 2대와 확장 중 NAP가 만드는 노드(이 실습에서는 최대 3대 추가)
+- AKS 시스템 노드 2대와 확장 중 NAP가 만드는 노드(이 실습에서는 최대 4대 추가)
 - Azure Monitor workspace의 Prometheus 수집·조회량
-- 실습 후 리소스 그룹을 삭제하면 과금이 멈춥니다.
+- 기본 `azd up`은 [AGC 실습](../azure-monitor-agc/index.md)용 Application Gateway for
+  Containers도 만듭니다(AGC·frontend·association 시간과 capacity unit 과금). Prometheus
+  패턴만 실습하려면 `azd up` 전에 `azd env set ENABLE_AGC false`를 실행합니다.
+- 실습 후 `azd down --purge --force`로 리소스 그룹을 삭제하면 과금이 멈춥니다.
 
 ## postdeploy hook이 ScaledObject를 적용하고 시스템 노드에서 k6로 초당 400건을 6분간 보낸다
 
