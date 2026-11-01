@@ -109,14 +109,19 @@ NAP는 2025년 7월 GA됐습니다. Microsoft Learn은
 | [Learn: CAS → NAP 마이그레이션](https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning) | 향후 기능 개발: CAS는 "maintained, with minimal feature enhancements", NAP는 "continuous active development and new feature enhancements" |
 | [AKS 릴리스 노트 2026-10-25](https://github.com/Azure/AKS/blob/master/CHANGELOG.md) | NAP: Capacity Reservation Group, Trusted Launch, managed GPU, Windows 노드(preview), dual-stack(preview) 추가. CAS: 이미지 업그레이드만 |
 
-## 클러스터별 선택: 새 클러스터, 미지원 구성, CAS 고유 동작
+## 클러스터별 선택: 기존 CAS 클러스터는 같은 클러스터에서 NAP로 전환
+
+운영 중인 AKS 클러스터는 대부분 VMSS 노드 풀과 CAS를 쓰고 있으므로, NAP 도입은 보통
+기존 클러스터에서 CAS를 끄고 NAP를 켜는 전환입니다. 클러스터를 다시 만들 필요는 없고,
+기존 VMSS 풀을 줄이면 Pod가 PDB 범위 안에서 NAP 노드로 옮겨집니다. 절차는
+[Cluster Autoscaler에서 NAP로 전환](cluster-autoscaler-migration/index.md)에 있습니다.
 
 | 클러스터 상황 | 선택 |
 |---|---|
-| 새 Linux 클러스터 | NAP로 시작 |
-| 기존 CAS 클러스터가 [NAP 미지원 구성](#nap-unsupported)(Windows GA, 서비스 주체, kubenet 등)을 사용 | CAS 유지, 또는 지원 구성으로 새 클러스터를 만들어 이전 |
+| 기존 CAS 클러스터, NAP 지원 구성(Azure CNI Overlay·Node Subnet, 관리 ID, Linux) | 같은 클러스터에서 CAS 끄기 → NAP 켜기 → 기존 풀 축소 |
+| 기존 CAS 클러스터, [NAP 미지원 구성](#nap-unsupported)(kubenet, Calico, 서비스 주체, Windows GA 필요 등) | 바꿀 수 있는 설정은 변경 후 전환. 바꿀 수 없으면 NAP를 켠 새 클러스터로 이전하거나 CAS 유지 |
 | `Deallocate` 재시작, 같은 VM 계열 quota 공유, Pod 이동 최소화가 꼭 필요한 풀 | 해당 풀만 CAS 유지 검토. NAP에서도 quota 여유, `WhenEmpty`, PDB, `do-not-disrupt`로 완화 가능 |
-| 그 밖의 기존 CAS 클러스터 | NAP로 전환([전환 가이드](cluster-autoscaler-migration/index.md)) |
+| 새 Linux 클러스터 | 처음부터 NAP로 생성 |
 
 ## 확장 단위: CAS는 풀의 노드 수, NAP는 VM 크기와 수
 
@@ -263,14 +268,19 @@ spec:
 
 권장 네트워크는 Azure CNI Overlay와 Cilium입니다.
 
+기존 클러스터에서 켤 때는 먼저 모든 노드 풀의 CAS를 끕니다(자세한 순서는
+[전환 가이드](cluster-autoscaler-migration/index.md#path-1)). 포털에서 작업하면 Cloud Shell에서
+같은 명령을 실행합니다([포털에서 진행](cluster-autoscaler-migration/index.md#portal)).
+
 ```bash
+# 기존 클러스터
+az aks update -g $RG -n $CLUSTER --node-provisioning-mode Auto
+
+# 새 클러스터
 az aks create -g $RG -n $CLUSTER \
   --node-provisioning-mode Auto \
   --network-plugin azure --network-plugin-mode overlay --network-dataplane cilium \
   --generate-ssh-keys
-
-# 기존 클러스터
-az aks update -g $RG -n $CLUSTER --node-provisioning-mode Auto
 
 kubectl get nodepools.karpenter.sh,aksnodeclasses.karpenter.azure.com
 kubectl get nodeclaims                       # NAP가 만든(또는 만드는 중인) 노드

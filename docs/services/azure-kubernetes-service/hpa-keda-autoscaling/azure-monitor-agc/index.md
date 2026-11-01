@@ -41,8 +41,8 @@ topic_order: 3
 
 Application Gateway for Containers(AGC)는 frontend가 처리한 요청 수를
 `TotalRequests` 플랫폼 메트릭으로 내보냅니다. KEDA add-on의 내장 `azure-monitor` scaler가
-이 값을 Workload Identity로 읽으면 앱에 지표를 추가하지 않고도 진입점 트래픽으로
-확장할 수 있습니다. 다만 1분 단위 집계와 게시 지연 때문에 1회 실측에서는 첫 확장이
+이 값을 Workload Identity로 읽고, KEDA가 만든 HPA가 Pod당 목표값으로 replica를
+계산합니다. 앱에 지표를 추가하지 않고도 진입점 트래픽으로 확장할 수 있습니다. 다만 1분 단위 집계와 게시 지연 때문에 1회 실측에서는 첫 확장이
 Managed Prometheus 방식보다 약 80초 늦었습니다.
 
 ## 확장 조건: 1분 집계 TotalRequests와 Pod당 목표값

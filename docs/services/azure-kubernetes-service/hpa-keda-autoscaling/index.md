@@ -1,5 +1,5 @@
 ---
-title: "AKS HPA·KEDA: 지표별 Pod 확장 방식과 요청 수 기반 패턴"
+title: "AKS KEDA와 HPA: KEDA가 만든 HPA로 외부 지표 확장, 요청 수 기반 패턴"
 description: AKS에서 HPA가 replica를 계산하는 방식, KEDA add-on이 HPA에 외부 지표를 공급하는 구조와 지원 범위, 요청 수 기반 확장 패턴별 지표 지연과 0개 운영 차이를 다룹니다.
 document_type: guide
 services: [azure-kubernetes-service]
@@ -40,18 +40,32 @@ review_cycle_days: 180
 applies_to: [AKS 1.36, KEDA add-on 2.19]
 ---
 
-# AKS HPA·KEDA: 지표별 Pod 확장 방식과 요청 수 기반 패턴
+# AKS KEDA와 HPA: KEDA가 만든 HPA로 외부 지표 확장, 요청 수 기반 패턴
 
-CPU·메모리처럼 Pod 안에서 재는 지표는 HPA만으로 충분합니다. 요청 수,
-큐 길이처럼 Pod 밖에 있는 지표로 확장하거나 0개까지 줄여야 하면 KEDA를
-씁니다. KEDA는 HPA를 대체하지 않고 HPA에 외부 지표를 공급하는 계층입니다.
-Pod가 늘어 노드가 부족해지면 그다음은 노드 autoscaler(NAP 또는 Cluster
-Autoscaler)가 이어받습니다.
+KEDA는 Kubernetes HPA를 이용해 Pod 수를 바꿉니다. `ScaledObject`를 만들면 KEDA
+operator가 같은 Deployment를 대상으로 하는 HPA(`keda-hpa-<이름>`)를 만들고, KEDA metrics
+server가 그 HPA에 요청 수·큐 길이 같은 외부 지표를 제공합니다. replica가 1개 이상일 때
+수를 계산하고 바꾸는 것은 HPA controller이며, KEDA가 replica를 직접 바꾸는 것은 HPA가
+처리하지 못하는 0↔1 전환뿐입니다.
+
+| 구분 | HPA 직접 사용 | KEDA `ScaledObject` |
+|---|---|---|
+| 사용자가 만드는 리소스 | `HorizontalPodAutoscaler` | `ScaledObject`. HPA는 KEDA가 만들고 관리 |
+| 지표 | CPU·메모리(metrics-server). 다른 지표는 custom·external metrics adapter 필요 | trigger의 scaler가 외부 지표를 조회하고 KEDA metrics server가 external metrics API로 제공 |
+| 1개 이상에서 replica 계산 | HPA controller | HPA controller(같은 식, 같은 `behavior`) |
+| 0개로 축소·0개에서 시작 | AKS 1.36에서 불가 | KEDA operator가 0↔1 전환 |
+| 확장 속도 조절 | `spec.behavior` | `advanced.horizontalPodAutoscalerConfig.behavior`(생성되는 HPA에 그대로 들어감) |
+
+CPU·메모리 지표만 쓰면 HPA를 직접 만들고, Pod 밖 지표로 확장하거나 0개까지 줄여야
+하면 KEDA를 씁니다. 어느 쪽이든 늘어난 Pod가 들어갈 노드가 없으면 노드
+autoscaler(NAP 또는 Cluster Autoscaler)가 노드를 추가합니다.
 
 ```text
-지표 원천 ──► KEDA ──► HPA controller ──► Deployment replica
-               └── 0↔1은 KEDA operator가 직접 ──┘    │
-                                           Pending Pod ──► NAP가 노드 생성
+ScaledObject ─► KEDA operator ─► HPA (keda-hpa-<이름>) ─► Deployment replica 1↔N ─► 노드 부족 시 노드 autoscaler
+                     │                │ 15초마다 지표 요청
+                     │                ▼
+                     │         KEDA metrics server ─► scaler ─► 지표 원천
+                     └─► 0↔1 전환은 KEDA operator가 Deployment replica를 직접 변경
 ```
 
 ## HPA replica 계산: 현재 지표와 목표의 비율
@@ -60,7 +74,8 @@ Autoscaler)가 이어받습니다.
 
 *그림: [Microsoft Learn, AKS scaling overview](https://learn.microsoft.com/azure/aks/concepts-scale), CC BY 4.0*
 
-HPA controller는 기본 15초 주기로 다음 식을 계산합니다.
+HPA controller는 기본 15초 주기로 다음 식을 계산합니다. 직접 만든 HPA와 KEDA가 만든 HPA가
+같은 식을 씁니다.
 
 ```text
 desiredReplicas = ceil(currentReplicas × currentMetricValue / desiredMetricValue)

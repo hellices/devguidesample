@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [migrate, operate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-01
 official_sources:
   - title: Migrate from cluster autoscaler to node auto-provisioning
     url: https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning
@@ -21,13 +21,19 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/zero-downtime-migration
   - title: Blue-green deployment of AKS clusters
     url: https://learn.microsoft.com/azure/architecture/guide/aks/blue-green-deployment-for-aks
+  - title: Delete an Azure Kubernetes Service (AKS) node pool
+    url: https://learn.microsoft.com/azure/aks/delete-node-pool
+  - title: Features & tools for Azure Cloud Shell
+    url: https://learn.microsoft.com/azure/cloud-shell/features
+  - title: Access a private Azure Kubernetes Service (AKS) cluster using the command invoke or Run command feature
+    url: https://learn.microsoft.com/azure/aks/access-private-cluster
   - title: Safely Drain a Node
     url: https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/
   - title: Container Lifecycle Hooks
     url: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/
   - title: Karpenter Scheduling
     url: https://karpenter.sh/docs/concepts/scheduling/
-last_verified: 2026-10-30
+last_verified: 2026-11-01
 review_cycle_days: 180
 applies_to: [AKS 1.36, Azure CLI 2.76+]
 topic_order: 2
@@ -35,16 +41,19 @@ topic_order: 2
 
 # Cluster Autoscaler에서 NAP로 전환: 같은 클러스터 전환, 동시 운영, 새 클러스터 이전
 
-NAP를 지원하는 네트워크·ID 구성이면 같은 클러스터에서 CAS를 끄고 NAP를 켠
-뒤 기존 VMSS 풀을 단계적으로 줄입니다. Pod는 PDB 범위 안에서 NAP 노드로 옮겨집니다.
-구성이 맞지 않으면 클러스터 설정을 바꿀 수 있는지부터 확인하고, 바꿀 수 없을 때는
-NAP를 켠 새 클러스터를 만들어 트래픽을 단계적으로 넘깁니다.
+NAP 도입은 대부분 운영 중인 CAS 클러스터를 같은 클러스터에서 NAP로 바꾸는 작업입니다.
+CAS를 끄고 NAP를 켠 뒤 기존 VMSS 풀을 단계적으로 줄이면, Pod는 PDB 범위 안에서 NAP
+노드로 옮겨집니다(경로 1). 클러스터를 다시 만들 필요는 없습니다.
+
+워크로드별로 몇 주에 걸쳐 나눠 옮겨야 하면 CAS와 NAP를 함께 운영하고(경로 2), 네트워크·ID
+구성이 NAP를 지원하지 않으면 클러스터 설정을 바꾸거나 NAP를 켠 새 클러스터로
+이전합니다(경로 3).
 
 ## 전환 경로 선택: NAP 지원 여부와 동시 운영 기간
 
 | 상황 | 경로 | 특징 |
 |---|---|---|
-| Azure CNI Overlay/Node Subnet, 관리 ID, Linux 풀 | 경로 1: CAS 끄기 → NAP 켜기 → 풀 단계 축소 | 가장 단순. 전환 중 기존 풀은 고정 크기 |
+| 대부분의 클러스터: Azure CNI Overlay/Node Subnet, 관리 ID, Linux 풀 | 경로 1(기본): CAS 끄기 → NAP 켜기 → 풀 단계 축소 | 같은 클러스터에서 전환. 전환 중 기존 풀은 고정 크기 |
 | 워크로드별로 몇 주에 걸쳐 옮겨야 함 | 경로 2: CAS·NAP 동시 운영 | `AllowClusterAutoscalerAndNAP` feature flag 등록과 taint·toleration 관리 필요 |
 | kubenet, Calico, 서비스 주체 | 먼저 클러스터 설정 변경 검토, 불가하면 경로 3: 새 클러스터 blue-green | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 비용이 두 배지만 롤백이 가장 빠름 |
 | Azure CNI Pod Subnet 동적 할당 | 경로 3만 가능 | Overlay로 바꿀 수 없고 NAP도 지원하지 않음 |
@@ -78,7 +87,7 @@ NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없으므로 네�
   `vnetSubnetID`를 먼저 설정합니다.
 - **시스템 풀:** 시스템 풀은 그대로 두고 user 풀만 옮깁니다.
 
-## 경로 1: CAS 끄기, NAP 켜기, 기존 풀 순차 축소
+## 경로 1: CAS 끄기, NAP 켜기, 기존 풀 순차 축소 { #path-1 }
 
 ```bash
 # 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
@@ -108,6 +117,23 @@ az aks nodepool delete -g $RG --cluster-name $CLUSTER -n user
 `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data`를 한 대씩
 실행합니다. drain은 eviction API를 쓰므로 PDB가 허용하는 만큼만 Pod를 내보냅니다.
 내보낸 Pod가 Pending이 되면 NAP가 새 노드를 만듭니다.
+
+### 포털에서 진행: Cloud Shell의 CLI와 Node pools 화면 { #portal }
+
+CAS 끄기와 NAP 켜기는 Azure CLI 또는 ARM 템플릿으로 합니다. Microsoft Learn의 NAP
+활성화·전환 문서는 이 두 방법만 다루므로, 포털에서 작업할 때는 포털에 내장된 Cloud
+Shell에서 위 명령을 실행합니다. Cloud Shell에는 Azure CLI와 kubectl이 설치되어 있고
+포털에 로그인한 계정으로 인증됩니다.
+
+1. 포털 상단 메뉴에서 Cloud Shell을 열고 **Bash**를 선택합니다.
+2. `RG=<리소스 그룹>`, `CLUSTER=<클러스터 이름>`을 지정하고 `az aks get-credentials -g $RG -n $CLUSTER`로
+   클러스터 자격 증명을 받습니다.
+3. 위 절차의 1~4단계를 그대로 실행합니다. `az aks` 명령은 Azure Resource Manager를
+   거치므로 private 클러스터에서도 동작합니다. private 클러스터의 `kubectl` 확인은
+   클러스터 화면의 **Run command**에서 실행합니다. Run command는 `az aks command invoke`와
+   같은 기능입니다.
+4. 비운 풀은 클러스터의 **Settings > Node pools**에서 풀 이름을 선택한 뒤
+   **Node Pool | Overview** 화면의 **Delete**로 삭제합니다. 삭제한 풀은 복구할 수 없습니다.
 
 ## 전환 리허설: 단계별 소요 시간과 요청 실패
 
@@ -214,6 +240,9 @@ Learn 절차는 2·3단계 뒤에 고정 크기 풀을 늘리지만, 순서를 �
 - [Update Azure CNI IPAM mode and data plane](https://learn.microsoft.com/azure/aks/update-azure-cni)
 - [Zero-downtime migration to AKS](https://learn.microsoft.com/azure/aks/zero-downtime-migration)
 - [Blue-green deployment of AKS clusters](https://learn.microsoft.com/azure/architecture/guide/aks/blue-green-deployment-for-aks)
+- [Delete an AKS node pool](https://learn.microsoft.com/azure/aks/delete-node-pool)
+- [Features & tools for Azure Cloud Shell](https://learn.microsoft.com/azure/cloud-shell/features)
+- [Access a private AKS cluster using command invoke or Run command](https://learn.microsoft.com/azure/aks/access-private-cluster)
 - [Kubernetes: Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
 - [Kubernetes: Container Lifecycle Hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/)
 - [Karpenter Scheduling](https://karpenter.sh/docs/concepts/scheduling/)
