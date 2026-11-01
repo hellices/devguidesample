@@ -47,8 +47,6 @@ official_sources:
     url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go
   - title: Use Scale-down Mode to delete/deallocate nodes in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/scale-down-mode
-  - title: What is Azure Kubernetes Service (AKS) Automatic?
-    url: https://learn.microsoft.com/azure/aks/intro-aks-automatic
   - title: Configure AKSNodeClass resources for node auto-provisioning (NAP) in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/node-autoprovision-aksnodeclass
   - title: "Generally Available: Node auto-provisioning support in AKS"
@@ -68,7 +66,7 @@ Cluster Autoscaler(CAS)는 미리 만든 VMSS 노드 풀의 노드 수만 바꿉
 NAP는 Pending Pod의 requests를 보고 VM 크기와 개수를 함께 정해 노드를 만들고,
 비거나 덜 쓰이는 노드도 스스로 정리합니다.
 
-NAP는 2025년 7월 GA됐고 AKS Automatic의 기본 노드 관리 방식입니다. Microsoft Learn은
+NAP는 2025년 7월 GA됐습니다. Microsoft Learn은
 향후 기능 개발에서 CAS를 "유지보수, 최소한의 기능 개선", NAP를 "지속적인 개발과 새 기능
 추가" 대상으로 구분하므로 새 Linux 워크로드는 NAP로 시작합니다. CAS는 폐기되지 않고 계속
 지원되며, NAP가 지원하지 않는 구성(Windows 노드 GA, 서비스 주체, kubenet 등)에서는 여전히
@@ -102,13 +100,12 @@ NAP는 2025년 7월 GA됐고 AKS Automatic의 기본 노드 관리 방식입니�
 측정 조건과 반복 횟수는 [NAP·CAS 시나리오별 실측](scenario-comparison/index.md)과
 [CAS·NAP 확장 시간 단계별 실측](scale-out-benchmark/index.md)에 있습니다.
 
-## 권장 근거: GA, AKS Automatic 기본값, 기능 개발 방향
+## 권장 근거: GA와 기능 개발 방향
 
 | 공식 근거 | 내용 |
 |---|---|
 | [Azure Updates (2025-07-17)](https://azure.microsoft.com/updates?id=498247) | NAP 정식 출시(GA) |
-| [Learn: NAP 개요](https://learn.microsoft.com/azure/aks/node-auto-provisioning) | 대부분의 프로덕션 워크로드는 AKS Automatic을 기본으로 권장하며, AKS Automatic에는 NAP가 사전 구성됨 |
-| [Learn: AKS scaling 개요](https://learn.microsoft.com/azure/aks/concepts-scale) | 빠른 권장: AKS Automatic(NAP·VPA·KEDA 사전 구성)으로 시작. CAS는 "미리 정의한 노드 풀이 있을 때", NAP는 "노드 풀을 직접 구성하지 않고 VM SKU를 자동 선택할 때" |
+| [Learn: AKS scaling 개요](https://learn.microsoft.com/azure/aks/concepts-scale) | CAS는 "미리 정의한 노드 풀이 있을 때", NAP는 "노드 풀을 직접 구성하지 않고 VM SKU를 자동 선택할 때" |
 | [Learn: CAS → NAP 마이그레이션](https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning) | 향후 기능 개발: CAS는 "maintained, with minimal feature enhancements", NAP는 "continuous active development and new feature enhancements" |
 | [AKS 릴리스 노트 2026-10-25](https://github.com/Azure/AKS/blob/master/CHANGELOG.md) | NAP: Capacity Reservation Group, Trusted Launch, managed GPU, Windows 노드(preview), dual-stack(preview) 추가. CAS: 이미지 업그레이드만 |
 
@@ -116,7 +113,7 @@ NAP는 2025년 7월 GA됐고 AKS Automatic의 기본 노드 관리 방식입니�
 
 | 클러스터 상황 | 선택 |
 |---|---|
-| 새 클러스터 | AKS Automatic(NAP 포함). 노드 설정을 세밀하게 제어해야 하면 AKS Standard + NAP |
+| 새 Linux 클러스터 | NAP로 시작 |
 | 기존 CAS 클러스터가 [NAP 미지원 구성](#nap-unsupported)(Windows GA, 서비스 주체, kubenet 등)을 사용 | CAS 유지, 또는 지원 구성으로 새 클러스터를 만들어 이전 |
 | `Deallocate` 재시작, 같은 VM 계열 quota 공유, Pod 이동 최소화가 꼭 필요한 풀 | 해당 풀만 CAS 유지 검토. NAP에서도 quota 여유, `WhenEmpty`, PDB, `do-not-disrupt`로 완화 가능 |
 | 그 밖의 기존 CAS 클러스터 | NAP로 전환([전환 가이드](cluster-autoscaler-migration/index.md)) |
@@ -152,8 +149,6 @@ NAP는 다른 SKU로 곧바로 넘어갑니다.
 VM 부팅 시간은 그대로입니다. VM을 만들고 노드로 준비하는 시간은 autoscaler가 줄이지 못하며,
 VM 준비에는 보통 2~5분이 걸립니다. 이 시간을 기다릴 수 없는 Linux 급증 부하에는 ACI virtual
 node를 고려합니다([AKS scaling overview](https://learn.microsoft.com/azure/aks/concepts-scale)).
-시간 보장이 필요하면 AKS Automatic의 Pod 준비 SLA(대상 작업의 99.9%를 5분 안에 준비)를
-기준으로 삼습니다([NAP 개요](https://learn.microsoft.com/azure/aks/node-auto-provisioning)).
 
 실측에서도 확장 결정 뒤 첫 노드 Ready까지 약 1~1.5분이 걸렸고 두 방식의 차이는 크지
 않았습니다. 다음 표는 같은 VM 크기의 Pod 20개를 0개부터 확장한 결과입니다(중앙값, AKS 1.36.5,
@@ -326,7 +321,6 @@ Windows 지원은 2026-10-25 AKS 릴리스와 AKSNodeClass 문서에 preview로 
 - [Karpenter Disruption](https://karpenter.sh/docs/concepts/disruption/)
 - [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
 - [Use Scale-down Mode to delete/deallocate nodes](https://learn.microsoft.com/azure/aks/scale-down-mode)
-- [What is AKS Automatic?](https://learn.microsoft.com/azure/aks/intro-aks-automatic)
 - [Configure AKSNodeClass resources for NAP](https://learn.microsoft.com/azure/aks/node-autoprovision-aksnodeclass)
 - [Generally Available: Node auto-provisioning support in AKS](https://azure.microsoft.com/updates?id=498247)
 - [AKS release notes](https://github.com/Azure/AKS/blob/master/CHANGELOG.md)

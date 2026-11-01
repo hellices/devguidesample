@@ -75,8 +75,6 @@ Pod를 보고 한 주기를 기다릴 때 생겼습니다. 따라서 Pod가 VM�
 - VM 준비 시간은 autoscaler보다 zone 조건과 측정 시점에 따라 달랐습니다. zone을 나누지 않은
   첫 측정에서는 CAS가, zone 1로 고정한 측정에서는 NAP가 조금 빨랐습니다(각 3~5회).
   자세한 조건은 [NAP·CAS 시나리오별 실측](../scenario-comparison/index.md)에 있습니다.
-- AKS Automatic은 NAP가 기본 구성되어 있고, 적격 Pod 준비 작업의 99.9%가 5분 안에
-  끝나는 SLA를 제공합니다.
 
 ## overprovisioning: placeholder Pod로 여유 용량 확보
 
@@ -235,7 +233,7 @@ Microsoft Learn의 NAP 예시 주석은 `consolidateAfter`를 `WhenEmpty`에서�
 - [Configure node disruption policies for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-disruption)
 - [Concepts - Storage in AKS (Ephemeral OS disks)](https://learn.microsoft.com/azure/aks/concepts-storage)
 - [Artifact Streaming on AKS](https://learn.microsoft.com/azure/aks/artifact-streaming)
-- [Overview of NAP (AKS Automatic SLA)](https://learn.microsoft.com/azure/aks/node-auto-provisioning)
+- [Overview of NAP in AKS](https://learn.microsoft.com/azure/aks/node-auto-provisioning)
 - [Cluster Autoscaler FAQ (overprovisioning)](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md)
 - [Cluster Autoscaler 1.35 static_autoscaler.go](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/core/static_autoscaler.go)
 - [Karpenter Settings](https://karpenter.sh/docs/reference/settings/)
