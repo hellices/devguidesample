@@ -60,8 +60,19 @@ CONTRAST = re.compile(r"[가-힣A-Za-z0-9)]+(?:이|가)\s?아니라(?=\s)")
 FORMAL_END = re.compile(r"(?:니다|니까|세요|십시오|해요|에요|예요|까요)[.!?]$")
 PLAIN_END = re.compile(r"[가-힣][.!?]$")
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
-# Quoted spans usually cite an example of a pattern rather than use it.
-QUOTED = re.compile(r"\"[^\"\n]*\"|“[^”\n]*”|'[^'\n]*'|‘[^’\n]*’|「[^」\n]*」")
+# Quoted spans usually cite an example of a pattern rather than use it. A straight
+# single quote next to an ASCII letter or digit is an apostrophe (don't, user's),
+# so it can neither open nor close a quote.
+QUOTED = re.compile(
+    r"\"[^\"\n]*\"|“[^”\n]*”|‘[^’\n]*’|「[^」\n]*」"
+    r"|(?<![A-Za-z0-9])'[^'\n]*'(?![A-Za-z0-9])"
+)
+# Inline Markdown that wraps heading text: images, link labels, emphasis.
+INLINE_LINK = re.compile(r"!?\[([^\]]*)\]")
+INLINE_EMPHASIS = re.compile(
+    r"(\*\*|\*|~~)(?=\S)(.+?)(?<=\S)\1"
+    r"|(?<![A-Za-z0-9])(__|_)(?=\S)(.+?)(?<=\S)\3(?![A-Za-z0-9])"
+)
 
 
 @dataclass
@@ -143,6 +154,15 @@ def strip_markup(text: str) -> tuple[str, str]:
     return markdown, prose
 
 
+def normalize_inline(text: str) -> str:
+    """Reduce link labels and emphasis to plain text."""
+    text = INLINE_LINK.sub(r"\1", text)
+    previous = None
+    while previous != text:
+        previous, text = text, INLINE_EMPHASIS.sub(lambda m: m.group(2) or m.group(4), text)
+    return text.strip()
+
+
 def split_sentences(prose: str) -> list[str]:
     sentences: list[str] = []
     for paragraph in re.split(r"\n\s*\n", prose):
@@ -176,7 +196,10 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     metrics, examples = report.metrics, report.examples
     per100 = 100 / max(len(sentences), 1)
 
-    headings = [HEADING_ANCHOR.sub("", m.group(2)).strip() for m in HEADING.finditer(markdown)]
+    headings = [
+        normalize_inline(HEADING_ANCHOR.sub("", m.group(2)))
+        for m in HEADING.finditer(markdown)
+    ]
     colon_headings = [h for h in headings if re.search(r"\S\s?[:：]\s+\S", h)]
     metrics["colon_headings"] = len(colon_headings)
     if colon_headings:
