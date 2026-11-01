@@ -5,7 +5,8 @@
   fallback-pool-pattern: CAS는 대체 VMSS 이름 일부(예: aks-user), NAP는 NodePool 이름(예: fallback)
   분석 모드는 마지막 인수로 지정하고, 생략하면 scenario 접두사(nap-/cas-)로 정합니다.
   first_attempt_s와 failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS만 봅니다. 선호 VM을 시도하지 않은 실행은
-  first_attempt_s가 빈 값입니다. fallback_node_ready_s는 t0 이후 생성된 대체 노드만 봅니다.
+  first_attempt_s가 빈 값입니다. NAP에서 선호 NodeClaim이 스냅샷 전에 삭제됐으면 그 NodeClaim의 가장 이른
+  이벤트 시각을 first_attempt_s로 씁니다. fallback_node_ready_s는 t0 이후 생성된 대체 노드만 봅니다.
 출력: scenario,run,first_attempt_s,failure_seen_s,fallback_decision_s,fallback_node_ready_s,all_pods_ready_s,failure_message
 """
 import json
@@ -66,6 +67,10 @@ def main():
         if bad:
             b = min(bad, key=et)
             fail, msg = et(b), (b.get("reason") or "") + ": " + (b.get("message") or "")
+        if first is None:
+            # 선호 NodeClaim이 스냅샷 전에 모두 삭제됐으면 그 NodeClaim의 가장 이른 이벤트를 시도 시각으로 씁니다.
+            first = min((et(e) for e in events if e["involvedObject"].get("kind") == "NodeClaim"
+                         and preferred(e["involvedObject"])), default=None)
     else:  # CAS
         def group(e):
             m = (GROUP if e.get("reason") != "TriggeredScaleUp" else TRIGGERED).search(e.get("message") or "")

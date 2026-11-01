@@ -26,6 +26,11 @@ kubectl --context "$CTX" -n demo wait gateway/web --for=condition=Programmed --t
 ./agc/allow-frontend.sh
 # AGC(trafficController)는 ALB Controller가 node resource group에 만듭니다. KEDA ID에 지표 읽기 권한을 줍니다.
 ALB_ID=$(az resource list -g "$MC" --resource-type Microsoft.ServiceNetworking/trafficControllers --query "[0].id" -o tsv)
-az role assignment create --assignee-object-id "$KEDA_PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
-  --role "Monitoring Reader" --scope "$ALB_ID" -o none
+[[ -n $ALB_ID ]] || { echo "노드 리소스 그룹 ${MC}에 AGC(trafficController)가 없습니다." >&2; exit 1; }
+# 다시 실행해도 실패하지 않도록 같은 역할 할당이 없을 때만 만듭니다. 조회가 실패하면 중단합니다.
+ASSIGNED=$(az role assignment list --assignee "$KEDA_PRINCIPAL_ID" --role "Monitoring Reader" --scope "$ALB_ID" --query "length(@)" -o tsv)
+if [[ $ASSIGNED == 0 ]]; then
+  az role assignment create --assignee-object-id "$KEDA_PRINCIPAL_ID" --assignee-principal-type ServicePrincipal \
+    --role "Monitoring Reader" --scope "$ALB_ID" -o none
+fi
 log "준비 완료. 실행: azd env set PATTERN prometheus-rps && azd hooks run postdeploy"

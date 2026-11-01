@@ -6,6 +6,7 @@
 #   STRICT=0           1이면 사전 조건(대조군 pref64, 점유 중 alt)이 맞지 않을 때 끝에서 실패로 종료.
 #                      기본 0은 경고와 precondition 열만 남깁니다(공개 실행의 대조군은 alt를 골랐음).
 # 반납 뒤 1200초 안에 pref64가 나오지 않으면 timeout 행(censored)을 남기고 실패로 종료합니다.
+# 반납 뒤 probe가 실패하면 그 회차는 기록하지 않고 1200초 기한 안에서 다시 시도합니다.
 # 1) 대조군: NAP가 pref64(D64ds_v7)를 고르는지 확인
 # 2) CAS user 풀(D4ds_v7) 노드 6대로 Ddsv7 계열 quota를 점유하고 11분 대기 → NAP가 alt로 바꾸는지 확인
 # 3) 점유 해제 직후부터 60초마다 NAP 선택을 확인해 pref64로 돌아오기까지 걸린 시간을 기록
@@ -124,7 +125,9 @@ done
 rel=$(date +%s); log "released; Ddsv7 usage $cur"
 found=0
 while (( $(date +%s) - rel <= 1200 )); do
-  r=$(probe); chosen=${r#* }; el=$(( ${r%% *} - rel ))
+  # probe 실패는 기록하지 않고 기한 안에서 다시 시도합니다. 기한을 넘기면 아래 timeout 행으로 끝납니다.
+  if ! r=$(probe); then log "WARNING: probe failed after release; retrying"; sleep 45; continue; fi
+  chosen=${r#* }; el=$(( ${r%% *} - rel ))
   echo "released,$el,$(usage),$chosen,"
   # 선택을 읽은 시각이 1200초를 넘었으면 pref64여도 기한 안 복귀로 보지 않고 timeout(censored)으로 남깁니다.
   (( el <= 1200 )) || break

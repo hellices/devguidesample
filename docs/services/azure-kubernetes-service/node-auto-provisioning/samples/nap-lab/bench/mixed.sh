@@ -11,6 +11,10 @@ BIG=${BIG:-4} MEM=${MEM:-6} SMALL=${SMALL:-10} TIMEOUT=${TIMEOUT:-900} OUT=${OUT
 HERE=$(cd "$(dirname "$0")" && pwd)
 # 리소스를 바꾸기 전에 확인합니다. 0이나 정수가 아닌 값이면 측정 없이 성공으로 끝나지 않게 합니다.
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
+# scenario는 CSV 첫 열에 그대로 들어가므로 열·행을 깨는 문자를 막습니다.
+if [[ $SCENARIO == *[$',\r\n"']* ]]; then
+  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+fi
 PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_LOCATION이 필요합니다}.json}
 [[ -f $PRICES ]] || { echo "가격 파일이 없습니다: $PRICES (bench/prices.py로 생성)" >&2; exit 1; }
 k() { kubectl --context "$CTX" "$@"; }
@@ -65,6 +69,7 @@ for run in $(seq 1 "$RUNS"); do
   log "run $run: $(ready_pods)/$total pods ready"
   k get nodes -o json > "$dir/nodes.json"
   k get events -n mixed -o json > "$dir/events.json"
-  python3 "$HERE/analyze_mixed.py" "$dir" "$SCENARIO" "$run" "$SELECTOR" "$PRICES"
+  # 생성되지 않은 Pod도 미완료로 보도록 기대 replica 수를 넘깁니다.
+  python3 "$HERE/analyze_mixed.py" "$dir" "$SCENARIO" "$run" "$SELECTOR" "$PRICES" "$BIG" "$MEM" "$SMALL"
   scale_zero
 done

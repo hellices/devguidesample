@@ -172,10 +172,11 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
       -o jsonpath='{range .items[*]}{.metadata.uid}:{.status.containerStatuses[0].restartCount}{"\n"}{end}'
   }
   drift_round() { # drift_round <label 값> <결과 이름>
-    local start; start=$(date -u +%FT%TZ)
-    local client0 client1 row
+    local start client0 client1 row
     client0=$(client_id) || return 1
     [[ -n $client0 ]] || { log "drift $1: client Pod가 없습니다"; return 1; }
+    # patch 직전 시각입니다. 이보다 먼저 만들어진 NodeClaim을 교체 대상으로 보고 client 로그도 이 시각부터 셉니다.
+    start=$(date -u +%FT%TZ)
     kubectl --context "$ctx" patch nodepool default --type merge \
       -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"rotation\":\"$1\"}}}}}" >/dev/null
     log "drift $1 시작"

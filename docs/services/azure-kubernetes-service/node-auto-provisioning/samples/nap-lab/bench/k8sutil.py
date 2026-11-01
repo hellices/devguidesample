@@ -34,11 +34,16 @@ def event_time(e, t0):
 
     Kubernetes는 반복 이벤트를 count와 lastTimestamp로 합치므로 이전 실행에서 처음 생긴 이벤트가
     이번 실행(t0 이후)에 다시 발생했으면 lastTimestamp를 이번 실행의 발생 시각으로 씁니다.
+    events.k8s.io 방식으로 series(count, lastObservedTime)에 합쳐진 이벤트도 같은 규칙으로 lastObservedTime을 씁니다.
     """
     first = ts(e.get("eventTime") or e.get("firstTimestamp") or e.get("lastTimestamp"))
     last = ts(e.get("lastTimestamp"))
     if first and last and (e.get("count") or 1) > 1 and first < t0 <= last:
         return last
+    series = e.get("series") or {}
+    observed = ts(series.get("lastObservedTime"))
+    if first and observed and (series.get("count") or 1) > 1 and first < t0 <= observed:
+        return observed
     return first
 
 

@@ -179,11 +179,15 @@ HPA controller가 맡습니다.
 - HPA가 15초마다 지표를 요청할 때마다 metrics server는 기본적으로 scaler를 새로
   조회합니다. trigger에 `useCachedMetrics: true`를 두면 `pollingInterval`마다 갱신한
   캐시 값을 돌려줘 이벤트 원천의 조회 부하를 줄입니다.
-- `minReplicaCount`가 1 이상이면 scaler는 항상 활성 상태이고 `activation*`
-  값은 무시됩니다.
+- `minReplicaCount`가 1 이상이면 workload가 0개로 줄지 않으므로 `activation*` 값은 replica
+  수에 영향을 주지 않습니다. KEDA 문서는 이를 "scaler가 항상 활성"이라고 표현하지만, 지표가
+  activation 값보다 낮을 때 `ScaledObject`의 `Active` 조건이 False로 보일 수 있으며 장애는
+  아닙니다.
 - 같은 workload에 HPA와 `ScaledObject`를 함께 두지 않습니다. 같은 대상을 가리키는 HPA가
-  먼저 있으면 KEDA admission webhook이 `ScaledObject`를 거부하고, 나중에 HPA를 만들면
-  둘이 replica 수를 번갈아 바꿉니다. 기존 HPA에서 옮길 때는 HPA를 지우거나
+  먼저 있으면 KEDA admission webhook이 `ScaledObject`를 거부합니다(KEDA 2.19
+  `verifyHpas`). 다만 그 HPA에 `validations.keda.sh/hpa-ownership: "false"` annotation이
+  있거나 webhook이 동작하지 않으면 거부되지 않으므로 이 검사에 기대지 말고 적용 전에 직접
+  확인합니다. 나중에 HPA를 만들면 둘이 replica 수를 번갈아 바꿉니다. 기존 HPA에서 옮길 때는 HPA를 지우거나
   `scaledobject.keda.sh/transfer-hpa-ownership: "true"` annotation과
   `advanced.horizontalPodAutoscalerConfig.name`(기존 HPA 이름)으로 소유권을 넘깁니다.
 - AKS 1.36의 기본 HPA는 replica 0을 지원하지 않습니다(`HPAScaleToZero`

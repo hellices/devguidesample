@@ -23,26 +23,31 @@ HOST=podinfo.example.com
 user_nodes() { local out; out=$(k get nodes -l kubernetes.azure.com/mode=user -o name) || return 1; grep -c . <<<"$out" || true; }
 # 아래 조건 함수는 조회가 실패하면 조건 불충족(nonzero)으로 돌려 wait_until이 다시 확인하게 합니다.
 # 실패한 조회를 노드 0대·Pod 0개로 읽어 다음 단계로 넘어가지 않습니다.
+# API 호출이 멈춰도 wait_until이 마감을 확인할 수 있도록 조회마다 --request-timeout을 둡니다.
 nodes_at_most() { # nodes_at_most <n>: 워크로드 노드가 n대 이하이면 성공
-  local out; out=$(kubectl --context "$CTX" get nodes -l kubernetes.azure.com/mode=user -o name) || return 1
+  local out; out=$(kubectl --context "$CTX" --request-timeout=30s get nodes -l kubernetes.azure.com/mode=user -o name) || return 1
   (( $(grep -c . <<<"$out" || true) <= $1 ))
 }
 no_podinfo_pods() { # Deployment 집계와 Pod 객체가 모두 0일 때 성공
   local rep pods
-  rep=$(kubectl --context "$CTX" -n demo get deploy podinfo -o jsonpath='{.status.replicas}') || return 1
-  pods=$(kubectl --context "$CTX" -n demo get pods -l app=podinfo -o name) || return 1
+  rep=$(kubectl --context "$CTX" --request-timeout=30s -n demo get deploy podinfo -o jsonpath='{.status.replicas}') || return 1
+  pods=$(kubectl --context "$CTX" --request-timeout=30s -n demo get pods -l app=podinfo -o name) || return 1
   [[ $rep =~ ^0?$ && -z $pods ]]
 }
 podinfo_available() { # podinfo_available <n>: 사용 가능한 podinfo replica가 n개 이상이면 성공
-  local avail; avail=$(kubectl --context "$CTX" -n demo get deploy podinfo -o jsonpath='{.status.availableReplicas}') || return 1
+  local avail; avail=$(kubectl --context "$CTX" --request-timeout=30s -n demo get deploy podinfo -o jsonpath='{.status.availableReplicas}') || return 1
   (( ${avail:-0} >= $1 ))
 }
 wait_until() { # wait_until <설명> <제한 초> <명령...>
-  local what=$1 limit=$2; shift 2; local start=$SECONDS
-  until "$@"; do
-    (( SECONDS - start < limit )) || { echo "$what: ${limit}초 안에 끝나지 않았습니다" >&2; return 1; }
-    sleep 10
+  # 절대 마감 시각을 두고 조건 실행 전후에 확인합니다. 마감 뒤에는 조건을 새로 실행하지 않습니다.
+  local what=$1 limit=$2; shift 2; local deadline=$(( SECONDS + limit )) rest
+  while (( SECONDS < deadline )); do
+    "$@" && return 0
+    rest=$(( deadline - SECONDS ))
+    (( rest > 0 )) || break
+    sleep $(( rest < 10 ? rest : 10 ))
   done
+  echo "$what: ${limit}초 안에 끝나지 않았습니다" >&2; return 1
 }
 reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n>, 워크로드 노드를 <n>대 이하로 맞춥니다.
   k -n demo delete scaledobject podinfo --ignore-not-found >/dev/null
@@ -72,16 +77,16 @@ run_load() { # run_load <결과 이름> <TARGET_URL> [Host 헤더]
   k -n demo create configmap watch-script --from-file=load/watch-replicas.sh --dry-run=client -o yaml | kapply
   sed "s|value: \"1200\"|value: \"${DURATION:-1200}\"|" load/watcher.yaml | kapply
   # watcher가 첫 기록을 남긴 뒤 부하를 시작합니다(이미지 준비 시간만큼 기록이 늦게 시작되는 것을 막음).
-  wait_until "watcher 시작" 300 bash -c "kubectl --context $CTX -n demo logs job/watcher 2>/dev/null | grep -qE '^[0-9]+,'"
+  wait_until "watcher 시작" 300 bash -c "kubectl --context $CTX --request-timeout=30s -n demo logs job/watcher 2>/dev/null | grep -qE '^[0-9]+,'"
   sed -e "s|value: http://podinfo.demo.svc/|value: $target|" -e "s|value: \"\"|value: \"$host\"|" load/k6-job.yaml | kapply
   log "$name: k6 부하 시작(6분 30초), replica·노드 기록 ${DURATION:-1200}초"
-  wait_until "k6 시작" 300 bash -c "[[ -n \$(kubectl --context $CTX -n demo get pod -l job-name=k6 -o jsonpath='{.items[0].status.containerStatuses[0].state.*.startedAt}' 2>/dev/null) ]]"
+  wait_until "k6 시작" 300 bash -c "[[ -n \$(kubectl --context $CTX --request-timeout=30s -n demo get pod -l job-name=k6 -o jsonpath='{.items[0].status.containerStatuses[0].state.*.startedAt}' 2>/dev/null) ]]"
   local started k6_start
   started=$(k -n demo get pod -l job-name=k6 -o jsonpath='{.items[0].status.containerStatuses[0].state.*.startedAt}')
   k6_start=$(python3 -c "import datetime,sys;print(int(datetime.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00')).timestamp()))" "$started")
-  wait_until "k6 종료" 1200 bash -c "kubectl --context $CTX -n demo wait job/k6 --for=condition=complete --timeout=30s >/dev/null 2>&1"
+  wait_until "k6 종료" 1200 bash -c "kubectl --context $CTX --request-timeout=30s -n demo wait job/k6 --for=condition=complete --timeout=30s >/dev/null 2>&1"
   kto "$OUT/$name-k6.txt" -n demo logs job/k6
-  wait_until "watcher 종료" $(( ${DURATION:-1200} + 300 )) bash -c "kubectl --context $CTX -n demo wait job/watcher --for=condition=complete --timeout=30s >/dev/null 2>&1"
+  wait_until "watcher 종료" $(( ${DURATION:-1200} + 300 )) bash -c "kubectl --context $CTX --request-timeout=30s -n demo wait job/watcher --for=condition=complete --timeout=30s >/dev/null 2>&1"
   # epoch를 k6 컨테이너 시작 시각 기준 경과 초로 바꿉니다. 음수는 부하 전 기록입니다.
   kto "$OUT/$name.raw" -n demo logs job/watcher
   awk -F, -v t0="$k6_start" 'BEGIN{OFS=","; print "elapsed_s,desired,ready,hpa_metric,user_nodes"} /^[0-9]+,/{$1=$1-t0; print}' "$OUT/$name.raw" > "$OUT/$name.csv"
@@ -127,7 +132,7 @@ pattern_http_add_on_cold_start() {
   for r in 1 2 3; do cold_request "$r"; done
   # 새 노드가 필요한 경우: keeper를 지우고 워크로드 노드가 0대가 된 뒤 요청합니다.
   k -n demo delete deploy keeper --ignore-not-found >/dev/null
-  wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.spec.replicas}') == 0 ]]"
+  wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX --request-timeout=30s -n demo get deploy podinfo -o jsonpath='{.spec.replicas}') == 0 ]]"
   wait_until "워크로드 노드 0" 1800 nodes_at_most 0
   cold_request node-cold
 }
@@ -141,7 +146,7 @@ pattern_azure_monitor_agc() {
       -e "s|<subscription-id>|$sub|" -e "s|<tenant-id>|$tenant|" agc/scaledobject.yaml | kapply
   ready_scaledobject
   # Gateway 주소는 비동기로 채워지므로 값이 생길 때까지 기다린 뒤 읽습니다.
-  wait_until "AGC Gateway 주소" 600 bash -c "[[ -n \$(kubectl --context $CTX -n demo get gateway web -o jsonpath='{.status.addresses[0].value}' 2>/dev/null) ]]"
+  wait_until "AGC Gateway 주소" 600 bash -c "[[ -n \$(kubectl --context $CTX --request-timeout=30s -n demo get gateway web -o jsonpath='{.status.addresses[0].value}' 2>/dev/null) ]]"
   addr=$(k -n demo get gateway web -o jsonpath='{.status.addresses[0].value}')
   # 서브넷 NSG는 클러스터 생성 뒤에 연결될 수 있으므로(구독 정책 등) 부하 직전에 다시 확인하고
   # 클러스터 안에서 frontend가 응답할 때까지 기다립니다.

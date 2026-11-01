@@ -10,6 +10,10 @@ CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE} RUNS=${4:-2} TIMEOU
 HERE=$(cd "$(dirname "$0")" && pwd)
 # 리소스를 바꾸기 전에 확인합니다. 0이나 정수가 아닌 값이면 측정 없이 성공으로 끝나지 않게 합니다.
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
+# scenario는 CSV 첫 열에 그대로 들어가므로 열·행을 깨는 문자를 막습니다.
+if [[ $SCENARIO == *[$',\r\n"']* ]]; then
+  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+fi
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 cleanup() { # best-effort: 실패해도 원래 종료 상태를 유지합니다.

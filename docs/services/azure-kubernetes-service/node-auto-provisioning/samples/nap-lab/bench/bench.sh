@@ -18,6 +18,10 @@ CPU=${CPU:-1} TIMEOUT=${TIMEOUT:-1800} WAVE_INTERVAL=${WAVE_INTERVAL:-30}
 OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
 # 잘못된 runs·nodeSelector로 patch만 적용되고 측정이 없거나 엉뚱한 노드를 세지 않도록 리소스를 바꾸기 전에 확인합니다.
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
+# scenario는 CSV 첫 열에 그대로 들어가므로 열·행을 깨는 문자를 막습니다.
+if [[ $SCENARIO == *[$',\r\n"']* ]]; then
+  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+fi
 if [[ -n $SELECTOR && ! $SELECTOR =~ ^[^=]+=.*$ ]]; then
   echo "nodeSelector는 key=value 형식이어야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2
 fi

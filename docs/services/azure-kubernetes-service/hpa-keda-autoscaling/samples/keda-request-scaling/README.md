@@ -61,8 +61,9 @@ azd hooks run postdeploy                      # 결과: out/<환경 이름>/
 | `http-add-on-cold-start` | 0개에서 첫 요청 응답 시간. 기존 노드에 자리가 있을 때 3회, 새 노드가 필요할 때 1회 |
 | `azure-monitor-agc` | AGC `TotalRequests` 기준 확장 |
 
-한 Deployment에는 `ScaledObject`를 하나만 둡니다. 기존 HPA가 같은 Deployment를 대상으로
-하고 있으면 KEDA admission webhook이 `ScaledObject`를 거부합니다.
+한 Deployment에는 `ScaledObject`를 하나만 두고, 같은 Deployment를 대상으로 하는 기존 HPA는
+먼저 지웁니다. KEDA admission webhook은 기존 HPA가 있으면 보통 `ScaledObject`를 거부하지만,
+HPA에 `validations.keda.sh/hpa-ownership: "false"` annotation이 있으면 검사를 건너뜁니다.
 
 ## 결과 파일
 

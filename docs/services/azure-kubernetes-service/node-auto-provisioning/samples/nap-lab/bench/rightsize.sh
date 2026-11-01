@@ -14,6 +14,10 @@ USAGE="사용법: rightsize.sh <kube-context> <scenario> <nodeSelector key=value
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE}
 FROM=${FROM:-20} TO=${TO:-3} WINDOW=${WINDOW:-720}
 HERE=$(cd "$(dirname "$0")" && pwd)
+# scenario는 CSV에 쓰지 않지만 다른 bench 스크립트와 같은 규칙으로 리소스를 바꾸기 전에 확인합니다.
+if [[ $SCENARIO == *[$',\r\n"']* ]]; then
+  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+fi
 PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_LOCATION이 필요합니다}.json}
 [[ -f $PRICES ]] || { echo "가격 파일이 없습니다: $PRICES (bench/prices.py로 생성)" >&2; exit 1; }
 k() { kubectl --context "$CTX" "$@"; }

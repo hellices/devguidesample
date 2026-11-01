@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """mixed.sh 스냅샷에서 Pod 준비 결과, 노드 구성, 요청 대비 할당 비율, 시간당 비용을 계산합니다.
 
+사용법: analyze_mixed.py <run-dir> <scenario> <run> <nodeSelector key=value> <prices.json> [big mem small]
+  big mem small: 워크로드별 기대 replica 수. 생략하면 pods.json에 있는 kind별 Pod 수를 씁니다.
+  all_ready_s는 kind별 Ready Pod 수가 모두 기대 수와 같을 때만 기록합니다.
 출력: scenario,run,ready_big,ready_mem,ready_small,all_ready_s,nodes,skus,vcpu_alloc,mem_alloc_gib,
       cpu_request_ratio,mem_request_ratio,usd_per_hour
 usd_per_hour는 노드 SKU 중 하나라도 가격 파일에 없으면 unknown입니다.
@@ -26,7 +29,15 @@ nodes = [n for n in json.loads((d / "nodes.json").read_text())["items"]
 node_names = {n["metadata"]["name"] for n in nodes}
 
 ready = {"big": 0, "mem": 0, "small": 0}
-last, req_cpu, req_mem, all_ready = None, 0.0, 0.0, True
+if len(sys.argv) > 6:
+    if len(sys.argv) != 9 or not all(a.isascii() and a.isdigit() for a in sys.argv[6:9]):
+        sys.exit("기대 replica 수는 big mem small 세 개의 0 이상 정수여야 합니다")
+    expected = dict(zip(ready, map(int, sys.argv[6:9])))
+else:  # 생성되지 않은 Pod는 알 수 없으므로 스냅샷에 있는 Pod 수를 기대 수로 봅니다.
+    expected = dict.fromkeys(ready, 0)
+    for p in pods:
+        expected[p["metadata"]["labels"].get("kind")] += 1
+last, req_cpu, req_mem = None, 0.0, 0.0
 for p in pods:
     kind = p["metadata"]["labels"].get("kind")
     r = p["spec"]["containers"][0]["resources"]["requests"]
@@ -38,8 +49,8 @@ for p in pods:
         ready[kind] += 1
         t = ts(c[0]["lastTransitionTime"])
         last = t if last is None or t > last else last
-    else:
-        all_ready = False
+# 아직 생성되지 않은 Pod가 있으면 스냅샷의 Pod가 모두 Ready여도 완료로 보지 않습니다.
+all_ready = ready == expected
 
 skus, cpu, mem, cost, unpriced = {}, 0.0, 0.0, 0.0, set()
 for n in nodes:
