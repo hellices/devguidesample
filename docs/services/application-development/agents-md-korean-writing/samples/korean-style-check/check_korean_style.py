@@ -17,13 +17,20 @@ from pathlib import Path
 
 FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.S)
 # Fence lines follow CommonMark: three or more backticks or tildes, and a backtick
-# fence's info string cannot contain a backtick. Indentation is not limited to
-# three spaces because fences nested in list items are indented further.
-FENCE_OPEN = re.compile(r"^\s*(`{3,}(?=[^`]*$)|~{3,})")
+# fence's info string cannot contain a backtick. Patterns below that take a line
+# body are matched after the leading spaces are removed.
+FENCE_OPEN = re.compile(r"(`{3,}(?=[^`]*$)|~{3,})")
+LIST_ITEM = re.compile(r"( *)([-*+]|\d{1,9}[.)])( +|$)")
+# MkDocs admonition, collapsible details and content tabs indent their body by four.
+BLOCK_CONTAINER = re.compile(r"( *)(?:!!!|\?\?\?\+?|===)(?:\s|$)")
+BLOCK_START = re.compile(r"(?:#{1,6}(?:\s|$)|>)")
+TABLE_DELIMITER = re.compile(r"\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?")
+TABLE_BREAK = re.compile(
+    r"(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|[-*+]\s|\d{1,9}[.)]\s|(?:[-*_]\s*){3,}$)"
+)
 INLINE_CODE = re.compile(r"`[^`\n]+`")
 LINK_TARGET = re.compile(r"\]\([^)]*\)")
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
-TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$", re.M)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+", re.M)
 BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
@@ -103,27 +110,109 @@ class Report:
     findings: list[str] = field(default_factory=list)
 
 
+def list_content_indent(match: re.Match[str]) -> int:
+    indent, marker, spaces = (len(group) for group in match.groups())
+    # A marker followed by nothing or by five or more spaces starts its content
+    # one column after the marker.
+    return indent + marker + (spaces if 1 <= spaces <= 4 else 1)
+
+
 def remove_fenced_code(text: str) -> str:
     """Drop fenced code blocks, including their fence lines.
 
-    A block closes only on a line with the same fence character repeated at
-    least as many times as the opening fence and followed by whitespace only.
-    An unclosed block runs to the end of the document, as in CommonMark.
+    As in CommonMark, an opening fence may be indented at most three spaces past
+    the content indent of its container. List items and MkDocs admonition,
+    details and tab blocks are tracked as containers, so a fence nested in them
+    is recognized while a top-level line indented four or more spaces is not.
+    A block closes on a line of the same fence character at least as long as
+    the opening fence or when its container ends. An unclosed block runs to the
+    end of the document.
     """
     kept: list[str] = []
+    containers: list[int] = []
     fence: str | None = None
-    for line in text.splitlines():
-        if fence is None:
-            match = FENCE_OPEN.match(line)
-            if match:
-                fence = match.group(1)
+    fence_base = 0
+    previous_blank = True
+    for raw in text.splitlines():
+        line = raw.expandtabs(4)
+        body = line.lstrip(" ")
+        indent = len(line) - len(body)
+        closing = body.rstrip()
+        if fence is not None:
+            if not body or indent >= fence_base:
+                if (
+                    closing
+                    and indent - fence_base <= 3
+                    and set(closing) == {fence[0]}
+                    and len(closing) >= len(fence)
+                ):
+                    fence, previous_blank = None, False
                 continue
-            kept.append(line)
+            # The container ended, which also closes the fence.
+            fence, previous_blank = None, True
+        if not body:
+            kept.append(raw)
+            previous_blank = True
             continue
-        stripped = line.strip()
-        if stripped and set(stripped) == {fence[0]} and len(stripped) >= len(fence):
-            fence = None
+        item = LIST_ITEM.match(line)
+        block = BLOCK_CONTAINER.match(line)
+        opener = FENCE_OPEN.match(body)
+        # A less indented line ends deeper containers unless it is a lazy
+        # continuation of the previous paragraph.
+        if previous_blank or item or block or opener or BLOCK_START.match(body):
+            while containers and indent < containers[-1]:
+                containers.pop()
+        base = containers[-1] if containers else 0
+        relative = indent - base
+        previous_blank = False
+        if opener and 0 <= relative <= 3:
+            fence, fence_base = opener.group(1), base
+            continue
+        if item and 0 <= relative <= 3:
+            containers.append(list_content_indent(item))
+        elif block and 0 <= relative <= 3:
+            containers.append(indent + 4)
+        kept.append(raw)
     return "\n".join(kept)
+
+
+def table_cells(row: str) -> int:
+    row = row.strip()
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|") and not row.endswith("\\|"):
+        row = row[:-1]
+    return len(re.split(r"(?<!\\)\|", row))
+
+
+def table_rows(lines: list[str]) -> set[int]:
+    """Return line indexes of GFM tables, with or without outer pipes.
+
+    A table starts with a header row followed by a delimiter row with the same
+    number of cells and runs until a blank line or another block starts.
+    """
+    rows: set[int] = set()
+    index = 1
+    while index < len(lines):
+        header, delimiter = lines[index - 1].strip(), lines[index].strip()
+        if (
+            index - 1 not in rows
+            and "|" in header
+            and "|" in delimiter
+            and TABLE_DELIMITER.fullmatch(delimiter)
+            and table_cells(header) == table_cells(delimiter)
+        ):
+            rows.update((index - 1, index))
+            index += 1
+            while index < len(lines):
+                row = lines[index].strip()
+                if not row or TABLE_BREAK.match(row):
+                    break
+                rows.add(index)
+                index += 1
+            continue
+        index += 1
+    return rows
 
 
 def mask_quotes(prose: str) -> str:
@@ -143,9 +232,11 @@ def strip_markup(text: str) -> tuple[str, str]:
     text = remove_fenced_code(text)
     text = INLINE_CODE.sub("CODE", text)
     markdown = LINK_TARGET.sub("]", text)
+    lines = markdown.splitlines()
+    tables = table_rows(lines)
     prose_lines = []
-    for line in markdown.splitlines():
-        if HEADING.match(line) or TABLE_ROW.match(line):
+    for index, line in enumerate(lines):
+        if HEADING.match(line) or index in tables:
             prose_lines.append("")
             continue
         prose_lines.append(BULLET.sub("", line))
@@ -214,7 +305,8 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     metrics["bold_per_1000_chars"] = round(bold * 1000 / max(report.prose_chars, 1), 2)
     metrics["bold_label_lines"] = len(BOLD_LABEL.findall(markdown))
     metrics["bullet_line_ratio"] = round(len(BULLET.findall(markdown)) / max(report.lines, 1), 2)
-    metrics["table_line_ratio"] = round(len(TABLE_ROW.findall(markdown)) / max(report.lines, 1), 2)
+    table_lines = len(table_rows(markdown.splitlines()))
+    metrics["table_line_ratio"] = round(table_lines / max(report.lines, 1), 2)
 
     count, found = collect(CONNECTIVE_COMMA, text)
     metrics["connective_comma"] = count
