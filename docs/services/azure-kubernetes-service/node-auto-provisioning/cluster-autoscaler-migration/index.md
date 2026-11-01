@@ -1,6 +1,6 @@
 ---
-title: Cluster Autoscaler에서 NAP로 중단을 최소화해 전환하고 불가능하면 새 클러스터로 옮기기
-description: VMSS Cluster Autoscaler 클러스터를 NAP로 전환하는 세 가지 경로, PDB를 지키며 Pod를 순차 이동하는 절차, 실제 전환 리허설 결과와 롤백 방법을 설명합니다.
+title: "Cluster Autoscaler에서 NAP로 전환: 같은 클러스터 전환, 동시 운영, 새 클러스터 이전"
+description: VMSS Cluster Autoscaler 클러스터를 NAP로 옮기는 세 가지 경로와 PDB를 지키는 Pod 순차 이동 절차, 실제 전환 리허설 결과, 롤백 방법을 다룹니다.
 document_type: guide
 services: [azure-kubernetes-service]
 technologies: [kubernetes, karpenter]
@@ -33,37 +33,36 @@ applies_to: [AKS 1.36, Azure CLI 2.76+]
 topic_order: 2
 ---
 
-# Cluster Autoscaler에서 NAP로 중단을 최소화해 전환하고 불가능하면 새 클러스터로 옮기기
+# Cluster Autoscaler에서 NAP로 전환: 같은 클러스터 전환, 동시 운영, 새 클러스터 이전
 
-NAP를 지원하는 네트워크·ID 구성이면 **같은 클러스터에서** CAS를 끄고 NAP를 켠
-뒤 기존 VMSS 풀을 단계적으로 줄입니다. Pod는 PDB를 지키며 NAP 노드로 옮겨집니다.
-구성이 맞지 않으면 먼저 클러스터 설정을 바꿀 수 있는지 보고, 바꿀 수 없으면
-NAP를 켠 **새 클러스터를 만들어 트래픽을 단계적으로 넘깁니다.**
+NAP를 지원하는 네트워크·ID 구성이면 같은 클러스터에서 CAS를 끄고 NAP를 켠
+뒤 기존 VMSS 풀을 단계적으로 줄입니다. Pod는 PDB 범위 안에서 NAP 노드로 옮겨집니다.
+구성이 맞지 않으면 클러스터 설정을 바꿀 수 있는지부터 확인하고, 바꿀 수 없을 때는
+NAP를 켠 새 클러스터를 만들어 트래픽을 단계적으로 넘깁니다.
 
-## 전환 경로는 NAP 지원 여부와 동시 운영 기간으로 고른다
+## 전환 경로 선택: NAP 지원 여부와 동시 운영 기간
 
 | 상황 | 경로 | 특징 |
 |---|---|---|
-| Azure CNI Overlay/Node Subnet, 관리 ID, Linux 풀 | **경로 1: CAS 끄기 → NAP 켜기 → 풀 단계 축소** | 가장 단순. 전환 중 기존 풀은 고정 크기 |
-| 워크로드별로 몇 주에 걸쳐 옮겨야 함 | **경로 2: CAS·NAP 동시 운영** | `AllowClusterAutoscalerAndNAP` feature flag 등록과 taint·toleration 관리 필요 |
-| kubenet, Calico, 서비스 주체 | **먼저 클러스터 설정 변경 검토**, 불가하면 **경로 3: 새 클러스터 blue-green** | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 비용이 두 배지만 롤백이 가장 빠름 |
-| Azure CNI Pod Subnet 동적 할당 | **경로 3만 가능** | Overlay로 바꿀 수 없고 NAP도 지원하지 않음 |
+| Azure CNI Overlay/Node Subnet, 관리 ID, Linux 풀 | 경로 1: CAS 끄기 → NAP 켜기 → 풀 단계 축소 | 가장 단순. 전환 중 기존 풀은 고정 크기 |
+| 워크로드별로 몇 주에 걸쳐 옮겨야 함 | 경로 2: CAS·NAP 동시 운영 | `AllowClusterAutoscalerAndNAP` feature flag 등록과 taint·toleration 관리 필요 |
+| kubenet, Calico, 서비스 주체 | 먼저 클러스터 설정 변경 검토, 불가하면 경로 3: 새 클러스터 blue-green | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 비용이 두 배지만 롤백이 가장 빠름 |
+| Azure CNI Pod Subnet 동적 할당 | 경로 3만 가능 | Overlay로 바꿀 수 없고 NAP도 지원하지 않음 |
 
 클러스터 설정 변경에는 다음 조건이 붙습니다.
 
 - **kubenet → Azure CNI Overlay:** `az aks update --network-plugin azure --network-plugin-mode overlay`로
   바꿀 수 있지만 되돌릴 수 없고, 모든 노드 풀이 동시에 재이미지됩니다. network policy가
-  켜져 있으면 먼저 제거해야 하고, kubenet route table을 떼려면 **사용자 할당 관리 ID**가
+  켜져 있으면 먼저 제거해야 하고, kubenet route table을 떼려면 사용자 할당 관리 ID가
   필요합니다(시스템 할당 ID는 지원하지 않음).
 - **Calico → Cilium:** 데이터플레인을 Azure CNI Powered by Cilium으로 바꾸면 기존 network
   policy 엔진이 Cilium으로 교체됩니다. kubenet은 Overlay로 먼저 바꾼 뒤 별도 작업으로
   Cilium을 적용합니다.
-- **순서:** NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없습니다. 네트워크 변경을 먼저
-  끝내고 NAP를 켭니다.
 
-이런 위험을 피하려면 경로 3을 택합니다.
+NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없으므로 네트워크 변경을 먼저 끝내고 NAP를
+켭니다. 이런 설정 변경의 위험을 피하려면 경로 3을 택합니다.
 
-## 전환 전에 Pod가 어느 노드로든 옮겨질 수 있는지 확인한다
+## 전환 전 점검: requests, PDB, 종료 대기, 풀 전용 스케줄링
 
 - **requests:** NAP는 Pending Pod의 requests로 VM을 고릅니다. requests가 없으면
   너무 작은 노드에 몰립니다.
@@ -79,7 +78,7 @@ NAP를 켠 **새 클러스터를 만들어 트래픽을 단계적으로 넘깁�
   `vnetSubnetID`를 먼저 설정합니다.
 - **시스템 풀:** 시스템 풀은 그대로 두고 user 풀만 옮깁니다.
 
-## 경로 1은 CAS를 끄고 NAP를 켠 뒤 기존 풀을 한 대씩 줄인다
+## 경로 1: CAS 끄기, NAP 켜기, 기존 풀 순차 축소
 
 ```bash
 # 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
@@ -104,13 +103,13 @@ done
 az aks nodepool delete -g $RG --cluster-name $CLUSTER -n user
 ```
 
-노드별로 더 세밀하게 제어하려면 풀을 줄이기 전에 직접 옮깁니다.
+노드 단위로 더 세밀하게 제어하려면 풀을 줄이기 전에 Pod를 직접 옮깁니다.
 모든 기존 노드를 `kubectl cordon`으로 막아 새 Pod가 다시 들어오지 않게 한 뒤,
 `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data`를 한 대씩
-실행합니다. drain은 eviction API를 쓰므로 PDB가 허용하는 만큼만 Pod를 내보내고,
-쫓겨난 Pod는 Pending이 되어 NAP가 새 노드를 만듭니다.
+실행합니다. drain은 eviction API를 쓰므로 PDB가 허용하는 만큼만 Pod를 내보냅니다.
+내보낸 Pod가 Pending이 되면 NAP가 새 노드를 만듭니다.
 
-## 실제 전환에서 기존 풀은 약 19분 만에 비었고 요청 실패는 NAP 활성화 중 1건이었다
+## 전환 리허설: 단계별 소요 시간과 요청 실패
 
 azd로 만든 AKS 1.36.5 클러스터에서 user 풀(`Standard_D4ds_v7` 2대, on-demand, CAS)에 1 vCPU
 Pod 6개, PDB `maxUnavailable: 1`을 두고 경로 1을 실행했습니다. 시스템 노드에서 0.2초마다
@@ -133,8 +132,8 @@ Pod 6개, PDB `maxUnavailable: 1`을 두고 경로 1을 실행했습니다. 시�
   때문입니다. 노드 수를 줄이려면 spread 기준을 zone으로 바꾸거나 `maxSkew`를
   늘립니다.
 
-종료 직전 요청 실패를 막으려면 Pod에 다음을 추가합니다. endpoint에서 빠지는
-동안 기존 프로세스가 요청을 계속 받습니다. `sleep` 동작은 Kubernetes 1.30부터
+종료 직전 요청 실패를 막으려면 Pod에 다음 설정을 추가합니다. Pod가 endpoint에서
+빠지는 동안 기존 프로세스가 요청을 계속 처리합니다. `sleep` 동작은 Kubernetes 1.30부터
 기본으로 사용할 수 있습니다.
 
 ```yaml
@@ -150,10 +149,10 @@ spec:
 
 단계별 시각과 drift 교체 명령은 sample의 `results/migration-timeline.md`에 있습니다.
 
-## 경로 2는 taint로 CAS 풀과 NAP 노드를 분리해 워크로드를 하나씩 옮긴다
+## 경로 2: taint로 CAS 풀과 NAP 노드를 나눈 동시 운영
 
-CAS와 NAP는 모두 Pending Pod에 반응하므로 같은 Pod를 두고 둘 다 노드를 만들 수
-있습니다. 공식 절차는 두 쪽을 taint로 완전히 나눕니다.
+CAS와 NAP는 둘 다 Pending Pod에 반응하므로 같은 Pod 때문에 양쪽이 모두 노드를 만들 수
+있습니다. 공식 절차는 taint로 두 쪽을 완전히 분리합니다.
 
 1. `AllowClusterAutoscalerAndNAP` feature flag를 등록합니다.
 2. CAS 풀에 `autoscaling.azure.com/cas-block=true:NoSchedule` taint를 추가하고,
@@ -166,27 +165,27 @@ CAS와 NAP는 모두 Pending Pod에 반응하므로 같은 Pod를 두고 둘 다
 동시 운영을 오래 유지하면 예측하기 어려운 확장이 생길 수 있으므로 전환 기간에만
 사용합니다.
 
-## 경로 3은 NAP 클러스터를 새로 만들고 트래픽 비중을 단계적으로 옮긴다
+## 경로 3: 새 NAP 클러스터와 blue-green 트래픽 이동
 
-클러스터를 바꾸면 Pod를 "이동"하는 것이 아니라 **새 클러스터에 같은 워크로드를
-배포하고 요청을 넘기는** 방식이 됩니다.
+클러스터를 바꿀 때는 Pod를 옮기지 않고, 새 클러스터에 같은 워크로드를 배포한 뒤
+요청을 넘깁니다.
 
-1. **Green 클러스터 준비:** NAP, Azure CNI Overlay + Cilium, 관리 ID로 만들고
+1. NAP, Azure CNI Overlay + Cilium, 관리 ID로 green 클러스터를 만들고
    인증서·Workload Identity·Key Vault·ACR 권한·관측 구성을 먼저 맞춥니다.
-2. **같은 매니페스트 배포:** GitOps나 CI/CD로 blue와 같은 버전을 배포합니다.
+2. GitOps나 CI/CD로 blue와 같은 버전의 매니페스트를 배포합니다.
    probe, requests, PDB가 있어야 NAP가 노드를 만들고 안전하게 정리합니다.
-3. **데이터 경로 확인:** 상태는 가능하면 클러스터 밖(Azure DB, Storage)에 두고,
+3. 데이터 경로를 확인합니다. 상태는 가능하면 클러스터 밖(Azure DB, Storage)에 두고,
    PV가 있으면 CSI snapshot, Azure Files, Velero로 복사·동기화합니다.
-4. **트래픽 이동:** 클러스터 앞단의 트래픽 분산 계층에서 green 비중을 단계적으로 늘리고,
+4. 클러스터 앞단의 트래픽 분산 계층에서 green 비중을 단계적으로 늘리고,
    단계마다 5xx 비율, p95 지연, 재시작 수를 확인합니다. 앞단 구성별 전환 방법은
    [Blue-green deployment of AKS clusters](https://learn.microsoft.com/azure/architecture/guide/aks/blue-green-deployment-for-aks)를
    따릅니다.
-5. **이전 클러스터 정리:** blue로 가는 트래픽을 모두 끊고 관측 기간을 지난 뒤 삭제합니다.
+5. blue로 가는 트래픽을 모두 끊고, 관측 기간이 지나면 이전 클러스터를 삭제합니다.
 
-롤백은 트래픽을 blue로 되돌리는 것입니다. 큐 consumer나 batch는 새 클러스터에서
+롤백할 때는 트래픽을 blue로 되돌립니다. 큐 consumer나 batch는 새 클러스터에서
 consumer를 켜기 전에 이전 클러스터의 consumer를 멈춰 중복 처리를 막습니다.
 
-## NAP를 되돌리려면 NAP 노드를 먼저 비워야 한다
+## 롤백: NAP 노드 비우기와 NAP 비활성화
 
 NAP는 NAP 노드가 남아 있는 동안 끌 수 없습니다. 옮겨 갈 자리를 먼저 만들어 두면
 노드를 비우는 동안 Pod가 Pending으로 남지 않습니다.
@@ -201,7 +200,7 @@ NAP는 NAP 노드가 남아 있는 동안 끌 수 없습니다. 옮겨 갈 자�
    다시 켭니다. NAP 노드가 남으면 먼저 남은 NodeClaim의 `Drifted` 상태와 막는 조건을
    확인합니다. NodePool disruption budget(`nodes: "0"` 등), eviction을 허용하지 않는 PDB,
    `karpenter.sh/do-not-disrupt` annotation이 있으면 풀을 늘려도 노드가 비지 않습니다.
-   이런 조건이 없는데 Pod가 Pending이면 고정 크기 용량이 부족한 것이므로 풀을 더 늘립니다.
+   이런 조건이 없는데도 Pod가 Pending이면 고정 크기 용량이 부족하므로 풀을 더 늘립니다.
 
 Learn 절차는 2·3단계 뒤에 고정 크기 풀을 늘리지만, 순서를 바꿔도 조건(노드 없음,
 `limits.cpu: 0`)은 같고 Pending 구간만 줄어듭니다.

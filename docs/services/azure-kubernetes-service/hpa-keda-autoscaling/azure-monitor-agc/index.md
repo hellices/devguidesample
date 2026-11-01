@@ -1,6 +1,6 @@
 ---
-title: AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 155초 걸렸다
-description: Application Gateway for Containers의 TotalRequests 메트릭을 KEDA azure-monitor scaler로 조회해 앱 수정 없이 진입점 트래픽으로 확장하고, 반응 시간과 frontend NSG 조건을 확인합니다.
+title: "KEDA Azure Monitor scaler: AGC 요청 수 기반 확장과 지표 지연"
+description: Application Gateway for Containers의 TotalRequests 메트릭을 KEDA azure-monitor scaler로 조회해 앱 수정 없이 진입점 트래픽으로 확장하는 구성과, 지표 지연에 따른 반응 시간, frontend NSG 조건을 다룹니다.
 document_type: lab
 services: [azure-kubernetes-service, azure-application-gateway-for-containers, azure-monitor]
 technologies: [kubernetes, keda]
@@ -37,15 +37,15 @@ cleanup_required: true
 topic_order: 3
 ---
 
-# AGC 요청 수를 Azure Monitor로 읽어 KEDA로 확장하면 지표 지연으로 1회 실측에서 첫 확장까지 약 155초 걸렸다
+# KEDA Azure Monitor scaler: AGC 요청 수 기반 확장과 지표 지연
 
 Application Gateway for Containers(AGC)는 frontend가 처리한 요청 수를
 `TotalRequests` 플랫폼 메트릭으로 내보냅니다. KEDA core의 `azure-monitor` scaler가
 이 값을 Workload Identity로 읽으면 앱에 지표를 추가하지 않고도 진입점 트래픽으로
-확장할 수 있습니다. 대신 1분 단위 집계와 게시 지연 때문에 1회 실측에서 Managed
-Prometheus 방식보다 첫 확장이 약 80초 늦었습니다.
+확장할 수 있습니다. 다만 1분 단위 집계와 게시 지연 때문에 1회 실측에서는 첫 확장이
+Managed Prometheus 방식보다 약 80초 늦었습니다.
 
-## 1분 동안 Pod당 3,000건(초당 50건)을 넘으면 replica를 늘린다
+## 확장 조건: 1분 집계 TotalRequests와 Pod당 목표값
 
 | 항목 | 값 |
 |---|---|
@@ -54,29 +54,29 @@ Prometheus 방식보다 첫 확장이 약 80초 늦었습니다.
 | 인증 | KEDA Workload Identity + AGC 리소스 `Monitoring Reader` |
 | 범위 | AGC 전체 요청 수. 여러 앱이 같은 AGC를 쓰면 `metricFilter`로 frontend를 나눕니다. |
 
-## AGC add-on은 Workload Identity가 필수이고 KEDA에는 Workload Identity를 먼저 켜는 것이 권장된다
+## 사전 조건: Workload Identity·preview 기능 등록·서브넷 NSG
 
 [Managed Prometheus 실습](../prometheus-rps/index.md)과 같은 클러스터·podinfo·KEDA ID를
 사용합니다. AGC add-on은 Azure CNI 또는 Azure CNI Overlay와 Workload Identity가 켜진
-클러스터를 요구합니다. KEDA add-on은 Workload Identity 없이도 켜지지만, Azure 지표를
-Workload Identity로 읽으려면 Workload Identity를 먼저 켜는 것을 권장하며 순서가
+클러스터를 요구합니다. KEDA add-on은 Workload Identity 없이도 켜집니다. 다만 Azure 지표를
+Workload Identity로 읽으려면 Workload Identity를 먼저 켜는 순서가 권장되며, 순서가
 바뀌었으면 `keda-operator`를 재시작합니다.
 
-AGC add-on은 preview이므로 postprovision hook(`infra/enable-addons.sh`)이 Learn quickstart와
-같이 `alb`·`aks-preview` CLI extension을 설치하고, `ManagedGatewayAPIPreview`·
-`ApplicationLoadBalancerPreview` feature가 `Registered`가 될 때까지 기다린 뒤
+AGC add-on은 preview입니다. postprovision hook(`infra/enable-addons.sh`)은 Learn quickstart와
+같이 `alb`·`aks-preview` CLI extension을 설치하고 `ManagedGatewayAPIPreview`·
+`ApplicationLoadBalancerPreview` feature가 `Registered`가 될 때까지 기다립니다. 이어서
 `Microsoft.ContainerService`, `Microsoft.Network`, `Microsoft.NetworkFunction`,
-`Microsoft.ServiceNetworking` provider 등록을 `--wait`로 완료하고 add-on을 켭니다.
+`Microsoft.ServiceNetworking` provider 등록을 `--wait`로 완료한 뒤 add-on을 켭니다.
 feature 등록은 처음 한 번 몇 분 걸릴 수 있습니다.
 
 AKS 관리 VNet에서는 add-on이 `Microsoft.ServiceNetworking/trafficControllers`로
-delegation된 `aks-appgateway` 서브넷을 만듭니다. 이 서브넷의 NSG는 add-on이 만든다고 Learn에
-명시되어 있지 않은데, 실습 구독에서는 서브넷이 생긴 뒤 이름에 `appgateway`가 들어간 NSG가
-기본 규칙만 가진 채 연결되었습니다. azd로 다시 만든 클러스터에서는 add-on 설정 직후에는 NSG가
+delegation된 `aks-appgateway` 서브넷을 만듭니다. Learn에는 이 서브넷의 NSG를 add-on이
+만든다는 설명이 없습니다. 실습 구독에서는 서브넷이 생긴 뒤 이름에 `appgateway`가 들어간
+NSG가 기본 규칙만 있는 상태로 연결되었습니다. azd로 다시 만든 클러스터에서는 add-on 설정 직후에는 NSG가
 없다가 부하 실험 전에 연결되어 frontend가 막혔습니다. 구독 정책 등으로 NSG가 나중에 붙을 수
 있으므로 부하를 주기 직전에 서브넷 상태를 다시 확인합니다.
 
-## 비용은 AGC·frontend·association 시간과 capacity unit, 추가 노드에 비례한다
+## 비용: AGC·frontend·association 시간, capacity unit, 추가 노드
 
 AGC 과금 미터는 AGC 리소스 시간, frontend 시간, association 시간, capacity unit
 네 가지입니다. capacity unit은 persistent connection 수와 처리량(Mbps) 중 사용률이
@@ -85,9 +85,9 @@ AGC 과금 미터는 AGC 리소스 시간, frontend 시간, association 시간, 
 노드 비용이 더해집니다. 실습 후 Gateway와 `ApplicationLoadBalancer`를 지우면 ALB Controller가
 AGC 리소스를 삭제합니다.
 
-## azd가 AGC Gateway, frontend NSG, 지표 읽기 권한, ScaledObject를 순서대로 적용한다
+## 준비와 실행: AGC Gateway, frontend NSG, 지표 읽기 권한, ScaledObject
 
-postprovision hook이 AGC 준비를 끝냅니다.
+AGC 준비는 postprovision hook이 다음 순서로 진행합니다.
 
 1. AKS 관리 VNet의 `aks-appgateway` 서브넷 ID로 `agc/gateway.yaml`의 `ApplicationLoadBalancer`
    association을 채워 Gateway·HTTPRoute를 만들고 `Programmed` 상태를 기다립니다.
@@ -108,11 +108,11 @@ hook은 `agc/scaledobject.yaml`의 `<...>` 값(AGC 이름, node resource group, 
 client ID)을 채워 적용하고, k6로 Gateway 주소(`http://<gateway-address>/`)에 초당 최대 400건을
 6분간 보냅니다.
 
-## 1회 실측에서 첫 확장은 약 155초, 전체 Ready는 약 320초였다
+## 실측 결과: 첫 확장과 전체 Ready 시점
 
 k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, 워크로드 노드는 NAP `default`
 NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 기록한
-`results/azure-monitor-agc.csv`, `results/prometheus-rps.csv`라 시점을 근삿값으로 적습니다.
+`results/azure-monitor-agc.csv`, `results/prometheus-rps.csv` 기준이므로 시점은 근삿값입니다.
 
 | 시점 | AGC + Azure Monitor | 비교: Managed Prometheus |
 |---|---|---|
@@ -126,22 +126,23 @@ NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 
 - `TotalRequests`는 1분 단위로 집계되어 부하 시작 약 95초 뒤에 처음 값이 조회됐고, 이후에도
   값이 갱신되기 전까지 KEDA는 이전 값을 썼습니다. 기록 중간에 HPA 지표가 잠시 비는 구간도
   있었습니다.
-- 축소는 마지막 지표 반영, HPA 300초 안정화 창이 더해져 Prometheus 방식보다 늦었습니다.
+- 축소는 마지막 지표가 반영되는 시간에 HPA 300초 안정화 창이 더해져 Prometheus 방식보다
+  늦었습니다.
 
-## 지표가 늦으므로 급격한 증가보다 지속 트래픽에 맞다
+## 적합한 경우: 급증보다 지속 트래픽
 
 - 앱 코드와 모니터링을 바꾸지 않고 진입점 기준으로 확장할 수 있습니다.
 - 몇십 초 안에 반응해야 하는 burst에는 Managed Prometheus나 HTTP Add-on이 적합합니다.
 - AGC 하나를 여러 앱이 공유하면 전체 요청 수가 섞이므로 앱별 frontend를 나누고
   `metricFilter: Frontend eq '<frontend-name>'`로 범위를 좁힙니다.
 
-## ScaledObject가 Ready이고 HPA 목표가 분당 요청 수를 따라가면 성공이다
+## 성공 기준: ScaledObject Ready와 분당 요청 수를 따르는 HPA 목표
 
 - `kubectl -n demo get scaledobject podinfo`: `READY=True`
 - `kubectl -n demo get hpa keda-hpa-podinfo`: 부하 중 `<값>/3k (avg)`
 - 부하 중 replica가 `ceil(분당 요청 / 3000)` 근처에 머물고 요청 실패가 없어야 합니다.
 
-## 실습 후 azd down으로 리소스 그룹을 삭제한다
+## 정리: azd down
 
 ```bash
 azd down --purge --force
@@ -150,7 +151,7 @@ azd down --purge --force
 클러스터를 남기고 AGC만 지울 때는 Gateway·HTTPRoute와 `ApplicationLoadBalancer`를 먼저
 삭제해 ALB Controller가 AGC 리소스를 정리하게 합니다.
 
-## frontend가 응답하지 않으면 association 서브넷 NSG부터 본다
+## 문제 해결: frontend 무응답과 association 서브넷 NSG
 
 | 증상 | 원인과 조치 |
 |---|---|

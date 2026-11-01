@@ -1,6 +1,6 @@
 ---
-title: KEDA HTTP Add-on은 0개에서 첫 요청을 보류하며, 1회 실측에서 새 노드가 필요하면 첫 응답까지 약 2분 걸렸다
-description: AKS KEDA add-on 위에 별도 설치한 KEDA HTTP Add-on으로 요청률 기반 확장과 scale-to-zero를 재현하고, cold start 시간과 burst 부하의 실패 조건을 측정합니다.
+title: "KEDA HTTP Add-on: 요청률 기반 확장과 scale-to-zero cold start"
+description: AKS KEDA add-on 위에 별도로 설치하는 KEDA HTTP Add-on의 요청률 기반 확장과 scale-to-zero 구성, 노드 유무에 따른 cold start 시간과 burst 부하의 실패 조건을 다룹니다.
 document_type: lab
 services: [azure-kubernetes-service]
 technologies: [kubernetes, keda]
@@ -29,27 +29,27 @@ cleanup_required: true
 topic_order: 2
 ---
 
-# KEDA HTTP Add-on은 0개에서 첫 요청을 보류하며, 1회 실측에서 새 노드가 필요하면 첫 응답까지 약 2분 걸렸다
+# KEDA HTTP Add-on: 요청률 기반 확장과 scale-to-zero cold start
 
 KEDA HTTP Add-on은 요청이 지나가는 interceptor에서 요청률을 직접 세므로 앱이나
 모니터링 수정 없이 HTTP 요청으로 확장하고 0개까지 줄일 수 있습니다. 기존 노드에
 자리가 있으면 0개에서 첫 응답까지 1.6–4.7초(3회)였지만, NAP가 노드를 새로 만들어야
 하면 약 111초(1회)가 걸렸습니다. Pod와 워크로드 노드가 모두 없는 상태에서 초당 400건
 burst를 보낸 1회 실측에서는 계획한 요청의 약 22%가 timeout으로 실패하거나 아예
-전송되지 못했고, `minReplicaCount: 1`로 바꾸자 실패가 사라졌습니다.
+전송되지 못했습니다. `minReplicaCount: 1`로 바꾼 실행에서는 실패가 없었습니다.
 
-## HTTP Add-on은 AKS KEDA add-on에 포함되지 않는 별도 구성 요소다
+## 지원 범위: AKS KEDA add-on과 별도인 HTTP Add-on
 
 | 구분 | 이 실습의 구성 | 지원 |
 |---|---|---|
 | KEDA core | AKS KEDA add-on (AKS 1.36 → KEDA 2.19) | AKS 지원 |
 | HTTP Add-on 0.16.0 | Helm으로 `kube-system`에 설치한 interceptor, external scaler, operator | KEDA 커뮤니티, beta |
 
-HTTP Add-on은 KEDA core와 같은 namespace에 설치하도록 안내하므로, AKS add-on이
+HTTP Add-on 설치 문서는 KEDA core와 같은 namespace를 안내하므로 AKS add-on이
 KEDA를 두는 `kube-system`에 설치했습니다. 0.14부터는 `HTTPScaledObject` 대신
 `InterceptorRoute`와 `external-push` trigger를 쓴 `ScaledObject`를 함께 만듭니다.
 
-## 요청 경로에 interceptor를 넣고 Pod당 초당 50건을 목표로 둔다
+## 요청 경로: interceptor 경유와 Pod당 요청률 목표
 
 ```text
 client ──► keda-add-ons-http-interceptor-proxy:8080 (Host: podinfo.example.com)
@@ -58,19 +58,19 @@ client ──► keda-add-ons-http-interceptor-proxy:8080 (Host: podinfo.example
      external scaler ──► KEDA ──► HPA ──► podinfo replica (0–20)
 ```
 
-운영에서는 Ingress·Gateway의 backend를 앱 Service가 아니라 interceptor proxy
-Service로 바꿉니다.
+운영 환경에서는 Ingress·Gateway backend를 앱 Service 대신 interceptor proxy
+Service로 지정합니다.
 
-## azd up이 KEDA add-on 클러스터와 HTTP Add-on 설치까지 준비한다
+## 준비: azd up으로 KEDA add-on 클러스터와 HTTP Add-on 설치
 
 [Managed Prometheus 실습](../prometheus-rps/index.md)과 같은 sample·클러스터를 씁니다.
 `azd up`의 postprovision hook이 `http-add-on/install.sh`로 HTTP Add-on 0.16.0을 `kube-system`에
 설치하고 `values.yaml`로 interceptor·scaler·operator를 시스템 풀에 고정합니다. 비용은 노드와
 실습 시간에 비례하며, 실습 후 `azd down`으로 리소스 그룹 전체를 삭제합니다.
 
-## ScaledObject는 0개부터 시작하고 cooldown을 노드 준비보다 길게 둔다
+## ScaledObject 설정: 0개 시작과 노드 준비보다 긴 cooldown
 
-postdeploy hook이 `http-add-on/scaling.yaml`을 적용합니다. 핵심 설정입니다.
+postdeploy hook이 적용하는 `http-add-on/scaling.yaml`의 주요 설정입니다.
 
 ```yaml
 # InterceptorRoute
@@ -89,22 +89,23 @@ triggers:
       interceptorRoute: podinfo
 ```
 
-## cold start와 burst 부하를 따로 측정한다
+## 실행: cold start와 burst 부하 측정
 
 ```bash
 azd env set PATTERN "http-add-on-cold-start http-add-on-min0 http-add-on-min1"
 azd hooks run postdeploy
 ```
 
-- **`http-add-on-cold-start`:** replica가 0이 된 뒤 시스템 노드의 임시 curl Pod에서
+- `http-add-on-cold-start`: kube-system Service DNS는 클러스터 안에서만 해석되므로, replica가
+  0이 된 뒤 시스템 노드의 임시 curl Pod에서
   `http://keda-add-ons-http-interceptor-proxy.kube-system:8080/`로 `Host: podinfo.example.com`
-  요청을 보냅니다. kube-system Service DNS는 클러스터 안에서만 해석되기 때문입니다. 작은
+  요청을 보냅니다. 작은
   keeper Pod로 워크로드 노드를 남긴 상태에서 3회, keeper를 지우고 워크로드 노드가 0대가 된
   뒤 1회 측정합니다.
-- **`http-add-on-min0`, `http-add-on-min1`:** k6가 같은 interceptor 주소로 초당 최대 400건을
+- `http-add-on-min0`, `http-add-on-min1`: k6가 같은 interceptor 주소로 초당 최대 400건을
   보냅니다. min0은 replica가 0이 된 뒤 시작합니다.
 
-## 기존 노드에서는 첫 응답이 5초 안쪽, 새 노드가 필요하면 약 111초였다
+## 실측 결과: 노드 유무에 따른 cold start와 burst 부하 실패
 
 AKS 1.36.5, HTTP Add-on 0.16.0에서 `PATTERN=http-add-on-cold-start`로 측정했습니다
 (`results/http-add-on-cold-start.txt`). 응답에는 `X-KEDA-HTTP-Cold-Start: true` header가 붙었습니다.
@@ -128,23 +129,23 @@ AKS 1.36.5, HTTP Add-on 0.16.0에서 `PATTERN=http-add-on-cold-start`로 측정�
   1 ms와 큰 차이가 없었습니다.
 - `minReplicaCount: 0` 실행에서는 부하가 끝난 뒤 HPA 안정화 창(300초)이 지나 약
   720초에 1개로 줄었고, 약 10초 뒤 0개가 됐습니다. `cooldownPeriod`(300초)는 trigger가
-  마지막으로 활성으로 보고된 때부터 세므로 HPA 안정화 창과 함께 흘렀습니다.
+  마지막으로 활성으로 보고된 시점부터 세므로 HPA 안정화 창과 겹쳐 진행됐습니다.
 
-## 0개 운영은 첫 요청 대기를 감당할 수 있는 경로에만 쓴다
+## 적합한 경우: 첫 요청 대기를 감당할 수 있는 경로의 0개 운영
 
 - 사용자 트래픽이 갑자기 몰리는 경로는 `minReplicaCount: 1` 이상을 두고, 야간·주말처럼
-  유휴가 확실한 시간에만 0개로 줄입니다. 시간대별 최소값은 `cron` trigger를 함께
-  쓰면 됩니다.
+  유휴가 확실한 시간에만 0개로 줄입니다. 시간대별 최소값은 `cron` trigger로
+  지정합니다.
 - 0개를 유지해야 하면 `coldStart.placeholder`로 즉시 안내 응답을 주거나
   `maxPendingRequests`로 보류 요청 수를 제한합니다.
 
-## 판정 기준은 첫 요청 성공과 부하 중 실패율 0이다
+## 성공 기준: 첫 요청 성공과 부하 중 실패율 0%
 
 - `kubectl -n demo get scaledobject podinfo`: `READY=True`, 유휴 시 replica 0
 - 0개 상태의 첫 요청이 200으로 응답하고 cold start header가 `true`
 - `minReplicaCount: 1` 부하에서 실패율 0%, replica가 `ceil(RPS/50)` 근처에 머묾
 
-## 실습 후 azd down으로 리소스 그룹을 삭제한다
+## 정리: azd down
 
 ```bash
 azd down --purge --force
@@ -154,9 +155,9 @@ azd down --purge --force
 `helm uninstall http-add-on -n kube-system`과 CRD 삭제(`httpscaledobjects.http.keda.sh`,
 `interceptorroutes.http.keda.sh`)를 실행합니다.
 
-## cold start 요청이 끊기면 cooldown과 interceptor 위치를 확인한다
+## 문제 해결: cold start 요청 끊김과 cooldown·interceptor 위치
 
-실습 중 실제로 겪은 문제입니다.
+실습 중 겪은 문제와 조치입니다.
 
 | 증상 | 원인 | 조치 |
 |---|---|---|

@@ -1,6 +1,6 @@
 ---
-title: AKS NAP(Karpenter)는 Microsoft가 권장하는 노드 확장 방향이며 이점은 속도보다 VM 선택과 비용이다
-description: NAP가 VMSS 기반 Cluster Autoscaler의 후속 권장 방향인지 공식 근거로 확인하고, 동작 차이·실측 유불리·NodePool 설정·활성화 방법과 제약을 정리합니다.
+title: "AKS NAP(Karpenter): CAS 대비 VM 자동 선택·비용 이점과 도입 기준"
+description: AKS Node Auto-Provisioning(NAP)이 VMSS 기반 Cluster Autoscaler의 후속 권장 방식이라는 공식 근거와 함께 두 방식의 동작 차이, 실측 유불리, NodePool 설정, 활성화 방법과 지원 제약을 다룹니다.
 document_type: guide
 services: [azure-kubernetes-service]
 technologies: [kubernetes, karpenter]
@@ -61,25 +61,24 @@ applies_to: [AKS 1.36, Azure CLI 2.76+]
 featured: true
 ---
 
-# AKS NAP(Karpenter)는 Microsoft가 권장하는 노드 확장 방향이며 이점은 속도보다 VM 선택과 비용이다
+# AKS NAP(Karpenter): CAS 대비 VM 자동 선택·비용 이점과 도입 기준
 
 Node Auto-Provisioning(NAP)은 AKS가 관리하는 [Karpenter](https://karpenter.sh)입니다.
-Cluster Autoscaler(CAS)가 **미리 만든 VMSS 노드 풀의 노드 수**만 바꾼다면,
-NAP는 Pending Pod의 requests를 보고 **VM 크기와 개수를 함께 정해** 노드를 만들고,
-비거나 덜 쓰이는 노드를 스스로 정리합니다.
+Cluster Autoscaler(CAS)는 미리 만든 VMSS 노드 풀의 노드 수만 바꿉니다.
+NAP는 Pending Pod의 requests를 보고 VM 크기와 개수를 함께 정해 노드를 만들고,
+비거나 덜 쓰이는 노드도 스스로 정리합니다.
 
-!!! abstract "결론: 새 Linux 워크로드는 NAP가 맞고, CAS는 유지보수 단계다"
+NAP는 2025년 7월 GA됐고 AKS Automatic의 기본 노드 관리 방식입니다. Microsoft Learn은
+향후 기능 개발에서 CAS를 "유지보수, 최소한의 기능 개선", NAP를 "지속적인 개발과 새 기능
+추가" 대상으로 구분하므로 새 Linux 워크로드는 NAP로 시작합니다. CAS는 폐기되지 않고 계속
+지원되며, NAP가 지원하지 않는 구성(Windows 노드 GA, 서비스 주체, kubenet 등)에서는 여전히
+유일한 자동 노드 확장 방식입니다.
 
-    - **최신 권장 방향이 맞습니다.** NAP는 2025년 7월 GA됐고 AKS Automatic의 기본 노드
-      관리 방식입니다. Microsoft Learn은 CAS를 "유지보수, 최소한의 기능 개선", NAP를
-      "지속적인 개발과 새 기능 추가" 대상으로 구분합니다.
-    - **CAS가 폐기된 것은 아닙니다.** 계속 지원되며, NAP가 지원하지 않는 구성(Windows 노드
-      GA, 서비스 주체, kubenet 등)에서는 CAS가 유일한 자동 노드 확장 방식입니다.
-    - **전환 이유는 속도가 아닙니다.** 같은 조건 실측에서 Pod가 준비되는 시간은 비슷했습니다.
-      이점은 VM 크기 자동 선택, 비용 절감(혼합 Pod 46~54%, 큰 노드 축소 87%), quota 부족 시
-      빠른 대체 결정, 노드 수명 관리입니다.
+같은 조건 실측에서 Pod가 준비되는 시간은 두 방식이 비슷했습니다. NAP로 옮겨서 얻는 이점은
+VM 크기 자동 선택, 비용 절감(혼합 Pod 46~54%, 큰 노드 축소 87%), quota 부족 시 빠른 대체
+결정, 노드 수명 관리입니다.
 
-## Microsoft는 NAP에 새 기능을 넣고 CAS는 유지보수만 한다
+## 권장 근거: GA, AKS Automatic 기본값, 기능 개발 방향
 
 | 공식 근거 | 내용 |
 |---|---|
@@ -89,13 +88,12 @@ NAP는 Pending Pod의 requests를 보고 **VM 크기와 개수를 함께 정해*
 | [Learn: CAS → NAP 마이그레이션](https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning) | 향후 기능 개발: CAS는 "maintained, with minimal feature enhancements", NAP는 "continuous active development and new feature enhancements" |
 | [AKS 릴리스 노트 2026-10-25](https://github.com/Azure/AKS/blob/master/CHANGELOG.md) | NAP: Capacity Reservation Group, Trusted Launch, managed GPU, Windows 노드(preview), dual-stack(preview) 추가. CAS: 이미지 업그레이드만 |
 
-아래 흐름으로 클러스터별 선택을 정합니다. 2·3단계의 조건은
-[NAP를 켤 수 없는 구성](#nap-unsupported)과 [시나리오별 실측](scenario-comparison/index.md)에
-근거합니다.
+클러스터별 선택은 다음 흐름을 따릅니다. 2·3단계 조건의 근거는
+[NAP 지원·미지원 구성](#nap-unsupported)과 [NAP·CAS 시나리오별 실측](scenario-comparison/index.md)입니다.
 
 ![새 클러스터는 AKS Automatic 또는 NAP로 시작하고, 기존 CAS 클러스터는 NAP 미지원 구성과 CAS 고유 동작 필요 여부를 확인한 뒤 NAP로 전환하거나 CAS를 유지하는 판단 흐름](images/nap-adoption-decision.svg)
 
-## CAS는 미리 만든 풀의 노드 수를, NAP는 VM 크기와 수를 함께 정한다
+## 확장 단위: CAS는 풀의 노드 수, NAP는 VM 크기와 수
 
 CAS는 Pending Pod가 생기면 노드 풀(VMSS) 하나를 골라 같은 크기의 노드를 늘립니다.
 HPA가 Pod를 늘리고 CAS가 노드를 늘리는 구조입니다.
@@ -120,20 +118,27 @@ NAP(Karpenter)는 기존 노드에 들어가지 못한 Pod를 모아 그 묶음�
 | 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget |
 | 다른 VM 크기가 필요할 때 | 풀을 새로 추가 | `NodePool` requirements만 수정 |
 
-## NAP는 VM 부팅이 아니라 확장 결정과 재시도를 빠르게 한다
+## 확장 속도: 확장 결정과 재시도에서 차이
 
-공식 소개 문서는 "VM이 더 빨리 뜬다"고 말하지 않습니다.
+NAP는 주기적인 scan 없이 Pending Pod 이벤트로 확장을 결정합니다
+([CAS→NAP 마이그레이션](https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning)).
+Pod가 1초 동안 더 생기지 않으면 그 묶음에 맞는 VM 크기와 수를 바로 정합니다. CAS는 가장
+오래된 Pending Pod가 2초 미만이면 다음 loop(최대 scan-interval 10초)까지 기다립니다.
 
-| 출처 | 속도 관련 표현 |
-|---|---|
-| Karpenter 문서 | node group 없이 인스턴스를 직접 관리하므로 **용량이 없을 때 몇 분이 아니라 밀리초 단위로 재시도**한다 |
-| Microsoft Learn NAP 개요 | Pending Pod에 맞는 VM 구성을 **효율적이고 비용 효과적으로** 제공한다. 속도 보장은 AKS Automatic의 Pod 준비 SLA(99.9%를 5분 안)로 제시 |
-| Microsoft Learn CAS→NAP 마이그레이션 | 전환 이유 표는 VM 크기 유연성, 비용, 관리 부담, 노드 수명 관리, 향후 기능 개발이다. 설정 비교 표에서 NAP는 주기 scan 없이 Pending Pod 이벤트로 바로 결정한다고 설명 |
-| Microsoft Learn AKS scaling overview | VM 준비는 보통 2~5분이므로 이를 기다릴 수 없는 Linux 급증 부하에는 ACI virtual node를 고려하라 |
+용량이 없을 때의 재시도도 빠릅니다. Karpenter는 node group 없이 인스턴스를 직접 관리하므로
+용량이 없으면 몇 분이 아니라 밀리초 단위로 다시 시도합니다
+([Karpenter Concepts](https://karpenter.sh/docs/concepts/)). 선호 VM의 quota나 용량이 부족하면
+NAP는 다른 SKU로 곧바로 넘어갑니다.
 
-VM을 만들고 노드로 준비하는 시간은 autoscaler가 줄이지 못합니다. 이 저장소의 실측에서는
-확장 결정 뒤 첫 노드 Ready까지 약 1~1.5분이었고 두 방식 간 차이가 크지 않았습니다. 같은 VM
-크기의 Pod 20개를 0개부터 확장한 결과(중앙값, AKS 1.36.5, `Standard_D4ds_v7` on-demand)입니다.
+VM 부팅 시간은 그대로입니다. VM을 만들고 노드로 준비하는 시간은 autoscaler가 줄이지 못하며,
+VM 준비에는 보통 2~5분이 걸립니다. 이 시간을 기다릴 수 없는 Linux 급증 부하에는 ACI virtual
+node를 고려합니다([AKS scaling overview](https://learn.microsoft.com/azure/aks/concepts-scale)).
+시간 보장이 필요하면 AKS Automatic의 Pod 준비 SLA(대상 작업의 99.9%를 5분 안에 준비)를
+기준으로 삼습니다([NAP 개요](https://learn.microsoft.com/azure/aks/node-auto-provisioning)).
+
+실측에서도 확장 결정 뒤 첫 노드 Ready까지 약 1~1.5분이 걸렸고 두 방식의 차이는 크지
+않았습니다. 다음 표는 같은 VM 크기의 Pod 20개를 0개부터 확장한 결과입니다(중앙값, AKS 1.36.5,
+`Standard_D4ds_v7` on-demand).
 
 | 시나리오 | 확장 결정 | 첫 노드 Ready | 전체 Pod Ready |
 |---|---|---|---|
@@ -141,7 +146,7 @@ VM을 만들고 노드로 준비하는 시간은 autoscaler가 줄이지 못합�
 | NAP, D4 고정 | 3초 | 83초 | 119초 |
 | NAP, v7 D 계열 자유 선택 | 2초 | 88초 | 103초 (D32als_v7 × 1) |
 
-NAP가 실제로 빨라지는 상황은 세 가지입니다.
+NAP가 더 빠른 상황은 다음 세 가지입니다.
 
 | 상황 | CAS | NAP | 실측 |
 |---|---|---|---|
@@ -149,13 +154,13 @@ NAP가 실제로 빨라지는 상황은 세 가지입니다.
 | 필요한 VM 크기가 기존 풀에 없음 | 확장하지 않음. 풀을 추가해야 함 | 허용 범위에서 맞는 VM 선택 | 6 vCPU Pod: CAS 확장 안 함, NAP 96초 |
 | 선호 VM을 만들 수 없음 (quota·용량) | quota 오류처럼 즉시 실패하면 다음 loop에서 다른 풀로 대체. VM이 만들어진 뒤 할당에 실패하면 기본 설정에서 노드 등록 제한 시간(15분)까지 기다릴 수 있음 | 계열 quota가 부족한 SKU는 미리 제외하고, 할당 실패한 SKU는 일정 시간 제외한 뒤 바로 다른 SKU로 재시도 | quota 초과: CAS 23~24초 뒤 대체, NAP 2~3초 만에 대체 |
 
-워크로드가 균일하고 풀을 미리 잘 설계했으며 용량이 넉넉하면 CAS도 속도 면에서
-충분합니다. 측정 방법은 [CAS와 NAP 확장 실측](scale-out-benchmark/index.md)에, Pod 대기
-시간을 줄이는 방법은 [확장 지연 줄이기](scale-up-optimization/index.md)에 있습니다.
+워크로드가 균일하고 풀 설계가 잘 되어 있으며 용량이 넉넉하면 CAS로도 속도는 충분합니다.
+측정 방법은 [CAS·NAP 확장 시간 단계별 실측](scale-out-benchmark/index.md)에서, Pod 대기
+시간을 줄이는 방법은 [AKS 노드 확장 지연 단축](scale-up-optimization/index.md)에서 다룹니다.
 
-## 실측에서 NAP는 비용과 VM 선택에서, CAS는 노드 재시작과 적은 Pod 이동에서 나았다
+## 실측 유불리: NAP는 비용·VM 선택, CAS는 노드 재시작·Pod 이동
 
-유불리 시나리오를 가설로 세우고 같은 환경에서 실측한 결과입니다.
+유불리가 갈릴 만한 시나리오를 가설로 세우고 같은 환경에서 측정했습니다.
 
 | 시나리오 | 결과 | 유리한 쪽 |
 |---|---|---|
@@ -168,14 +173,14 @@ NAP가 실제로 빨라지는 상황은 세 가지입니다.
 | 할당 해제한 VM 재시작 | CAS `Deallocate` 50초, NAP 기능 없음 | CAS |
 | 다른 클러스터가 같은 계열 quota를 쓰고 반납 | NAP는 10분 주기로 quota를 다시 읽어, 1회 실측에서 반납 약 4분 뒤까지 1순위 VM 대신 대체 VM 사용(약 7.5분 뒤 복귀) | CAS |
 
-자세한 가설, 조건과 수치는 [NAP와 CAS 시나리오별 실측](scenario-comparison/index.md)에 있습니다.
+가설, 조건과 수치는 [NAP·CAS 시나리오별 실측](scenario-comparison/index.md)에 자세히 정리했습니다.
 
-## NodePool은 허용할 VM 범위를, AKSNodeClass는 Azure 노드 설정을 정한다
+## NodePool과 AKSNodeClass: 허용 VM 범위와 Azure 노드 설정
 
 NAP를 켜면 `default`(D 계열 on-demand)와 `system-surge` NodePool이 만들어집니다.
-워크로드 성격별로 NodePool을 추가할 때는 하나의 Pod가 하나의 NodePool에만 맞아야
-합니다. 아래 `general`은 전용 label·taint를 두어 `default`와 겹치지 않게 하고,
-운영 환경에 맞게 on-demand만 허용합니다.
+워크로드 성격별로 NodePool을 추가한다면 Pod 하나가 NodePool 하나에만 맞도록 조건을
+나눕니다. 다음 `general` 예시는 전용 label·taint로 `default`와 겹치지 않게 하고,
+운영 환경을 고려해 on-demand만 허용합니다.
 
 ```yaml
 apiVersion: karpenter.sh/v1
@@ -242,7 +247,7 @@ spec:
           effect: NoSchedule
 ```
 
-## NAP 기능은 VM 선택, 비용 정리, 수명 관리로 나뉜다
+## NAP 기능: VM 선택, 비용 정리, 수명 관리
 
 | 기능 | 설정 | 동작 |
 |---|---|---|
@@ -257,7 +262,7 @@ spec:
 | 보호 | Pod·노드 annotation `karpenter.sh/do-not-disrupt: "true"` | 자발적 정리 대상에서 제외 |
 | Static NodePool | `spec.replicas` | 수요와 관계없이 지정한 수의 NAP 노드 유지. upstream Karpenter에서는 alpha 기능 |
 
-## 새 클러스터는 `--node-provisioning-mode Auto`로 켜고 NodeClaim으로 확인한다
+## NAP 활성화: `--node-provisioning-mode Auto`와 NodeClaim 확인
 
 권장 네트워크는 Azure CNI Overlay와 Cilium입니다.
 
@@ -275,28 +280,29 @@ kubectl get nodeclaims                       # NAP가 만든(또는 만드는 �
 kubectl get events -A --field-selector source=karpenter -w   # AKS 1.36 실측 기준 source 이름
 ```
 
-`--node-provisioning-default-pools None`을 주면 기본 NodePool 없이 직접 정의한
-풀만 사용합니다.
+`--node-provisioning-default-pools None`을 지정하면 기본 NodePool을 만들지 않고 직접
+정의한 풀만 씁니다.
 
-## 네트워크·ID·OS 구성이 맞지 않으면 NAP를 켤 수 없다 { #nap-unsupported }
+## NAP 지원·미지원 구성 { #nap-unsupported }
 
 | 구분 | NAP 지원 | NAP 미지원 |
 |---|---|---|
 | 네트워크 | Azure CNI Overlay(권장, Cilium 데이터플레인), Azure CNI Node Subnet | kubenet, Azure CNI Pod Subnet 동적 할당, Calico network policy |
 | ID | 시스템·사용자 할당 관리 ID | 서비스 주체 |
-| OS | Ubuntu, Azure Linux, Azure Container Linux(AKS 1.34 이상, Trusted Launch 필요). Windows Server 2022·2025는 **preview** (Cilium 미지원) | Windows 노드의 GA 운영 |
-| IP | IPv4, IPv4/IPv6 dual-stack(**preview**) | IPv6 단일 스택 |
+| OS | Ubuntu, Azure Linux, Azure Container Linux(AKS 1.34 이상, Trusted Launch 필요). Windows Server 2022·2025는 preview (Cilium 미지원) | Windows 노드의 GA 운영 |
+| IP | IPv4, IPv4/IPv6 dual-stack(preview) | IPv6 단일 스택 |
 | 운영 | - | 클러스터 중지(stop), 생성 후 outbound type 변경, 사용자 지정 VNet의 Basic Load Balancer |
 
-- **CAS와의 관계:** 같은 클러스터에서 함께 쓰려면 마이그레이션용
-  `AllowClusterAutoscalerAndNAP` feature flag가 필요합니다. 일반적으로는 CAS를 끄고 NAP로 전환합니다.
-- Windows 지원은 2026-10-25 AKS 릴리스와 AKSNodeClass 문서에 preview로 추가됐고, NAP 개요의 제한
-  사항에는 아직 "Windows node pools aren't supported"로 남아 있습니다. preview는 SLA 대상이
-  아니므로 Windows 노드를 프로덕션에서 운영한다면 해당 풀은 CAS로 둡니다.
+CAS와 NAP를 같은 클러스터에서 함께 쓰려면 마이그레이션용
+`AllowClusterAutoscalerAndNAP` feature flag가 필요합니다. 보통은 CAS를 끄고 NAP로 전환합니다.
 
-기존 CAS 클러스터를 옮기는 절차와 위 조건 때문에 전환할 수 없을 때의 재생성
-전략은 [Cluster Autoscaler에서 NAP로 중단을 최소화해 전환](cluster-autoscaler-migration/index.md)에
-정리했습니다.
+Windows 지원은 2026-10-25 AKS 릴리스와 AKSNodeClass 문서에 preview로 추가됐지만, NAP 개요의
+제한 사항에는 아직 "Windows node pools aren't supported"가 남아 있습니다. preview는 SLA 대상이
+아니므로 Windows 노드를 프로덕션에서 운영한다면 해당 풀은 CAS로 둡니다.
+
+기존 CAS 클러스터의 전환 절차와, 위 조건 때문에 전환할 수 없을 때의 재생성 전략은
+[Cluster Autoscaler에서 NAP로 전환: 같은 클러스터 전환, 동시 운영, 새 클러스터 이전](cluster-autoscaler-migration/index.md)에서
+다룹니다.
 
 ## 공식 참고 자료
 

@@ -1,6 +1,6 @@
 ---
-title: Managed Prometheus 요청률로 KEDA 확장 시 1회 실측에서 부하 후 약 70초에 Pod가 늘기 시작했다
-description: podinfo의 HTTP 요청률을 Azure Monitor managed service for Prometheus에서 조회해 KEDA Prometheus scaler로 확장하고, 확장·축소 시점과 NAP 노드 추가를 측정합니다.
+title: "KEDA Prometheus scaler: Managed Prometheus 요청률 기반 확장"
+description: Azure Monitor managed service for Prometheus에서 podinfo의 HTTP 요청률을 조회하는 KEDA Prometheus scaler 구성과, 1회 실측한 확장·축소 시점과 NAP 노드 추가 시간을 다룹니다.
 document_type: lab
 services: [azure-kubernetes-service, azure-monitor]
 technologies: [kubernetes, keda, prometheus]
@@ -29,15 +29,15 @@ cleanup_required: true
 topic_order: 1
 ---
 
-# Managed Prometheus 요청률로 KEDA 확장 시 1회 실측에서 부하 후 약 70초에 Pod가 늘기 시작했다
+# KEDA Prometheus scaler: Managed Prometheus 요청률 기반 확장
 
 앱이 내보내는 Prometheus counter를 Azure Monitor managed service for
 Prometheus(Managed Prometheus)로 수집하고, KEDA core에 포함된 `prometheus`
 scaler가 Workload Identity로 조회해 replica를 정합니다. 초당 400건 부하의 1회
-실측에서 Pod는 약 70초 뒤 늘기 시작해 약 130초에 목표 수에 도달했고, 새 Pod를
-담을 NAP 노드가 준비되어 모든 Pod가 Ready가 되기까지 약 2분이 더 걸렸습니다.
+실측에서 Pod는 약 70초 뒤 늘기 시작해 약 130초에 목표 수에 도달했습니다. 새 Pod를
+담을 NAP 노드가 준비되고 모든 Pod가 Ready가 되기까지는 약 2분이 더 걸렸습니다.
 
-## 앱 요청률이 Pod당 초당 50건을 넘으면 replica를 늘린다
+## 확장 조건: Pod당 요청률 목표와 query
 
 - 지표: podinfo의 `http_request_duration_seconds_count` 중 `path="root"`(probe·scrape 제외)
 - query: `sum(rate(http_request_duration_seconds_count{namespace="demo", path="root"}[1m]))`
@@ -45,7 +45,7 @@ scaler가 Workload Identity로 조회해 replica를 정합니다. 초당 400건 
 - 지원 범위: Prometheus scaler와 Managed Prometheus 조합은 AKS KEDA add-on 지원
   범위입니다. 자체 운영 Prometheus는 범위 밖입니다.
 
-## azd up이 Workload Identity·KEDA·Managed Prometheus와 읽기 권한을 한 번에 준비한다
+## 준비: azd up으로 Workload Identity·KEDA·Managed Prometheus 구성
 
 [HPA·KEDA 가이드](../index.md)의 sample `keda-request-scaling`을 저장소 루트에서 실행합니다.
 
@@ -62,9 +62,9 @@ azd up
   재시작합니다. Workload Identity 환경 변수는 새 Pod에만 주입되므로, KEDA를 먼저 켠
   클러스터에서도 재시작으로 적용됩니다.
 - 관리 ID의 client ID와 workspace query endpoint는 azd 환경 값(`KEDA_CLIENT_ID`,
-  `AMW_QUERY_ENDPOINT`)으로 남아 다음 단계가 그대로 씁니다.
+  `AMW_QUERY_ENDPOINT`)에 저장되고, 다음 단계에서 그대로 쓰입니다.
 
-## 비용은 노드, Azure Monitor workspace 수집량, AGC, 부하 시간에 비례한다
+## 비용: 노드, workspace 수집량, AGC, 부하 시간
 
 - AKS 시스템 노드 2대와 확장 중 NAP가 만드는 노드(이 실습에서는 최대 4대 추가)
 - Azure Monitor workspace의 Prometheus 수집·조회량
@@ -73,14 +73,14 @@ azd up
   패턴만 실습하려면 `azd up` 전에 `azd env set ENABLE_AGC false`를 실행합니다.
 - 실습 후 `azd down --purge --force`로 리소스 그룹을 삭제하면 과금이 멈춥니다.
 
-## postdeploy hook이 ScaledObject를 적용하고 시스템 노드에서 k6로 초당 400건을 6분간 보낸다
+## 실행: postdeploy hook의 ScaledObject 적용과 k6 부하
 
 ```bash
 azd env set PATTERN prometheus-rps
 azd hooks run postdeploy      # 결과: out/<환경 이름>/prometheus-rps.csv, prometheus-rps-k6.txt
 ```
 
-hook은 이전 `ScaledObject`를 지우고 워크로드 노드가 1대로 줄어든 뒤 다음을 실행합니다.
+hook은 이전 `ScaledObject`를 지우고, 워크로드 노드가 1대로 줄어들면 다음 순서로 진행합니다.
 
 1. `prometheus/scaledobject.yaml`의 `<keda-client-id>`, `<amw-query-endpoint>`를 azd 환경 값으로
    채워 적용하고 `READY=True`를 기다립니다.
@@ -90,11 +90,11 @@ hook은 이전 `ScaledObject`를 지우고 워크로드 노드가 1대로 줄어
 podinfo와 PodMonitor는 postprovision에서 배포합니다. PodMonitor는 OSS와 같은 스펙이지만 API
 group이 `azmonitoring.coreos.com/v1`이며, 첫 데이터가 workspace에 보이기까지 1–2분이 걸립니다.
 
-## 1회 실측에서 첫 확장은 약 70초, 노드 준비가 약 2분을 더했다
+## 실측 결과: 첫 확장 시점과 NAP 노드 준비 시간
 
 k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, KEDA 2.19, 워크로드 노드는 NAP
 `default` NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 기록한
-`results/prometheus-rps.csv`라 시점을 구간으로 적습니다.
+`results/prometheus-rps.csv` 기준이므로 시점은 구간으로 표시했습니다.
 
 | 시점 | 관측 |
 |---|---|
@@ -114,21 +114,21 @@ k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, KEDA 2
   더해진 결과입니다. 1 → N 구간에서는 HPA가 sync 주기마다 KEDA metrics server를 거쳐
   query를 실행하므로, `useCachedMetrics`를 쓰지 않는 한 `pollingInterval`은 이 지연에
   영향을 주지 않습니다(`pollingInterval`은 0 ↔ 1 판단 주기). 더 빨리 반응해야 하면
-  rate 창과 scrape 간격을 줄이되 흔들림이 커지는 것을 함께 확인합니다.
+  rate 창과 scrape 간격을 줄이고, 그만큼 커지는 흔들림도 함께 확인합니다.
 
-## ScaledObject가 Ready이고 HPA 목표가 RPS 값을 따라가면 성공이다
+## 성공 기준: ScaledObject Ready와 RPS를 따르는 HPA 목표
 
 - `kubectl -n demo get scaledobject podinfo`: `READY=True`, 부하 중 `ACTIVE=True`
 - `kubectl -n demo get hpa keda-hpa-podinfo`: `TARGETS`가 `<값>/50 (avg)`로 갱신
 - 부하 중 replica가 `ceil(RPS/50)` 근처에 머물고 요청 실패가 없어야 합니다.
 
-## 실습 후 azd down으로 리소스 그룹을 삭제한다
+## 정리: azd down
 
 ```bash
 azd down --purge --force
 ```
 
-## 인증·query 오류는 ScaledObject 이벤트에 먼저 나타난다
+## 문제 해결: 인증·query 오류와 ScaledObject 이벤트
 
 | 증상 | 원인과 조치 |
 |---|---|

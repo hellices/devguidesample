@@ -82,7 +82,7 @@ spec:
 
 분산된 Deployment의 replica 수를 부하에 맞추는 HPA 예시, 동작 기본값과
 KEDA를 이용한 요청 수 기반 확장은
-[AKS HPA와 KEDA로 지표별 Pod 확장 방식 고르기](../hpa-keda-autoscaling/index.md)에서
+[AKS HPA·KEDA: 지표별 Pod 확장 방식과 요청 수 기반 패턴](../hpa-keda-autoscaling/index.md)에서
 다룹니다.
 
 ***
