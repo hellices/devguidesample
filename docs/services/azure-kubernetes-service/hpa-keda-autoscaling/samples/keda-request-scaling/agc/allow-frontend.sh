@@ -6,7 +6,14 @@
 set -euo pipefail
 RG=${AZURE_RESOURCE_GROUP:?} CLUSTER=${AKS_CLUSTER_NAME:?}
 MC=$(az aks show -g "$RG" -n "$CLUSTER" --query nodeResourceGroup -o tsv)
-NSG_ID=$(az network vnet list -g "$MC" --query "[0].subnets[?name=='aks-appgateway'].networkSecurityGroup.id | [0]" -o tsv)
+# 노드 리소스 그룹의 모든 VNet에서 aks-appgateway 서브넷을 찾고, 정확히 하나일 때만 진행합니다.
+ROWS=$(az network vnet list -g "$MC" --query "[].subnets[?name=='aks-appgateway'][].[id, networkSecurityGroup.id || '']" -o tsv)
+COUNT=$(grep -c . <<<"$ROWS" || true)
+if (( COUNT != 1 )); then
+  echo "노드 리소스 그룹 $MC에서 aks-appgateway 서브넷을 $COUNT개 찾았습니다. 정확히 1개여야 합니다." >&2
+  exit 1
+fi
+NSG_ID=$(cut -f2 <<<"$ROWS")
 if [[ -z $NSG_ID ]]; then
   echo "aks-appgateway 서브넷에 NSG가 없어 frontend 허용 규칙이 필요하지 않습니다."
   exit 0

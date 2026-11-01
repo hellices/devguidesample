@@ -3,6 +3,9 @@
 #   생략한 인수는 NAP_CLUSTER_NAME, CAS_CLUSTER_NAME, AZURE_LOCATION을 씁니다(context 이름 = 클러스터 이름).
 #   BASELINE_USAGE  실험 전 StandardDdsv7Family 사용량(두 클러스터 시스템 풀 합계). 필수
 #   PROBE_TIMEOUT=300  NAP NodeClaim 선택을 기다릴 최대 시간(초). 넘으면 실패로 종료
+#   STRICT=0           1이면 사전 조건(대조군 pref64, 점유 중 alt)이 맞지 않을 때 끝에서 실패로 종료.
+#                      기본 0은 경고와 precondition 열만 남깁니다(공개 실행의 대조군은 alt를 골랐음).
+# 반납 뒤 1200초 안에 pref64가 나오지 않으면 timeout 행(censored)을 남기고 실패로 종료합니다.
 # 1) 대조군: NAP가 pref64(D64ds_v7)를 고르는지 확인
 # 2) CAS user 풀(D4ds_v7) 노드 6대로 Ddsv7 계열 quota를 점유하고 11분 대기 → NAP가 alt로 바꾸는지 확인
 # 3) 점유 해제 직후부터 60초마다 NAP 선택을 확인해 pref64로 돌아오기까지 걸린 시간을 기록
@@ -12,7 +15,7 @@ NAP=${1:-${NAP_CLUSTER_NAME:?nap-context 인수 또는 NAP_CLUSTER_NAME이 필�
 CAS=${2:-${CAS_CLUSTER_NAME:?cas-context 인수 또는 CAS_CLUSTER_NAME이 필요합니다}}
 REGION=${3:-${AZURE_LOCATION:?region 인수 또는 AZURE_LOCATION이 필요합니다}}
 BASELINE_USAGE=${BASELINE_USAGE:?BASELINE_USAGE(실험 전 StandardDdsv7Family 사용량)가 필요합니다}
-PROBE_TIMEOUT=${PROBE_TIMEOUT:-300}
+PROBE_TIMEOUT=${PROBE_TIMEOUT:-300} STRICT=${STRICT:-0}
 [[ $BASELINE_USAGE =~ ^[0-9]+$ ]] || { echo "BASELINE_USAGE는 정수여야 합니다: $BASELINE_USAGE" >&2; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 log() { echo "[$(date -u +%T)] $*" >&2; }
@@ -82,8 +85,18 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
   echo "$seen $pools"
 }
 
-echo "phase,elapsed_s,ddsv7_usage,chosen"   # elapsed_s: 반납 시점부터 NodePool 선택을 읽은 시각까지
-r=$(probe); echo "control,,$(usage),${r#* }"
+precondition_failed=0
+check() { # check <phase> <기대 NodePool> <chosen>: 결과를 pc에 ok 또는 failed(...)로 남깁니다.
+  local got
+  got=$(grep -oE 'pref64|alt' <<<"$3" | sort -u | paste -sd+ - || true)
+  if [[ $got == "$2" ]]; then pc=ok; return; fi
+  pc="failed($1 chose ${got:-none})"
+  precondition_failed=1
+  log "WARNING: precondition $pc, expected $2"
+}
+
+echo "phase,elapsed_s,ddsv7_usage,chosen,precondition"   # elapsed_s: 반납 시점부터 NodePool 선택을 읽은 시각까지
+r=$(probe); check control pref64 "${r#* }"; echo "control,,$(usage),${r#* },$pc"
 
 cas_used=1
 kubectl --context "$CAS" apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
@@ -95,7 +108,7 @@ kubectl --context "$CAS" -n bench scale deployment inflate --replicas 18 >/dev/n
 kubectl --context "$CAS" -n bench rollout status deployment/inflate --timeout=15m >/dev/null
 log "consumer nodes ready; Ddsv7 usage $(usage). waiting 11 minutes for NAP quota refresh"
 sleep 660
-r=$(probe); echo "consumed,,$(usage),${r#* }"
+r=$(probe); check consumed alt "${r#* }"; echo "consumed,,$(usage),${r#* },$pc"
 
 kubectl --context "$CAS" -n bench scale deployment inflate --replicas 0 >/dev/null
 log "waiting for consumer VMs to be deleted"
@@ -106,9 +119,19 @@ until cur=$(fam) && (( cur <= BASELINE_USAGE )); do
   sleep 15
 done
 rel=$(date +%s); log "released; Ddsv7 usage $cur"
+found=0
 while (( $(date +%s) - rel <= 1200 )); do
   r=$(probe); chosen=${r#* }
-  echo "released,$(( ${r%% *} - rel )),$(usage),$chosen"
-  [[ $chosen == *pref64* ]] && break
+  echo "released,$(( ${r%% *} - rel )),$(usage),$chosen,"
+  [[ $chosen == *pref64* ]] && { found=1; break; }
   sleep 45
 done
+if (( ! found )); then
+  echo "timeout,1200,$(usage),censored,"
+  log "timeout: pref64 not chosen within 1200s after release (censored)"
+  exit 1
+fi
+if (( precondition_failed )) && [[ $STRICT == 1 ]]; then
+  log "STRICT=1: precondition failed"
+  exit 1
+fi

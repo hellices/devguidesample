@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-from k8sutil import ts
+from k8sutil import event_time, ts
 
 VMSS = re.compile(r"virtualMachineScaleSets/([^/]+)", re.I)
 GROUP = re.compile(r"group (\S+?):? ")
@@ -30,7 +30,7 @@ def main():
     t0 = ts((d / "t0").read_text().strip())
     load = lambda n: json.loads((d / n).read_text())["items"]
     sec = lambda t: "" if t is None else str(round((t - t0).total_seconds()))
-    et = lambda e: ts(e.get("eventTime") or e.get("firstTimestamp") or e.get("lastTimestamp"))
+    et = lambda e: event_time(e, t0)   # 이전 실행에서 합쳐진 반복 이벤트는 이번 실행 발생 시각으로 봅니다.
     events = [e for e in load("events.json") if et(e) and et(e) >= t0]
     claims = [c for c in load("nodeclaims.json") if ts(c["metadata"]["creationTimestamp"]) >= t0]
     pool = lambda c: c["metadata"].get("labels", {}).get("karpenter.sh/nodepool")
@@ -42,13 +42,24 @@ def main():
         fbs = [ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) == pattern]
         fb = min(fbs) if fbs else None
         # 선호 NodeClaim의 경고만 실패로 봅니다. 실패한 NodeClaim은 스냅샷 전에 삭제될 수 있으므로
-        # 스냅샷에 없으면 이름 접두사(<NodePool>-)가 대체 NodePool이 아닌 것을 선호로 봅니다.
+        # 스냅샷에 없으면 이름 접두사(<NodePool>-)로 NodePool을 정합니다. 'fallback'과 'fallback-spot'처럼
+        # 접두사가 겹치면 가장 긴 NodePool 이름을 씁니다. nodepools.json이 없는 이전 스냅샷은
+        # NodeClaim label에 보이는 NodePool 이름만 후보로 씁니다.
         known = {c["metadata"]["uid"]: pool(c) != pattern for c in claims}
         known.update({c["metadata"]["name"]: pool(c) != pattern for c in claims})
+        if (d / "nodepools.json").exists():
+            names = {p["metadata"]["name"] for p in load("nodepools.json")}
+        else:
+            names = {p for c in load("nodeclaims.json") if (p := pool(c))}
+        names.add(pattern)
 
         def preferred(o):
             hit = known.get(o.get("uid"), known.get(o.get("name")))
-            return hit if hit is not None else not (o.get("name") or "").startswith(pattern + "-")
+            if hit is not None:
+                return hit
+            name = o.get("name") or ""
+            owner = max((n for n in names if name.startswith(n + "-")), key=len, default=None)
+            return owner != pattern
 
         bad = [e for e in events if e["involvedObject"].get("kind") == "NodeClaim"
                and e.get("type") == "Warning" and preferred(e["involvedObject"])]
@@ -61,7 +72,7 @@ def main():
             return m.group(1) if m else None
 
         # 확장 결정은 ScaledUpGroup("setting group")과 Pod의 TriggeredScaleUp 중 이른 쪽입니다.
-        # 같은 이유의 이벤트가 이전 실행에서 이미 생겼으면 ScaledUpGroup은 스냅샷에 새로 남지 않을 수 있습니다.
+        # 이전 실행에서 생긴 같은 이벤트에 합쳐진 재발생은 event_time이 lastTimestamp로 읽습니다.
         ups = sorted((e for e in events if e.get("reason") == "ScaledUpGroup"
                       and (e.get("message") or "").startswith("Scale-up: setting group")
                       or e.get("reason") == "TriggeredScaleUp"), key=et)

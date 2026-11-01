@@ -6,7 +6,7 @@
 #   SCALE_IN_COUNT="<cmd>"  남은 VM 수를 출력하는 명령. 0이 되는 시각을 축소 완료로 기록
 #                    예) CAS: az vmss list-instances -g <MC_rg> -n <vmss> --query "length(@)" -o tsv
 #                        NAP: kubectl get nodeclaims -l karpenter.sh/nodepool=bench-fixed --no-headers | wc -l
-# 실행마다 시작 시각과 Pod·노드·NodeClaim·이벤트 스냅샷을 남기고 analyze.py로 단계별 시간을 계산합니다.
+# 실행마다 시작 시각과 Pod·노드·NodeClaim·NodePool·이벤트 스냅샷을 남기고 analyze.py로 단계별 시간을 계산합니다.
 set -euo pipefail
 USAGE="사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector key=value]"
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} REPLICAS=${3:?$USAGE} RUNS=${4:?$USAGE} SELECTOR=${5:-}
@@ -32,9 +32,16 @@ ready_nodes() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
   grep -c True <<<"$out" || true
 }
-ready_pods() {
-  k -n bench get pods -l app=inflate \
-    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true
+ready_pods() { # 삭제 중(deletionTimestamp)인 이전 실행 Pod는 세지 않습니다. 조회 실패는 nonzero
+  local out
+  out=$(k -n bench get pods -l app=inflate -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{"\n"}}{{end}}{{end}}{{end}}{{end}}') || return 1
+  grep -c True <<<"$out" || true
+}
+snap_crd() { # snap_crd <resource> <file>: CRD가 없는 클러스터(CAS)만 빈 목록으로 저장. 다른 조회 실패는 nonzero
+  local err
+  err=$(k get "$1" -o json 2>&1 >"$2") && return 0
+  grep -q "the server doesn't have a resource type" <<<"$err" || { echo "$err" >&2; return 1; }
+  echo '{"items":[]}' > "$2"
 }
 wait_for() { # wait_for <desc> <predicate...>
   local desc=$1; shift; local start; start=$(date +%s)
@@ -44,7 +51,7 @@ wait_for() { # wait_for <desc> <predicate...>
   done
 }
 no_ready_nodes() { local n; n=$(ready_nodes) || return 1; [[ $n -eq 0 ]]; }
-pods_ready() { [[ $(ready_pods) -ge $REPLICAS ]]; }
+pods_ready() { local n; n=$(ready_pods) || return 1; [[ $n -ge $REPLICAS ]]; }
 
 k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 # 스냅샷 조회 실패나 중단으로 끝나도 inflate를 0으로 되돌려 Pod와 노드가 남지 않게 합니다.
@@ -86,7 +93,8 @@ for run in $(seq 1 "$RUNS"); do
 
   k -n bench get pods -o json > "$dir/pods.json"
   k get nodes -o json > "$dir/nodes.json"
-  k get nodeclaims -o json > "$dir/nodeclaims.json" 2>/dev/null || echo '{"items":[]}' > "$dir/nodeclaims.json"
+  snap_crd nodeclaims "$dir/nodeclaims.json"
+  snap_crd nodepools.karpenter.sh "$dir/nodepools.json"
   k get events -A -o json > "$dir/events.json"
 
   now > "$dir/scale_in_start"

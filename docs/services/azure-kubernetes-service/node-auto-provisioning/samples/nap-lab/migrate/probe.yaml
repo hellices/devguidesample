@@ -20,6 +20,15 @@ spec:
       labels:
         app: web
     spec:
+      # 측정 대상은 마이그레이션되는 노드(user 풀, 이후 NAP 노드)입니다. system 풀에는 배치하지 않습니다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.azure.com/mode
+                    operator: NotIn
+                    values: [system]
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname

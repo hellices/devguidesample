@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal
 
-_TS = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})")
+_TS = re.compile(r"(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2}:\d{2})(?:\.(\d+))?([Zz]|[+-]\d{2}:\d{2})")
 _QTY = re.compile(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))([eE][+-]?\d+|Ki|Mi|Gi|Ti|Pi|Ei|n|u|m|k|M|G|T|P|E)?")
 _SUFFIX = {
     "Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60,
@@ -16,17 +16,30 @@ _SUFFIX = {
 def ts(value):
     """RFC 3339 시각을 UTC datetime으로 바꿉니다. 소수 초는 마이크로초(6자리)까지 유지합니다.
 
-    시간대(Z 또는 ±hh:mm)가 없으면 ValueError입니다.
+    RFC 3339처럼 T/Z 구분자는 소문자(t/z)도 받습니다. 시간대(Z 또는 ±hh:mm)가 없으면 ValueError입니다.
     """
     if not value:
         return None
     m = _TS.fullmatch(value.strip())
     if not m:
         raise ValueError(f"RFC 3339 시각이 아닙니다: {value!r}")
-    head, frac, tz = m.groups()
+    date, clock, frac, tz = m.groups()
     frac = "." + (frac + "000000")[:6] if frac else ""
-    tz = "+00:00" if tz == "Z" else tz
-    return datetime.fromisoformat(head + frac + tz).astimezone(timezone.utc)
+    tz = "+00:00" if tz in ("Z", "z") else tz
+    return datetime.fromisoformat(f"{date}T{clock}{frac}{tz}").astimezone(timezone.utc)
+
+
+def event_time(e, t0):
+    """이벤트 발생 시각입니다. 기본은 eventTime 또는 firstTimestamp입니다.
+
+    Kubernetes는 반복 이벤트를 count와 lastTimestamp로 합치므로 이전 실행에서 처음 생긴 이벤트가
+    이번 실행(t0 이후)에 다시 발생했으면 lastTimestamp를 이번 실행의 발생 시각으로 씁니다.
+    """
+    first = ts(e.get("eventTime") or e.get("firstTimestamp") or e.get("lastTimestamp"))
+    last = ts(e.get("lastTimestamp"))
+    if first and last and (e.get("count") or 1) > 1 and first < t0 <= last:
+        return last
+    return first
 
 
 def qty(value):

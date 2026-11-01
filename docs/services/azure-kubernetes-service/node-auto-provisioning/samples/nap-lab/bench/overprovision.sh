@@ -3,6 +3,7 @@
 # placeholder Pod(PriorityClass -10) 3개로 노드 1대분 여유를 잡아 둔 상태에서
 # 실제 Pod 3개를 추가해 Ready까지 걸린 시간을 기록합니다.
 # TIMEOUT=900  Pod·placeholder Ready 대기 제한(초). 넘으면 실패로 종료합니다.
+# placeholder_rescheduled_s: burst 전 placeholder Pod가 모두 선점·교체되고 새 placeholder 3개가 Ready가 된 시각
 set -euo pipefail
 USAGE="사용법: overprovision.sh <kube-context> <scenario> <nodeSelector key=value> [runs]"
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE} RUNS=${4:-2} TIMEOUT=${TIMEOUT:-900}
@@ -19,6 +20,12 @@ wait_ready3() { # wait_ready3 <deployment> <poll초>: readyReplicas가 3이 될 
     (( $(date +%s) < deadline )) || { log "run $run: timeout waiting for $1 readyReplicas=3"; exit 1; }
     sleep "$2"
   done
+}
+placeholders_replaced() { # 선점 전 placeholder($old_uids)가 모두 사라지고 삭제 중이 아닌 placeholder 3개가 Ready면 성공
+  local out uid
+  out=$(k -n bench get pods -l app=overprovisioning -o go-template='{{range .items}}{{.metadata.uid}} {{if .metadata.deletionTimestamp}}deleting{{else}}{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}{{end}}{{"\n"}}{{end}}') || return 1
+  for uid in $old_uids; do grep -q "^$uid " <<<"$out" && return 1; done
+  [[ $(grep -c ' True$' <<<"$out" || true) -ge 3 ]]
 }
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]"
 
@@ -47,12 +54,19 @@ for run in $(seq 1 "$RUNS"); do
     if [[ $n == 1 ]]; then stable=$((stable + 1)); else stable=0; fi
     sleep 10
   done
+  # readyReplicas는 선점 직후에도 이전 값 3으로 남을 수 있으므로 burst 전 placeholder UID를 기록해 교체 여부로 판단합니다.
+  old_uids=$(k -n bench get pods -l app=overprovisioning -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}')
+  [[ -n $old_uids ]] || { log "run $run: no placeholder pods before burst"; exit 1; }
   t0=$(date +%s)
   k -n bench scale deployment inflate --replicas 3 >/dev/null
   wait_ready3 inflate 1
   t1=$(date +%s)
   # 선점된 placeholder가 새 노드에서 다시 Running이 될 때까지(다음 burst를 받을 여유가 복구되는 시간)
-  wait_ready3 overprovisioning 2
+  deadline=$(( $(date +%s) + TIMEOUT ))
+  until placeholders_replaced; do
+    (( $(date +%s) < deadline )) || { log "run $run: timeout waiting for placeholders to be replaced and Ready"; exit 1; }
+    sleep 2
+  done
   t2=$(date +%s)
   echo "$SCENARIO,$run,$((t1 - t0)),$((t2 - t0))"
 done

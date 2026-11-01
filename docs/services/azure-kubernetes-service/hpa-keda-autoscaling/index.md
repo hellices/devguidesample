@@ -235,9 +235,11 @@ HTTP Add-on처럼 별도 controller나 external scaler가 필요한 기능은 He
 | [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | Helm 별도 설치 | 약 40초 | 가능: 첫 요청 보류 (노드에 자리 있으면 5초 안쪽, 새 노드면 약 111초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
 | [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | add-on 포함 | 약 155초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
 
-0개에서 burst를 받으면 첫 Pod가 준비될 때까지 요청이 보류됩니다. Pod와 워크로드 노드가
-모두 없는 상태에서 시작한 1회 실측에서는 NAP 노드와 첫 Pod가 준비되기까지 약 110초 동안
-계획한 요청의 약 22%가 실패하거나 아예 전송되지 못했습니다. `minReplicaCount: 1`에서는
+0개 상태에서 요청을 붙잡아 두는 것은 KEDA HTTP Add-on의 interceptor뿐입니다. Managed
+Prometheus와 AGC 패턴은 요청이 앱 Service로 바로 가므로 Pod가 0개인 동안 들어온 요청은 보류되지
+않고 실패합니다. HTTP Add-on도 보류 시간에는 한도가 있습니다. Pod와 워크로드 노드가 모두 없는
+상태에서 burst를 받은 1회 실측에서는 NAP 노드와 첫 Pod가 준비되기까지 약 110초 동안 계획한
+요청의 약 22%가 실패하거나 아예 전송되지 못했습니다. `minReplicaCount: 1`에서는
 실패가 없었습니다.
 
 ## 노드 autoscaler: Pod 확장 이후의 노드 추가

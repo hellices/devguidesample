@@ -97,7 +97,7 @@ cold_request() { # cold_request <run 이름>: 0개 상태에서 첫 요청과 �
   local r; r=$(kubectl --context "$CTX" run "coldstart-$RANDOM" --rm -i --restart=Never --image=curlimages/curl:8.23.0 --quiet \
     --overrides='{"spec":{"nodeSelector":{"kubernetes.azure.com/mode":"system"},"tolerations":[{"key":"CriticalAddonsOnly","operator":"Exists"}]}}' \
     -- sh -c "h=\$(curl -s -o /dev/null -D - -m 300 -w 'code=%{http_code} total=%{time_total}' -H 'Host: $HOST' $INTERCEPTOR | tr -d '\r' | grep -i -E 'x-keda-http-cold-start|code=' | tr '\n' ' ');
-              w=\$(curl -s -o /dev/null -w '%{time_total}' -H 'Host: $HOST' $INTERCEPTOR); echo \"\$h warm_after=\$w\"")
+              w=\$(curl -sf -o /dev/null -m 60 -w '%{time_total}' -H 'Host: $HOST' $INTERCEPTOR) || w=failed; echo \"\$h warm_after=\$w\"")
   echo "run=$1 user_nodes_before=$before $r" | tee -a "$OUT/http-add-on-cold-start.txt"
 }
 pattern_http_add_on_cold_start() {
@@ -109,7 +109,7 @@ pattern_http_add_on_cold_start() {
   k -n demo rollout status deploy keeper --timeout=10m >/dev/null
   for r in 1 2 3; do cold_request "$r"; done
   # 새 노드가 필요한 경우: keeper를 지우고 워크로드 노드가 0대가 된 뒤 요청합니다.
-  k -n demo delete deploy keeper >/dev/null
+  k -n demo delete deploy keeper --ignore-not-found >/dev/null
   wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.spec.replicas}') == 0 ]]"
   wait_until "워크로드 노드 0" 1800 nodes_at_most 0
   cold_request node-cold

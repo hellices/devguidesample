@@ -2,6 +2,10 @@
 """bench.sh 스냅샷에서 단계별 시간(초)을 계산해 CSV 한 줄을 출력합니다.
 
 decision_s           확장 결정: CAS ScaledUpGroup('setting group') 또는 TriggeredScaleUp 중 이른 시각 / NAP NodeClaim 생성
+                     CAS는 inflate Pod의 TriggeredScaleUp과, 대상 노드의 VMSS 또는 그 이벤트가 가리킨 그룹의
+                     ScaledUpGroup만 봅니다. 노드를 만들지 못한 그룹(예: quota로 실패한 선호 풀)은 제외합니다.
+                     NAP는 selector label·대상 노드·대상 노드의 NodePool 중 하나와 맞는 NodeClaim만 봅니다.
+                     이전 실행 이벤트에 합쳐진 반복 이벤트는 lastTimestamp(이번 실행 발생 시각의 상한)를 씁니다.
 vm_launched_s        NAP NodeClaim Launched(VM 생성 API 완료). CAS는 측정하지 않음
 first_node_ready_s   첫 워크로드 노드 Ready
 last_node_ready_s    마지막 워크로드 노드 Ready
@@ -9,10 +13,15 @@ all_pods_ready_s     모든 inflate Pod Ready
 wave_latency_s       WAVES 사용 시 wave별 '추가 → 해당 Pod 모두 Ready' 시간
 """
 import json
+import re
 import sys
 from pathlib import Path
 
-from k8sutil import ts
+from k8sutil import event_time, ts
+
+VMSS = re.compile(r"virtualMachineScaleSets/([^/]+)", re.I)
+SETTING = re.compile(r"Scale-up: setting group (\S+?):? ")
+TRIGGERED = re.compile(r"\{(\S+?) \d+->")
 
 
 def cond(obj, ctype):
@@ -34,7 +43,16 @@ def main():
 
     pods = [p for p in load("pods.json") if p["metadata"].get("labels", {}).get("app") == "inflate"]
     nodes = [n for n in load("nodes.json") if n["metadata"].get("labels", {}).get(key) == val]
-    claims = [c for c in load("nodeclaims.json") if ts(c["metadata"]["creationTimestamp"]) >= t0]
+    node_names = {n["metadata"]["name"] for n in nodes}
+    node_pools = {p for n in nodes if (p := n["metadata"].get("labels", {}).get("karpenter.sh/nodepool"))}
+
+    # 다른 워크로드의 NodeClaim은 제외합니다. 실패한 NodeClaim은 노드가 없으므로 label이나 NodePool로 판별합니다.
+    def ours(c):
+        labels = c["metadata"].get("labels", {})
+        return (labels.get(key) == val or c.get("status", {}).get("nodeName") in node_names
+                or labels.get("karpenter.sh/nodepool") in node_pools)
+
+    claims = [c for c in load("nodeclaims.json") if ts(c["metadata"]["creationTimestamp"]) >= t0 and ours(c)]
     events = load("events.json")
 
     ready_nodes = []
@@ -48,15 +66,28 @@ def main():
         sku = n["metadata"]["labels"].get("node.kubernetes.io/instance-type", "?")
         skus[sku] = skus.get(sku, 0) + 1
 
-    def ev_time(e):
-        return ts(e.get("eventTime") or e.get("firstTimestamp") or e.get("lastTimestamp"))
+    def ev_time(e):  # 이전 실행에서 합쳐진 반복 이벤트는 이번 실행 발생 시각(lastTimestamp)으로 봅니다.
+        return event_time(e, t0)
+
+    # CAS: inflate Pod의 TriggeredScaleUp과 대상 노드 그룹의 ScaledUpGroup만 확장 결정으로 봅니다.
+    pod_ids = {p["metadata"].get("uid") for p in pods} - {None} | {p["metadata"]["name"] for p in pods}
+
+    def our_pod(o):
+        return o.get("kind") == "Pod" and o.get("namespace") == "bench" and (
+            o.get("uid") in pod_ids or o.get("name") in pod_ids)
+
+    triggered = [e for e in events if e.get("reason") == "TriggeredScaleUp" and our_pod(e["involvedObject"])]
+    groups = {m.group(1).lower() for n in nodes if (m := VMSS.search(n.get("spec", {}).get("providerID") or ""))}
+    groups |= {g.lower() for e in triggered for g in TRIGGERED.findall(e.get("message") or "")}
 
     def is_cas_decision(e):
-        msg = e.get("message") or ""
-        return e.get("reason") == "TriggeredScaleUp" or (
-            e.get("reason") == "ScaledUpGroup" and msg.startswith("Scale-up: setting group"))
+        if e.get("reason") != "ScaledUpGroup":
+            return False
+        m = SETTING.match(e.get("message") or "")
+        return bool(m) and m.group(1).lower() in groups
 
-    cas = [ev_time(e) for e in events if is_cas_decision(e) and ev_time(e) and ev_time(e) >= t0]
+    cas = [ev_time(e) for e in triggered + [e for e in events if is_cas_decision(e)]
+           if ev_time(e) and ev_time(e) >= t0]
     decision = min(cas) if cas else (min(ts(c["metadata"]["creationTimestamp"]) for c in claims) if claims else None)
     # Launched는 status가 True일 때만 VM 생성 완료를 뜻합니다(False/Unknown은 실패·재시도 중).
     launched = [ts(cond(c, "Launched")["lastTransitionTime"]) for c in claims

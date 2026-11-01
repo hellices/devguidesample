@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # 5초 간격으로 Unix 시각, 원하는 replica, Ready replica, KEDA가 만든 HPA의 현재 지표, 워크로드 노드 수를 CSV로 기록합니다.
+# HPA는 KEDA가 ScaledObject 이름으로 만드는 keda-hpa-<ScaledObject 이름>을 읽습니다(기본 keda-hpa-$DEPLOY).
 # 기본 1200초 동안 기록합니다. Pod 축소(약 11~12분)와 노드 정리(약 16~17분)까지 보려면 줄이지 않습니다.
 # postdeploy hook은 이 스크립트를 load/watcher.yaml Job으로 클러스터 안에서 실행하고(CTX 없음 = in-cluster),
 # epoch를 k6 시작 시각 기준 경과 초(elapsed_s)로 바꿔 저장합니다. 조회에 실패한 값은 빈 칸으로 남깁니다.
 set -uo pipefail
-NS=${NS:-demo} DEPLOY=${DEPLOY:-podinfo} DURATION=${DURATION:-1200} INTERVAL=${INTERVAL:-5}
+NS=${NS:-demo} DEPLOY=${DEPLOY:-podinfo} HPA=${HPA:-keda-hpa-$DEPLOY} DURATION=${DURATION:-1200} INTERVAL=${INTERVAL:-5}
 k() { kubectl ${CTX:+--context "$CTX"} "$@"; }
 echo "epoch,desired,ready,hpa_metric,user_nodes"
 start=$(date +%s) i=0
@@ -13,8 +14,7 @@ while (( $(date +%s) - start < DURATION )); do
   dep=$(k -n "$NS" get deploy "$DEPLOY" -o jsonpath='{.spec.replicas},{.status.readyReplicas}' 2>/dev/null) || dep=","
   desired=${dep%%,*} ready=${dep#*,}
   [[ -n $desired && -z $ready ]] && ready=0
-  # namespace의 HPA 중 $DEPLOY를 대상으로 하는 것(KEDA가 만든 keda-hpa-*)의 지표만 읽습니다.
-  metric=$(k -n "$NS" get hpa -o jsonpath="{.items[?(@.spec.scaleTargetRef.name==\"$DEPLOY\")].status.currentMetrics[0].external.current.averageValue}" 2>/dev/null) || metric=""
+  metric=$(k -n "$NS" get hpa "$HPA" -o jsonpath='{.status.currentMetrics[0].external.current.averageValue}' 2>/dev/null) || metric=""
   if nl=$(k get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null); then
     nodes=$(grep -c . <<<"$nl")
   else

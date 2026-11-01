@@ -40,6 +40,14 @@ for ns in Microsoft.ContainerService Microsoft.Network Microsoft.NetworkFunction
   az provider register --namespace "$ns" --wait -o none
 done
 
+# Gateway API와 ALB 상태를 따로 확인해 꺼져 있는 것만 켭니다.
+flags=()
+if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "ingressProfile.gatewayApi.installation" -o tsv 2>/dev/null) != Standard ]]; then
+  flags+=(--enable-gateway-api)
+fi
 if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "ingressProfile.applicationLoadBalancer.enabled" -o tsv 2>/dev/null) != true ]]; then
-  az aks update -g "$RG" -n "$CLUSTER" --enable-gateway-api --enable-application-load-balancer -o none
+  flags+=(--enable-application-load-balancer)
+fi
+if (( ${#flags[@]} > 0 )); then
+  az aks update -g "$RG" -n "$CLUSTER" "${flags[@]}" -o none
 fi

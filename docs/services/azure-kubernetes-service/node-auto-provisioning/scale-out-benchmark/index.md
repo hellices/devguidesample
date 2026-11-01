@@ -48,14 +48,14 @@ topic_order: 1
 이번 측정에서 NAP가 CAS보다 빨랐던 구간은 확장 결정 단계입니다.
 NAP는 Pending Pod가 생기고 2~5초 만에 NodeClaim을 만들었고, VMSS Cluster
 Autoscaler(CAS)는 새 Pending Pod를 보고 한 주기를 기다려 12~27초 뒤에 VMSS 크기를
-바꿨습니다. 결정 뒤 첫 노드가 Ready가 되기까지는 CAS 63~66초, NAP 78~86초가 걸려
+바꿨습니다. 결정 뒤 첫 노드가 Ready가 되기까지는 CAS 63~69초, NAP 78~86초가 걸려
 Pod 실행까지의 시간은 두 방식이 비슷합니다. NAP가 앞선 경우는 VM 크기 선택과
 기존 풀에 맞지 않는 큰 Pod 처리였습니다. 축소 속도는 autoscaler 종류보다 budget·profile
 설정에 따라 달라졌습니다.
 
 | 시나리오 (1 vCPU Pod 20개, 중앙값) | 확장 결정 | 첫 노드 Ready | 전체 Pod Ready | 만든 노드 |
 |---|---|---|---|---|
-| CAS, `Standard_D4ds_v7` 풀 (3회) | 15초 | 81초 | 108초 | D4 × 7 |
+| CAS, `Standard_D4ds_v7` 풀 (3회) | 12초 | 81초 | 108초 | D4 × 7 |
 | NAP, `Standard_D4ds_v7` 고정 (5회) | 3초 | 83초 | 119초 | D4 × 7 |
 | NAP, v7 D 계열 자유 선택 (2회) | 2초 | 88초 | 103초 | D32als_v7 × 1 |
 
@@ -117,7 +117,8 @@ CAS 축소 값은 기본값(10분)으로 두면 비교에 수십 분이 걸려 1
   `unschedulablePodWithGpuTimeBuffer`).
 - NAP는 첫 Pending Pod 이후 1초 동안 새 Pod가 없으면 바로 결정합니다(Karpenter
   `BATCH_IDLE_DURATION` 기본 1초, 최대 10초).
-- 그 결과 확장 결정은 CAS 12~27초, NAP 2~5초였고, NAP가 앞선 시간은 이 10~20초입니다.
+- 그 결과 확장 결정은 CAS 12~27초, NAP 2~5초였고, NAP가 앞선 시간은 중앙값 기준 약 10초,
+  가장 컸던 실행에서 25초였습니다.
   loop가 첫 Pending Pod보다 2초 이상 늦게 돌면 CAS도 기다리지 않습니다. 40대 확장
   측정(1회)에서는 CAS와 NAP 모두 3초에 결정했습니다.
 
@@ -125,15 +126,17 @@ CAS 축소 값은 기본값(10분)으로 두면 비교에 수십 분이 걸려 1
 
 | 구간 (중앙값) | CAS (VMSS) | NAP (단독 VM) |
 |---|---|---|
-| 결정 → 첫 노드 Ready | 약 63초 | 약 81초 |
+| 결정 → 첫 노드 Ready | 약 66초 | 약 81초 |
 | NAP NodeClaim 생성 → Launched | - | 3~4초 |
 | NAP Launched → 노드 등록 | - | 약 70초 (NodeClaim 35개, 64~146초) |
 
 - NAP는 VMSS를 거치지 않고 노드마다 VM을 따로 만듭니다. 결정 단계에서 얻은 10초 남짓의
   이점은 이번 측정에서 VM 준비 시간에 거의 상쇄됐습니다. NodeClaim별 단계 시간은
   `results/nap-nodeclaim-phases.csv`에 있습니다.
-- 꼬리 지연은 NAP 쪽이 더 컸습니다. NAP는 노드를 4개 zone(`topology.kubernetes.io/zone` 값
-  `eastus2-1`~`eastus2-4`, `results/nap-nodeclaim-phases.csv`)에 나눠 만들었고, 7대 중
+- 꼬리 지연은 NAP 쪽이 더 컸습니다. 실험 구독에서 East US 2의 `Standard_D4ds_v7`은 zone 1~4를
+  제공했습니다(2026-11-01 `az vm list-skus --location eastus2 --size Standard_D4ds_v7` 기준).
+  NAP는 노드를 4개 zone(`topology.kubernetes.io/zone` 값 `eastus2-1`~`eastus2-4`,
+  `results/nap-nodeclaim-phases.csv`)에 나눠 만들었고, 7대 중
   1~2대가 130~270초까지 늦어진 run이 있었습니다. 1회차에서는 zone 2 NodeClaim의 `Launched`가
   126초에야 기록됐습니다. CAS 풀은 zone을 지정하지 않은 regional VMSS여서 burst에서는
   마지막 노드가 96~115초 안에 들어왔습니다.
@@ -141,7 +144,7 @@ CAS 축소 값은 기본값(10분)으로 두면 비교에 수십 분이 걸려 1
   NAP(119초)가 CAS(108초)보다 조금 길었습니다.
 - 이후 두 쪽 모두 zone 1에만 노드를 만들게 해 다시 측정하자 첫 노드 Ready는 NAP
   54~59초, CAS 69~82초로 NAP가 앞섰고 꼬리 지연은 두 방식 모두 생겼습니다. 이 차이의
-  대부분은 확장 결정 단계였고, 결정 → 첫 노드 Ready는 NAP 50~57초, CAS 55~69초로
+  대부분은 확장 결정 단계였고, 결정 → 첫 노드 Ready는 NAP 50~57초, CAS 55~70초로
   비슷했습니다. 첫 측정의 차이는 단독 VM 방식보다 zone 조건 차이에서 왔을 가능성이 크지만,
   다른 시간대의 3회 측정이라 단정하지 않습니다. 자세한 결과는
   [NAP·CAS 시나리오별 실측](../scenario-comparison/index.md)에 있습니다.
@@ -190,7 +193,7 @@ Karpenter는 선호 VM의 용량이 없을 때 다른 후보로 빠르게 넘어
 
 | 측정 (2회) | 1순위 실패 확인 | 대체 결정 | 첫 노드 Ready | 전체 Pod Ready |
 |---|---|---|---|---|
-| CAS | 13초 (`OperationNotAllowed`: 리전 vCPU quota 초과) | 23~24초 | 66~76초 | 104~112초 |
+| CAS | 13초 (`OperationNotAllowed`: 리전 vCPU quota 초과) | 23초 | 66~76초 | 104~112초 |
 | NAP | 시도하지 않음 (`NoCompatibleInstanceTypes`) | 2~3초 | 83초 | 96~130초 |
 
 - CAS는 12초에 big 풀 확장을 요청했고, 1초 뒤 quota 오류를 받아 그 풀을 backoff한 다음 loop

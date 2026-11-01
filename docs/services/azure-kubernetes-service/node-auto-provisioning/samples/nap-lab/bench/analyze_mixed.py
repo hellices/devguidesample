@@ -23,13 +23,14 @@ pods = json.loads((d / "pods.json").read_text())["items"]
 # CAS가 VM을 삭제한 뒤 NotReady로 남은 node 객체(이전 실행의 잔류 포함)는 제외합니다.
 nodes = [n for n in json.loads((d / "nodes.json").read_text())["items"]
          if n["metadata"]["labels"].get(key) == val and not vm_removed(n)]
+node_names = {n["metadata"]["name"] for n in nodes}
 
 ready = {"big": 0, "mem": 0, "small": 0}
 last, req_cpu, req_mem, all_ready = None, 0.0, 0.0, True
 for p in pods:
     kind = p["metadata"]["labels"].get("kind")
     r = p["spec"]["containers"][0]["resources"]["requests"]
-    if p["spec"].get("nodeName"):  # 노드에 배치된 Pod만 할당 비율에 포함
+    if p["spec"].get("nodeName") in node_names:  # 분모에 넣은 노드에 배치된 Pod만 할당 비율에 포함
         req_cpu += qty(r["cpu"])
         req_mem += qty(r["memory"])
     c = [x for x in p["status"].get("conditions", []) if x["type"] == "Ready" and x["status"] == "True"]

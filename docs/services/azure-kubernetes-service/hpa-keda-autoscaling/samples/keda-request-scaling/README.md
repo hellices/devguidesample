@@ -71,7 +71,7 @@ azd hooks run postdeploy                      # 결과: out/<환경 이름>/
 | `results/prometheus-rps.csv` | k6 시작 기준 경과 초(음수는 부하 전), 원하는 replica, Ready replica, HPA 지표, 워크로드 노드 수. 클러스터 안의 watcher Job이 5초 간격으로 기록 |
 | `results/http-add-on-min0.csv` | HTTP Add-on, `minReplicaCount: 0`에서 burst 부하 |
 | `results/http-add-on-min1.csv` | HTTP Add-on, `minReplicaCount: 1`에서 같은 부하 |
-| `results/http-add-on-cold-start.txt` | 0개에서 첫 응답까지 걸린 시간(`total`)과 직후 warm 요청 시간(`warm_after`), 초 단위 |
+| `results/http-add-on-cold-start.txt` | 0개에서 첫 응답까지 걸린 시간(`total`)과 직후 warm 요청 시간(`warm_after`, 60초 안에 실패하면 `failed`), 초 단위 |
 | `results/azure-monitor-agc.csv` | 같은 형식 |
 | `results/k6-summary.csv` | 실행별 k6 요약. 계획 요청 수(138,000), 실제 전송 수, 미전송·실패 수, 응답 시간 avg·p95·p99 |
 

@@ -20,7 +20,7 @@ rules:
     verbs: [get]
   - apiGroups: [autoscaling]
     resources: [horizontalpodautoscalers]
-    verbs: [list]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -58,8 +58,8 @@ spec:
           args:
             - |
               set -e
-              # 최소 이미지에는 공용 CA가 일부만 있어 kubectl 다운로드 전에 ca-certificates를 설치합니다.
-              tdnf -q -y install ca-certificates >/dev/null
+              # 최소 이미지라 kubectl 다운로드 전에 ca-certificates와 curl을 설치합니다.
+              tdnf -q -y install ca-certificates curl >/dev/null
               curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
               chmod +x /tmp/kubectl
               PATH=/tmp:$PATH exec bash /scripts/watch-replicas.sh
