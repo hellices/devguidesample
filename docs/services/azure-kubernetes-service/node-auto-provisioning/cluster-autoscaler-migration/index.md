@@ -177,14 +177,13 @@ CAS와 NAP는 모두 Pending Pod에 반응하므로 같은 Pod를 두고 둘 다
    probe, requests, PDB가 있어야 NAP가 노드를 만들고 안전하게 정리합니다.
 3. **데이터 경로 확인:** 상태는 가능하면 클러스터 밖(Azure DB, Storage)에 두고,
    PV가 있으면 CSI snapshot, Azure Files, Velero로 복사·동기화합니다.
-4. **트래픽 비중 이동:** Front Door origin과 Traffic Manager endpoint의 weight는 1~1000
-   정수이므로 green 비중을 상대 weight로 맞춥니다. 예를 들어 blue:green을 900:100(10%),
-   500:500(50%)으로 바꾸고 단계마다 5xx 비율, p95 지연, 재시작 수를 확인합니다. DNS 기반
-   전환은 TTL 동안 이전 클러스터로도 요청이 갑니다.
-5. **이전 클러스터 정리:** weight로는 0%를 만들 수 없으므로 blue origin·endpoint를
-   disable해 green 100%로 바꾸고, 관측 기간을 지난 뒤 blue를 삭제합니다.
+4. **트래픽 이동:** 클러스터 앞단의 트래픽 분산 계층에서 green 비중을 단계적으로 늘리고,
+   단계마다 5xx 비율, p95 지연, 재시작 수를 확인합니다. 앞단 구성별 전환 방법은
+   [Blue-green deployment of AKS clusters](https://learn.microsoft.com/azure/architecture/guide/aks/blue-green-deployment-for-aks)를
+   따릅니다.
+5. **이전 클러스터 정리:** blue로 가는 트래픽을 모두 끊고 관측 기간을 지난 뒤 삭제합니다.
 
-롤백은 blue origin·endpoint를 다시 enable하고 weight를 blue 쪽으로 되돌리는 것입니다. 큐 consumer나 batch는 새 클러스터에서
+롤백은 트래픽을 blue로 되돌리는 것입니다. 큐 consumer나 batch는 새 클러스터에서
 consumer를 켜기 전에 이전 클러스터의 consumer를 멈춰 중복 처리를 막습니다.
 
 ## NAP를 되돌리려면 NAP 노드를 먼저 비워야 한다
