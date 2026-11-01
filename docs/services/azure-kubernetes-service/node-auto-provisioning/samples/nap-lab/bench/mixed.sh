@@ -18,11 +18,10 @@ ready_pods() {
   k -n mixed get pods -l app=mix \
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true
 }
-ready_nodes() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
+node_objects() { # Ready 여부와 관계없는 node 객체 수. 조회 실패는 0개가 아니라 nonzero로 반환합니다.
   local out
-  out=$(k get nodes -l "$SELECTOR" \
-    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
-  grep -c True <<<"$out" || true
+  out=$(k get nodes -l "$SELECTOR" -o name) || return 1
+  grep -c . <<<"$out" || true
 }
 scale_zero() { # 모든 Deployment를 시도하고 하나라도 실패하면 nonzero
   local d rc=0
@@ -41,10 +40,11 @@ trap 'exit 143' TERM
 
 for run in $(seq 1 "$RUNS"); do
   dir="$OUT/$SCENARIO/run$run"; mkdir -p "$dir"
-  log "run $run: waiting for zero ready workload nodes"
+  # 이전 실행의 VM이 지워진 뒤 NotReady로 남은 node 객체까지 사라져야 다음 실행의 구성에 섞이지 않습니다.
+  log "run $run: waiting for zero workload node objects"
   wait_start=$(date +%s)
-  until n=$(ready_nodes) && [[ $n -eq 0 ]]; do
-    (( $(date +%s) - wait_start <= 1800 )) || { log "run $run: timeout waiting for zero ready workload nodes"; exit 1; }
+  until n=$(node_objects) && [[ $n -eq 0 ]]; do
+    (( $(date +%s) - wait_start <= 1800 )) || { log "run $run: timeout waiting for zero workload node objects"; exit 1; }
     sleep 5
   done
   date -u +%Y-%m-%dT%H:%M:%SZ > "$dir/t0"

@@ -4,7 +4,8 @@
 사용법: fallback.py <run-dir> <scenario> <run> <fallback-pool-pattern> [nap|cas]
   fallback-pool-pattern: CAS는 대체 VMSS 이름 일부(예: aks-user), NAP는 NodePool 이름(예: fallback)
   분석 모드는 마지막 인수로 지정하고, 생략하면 scenario 접두사(nap-/cas-)로 정합니다.
-  failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS의 실패만, fallback_node_ready_s는 대체 노드만 봅니다.
+  first_attempt_s와 failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS만 봅니다. 선호 VM을 시도하지 않은 실행은
+  first_attempt_s가 빈 값입니다. fallback_node_ready_s는 대체 노드만 봅니다.
 출력: scenario,run,first_attempt_s,failure_seen_s,fallback_decision_s,fallback_node_ready_s,all_pods_ready_s,failure_message
 """
 import json
@@ -16,6 +17,7 @@ from k8sutil import ts
 
 VMSS = re.compile(r"virtualMachineScaleSets/([^/]+)", re.I)
 GROUP = re.compile(r"group (\S+?):? ")
+TRIGGERED = re.compile(r"\{(\S+?) \d+->")
 
 
 def main():
@@ -36,7 +38,7 @@ def main():
     first = fail = fb = None
     msg = ""
     if nap:
-        first = min((ts(c["metadata"]["creationTimestamp"]) for c in claims), default=None)
+        first = min((ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) != pattern), default=None)
         fbs = [ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) == pattern]
         fb = min(fbs) if fbs else None
         # 선호 NodeClaim의 경고만 실패로 봅니다. 실패한 NodeClaim은 스냅샷 전에 삭제될 수 있으므로
@@ -54,15 +56,20 @@ def main():
             b = min(bad, key=et)
             fail, msg = et(b), (b.get("reason") or "") + ": " + (b.get("message") or "")
     else:  # CAS
+        def group(e):
+            m = (GROUP if e.get("reason") != "TriggeredScaleUp" else TRIGGERED).search(e.get("message") or "")
+            return m.group(1) if m else None
+
+        # 확장 결정은 ScaledUpGroup("setting group")과 Pod의 TriggeredScaleUp 중 이른 쪽입니다.
+        # 같은 이유의 이벤트가 이전 실행에서 이미 생겼으면 ScaledUpGroup은 스냅샷에 새로 남지 않을 수 있습니다.
         ups = sorted((e for e in events if e.get("reason") == "ScaledUpGroup"
-                      and (e.get("message") or "").startswith("Scale-up: setting group")), key=et)
-        first = et(ups[0]) if ups else None
-        fbs = [et(e) for e in ups if pattern in (e.get("message") or "")]
+                      and (e.get("message") or "").startswith("Scale-up: setting group")
+                      or e.get("reason") == "TriggeredScaleUp"), key=et)
+        fbs = [et(e) for e in ups if (g := group(e)) and pattern in g]
         fb = min(fbs) if fbs else None
 
-        def group(e):
-            m = GROUP.search(e.get("message") or "")
-            return m.group(1) if m else None
+        # 대체 그룹의 확장은 선호 시도가 아닙니다. 선호 그룹이 backoff로 시도되지 않았으면 빈 값입니다.
+        first = next((et(e) for e in ups if (g := group(e)) and pattern not in g), None)
 
         # 실패 이벤트는 최초 선호 ScaledUpGroup의 그룹만 봅니다. 이번 실행에 선호 그룹 확장 이벤트가
         # 없으면(이전 실행 backoff 등) 대체 그룹이 아닌 그룹의 실패를 선호 VM 실패로 봅니다.

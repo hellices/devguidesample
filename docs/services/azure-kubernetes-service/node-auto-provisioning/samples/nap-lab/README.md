@@ -98,11 +98,11 @@ CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler
 | `results/scale-out-v7.csv` | v7 on-demand 조건의 시나리오별 단계 시간 |
 | `results/scale-out-azd-rerun.csv` | `azd`로 새로 만든 클러스터에서 `EXPERIMENT=scale-out`을 다시 실행한 결과(3회씩) |
 | `results/overprovisioning.csv` | placeholder가 있을 때 Pod 시작과 placeholder 복구 시간 |
-| `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간 |
+| `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간. `preferred_attempt_s`는 선호 VM을 실제로 시도한 실행에만 값이 있음 |
 | `results/migration-timeline.md` | `EXPERIMENT="migration drift"` 전환 단계별 시각, drift 교체 시간과 요청 실패 수 |
 | `results/prices-eastus2.json` | 비용 계산에 쓴 v7 VM 시간당 가격(2026-10-31) |
 | `results/mixed-shapes.csv` | 혼합 Pod 배치·노드 구성·노드 용량 대비 요청 비율(`*_request_ratio`)·비용 |
-| `results/rightsize-*.csv` | 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
+| `results/rightsize-*.csv` | 축소 후 30초 간격 노드 구성·비용·이동 Pod 수. 공개 결과는 node 객체 기준이며, 현재 스크립트는 CAS가 VM을 삭제한 뒤 남은 NotReady 객체를 비용에서 빼고 `ready_nodes`·`removed_nodes` 열을 함께 기록 |
 | `results/zone1-burst.csv` | 같은 zone 확장 단계 시간 |
 | `results/burst-40-nodes.csv` | 40대 확장 단계 시간과 정책 거부 기록 |
 | `results/quota-staleness.csv` | quota 점유·반납 후 NAP가 고른 NodePool. `recorded_s`는 이전 스크립트가 확인용 NodeClaim 정리 뒤 기록한 시각, `probe_s_est`는 스크립트 순서로 역산한 선택 확인 시각(±5초) |

@@ -20,7 +20,19 @@ log() { echo "[$(date -u +%T)] $*" >&2; }
 INTERCEPTOR=http://keda-add-ons-http-interceptor-proxy.kube-system:8080/
 HOST=podinfo.example.com
 
-user_nodes() { k get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l | tr -d ' '; }
+user_nodes() { local out; out=$(k get nodes -l kubernetes.azure.com/mode=user -o name) || return 1; grep -c . <<<"$out" || true; }
+# 아래 조건 함수는 조회가 실패하면 조건 불충족(nonzero)으로 돌려 wait_until이 다시 확인하게 합니다.
+# 실패한 조회를 노드 0대·Pod 0개로 읽어 다음 단계로 넘어가지 않습니다.
+nodes_at_most() { # nodes_at_most <n>: 워크로드 노드가 n대 이하이면 성공
+  local out; out=$(kubectl --context "$CTX" get nodes -l kubernetes.azure.com/mode=user -o name) || return 1
+  (( $(grep -c . <<<"$out" || true) <= $1 ))
+}
+no_podinfo_pods() { # Deployment 집계와 Pod 객체가 모두 0일 때 성공
+  local rep pods
+  rep=$(kubectl --context "$CTX" -n demo get deploy podinfo -o jsonpath='{.status.replicas}') || return 1
+  pods=$(kubectl --context "$CTX" -n demo get pods -l app=podinfo -o name) || return 1
+  [[ $rep =~ ^0?$ && -z $pods ]]
+}
 wait_until() { # wait_until <설명> <제한 초> <명령...>
   local what=$1 limit=$2; shift 2; local start=$SECONDS
   until "$@"; do
@@ -35,7 +47,7 @@ reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n
   k -n demo delete job k6 --ignore-not-found --wait >/dev/null
   k -n demo scale deploy podinfo --replicas "$1" >/dev/null
   log "워크로드 노드가 $1대 이하가 될 때까지 대기(NAP consolidation)"
-  wait_until "노드 축소" 1800 bash -c "(( \$(kubectl --context $CTX get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l) <= $1 ))"
+  wait_until "노드 축소" 1800 nodes_at_most "$1"
 }
 ready_scaledobject() { k -n demo wait scaledobject/podinfo --for=condition=Ready --timeout=5m >/dev/null; }
 apply_http_scaler() { # apply_http_scaler <minReplicaCount>
@@ -74,13 +86,13 @@ pattern_http_add_on_min0() {
   reset 1; apply_http_scaler 0
   # Pod와 워크로드 노드가 모두 사라져 첫 요청에 새 노드가 필요한 상태에서 시작합니다.
   log "replica 0, Pod 0개, 워크로드 노드 0대 대기"
-  wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.status.replicas}') =~ ^0?$ ]] && [[ -z \$(kubectl --context $CTX -n demo get pods -l app=podinfo --no-headers 2>/dev/null) ]]"
-  wait_until "워크로드 노드 0" 1800 bash -c "(( \$(kubectl --context $CTX get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l) == 0 ))"
+  wait_until "replica 0" 900 no_podinfo_pods
+  wait_until "워크로드 노드 0" 1800 nodes_at_most 0
   run_load http-add-on-min0 "$INTERCEPTOR" "$HOST"
 }
 cold_request() { # cold_request <run 이름>: 0개 상태에서 첫 요청과 직후 warm 요청을 시스템 노드의 임시 Pod에서 보냅니다.
   # Deployment 집계가 0이어도 종료 중인 Pod가 남을 수 있으므로 Pod 객체가 모두 사라진 뒤 요청합니다.
-  wait_until "replica 0, Pod 0개" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.status.replicas}') =~ ^0?$ ]] && [[ -z \$(kubectl --context $CTX -n demo get pods -l app=podinfo --no-headers 2>/dev/null) ]]"
+  wait_until "replica 0, Pod 0개" 900 no_podinfo_pods
   local before; before=$(user_nodes)
   local r; r=$(kubectl --context "$CTX" run "coldstart-$RANDOM" --rm -i --restart=Never --image=curlimages/curl:8.23.0 --quiet \
     --overrides='{"spec":{"nodeSelector":{"kubernetes.azure.com/mode":"system"},"tolerations":[{"key":"CriticalAddonsOnly","operator":"Exists"}]}}' \
@@ -99,7 +111,7 @@ pattern_http_add_on_cold_start() {
   # 새 노드가 필요한 경우: keeper를 지우고 워크로드 노드가 0대가 된 뒤 요청합니다.
   k -n demo delete deploy keeper >/dev/null
   wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX -n demo get deploy podinfo -o jsonpath='{.spec.replicas}') == 0 ]]"
-  wait_until "워크로드 노드 0" 1800 bash -c "(( \$(kubectl --context $CTX get nodes -l kubernetes.azure.com/mode=user --no-headers 2>/dev/null | wc -l) == 0 ))"
+  wait_until "워크로드 노드 0" 1800 nodes_at_most 0
   cold_request node-cold
 }
 pattern_azure_monitor_agc() {

@@ -38,3 +38,15 @@ def qty(value):
     if suffix[:1] in ("e", "E") and len(suffix) > 1:
         return float(Decimal(num + suffix))
     return float(Decimal(num) * _SUFFIX[suffix])
+
+
+def vm_removed(node):
+    """CAS가 삭제를 시작해 VM이 없어졌거나 없어지는 중인 node 객체면 True입니다.
+
+    CAS는 삭제할 노드에 ToBeDeletedByClusterAutoscaler taint를 붙이고, VM이 삭제되면 node 객체가
+    NotReady로 몇 분 더 남습니다. 두 조건을 모두 만족하는 객체만 제외하므로 생성 중이라 NotReady인
+    노드와 삭제 표시만 되고 아직 Ready인 노드는 비용·용량에 남습니다.
+    """
+    ready = any(c["type"] == "Ready" and c["status"] == "True" for c in node["status"].get("conditions", []))
+    marked = any(t.get("key") == "ToBeDeletedByClusterAutoscaler" for t in node["spec"].get("taints", []))
+    return marked and not ready

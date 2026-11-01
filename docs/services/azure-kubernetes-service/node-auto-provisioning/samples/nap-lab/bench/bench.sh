@@ -47,6 +47,11 @@ no_ready_nodes() { local n; n=$(ready_nodes) || return 1; [[ $n -eq 0 ]]; }
 pods_ready() { [[ $(ready_pods) -ge $REPLICAS ]]; }
 
 k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
+# 스냅샷 조회 실패나 중단으로 끝나도 inflate를 0으로 되돌려 Pod와 노드가 남지 않게 합니다.
+# 정리 실패가 원래 종료 상태를 덮지 않습니다.
+trap 'k -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 k -n bench patch deployment inflate --type strategic -p \
   "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"pause\",\"resources\":{\"requests\":{\"cpu\":\"$CPU\",\"memory\":\"1Gi\"}}}]}}}}" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
@@ -89,7 +94,8 @@ for run in $(seq 1 "$RUNS"); do
   # CAS는 VM 삭제 뒤에도 node 객체가 NotReady로 몇 분 남으므로 node 수가 아니라 VM 수로 완료를 판단합니다.
   # timeout이면 scale_in_end를 남기지 않아 analyze.py가 축소 시간을 빈 값으로 둡니다.
   if [[ -n ${SCALE_IN_COUNT:-} ]]; then
-    vms_gone() { [[ $(bash -c "$SCALE_IN_COUNT" 2>/dev/null | tr -d ' ') == 0 ]]; }
+    # pipefail로 명령 안의 조회 실패(예: kubectl | wc -l)를 실패로 전파하고, 성공한 출력만 0과 비교합니다.
+    vms_gone() { local out; out=$(bash -o pipefail -c "$SCALE_IN_COUNT" 2>/dev/null) || return 1; [[ $(tr -d ' \n' <<<"$out") == 0 ]]; }
     if wait_for "scale-in" vms_gone; then now > "$dir/scale_in_end"; fi
     wait_for "no ready nodes" no_ready_nodes || true
   elif wait_for "no ready nodes" no_ready_nodes; then

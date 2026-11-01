@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-from k8sutil import qty, ts
+from k8sutil import qty, ts, vm_removed
 
 
 d, scenario, run, sel, prices_file = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
@@ -19,9 +19,10 @@ if not Path(prices_file).is_file():
     sys.exit(f"가격 파일이 없습니다: {prices_file}")
 prices = json.loads(Path(prices_file).read_text())
 pods = json.loads((d / "pods.json").read_text())["items"]
-# Ready 여부와 관계없이 selector와 일치하는 노드(생성 중·NotReady 포함)를 모두 구성·용량·비용에 넣습니다.
+# selector와 일치하는 노드를 구성·용량·비용에 넣습니다. 생성 중인 NotReady 노드는 포함하고,
+# CAS가 VM을 삭제한 뒤 NotReady로 남은 node 객체(이전 실행의 잔류 포함)는 제외합니다.
 nodes = [n for n in json.loads((d / "nodes.json").read_text())["items"]
-         if n["metadata"]["labels"].get(key) == val]
+         if n["metadata"]["labels"].get(key) == val and not vm_removed(n)]
 
 ready = {"big": 0, "mem": 0, "small": 0}
 last, req_cpu, req_mem, all_ready = None, 0.0, 0.0, True
