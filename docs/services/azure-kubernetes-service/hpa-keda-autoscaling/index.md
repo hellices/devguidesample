@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [operate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-01
 official_sources:
   - title: Azure Kubernetes Service (AKS) scaling overview — HPA, VPA, Cluster Autoscaler, and KEDA
     url: https://learn.microsoft.com/azure/aks/concepts-scale
@@ -23,11 +23,19 @@ official_sources:
     url: https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/
   - title: Feature Gates
     url: https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/
+  - title: Install the Kubernetes Event-driven Autoscaling (KEDA) add-on using the Azure CLI
+    url: https://learn.microsoft.com/azure/aks/keda-deploy-add-on-cli
+  - title: KEDA Concepts
+    url: https://keda.sh/docs/2.19/concepts/
+  - title: KEDA External Scalers
+    url: https://keda.sh/docs/2.19/concepts/external-scalers/
+  - title: KEDA Metrics Server
+    url: https://keda.sh/docs/2.19/operate/metrics-server/
   - title: KEDA ScaledObject specification
     url: https://keda.sh/docs/2.19/reference/scaledobject-spec/
   - title: KEDA scaling deployments, StatefulSets and custom resources
     url: https://keda.sh/docs/2.19/concepts/scaling-deployments/
-last_verified: 2026-10-31
+last_verified: 2026-11-01
 review_cycle_days: 180
 applies_to: [AKS 1.36, KEDA add-on 2.19]
 ---
@@ -41,9 +49,9 @@ Pod가 늘어 노드가 부족해지면 그다음은 노드 autoscaler(NAP 또�
 Autoscaler)가 이어받습니다.
 
 ```text
-지표 원천 ──► KEDA (ScaledObject) ──► HPA ──► Deployment replica
-                 └ 0↔1 활성화는 KEDA가 직접           │
-                                             Pending Pod ──► NAP가 노드 생성
+지표 원천 ──► KEDA ──► HPA controller ──► Deployment replica
+               └── 0↔1은 KEDA operator가 직접 ──┘    │
+                                           Pending Pod ──► NAP가 노드 생성
 ```
 
 ## HPA replica 계산: 현재 지표와 목표의 비율
@@ -103,21 +111,59 @@ HPA를 적용한 Deployment manifest에서는 `replicas`를 지워 배포 때마
 [배포 전략 가이드](../deployment-strategies-rollout/index.md)에
 있습니다.
 
-## KEDA 역할: HPA에 외부 지표 공급과 0↔1 전환
+## KEDA 구성 요소: operator, scaler, metrics server, admission webhook
 
-`ScaledObject`를 만들면 KEDA operator가 `keda-hpa-<이름>` HPA를 생성하고,
-KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 0↔1 활성화와 1↔N 확장은
-담당이 다릅니다.
+KEDA는 HPA를 대신하지 않습니다. 외부 지표를 HPA가 읽을 수 있는 Kubernetes
+API로 내보내고, HPA가 다루지 못하는 0개 전환만 직접 처리합니다. AKS KEDA
+add-on을 켜면 `kube-system`에 다음 Pod가 뜨고, replica 계산은 control plane의
+HPA controller가 맡습니다.
+
+| 구성 요소 | 위치 | 역할 |
+|---|---|---|
+| KEDA operator | `keda-operator` Pod | `ScaledObject`를 감시해 `keda-hpa-<이름>` HPA를 만들고 고칩니다. `pollingInterval`마다 scaler에 활성 여부를 묻고, 0↔1 전환 때 대상의 replica 수를 직접 바꿉니다. |
+| 내장 scaler | operator 프로세스 안 | trigger `type`별 접속 코드입니다. 이벤트 원천(Managed Prometheus, Azure Monitor, Service Bus 등)을 조회해 활성 여부와 현재 지표 값을 돌려줍니다. |
+| external scaler | 별도 gRPC 서버 | 내장 scaler와 같은 interface를 KEDA 밖의 별도 프로세스로 구현합니다. trigger에는 `external`·`external-push`와 서버 주소를 적습니다. |
+| KEDA metrics server | `keda-operator-metrics-apiserver` Pod | `external.metrics.k8s.io` API를 제공합니다. HPA가 지표를 요청하면 gRPC로 operator에 넘겨 scaler 값을 받아 돌려줍니다. |
+| admission webhook | `keda-admission-webhooks` Pod | 같은 workload를 가리키는 HPA·`ScaledObject`가 이미 있는 경우처럼 잘못된 설정을 생성 단계에서 거부합니다. |
+| HPA controller | kube-controller-manager(AKS control plane) | 15초마다 KEDA metrics server에서 지표를 읽어 replica 수를 계산하고 대상의 scale subresource를 고칩니다. |
+
+내장 scaler가 operator 안에서 돌기 때문에 Azure 지표를 읽는 Workload Identity도
+`keda-operator` service account에 연결합니다. replica 수가 바뀐 뒤 Pod를 만들고
+지우는 일은 Deployment controller가 합니다.
+
+```text
+이벤트 원천 ◄── 조회 ── scaler (keda-operator 안)
+                        │
+       ┌────────────────┴───────────────┐
+  활성 여부 (pollingInterval)       지표 값 (HPA 요청 때)
+       │                                │ gRPC
+  KEDA operator                  KEDA metrics server
+       │ 0↔1                            ▲ external.metrics.k8s.io, 15초
+       ▼                                │
+  Deployment replicas ◄──── 1↔N ─── HPA controller (keda-hpa-<이름>)
+```
 
 ![ScaledObject를 등록하면 KEDA가 외부 이벤트 소스를 확인해 0과 1 사이 전환을 직접 하고, 1에서 N 사이 확장은 KEDA metrics adapter가 지표를 넘긴 HPA가 담당하는 KEDA 구조](images/learn-keda-architecture.png)
 
 *그림: [Microsoft Learn, Kubernetes Event-driven Autoscaling (KEDA)](https://learn.microsoft.com/azure/aks/keda-about), CC BY 4.0*
 
-| 단계 | 담당 | 설정 |
-|---|---|---|
-| 활성화(0 ↔ 1) | KEDA operator | `activation*` 값, `pollingInterval`(기본 30초), `cooldownPeriod`(기본 300초) |
-| 확장(1 ↔ N) | HPA controller | trigger의 목표값(`threshold`, `targetValue` 등), `advanced.horizontalPodAutoscalerConfig.behavior` |
+## replica 변경 주체: 0↔1은 KEDA operator, 1↔N은 HPA controller
 
+| 단계 | replica를 바꾸는 주체 | 판단 근거 | 설정 |
+|---|---|---|---|
+| 활성화(0 → 1) | KEDA operator | scaler 활성 여부 | `activation*` 값, `pollingInterval`(기본 30초) |
+| 확장·축소(1 ↔ N) | HPA controller | scaler 지표 값과 trigger 목표값 | `threshold`·`targetValue` 등, `advanced.horizontalPodAutoscalerConfig.behavior` |
+| 비활성화(1 → 0) | KEDA operator | 모든 trigger 비활성 | `cooldownPeriod`(기본 300초) |
+
+- replica가 0이면 HPA는 대상을 조정하지 않고 `ScalingActive=False` 상태로
+  기다립니다. 그래서 0에서 1로 올리는 일은 KEDA operator가 맡고, 1이 되면 HPA가
+  이어받습니다. KEDA가 만든 HPA의 `minReplicas`는 1 이상입니다.
+- 1↔N 구간에서 HPA는 앞 절의 식으로 replica를 계산합니다. 외부 지표의 기본 목표
+  유형은 `AverageValue`라서 scaler 값을 현재 replica 수로 나눈 값을 목표값과
+  비교합니다. 예를 들어 Pod당 목표 50 RPS에 전체 400 RPS면 8개가 됩니다.
+- HPA가 15초마다 지표를 요청할 때마다 metrics server는 기본적으로 scaler를 새로
+  조회합니다. trigger에 `useCachedMetrics: true`를 두면 `pollingInterval`마다 갱신한
+  캐시 값을 돌려줘 이벤트 원천의 조회 부하를 줄입니다.
 - `minReplicaCount`가 1 이상이면 scaler는 항상 활성 상태이고 `activation*`
   값은 무시됩니다.
 - 같은 workload에 HPA와 `ScaledObject`를 함께 두지 않습니다. 같은 대상을 가리키는 HPA가
@@ -131,18 +177,29 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 0↔1 활성
   object·external 지표 HPA에 `minReplicas: 0`을 쓸 수 있습니다. AKS 1.37에서
   허용되는지는 클러스터에서 따로 확인합니다.
 
-## AKS KEDA add-on 지원 범위: KEDA core와 별도 설치 구성 요소
+KEDA가 만든 HPA와 지표 값은 다음 명령으로 확인합니다.
 
-`az aks update --enable-keda`로 켜는 add-on은 KEDA core를 설치하고 AKS가
-버전과 수명주기를 관리합니다. 설치되는 KEDA 버전은 클러스터 Kubernetes
-버전이 정하며, AKS 1.36에서는 KEDA 2.19 계열입니다. 그 밖의 확장 구성 요소는
-별도로 설치하며 AKS 지원 범위 밖입니다.
+```bash
+kubectl get hpa keda-hpa-<scaledobject-name> -n <namespace>
+kubectl get scaledobject <scaledobject-name> -n <namespace> \
+  -o jsonpath='{.status.externalMetricNames}'
+kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/<namespace>/<metric-name>?labelSelector=scaledobject.keda.sh%2Fname%3D<scaledobject-name>"
+```
 
-| 구분 | 구성 요소·scaler | 설치·지원 |
+## AKS KEDA add-on 설치 범위: operator·metrics server·내장 scaler
+
+`az aks update --enable-keda`는 operator, metrics server, admission webhook과
+`ScaledObject`·`ScaledJob`·`TriggerAuthentication` CRD를 설치합니다. KEDA 버전은
+클러스터 Kubernetes 버전을 따르며 AKS 1.36에서는 2.19 계열이고, 업그레이드도 AKS가
+합니다. 내장 scaler는 operator에 들어 있어 trigger `type`만 지정하면 됩니다.
+HTTP Add-on처럼 별도 controller나 external scaler가 필요한 기능은 Helm으로
+설치하고, AKS가 아닌 KEDA 커뮤니티가 지원합니다.
+
+| 구분 | 예 | 설치·지원 |
 |---|---|---|
-| KEDA core (add-on 포함) | operator, metrics API server, admission webhook, `ScaledObject`·`ScaledJob`·`TriggerAuthentication` CRD | AKS add-on이 설치·업그레이드 |
-| core 내장 scaler | Azure Monitor, Service Bus, Event Hubs, Storage Queue/Blob, Log Analytics, Application Insights, Data Explorer, Azure Pipelines, Prometheus(Azure Monitor managed service for Prometheus 대상), cron, CPU·memory 등 | 별도 설치 없음. Managed Prometheus를 조회하는 Prometheus scaler는 지원 범위이고 자체 운영 Prometheus는 범위 밖 |
-| 별도 add-on·external scaler | KEDA HTTP Add-on(beta), Azure Cosmos DB change feed external scaler 등 | Helm 등으로 직접 설치, 커뮤니티 지원 |
+| add-on 포함 | operator, metrics server, admission webhook, CRD | AKS가 설치·업그레이드 |
+| add-on 포함 내장 scaler | Azure Monitor, Service Bus, Event Hubs, Storage Queue/Blob, Log Analytics, Application Insights, Data Explorer, Azure Pipelines, Prometheus, cron, CPU·memory 등 | trigger `type`으로 사용. Prometheus scaler는 Azure Monitor managed service for Prometheus 조회가 지원 범위이고 자체 운영 Prometheus는 범위 밖 |
+| add-on 미포함 | KEDA HTTP Add-on(beta), Azure Cosmos DB change feed external scaler 등 | Helm 등으로 직접 설치, 커뮤니티 지원 |
 
 - Workload Identity로 Azure 지표를 읽으려면 Workload Identity를 KEDA add-on보다
   먼저 켜는 순서가 권장됩니다. 순서가 바뀌었으면 `keda-operator`
@@ -157,11 +214,11 @@ KEDA metrics server가 그 HPA에 외부 지표를 제공합니다. 0↔1 활성
 패턴마다 1회 실측했습니다. 워크로드 노드는 모두 NAP `default` NodePool의 on-demand VM입니다.
 첫 확장 시간은 k6 시작 기준이며 5초 간격 기록이라 근삿값으로 적습니다.
 
-| 패턴 | 지표 경로 | KEDA 범위 | 첫 확장(1회 실측) | 0개 운영 | 적합한 경우 |
+| 패턴 | 지표 경로 | 설치 | 첫 확장(1회 실측) | 0개 운영 | 적합한 경우 |
 |---|---|---|---|---|---|
-| [Managed Prometheus RPS](prometheus-rps/index.md) | 앱 `/metrics` → Managed Prometheus → `prometheus` scaler | core | 약 70초 | 부적합: Pod가 없으면 지표도 없음 | 앱이 Prometheus 지표를 내고 정밀한 query가 필요할 때 |
-| [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | 별도 add-on | 약 40초 | 가능: 첫 요청 보류 (노드에 자리 있으면 5초 안쪽, 새 노드면 약 111초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
-| [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | core | 약 155초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
+| [Managed Prometheus RPS](prometheus-rps/index.md) | 앱 `/metrics` → Managed Prometheus → `prometheus` scaler | add-on 포함 | 약 70초 | 부적합: Pod가 없으면 지표도 없음 | 앱이 Prometheus 지표를 내고 정밀한 query가 필요할 때 |
+| [KEDA HTTP Add-on](http-add-on/index.md) | 요청이 interceptor를 거치며 집계 → `external-push` | Helm 별도 설치 | 약 40초 | 가능: 첫 요청 보류 (노드에 자리 있으면 5초 안쪽, 새 노드면 약 111초) | 유휴 시간이 길어 0개로 줄여야 할 때 |
+| [AGC Azure Monitor 메트릭](azure-monitor-agc/index.md) | AGC `TotalRequests` → Azure Monitor → `azure-monitor` scaler | add-on 포함 | 약 155초 | 부적합: 0개 동안 요청 실패 | 앱 수정 없이 진입점 트래픽으로 확장할 때 |
 
 0개에서 burst를 받으면 첫 Pod가 준비될 때까지 요청이 보류됩니다. Pod와 워크로드 노드가
 모두 없는 상태에서 시작한 1회 실측에서는 NAP 노드와 첫 Pod가 준비되기까지 약 110초 동안

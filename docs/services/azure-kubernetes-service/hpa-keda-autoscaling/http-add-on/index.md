@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [build, operate]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-01
 official_sources:
   - title: Simplified application autoscaling with Kubernetes Event-driven Autoscaling (KEDA) add-on
     url: https://learn.microsoft.com/azure/aks/keda-about
@@ -15,13 +15,15 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/keda-integrations
   - title: KEDA HTTP Add-on Getting Started
     url: https://keda.sh/http-add-on/0.16/getting-started/
+  - title: KEDA HTTP Add-on Architecture
+    url: https://keda.sh/http-add-on/0.16/concepts/architecture/
   - title: KEDA HTTP Add-on Installation
     url: https://keda.sh/http-add-on/0.16/operations/installation/
   - title: KEDA HTTP Add-on Configure Cold-Start Behavior
     url: https://keda.sh/http-add-on/0.16/user-guide/configure-cold-start/
   - title: KEDA ScaledObject specification
     url: https://keda.sh/docs/2.19/reference/scaledobject-spec/
-last_verified: 2026-10-31
+last_verified: 2026-11-01
 review_cycle_days: 90
 estimated_time: 60m
 cost: paid
@@ -38,16 +40,24 @@ KEDA HTTP Add-on은 요청이 지나가는 interceptor에서 요청률을 직접
 burst를 보낸 1회 실측에서는 계획한 요청의 약 22%가 timeout으로 실패하거나 아예
 전송되지 못했습니다. `minReplicaCount: 1`로 바꾼 실행에서는 실패가 없었습니다.
 
-## 지원 범위: AKS KEDA add-on과 별도인 HTTP Add-on
+## HTTP Add-on 구성 요소: interceptor, scaler, operator
 
-| 구분 | 이 실습의 구성 | 지원 |
+HTTP에는 큐가 없어서 scaler가 조회할 대기 건수가 없습니다. HTTP Add-on은 요청
+경로에 proxy를 두고 그 proxy에서 요청을 세어 이 값을 만듭니다. HTTP Add-on의 세
+구성 요소는 Helm으로 설치하고, replica 계산은 AKS KEDA add-on과 HPA가 맡습니다.
+
+| 구성 요소 | 설치 | 역할 |
 |---|---|---|
-| KEDA core | AKS KEDA add-on (AKS 1.36 → KEDA 2.19) | AKS 지원 |
-| HTTP Add-on 0.16.0 | Helm으로 `kube-system`에 설치한 interceptor, external scaler, operator | KEDA 커뮤니티, beta |
+| interceptor | HTTP Add-on 0.16.0(Helm) | 앞단과 앱 사이의 reverse proxy. host·path로 route를 찾고, route별 동시 요청 수와 누적 요청 수를 셉니다. 앱 replica가 0이면 Pod가 준비될 때까지 요청을 붙잡아 둡니다. |
+| scaler | HTTP Add-on 0.16.0(Helm) | KEDA external scaler(gRPC). interceptor Pod들의 카운터를 주기적으로 모아 route별 요청률을 계산합니다. |
+| operator | HTTP Add-on 0.16.0(Helm) | `InterceptorRoute`를 읽어 interceptor의 routing 설정을 맞춥니다. |
+| KEDA operator·metrics server | AKS KEDA add-on(AKS 1.36, KEDA 2.19) | `external-push` trigger로 scaler에 연결합니다. 0↔1은 operator가 직접 바꾸고, 1↔N은 metrics server가 HPA에 요청률을 넘겨 HPA controller가 계산합니다. |
 
-HTTP Add-on 설치 문서는 KEDA core와 같은 namespace를 안내하므로 AKS add-on이
-KEDA를 두는 `kube-system`에 설치했습니다. 0.14부터는 `HTTPScaledObject` 대신
-`InterceptorRoute`와 `external-push` trigger를 쓴 `ScaledObject`를 함께 만듭니다.
+AKS KEDA add-on은 HTTP Add-on을 설치하지 않으므로 업그레이드와 지원은 KEDA
+커뮤니티 몫이며, 0.16.0은 beta입니다. HTTP Add-on 설치 문서가 KEDA와 같은
+namespace를 안내해 AKS add-on이 KEDA를 두는 `kube-system`에 설치했습니다. 0.14부터는
+`HTTPScaledObject` 대신 `InterceptorRoute`와 `external-push` trigger를 쓴
+`ScaledObject`를 함께 만듭니다.
 
 ## 요청 경로: interceptor 경유와 Pod당 요청률 목표
 
@@ -55,7 +65,8 @@ KEDA를 두는 `kube-system`에 설치했습니다. 0.14부터는 `HTTPScaledObj
 client ──► keda-add-ons-http-interceptor-proxy:8080 (Host: podinfo.example.com)
               │ 요청률 집계            └──► podinfo Service
               ▼
-     external scaler ──► KEDA ──► HPA ──► podinfo replica (0–20)
+     HTTP Add-on scaler ──► KEDA ──► HPA controller ──► podinfo replica (1–20)
+                             └── 0↔1은 KEDA operator가 직접 변경
 ```
 
 운영 환경에서는 Ingress·Gateway backend를 앱 Service 대신 interceptor proxy

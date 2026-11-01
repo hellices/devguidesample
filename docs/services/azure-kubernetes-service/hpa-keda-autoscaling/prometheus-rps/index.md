@@ -32,8 +32,9 @@ topic_order: 1
 # KEDA Prometheus scaler: Managed Prometheus 요청률 기반 확장
 
 앱이 내보내는 Prometheus counter를 Azure Monitor managed service for
-Prometheus(Managed Prometheus)로 수집하고, KEDA core에 포함된 `prometheus`
-scaler가 Workload Identity로 조회해 replica를 정합니다. 초당 400건 부하의 1회
+Prometheus(Managed Prometheus)로 수집합니다. KEDA add-on의 내장 `prometheus`
+scaler가 Workload Identity로 요청률을 조회하고, HPA가 Pod당 목표값으로 replica를
+계산합니다. 초당 400건 부하의 1회
 실측에서 Pod는 약 70초 뒤 늘기 시작해 약 130초에 목표 수에 도달했습니다. 새 Pod를
 담을 NAP 노드가 준비되고 모든 Pod가 Ready가 되기까지는 약 2분이 더 걸렸습니다.
 
