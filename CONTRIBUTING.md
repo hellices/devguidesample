@@ -8,11 +8,14 @@
 문서 제목과 절 제목은 항목 이름이 아니라 **본문의 핵심 내용**을 요약합니다.
 [제목 작성 기준](docs/contributing/index.md#content-first-headings)에 따라
 제목만 읽어도 요지와 논리 흐름이 드러나는지 검토합니다. 제목은 문장형이나
-콜론 부제목 대신 핵심을 담은 명사구로 씁니다.
+콜론 부제목 대신 핵심을 담은 명사구로 씁니다. `research`·`lab` 문서는 "결과 1:
+단건 레이턴시"처럼 절의 종류와 대상을 잇는 보고서형 절 제목을 쓸 수 있습니다.
 
 한국어 본문은 [한국어 문체 기준](docs/contributing/index.md#korean-writing)에
 따라 번역투와 LLM 특유의 서식을 덜어 내고, 새로 쓰거나 고친 문서는 문체 밀도
-검사기로 점검합니다.
+검사기로 점검합니다. 측정 결과·비교 절은
+[스캔형 구성](docs/contributing/index.md#scan-format)에 따라 비교 표와 굵은
+꼬리표 글머리표로 씁니다.
 
 자동화가 생성하는 `Azure Daily Update`만
 `docs/azure-daily-update/YYYY-MM-DD/index.md`를 사용합니다. 상세한

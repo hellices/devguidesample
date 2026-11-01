@@ -39,8 +39,16 @@ HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+", re.M)
 BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
-BOLD_LABEL = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?\*\*[^*\n]+\*\*\s*[:：]", re.M)
+# A paragraph that opens with a bold label: "**결론**: ..." or "**정리:** ...".
+BOLD_LABEL = re.compile(r"\s*\*\*[^*\n]+?(?:[:：]\*\*|\*\*\s*[:：])")
+LINK_LABEL = re.compile(r"\[[^\]]*\]")
+# What may remain on a sources line once link labels are removed. A URL with its
+# own parentheses leaves a stray ")" after the link target is stripped.
+LINK_SEPARATORS = re.compile(r"[\s·,|/)]*")
 EM_DASH = re.compile(r"—|(?<=\S) -- (?=\S)")
+DOCUMENT_TYPE = re.compile(r"^document_type:\s*['\"]?([a-z-]+)", re.M)
+# Report genres may title sections as "결과 1: 단건 레이턴시" or "부록: 비용 참고".
+REPORT_TYPES = {"research", "lab"}
 # Headings that end like a sentence ("~합니다", "~다", "~요") read as body text.
 SENTENCE_HEADING = re.compile(r"(?:니다|세요|[가-힣]요|[가-힣]다)[.!?]?$")
 HEADING_ANCHOR = re.compile(r"\s*\{[^}]*\}\s*$")
@@ -90,7 +98,9 @@ INLINE_EMPHASIS = re.compile(
 @dataclass
 class Thresholds:
     bold_per_1000_chars: float = 2.0
-    bold_label_lines: int = 0
+    # A single conclusion line after a decision table is allowed; a summary box
+    # at the end of every section is the pattern to catch.
+    bold_label_lines: int = 1
     colon_headings: int = 0
     sentence_headings: int = 0
     connective_comma_per_100_sentences: float = 8.0
@@ -98,10 +108,9 @@ class Thresholds:
     translationese_per_100_sentences: float = 6.0
     signature_phrases: int = 1
     contrast: int = 2
-    em_dash: int = 0
+    em_dash_per_100_sentences: float = 10.0
     minority_ending_ratio: float = 0.15
     bullet_line_ratio: float = 0.35
-    table_line_ratio: float = 0.30
 
 
 @dataclass
@@ -254,6 +263,53 @@ def table_rows(lines: list[str]) -> set[int]:
     return rows
 
 
+def paragraph_lines(lines: list[str], tables: set[int]) -> list[int]:
+    """Return indexes of explanation-paragraph lines.
+
+    Headings, table rows, list items with their continuation lines, block
+    quotes and HTML lines are left out. Those are where the scan format of
+    result and comparison sections keeps its bold labels, rating symbols and
+    dash-joined fragments.
+    """
+    kept: list[int] = []
+    in_list = False
+    previous_blank = True
+    for index, line in enumerate(lines):
+        body = line.strip()
+        if not body:
+            previous_blank = True
+            continue
+        indented = len(line) - len(line.lstrip(" ")) >= 2
+        if index in tables or HEADING.match(line):
+            in_list = False
+        elif re.match(r" {0,3}>", line) or body.startswith("<"):
+            in_list = False
+        elif LIST_ITEM.match(line) and line[LIST_ITEM.match(line).end() - 1 :].strip() != "":
+            in_list = True
+        elif in_list and (indented or not previous_blank):
+            pass
+        else:
+            in_list = False
+            kept.append(index)
+        previous_blank = False
+    return kept
+
+
+def is_exempt_label(lines: list[str], index: int, tables: set[int]) -> bool:
+    """A label alone on its line that opens a list or table, or a sources line."""
+    line = lines[index]
+    label = BOLD_LABEL.match(line)
+    rest = line[label.end():] if label else ""
+    if LINK_LABEL.search(rest) and LINK_SEPARATORS.fullmatch(LINK_LABEL.sub("", rest)):
+        return True
+    if rest.strip():
+        return False
+    for following in range(index + 1, len(lines)):
+        if lines[following].strip():
+            return following in tables or bool(LIST_ITEM.match(lines[following]))
+    return False
+
+
 def mask_quotes(prose: str) -> str:
     """Join each paragraph onto one line and replace quoted spans with a token."""
     paragraphs = []
@@ -314,7 +370,11 @@ def collect(pattern: re.Pattern[str], text: str, limit: int = 3) -> tuple[int, l
 
 
 def analyze(path: Path, limits: Thresholds) -> Report:
-    markdown, prose = strip_markup(path.read_text(encoding="utf-8"))
+    source = path.read_text(encoding="utf-8")
+    front = FRONT_MATTER.match(source)
+    kind = DOCUMENT_TYPE.search(front.group(0)) if front else None
+    document_type = kind.group(1) if kind else ""
+    markdown, prose = strip_markup(source)
     text = mask_quotes(prose)
     sentences = split_sentences(text)
     report = Report(
@@ -331,6 +391,9 @@ def analyze(path: Path, limits: Thresholds) -> Report:
         for m in HEADING.finditer(markdown)
     ]
     colon_headings = [h for h in headings if re.search(r"\S\s?[:：]\s+\S", h)]
+    if document_type in REPORT_TYPES:
+        metrics["report_colon_headings"] = len(colon_headings)
+        colon_headings = []
     metrics["colon_headings"] = len(colon_headings)
     if colon_headings:
         examples["colon_headings"] = colon_headings[:3]
@@ -339,13 +402,21 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     if sentence_headings:
         examples["sentence_headings"] = sentence_headings[:3]
 
-    bold = len(BOLD.findall(markdown))
-    metrics["bold"] = bold
+    lines = markdown.splitlines()
+    tables = table_rows(lines)
+    paragraphs = paragraph_lines(lines, tables)
+    labels = [i for i in paragraphs if BOLD_LABEL.match(lines[i])]
+    exempt = {i for i in labels if is_exempt_label(lines, i, tables)}
+    bold = sum(len(BOLD.findall(lines[i])) for i in paragraphs if i not in exempt)
+    metrics["bold"] = len(BOLD.findall(markdown))
+    metrics["paragraph_bold"] = bold
     metrics["bold_per_1000_chars"] = round(bold * 1000 / max(report.prose_chars, 1), 2)
-    metrics["bold_label_lines"] = len(BOLD_LABEL.findall(markdown))
+    flagged_labels = [lines[i].strip() for i in labels if i not in exempt]
+    metrics["bold_label_lines"] = len(flagged_labels)
+    if flagged_labels:
+        examples["bold_label_lines"] = [label[:40] for label in flagged_labels[:3]]
     metrics["bullet_line_ratio"] = round(len(BULLET.findall(markdown)) / max(report.lines, 1), 2)
-    table_lines = len(table_rows(markdown.splitlines()))
-    metrics["table_line_ratio"] = round(table_lines / max(report.lines, 1), 2)
+    metrics["table_line_ratio"] = round(len(tables) / max(report.lines, 1), 2)
 
     count, found = collect(CONNECTIVE_COMMA, text)
     metrics["connective_comma"] = count
@@ -380,7 +451,9 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     if found:
         examples["contrast"] = found
 
-    metrics["em_dash"] = len(EM_DASH.findall(text))
+    dashes = sum(len(EM_DASH.findall(QUOTED.sub("QUOTE", lines[i]))) for i in paragraphs)
+    metrics["em_dash"] = dashes
+    metrics["em_dash_per_100_sentences"] = round(dashes * per100, 1)
 
     formal = sum(1 for s in sentences if FORMAL_END.search(s))
     plain = sum(1 for s in sentences if not FORMAL_END.search(s) and PLAIN_END.search(s))
@@ -397,9 +470,9 @@ def analyze(path: Path, limits: Thresholds) -> Report:
 
     checks = [
         ("bold_per_1000_chars", limits.bold_per_1000_chars,
-         "굵은 글씨가 많다. 처음 정의하는 용어나 놓치면 안 되는 한 곳에만 쓴다."),
+         "설명 문단에 굵은 글씨가 많다. 처음 정의하는 용어나 놓치면 안 되는 한 곳에만 쓴다."),
         ("bold_label_lines", limits.bold_label_lines,
-         "'**꼬리표**:'로 시작하는 줄이 있다. 문장으로 풀어 쓴다."),
+         "'**꼬리표**:'로 시작하는 결론 문단이 반복된다. 결론은 한 번만 두고 나머지는 문장으로 풀어 쓴다."),
         ("colon_headings", limits.colon_headings,
          "'X: Y' 형식 제목이 있다. 핵심을 담은 명사구 하나로 쓴다."),
         ("sentence_headings", limits.sentence_headings,
@@ -414,14 +487,12 @@ def analyze(path: Path, limits: Thresholds) -> Report:
          "결산 접속어·의미 부풀리기·열거 도입이 있다. 지우거나 숫자·사례로 바꾼다."),
         ("contrast", limits.contrast,
          "'A가 아니라 B' 대조가 반복된다. 오해를 바로잡아야 하는 곳에만 남긴다."),
-        ("em_dash", limits.em_dash,
-         "대시(—)로 문장을 잇는다. 쉼표·괄호·새 문장으로 바꾼다."),
+        ("em_dash_per_100_sentences", limits.em_dash_per_100_sentences,
+         "설명 문단에서 대시(—)로 문장을 자주 잇는다. 쉼표·괄호·새 문장으로 바꾼다."),
         ("minority_ending_ratio", limits.minority_ending_ratio,
          "'~다'와 '~니다' 종결이 섞여 있다. 문서 하나에서 한 가지로 통일한다."),
         ("bullet_line_ratio", limits.bullet_line_ratio,
-         "글머리표 줄 비율이 높다. 설명은 문단으로 쓴다."),
-        ("table_line_ratio", limits.table_line_ratio,
-         "표 줄 비율이 높다. 같은 기준으로 여러 대상을 비교할 때만 표를 쓴다."),
+         "글머리표 줄 비율이 높다. 결과·비교가 아닌 설명은 문단으로 쓴다."),
     ]
     for key, limit, message in checks:
         value = metrics.get(key, 0)
