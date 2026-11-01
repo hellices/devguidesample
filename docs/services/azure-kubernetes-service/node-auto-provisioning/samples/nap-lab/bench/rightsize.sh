@@ -7,6 +7,8 @@
 # 노드 수·vCPU·비용은 selector에 맞는 노드 중 CAS가 VM을 삭제해 NotReady로 남은 객체를 뺀 값입니다(k8sutil.vm_removed).
 # 생성 중인 NotReady 노드는 포함합니다. Ready 노드 수는 ready_nodes, 제외한 잔류 객체 수는 removed_nodes 열에 둡니다.
 # 가격 파일에 없는 SKU가 있으면 usd_per_hour는 unknown입니다.
+# capacity.cpu가 없는 노드가 있으면 vcpu는 unknown입니다.
+# 첫 행(기준)은 축소 직전 상태이며 elapsed_s는 축소 시작 기준 0 이하의 실제 오프셋입니다. 이후 행은 축소 시작 뒤 경과 초입니다.
 set -euo pipefail
 USAGE="사용법: rightsize.sh <kube-context> <scenario> <nodeSelector key=value>"
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE}
@@ -30,7 +32,9 @@ s={}
 for x in n:
   t=x['metadata']['labels'].get('node.kubernetes.io/instance-type','?'); s[t]=s.get(t,0)+1
 usd='unknown' if any(t not in p for t in s) else round(sum(p[t]*c for t,c in s.items()),3)
-print(len(n), len(r), len(a)-len(n), round(sum(qty(x['status']['capacity']['cpu']) for x in n)), usd, ' '.join(f'{t}x{c}' for t,c in sorted(s.items())))" "$PRICES" "$HERE"
+cpu=[x['status'].get('capacity', {}).get('cpu') for x in n]
+vcpu='unknown' if any(v is None for v in cpu) else round(sum(qty(v) for v in cpu))
+print(len(n), len(r), len(a)-len(n), vcpu, usd, ' '.join(f'{t}x{c}' for t,c in sorted(s.items())))" "$PRICES" "$HERE"
 }
 
 k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
@@ -50,9 +54,11 @@ echo "elapsed_s,nodes,vcpu,usd_per_hour,skus,pods,moved_pods,ready_nodes,removed
 # 기준 행의 Pod 수는 FROM이 아니라 실제로 조회한 Pod 수입니다(빈 출력은 0).
 base=$(pods); seen="$base"
 read -r n ready gone c usd skus < <(node_state)
-echo "-60,$n,$c,$usd,$skus,$(grep -c . <<<"$base" || true),0,$ready,$gone"
+base_at=$(date +%s)
 k -n bench scale deployment inflate --replicas "$TO" >/dev/null
 start=$(date +%s)
+# 기준 행의 elapsed_s는 기준 측정을 마친 시각에서 축소 명령 완료 시각(start)을 뺀 실제 값입니다(보통 0~-2).
+echo "$(( base_at - start )),$n,$c,$usd,$skus,$(grep -c . <<<"$base" || true),0,$ready,$gone"
 while :; do
   cur=$(pods); seen=$(printf '%s\n%s\n' "$seen" "$cur" | sort -u)
   moved=$(comm -13 <(echo "$base") <(echo "$seen") | grep -c . || true)

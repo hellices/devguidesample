@@ -64,6 +64,9 @@ drop_claims() { # 확인용 NodeClaim을 삭제하고 사라질 때까지(최대
 }
 
 probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
+  # 이전 probe·실행에서 남은 Pod나 pref64/alt NodeClaim이 있으면 이번 선택과 섞이므로 먼저 비웁니다. 정리에 실패하면 probe를 시작하지 않습니다.
+  kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || { log "probe: scale to 0 failed"; return 1; }
+  drop_claims || { log "probe: leftover pref64/alt NodeClaims; not starting probe"; return 1; }
   kubectl --context "$NAP" -n bench scale deployment inflate --replicas 20 >/dev/null
   # NodeClaim이 생기고 두 번 연속 같은 결과가 나올 때까지 기다립니다. timeout이면 빈 결과를 기록하지 않고 실패합니다.
   local pools="" prev="" seen start

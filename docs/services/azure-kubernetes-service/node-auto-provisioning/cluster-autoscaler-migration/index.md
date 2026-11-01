@@ -105,8 +105,9 @@ kubectl get nodepools.karpenter.sh
 # 4. 기존 풀을 현재 노드 수에서 한 대씩 축소. AKS가 cordon·drain하며 PDB를 지킵니다.
 count=$(az aks nodepool show -g $RG --cluster-name $CLUSTER -n user --query count -o tsv)
 for n in $(seq $((count - 1)) -1 0); do
-  az aks nodepool scale -g $RG --cluster-name $CLUSTER -n user --node-count $n
-  kubectl rollout status deploy/web -n app          # 모든 replica Ready 확인 후 다음 단계
+  # 축소나 rollout 확인이 실패하면 다음 단계와 풀 삭제로 넘어가지 않고 멈춥니다.
+  az aks nodepool scale -g $RG --cluster-name $CLUSTER -n user --node-count $n || exit 1
+  kubectl rollout status deploy/web -n app --timeout=15m || exit 1   # 모든 replica Ready 확인 후 다음 단계
 done
 
 # 5. 비어 있는 풀 삭제

@@ -9,7 +9,7 @@ param environmentName string
 @description('리소스를 만들 리전. 실측은 eastus2에서 했습니다.')
 param location string
 
-@description('AKS Kubernetes 버전. 기본값은 1.36이며 빈 문자열을 넘기면 리전 기본 버전을 씁니다.')
+@description('AKS Kubernetes 버전(<major.minor> 또는 <major.minor.patch>). 기본값은 1.36이며, 빈 문자열이면 버전 속성을 생략해 버전 선택을 AKS에 맡깁니다.')
 param kubernetesVersion string = '1.36'
 
 @description('시스템 풀 VM 크기. k6 부하 Job도 시스템 풀에서 실행합니다.')

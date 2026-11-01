@@ -165,8 +165,17 @@ exp_migration() { # in-place.sh가 probe(web 6 replica + client)를 배포하고
 }
 exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 → preStop.sleep 10s 순서
   local ctx=$CAS
+  # client는 system 풀(nodeSelector)에 있어 NAP NodePool drift 대상이 아닙니다. 그래도 교체·재시작되면
+  # deploy/client 로그가 현재 컨테이너만 보여 요청 수가 빠지므로 UID:restartCount로 확인합니다.
+  client_id() {
+    kubectl --context "$ctx" -n migrate get pods -l app=client \
+      -o jsonpath='{range .items[*]}{.metadata.uid}:{.status.containerStatuses[0].restartCount}{"\n"}{end}'
+  }
   drift_round() { # drift_round <label 값> <결과 이름>
     local start; start=$(date -u +%FT%TZ)
+    local client0 client1 row
+    client0=$(client_id) || return 1
+    [[ -n $client0 ]] || { log "drift $1: client Pod가 없습니다"; return 1; }
     kubectl --context "$ctx" patch nodepool default --type merge \
       -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"rotation\":\"$1\"}}}}}" >/dev/null
     log "drift $1 시작"
@@ -182,8 +191,15 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
     done
     kubectl --context "$ctx" -n migrate rollout status deploy/web --timeout=15m >/dev/null
     local end; end=$(date -u +%FT%TZ)
-    kubectl --context "$ctx" -n migrate logs deploy/client --since-time="$start" |
-      awk -v s="$start" -v e="$end" -v n="$2" '$1>=s && $1<=e {t++; if ($2!="200") f++} END {printf "%s,%s,%s,%d,%d\n", n, s, e, t, f}'
+    row=$(kubectl --context "$ctx" -n migrate logs deploy/client --since-time="$start" |
+      awk -v s="$start" -v e="$end" -v n="$2" '$1>=s && $1<=e {t++; if ($2!="200") f++} END {printf "%s,%s,%s,%d,%d\n", n, s, e, t, f}')
+    # client가 바뀌었거나 확인하지 못하면 불완전한 행을 drift.csv에 남기지 않고 경고와 함께 실패로 끝냅니다.
+    client1=$(client_id) || client1="unknown"
+    if [[ $client1 != "$client0" ]]; then
+      log "WARNING drift $1: client Pod 교체·재시작으로 결과 불완전(${client0} → ${client1}). drift.csv에 기록하지 않음: ${row}"
+      return 1
+    fi
+    echo "$row"
   }
   # 이전 실행에서 남은 preStop을 지우고 rollout이 끝난 뒤 시작합니다. 조회 실패는 lifecycle 없음으로 보지 않습니다.
   local lifecycle

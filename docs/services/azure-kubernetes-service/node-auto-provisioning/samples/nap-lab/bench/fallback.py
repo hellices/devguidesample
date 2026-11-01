@@ -5,7 +5,7 @@
   fallback-pool-pattern: CAS는 대체 VMSS 이름 일부(예: aks-user), NAP는 NodePool 이름(예: fallback)
   분석 모드는 마지막 인수로 지정하고, 생략하면 scenario 접두사(nap-/cas-)로 정합니다.
   first_attempt_s와 failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS만 봅니다. 선호 VM을 시도하지 않은 실행은
-  first_attempt_s가 빈 값입니다. fallback_node_ready_s는 대체 노드만 봅니다.
+  first_attempt_s가 빈 값입니다. fallback_node_ready_s는 t0 이후 생성된 대체 노드만 봅니다.
 출력: scenario,run,first_attempt_s,failure_seen_s,fallback_decision_s,fallback_node_ready_s,all_pods_ready_s,failure_message
 """
 import json
@@ -103,6 +103,9 @@ def main():
             vmss = VMSS.search(n.get("spec", {}).get("providerID") or "")
             if not vmss or pattern not in vmss.group(1):
                 continue
+        # 이전 실행에서 남은 노드가 t0 뒤 다시 Ready로 바뀐 경우는 이번 실행의 대체 노드로 세지 않습니다.
+        if ts(n["metadata"]["creationTimestamp"]) < t0:
+            continue
         c = [x for x in n["status"].get("conditions", []) if x["type"] == "Ready"]
         if c and c[0]["status"] == "True" and ts(c[0]["lastTransitionTime"]) >= t0:
             ready.append(ts(c[0]["lastTransitionTime"]))

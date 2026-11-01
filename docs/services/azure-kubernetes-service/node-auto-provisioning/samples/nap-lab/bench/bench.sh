@@ -16,6 +16,11 @@ CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} REPLICAS=${3:?$USAGE} RUNS=${4:?$USAGE} S
 export CTX   # SCALE_IN_COUNT 명령이 같은 context를 "$CTX"로 쓸 수 있게 합니다.
 CPU=${CPU:-1} TIMEOUT=${TIMEOUT:-1800} WAVE_INTERVAL=${WAVE_INTERVAL:-30}
 OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
+# 잘못된 runs·nodeSelector로 patch만 적용되고 측정이 없거나 엉뚱한 노드를 세지 않도록 리소스를 바꾸기 전에 확인합니다.
+[[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
+if [[ -n $SELECTOR && ! $SELECTOR =~ ^[^=]+=.*$ ]]; then
+  echo "nodeSelector는 key=value 형식이어야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2
+fi
 # WAVES 합계가 replicas와 다르면 측정 부하와 완료 조건이 어긋나므로 리소스를 바꾸기 전에 실패합니다.
 if [[ -n ${WAVES:-} ]]; then
   sum=0

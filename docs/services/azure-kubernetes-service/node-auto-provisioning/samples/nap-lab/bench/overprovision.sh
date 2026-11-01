@@ -8,6 +8,8 @@ set -euo pipefail
 USAGE="사용법: overprovision.sh <kube-context> <scenario> <nodeSelector key=value> [runs]"
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE} RUNS=${4:-2} TIMEOUT=${TIMEOUT:-900}
 HERE=$(cd "$(dirname "$0")" && pwd)
+# 리소스를 바꾸기 전에 확인합니다. 0이나 정수가 아닌 값이면 측정 없이 성공으로 끝나지 않게 합니다.
+[[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 cleanup() { # best-effort: 실패해도 원래 종료 상태를 유지합니다.

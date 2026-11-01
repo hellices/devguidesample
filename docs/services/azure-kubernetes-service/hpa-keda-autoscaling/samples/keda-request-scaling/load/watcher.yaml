@@ -63,7 +63,8 @@ metadata:
   name: watcher
   namespace: demo
 spec:
-  backoffLimit: 0
+  # 패키지 설치·다운로드 재시도로도 실패하면 Pod를 최대 2번 다시 만듭니다.
+  backoffLimit: 2
   template:
     spec:
       serviceAccountName: watcher
@@ -80,9 +81,11 @@ spec:
           args:
             - |
               set -e
+              # 일시적인 네트워크 오류에 대비해 최대 5번(10초 간격) 시도합니다.
+              retry() { local i; for i in 1 2 3 4 5; do "$@" && return 0; sleep 10; done; return 1; }
               # 최소 이미지라 kubectl 다운로드 전에 ca-certificates와 curl을 설치합니다.
-              tdnf -q -y install ca-certificates curl >/dev/null
-              curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+              retry tdnf -q -y install ca-certificates curl >/dev/null
+              retry curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
               chmod +x /tmp/kubectl
               PATH=/tmp:$PATH exec bash /scripts/watch-replicas.sh
           env:

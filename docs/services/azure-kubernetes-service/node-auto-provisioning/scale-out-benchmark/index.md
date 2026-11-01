@@ -179,7 +179,7 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 표의 값은 
   적은 AMD v7(`Dals`)을 골랐습니다. `kubernetes.io/arch`를 지정하지 않으면 Arm64 VM도
   후보가 되므로 이미지 아키텍처에 맞게 지정합니다.
 
-## 선호 VM 생성 불가: 시도 없이 대체 VM을 고르는 NAP
+## 선호 VM 생성 불가: 생성 시도 없이 대체 VM을 고른 NAP
 
 Karpenter는 선호 VM의 용량이 없을 때 다른 후보로 빠르게 넘어갑니다. 이 동작을 비교하려고
 두 클러스터의 시스템 풀이 이미 같은 `Ddsv7` 계열 16 vCPU를 쓰는 상태에서 96 vCPU VM을
@@ -199,11 +199,16 @@ Karpenter는 선호 VM의 용량이 없을 때 다른 후보로 빠르게 넘어
 - CAS는 12초에 big 풀 확장을 요청했고, 1초 뒤 quota 오류를 받아 그 풀을 backoff한 다음 loop
   (약 10초 뒤)에서 대체 풀을 늘렸습니다. quota 오류는 VMSS 요청 즉시 돌아오는 동기 오류라
   CAS도 빨리 넘어갑니다.
-- NAP는 리전 전체 한도가 아니라 VM 계열별 quota(`StandardDdsv7Family`)를 10분마다 조회해
-  남은 quota로 만들 수 없는 SKU를 미리 뺍니다. 계열 한도 값은 기록하지 않았지만, 16 vCPU를
-  이미 쓴 계열에 96 vCPU가 남아 있지 않아 처음부터 후보가 아니었던 것으로 봅니다.
-- 반대로 quota가 풀린 뒤에도 최대 10분은 이전 사용량으로 판단합니다. 리전 여유가 84 vCPU로
-  돌아온 직후 1순위를 64 vCPU VM으로 바꿨지만 NAP는 이를 제외하고 대체 VM을 만들었습니다.
+- NAP가 남긴 이벤트는 `NoCompatibleInstanceTypes`("NodePool requirements filtered out all
+  compatible available instance types") 하나로, SKU를 뺀 이유는 적혀 있지 않습니다. 실행 당시
+  `StandardDdsv7Family` 한도·사용량과 controller 로그는 기록하지 않았으므로 quota가 원인이라고
+  실측으로 확인하지는 못했습니다. karpenter-provider-azure의 quota provider는 VM 계열별
+  quota를 10분마다 조회해 남은 quota로 만들 수 없는 SKU를 후보에서 빼므로, 16 vCPU를 이미 쓴
+  계열에 96 vCPU가 남지 않아 제외됐다고 해석합니다.
+- 같은 해석이면 quota가 풀린 뒤에도 최대 10분은 이전 사용량으로 판단합니다. 리전 여유가
+  84 vCPU로 돌아온 직후 1순위를 64 vCPU VM으로 바꿨지만 NAP는 이를 제외하고 대체 VM을
+  만들었습니다. 이 지연은 [quota 정보 갱신 지연 실측](../scenario-comparison/index.md)에서 따로
+  확인했습니다.
 - NAP가 줄인 시간은 대체 결정 단계의 약 20초뿐입니다. 첫 노드 Ready는 CAS 66~76초,
   NAP 83초, 전체 Pod Ready는 CAS 104~112초, NAP 96~130초로 이후 단계에서는 NAP가 앞서지
   않았습니다(각 2회).

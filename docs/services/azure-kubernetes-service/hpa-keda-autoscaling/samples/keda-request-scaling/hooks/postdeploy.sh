@@ -49,6 +49,8 @@ reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n
   k -n demo delete triggerauthentication azure-wi --ignore-not-found >/dev/null
   k -n demo delete interceptorroute podinfo --ignore-not-found >/dev/null 2>&1 || true
   k -n demo delete job k6 --ignore-not-found --wait >/dev/null
+  # 이전 실행이 중간에 멈춰 남은 keeper가 워크로드 노드를 붙잡지 않도록 지웁니다(cold start 재실행 대비).
+  k -n demo delete deploy keeper --ignore-not-found --wait >/dev/null
   k -n demo scale deploy podinfo --replicas "$1" >/dev/null
   log "워크로드 노드가 $1대 이하가 될 때까지 대기(NAP consolidation)"
   wait_until "노드 축소" 1800 nodes_at_most "$1"
@@ -110,6 +112,8 @@ cold_request() { # cold_request <run 이름>: 0개 상태에서 첫 요청과 �
   echo "run=$1 user_nodes_before=$before $r" | tee -a "$OUT/http-add-on-cold-start.txt"
 }
 pattern_http_add_on_cold_start() {
+  # cold_request가 결과를 이어 쓰므로 패턴을 시작할 때 이전 결과를 한 번 비웁니다.
+  : > "$OUT/http-add-on-cold-start.txt"
   reset 1; apply_http_scaler 0
   # 기존 노드에 자리가 있는 경우: 작은 keeper Pod로 워크로드 노드 1대를 유지합니다.
   # 시스템 노드에 배치되지 않도록 워크로드 노드(mode=user)만 고릅니다.

@@ -55,8 +55,12 @@ az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto -o none
 trap - EXIT INT TERM   # NAP가 켜졌으므로 이후 실패는 CAS로 되돌리지 않습니다.
 log "NAP enabled"; k get nodepools.karpenter.sh
 
-while (( $(pool_count) > 0 )); do
-  next=$(( $(pool_count) - 1 ))
+while :; do
+  # 조건식 안의 $(pool_count)는 조회 실패가 set -e로 전파되지 않으므로 일반 명령으로 읽고 정수인지 확인합니다.
+  count=$(pool_count)
+  [[ $count =~ ^[0-9]+$ ]] || { log "pool $POOL count is not an integer: ${count}"; exit 1; }
+  if (( count == 0 )); then break; fi
+  next=$(( count - 1 ))
   log "scale $POOL to $next"
   az aks nodepool scale -g "$RG" --cluster-name "$CLUSTER" -n "$POOL" --node-count "$next" -o none
   wait_web_ready
