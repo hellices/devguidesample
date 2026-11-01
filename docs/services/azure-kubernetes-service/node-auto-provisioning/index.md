@@ -269,8 +269,9 @@ spec:
 권장 네트워크는 Azure CNI Overlay와 Cilium입니다.
 
 기존 클러스터에서 켤 때는 먼저 모든 노드 풀의 CAS를 끕니다(자세한 순서는
-[전환 가이드](cluster-autoscaler-migration/index.md#path-1)). 포털에서 작업하면 Cloud Shell에서
-같은 명령을 실행합니다([포털에서 진행](cluster-autoscaler-migration/index.md#portal)).
+[전환 가이드](cluster-autoscaler-migration/index.md#path-1)). 포털에서는 클러스터의 **설정 > 노드 풀**에서
+각 풀의 스케일링 방법을 수동으로 바꾼 뒤 **노드 자동 프로비전** 탭의 **구성**으로 켭니다
+([포털에서 진행](cluster-autoscaler-migration/index.md#portal)).
 
 ```bash
 # 기존 클러스터

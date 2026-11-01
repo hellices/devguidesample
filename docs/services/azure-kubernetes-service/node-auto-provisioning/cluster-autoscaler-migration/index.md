@@ -118,22 +118,58 @@ az aks nodepool delete -g $RG --cluster-name $CLUSTER -n user
 실행합니다. drain은 eviction API를 쓰므로 PDB가 허용하는 만큼만 Pod를 내보냅니다.
 내보낸 Pod가 Pending이 되면 NAP가 새 노드를 만듭니다.
 
-### 포털에서 진행: Cloud Shell의 CLI와 Node pools 화면 { #portal }
+### 포털에서 진행: 노드 풀 화면의 스케일링 방법과 노드 자동 프로비전 탭 { #portal }
 
-CAS 끄기와 NAP 켜기는 Azure CLI 또는 ARM 템플릿으로 합니다. Microsoft Learn의 NAP
-활성화·전환 문서는 이 두 방법만 다루므로, 포털에서 작업할 때는 포털에 내장된 Cloud
-Shell에서 위 명령을 실행합니다. Cloud Shell에는 Azure CLI와 kubectl이 설치되어 있고
-포털에 로그인한 계정으로 인증됩니다.
+경로 1은 포털 화면만으로도 진행할 수 있습니다. 아래 화면은 2026-11-01 한국어 포털에서 CAS를
+켠 임시 클러스터를 같은 순서로 전환하며 확인했습니다. 메뉴 이름은 포털 언어와 시점에 따라
+달라질 수 있습니다.
 
-1. 포털 상단 메뉴에서 Cloud Shell을 열고 **Bash**를 선택합니다.
-2. `RG=<리소스 그룹>`, `CLUSTER=<클러스터 이름>`을 지정하고 `az aks get-credentials -g $RG -n $CLUSTER`로
-   클러스터 자격 증명을 받습니다.
-3. 위 절차의 1~4단계를 그대로 실행합니다. `az aks` 명령은 Azure Resource Manager를
-   거치므로 private 클러스터에서도 동작합니다. private 클러스터의 `kubectl` 확인은
-   클러스터 화면의 **Run command**에서 실행합니다. Run command는 `az aks command invoke`와
-   같은 기능입니다.
-4. 비운 풀은 클러스터의 **Settings > Node pools**에서 풀 이름을 선택한 뒤
-   **Node Pool | Overview** 화면의 **Delete**로 삭제합니다. 삭제한 풀은 복구할 수 없습니다.
+1. 클러스터의 **설정 > 노드 풀**(Settings > Node pools)을 엽니다. **노드 풀** 탭의
+   **스케일링 방법** 열이 `자동 크기 조정`인 풀은 CAS가 켜져 있습니다.
+
+    ![노드 풀 탭에서 nodepool1의 스케일링 방법이 자동 크기 조정으로 표시된 화면](images/portal-1-scale-method.png){ width="560" }
+
+2. 같은 화면의 **노드 자동 프로비전** 탭을 엽니다. CAS가 켜진 풀이 하나라도 있으면 모든
+   풀의 크기 조정 방법을 수동으로 바꾸라는 안내가 나오고 **구성** 버튼을 누를 수 없습니다.
+   클러스터가 중지 상태일 때도 같은 버튼이 비활성화됩니다.
+
+    ![노드 자동 프로비전 탭에 클러스터 자동 크기 조정기가 켜진 노드 풀이 있으니 크기 조정 방법을 수동으로 바꾸라는 안내가 표시된 화면](images/portal-2-nap-tab-cas-on.png){ width="560" }
+
+3. **노드 풀** 탭에서 각 풀의 `자동 크기 조정` 링크를 눌러 **노드 풀 스케일링** 창을 엽니다.
+   **크기 조정 방법**을 **수동**으로 바꾸고 **노드 수**는 현재 값 그대로 둔 채 **적용**을
+   누릅니다. CAS가 켜진 모든 풀에 반복합니다. CLI 절차의 1단계와 같습니다.
+
+    ![노드 풀 스케일링 창에서 크기 조정 방법을 수동으로 선택하고 노드 수 1을 입력한 화면](images/portal-3-scale-manual.png){ width="560" }
+
+4. **노드 자동 프로비전** 탭에서 **구성**을 누르고 확인 창에서 **예**를 선택합니다. CLI
+   절차의 2단계와 같습니다. 노드 1대짜리 임시 클러스터에서는 약 3분 뒤 완료됐습니다.
+
+    ![노드 자동 프로비전을 사용하도록 설정할지 묻고 이 프로세스는 되돌릴 수 없다고 안내하는 확인 창](images/portal-4-enable-confirm.png){ width="560" }
+
+    확인 창은 되돌릴 수 없다고 안내하고, 전환 뒤 화면에도 NAP를 끄는 메뉴가 없습니다. NAP를
+    끄려면 [롤백](#rollback) 조건을 맞춘 뒤 CLI(`az aks update --node-provisioning-mode Manual`)로
+    실행합니다.
+
+5. 완료되면 탭에 **NAP 이벤트**, **NAP 경고**와 `default`·`system-surge` NodePool이
+   **노드 풀 템플릿**으로 표시됩니다. **AKS 노드 클레임**과 **AKS 노드 클래스** 탭에서
+   `NodeClaim`과 `AKSNodeClass`를 볼 수 있습니다. CLI 절차 3단계처럼 기존 풀의 label·taint를
+   재현할 NodePool은 **NAP 노드 풀 추가**로 만듭니다. 입력 항목은 다음과 같습니다.
+
+    | 탭 | 항목 | NodePool 필드 |
+    |---|---|---|
+    | 기본 | 노드 풀 이름, 노드 클래스, 가중치 | `metadata.name`, `spec.template.spec.nodeClassRef`, `spec.weight` |
+    | 기본 | 용량 유형(기본값 주문형), 아키텍처, SKU 제품군, SKU 이름, 가용성 영역 | `spec.template.spec.requirements` |
+    | 기본 | CPU, 메모리 | `spec.limits` |
+    | 고급 | 만료, 종료 유예 기간, 통합 정책(비어 있거나 사용률이 낮을 때·비어 있을 때), 통합 대기 시간 | `spec.template.spec.expireAfter`, `spec.template.spec.terminationGracePeriod`, `spec.disruption` |
+    | 레이블 | 레이블, 주석, 테인트, 시작 테인트 | `spec.template.metadata`, `spec.template.spec.taints`, `spec.template.spec.startupTaints` |
+
+    ![노드 자동 프로비전 탭에 NAP 이벤트와 경고 수, default와 system-surge 노드 풀 템플릿이 표시된 화면](images/portal-5-nap-enabled.png){ width="560" }
+
+6. 기존 풀은 3단계와 같은 **노드 풀 스케일링** 창에서 **노드 수**를 한 단계씩 줄입니다. 각
+   단계 뒤 워크로드의 모든 replica가 Ready인지 확인합니다. `kubectl`은 포털 상단의 Cloud
+   Shell에서 실행하고, private 클러스터라면 클러스터 화면의 **Run command**를 씁니다.
+7. 비운 풀은 **설정 > 노드 풀**에서 풀 이름을 선택한 뒤 **Node Pool | Overview** 화면의
+   **Delete**로 삭제합니다. 삭제한 풀은 복구할 수 없습니다.
 
 ## 전환 리허설: 단계별 소요 시간과 요청 실패
 
@@ -212,7 +248,7 @@ CAS와 NAP는 둘 다 Pending Pod에 반응하므로 같은 Pod 때문에 양쪽
 롤백할 때는 트래픽을 blue로 되돌립니다. 큐 consumer나 batch는 새 클러스터에서
 consumer를 켜기 전에 이전 클러스터의 consumer를 멈춰 중복 처리를 막습니다.
 
-## 롤백: NAP 노드 비우기와 NAP 비활성화
+## 롤백: NAP 노드 비우기와 NAP 비활성화 { #rollback }
 
 NAP는 NAP 노드가 남아 있는 동안 끌 수 없습니다. 옮겨 갈 자리를 먼저 만들어 두면
 노드를 비우는 동안 Pod가 Pending으로 남지 않습니다.
