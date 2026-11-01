@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="530" viewBox="0 0 1040 530" role="img" aria-labelledby="title desc">
+  <title id="title">Database-level Managed identity로 외부 데이터 접근 권한 분리</title>
+  <desc id="desc">같은 tenant와 logical server의 데이터베이스 A와 B에 서로 다른 UAMI를 할당하고, database-scoped credential을 통해 각각 허용한 Blob Storage 또는 ADLS Gen2 데이터만 읽도록 구성한 예시입니다. 화살표는 파일 조회 요청이며 실제 읽기 권한은 Storage RBAC 또는 ACL로 부여합니다.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; fill: #172554; }
+      .heading { font-size: 23px; font-weight: 700; }
+      .label { font-size: 20px; font-weight: 700; }
+      .body { font-size: 18px; }
+      .note { font-size: 16px; fill: #334155; }
+    </style>
+  </defs>
+  <rect width="1040" height="530" rx="16" fill="#ffffff"/>
+  <text x="32" y="40" class="heading">데이터베이스별 identity와 Storage 권한을 따로 설정</text>
+  <rect x="24" y="64" width="992" height="414" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <text x="44" y="94" class="note">같은 Microsoft Entra tenant · 서로 다른 UAMI를 사용하는 구성 예시</text>
+  <rect x="44" y="116" width="360" height="334" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="64" y="148" class="label">Azure SQL logical server</text>
+  <rect x="64" y="170" width="320" height="116" rx="10" fill="#ffffff" stroke="#60a5fa"/>
+  <text x="84" y="201" class="label">데이터베이스 A</text>
+  <text x="84" y="233" class="body">할당 identity: UAMI-A</text>
+  <text x="84" y="264" class="note">Credential → database identity</text>
+  <rect x="64" y="310" width="320" height="116" rx="10" fill="#ffffff" stroke="#60a5fa"/>
+  <text x="84" y="341" class="label">데이터베이스 B</text>
+  <text x="84" y="373" class="body">할당 identity: UAMI-B</text>
+  <text x="84" y="404" class="note">Credential → database identity</text>
+  <path d="M 384 228 H 668" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="425" y="203" class="body">UAMI-A로 파일 조회</text>
+  <text x="426" y="254" class="note">OPENROWSET / external table</text>
+  <path d="M 384 368 H 668" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="425" y="343" class="body">UAMI-B로 파일 조회</text>
+  <text x="426" y="394" class="note">OPENROWSET / external table</text>
+  <rect x="680" y="170" width="308" height="116" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="700" y="201" class="label">허용된 데이터 A</text>
+  <text x="700" y="233" class="body">Blob Storage / ADLS Gen2</text>
+  <text x="700" y="264" class="note">UAMI-A에 읽기 권한 부여</text>
+  <rect x="680" y="310" width="308" height="116" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+  <text x="700" y="341" class="label">허용된 데이터 B</text>
+  <text x="700" y="373" class="body">Blob Storage / ADLS Gen2</text>
+  <text x="700" y="404" class="note">UAMI-B에 읽기 권한 부여</text>
+  <text x="32" y="509" class="note">공식 문서 기반 재구성 · 읽기 권한은 Storage RBAC / ACL로 구성 · 네트워크 접근은 별도 확인</text>
+</svg>
