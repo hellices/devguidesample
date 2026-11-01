@@ -16,7 +16,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.S)
-FENCED_CODE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1[^\n]*$", re.S | re.M)
+# Fence lines follow CommonMark: three or more backticks or tildes, and a backtick
+# fence's info string cannot contain a backtick. Indentation is not limited to
+# three spaces because fences nested in list items are indented further.
+FENCE_OPEN = re.compile(r"^\s*(`{3,}(?=[^`]*$)|~{3,})")
 INLINE_CODE = re.compile(r"`[^`\n]+`")
 LINK_TARGET = re.compile(r"\]\([^)]*\)")
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
@@ -89,11 +92,44 @@ class Report:
     findings: list[str] = field(default_factory=list)
 
 
+def remove_fenced_code(text: str) -> str:
+    """Drop fenced code blocks, including their fence lines.
+
+    A block closes only on a line with the same fence character repeated at
+    least as many times as the opening fence and followed by whitespace only.
+    An unclosed block runs to the end of the document, as in CommonMark.
+    """
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        if fence is None:
+            match = FENCE_OPEN.match(line)
+            if match:
+                fence = match.group(1)
+                continue
+            kept.append(line)
+            continue
+        stripped = line.strip()
+        if stripped and set(stripped) == {fence[0]} and len(stripped) >= len(fence):
+            fence = None
+    return "\n".join(kept)
+
+
+def mask_quotes(prose: str) -> str:
+    """Join each paragraph onto one line and replace quoted spans with a token."""
+    paragraphs = []
+    for paragraph in re.split(r"\n\s*\n", prose):
+        joined = " ".join(part.strip() for part in paragraph.splitlines() if part.strip())
+        if joined:
+            paragraphs.append(QUOTED.sub("QUOTE", joined))
+    return "\n\n".join(paragraphs)
+
+
 def strip_markup(text: str) -> tuple[str, str]:
     """Return (markdown without code, prose-only text)."""
     text = FRONT_MATTER.sub("", text, count=1)
     text = HTML_COMMENT.sub("", text)
-    text = FENCED_CODE.sub("", text)
+    text = remove_fenced_code(text)
     text = INLINE_CODE.sub("CODE", text)
     markdown = LINK_TARGET.sub("]", text)
     prose_lines = []
@@ -129,7 +165,8 @@ def collect(pattern: re.Pattern[str], text: str, limit: int = 3) -> tuple[int, l
 
 def analyze(path: Path, limits: Thresholds) -> Report:
     markdown, prose = strip_markup(path.read_text(encoding="utf-8"))
-    sentences = split_sentences(prose)
+    text = mask_quotes(prose)
+    sentences = split_sentences(text)
     report = Report(
         path=str(path),
         prose_chars=len(re.sub(r"\s", "", prose)),
@@ -137,7 +174,6 @@ def analyze(path: Path, limits: Thresholds) -> Report:
         lines=sum(1 for line in markdown.splitlines() if line.strip()),
     )
     metrics, examples = report.metrics, report.examples
-    text = QUOTED.sub("QUOTE", prose)
     per100 = 100 / max(len(sentences), 1)
 
     headings = [HEADING_ANCHOR.sub("", m.group(2)).strip() for m in HEADING.finditer(markdown)]

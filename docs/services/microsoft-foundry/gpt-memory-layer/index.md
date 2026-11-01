@@ -4,10 +4,12 @@ services:
 official_sources:
 - title: Microsoft Foundry documentation
   url: https://learn.microsoft.com/azure/ai-foundry/
+- title: Prompt caching
+  url: https://learn.microsoft.com/azure/foundry/openai/how-to/prompt-caching
 document_type: guide
 status: needs-review
 verification_status: needs-review
-sources_checked_at: 2026-09-12
+sources_checked_at: 2026-11-01
 last_verified: null
 review_cycle_days: 180
 applies_to:
@@ -51,7 +53,7 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
 
 ### 처음 1,024 토큰의 바이트 일치 조건
 
-공식 문서 기준으로 프롬프트가 1,024 토큰 이상이어야 캐시 대상이 됩니다. 처음 1,024 토큰이 바이트 단위로 완전히 같아야 cache hit가 나며 그 뒤로는 128 토큰 단위로 추가 적중합니다. 한 글자만 달라도 cache miss가 나고 `cached_tokens`는 0이 됩니다.
+공식 문서 기준으로 프롬프트가 1,024 토큰 이상이어야 캐시 대상이 됩니다. 처음 1,024 토큰이 완전히 같아야 cache hit가 나며 이 구간에서 한 글자만 달라도 cache miss가 나고 `cached_tokens`는 0이 됩니다. 처음 1,024 토큰 뒤에서 달라지면 그 앞까지 일치한 프리픽스는 계속 적중하므로 `cached_tokens`가 0보다 클 수 있습니다. gpt-5.5 이하에서는 1,024 토큰 뒤의 적중을 128 토큰 단위로 계산하며 gpt-5.6 이상에는 이 단위가 적용되지 않습니다.
 
 ### 토큰 수 지정 대신 두 파라미터로 하는 간접 제어
 
