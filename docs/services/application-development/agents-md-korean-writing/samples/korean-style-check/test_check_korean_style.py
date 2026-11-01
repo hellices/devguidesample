@@ -1,0 +1,149 @@
+"""Regression tests for check_korean_style.py. Run: python -m unittest -v"""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+import check_korean_style as checker
+
+FILLER = "\n\n".join(f"{n}번째 문단은 설정을 확인한다. 값을 저장한다." for n in range(1, 30))
+
+
+def analyze(markdown: str) -> checker.Report:
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "doc.md"
+        path.write_text(markdown, encoding="utf-8")
+        return checker.analyze(path, checker.Thresholds())
+
+
+def flagged(report: checker.Report) -> set[str]:
+    return {finding.split("=")[0] for finding in report.findings}
+
+
+class SentenceHeadingTest(unittest.TestCase):
+    def test_noun_headings_are_not_sentences(self) -> None:
+        for heading in ("개요", "✅ 개요", "바다", "필요", "토큰 갱신 필요", "주요 지표", "람다 함수"):
+            with self.subTest(heading=heading):
+                report = analyze(f"# {heading}\n\n본문이다.\n")
+                self.assertEqual(report.metrics["sentence_headings"], 0)
+
+    def test_predicate_endings_are_sentences(self) -> None:
+        for heading in (
+            "제목은 본문의 핵심 내용을 요약합니다",
+            "키 속성입니다",
+            "두 경로를 분리해서 본다",
+            "캐시가 적중한다",
+            "설정을 바꿨다",
+            "값이 있다",
+            "권한이 없다",
+            "AGIC와 AGFC는 다르다",
+            "단순 모델로는 부족하다",
+            "IP 제한 용도가 아니다",
+            "쓰지 않는다",
+            "설정을 확인하세요",
+            "값이 있어요",
+            "결과가 같죠",
+        ):
+            with self.subTest(heading=heading):
+                report = analyze(f"# {heading}\n\n본문이다.\n")
+                self.assertEqual(report.metrics["sentence_headings"], 1)
+
+    def test_link_label_and_emphasis_are_normalized(self) -> None:
+        report = analyze("# [설정합니다.](#setup)\n\n## **캐시를 끕니다**\n\n본문이다.\n")
+        self.assertEqual(report.metrics["sentence_headings"], 2)
+
+
+class ConnectiveCommaTest(unittest.TestCase):
+    def test_nouns_ending_in_go_are_not_connective(self) -> None:
+        report = analyze("사고, 대응 절차를 확인한다. 재고, 주문, 참고, 로고 항목을 본다.\n")
+        self.assertEqual(report.metrics["connective_comma"], 0)
+        self.assertNotIn("connective_comma_per_100_sentences", flagged(report))
+
+    def test_connective_endings_are_counted(self) -> None:
+        report = analyze(
+            "설정을 바꾸고, 다시 배포한다. 값이 있으며, 로그도 남는다. 지원하지만, 느리다.\n"
+        )
+        self.assertEqual(report.metrics["connective_comma"], 3)
+
+
+class FencedCodeTest(unittest.TestCase):
+    def test_inner_fence_does_not_close_longer_fence(self) -> None:
+        text = "# 펜스\n\n````markdown\n```bash\n따라서, 실행한다.\n```\n하지만, 코드다.\n````\n\n본문이다.\n"
+        self.assertEqual(analyze(text).metrics["adverb_comma"], 0)
+
+    def test_fences_inside_quote_and_list_marker_are_code(self) -> None:
+        text = (
+            "# 펜스\n\n> ```text\n> 따라서, 코드다.\n> ```\n\n"
+            "- ```text\n  그리고, 코드다.\n  ```\n  설명이다. 그리고, 본문이다.\n"
+        )
+        self.assertEqual(analyze(text).metrics["adverb_comma"], 1)
+
+    def test_top_level_indented_fence_is_not_a_fence(self) -> None:
+        text = f"# 펜스\n\n본문이다.\n\n    ```\n    코드 줄\n\n그리고, 본문이다.\n\n{FILLER}\n"
+        self.assertEqual(analyze(text).metrics["adverb_comma"], 1)
+
+    def test_fence_nested_in_list_and_admonition_is_code(self) -> None:
+        text = (
+            "# 펜스\n\n*   항목이다.\n    ```yaml\n    그리고, 코드다.\n    ```\n\n"
+            '??? example "예시"\n    설명이다.\n\n    ```yaml\n    그러나, 코드다.\n    ```\n\n본문이다.\n'
+        )
+        self.assertEqual(analyze(text).metrics["adverb_comma"], 0)
+
+
+class QuoteTest(unittest.TestCase):
+    def test_quoted_examples_do_not_count_as_endings(self) -> None:
+        text = '# 인용\n\n본문은 합니다체로 씁니다. 예시 문구는 "파일을 저장한다. 다음 파일을 읽는다."입니다.\n'
+        report = analyze(text)
+        self.assertEqual(report.metrics["plain_endings"], 0)
+        self.assertNotIn("minority_ending_ratio", flagged(report))
+
+    def test_apostrophes_do_not_open_quotes(self) -> None:
+        report = analyze("# 따옴표\n\ndon't 때문에 번역투에 의해 user's 값을 설명합니다.\n")
+        self.assertEqual(report.metrics["translationese"], 1)
+
+
+class TableTest(unittest.TestCase):
+    def test_table_without_outer_pipes_is_not_prose(self) -> None:
+        text = "# 표\n\n항목 | 설명\n--- | ---\n접속 | 그리고, 셀이다.\n\n본문이다.\n"
+        report = analyze(text)
+        self.assertEqual(report.metrics["adverb_comma"], 0)
+        self.assertGreater(report.metrics["table_line_ratio"], 0)
+
+    def test_pipe_in_prose_is_not_a_table(self) -> None:
+        report = analyze("# 표\n\n명령은 a | b 형태다. 그리고, 이 쉼표는 센다.\n")
+        self.assertEqual(report.metrics["adverb_comma"], 1)
+
+
+class ScanFormatTest(unittest.TestCase):
+    def test_result_section_markup_is_not_counted(self) -> None:
+        text = (
+            "---\ndocument_type: research\n---\n\n# 결과\n\n## 결과 1: 단건 레이턴시\n\n"
+            "| GPU | mean |\n|---|---|\n| A10 | **3.97 ms** |\n\n"
+            "**분석:**\n- **A10 1.4× 우위** — 절대값은 한 자릿수 ms\n\n"
+            "> ⚠️ **측정 범위**: 임베딩 구간만 측정했다.\n\n"
+            f"{FILLER}\n"
+        )
+        report = analyze(text)
+        self.assertEqual(report.findings, [])
+        self.assertEqual(report.metrics["report_colon_headings"], 1)
+
+    def test_repeated_conclusion_boxes_are_flagged(self) -> None:
+        text = (
+            "# 설계\n\n**결론**: 흐름은 손으로만 기록됐다.\n\n본문이다.\n\n"
+            "**정리**: 코드가 문서를 이겼다.\n"
+        )
+        self.assertIn("bold_label_lines", flagged(analyze(text)))
+
+
+class ExampleFilesTest(unittest.TestCase):
+    def test_before_fails_and_after_passes(self) -> None:
+        here = Path(__file__).parent / "examples"
+        limits = checker.Thresholds()
+        self.assertTrue(checker.analyze(here / "before.md", limits).findings)
+        self.assertFalse(checker.analyze(here / "after.md", limits).findings)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -368,8 +368,8 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
 ## 처음부터 한국어로 쓴 글처럼 읽히는 문체 기준 { #korean-writing }
 
 에이전트가 쓴 한국어 문서는 내용이 정확해도 번역투와 LLM 특유의 서식 때문에
-기계가 쓴 글처럼 읽히기 쉽습니다. 근거와 연구 출처는
-[AGENTS.md 한국어 문서의 AI 문체 연구](../services/application-development/agents-md-korean-writing/index.md)에
+기계가 쓴 글처럼 읽히기 쉽습니다. 근거와 연구 출처는 리서치 문서
+[짧은 원칙·경로별 예시·밀도 검사로 줄이는 AGENTS.md 한국어 문서의 AI 문체](../services/application-development/agents-md-korean-writing/index.md)에
 정리했습니다. 공개 문서와 sample README는 다음 기준을 따릅니다.
 
 - 한 문서 안에서 종결어미를 `~다`나 `~합니다` 중 하나로 통일합니다.

@@ -9,7 +9,7 @@ official_sources:
 document_type: guide
 status: needs-review
 verification_status: needs-review
-sources_checked_at: 2026-11-01
+sources_checked_at: 2026-11-02
 last_verified: null
 review_cycle_days: 180
 applies_to:
@@ -64,9 +64,10 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
 | 모델 | 허용 값 | 기본값 | 비고 |
 |------|---------|--------|------|
 | gpt-5.4 이하 (gpt-5.4, 5.3-codex, 5.2, 5.1 계열, 5, 5-codex, 4.1) | `"in_memory"`, `"24h"` | `"in_memory"` | 비 ZDR 조직은 2026.05.29부터 기본값 `"24h"`로 변경됨 |
-| gpt-5.5 이상 | `"24h"` 만 허용 | `"24h"` | `"in_memory"` 미지원. ZDR 조직 포함 전체 적용 |
+| gpt-5.5 | `"24h"` 만 허용 | `"24h"` | 확장 보존이 기본. `"in_memory"` 미지원. ZDR 조직 포함 전체 적용 |
+| gpt-5.6 이상 | 적용 안 됨 (사용 중단) | — | 최소 수명은 `prompt_cache_options.ttl`로 지정하며 `"30m"`이 기본값이자 유일한 값 |
 
-`in_memory`는 5~10분 동안 요청이 없으면 캐시를 비우고 늦어도 1시간 안에 반드시 제거합니다. Azure 구독 사이에는 캐시를 공유하지 않습니다. `24h`는 KV 텐서를 GPU-local 스토리지로 옮겨 최대 24시간 유지합니다. 원본 프롬프트 텍스트는 디스크에 절대 저장하지 않습니다.
+두 보존 정책의 캐시 가격은 같습니다. `in_memory`는 5~10분 동안 요청이 없으면 캐시를 비우고 늦어도 1시간 안에 반드시 제거합니다. Azure 구독 사이에는 캐시를 공유하지 않습니다. `24h`는 KV 텐서를 GPU-local 스토리지로 옮겨 최대 24시간 유지합니다. 원본 프롬프트 텍스트는 디스크에 절대 저장하지 않습니다.
 
 ```json
 {
@@ -86,8 +87,7 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
 {
   "model": "gpt-5.6-sol",
   "messages": [...],
-  "prompt_cache_key": "support-agent-system-v2",
-  "prompt_cache_retention": "24h"
+  "prompt_cache_key": "support-agent-system-v2"
 }
 ```
 
@@ -499,7 +499,7 @@ Redis 기반 세션 메모리를 이미 운영하고 있다면 세 계층을 분
 - [ ] Foundry Memory Service가 GA인지 확인합니다. 지금은 Public Preview이므로 프로덕션 적용에 주의합니다.
 - [ ] VNet이 필수라면 Redis를 유지합니다. Foundry Memory는 VNet을 지원하지 않습니다.
 - [ ] 스코프 100개, 스코프당 항목 10K 한도가 워크로드에 충분한지 검증합니다.
-- [ ] `prompt_cache_retention`을 `"24h"`로 설정해 캐시 비용이 줄어드는지 확인합니다. gpt-5.5 이상은 기본값이 24h입니다.
+- [ ] gpt-5.4 이하에서는 `prompt_cache_retention`의 `"in_memory"`와 `"24h"`를 비교합니다. 두 정책의 캐시 가격은 같으므로 `cached_tokens`로 적중률 차이를 확인합니다. gpt-5.5는 확장 보존(24h)이 기본이라 바꿀 값이 없습니다. gpt-5.6 이상에서는 이 필드가 적용되지 않고 cache write가 별도 과금되므로 `cache_write_tokens`와 `cached_tokens`로 쓰기·읽기 비용을 함께 산정합니다.
 - [ ] gpt-5.6 Responses API 캐싱 버그가 해결되기 전까지 Chat Completions API를 사용합니다.
 - [ ] gpt-5.6 가격은 Azure Billing 지원 티켓으로 확인한 뒤 비용을 계획합니다.
 - [ ] Memory Store API 버전은 `2025-11-15-preview`, SDK는 `azure-ai-projects >= 2.0.0`을 사용합니다.

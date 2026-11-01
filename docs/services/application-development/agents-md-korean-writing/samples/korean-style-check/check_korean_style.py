@@ -49,12 +49,40 @@ EM_DASH = re.compile(r"—|(?<=\S) -- (?=\S)")
 DOCUMENT_TYPE = re.compile(r"^document_type:\s*['\"]?([a-z-]+)", re.M)
 # Report genres may title sections as "결과 1: 단건 레이턴시" or "부록: 비용 참고".
 REPORT_TYPES = {"research", "lab"}
-# Headings that end like a sentence ("~합니다", "~다", "~요") read as body text.
-SENTENCE_HEADING = re.compile(r"(?:니다|세요|[가-힣]요|[가-힣]다)[.!?]?$")
+
+
+def _syllables(finals: set[int] = frozenset(), vowels: str = "") -> str:
+    """Hangul syllables with one of the given final consonants, plus listed syllables."""
+    chosen = [chr(code) for code in range(0xAC00, 0xD7A4) if (code - 0xAC00) % 28 in finals]
+    return "".join(chosen) + vowels
+
+
+# A heading reads as a sentence when it ends with a predicate ending. Without a
+# morphological analyzer the syllable before "다" or "요" decides: a verb or
+# adjective stem ends in a consonant such as ㄴ (한다, 는다), ㅆ (했다, 있다) or ㅄ
+# (없다), or in a vowel listed here (하다, 되다, 다르다, 해요, 있어요). Nouns such as
+# 개요, 필요, 바다 and 람다 do not match. Loanwords such as 판다 and 아젠다 still do.
+_DA_STEM = _syllables(
+    finals={1, 4, 6, 7, 8, 9, 11, 17, 18, 19, 20, 22, 25, 26, 27},
+    vowels="하되이지리기르쓰키치주내두",
+)
+_YO_STEM = "어아여해돼봐줘워와져쳐려세에예네까지래게써나"
+SENTENCE_HEADING = re.compile(
+    rf"(?:니다|[{_YO_STEM}]요|[가-힣]죠|[{_DA_STEM}]다)[.!?]?$"
+)
 HEADING_ANCHOR = re.compile(r"\s*\{[^}]*\}\s*$")
 
-# A Hangul syllable followed by a connective ending and a comma.
-CONNECTIVE_COMMA = re.compile(r"[가-힣](?:고|며|지만|면서|아서|어서|여서|는데|니까|므로)\s?,")
+# A whole word ending in a connective ending and followed by a comma.
+CONNECTIVE_COMMA = re.compile(
+    r"(?<![가-힣])([가-힣]*[가-힣](?:고|며|지만|면서|아서|어서|여서|는데|니까|므로))\s?,"
+)
+# Nouns that end in "고" and are often followed by a comma in a list. "보고" is left
+# out because it is just as often the connective form of "보다".
+NOUNS_ENDING_IN_GO = {
+    "사고", "재고", "참고", "광고", "경고", "신고", "원고", "창고", "최고", "잔고",
+    "비고", "공고", "투고", "기고", "회고", "숙고", "선고", "노고", "제고", "출고",
+    "입고", "금고", "서고", "문고", "퇴고", "탈고", "상고", "로고", "망고", "시카고",
+}
 ADVERB_COMMA = re.compile(
     r"(?:^|[\s(])(?:그리고|그러나|그런데|하지만|그러므로|따라서|또한|즉|게다가|그래서)\s?,"
 )
@@ -369,6 +397,15 @@ def collect(pattern: re.Pattern[str], text: str, limit: int = 3) -> tuple[int, l
     return len(matches), examples
 
 
+def collect_connective_commas(text: str, limit: int = 3) -> tuple[int, list[str]]:
+    matches = [m for m in CONNECTIVE_COMMA.finditer(text) if m.group(1) not in NOUNS_ENDING_IN_GO]
+    examples = []
+    for match in matches[:limit]:
+        start, end = max(match.start() - 18, 0), min(match.end() + 18, len(text))
+        examples.append(text[start:end].replace("\n", " ").strip())
+    return len(matches), examples
+
+
 def analyze(path: Path, limits: Thresholds) -> Report:
     source = path.read_text(encoding="utf-8")
     front = FRONT_MATTER.match(source)
@@ -418,7 +455,7 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     metrics["bullet_line_ratio"] = round(len(BULLET.findall(markdown)) / max(report.lines, 1), 2)
     metrics["table_line_ratio"] = round(len(tables) / max(report.lines, 1), 2)
 
-    count, found = collect(CONNECTIVE_COMMA, text)
+    count, found = collect_connective_commas(text)
     metrics["connective_comma"] = count
     metrics["connective_comma_per_100_sentences"] = round(count * per100, 1)
     if found:
