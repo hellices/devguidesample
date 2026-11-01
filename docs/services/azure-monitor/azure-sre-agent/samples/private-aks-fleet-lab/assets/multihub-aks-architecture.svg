@@ -1,0 +1,444 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1050" width="1800" height="1050" font-family="'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif">
+  <defs>
+    <!-- Azure VNet Icon (<...>) -->
+    <g id="vnet-icon">
+      <path d="M9 4 L2 11 L9 18" fill="none" stroke="#0078d4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M23 4 L30 11 L23 18" fill="none" stroke="#0078d4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="11.5" cy="11" r="1.8" fill="#50e6ff"/>
+      <circle cx="16" cy="11" r="1.8" fill="#0078d4"/>
+      <circle cx="20.5" cy="11" r="1.8" fill="#005a9e"/>
+    </g>
+
+    <!-- Azure Virtual Hub Icon (Green/Blue Router node) -->
+    <g id="vhub-icon">
+      <circle cx="15" cy="3" r="2.6" fill="#7fba00"/>
+      <circle cx="7" cy="25" r="2.6" fill="#7fba00"/>
+      <circle cx="23" cy="25" r="2.6" fill="#7fba00"/>
+      <line x1="15" y1="5" x2="15" y2="12" stroke="#7fba00" stroke-width="2"/>
+      <line x1="11" y1="18" x2="7" y2="23" stroke="#7fba00" stroke-width="2"/>
+      <line x1="19" y1="18" x2="23" y2="23" stroke="#7fba00" stroke-width="2"/>
+      <rect x="4" y="8" width="22" height="13" rx="2.5" fill="#0078d4"/>
+      <path d="M10 12 L7 14.5 L10 17 M20 12 L23 14.5 L20 17" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="15" cy="14.5" r="1.4" fill="#ffffff"/>
+    </g>
+
+    <!-- Azure Firewall Icon (Blue Cloud + Red Brick Wall) -->
+    <g id="firewall-icon">
+      <path d="M22 44 C12 44 6 37 6 28 C6 20 12 14 19 13 C22 5 31 0 41 0 C53 0 63 9 64 20 C71 21 76 27 76 34 C76 41 70 44 62 44 Z" fill="#2582eb"/>
+      <rect x="21" y="24" width="40" height="24" rx="2" fill="#b91c1c" stroke="#ffffff" stroke-width="1.2"/>
+      <line x1="21" y1="32" x2="61" y2="32" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="21" y1="40" x2="61" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="34" y1="24" x2="34" y2="32" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="48" y1="24" x2="48" y2="32" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="28" y1="32" x2="28" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="41" y1="32" x2="41" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="54" y1="32" x2="54" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="34" y1="40" x2="34" y2="48" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="48" y1="40" x2="48" y2="48" stroke="#fca5a5" stroke-width="1.2"/>
+    </g>
+
+    <!-- Hub Bottom Policy Pins (4 colored lollipops from KT slide) -->
+    <g id="hub-pins">
+      <line x1="10" y1="0" x2="10" y2="16" stroke="#15803d" stroke-width="3"/>
+      <circle cx="10" cy="0" r="6" fill="#16a34a"/>
+      <line x1="26" y1="0" x2="26" y2="16" stroke="#ca8a04" stroke-width="3"/>
+      <circle cx="26" cy="0" r="6" fill="#eab308"/>
+      <line x1="42" y1="0" x2="42" y2="16" stroke="#15803d" stroke-width="3"/>
+      <circle cx="42" cy="0" r="6" fill="#22c55e"/>
+      <line x1="58" y1="0" x2="58" y2="16" stroke="#15803d" stroke-width="3"/>
+      <circle cx="58" cy="0" r="6" fill="#16a34a"/>
+    </g>
+
+    <!-- Azure Virtual WAN / Mesh Center Icon -->
+    <g id="vwan-icon">
+      <path d="M16 38 C7 38 2 32 2 24 C2 17 7 11 14 10 C17 3 25 -1 34 -1 C45 -1 54 7 55 17 C61 18 66 23 66 29 C66 35 61 38 53 38 Z" fill="#32bedd"/>
+      <circle cx="34" cy="25" r="12" fill="#ffffff" stroke="#0078d4" stroke-width="1.8"/>
+      <ellipse cx="34" cy="25" rx="6" ry="12" fill="none" stroke="#0078d4" stroke-width="1.4"/>
+      <line x1="22" y1="25" x2="46" y2="25" stroke="#0078d4" stroke-width="1.4"/>
+      <line x1="24" y1="19" x2="44" y2="19" stroke="#0078d4" stroke-width="1.2"/>
+      <line x1="24" y1="31" x2="44" y2="31" stroke="#0078d4" stroke-width="1.2"/>
+    </g>
+
+    <!-- DNS Private Resolver Icon -->
+    <g id="dns-icon">
+      <circle cx="20" cy="20" r="18" fill="#2582eb"/>
+      <ellipse cx="20" cy="20" rx="8" ry="16" fill="none" stroke="#93c5fd" stroke-width="1.4"/>
+      <line x1="4" y1="20" x2="36" y2="20" stroke="#93c5fd" stroke-width="1.4"/>
+      <rect x="13" y="11" width="14" height="18" rx="2" fill="#1e3a8a" stroke="#ffffff" stroke-width="1.2"/>
+      <text x="20" y="24" fill="#50e6ff" font-size="11" font-weight="700" text-anchor="middle">i</text>
+    </g>
+
+    <!-- AKS / Kubernetes Hexagon Icon -->
+    <g id="aks-icon">
+      <polygon points="16,2 29,9 29,23 16,30 3,23 3,9" fill="#326ce5" stroke="#ffffff" stroke-width="1"/>
+      <circle cx="16" cy="16" r="5.5" fill="none" stroke="#ffffff" stroke-width="1.5"/>
+      <line x1="16" y1="7" x2="16" y2="10.5" stroke="#ffffff" stroke-width="1.5"/>
+      <line x1="16" y1="21.5" x2="16" y2="25" stroke="#ffffff" stroke-width="1.5"/>
+      <line x1="8" y1="11.5" x2="11" y2="13.5" stroke="#ffffff" stroke-width="1.5"/>
+      <line x1="21" y1="18.5" x2="24" y2="20.5" stroke="#ffffff" stroke-width="1.5"/>
+      <line x1="8" y1="20.5" x2="11" y2="18.5" stroke="#ffffff" stroke-width="1.5"/>
+      <line x1="21" y1="13.5" x2="24" y2="11.5" stroke="#ffffff" stroke-width="1.5"/>
+    </g>
+
+    <!-- SRE Agent Bot / Monitor Icon -->
+    <g id="sre-icon">
+      <rect x="2" y="4" width="32" height="24" rx="4" fill="#0078d4"/>
+      <rect x="6" y="8" width="24" height="16" rx="2" fill="#50e6ff"/>
+      <circle cx="13" cy="16" r="2.2" fill="#003366"/>
+      <circle cx="23" cy="16" r="2.2" fill="#003366"/>
+      <path d="M12 28 L24 28 L27 33 L9 33 Z" fill="#005a9e"/>
+    </g>
+
+    <!-- Private Endpoint Plug Icon -->
+    <g id="pe-icon">
+      <circle cx="9" cy="9" r="8" fill="#10b981"/>
+      <path d="M5 9 L13 9 M9 5 L9 13" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- Clean White Background -->
+  <rect width="1800" height="1050" fill="#ffffff"/>
+
+  <!-- Top-Left Slide Title (KT Landing Zone Connectivity Design Style) -->
+  <text x="36" y="54" fill="#000000" font-size="30" font-weight="800">Enterprise</text>
+  <text x="36" y="90" fill="#111827" font-size="28" font-weight="400">SRE Agent &amp; Private AKS</text>
+  <text x="36" y="124" fill="#111827" font-size="28" font-weight="400">Connectivity Design (Testbed)</text>
+  <text x="36" y="152" fill="#6b7280" font-size="13">실제 배포 리소스 기준 (3-Hub Full-Mesh + Firewall NVA + 6 UDR + 10 Private AKS + vWAN Lab)</text>
+
+  <!-- ========================================================================================= -->
+  <!-- BACKGROUND GREY TREE & MESH CONNECTORS (KT Slide Style) -->
+  <!-- ========================================================================================= -->
+  <!-- Central Full-Mesh Lines between the 4 Hub Nodes (Hub 1, Hub 2, Hub 3, vWAN Hub) -->
+  <g stroke="#e5e7eb" stroke-width="5" stroke-linecap="round">
+    <!-- Diamond / Hex Mesh lines -->
+    <line x1="650" y1="450" x2="880" y2="270"/>
+    <line x1="650" y1="450" x2="880" y2="660"/>
+    <line x1="650" y1="450" x2="1120" y2="450"/>
+    <line x1="880" y1="270" x2="1120" y2="450"/>
+    <line x1="880" y1="660" x2="1120" y2="450"/>
+    <line x1="880" y1="270" x2="880" y2="660"/>
+  </g>
+
+  <!-- Active UDR Transitive Flow Highlight Overlay (Subtle Dashed Red Path) -->
+  <path d="M 390 420 L 560 420" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="6,4"/>
+  <path d="M 650 355 L 790 250" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="6,4"/>
+  <path d="M 740 450 L 1030 450" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="6,4"/>
+
+  <!-- Left Branch Tree: Left Spokes -> Hub #1 (vnet-fleet-hub-01) -->
+  <g stroke="#d1d5db" stroke-width="4.5" fill="none">
+    <!-- Spine on left of Hub 1 -->
+    <line x1="470" y1="245" x2="470" y2="795"/>
+    <line x1="470" y1="450" x2="560" y2="450"/>
+    <!-- Branches to Left VNet Boxes -->
+    <line x1="390" y1="245" x2="470" y2="245"/>
+    <line x1="390" y1="420" x2="470" y2="420"/>
+    <line x1="390" y1="610" x2="470" y2="610"/>
+    <line x1="390" y1="795" x2="470" y2="795"/>
+  </g>
+
+  <!-- Top-Right Branch Tree: Hub #2 (vnet-fleet-aks-hub) -> 5 AKS Subnets (01..05) -->
+  <g stroke="#d1d5db" stroke-width="4" fill="none">
+    <line x1="970" y1="220" x2="1280" y2="220"/>
+    <line x1="1280" y1="75" x2="1280" y2="375"/>
+    <line x1="1280" y1="75"  x2="1340" y2="75"/>
+    <line x1="1280" y1="150" x2="1340" y2="150"/>
+    <line x1="1280" y1="225" x2="1340" y2="225"/>
+    <line x1="1280" y1="300" x2="1340" y2="300"/>
+    <line x1="1280" y1="375" x2="1340" y2="375"/>
+  </g>
+
+  <!-- Bottom-Right Branch Tree: Hub #3 (vnet-fleet-hub-03) -> 5 Spoke VNets (06..10) -->
+  <g stroke="#d1d5db" stroke-width="4" fill="none">
+    <line x1="1210" y1="490" x2="1280" y2="490"/>
+    <line x1="1280" y1="490" x2="1280" y2="855"/>
+    <line x1="1280" y1="535" x2="1340" y2="535"/>
+    <line x1="1280" y1="615" x2="1340" y2="615"/>
+    <line x1="1280" y1="695" x2="1340" y2="695"/>
+    <line x1="1280" y1="775" x2="1340" y2="775"/>
+    <line x1="1280" y1="855" x2="1340" y2="855"/>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- CENTER: Virtual WAN / Full-Mesh Backbone Node -->
+  <!-- ========================================================================================= -->
+  <g transform="translate(846, 425)">
+    <use href="#vwan-icon" x="0" y="0"/>
+    <text x="34" y="58" fill="#111827" font-size="15" font-weight="700" text-anchor="middle">Full-Mesh Peering</text>
+    <text x="34" y="75" fill="#4b5563" font-size="12" text-anchor="middle">&amp; Virtual WAN (vwan-kcsp)</text>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- HUB #1 (Center-Left): vnet-fleet-hub-01 (10.51.0.0/16) -->
+  <!-- ========================================================================================= -->
+  <g transform="translate(560, 355)">
+    <rect x="0" y="18" width="180" height="175" fill="#ffffff" stroke="#0078d4" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="8" y="0" width="164" height="32" fill="#ffffff"/>
+    <use href="#vhub-icon" x="10" y="2"/>
+    <text x="46" y="15" fill="#111827" font-size="14" font-weight="700">vnet-fleet-hub-01</text>
+    <text x="46" y="29" fill="#4b5563" font-size="11">(10.51.0.0/16 · Hub #1)</text>
+    <use href="#firewall-icon" x="50" y="52"/>
+    <text x="90" y="122" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">fw-hub-01</text>
+    <text x="90" y="140" fill="#111827" font-size="13.5" text-anchor="middle">(10.51.250.4)</text>
+    <text x="90" y="156" fill="#dc2626" font-size="10.5" font-weight="700" text-anchor="middle">UDR: rt-fleet-hub-01-fw</text>
+    <use href="#hub-pins" x="56" y="193"/>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- HUB #2 (Top-Center): vnet-fleet-aks-hub (10.52.0.0/16) -->
+  <!-- ========================================================================================= -->
+  <g transform="translate(790, 140)">
+    <rect x="0" y="18" width="180" height="175" fill="#ffffff" stroke="#0078d4" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="8" y="0" width="164" height="32" fill="#ffffff"/>
+    <use href="#vhub-icon" x="10" y="2"/>
+    <text x="46" y="15" fill="#111827" font-size="14" font-weight="700">vnet-fleet-aks-hub</text>
+    <text x="46" y="29" fill="#4b5563" font-size="11">(10.52.0.0/16 · Hub #2)</text>
+    <use href="#firewall-icon" x="50" y="52"/>
+    <text x="90" y="122" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">fw-hub-02</text>
+    <text x="90" y="140" fill="#111827" font-size="13.5" text-anchor="middle">(10.52.250.4)</text>
+    <text x="90" y="156" fill="#2563eb" font-size="10.5" font-weight="700" text-anchor="middle">UDR: rt-fleet-hub-02-fw</text>
+    <use href="#hub-pins" x="56" y="193"/>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- HUB #3 (Center-Right): vnet-fleet-hub-03 (10.53.0.0/16) -->
+  <!-- ========================================================================================= -->
+  <g transform="translate(1030, 355)">
+    <rect x="0" y="18" width="180" height="175" fill="#ffffff" stroke="#0078d4" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="8" y="0" width="164" height="32" fill="#ffffff"/>
+    <use href="#vhub-icon" x="10" y="2"/>
+    <text x="46" y="15" fill="#111827" font-size="14" font-weight="700">vnet-fleet-hub-03</text>
+    <text x="46" y="29" fill="#4b5563" font-size="11">(10.53.0.0/16 · Hub #3)</text>
+    <use href="#firewall-icon" x="50" y="52"/>
+    <text x="90" y="122" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">fw-hub-03</text>
+    <text x="90" y="140" fill="#111827" font-size="13.5" text-anchor="middle">(10.53.250.4)</text>
+    <text x="90" y="156" fill="#7c3aed" font-size="10.5" font-weight="700" text-anchor="middle">UDR: rt-fleet-hub-03-fw</text>
+    <use href="#hub-pins" x="56" y="193"/>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- HUB #4 (Bottom-Center): Existing vWAN Secured Hub in rg-vwan-lab (vhub-krc / vhub-jpe) -->
+  <!-- ========================================================================================= -->
+  <g transform="translate(790, 585)">
+    <rect x="0" y="18" width="180" height="175" fill="#ffffff" stroke="#0078d4" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="8" y="0" width="168" height="32" fill="#ffffff"/>
+    <use href="#vhub-icon" x="10" y="2"/>
+    <text x="46" y="15" fill="#111827" font-size="14" font-weight="700">vhub-krc / vhub-jpe</text>
+    <text x="46" y="29" fill="#4b5563" font-size="11">(10.1.0.0/23 · rg-vwan-lab)</text>
+    <use href="#firewall-icon" x="50" y="52"/>
+    <text x="90" y="122" fill="#111827" font-size="14" font-weight="600" text-anchor="middle">fw-krc / fw-jpe</text>
+    <text x="90" y="140" fill="#111827" font-size="13" text-anchor="middle">(Routing Intent: ri-krc)</text>
+    <text x="90" y="156" fill="#059669" font-size="10.5" font-weight="700" text-anchor="middle">Policy: afwp-vwan</text>
+    <use href="#hub-pins" x="56" y="193"/>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- LEFT COLUMN: Management / DNS / SRE Agent VNets -->
+  <!-- ========================================================================================= -->
+  <!-- 1. DNS Private Resolver & 10 Private DNS Zones -->
+  <g transform="translate(50, 185)">
+    <rect x="0" y="16" width="340" height="105" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="8" y="0" width="240" height="30" fill="#ffffff"/>
+    <use href="#vnet-icon" x="12" y="4"/>
+    <text x="50" y="14" fill="#111827" font-size="14" font-weight="700">vnet-dns &amp; Private DNS Zones</text>
+    <text x="50" y="28" fill="#4b5563" font-size="11">(10.10.0.0/24 + 10x *.privatelink.azmk8s.io)</text>
+    <use href="#dns-icon" x="20" y="46"/>
+    <text x="72" y="62" fill="#111827" font-size="13.5" font-weight="700">DNS Private Resolver (dnspr-krc)</text>
+    <text x="72" y="80" fill="#111827" font-size="12.5">(10.10.0.4) &amp; VNet Links (link-01 ~ 10)</text>
+    <text x="72" y="98" fill="#6b7280" font-size="11">• 10개 AKS 사설 도메인 ──► 10.52.x.4 / 10.60.x.4 응답</text>
+  </g>
+
+  <!-- 2. SRE Agent VNet (vnet-sre-agent-hub) -->
+  <g transform="translate(50, 340)">
+    <rect x="0" y="16" width="340" height="150" fill="#f0f9ff" stroke="#0078d4" stroke-width="2.4" stroke-dasharray="6,3"/>
+    <rect x="8" y="0" width="290" height="30" fill="#ffffff"/>
+    <use href="#vnet-icon" x="12" y="4"/>
+    <text x="50" y="14" fill="#0078d4" font-size="14.5" font-weight="800">vnet-sre-agent-hub</text>
+    <text x="50" y="28" fill="#1e3a8a" font-size="11" font-weight="600">(10.42.0.0/16 · SRE Agent 시작점 VNet)</text>
+    <use href="#sre-icon" x="20" y="52"/>
+    <text x="68" y="62" fill="#0f172a" font-size="14" font-weight="700">Azure SRE Agent (sre-aks-fleet-agent)</text>
+    <text x="68" y="80" fill="#1e40af" font-size="12" font-weight="600">Subnet: snet-sre-agent-sandbox (10.42.4.0/24)</text>
+    <text x="68" y="98" fill="#dc2626" font-size="11.5" font-weight="700">• UDR: rt-sre-agent-sandbox ──► 10.51.250.4</text>
+    <text x="68" y="116" fill="#334155" font-size="11">• 위임: Microsoft.App/environments (legionservicelink)</text>
+    <text x="68" y="134" fill="#334155" font-size="11">• 동반 워크로드: ca-sre-event-lab-vnet (10.42.0.0/23)</text>
+  </g>
+
+  <!-- 3. Observability & Incident Platform -->
+  <g transform="translate(50, 540)">
+    <rect x="0" y="16" width="340" height="115" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="8" y="0" width="260" height="30" fill="#ffffff"/>
+    <use href="#vnet-icon" x="12" y="4"/>
+    <text x="50" y="14" fill="#111827" font-size="14" font-weight="700">rg-sre-agent-hub (Observability)</text>
+    <text x="50" y="28" fill="#4b5563" font-size="11">(snet-private-endpoints: 10.42.2.0/24)</text>
+    <text x="24" y="60" fill="#111827" font-size="13" font-weight="700">• Log Analytics: law-sre-event-lab-qsjjdr4u</text>
+    <text x="24" y="80" fill="#111827" font-size="13" font-weight="700">• App Insights: appi-sre-event-lab-qsjjdr4u</text>
+    <text x="24" y="100" fill="#4b5563" font-size="11.5">• Storage PE: stsrelabqsjjdr4u (10.42.2.4)</text>
+  </g>
+
+  <!-- 4. vWAN Spoke VNets -->
+  <g transform="translate(50, 720)">
+    <rect x="0" y="16" width="340" height="105" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="8" y="0" width="270" height="30" fill="#ffffff"/>
+    <use href="#vnet-icon" x="12" y="4"/>
+    <text x="50" y="14" fill="#111827" font-size="14" font-weight="700">vnet-spoke-krc &amp; vnet-spoke-jpe</text>
+    <text x="50" y="28" fill="#4b5563" font-size="11">(10.11.0.0/24, 10.21.0.0/24 · rg-vwan-lab)</text>
+    <text x="24" y="62" fill="#111827" font-size="13" font-weight="600">• vWAN Hub Connections (conn-spoke-krc/jpe)</text>
+    <text x="24" y="82" fill="#4b5563" font-size="11.5">• InternetSecurity: Enabled (fw-krc / fw-jpe 경유)</text>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- RIGHT TOP COLUMN: 5 Private AKS Clusters in Hub #2 (aks-priv-01 ~ 05) -->
+  <!-- ========================================================================================= -->
+  <!-- Header Pill -->
+  <rect x="1340" y="12" width="420" height="28" rx="4" fill="#dbeafe"/>
+  <text x="1550" y="31" fill="#1e40af" font-size="13" font-weight="700" text-anchor="middle">Group A: Hub #2 산하 Private AKS 01~05 (rt-fleet-hub-02-aks)</text>
+
+  <!-- AKS 01 -->
+  <g transform="translate(1340, 44)">
+    <rect x="0" y="12" width="420" height="54" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="250" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">aks-priv-01</text>
+    <text x="150" y="13" fill="#4b5563" font-size="11">(snet-aks-01: 10.52.11.0/24)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.52.11.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">commerce/storefront (2/2) · LB: 20.227.45.168 · [점검: 100점 READY]</text>
+  </g>
+
+  <!-- AKS 02 -->
+  <g transform="translate(1340, 118)">
+    <rect x="0" y="12" width="420" height="54" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="250" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">aks-priv-02</text>
+    <text x="150" y="13" fill="#4b5563" font-size="11">(snet-aks-02: 10.52.12.0/24)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.52.12.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">checkout/order-service (2/2) · LB: 4.237.181.74 · [K8s 1.36.4 ➔ 1.37.0]</text>
+  </g>
+
+  <!-- AKS 03 -->
+  <g transform="translate(1340, 192)">
+    <rect x="0" y="12" width="420" height="54" fill="#fefce8" stroke="#ca8a04" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="250" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">aks-priv-03</text>
+    <text x="150" y="13" fill="#4b5563" font-size="11">(snet-aks-03: 10.52.13.0/24)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.52.13.4</text>
+    <text x="70" y="55" fill="#b45309" font-size="11" font-weight="700">banking/ledger-audit-worker (원인 진단 · 복구 검증 완료) · LB: 20.167.11.120</text>
+  </g>
+
+  <!-- AKS 04 -->
+  <g transform="translate(1340, 266)">
+    <rect x="0" y="12" width="420" height="54" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="250" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">aks-priv-04</text>
+    <text x="150" y="13" fill="#4b5563" font-size="11">(snet-aks-04: 10.52.14.0/24)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.52.14.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">security/iam-auth-gateway (2/2) · LB: 20.167.84.33</text>
+  </g>
+
+  <!-- AKS 05 -->
+  <g transform="translate(1340, 340)">
+    <rect x="0" y="12" width="420" height="54" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="250" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">aks-priv-05</text>
+    <text x="150" y="13" fill="#4b5563" font-size="11">(snet-aks-05: 10.52.15.0/24)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.52.15.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">logistics/warehouse-inventory (2/2) · LB: 4.195.36.181</text>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- RIGHT BOTTOM COLUMN: 5 Spoke VNets under Hub #3 (vnet-fleet-spoke-06 ~ 10) -->
+  <!-- ========================================================================================= -->
+  <rect x="1340" y="468" width="420" height="28" rx="4" fill="#ede9fe"/>
+  <text x="1550" y="487" fill="#5b21b6" font-size="13" font-weight="700" text-anchor="middle">Group B: Hub #3 독점 Spoke VNet 06~10 (rt-fleet-spoke-06-to-10-aks)</text>
+
+  <!-- Spoke 06 -->
+  <g transform="translate(1340, 502)">
+    <rect x="0" y="12" width="420" height="56" fill="#fefce8" stroke="#ca8a04" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="265" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">vnet-fleet-spoke-06</text>
+    <text x="165" y="13" fill="#4b5563" font-size="11">(10.60.6.0/24 · aks-priv-06)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.60.6.4</text>
+    <text x="70" y="55" fill="#b45309" font-size="11" font-weight="700">messaging (단일 레플리카 · PDB 감지) · [점검: 82점 CONDITIONAL]</text>
+  </g>
+
+  <!-- Spoke 07 -->
+  <g transform="translate(1340, 582)">
+    <rect x="0" y="12" width="420" height="56" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="265" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">vnet-fleet-spoke-07</text>
+    <text x="165" y="13" fill="#4b5563" font-size="11">(10.60.7.0/24 · aks-priv-07)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.60.7.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">ai-inference/recommendation (2/2) · LB: 4.198.28.137</text>
+  </g>
+
+  <!-- Spoke 08 -->
+  <g transform="translate(1340, 662)">
+    <rect x="0" y="12" width="420" height="56" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="265" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">vnet-fleet-spoke-08</text>
+    <text x="165" y="13" fill="#4b5563" font-size="11">(10.60.8.0/24 · aks-priv-08)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.60.8.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">finops/cloud-billing-metering (2/2) · LB: 4.195.208.40</text>
+  </g>
+
+  <!-- Spoke 09 -->
+  <g transform="translate(1340, 742)">
+    <rect x="0" y="12" width="420" height="56" fill="#ffffff" stroke="#0078d4" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="265" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">vnet-fleet-spoke-09</text>
+    <text x="165" y="13" fill="#4b5563" font-size="11">(10.60.9.0/24 · aks-priv-09)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.60.9.4</text>
+    <text x="70" y="55" fill="#4b5563" font-size="11">media/media-cdn-origin (2/2) · LB: 4.200.68.150</text>
+  </g>
+
+  <!-- Spoke 10 -->
+  <g transform="translate(1340, 822)">
+    <rect x="0" y="12" width="420" height="56" fill="#fef2f2" stroke="#dc2626" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <rect x="6" y="0" width="265" height="22" fill="#ffffff"/>
+    <use href="#vnet-icon" x="8" y="0"/>
+    <text x="44" y="13" fill="#111827" font-size="13" font-weight="700">vnet-fleet-spoke-10</text>
+    <text x="165" y="13" fill="#4b5563" font-size="11">(10.60.10.0/24 · aks-priv-10)</text>
+    <use href="#aks-icon" x="14" y="26"/>
+    <use href="#pe-icon" x="52" y="33"/>
+    <text x="70" y="39" fill="#111827" font-size="12" font-weight="700">PE (kube-apiserver): 10.60.10.4</text>
+    <text x="70" y="55" fill="#dc2626" font-size="11" font-weight="700">payments-canary (ImagePullBackOff 감지) · [점검: 55점 BLOCKED]</text>
+  </g>
+
+  <!-- Grey Callout Pills (KT Slide Style) -->
+  <rect x="1340" y="910" width="420" height="36" rx="4" fill="#e5e7eb"/>
+  <text x="1550" y="933" fill="#111827" font-size="13.5" font-weight="600" text-anchor="middle" text-decoration="underline">+10 MC_* Node Resource Groups (Public LB &amp; Private DNS)</text>
+
+  <rect x="50" y="865" width="340" height="36" rx="4" fill="#e5e7eb"/>
+  <text x="220" y="888" fill="#111827" font-size="13.5" font-weight="600" text-anchor="middle" text-decoration="underline">6x Symmetric UDR Route Tables (PE Policies=Enabled)</text>
+
+  <!-- Bottom Legend Bar -->
+  <rect x="50" y="965" width="1710" height="54" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="72" y="997" fill="#111827" font-size="13" font-weight="700">트래픽 흐름:</text>
+  <text x="188" y="997" fill="#0078d4" font-size="13" font-weight="700">[SRE Agent (10.42.4.0/24)]</text>
+  <text x="365" y="997" fill="#dc2626" font-size="13" font-weight="700">──(UDR #1)──► [fw-hub-01 (10.51.250.4)] ──(UDR #2 양갈래 분기)──► [fw-hub-02 (10.52.250.4) / fw-hub-03 (10.53.250.4)]</text>
+  <text x="1225" y="997" fill="#059669" font-size="13" font-weight="700">──(TCP 443)──► [10x kube-apiserver PE (10.52.x.4 / 10.60.x.4)]</text>
+</svg>

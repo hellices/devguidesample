@@ -930,6 +930,7 @@ def test_repository_connected_topics_have_canonical_layout() -> None:
                 "dynamic-thresholds",
                 "sql-server-vm-health-check",
                 "sql-server-vm-grafana",
+                "private-aks-multihub-preflight",
             ],
             "redirects": [
                 "guides/azure-monitor/azure-sre-agent-overview/index.md",
@@ -943,6 +944,7 @@ def test_repository_connected_topics_have_canonical_layout() -> None:
                 "guides/azure-monitor/sre-agent-incident-runbook/index.md",
                 "guides/azure-monitor/sre-agent-dynamic-thresholds/index.md",
                 # Added after the topic migration, so they have no legacy URL.
+                None,
                 None,
                 None,
             ],

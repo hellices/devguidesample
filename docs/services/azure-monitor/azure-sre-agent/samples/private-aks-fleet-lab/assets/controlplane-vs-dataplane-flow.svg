@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1750 860" width="1750" height="860" font-family="'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif">
+  <defs>
+    <g id="vnet-icon">
+      <path d="M9 4 L2 11 L9 18" fill="none" stroke="#0078d4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M23 4 L30 11 L23 18" fill="none" stroke="#0078d4" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="11.5" cy="11" r="1.8" fill="#50e6ff"/>
+      <circle cx="16" cy="11" r="1.8" fill="#0078d4"/>
+      <circle cx="20.5" cy="11" r="1.8" fill="#005a9e"/>
+    </g>
+    <g id="vhub-icon">
+      <circle cx="15" cy="3" r="2.6" fill="#7fba00"/>
+      <circle cx="7" cy="25" r="2.6" fill="#7fba00"/>
+      <circle cx="23" cy="25" r="2.6" fill="#7fba00"/>
+      <line x1="15" y1="5" x2="15" y2="12" stroke="#7fba00" stroke-width="2"/>
+      <line x1="11" y1="18" x2="7" y2="23" stroke="#7fba00" stroke-width="2"/>
+      <line x1="19" y1="18" x2="23" y2="23" stroke="#7fba00" stroke-width="2"/>
+      <rect x="4" y="8" width="22" height="13" rx="2.5" fill="#0078d4"/>
+      <circle cx="15" cy="14.5" r="1.6" fill="#ffffff"/>
+    </g>
+    <g id="firewall-icon">
+      <path d="M22 44 C12 44 6 37 6 28 C6 20 12 14 19 13 C22 5 31 0 41 0 C53 0 63 9 64 20 C71 21 76 27 76 34 C76 41 70 44 62 44 Z" fill="#2582eb"/>
+      <rect x="21" y="24" width="40" height="24" rx="2" fill="#b91c1c" stroke="#ffffff" stroke-width="1.2"/>
+      <line x1="21" y1="32" x2="61" y2="32" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="21" y1="40" x2="61" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="34" y1="24" x2="34" y2="32" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="48" y1="24" x2="48" y2="32" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="28" y1="32" x2="28" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="41" y1="32" x2="41" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+      <line x1="54" y1="32" x2="54" y2="40" stroke="#fca5a5" stroke-width="1.2"/>
+    </g>
+    <g id="dns-icon">
+      <circle cx="20" cy="20" r="18" fill="#2582eb"/>
+      <ellipse cx="20" cy="20" rx="8" ry="16" fill="none" stroke="#93c5fd" stroke-width="1.4"/>
+      <line x1="4" y1="20" x2="36" y2="20" stroke="#93c5fd" stroke-width="1.4"/>
+      <rect x="13" y="11" width="14" height="18" rx="2" fill="#1e3a8a" stroke="#ffffff" stroke-width="1.2"/>
+      <text x="20" y="24" fill="#50e6ff" font-size="11" font-weight="700" text-anchor="middle">i</text>
+    </g>
+    <g id="aks-icon">
+      <polygon points="18,2 33,10 33,26 18,34 3,26 3,10" fill="#326ce5" stroke="#ffffff" stroke-width="1"/>
+      <circle cx="18" cy="18" r="6" fill="none" stroke="#ffffff" stroke-width="1.6"/>
+      <line x1="18" y1="7" x2="18" y2="12" stroke="#ffffff" stroke-width="1.6"/>
+      <line x1="18" y1="24" x2="18" y2="29" stroke="#ffffff" stroke-width="1.6"/>
+      <line x1="9" y1="13" x2="13" y2="15" stroke="#ffffff" stroke-width="1.6"/>
+      <line x1="23" y1="21" x2="27" y2="23" stroke="#ffffff" stroke-width="1.6"/>
+    </g>
+    <g id="sre-icon">
+      <rect x="2" y="4" width="36" height="28" rx="5" fill="#0078d4"/>
+      <rect x="7" y="9" width="26" height="18" rx="2" fill="#50e6ff"/>
+      <circle cx="15" cy="18" r="2.5" fill="#003366"/>
+      <circle cx="25" cy="18" r="2.5" fill="#003366"/>
+    </g>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0078d4"/>
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+  </defs>
+
+  <rect width="1750" height="860" fill="#ffffff"/>
+
+  <!-- Slide Header -->
+  <text x="36" y="50" fill="#000000" font-size="28" font-weight="800">Enterprise</text>
+  <text x="36" y="84" fill="#111827" font-size="25" font-weight="400">Control Plane vs Data Plane &amp; Hop-by-Hop Packet Flow</text>
+  <text x="36" y="110" fill="#6b7280" font-size="13">SRE Agent가 Private AKS의 목록(컨트롤 플레인)을 조회할 때와 내부 파드(데이터 플레인)를 제어할 때의 실제 통신 매개체 차이</text>
+
+  <!-- ========================================================================================= -->
+  <!-- TOP LANE: CONTROL PLANE (Public ARM Path) -->
+  <!-- ========================================================================================= -->
+  <rect x="36" y="135" width="1678" height="175" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.8" stroke-dasharray="6,3"/>
+  <rect x="52" y="122" width="440" height="26" fill="#ffffff"/>
+  <text x="60" y="140" fill="#0f172a" font-size="15" font-weight="800">경로 A. 컨트롤 플레인 (Control Plane — 클러스터 목록 · 현재 버전 · 업그레이드 가능 버전 조회)</text>
+
+  <!-- SRE Agent Service Box in Top Lane -->
+  <g transform="translate(65, 165)">
+    <rect x="0" y="0" width="350" height="120" rx="6" fill="#ffffff" stroke="#0078d4" stroke-width="2"/>
+    <use href="#sre-icon" x="18" y="18"/>
+    <text x="68" y="32" fill="#111827" font-size="15" font-weight="700">sre-aks-fleet-agent (Managed Infra)</text>
+    <text x="68" y="52" fill="#0078d4" font-size="12.5" font-weight="700">도구: RunAzCliReadCommands</text>
+    <text x="20" y="78" fill="#334155" font-size="12">• 실행 명령: az aks list, az aks get-upgrades</text>
+    <text x="20" y="98" fill="#059669" font-size="12" font-weight="600">• 특징: VNet 피어링/방화벽 없이도 즉시 조회 가능</text>
+  </g>
+
+  <!-- Arrow to ARM -->
+  <line x1="415" y1="225" x2="720" y2="225" stroke="#0078d4" stroke-width="3.5" marker-end="url(#arrBlue)"/>
+  <rect x="455" y="192" width="230" height="26" rx="4" fill="#dbeafe"/>
+  <text x="570" y="209" fill="#1e40af" font-size="12" font-weight="700" text-anchor="middle">① HTTPS 443 (management.azure.com)</text>
+  <text x="570" y="250" fill="#334155" font-size="11.5" text-anchor="middle">필요 권한: 구독/MG Reader + AKS Cluster User Role</text>
+
+  <!-- ARM Control Plane Box -->
+  <g transform="translate(730, 165)">
+    <rect x="0" y="0" width="420" height="120" rx="6" fill="#ffffff" stroke="#0078d4" stroke-width="2"/>
+    <text x="24" y="32" fill="#0078d4" font-size="15" font-weight="800">Azure Resource Manager (ARM 컨트롤 플레인)</text>
+    <text x="24" y="54" fill="#111827" font-size="12.5" font-weight="600">Endpoint: https://management.azure.com</text>
+    <text x="24" y="78" fill="#334155" font-size="12">• 반환 정보: N대 클러스터 이름, 현재 K8s 버전, 업그레이드 가능 버전</text>
+    <text x="24" y="98" fill="#dc2626" font-size="12" font-weight="700">• 한계: 클러스터 내부 파드 상태, 로그, PDB, YAML은 볼 수 없음</text>
+  </g>
+
+  <!-- Optional Run Command Note -->
+  <line x1="1150" y1="225" x2="1320" y2="225" stroke="#94a3b8" stroke-width="2.5" stroke-dasharray="5,4" marker-end="url(#arrBlue)"/>
+  <g transform="translate(1330, 165)">
+    <rect x="0" y="0" width="355" height="120" rx="6" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="20" y="30" fill="#334155" font-size="13.5" font-weight="700">(참고) az aks command invoke 사용 시</text>
+    <text x="20" y="54" fill="#475569" font-size="11.5">• ARM이 클러스터 내부에 임시 파드를 띄워 대리 실행</text>
+    <text x="20" y="74" fill="#475569" font-size="11.5">• 장점: VNet 연결 불필요 / 단점: 건당 20~30초 지연</text>
+    <text x="20" y="96" fill="#0078d4" font-size="11.5" font-weight="700">• N대 클러스터 실시간 조회를 위해 아래 [경로 B] 사용</text>
+  </g>
+
+  <!-- ========================================================================================= -->
+  <!-- BOTTOM LANE: DATA PLANE (VNet Injection -> DNS -> Multi-Hub FW -> Private Endpoint) -->
+  <!-- ========================================================================================= -->
+  <rect x="36" y="345" width="1678" height="485" rx="8" fill="#ffffff" stroke="#0078d4" stroke-width="2.2" stroke-dasharray="7,4"/>
+  <rect x="52" y="332" width="690" height="26" fill="#ffffff"/>
+  <text x="60" y="350" fill="#0078d4" font-size="15" font-weight="800">경로 B. 데이터 플레인 (Data Plane — VNet 주입 · 사설 DNS · Multi-Hub 방화벽 UDR · 파드 조회 및 복구 검증)</text>
+
+  <!-- Step 1: SRE Agent VNet Subnet -->
+  <g transform="translate(60, 460)">
+    <rect x="0" y="16" width="310" height="240" fill="#f0f9ff" stroke="#0078d4" stroke-width="2" stroke-dasharray="6,3"/>
+    <rect x="8" y="0" width="250" height="28" fill="#ffffff"/>
+    <use href="#vnet-icon" x="10" y="2"/>
+    <text x="46" y="14" fill="#111827" font-size="13.5" font-weight="700">vnet-sre-agent-hub</text>
+    <text x="46" y="28" fill="#0078d4" font-size="11" font-weight="700">snet-sre-agent-sandbox (10.42.4.0/24)</text>
+
+    <use href="#sre-icon" x="18" y="46"/>
+    <text x="64" y="60" fill="#0f172a" font-size="13.5" font-weight="700">시작점 IP: 10.42.4.x (사설 IP)</text>
+    <text x="64" y="78" fill="#0078d4" font-size="12" font-weight="700">도구: RunKubectlReadCommand</text>
+    <rect x="16" y="94" width="278" height="46" rx="4" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="26" y="112" fill="#dc2626" font-size="11.5" font-weight="700">설정: [ ] AKS API 서버 체크 해제</text>
+    <text x="26" y="130" fill="#334155" font-size="11">(체크 해제 시 이 서브넷에서 출발함)</text>
+
+    <rect x="16" y="150" width="278" height="46" rx="4" fill="#fef2f2" stroke="#fca5a5"/>
+    <text x="26" y="168" fill="#991b1b" font-size="11.5" font-weight="700">매개체: Route Table (rt-sre-agent-sandbox)</text>
+    <text x="26" y="186" fill="#7f1d1d" font-size="11">• 10.52/16, 10.60/16 ──► 10.51.250.4 (FW #1)</text>
+
+    <text x="16" y="220" fill="#059669" font-size="11.5" font-weight="700">• 권한: UAMI (RBAC Reader) 또는 사용자 OBO</text>
+  </g>
+
+  <!-- Step 0 (Above Step 1): Private DNS Resolution -->
+  <g transform="translate(60, 368)">
+    <rect x="0" y="0" width="310" height="68" rx="6" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.6"/>
+    <use href="#dns-icon" x="12" y="14"/>
+    <text x="60" y="24" fill="#5b21b6" font-size="12.5" font-weight="700">① Private DNS 해석 (VNet Link / Resolver)</text>
+    <text x="60" y="42" fill="#334155" font-size="11">• 질의: aks-priv-10...azmk8s.io</text>
+    <text x="60" y="58" fill="#5b21b6" font-size="11" font-weight="700">• 응답: 10.60.10.4 (Spoke 10 PE 사설 IP)</text>
+  </g>
+  <line x1="215" y1="436" x2="215" y2="472" stroke="#7c3aed" stroke-width="2.5" stroke-dasharray="4,3" marker-end="url(#arrPurple)"/>
+
+  <!-- Arrow Hop 1: SRE Subnet -> Hub 1 FW -->
+  <line x1="370" y1="585" x2="495" y2="585" stroke="#dc2626" stroke-width="3.5" marker-end="url(#arrRed)"/>
+  <rect x="382" y="552" width="102" height="24" rx="4" fill="#dc2626"/>
+  <text x="433" y="568" fill="#ffffff" font-size="11.5" font-weight="700" text-anchor="middle">② Hop 1 (UDR)</text>
+  <text x="433" y="606" fill="#475569" font-size="11" text-anchor="middle">peer-sre-to-hub01</text>
+
+  <!-- Step 2: Hub #1 Firewall -->
+  <g transform="translate(505, 475)">
+    <rect x="0" y="18" width="230" height="205" fill="#ffffff" stroke="#0078d4" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="8" y="0" width="190" height="30" fill="#ffffff"/>
+    <use href="#vhub-icon" x="10" y="2"/>
+    <text x="44" y="14" fill="#111827" font-size="13.5" font-weight="700">vnet-fleet-hub-01</text>
+    <text x="44" y="28" fill="#4b5563" font-size="11">(10.51.0.0/16 · 관제 허브)</text>
+    <use href="#firewall-icon" x="75" y="45"/>
+    <text x="115" y="112" fill="#111827" font-size="13.5" font-weight="700" text-anchor="middle">fw-hub-01 (10.51.250.4)</text>
+    <text x="115" y="130" fill="#059669" font-size="11" font-weight="700" text-anchor="middle">• NIC: IP Forwarding = True</text>
+    <rect x="14" y="142" width="202" height="66" rx="4" fill="#fef2f2" stroke="#fca5a5"/>
+    <text x="24" y="160" fill="#991b1b" font-size="11.5" font-weight="700">매개체: rt-fleet-hub-01-fw</text>
+    <text x="24" y="178" fill="#7f1d1d" font-size="10.8">• 10.52.x.x ──► 10.52.250.4 (FW #2)</text>
+    <text x="24" y="194" fill="#7f1d1d" font-size="10.8">• 10.60.x.x ──► 10.53.250.4 (FW #3)</text>
+  </g>
+
+  <!-- Arrow Hop 2: Hub 1 FW -> Hub 2 / Hub 3 FW -->
+  <line x1="735" y1="585" x2="875" y2="585" stroke="#dc2626" stroke-width="3.5" marker-end="url(#arrRed)"/>
+  <rect x="750" y="552" width="112" height="24" rx="4" fill="#dc2626"/>
+  <text x="806" y="568" fill="#ffffff" font-size="11.5" font-weight="700" text-anchor="middle">③ Hop 2 (Mesh)</text>
+  <text x="806" y="606" fill="#475569" font-size="11" text-anchor="middle">Full-Mesh Peering</text>
+  <text x="806" y="622" fill="#475569" font-size="10.5" text-anchor="middle">(또는 vWAN Routing Intent)</text>
+
+  <!-- Step 3: Hub #2 / Hub #3 Firewall -->
+  <g transform="translate(885, 475)">
+    <rect x="0" y="18" width="240" height="205" fill="#ffffff" stroke="#0078d4" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="8" y="0" width="215" height="30" fill="#ffffff"/>
+    <use href="#vhub-icon" x="10" y="2"/>
+    <text x="44" y="14" fill="#111827" font-size="13.5" font-weight="700">Hub #2 / Hub #3 (또는 vHub)</text>
+    <text x="44" y="28" fill="#4b5563" font-size="11">(10.52.0.0/16 · 10.53.0.0/16)</text>
+    <use href="#firewall-icon" x="80" y="45"/>
+    <text x="120" y="112" fill="#111827" font-size="13.5" font-weight="700" text-anchor="middle">fw-hub-02 / 03</text>
+    <text x="120" y="130" fill="#334155" font-size="11.5" text-anchor="middle">(10.52.250.4 / 10.53.250.4)</text>
+    <rect x="14" y="142" width="212" height="66" rx="4" fill="#ecfdf5" stroke="#6ee7b7"/>
+    <text x="24" y="160" fill="#065f46" font-size="11.5" font-weight="700">방화벽 허용 규칙 (Network Rule)</text>
+    <text x="24" y="178" fill="#047857" font-size="10.8">• Allow TCP 443 (10.42.4.0/24 ➔ AKS)</text>
+    <text x="24" y="194" fill="#dc2626" font-size="10.8" font-weight="700">• TLS Inspection: Bypass 필수!</text>
+  </g>
+
+  <!-- Arrow Hop 3: Hub 2/3 FW -> Spoke AKS Private Endpoint -->
+  <line x1="1125" y1="585" x2="1265" y2="585" stroke="#059669" stroke-width="3.5" marker-end="url(#arrGreen)"/>
+  <rect x="1140" y="552" width="112" height="24" rx="4" fill="#059669"/>
+  <text x="1196" y="568" fill="#ffffff" font-size="11.5" font-weight="700" text-anchor="middle">④ Hop 3 (443)</text>
+  <text x="1196" y="606" fill="#475569" font-size="11" text-anchor="middle">peer-hub03-to-spoke</text>
+
+  <!-- Step 4: Spoke VNet & Private AKS Cluster -->
+  <g transform="translate(1275, 450)">
+    <rect x="0" y="16" width="410" height="255" fill="#ffffff" stroke="#0078d4" stroke-width="2.2" stroke-dasharray="6,3"/>
+    <rect x="8" y="0" width="330" height="28" fill="#ffffff"/>
+    <use href="#vnet-icon" x="10" y="2"/>
+    <text x="46" y="14" fill="#111827" font-size="13.5" font-weight="700">Spoke VNet (vnet-fleet-spoke-06 ~ 10)</text>
+    <text x="46" y="28" fill="#4b5563" font-size="11">(Subnet: snet-nodes · 10.60.6.0/25 ~ 10.60.10.0/25)</text>
+
+    <!-- Private Endpoint Box -->
+    <rect x="20" y="46" width="370" height="64" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.8"/>
+    <text x="34" y="68" fill="#065f46" font-size="13" font-weight="800">매개체: Private Endpoint (이름: kube-apiserver)</text>
+    <text x="34" y="88" fill="#047857" font-size="11.5" font-weight="600">• 사설 IP: 10.60.6.4 ~ 10.60.10.4 (MC_* 리소스 그룹 내 자동 생성)</text>
+    <text x="34" y="104" fill="#1e40af" font-size="11" font-weight="700">• 서브넷 설정: privateEndpointNetworkPolicies = Enabled</text>
+
+    <!-- Private Link Tunnel to K8s Master -->
+    <rect x="20" y="124" width="370" height="120" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.8"/>
+    <use href="#aks-icon" x="32" y="142"/>
+    <text x="78" y="152" fill="#1e3a8a" font-size="14" font-weight="800">Private AKS Cluster (aks-priv-01 ~ N)</text>
+    <text x="78" y="172" fill="#334155" font-size="11.5">• 파드/노드/PDB/이벤트 실시간 조회 (kubectl get/describe)</text>
+    <text x="78" y="192" fill="#059669" font-size="11.5" font-weight="700">• 원인 특정 · 권장 조치안 제시 · 복구 상태 검증</text>
+    <text x="78" y="212" fill="#7c3aed" font-size="11.5" font-weight="700">• 대칭 복귀 UDR: rt-fleet-spoke-06-to-10-aks ──► FW #3 ──► FW #1</text>
+  </g>
+</svg>
