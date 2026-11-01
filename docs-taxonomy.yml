@@ -51,6 +51,7 @@ services:
   microsoft-foundry: Microsoft Foundry
 
 technologies:
+  agents-md: AGENTS.md
   airflow: Apache Airflow
   azure-cli: Azure CLI
   bicep: Bicep
