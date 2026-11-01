@@ -40,9 +40,13 @@ podinfo_available() { # podinfo_available <n>: 사용 가능한 podinfo replica�
 }
 wait_until() { # wait_until <설명> <제한 초> <명령...>
   # 절대 마감 시각을 두고 조건 실행 전후에 확인합니다. 마감 뒤에는 조건을 새로 실행하지 않습니다.
+  # 조건이 성공해도 마감을 넘겨 끝났으면 시간 초과로 처리합니다.
   local what=$1 limit=$2; shift 2; local deadline=$(( SECONDS + limit )) rest
   while (( SECONDS < deadline )); do
-    "$@" && return 0
+    if "$@"; then
+      (( SECONDS <= deadline )) && return 0
+      break
+    fi
     rest=$(( deadline - SECONDS ))
     (( rest > 0 )) || break
     sleep $(( rest < 10 ? rest : 10 ))

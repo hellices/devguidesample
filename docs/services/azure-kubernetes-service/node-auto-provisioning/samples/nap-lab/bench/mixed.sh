@@ -15,6 +15,18 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 if [[ $SCENARIO == *[$',\r\n"']* ]]; then
   echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
+# nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
+# key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
+split_selector() { # split_selector <key=value>: 성공하면 SEL_KEY, SEL_VAL을 설정
+  local name='[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?' dns='[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?'
+  local key=${1%%=*} val=${1#*=}
+  [[ $1 == *=* && $val != *=* && $key =~ ^(($dns)(\.$dns)*/)?$name$ && $val =~ ^($name)?$ ]] || return 1
+  local prefix=${key%/*}
+  [[ $key != */* || ${#prefix} -le 253 ]] || return 1
+  SEL_KEY=$key SEL_VAL=$val
+}
+split_selector "$SELECTOR" || {
+  echo "nodeSelector는 Kubernetes label 문법의 key=value여야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2; }
 PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_LOCATION이 필요합니다}.json}
 [[ -f $PRICES ]] || { echo "가격 파일이 없습니다: $PRICES (bench/prices.py로 생성)" >&2; exit 1; }
 k() { kubectl --context "$CTX" "$@"; }
@@ -26,7 +38,7 @@ ready_pods() {
 }
 node_objects() { # Ready 여부와 관계없는 node 객체 수. 조회 실패는 0개가 아니라 nonzero로 반환합니다.
   local out
-  out=$(k get nodes -l "$SELECTOR" -o name) || return 1
+  out=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o name) || return 1
   grep -c . <<<"$out" || true
 }
 scale_zero() { # 모든 Deployment를 시도하고 하나라도 실패하면 nonzero
@@ -41,7 +53,7 @@ trap 'exit 143' TERM
 
 k apply -f "$HERE/../manifests/mixed.yaml" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
-sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]"
+sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]"
 for d in big mem small; do k -n mixed patch deployment $d --type json -p "$sel" >/dev/null; done
 
 for run in $(seq 1 "$RUNS"); do
@@ -70,6 +82,6 @@ for run in $(seq 1 "$RUNS"); do
   k get nodes -o json > "$dir/nodes.json"
   k get events -n mixed -o json > "$dir/events.json"
   # 생성되지 않은 Pod도 미완료로 보도록 기대 replica 수를 넘깁니다.
-  python3 "$HERE/analyze_mixed.py" "$dir" "$SCENARIO" "$run" "$SELECTOR" "$PRICES" "$BIG" "$MEM" "$SMALL"
+  python3 "$HERE/analyze_mixed.py" "$dir" "$SCENARIO" "$run" "${SEL_KEY}=${SEL_VAL}" "$PRICES" "$BIG" "$MEM" "$SMALL"
   scale_zero
 done

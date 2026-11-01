@@ -306,7 +306,8 @@ CAS와 NAP를 같은 클러스터에서 함께 쓰려면 마이그레이션용
 
 Windows 지원은 2026-10-25 AKS 릴리스와 AKSNodeClass 문서에 preview로 추가됐지만, NAP 개요의
 제한 사항에는 아직 "Windows node pools aren't supported"가 남아 있습니다. preview는 SLA 대상이
-아니므로 Windows 노드를 프로덕션에서 운영한다면 해당 풀은 CAS로 둡니다.
+아니므로 Windows 노드를 프로덕션에서 운영한다면 클러스터 전체를 CAS로 유지합니다. Windows 풀만
+CAS로 두고 Linux를 NAP로 운영하는 구성은 위 feature flag가 필요한 전환 기간용 경로입니다.
 
 기존 CAS 클러스터의 전환 절차와, 위 조건 때문에 전환할 수 없을 때의 재생성 전략은
 [Cluster Autoscaler에서 NAP로 전환: 같은 클러스터 전환, 동시 운영, 새 클러스터 이전](cluster-autoscaler-migration/index.md)에서

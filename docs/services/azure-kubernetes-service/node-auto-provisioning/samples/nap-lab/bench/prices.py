@@ -10,8 +10,14 @@ import urllib.request
 
 region, out = sys.argv[1], sys.argv[2]
 needle = sys.argv[3] if len(sys.argv) > 3 else "_v7"
-flt = (f"serviceName eq 'Virtual Machines' and armRegionName eq '{region}' "
-       f"and priceType eq 'Consumption' and contains(armSkuName, '{needle}')")
+
+
+def lit(v):  # OData 문자열 리터럴: 작은따옴표는 두 번 써서 이스케이프합니다.
+    return "'" + v.replace("'", "''") + "'"
+
+
+flt = (f"serviceName eq 'Virtual Machines' and armRegionName eq {lit(region)} "
+       f"and priceType eq 'Consumption' and contains(armSkuName, {lit(needle)})")
 url = "https://prices.azure.com/api/retail/prices?" + urllib.parse.urlencode({"$filter": flt})
 prices = {}
 while url:

@@ -4,7 +4,8 @@
 decision_s           확장 결정: CAS ScaledUpGroup('setting group') 또는 TriggeredScaleUp 중 이른 시각 / NAP NodeClaim 생성
                      CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 inflate Pod의 TriggeredScaleUp과
                      ScaledUpGroup만 봅니다. 노드를 만들지 못한 그룹(예: quota로 실패한 선호 풀)은 제외합니다.
-                     NAP는 selector label·대상 노드·대상 노드의 NodePool 중 하나와 맞는 NodeClaim만 봅니다.
+                     NAP는 이번 실행에 생성되어 대상 노드에 연결됐거나, 노드 없이 inflate Pod의
+                     Nominated 이벤트(nodeclaim/<이름>)가 가리킨 NodeClaim만 봅니다.
                      이전 실행 이벤트에 합쳐진 반복 이벤트는 lastTimestamp(이번 실행 발생 시각의 상한)를 씁니다.
 vm_launched_s        NAP NodeClaim Launched(VM 생성 API 완료). CAS는 측정하지 않음
 first_node_ready_s   첫 워크로드 노드 Ready
@@ -22,6 +23,7 @@ from k8sutil import event_time, ts
 VMSS = re.compile(r"virtualMachineScaleSets/([^/]+)", re.I)
 SETTING = re.compile(r"Scale-up: setting group (\S+?):? ")
 TRIGGERED = re.compile(r"\{(\S+?) \d+->")
+NOMINATED = re.compile(r"nodeclaim/([^\s,]+)")
 
 
 def cond(obj, ctype):
@@ -44,16 +46,23 @@ def main():
     pods = [p for p in load("pods.json") if p["metadata"].get("labels", {}).get("app") == "inflate"]
     nodes = [n for n in load("nodes.json") if n["metadata"].get("labels", {}).get(key) == val]
     node_names = {n["metadata"]["name"] for n in nodes}
-    node_pools = {p for n in nodes if (p := n["metadata"].get("labels", {}).get("karpenter.sh/nodepool"))}
+    events = load("events.json")
+    pod_ids = {p["metadata"].get("uid") for p in pods} - {None} | {p["metadata"]["name"] for p in pods}
 
-    # 다른 워크로드의 NodeClaim은 제외합니다. 실패한 NodeClaim은 노드가 없으므로 label이나 NodePool로 판별합니다.
+    def our_pod(o):
+        return o.get("kind") == "Pod" and o.get("namespace") == "bench" and (
+            o.get("uid") in pod_ids or o.get("name") in pod_ids)
+
+    # 같은 NodePool의 다른 워크로드 NodeClaim은 제외합니다. 노드가 있으면 대상 노드인지로,
+    # 노드가 없으면(실패·생성 중) inflate Pod를 그 NodeClaim에 지정한 Karpenter Nominated 이벤트로 판별합니다.
+    nominated = {n for e in events if e.get("reason") == "Nominated" and our_pod(e["involvedObject"])
+                 for n in NOMINATED.findall(e.get("message") or "")}
+
     def ours(c):
-        labels = c["metadata"].get("labels", {})
-        return (labels.get(key) == val or c.get("status", {}).get("nodeName") in node_names
-                or labels.get("karpenter.sh/nodepool") in node_pools)
+        node = c.get("status", {}).get("nodeName")
+        return node in node_names if node else c["metadata"]["name"] in nominated
 
     claims = [c for c in load("nodeclaims.json") if ts(c["metadata"]["creationTimestamp"]) >= t0 and ours(c)]
-    events = load("events.json")
 
     ready_nodes = []
     for n in nodes:
@@ -70,12 +79,6 @@ def main():
         return event_time(e, t0)
 
     # CAS: 대상 노드 그룹을 가리킨 inflate Pod의 TriggeredScaleUp과 ScaledUpGroup만 확장 결정으로 봅니다.
-    pod_ids = {p["metadata"].get("uid") for p in pods} - {None} | {p["metadata"]["name"] for p in pods}
-
-    def our_pod(o):
-        return o.get("kind") == "Pod" and o.get("namespace") == "bench" and (
-            o.get("uid") in pod_ids or o.get("name") in pod_ids)
-
     # 노드를 만든 그룹은 대상 노드 providerID의 VMSS로만 정합니다. 실패한 그룹을 가리킨 이벤트는 제외합니다.
     groups = {m.group(1).lower() for n in nodes if (m := VMSS.search(n.get("spec", {}).get("providerID") or ""))}
 

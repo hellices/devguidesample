@@ -14,6 +14,18 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 if [[ $SCENARIO == *[$',\r\n"']* ]]; then
   echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
+# nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
+# key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
+split_selector() { # split_selector <key=value>: 성공하면 SEL_KEY, SEL_VAL을 설정
+  local name='[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?' dns='[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?'
+  local key=${1%%=*} val=${1#*=}
+  [[ $1 == *=* && $val != *=* && $key =~ ^(($dns)(\.$dns)*/)?$name$ && $val =~ ^($name)?$ ]] || return 1
+  local prefix=${key%/*}
+  [[ $key != */* || ${#prefix} -le 253 ]] || return 1
+  SEL_KEY=$key SEL_VAL=$val
+}
+split_selector "$SELECTOR" || {
+  echo "nodeSelector는 Kubernetes label 문법의 key=value여야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2; }
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 cleanup() { # best-effort: 실패해도 원래 종료 상태를 유지합니다.
@@ -33,7 +45,7 @@ placeholders_replaced() { # 선점 전 placeholder($old_uids)가 모두 사라�
   for uid in $old_uids; do grep -q "^$uid " <<<"$out" && return 1; done
   [[ $(grep -c ' True$' <<<"$out" || true) -ge 3 ]]
 }
-sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]"
+sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]"
 
 # 첫 리소스 변경 전에 등록해 apply·patch 부분 실패도 정리합니다.
 trap cleanup EXIT
@@ -56,7 +68,7 @@ for run in $(seq 1 "$RUNS"); do
   stable=0 deadline=$(( $(date +%s) + TIMEOUT ))
   until (( stable >= 3 )); do
     (( $(date +%s) < deadline )) || { log "run $run: timeout waiting for placeholders on a single node"; exit 1; }
-    n=$(k get nodes -l "$SELECTOR" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true)
+    n=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true)
     if [[ $n == 1 ]]; then stable=$((stable + 1)); else stable=0; fi
     sleep 10
   done

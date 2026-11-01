@@ -3,7 +3,7 @@
 
 사용법: analyze_mixed.py <run-dir> <scenario> <run> <nodeSelector key=value> <prices.json> [big mem small]
   big mem small: 워크로드별 기대 replica 수. 생략하면 pods.json에 있는 kind별 Pod 수를 씁니다.
-  all_ready_s는 kind별 Ready Pod 수가 모두 기대 수와 같을 때만 기록합니다.
+  all_ready_s는 kind별 Ready Pod 수가 모두 기대 수와 같을 때만 기록합니다. 기대 수가 모두 0이고 Pod가 없으면 0입니다.
 출력: scenario,run,ready_big,ready_mem,ready_small,all_ready_s,nodes,skus,vcpu_alloc,mem_alloc_gib,
       cpu_request_ratio,mem_request_ratio,usd_per_hour
 usd_per_hour는 노드 SKU 중 하나라도 가격 파일에 없으면 unknown입니다.
@@ -51,6 +51,9 @@ for p in pods:
         last = t if last is None or t > last else last
 # 아직 생성되지 않은 Pod가 있으면 스냅샷의 Pod가 모두 Ready여도 완료로 보지 않습니다.
 all_ready = ready == expected
+# 기대 수가 모두 0이고 Pod도 없으면 기다릴 Pod가 없으므로 0초에 완료한 것으로 봅니다.
+if all_ready and last is None and not pods and not any(expected.values()):
+    last = t0
 
 skus, cpu, mem, cost, unpriced = {}, 0.0, 0.0, 0.0, set()
 for n in nodes:

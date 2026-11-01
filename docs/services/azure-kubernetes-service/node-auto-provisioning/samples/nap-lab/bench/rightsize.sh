@@ -18,13 +18,25 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 if [[ $SCENARIO == *[$',\r\n"']* ]]; then
   echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
+# nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
+# key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
+split_selector() { # split_selector <key=value>: 성공하면 SEL_KEY, SEL_VAL을 설정
+  local name='[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?' dns='[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?'
+  local key=${1%%=*} val=${1#*=}
+  [[ $1 == *=* && $val != *=* && $key =~ ^(($dns)(\.$dns)*/)?$name$ && $val =~ ^($name)?$ ]] || return 1
+  local prefix=${key%/*}
+  [[ $key != */* || ${#prefix} -le 253 ]] || return 1
+  SEL_KEY=$key SEL_VAL=$val
+}
+split_selector "$SELECTOR" || {
+  echo "nodeSelector는 Kubernetes label 문법의 key=value여야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2; }
 PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_LOCATION이 필요합니다}.json}
 [[ -f $PRICES ]] || { echo "가격 파일이 없습니다: $PRICES (bench/prices.py로 생성)" >&2; exit 1; }
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 pods() { k -n bench get pods -l app=inflate -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort; }
 node_state() { # "노드수 Ready노드수 잔류객체수 vCPU합 시간당비용 SKU목록"
-  k get nodes -l "$SELECTOR" -o json | python3 -c "
+  k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o json | python3 -c "
 import json,sys
 sys.path.insert(0, sys.argv[2])
 from k8sutil import qty, vm_removed
@@ -49,7 +61,7 @@ trap 'exit 143' TERM
 k -n bench patch deployment inflate --type strategic -p \
   '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"1","memory":"1Gi"}}}]}}}}' >/dev/null
 k -n bench patch deployment inflate --type json -p \
-  "[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]" >/dev/null
+  "[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]" >/dev/null
 k -n bench scale deployment inflate --replicas "$FROM" >/dev/null
 k -n bench rollout status deployment/inflate --timeout=20m >/dev/null
 sleep 60

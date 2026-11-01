@@ -22,15 +22,25 @@ OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
 if [[ $SCENARIO == *[$',\r\n"']* ]]; then
   echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
-if [[ -n $SELECTOR && ! $SELECTOR =~ ^[^=]+=.*$ ]]; then
-  echo "nodeSelector는 key=value 형식이어야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2
+# nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
+# key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
+split_selector() { # split_selector <key=value>: 성공하면 SEL_KEY, SEL_VAL을 설정
+  local name='[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?' dns='[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?'
+  local key=${1%%=*} val=${1#*=}
+  [[ $1 == *=* && $val != *=* && $key =~ ^(($dns)(\.$dns)*/)?$name$ && $val =~ ^($name)?$ ]] || return 1
+  local prefix=${key%/*}
+  [[ $key != */* || ${#prefix} -le 253 ]] || return 1
+  SEL_KEY=$key SEL_VAL=$val
+}
+if [[ -n $SELECTOR ]] && ! split_selector "$SELECTOR"; then
+  echo "nodeSelector는 Kubernetes label 문법의 key=value여야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2
 fi
 # WAVES 합계가 replicas와 다르면 측정 부하와 완료 조건이 어긋나므로 리소스를 바꾸기 전에 실패합니다.
 if [[ -n ${WAVES:-} ]]; then
   sum=0
   for w in $WAVES; do
     [[ $w =~ ^[0-9]+$ ]] || { echo "WAVES는 정수 목록이어야 합니다: $WAVES" >&2; exit 1; }
-    sum=$((sum + w))
+    sum=$((sum + 10#$w))   # 앞자리 0(예: 08)을 8진수로 해석하지 않도록 10진수로 계산합니다.
   done
   [[ $sum == "$REPLICAS" ]] || { echo "WAVES 합계($sum)가 replicas($REPLICAS)와 다릅니다: $WAVES" >&2; exit 1; }
 fi
@@ -38,7 +48,8 @@ k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-NODE_SEL=${SELECTOR:-kubernetes.azure.com/mode=user}
+NODE_SEL=kubernetes.azure.com/mode=user
+[[ -z $SELECTOR ]] || NODE_SEL="${SEL_KEY}=${SEL_VAL}"
 ready_nodes() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
   local out
   out=$(k get nodes -l "$NODE_SEL" \
@@ -77,7 +88,7 @@ k -n bench patch deployment inflate --type strategic -p \
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
 if [[ -n $SELECTOR ]]; then
   k -n bench patch deployment inflate --type json -p \
-    "[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]" >/dev/null
+    "[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]" >/dev/null
 fi
 
 # pipefail로 명령 안의 조회 실패(예: kubectl | wc -l)를 실패로 전파하고, 성공한 출력만 0과 비교합니다.
@@ -97,7 +108,7 @@ for run in $(seq 1 "$RUNS"); do
   if [[ -n ${WAVES:-} ]]; then
     total=0; : > "$dir/waves"
     for w in $WAVES; do
-      total=$((total + w)); echo "$(now) $total" >> "$dir/waves"
+      total=$((total + 10#$w)); echo "$(now) $total" >> "$dir/waves"
       k -n bench scale deployment inflate --replicas "$total" >/dev/null
       if [[ $total -lt $REPLICAS ]]; then sleep "$WAVE_INTERVAL"; fi
     done

@@ -185,9 +185,8 @@ HPA controller가 맡습니다.
   아닙니다.
 - 같은 workload에 HPA와 `ScaledObject`를 함께 두지 않습니다. 같은 대상을 가리키는 HPA가
   먼저 있으면 KEDA admission webhook이 `ScaledObject`를 거부합니다(KEDA 2.19
-  `verifyHpas`). 다만 그 HPA에 `validations.keda.sh/hpa-ownership: "false"` annotation이
-  있거나 webhook이 동작하지 않으면 거부되지 않으므로 이 검사에 기대지 말고 적용 전에 직접
-  확인합니다. 나중에 HPA를 만들면 둘이 replica 수를 번갈아 바꿉니다. 기존 HPA에서 옮길 때는 HPA를 지우거나
+  `verifyHpas`). 이 검증을 끄는 annotation이 있고 webhook이 동작하지 않는 환경도 있으므로,
+  검증에 기대지 말고 적용 전에 같은 대상을 가리키는 HPA가 없는지 직접 확인합니다. 나중에 HPA를 만들면 둘이 replica 수를 번갈아 바꿉니다. 기존 HPA에서 옮길 때는 HPA를 지우거나
   `scaledobject.keda.sh/transfer-hpa-ownership: "true"` annotation과
   `advanced.horizontalPodAutoscalerConfig.name`(기존 HPA 이름)으로 소유권을 넘깁니다.
 - AKS 1.36의 기본 HPA는 replica 0을 지원하지 않습니다(`HPAScaleToZero`

@@ -8,6 +8,9 @@
 # migration은 CAS 클러스터에 NAP를 켜므로 CAS 실험을 모두 끝낸 뒤 마지막에 실행합니다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+list=${EXPERIMENT:-}
+# azd up도 이 hook을 실행하므로 값이 없으면 환경 값 확인·Azure 호출 전에 안내만 하고 끝냅니다.
+[[ -n $list ]] || { echo "실행할 실험이 없습니다. 예: azd env set EXPERIMENT scale-out && azd hooks run postdeploy"; exit 0; }
 : "${AZURE_RESOURCE_GROUP:?}" "${CAS_CLUSTER_NAME:?}" "${NAP_CLUSTER_NAME:?}" "${AZURE_LOCATION:?}" "${AZURE_ENV_NAME:?}"
 RG=$AZURE_RESOURCE_GROUP CAS=$CAS_CLUSTER_NAME NAP=$NAP_CLUSTER_NAME LOC=$AZURE_LOCATION
 RUNS=${RUNS:-3}
@@ -218,9 +221,6 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
   drift_round "r2-$(date +%s)" drift-prestop-10s | csv drift.csv round,start,end,requests,failed
 }
 
-list=${EXPERIMENT:-}
-# azd up도 이 hook을 실행하므로 값이 없으면 안내만 하고 끝냅니다.
-[[ -n $list ]] || { echo "실행할 실험이 없습니다. 예: azd env set EXPERIMENT scale-out && azd hooks run postdeploy"; exit 0; }
 for e in ${list//,/ }; do
   fn=exp_${e//-/_}
   declare -F "$fn" >/dev/null || { echo "알 수 없는 실험: $e" >&2; exit 1; }

@@ -62,8 +62,8 @@ azd hooks run postdeploy                      # 결과: out/<환경 이름>/
 | `azure-monitor-agc` | AGC `TotalRequests` 기준 확장 |
 
 한 Deployment에는 `ScaledObject`를 하나만 두고, 같은 Deployment를 대상으로 하는 기존 HPA는
-먼저 지웁니다. KEDA admission webhook은 기존 HPA가 있으면 보통 `ScaledObject`를 거부하지만,
-HPA에 `validations.keda.sh/hpa-ownership: "false"` annotation이 있으면 검사를 건너뜁니다.
+먼저 지웁니다. KEDA admission webhook은 기존 HPA가 있으면 `ScaledObject`를 거부하지만, 이
+검증에 기대지 않고 실습 전에 HPA가 없는지 확인합니다.
 
 ## 결과 파일
 

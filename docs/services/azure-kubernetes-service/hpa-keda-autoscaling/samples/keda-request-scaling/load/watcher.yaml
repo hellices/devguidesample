@@ -85,7 +85,13 @@ spec:
               retry() { local i; for i in 1 2 3 4 5; do "$@" && return 0; sleep 10; done; return 1; }
               # 최소 이미지라 kubectl 다운로드 전에 ca-certificates와 curl을 설치합니다.
               retry tdnf -q -y install ca-certificates curl >/dev/null
-              retry curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+              # 시스템 노드의 CPU 아키텍처(amd64·arm64)에 맞는 kubectl을 받습니다.
+              case $(uname -m) in
+                x86_64) ARCH=amd64 ;;
+                aarch64) ARCH=arm64 ;;
+                *) echo "지원하지 않는 아키텍처: $(uname -m)" >&2; exit 1 ;;
+              esac
+              retry curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
               chmod +x /tmp/kubectl
               PATH=/tmp:$PATH exec bash /scripts/watch-replicas.sh
           env:
