@@ -81,11 +81,11 @@ OUT=./out ./bench/bench.sh "$NAP_CLUSTER_NAME" nap-burst 20 3 bench=fixed
 
 | 열 | 의미 |
 |---|---|
-| `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성. CAS는 `bench` inflate Pod의 `TriggeredScaleUp`과 대상 노드 그룹(또는 그 이벤트가 가리킨 그룹)의 `ScaledUpGroup`만, NAP는 selector·대상 노드·대상 NodePool과 맞는 NodeClaim만 봄. 이전 실행 이벤트에 합쳐진 반복 이벤트는 `lastTimestamp`(이번 실행 발생 시각의 상한)를 씀 |
+| `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성. CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 `bench` inflate Pod의 `TriggeredScaleUp`과 `ScaledUpGroup`만, NAP는 selector·대상 노드·대상 NodePool과 맞는 NodeClaim만 봄. 이전 실행 이벤트에 합쳐진 반복 이벤트는 `lastTimestamp`(이번 실행 발생 시각의 상한)를 씀 |
 | `vm_launched_s` | NAP NodeClaim `Launched=True` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
 | `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니면 빈 값 |
-| `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값 |
+| `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값. `SCALE_IN_COUNT` timeout이면 그 실행 행을 남긴 뒤 실패로 종료하고, 각 실행은 그 명령이 `0`을 출력해야 시작 |
 | `wave_latency_s` | wave별 추가 → 해당 wave Pod 모두 Ready |
 
 CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler` 범주를 Log Analytics로

@@ -121,8 +121,10 @@ done
 rel=$(date +%s); log "released; Ddsv7 usage $cur"
 found=0
 while (( $(date +%s) - rel <= 1200 )); do
-  r=$(probe); chosen=${r#* }
-  echo "released,$(( ${r%% *} - rel )),$(usage),$chosen,"
+  r=$(probe); chosen=${r#* }; el=$(( ${r%% *} - rel ))
+  echo "released,$el,$(usage),$chosen,"
+  # 선택을 읽은 시각이 1200초를 넘었으면 pref64여도 기한 안 복귀로 보지 않고 timeout(censored)으로 남깁니다.
+  (( el <= 1200 )) || break
   [[ $chosen == *pref64* ]] && { found=1; break; }
   sleep 45
 done

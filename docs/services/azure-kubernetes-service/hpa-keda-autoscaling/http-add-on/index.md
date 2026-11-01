@@ -152,7 +152,9 @@ AKS 1.36.5, HTTP Add-on 0.16.0에서 `PATTERN=http-add-on-cold-start`로 측정�
 
 ## 성공 기준: 첫 요청 성공과 부하 중 실패율 0%
 
-- `kubectl -n demo get scaledobject podinfo`: `READY=True`, 유휴 시 replica 0
+- `kubectl -n demo get scaledobject podinfo`가 `READY=True`이고, 유휴 상태에서
+  `kubectl -n demo get deployment podinfo -o jsonpath='{.spec.replicas}'`가 `0`. ScaledObject
+  출력의 `MIN`은 설정값이므로 cooldown이 끝나 실제 replica가 0이 됐는지는 Deployment에서 확인합니다.
 - 0개 상태의 첫 요청이 200으로 응답하고 cold start header가 `true`
 - `minReplicaCount: 1` 부하에서 실패율 0%, replica가 `ceil(RPS/50)` 근처에 머묾
 

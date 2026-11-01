@@ -8,7 +8,7 @@ set -uo pipefail
 NS=${NS:-demo} DEPLOY=${DEPLOY:-podinfo} HPA=${HPA:-keda-hpa-$DEPLOY} DURATION=${DURATION:-1200} INTERVAL=${INTERVAL:-5}
 k() { kubectl ${CTX:+--context "$CTX"} "$@"; }
 echo "epoch,desired,ready,hpa_metric,user_nodes"
-start=$(date +%s) i=0
+start=$(date +%s)
 while (( $(date +%s) - start < DURATION )); do
   now=$(date +%s)
   dep=$(k -n "$NS" get deploy "$DEPLOY" -o jsonpath='{.spec.replicas},{.status.readyReplicas}' 2>/dev/null) || dep=","
@@ -22,6 +22,7 @@ while (( $(date +%s) - start < DURATION )); do
   fi
   echo "$now,$desired,$ready,$metric,$nodes"
   # 조회 시간과 관계없이 start + i×INTERVAL 시각에 다음 기록을 시작합니다.
-  i=$((i + 1)); wait_s=$(( start + i * INTERVAL - $(date +%s) ))
+  # 한 번의 기록이 INTERVAL보다 오래 걸리면 지나간 시각은 건너뜁니다.
+  t=$(date +%s); i=$(( (t - start) / INTERVAL + 1 )); wait_s=$(( start + i * INTERVAL - t ))
   if (( wait_s > 0 )); then sleep "$wait_s"; fi
 done

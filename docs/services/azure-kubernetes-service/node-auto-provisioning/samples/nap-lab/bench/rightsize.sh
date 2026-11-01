@@ -46,17 +46,21 @@ k -n bench scale deployment inflate --replicas "$FROM" >/dev/null
 k -n bench rollout status deployment/inflate --timeout=20m >/dev/null
 sleep 60
 echo "elapsed_s,nodes,vcpu,usd_per_hour,skus,pods,moved_pods,ready_nodes,removed_nodes"
-read -r n ready gone c usd skus < <(node_state); echo "-60,$n,$c,$usd,$skus,$FROM,0,$ready,$gone"
-
 # 축소 직전 Pod 집합을 기준으로 삼아, 축소 직후 재생성된 Pod도 이동으로 집계합니다.
+# 기준 행의 Pod 수는 FROM이 아니라 실제로 조회한 Pod 수입니다(빈 출력은 0).
 base=$(pods); seen="$base"
+read -r n ready gone c usd skus < <(node_state)
+echo "-60,$n,$c,$usd,$skus,$(grep -c . <<<"$base" || true),0,$ready,$gone"
 k -n bench scale deployment inflate --replicas "$TO" >/dev/null
 start=$(date +%s)
-while (( $(date +%s) - start <= WINDOW )); do
+while :; do
   cur=$(pods); seen=$(printf '%s\n%s\n' "$seen" "$cur" | sort -u)
   moved=$(comm -13 <(echo "$base") <(echo "$seen") | grep -c . || true)
   read -r n ready gone c usd skus < <(node_state)
   echo "$(( $(date +%s) - start )),$n,$c,$usd,$skus,$(echo "$cur" | grep -c .),$moved,$ready,$gone"
-  sleep 30
+  # 관찰 시간을 넘기지 않도록 남은 시간이 30초보다 짧으면 그만큼만 기다립니다.
+  left=$(( WINDOW - ($(date +%s) - start) ))
+  (( left > 0 )) || break
+  sleep $(( left < 30 ? left : 30 ))
 done
 log "done"

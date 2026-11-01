@@ -94,7 +94,7 @@ KEDA를 이용한 요청 수 기반 확장은
 *   `ScheduleAnyway` 옵션으로 스케줄링 실패 방지.
 *   라벨(`app: my-app`)은 Deployment와 Constraints 모두 동일하게 유지.
 *   AZ 기반 분산: `topologyKey: topology.kubernetes.io/zone`로 변경 가능.
-*   HPA와 함께 사용 시 노드 autoscaler(Cluster Autoscaler 또는 [NAP](../node-auto-provisioning/index.md)) 활성화 권장. NAP는 `ScheduleAnyway` spread도 우선 지키려고 노드를 더 만들 수 있습니다.
+*   HPA와 함께 사용 시 노드 autoscaler(Cluster Autoscaler 또는 [NAP](../node-auto-provisioning/index.md)) 활성화 권장. `ScheduleAnyway`는 기존 노드에 배치할 수 있으면 Pod를 Pending으로 만들지 않으므로 이 설정만으로 노드가 늘지는 않습니다. 다만 다른 이유로 Pending인 Pod에 노드를 만들 때 NAP(Karpenter)는 `ScheduleAnyway` spread도 먼저 지키려 해 노드를 예상보다 더 만들 수 있습니다([Karpenter Scheduling](https://karpenter.sh/docs/concepts/scheduling/)). 노드를 늘려서라도 분산을 강제하려면 `DoNotSchedule`과 충분한 autoscaler 한도가 필요합니다.
 
 ***
 

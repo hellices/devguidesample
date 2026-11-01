@@ -33,6 +33,10 @@ no_podinfo_pods() { # Deployment 집계와 Pod 객체가 모두 0일 때 성공
   pods=$(kubectl --context "$CTX" -n demo get pods -l app=podinfo -o name) || return 1
   [[ $rep =~ ^0?$ && -z $pods ]]
 }
+podinfo_available() { # podinfo_available <n>: 사용 가능한 podinfo replica가 n개 이상이면 성공
+  local avail; avail=$(kubectl --context "$CTX" -n demo get deploy podinfo -o jsonpath='{.status.availableReplicas}') || return 1
+  (( ${avail:-0} >= $1 ))
+}
 wait_until() { # wait_until <설명> <제한 초> <명령...>
   local what=$1 limit=$2; shift 2; local start=$SECONDS
   until "$@"; do
@@ -48,6 +52,11 @@ reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n
   k -n demo scale deploy podinfo --replicas "$1" >/dev/null
   log "워크로드 노드가 $1대 이하가 될 때까지 대기(NAP consolidation)"
   wait_until "노드 축소" 1800 nodes_at_most "$1"
+  # podinfo가 Pending인 채로 warm 패턴이 시작되지 않도록 replica <n>개가 사용 가능해질 때까지 기다립니다.
+  if (( $1 >= 1 )); then
+    log "podinfo replica $1개 사용 가능 대기"
+    wait_until "podinfo 준비" 900 podinfo_available "$1"
+  fi
 }
 ready_scaledobject() { k -n demo wait scaledobject/podinfo --for=condition=Ready --timeout=5m >/dev/null; }
 apply_http_scaler() { # apply_http_scaler <minReplicaCount>
@@ -103,10 +112,14 @@ cold_request() { # cold_request <run 이름>: 0개 상태에서 첫 요청과 �
 pattern_http_add_on_cold_start() {
   reset 1; apply_http_scaler 0
   # 기존 노드에 자리가 있는 경우: 작은 keeper Pod로 워크로드 노드 1대를 유지합니다.
+  # 시스템 노드에 배치되지 않도록 워크로드 노드(mode=user)만 고릅니다.
   k -n demo create deployment keeper --image=registry.k8s.io/pause:3.10 --dry-run=client -o yaml |
-    kapply
+    kubectl patch --local -f - --type merge -o yaml \
+      -p '{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.azure.com/mode":"user"}}}}}' | kapply
   k -n demo set resources deploy keeper --requests=cpu=100m,memory=64Mi >/dev/null
   k -n demo rollout status deploy keeper --timeout=10m >/dev/null
+  local n; n=$(user_nodes) || n=""
+  [[ $n =~ ^[0-9]+$ ]] && (( n >= 1 )) || { echo "keeper 배치 뒤 워크로드 노드가 없습니다(조회 값: ${n:-실패})" >&2; return 1; }
   for r in 1 2 3; do cold_request "$r"; done
   # 새 노드가 필요한 경우: keeper를 지우고 워크로드 노드가 0대가 된 뒤 요청합니다.
   k -n demo delete deploy keeper --ignore-not-found >/dev/null

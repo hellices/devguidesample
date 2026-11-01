@@ -6,13 +6,24 @@
 set -euo pipefail
 RG=${AZURE_RESOURCE_GROUP:?} CLUSTER=${AKS_CLUSTER_NAME:?} AMW_ID=${AZURE_MONITOR_WORKSPACE_ID:?}
 
-# Managed Prometheus가 이미 켜져 있어도 이 sample의 workspace로 보내는 DCR이 연결되어 있지 않으면 다시 연결합니다.
+# Managed Prometheus가 이미 켜져 있어도 이 sample의 workspace로 Prometheus 지표를 보내는 DCR이 연결되어 있지 않으면 다시 연결합니다.
+# DCR에 $AMW_ID를 가리키는 monitoringAccounts destination이 있고, Microsoft-PrometheusMetrics stream을
+# 그 destination으로 보내는 dataFlow가 있을 때만 연결된 것으로 봅니다(ID는 대소문자 구분 없이 비교).
 aks_id=$(az aks show -g "$RG" -n "$CLUSTER" --query id -o tsv)
 linked=false
 if [[ $(az aks show -g "$RG" -n "$CLUSTER" --query "azureMonitorProfile.metrics.enabled" -o tsv) == true ]]; then
   for dcr in $(az monitor data-collection rule association list --resource "$aks_id" --query "[].dataCollectionRuleId" -o tsv); do
-    if az monitor data-collection rule show --ids "$dcr" --query "destinations.monitoringAccounts[].accountResourceId" -o tsv |
-      grep -qix "$AMW_ID"; then linked=true; break; fi
+    if az monitor data-collection rule show --ids "$dcr" -o json 2>/dev/null | python3 -c '
+import json, sys
+r = json.loads(sys.stdin.read() or "{}")
+p = r.get("properties") or {}
+dest = r.get("destinations") or p.get("destinations") or {}
+names = {str(m.get("name", "")).lower() for m in dest.get("monitoringAccounts") or []
+         if str(m.get("accountResourceId", "")).lower() == sys.argv[1].lower()}
+ok = any("microsoft-prometheusmetrics" in {str(s).lower() for s in f.get("streams") or []}
+         and names & {str(d).lower() for d in f.get("destinations") or []}
+         for f in r.get("dataFlows") or p.get("dataFlows") or [])
+sys.exit(0 if ok else 1)' "$AMW_ID"; then linked=true; break; fi
   done
 fi
 if [[ $linked != true ]]; then
@@ -31,7 +42,7 @@ done
 for f in ManagedGatewayAPIPreview ApplicationLoadBalancerPreview; do
   start=$(date +%s)
   until [[ $(az feature show --namespace Microsoft.ContainerService --name "$f" --query properties.state -o tsv) == Registered ]]; do
-    (( $(date +%s) - start <= 3600 )) || { echo "feature $f가 60분 안에 Registered가 되지 않았습니다" >&2; exit 1; }
+    (( $(date +%s) - start <= 3600 )) || { echo "feature ${f}가 60분 안에 Registered가 되지 않았습니다" >&2; exit 1; }
     echo "feature $f 등록 대기"; sleep 30
   done
 done

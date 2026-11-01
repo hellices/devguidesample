@@ -7,6 +7,7 @@ metadata:
   name: watcher
   namespace: demo
 ---
+# 노드 수 조회만 클러스터 범위로 두고, Deployment·HPA 조회는 demo namespace Role로 제한합니다.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -15,12 +16,6 @@ rules:
   - apiGroups: [""]
     resources: [nodes]
     verbs: [list]
-  - apiGroups: [apps]
-    resources: [deployments]
-    verbs: [get]
-  - apiGroups: [autoscaling]
-    resources: [horizontalpodautoscalers]
-    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -30,6 +25,33 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: demo-watcher
+subjects:
+  - kind: ServiceAccount
+    name: watcher
+    namespace: demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: watcher
+  namespace: demo
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: watcher
+  namespace: demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: watcher
 subjects:
   - kind: ServiceAccount
     name: watcher

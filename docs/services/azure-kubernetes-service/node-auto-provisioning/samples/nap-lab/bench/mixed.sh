@@ -28,15 +28,15 @@ scale_zero() { # 모든 Deployment를 시도하고 하나라도 실패하면 non
   for d in big mem small; do k -n mixed scale deployment $d --replicas 0 >/dev/null || rc=1; done
   return "$rc"
 }
+# 첫 리소스 변경 전에 등록해 중간 실패·중단에도 세 Deployment를 0으로 되돌립니다(best-effort).
+trap 'scale_zero 2>/dev/null || log "cleanup failed"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 k apply -f "$HERE/../manifests/mixed.yaml" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SELECTOR%%=*}\":\"${SELECTOR#*=}\"}}]"
 for d in big mem small; do k -n mixed patch deployment $d --type json -p "$sel" >/dev/null; done
-# 중간 실패·중단에도 세 Deployment를 0으로 되돌립니다(best-effort).
-trap 'scale_zero 2>/dev/null || log "cleanup failed"' EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 for run in $(seq 1 "$RUNS"); do
   dir="$OUT/$SCENARIO/run$run"; mkdir -p "$dir"

@@ -101,6 +101,8 @@ spec:
           command: ["/bin/bash", "-c"]
           args:
             - |
+              # 최소 이미지에 curl이 없을 수 있으므로 먼저 설치합니다. 설치에 실패하면 측정하지 않고 종료합니다.
+              tdnf -q -y install ca-certificates curl >/dev/null || exit 1
               # 실패 요청이 timeout까지 기다려도 다음 요청은 예약된 시각에 시작합니다.
               # 프로세스가 멈춰 지난 슬롯은 몰아서 보내지 않고 현재 시각부터 0.2초 뒤로 다시 잡습니다.
               next=$(date +%s%N)

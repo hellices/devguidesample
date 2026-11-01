@@ -33,7 +33,10 @@ add_pool() { # add_pool <name> <az aks nodepool add 추가 인수...>
     --enable-cluster-autoscaler --min-count 0 "$@" -o none
 }
 del_pool() { # 노드 풀 10개 제한 정책이 있는 구독을 위해 실험이 끝나면 풀을 지웁니다.
-  az aks nodepool show -g "$RG" --cluster-name "$CAS" -n "$1" -o none 2>/dev/null || return 0
+  # 목록에 없을 때만 이미 지워진 것으로 봅니다. 조회 실패(인증·네트워크 등)는 nonzero로 반환합니다.
+  local found
+  found=$(az aks nodepool list -g "$RG" --cluster-name "$CAS" --query "[?name=='$1'].name" -o tsv) || return 1
+  [[ -n $found ]] || return 0
   log "CAS 풀 $1 삭제"; az aks nodepool delete -g "$RG" --cluster-name "$CAS" -n "$1" -o none
 }
 profile() { az aks update -g "$RG" -n "$CAS" --cluster-autoscaler-profile "$@" -o none; }
@@ -182,8 +185,10 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
     kubectl --context "$ctx" -n migrate logs deploy/client --since-time="$start" |
       awk -v s="$start" -v e="$end" -v n="$2" '$1>=s && $1<=e {t++; if ($2!="200") f++} END {printf "%s,%s,%s,%d,%d\n", n, s, e, t, f}'
   }
-  # 이전 실행에서 남은 preStop을 지우고 rollout이 끝난 뒤 시작합니다.
-  if [[ -n $(kubectl --context "$ctx" -n migrate get deploy web -o jsonpath='{.spec.template.spec.containers[0].lifecycle}') ]]; then
+  # 이전 실행에서 남은 preStop을 지우고 rollout이 끝난 뒤 시작합니다. 조회 실패는 lifecycle 없음으로 보지 않습니다.
+  local lifecycle
+  lifecycle=$(kubectl --context "$ctx" -n migrate get deploy web -o jsonpath='{.spec.template.spec.containers[0].lifecycle}') || return 1
+  if [[ -n $lifecycle ]]; then
     kubectl --context "$ctx" -n migrate patch deploy web --type json \
       -p '[{"op":"remove","path":"/spec/template/spec/containers/0/lifecycle"}]' >/dev/null
     kubectl --context "$ctx" -n migrate rollout status deploy/web --timeout=15m >/dev/null

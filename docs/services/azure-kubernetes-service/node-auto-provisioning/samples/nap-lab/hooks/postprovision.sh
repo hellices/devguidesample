@@ -13,7 +13,7 @@ done
 VM_SIZE=${AKS_VM_SIZE:-Standard_D4ds_v7}
 vcpu=$(az vm list-skus -l "$AZURE_LOCATION" --size "$VM_SIZE" --resource-type virtualMachines \
   --query "[?name=='$VM_SIZE'] | [0].capabilities[?name=='vCPUs'].value | [0]" -o tsv)
-[[ $vcpu =~ ^[0-9]+$ ]] || { echo "$VM_SIZE의 vCPU 수를 확인할 수 없습니다" >&2; exit 1; }
+[[ $vcpu =~ ^[0-9]+$ ]] || { echo "${VM_SIZE}의 vCPU 수를 확인할 수 없습니다" >&2; exit 1; }
 sed -e "s/Standard_D4ds_v7/$VM_SIZE/" -e "s/cpu: \"40\"/cpu: \"$((vcpu * 10))\"/" manifests/nodepool-fixed.yaml |
   kubectl --context "$NAP_CLUSTER_NAME" apply -f - >/dev/null
 kubectl --context "$NAP_CLUSTER_NAME" apply -f manifests/nodepool-flex.yaml >/dev/null

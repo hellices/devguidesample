@@ -201,7 +201,8 @@ az aks nodepool add -g $RG --cluster-name $CLUSTER -n burst \
 | NAP `consolidateAfter: 0s`, budget 100% | 56~92초 |
 
 ```yaml
-# NAP: 빈 노드를 한 번에 정리하되, 평일 업무 시간에는 동시 정리를 제한
+# NAP: 빈 노드와 저활용 노드를 정리하고(실행 중인 Pod가 있는 노드도 교체될 수 있음),
+# 평일 업무 시간에는 동시 정리를 제한
 spec:
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized

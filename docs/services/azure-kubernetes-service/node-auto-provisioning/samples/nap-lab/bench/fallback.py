@@ -108,11 +108,12 @@ def main():
             ready.append(ts(c[0]["lastTransitionTime"]))
     pods, targets = [], 0
     for p in load("pods.json"):
-        if p["metadata"].get("labels", {}).get("app") != "inflate":
+        # 이전 실행에서 남은 Pod와 t0 이전 Ready 전환은 이번 실행 결과로 세지 않습니다.
+        if p["metadata"].get("labels", {}).get("app") != "inflate" or ts(p["metadata"]["creationTimestamp"]) < t0:
             continue
         targets += 1
         c = [x for x in p["status"].get("conditions", []) if x["type"] == "Ready" and x["status"] == "True"]
-        if c:
+        if c and ts(c[0]["lastTransitionTime"]) >= t0:
             pods.append(ts(c[0]["lastTransitionTime"]))
     # timeout으로 일부 Pod만 Ready인 실행은 완료 시간으로 기록하지 않습니다.
     all_ready = max(pods) if pods and len(pods) == targets else None

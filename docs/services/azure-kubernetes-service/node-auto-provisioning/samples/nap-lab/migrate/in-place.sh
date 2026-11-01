@@ -9,13 +9,14 @@ POOL=${POOL:-user} CTX=${CTX:-$CLUSTER}
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $*"; }
 pool_count() { az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n "$POOL" --query count -o tsv; }
-wait_web_ready() { # 새 revision의 replica가 모두 Ready·Available이 될 때까지(15분 제한). 일부 Pod 누락이나 이전 revision 상태로 진행하지 않습니다.
-  local deadline=$(( $(date +%s) + 900 )) s gen obs want updated ready avail
+wait_web_ready() { # 새 revision의 replica가 모두 Ready·Available이고 전체 Pod 수가 spec과 같을 때까지(15분 제한).
+  # 일부 Pod 누락이나 이전 revision Pod(status.replicas > spec.replicas)가 남은 상태로 진행하지 않습니다.
+  local deadline=$(( $(date +%s) + 900 )) s gen obs want total updated ready avail
   while :; do
-    s=$(k -n migrate get deploy web -o jsonpath='{.metadata.generation},{.status.observedGeneration},{.spec.replicas},{.status.updatedReplicas},{.status.readyReplicas},{.status.availableReplicas}') || s=""
-    IFS=, read -r gen obs want updated ready avail <<<"$s"
-    if [[ -n $want && $obs == "$gen" && ${updated:-0} == "$want" && ${ready:-0} == "$want" && ${avail:-0} == "$want" ]]; then return 0; fi
-    (( $(date +%s) < deadline )) || { log "timeout: web not ready (generation,observed,replicas,updated,ready,available=$s)"; return 1; }
+    s=$(k -n migrate get deploy web -o jsonpath='{.metadata.generation},{.status.observedGeneration},{.spec.replicas},{.status.replicas},{.status.updatedReplicas},{.status.readyReplicas},{.status.availableReplicas}') || s=""
+    IFS=, read -r gen obs want total updated ready avail <<<"$s"
+    if [[ -n $want && $obs == "$gen" && ${total:-0} == "$want" && ${updated:-0} == "$want" && ${ready:-0} == "$want" && ${avail:-0} == "$want" ]]; then return 0; fi
+    (( $(date +%s) < deadline )) || { log "timeout: web not ready (generation,observed,spec,replicas,updated,ready,available=$s)"; return 1; }
     sleep 2
   done
 }
