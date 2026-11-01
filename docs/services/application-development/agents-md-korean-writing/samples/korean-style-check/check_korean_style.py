@@ -16,14 +16,19 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.S)
-# Fence lines follow CommonMark: three or more backticks or tildes, and a backtick
-# fence's info string cannot contain a backtick. Patterns below that take a line
-# body are matched after the leading spaces are removed.
-FENCE_OPEN = re.compile(r"(`{3,}(?=[^`]*$)|~{3,})")
-LIST_ITEM = re.compile(r"( *)([-*+]|\d{1,9}[.)])( +|$)")
+# Block patterns follow CommonMark and are matched against the part of a line left
+# after the prefixes of its open containers are removed. A fence is three or more
+# backticks or tildes, and a backtick fence's info string cannot contain a backtick.
+FENCE_OPEN = re.compile(r" {0,3}(`{3,}(?=[^`]*$)|~{3,})")
+QUOTE_MARKER = re.compile(r" {0,3}> ?")
+LIST_ITEM = re.compile(r"( {0,3})([-*+]|\d{1,9}[.)])( +|$)")
+THEMATIC_BREAK = re.compile(r" {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$")
 # MkDocs admonition, collapsible details and content tabs indent their body by four.
-BLOCK_CONTAINER = re.compile(r"( *)(?:!!!|\?\?\?\+?|===)(?:\s|$)")
-BLOCK_START = re.compile(r"(?:#{1,6}(?:\s|$)|>)")
+BLOCK_CONTAINER = re.compile(r"( {0,3})(?:!!!|\?\?\?\+?|===)(?:\s|$)")
+BLOCK_START = re.compile(
+    r" {0,3}(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)"
+    r"|!!!|\?\?\?|===)"
+)
 TABLE_DELIMITER = re.compile(r"\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?")
 TABLE_BREAK = re.compile(
     r"(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|[-*+]\s|\d{1,9}[.)]\s|(?:[-*_]\s*){3,}$)"
@@ -117,61 +122,95 @@ def list_content_indent(match: re.Match[str]) -> int:
     return indent + marker + (spaces if 1 <= spaces <= 4 else 1)
 
 
+# A container is a block quote (width None) or a block whose content is indented
+# by a fixed width: a list item, admonition, details or tab block.
+def continue_container(width: int | None, rest: str) -> str | None:
+    """Strip one container's prefix from a line, or return None if it ended."""
+    if width is None:
+        marker = QUOTE_MARKER.match(rest)
+        return rest[marker.end():] if marker else None
+    if not rest.strip():
+        return ""
+    if rest[:width] == " " * width:
+        return rest[width:]
+    return None
+
+
+def open_containers(rest: str, stack: list[int | None]) -> str:
+    """Push containers that start on this line and return the line's content."""
+    while rest.strip() and not THEMATIC_BREAK.match(rest):
+        quote = QUOTE_MARKER.match(rest)
+        if quote:
+            stack.append(None)
+            rest = rest[quote.end():]
+            continue
+        item = LIST_ITEM.match(rest)
+        if item:
+            width = list_content_indent(item)
+            stack.append(width)
+            rest = rest[width:]
+            continue
+        block = BLOCK_CONTAINER.match(rest)
+        if block:
+            stack.append(len(block.group(1)) + 4)
+            return ""
+        break
+    return rest
+
+
 def remove_fenced_code(text: str) -> str:
     """Drop fenced code blocks, including their fence lines.
 
-    As in CommonMark, an opening fence may be indented at most three spaces past
-    the content indent of its container. List items and MkDocs admonition,
-    details and tab blocks are tracked as containers, so a fence nested in them
-    is recognized while a top-level line indented four or more spaces is not.
-    A block closes on a line of the same fence character at least as long as
-    the opening fence or when its container ends. An unclosed block runs to the
-    end of the document.
+    Each line is matched against the open block quotes, list items and MkDocs
+    admonition, details and tab blocks first. A fence is recognized in what is
+    left, indented at most three spaces, so "> ```" and "- ```" open a fence
+    while a top-level line indented four or more spaces does not. A fence
+    closes on a line of the same character at least as long as the opening
+    fence, or when a container it belongs to ends. An unclosed fence runs to
+    the end of the document.
     """
     kept: list[str] = []
-    containers: list[int] = []
+    stack: list[int | None] = []
     fence: str | None = None
-    fence_base = 0
+    fence_depth = 0
     previous_blank = True
     for raw in text.splitlines():
-        line = raw.expandtabs(4)
-        body = line.lstrip(" ")
-        indent = len(line) - len(body)
-        closing = body.rstrip()
+        rest = raw.expandtabs(4)
+        matched = 0
+        for width in stack:
+            remainder = continue_container(width, rest)
+            if remainder is None:
+                break
+            rest, matched = remainder, matched + 1
         if fence is not None:
-            if not body or indent >= fence_base:
+            if matched >= fence_depth:
+                closing = rest.strip()
                 if (
                     closing
-                    and indent - fence_base <= 3
+                    and len(rest) - len(rest.lstrip(" ")) <= 3
                     and set(closing) == {fence[0]}
                     and len(closing) >= len(fence)
                 ):
-                    fence, previous_blank = None, False
+                    fence = None
+                    previous_blank = False
                 continue
-            # The container ended, which also closes the fence.
             fence, previous_blank = None, True
-        if not body:
+        blank = not rest.strip()
+        # An unmatched container ends unless the line lazily continues the
+        # previous paragraph.
+        if matched < len(stack) and (previous_blank or blank or BLOCK_START.match(rest)):
+            del stack[matched:]
+        if blank:
             kept.append(raw)
             previous_blank = True
             continue
-        item = LIST_ITEM.match(line)
-        block = BLOCK_CONTAINER.match(line)
-        opener = FENCE_OPEN.match(body)
-        # A less indented line ends deeper containers unless it is a lazy
-        # continuation of the previous paragraph.
-        if previous_blank or item or block or opener or BLOCK_START.match(body):
-            while containers and indent < containers[-1]:
-                containers.pop()
-        base = containers[-1] if containers else 0
-        relative = indent - base
         previous_blank = False
-        if opener and 0 <= relative <= 3:
-            fence, fence_base = opener.group(1), base
-            continue
-        if item and 0 <= relative <= 3:
-            containers.append(list_content_indent(item))
-        elif block and 0 <= relative <= 3:
-            containers.append(indent + 4)
+        if matched == len(stack):
+            rest = open_containers(rest, stack)
+            opener = FENCE_OPEN.match(rest)
+            if opener:
+                fence, fence_depth = opener.group(1), len(stack)
+                continue
         kept.append(raw)
     return "\n".join(kept)
 
