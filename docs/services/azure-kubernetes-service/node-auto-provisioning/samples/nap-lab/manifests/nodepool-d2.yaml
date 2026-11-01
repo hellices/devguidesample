@@ -1,4 +1,4 @@
-# B2: 2 vCPU VM 40대를 한 번에 만드는 대규모 burst
+# 40대 동시 확장 시나리오: 2 vCPU VM 40대를 한 번에 만드는 대규모 burst
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:

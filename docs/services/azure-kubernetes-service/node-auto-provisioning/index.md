@@ -74,9 +74,33 @@ NAP는 2025년 7월 GA됐고 AKS Automatic의 기본 노드 관리 방식입니�
 지원되며, NAP가 지원하지 않는 구성(Windows 노드 GA, 서비스 주체, kubenet 등)에서는 여전히
 유일한 자동 노드 확장 방식입니다.
 
-같은 조건 실측에서 Pod가 준비되는 시간은 두 방식이 비슷했습니다. NAP로 옮겨서 얻는 이점은
-VM 크기 자동 선택, 비용 절감(혼합 Pod 46~54%, 큰 노드 축소 87%), quota 부족 시 빠른 대체
-결정, 노드 수명 관리입니다.
+## CAS·NAP 비교: 확장 방식, 속도, 비용, 운영
+
+실측은 East US 2, AKS 1.36.5, v7 on-demand VM 기준입니다. 같은 조건에서 Pod가 준비되는
+시간은 비슷했고, 차이는 VM 크기 선택·비용·축소 방식에서 났습니다.
+
+| 항목 | CAS (VMSS 노드 풀) | NAP (Karpenter) | 유리한 쪽 |
+|---|---|---|---|
+| 확장 단위 | 노드 풀 하나의 노드 수. 풀마다 VM 크기 하나 | Pending Pod 묶음에 맞춰 VM 크기와 수를 함께 결정 | NAP |
+| 설정 | `az aks nodepool`, autoscaler profile | Kubernetes CRD `NodePool`·`AKSNodeClass` | - |
+| 기존 풀에 없는 VM 크기 필요 | 확장하지 않음. 풀을 추가해야 함 | 허용 범위에서 선택(6 vCPU Pod, 96초) | NAP |
+| 확장 결정(Pod 생성 직후) | 12~27초(scan loop 대기) | 2~5초(이벤트 + 1초 batch) | NAP |
+| 첫 노드 Ready(`D4ds_v7`, Pod 20개, 중앙값) | 81초 | 83초 | 비슷 |
+| 전체 Pod Ready(같은 조건) | 108초 | 119초(VM 자유 선택 시 103초) | 비슷 |
+| 선호 VM quota 초과 시 대체 결정 | 23~24초 | 2~3초 | NAP(전체 Pod Ready는 비슷) |
+| 크기가 다른 Pod 20개 | 풀 3개, $3.28~3.82/h | 2대, $1.78/h | NAP(46~54% 저렴) |
+| 큰 VM에 Pod 몇 개만 남음 | 32 vCPU 풀 유지(0%) | 4 vCPU VM으로 교체(−87%) | NAP |
+| 축소 방식 | 빈 노드·저사용 노드 삭제(기본 10분 미사용 + 추가 후 10분 지연) | 빈 노드 삭제, 여러 노드 합치기, 더 저렴한 VM으로 교체 | NAP |
+| 축소 중 옮겨진 Pod(20 → 3 Pod) | 1개(`D4ds_v7` 풀) | 3개 | CAS |
+| 중지한 VM 재시작 | `Deallocate` 모드, 첫 노드 50초 | 기능 없음 | CAS |
+| 다른 클러스터와 VM 계열 quota 공유 | 매번 VMSS 확장을 시도해 바로 반영 | quota를 10분 주기로 갱신. 반납 뒤 약 4~7.5분 대체 VM 사용(1회) | CAS |
+| VMSS 10대·노드 풀 10개 제한 정책 | 0→40 확장 거부 | 단독 VM이라 영향 없음 | NAP(정책 환경) |
+| 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget | NAP |
+| 구성 범위 | Windows, 서비스 주체, kubenet 등 대부분 | 일부 구성 미지원([목록](#nap-unsupported)) | CAS |
+| 향후 개발 | 유지보수, 최소한의 기능 개선 | 지속 개발, 새 기능 추가 | NAP |
+
+측정 조건과 반복 횟수는 [NAP·CAS 시나리오별 실측](scenario-comparison/index.md)과
+[CAS·NAP 확장 시간 단계별 실측](scale-out-benchmark/index.md)에 있습니다.
 
 ## 권장 근거: GA, AKS Automatic 기본값, 기능 개발 방향
 
@@ -88,10 +112,14 @@ VM 크기 자동 선택, 비용 절감(혼합 Pod 46~54%, 큰 노드 축소 87%)
 | [Learn: CAS → NAP 마이그레이션](https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning) | 향후 기능 개발: CAS는 "maintained, with minimal feature enhancements", NAP는 "continuous active development and new feature enhancements" |
 | [AKS 릴리스 노트 2026-10-25](https://github.com/Azure/AKS/blob/master/CHANGELOG.md) | NAP: Capacity Reservation Group, Trusted Launch, managed GPU, Windows 노드(preview), dual-stack(preview) 추가. CAS: 이미지 업그레이드만 |
 
-클러스터별 선택은 다음 흐름을 따릅니다. 2·3단계 조건의 근거는
-[NAP 지원·미지원 구성](#nap-unsupported)과 [NAP·CAS 시나리오별 실측](scenario-comparison/index.md)입니다.
+## 클러스터별 선택: 새 클러스터, 미지원 구성, CAS 고유 동작
 
-![새 클러스터는 AKS Automatic 또는 NAP로 시작하고, 기존 CAS 클러스터는 NAP 미지원 구성과 CAS 고유 동작 필요 여부를 확인한 뒤 NAP로 전환하거나 CAS를 유지하는 판단 흐름](images/nap-adoption-decision.svg)
+| 클러스터 상황 | 선택 |
+|---|---|
+| 새 클러스터 | AKS Automatic(NAP 포함). 노드 설정을 세밀하게 제어해야 하면 AKS Standard + NAP |
+| 기존 CAS 클러스터가 [NAP 미지원 구성](#nap-unsupported)(Windows GA, 서비스 주체, kubenet 등)을 사용 | CAS 유지, 또는 지원 구성으로 새 클러스터를 만들어 이전 |
+| `Deallocate` 재시작, 같은 VM 계열 quota 공유, Pod 이동 최소화가 꼭 필요한 풀 | 해당 풀만 CAS 유지 검토. NAP에서도 quota 여유, `WhenEmpty`, PDB, `do-not-disrupt`로 완화 가능 |
+| 그 밖의 기존 CAS 클러스터 | NAP로 전환([전환 가이드](cluster-autoscaler-migration/index.md)) |
 
 ## 확장 단위: CAS는 풀의 노드 수, NAP는 VM 크기와 수
 
@@ -108,15 +136,6 @@ NAP(Karpenter)는 기존 노드에 들어가지 못한 Pod를 모아 그 묶음�
 ![기존 용량에 배치되지 못한 Pod를 Karpenter가 just-in-time 용량으로 만들고, 이후 기존 용량과 합쳐 최적화된 용량으로 재배치하는 흐름](images/karpenter-overview.png)
 
 *그림: [Karpenter](https://karpenter.sh/), Apache License 2.0*
-
-| 항목 | Cluster Autoscaler (VMSS) | NAP |
-|---|---|---|
-| 확장 단위 | 노드 풀(VMSS) 하나당 VM 크기 하나 | Pod 요구에 맞춰 허용 범위 안의 여러 VM 크기 |
-| 설정 위치 | `az aks nodepool`·autoscaler profile | Kubernetes CRD(`NodePool`, `AKSNodeClass`) |
-| 판단 방식 | Pending Pod 이벤트 + 가장 오래된 Pending Pod가 2초 미만이면 한 loop(최대 scan-interval 10초) 대기, 풀 선택(expander) | Pending Pod 이벤트 기반, 1초 batch 후 결정 |
-| 축소 | 10분 미사용 + 추가 후 10분 지연(기본값) | consolidation: 빈 노드 삭제, 여러 노드를 하나로 합치거나 더 저렴한 노드로 교체 |
-| 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget |
-| 다른 VM 크기가 필요할 때 | 풀을 새로 추가 | `NodePool` requirements만 수정 |
 
 ## 확장 속도: 확장 결정과 재시도에서 차이
 
@@ -157,23 +176,6 @@ NAP가 더 빠른 상황은 다음 세 가지입니다.
 워크로드가 균일하고 풀 설계가 잘 되어 있으며 용량이 넉넉하면 CAS로도 속도는 충분합니다.
 측정 방법은 [CAS·NAP 확장 시간 단계별 실측](scale-out-benchmark/index.md)에서, Pod 대기
 시간을 줄이는 방법은 [AKS 노드 확장 지연 단축](scale-up-optimization/index.md)에서 다룹니다.
-
-## 실측 유불리: NAP는 비용·VM 선택, CAS는 노드 재시작·Pod 이동
-
-유불리가 갈릴 만한 시나리오를 가설로 세우고 같은 환경에서 측정했습니다.
-
-| 시나리오 | 결과 | 유리한 쪽 |
-|---|---|---|
-| 크기가 다른 Pod 20개 혼합 | NAP 2대 $1.78/h, CAS 풀 3개 $3.28~3.82/h | NAP |
-| 큰 VM에 Pod 몇 개만 남음 | NAP는 32 vCPU VM을 4 vCPU VM으로 교체(−87%), CAS 32 vCPU 풀은 그대로 | NAP |
-| 선호 VM quota 초과 | 대체 결정 NAP 2~3초, CAS 23~24초. 전체 Pod Ready는 비슷 | NAP (결정 단계) |
-| VMSS 10대·노드 풀 10개 제한 정책 | CAS 0→40 확장 거부, NAP 영향 없음 | NAP |
-| 같은 zone·같은 VM 확장 | 첫 노드 Ready NAP 54~59초, CAS 69~82초(차이 대부분은 확장 결정). 전체 Pod는 비슷 | 비슷 |
-| 축소 중 Pod 이동 | NAP 3개, CAS 1개 | CAS |
-| 할당 해제한 VM 재시작 | CAS `Deallocate` 50초, NAP 기능 없음 | CAS |
-| 다른 클러스터가 같은 계열 quota를 쓰고 반납 | NAP는 10분 주기로 quota를 다시 읽어, 1회 실측에서 반납 약 4분 뒤까지 1순위 VM 대신 대체 VM 사용(약 7.5분 뒤 복귀) | CAS |
-
-가설, 조건과 수치는 [NAP·CAS 시나리오별 실측](scenario-comparison/index.md)에 자세히 정리했습니다.
 
 ## NodePool과 AKSNodeClass: 허용 VM 범위와 Azure 노드 설정
 

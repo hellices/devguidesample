@@ -1,6 +1,6 @@
 ---
 title: "NAP·CAS 시나리오별 실측: 비용·VM 선택과 노드 재시작·Pod 이동"
-description: 크기가 다른 Pod 혼합, 큰 노드 축소, 선호 VM quota 초과, 정책 제한, 같은 zone 확장 등에서 NAP와 VMSS Cluster Autoscaler의 유불리를 가설로 세우고 AKS 1.36 v7 환경에서 실측해 판정한 결과입니다.
+description: 크기가 다른 Pod 혼합, 큰 노드 축소, 선호 VM quota 초과, 정책 제한, 같은 zone 확장 등 9개 시나리오에서 NAP와 VMSS Cluster Autoscaler를 AKS 1.36 v7 on-demand 환경으로 실측해 비교하고, 사전 예상과 결과를 대조합니다.
 document_type: research
 services: [azure-kubernetes-service]
 technologies: [kubernetes, karpenter]
@@ -35,21 +35,24 @@ topic_order: 4
 
 # NAP·CAS 시나리오별 실측: 비용·VM 선택과 노드 재시작·Pod 이동
 
-NAP와 VMSS Cluster Autoscaler(CAS)의 유불리를 시나리오별 가설로 세우고 실측했습니다.
-NAP의 이점은 비용과 VM 크기 선택에서 뚜렷했습니다. NAP나 VMSS 중 한쪽이 더 빠르다는
-가설은 같은 조건에서 대부분 확인되지 않았습니다.
+같은 환경에서 NAP와 VMSS Cluster Autoscaler(CAS)를 9개 시나리오로 비교했습니다. NAP는
+VM 크기 선택과 비용에서 앞섰고, CAS는 중지한 VM 재시작과 축소 중 Pod 이동에서 앞섰습니다.
+같은 조건의 확장 속도는 비슷했습니다.
 
-| # | 시나리오 | 예상 | 실측 결과 | 판정 |
-|---|---|---|---|---|
-| A1 | 크기가 다른 Pod 혼합 | NAP가 노드·비용 최소 | NAP 2대 $1.78/h, CAS 풀 3개 6~11대 $3.28~3.82/h | 맞음 (NAP 46~54% 저렴) |
-| A2 | 큰 노드 축소 | NAP만 VM을 작게 교체 | NAP −87%, CAS 32 vCPU 풀 0% | 맞음 |
-| A3 | 선호 VM quota 초과 | NAP가 빨리 대체 | 대체 결정 NAP 2~3초, CAS 23~24초. Pod Ready는 비슷 | 맞음 (결정 단계만) |
-| A4 | VMSS·풀 수 제한 정책 | (사전 가설 없음) | CAS 0→40 요청이 정책에 거부, NAP는 영향 없음 | NAP 유리 (환경 의존) |
-| B1 | 같은 zone 확장 | NAP VM 준비가 느림 | 첫 노드 NAP 54~59초, CAS 69~82초 (차이 대부분은 결정 단계) | 틀림 |
-| B2 | 40대 동시 확장 | NAP 꼬리 지연이 큼 | 전체 Pod Ready NAP 221초, CAS 198초 (1회) | 차이 작음 |
-| B3 | quota 정보 갱신 지연 | NAP가 최대 10분 선호 VM 제외 | quota 반납 약 4분 뒤까지 대체 VM 7대 선택, 약 7.5분 뒤에는 1순위 선택 | 맞음 (1회, 대조군 실패) |
-| B4 | 축소 중 Pod 이동 | NAP가 더 많이 옮김 | NAP 3개, CAS 1개 | 맞음 |
-| B5 | 할당 해제 VM 재시작 | CAS만 가능 | 첫 노드 Ready 50초 (새 VM 78~104초) | 맞음 |
+## 시나리오별 결과: CAS·NAP 비교
+
+| 시나리오 | CAS | NAP | 유리한 쪽 |
+|---|---|---|---|
+| 크기가 다른 Pod 20개, 시간당 비용 | 풀 3개 $3.28~3.82(6~11대). 풀 1개는 16개만 배치 | 2대 $1.78 | NAP(46~54% 저렴) |
+| 큰 VM에 Pod 3개만 남음, 비용 변화 | 32 vCPU 풀 그대로(0%) | 4 vCPU VM으로 교체(−87%) | NAP |
+| 선호 VM quota 초과, 대체 결정 | 23~24초 | 2~3초 | NAP(전체 Pod Ready는 비슷) |
+| VMSS 10대·노드 풀 10개 제한 정책, 0→40대 | 정책에 거부되어 Pod 40개 Pending | 단독 VM 40대 생성 | NAP(정책 환경) |
+| 같은 zone 확장, 첫 노드 Ready | 69~82초 | 54~59초 | 비슷(차이 대부분은 확장 결정) |
+| 같은 zone 확장, 모든 Pod Ready 중앙값 | 108초 | 106초 | 비슷 |
+| 40대 동시 확장, 모든 Pod Ready | 198초 | 221초 | 비슷(1회) |
+| 축소 중 옮겨진 Pod(20 → 3 Pod) | 1개(`D4ds_v7` 풀) | 3개 | CAS |
+| 중지한 VM 재시작, 첫 노드 Ready | `Deallocate` 50초(새 VM 78~104초) | 기능 없음 | CAS |
+| 다른 클러스터가 같은 계열 quota를 반납한 뒤 | quota를 미리 거르지 않아 바로 1순위 풀 시도 | 약 4분 뒤까지 대체 VM, 약 7.5분 뒤 1순위 VM(1회) | CAS |
 
 ## 측정 환경: East US 2, AKS 1.36.5, v7 on-demand
 
@@ -60,11 +63,9 @@ NAP의 이점은 비용과 VM 크기 선택에서 뚜렷했습니다. NAP나 VMS
   계산했습니다. VM 가격만 포함하고 디스크·네트워크는 제외했습니다.
 - 리전 vCPU 한도(100) 때문에 시나리오를 순서대로 실행했고, 반복 횟수는 1~3회입니다.
 
-## A1 크기가 다른 Pod 혼합: NAP 노드 2대, 비용 절반
+## 크기가 다른 Pod 혼합: NAP 노드 2대, 비용 절반
 
 6 vCPU·8 GiB Pod 4개, 1 vCPU·8 GiB Pod 6개, 0.5 vCPU·1 GiB Pod 10개를 동시에 만들었습니다.
-
-![크기가 다른 Pod 20개를 담을 때 CAS 풀 1개는 1.09달러로 16개만 배치했고, CAS 풀 3개는 3.28~3.82달러, NAP는 1.78달러였던 시간당 비용 비교](images/a1-mixed-pods-cost.svg)
 
 | 구성 | 배치 | 노드 | 요청/용량 (CPU·메모리) | 시간당 비용 | 모든 Pod Ready |
 |---|---|---|---|---|---|
@@ -82,7 +83,7 @@ NAP의 이점은 비용과 VM 크기 선택에서 뚜렷했습니다. NAP나 VMS
 - 속도에서는 NAP가 앞서지 않았습니다. CAS가 8 vCPU VM 여러 대를 VMSS로 만드는 동안 NAP는
   32 vCPU VM을 기다렸습니다. 모든 Pod Ready는 CAS 80~148초, NAP 102~139초입니다.
 
-## A2 큰 노드 축소: NAP만 VM을 작게 교체
+## 큰 노드 축소: NAP만 VM을 작게 교체
 
 Pod 20개(각 1 vCPU)를 띄운 뒤 3개로 줄이고 12분 동안 30초마다 기록했습니다.
 
@@ -96,7 +97,7 @@ Pod 20개(각 1 vCPU)를 띄운 뒤 3개로 줄이고 12분 동안 30초마다 �
 - 작은 VM 풀이면 CAS도 빈 노드를 지워 비슷하게 줄입니다. NAP는 여기에 더해 큰 VM을 작은
   VM으로 교체합니다.
 
-## A3 선호 VM quota 초과: 대체 결정 단계만 NAP 우세
+## 선호 VM quota 초과: 대체 결정 단계만 NAP 우세
 
 [CAS·NAP 확장 시간 단계별 실측](../scale-out-benchmark/index.md)에서 측정한 결과입니다(각 2회). 시스템 풀이 같은
 계열 16 vCPU를 쓰는 상태에서 96 vCPU VM을 1순위로 두자 CAS는 요청이 리전 quota 초과로 실패한
@@ -104,7 +105,7 @@ Pod 20개(각 1 vCPU)를 띄운 뒤 3개로 줄이고 12분 동안 30초마다 �
 골랐습니다. NAP가 앞선 단계는 대체 결정뿐입니다. 첫 노드 Ready는 CAS 66~76초, NAP 83초였고
 모든 Pod Ready는 CAS 104~112초, NAP 96~130초였습니다.
 
-## A4 VMSS·노드 풀 수 제한 정책: CAS만 영향
+## VMSS·노드 풀 수 제한 정책: CAS만 영향
 
 실험 구독에는 관리 그룹 수준의 Azure Policy가 적용되어 있었습니다.
 
@@ -117,7 +118,7 @@ CAS는 VM 크기마다, 그리고 VMSS 크기 제한마다 노드 풀을 따로 
 CAS로 만들 때는 10대 상한 풀 4개와 `balance-similar-node-groups=true`를 사용했습니다. 이 정책은
 실험 구독의 조직 정책이지만, 거버넌스 정책이 있는 환경에서는 같은 차이가 생길 수 있습니다.
 
-## B1 같은 zone 확장: NAP 첫 노드가 먼저 Ready, 차이는 대부분 확장 결정
+## 같은 zone 확장: NAP 첫 노드가 먼저 Ready, 차이는 대부분 확장 결정
 
 이전 측정에서 NAP의 노드 준비가 더 오래 걸린 원인이 단독 VM 방식인지 확인하려고, 두 쪽 모두
 zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측정했습니다.
@@ -134,7 +135,7 @@ zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측
 - 한두 대가 크게 늦어지는 꼬리 지연은 두 방식 모두 생겼습니다. CAS 3회차에서는 마지막 노드가
   260초에야 Ready가 됐습니다.
 
-## B2 40대 동시 확장: 두 방식의 차이 작음
+## 40대 동시 확장: 두 방식의 차이 작음
 
 2 vCPU VM 40대가 필요한 Pod 40개를 만들었습니다(각 1회).
 
@@ -149,7 +150,7 @@ zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측
   시점에 loop가 돌아 대기 없이 3초 만에 결정했습니다.
 - 1회 측정이라 23초 차이는 VM 준비 편차 범위로 봅니다.
 
-## B3 quota 정보 갱신 지연: 다음 조회 전까지 이전 사용량 기준 판단
+## quota 정보 갱신 지연: 다음 조회 전까지 이전 사용량 기준 판단
 
 실측 리전의 vCPU 한도는 100입니다. NAP는 리전 전체가 아니라 VM 계열별 quota
 (`StandardDdsv7Family`)로 판단하며, 계열 한도 값은 따로 기록하지 않았습니다. `pref64`(weight 100, `Standard_D64ds_v7`)와 `alt`(weight 10,
@@ -183,14 +184,14 @@ zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측
 - 같은 구독에서 여러 클러스터나 VMSS가 같은 VM 계열 quota를 나눠 쓰면, NAP가 고르는 VM 크기는
   최대 10분 전 quota 상태를 따를 수 있습니다. 1순위 VM 계열에는 quota 여유를 두는 편이 안전합니다.
 
-## B4 축소 중 Pod 이동: VM 교체로 NAP가 더 많이 이동
+## 축소 중 Pod 이동: VM 교체로 NAP가 더 많이 이동
 
-A2에서 NAP는 큰 VM을 작은 VM으로 바꾸면서 남은 Pod 3개를 모두 새 노드로 옮겼습니다. CAS의
+큰 노드 축소 시나리오에서 NAP는 큰 VM을 작은 VM으로 바꾸면서 남은 Pod 3개를 모두 새 노드로 옮겼습니다. CAS의
 `D4ds_v7` 풀은 빈 노드를 지우면서 1개를 옮겼고, `D32als_v7` 풀은 아무것도 옮기지 않았습니다.
 재시작 비용이 큰 워크로드는 PDB나 `karpenter.sh/do-not-disrupt` annotation으로 이동을 제한하고,
 `consolidationPolicy: WhenEmpty`로 빈 노드만 정리하게 할 수 있습니다.
 
-## B5 할당 해제 VM 재시작: CAS에만 있는 방식
+## 할당 해제 VM 재시작: CAS에만 있는 방식
 
 CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 중지했다가 다시 시작합니다.
 재시작 시 첫 노드 Ready는 50초로 새 VM(78~104초)보다 빨랐습니다. NAP에는 같은 기능이 없습니다.
@@ -203,6 +204,23 @@ CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 �
   (`results/cas-node-object-linger.csv`). node 수로 상태를 보는 모니터링과 자동화가 이 시간을 함께 셉니다.
 - AKS의 CAS expander 기본값은 `random`입니다. 여러 풀을 운영하면 expander와 풀 구성을 함께
   설계해야 합니다.
+
+## 사전 예상과 실측: 맞은 예상과 빗나간 예상
+
+실험 전에 세운 예상과 결과입니다. NAP나 VMSS 중 한쪽이 더 빠를 것이라는 예상은 같은 조건에서
+대부분 확인되지 않았습니다.
+
+| 시나리오 | 사전 예상 | 결과 |
+|---|---|---|
+| 크기가 다른 Pod 혼합 | NAP가 노드·비용 최소 | 맞음 |
+| 큰 노드 축소 | NAP만 VM을 작게 교체 | 맞음 |
+| 선호 VM quota 초과 | NAP가 빨리 대체 | 대체 결정 단계만 맞음 |
+| VMSS·풀 수 제한 정책 | 사전 예상 없음 | 실험 중 발견 |
+| 같은 zone 확장 | NAP VM 준비가 느림 | 틀림 |
+| 40대 동시 확장 | NAP 꼬리 지연이 큼 | 차이 작음 |
+| quota 정보 갱신 지연 | NAP가 최대 10분 선호 VM 제외 | 맞음(1회, 대조군 실패) |
+| 축소 중 Pod 이동 | NAP가 더 많이 옮김 | 맞음 |
+| 할당 해제 VM 재시작 | CAS만 가능 | 맞음 |
 
 ## 선택 기준: 워크로드 모양, 축소 비용, 정책 환경
 

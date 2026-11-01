@@ -1,4 +1,4 @@
-# A1: D·E·F v7 계열에서 Pod 크기에 맞는 VM을 고르게 합니다.
+# 혼합 Pod 시나리오: D·E·F v7 계열에서 Pod 크기에 맞는 VM을 고르게 합니다.
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:

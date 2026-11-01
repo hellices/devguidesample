@@ -52,11 +52,11 @@ azd hooks run postdeploy                    # 또는 azd deploy
 | `azurelinux` | AzureLinux 노드 이미지 | `scale-out.csv` |
 | `overprovision` | placeholder Pod로 여유 노드 1대를 둔 상태에서 Pod 3개 추가 | `overprovisioning.csv` |
 | `quota-fallback` | quota를 넘는 `Standard_D96ds_v7`을 1순위, D4를 대체로 둠 | `quota-fallback.csv` |
-| `mixed` | 크기가 다른 Pod 20개(A1). CAS 풀 1개·3개(random, least-waste) vs NAP | `mixed-shapes.csv` |
-| `rightsize` | 20 → 3 Pod 축소 후 12분 관찰(A2·B4) | `rightsize-*.csv` |
-| `zone1` | 두 쪽 모두 zone 1에만 노드 생성(B1) | `zone1-burst.csv` |
-| `burst40` | 2 vCPU VM 40대(B2). CAS는 max 10 풀 4개 + `balance-similar-node-groups` | `burst-40-nodes.csv` |
-| `quota-staleness` | 같은 VM 계열 quota를 CAS 풀로 점유했다가 반납(B3) | `quota-staleness.csv` |
+| `mixed` | 크기가 다른 Pod 20개, CAS 풀 1개·3개(random, least-waste) vs NAP | `mixed-shapes.csv` |
+| `rightsize` | 20 → 3 Pod 축소 후 12분 관찰 | `rightsize-*.csv` |
+| `zone1` | 두 쪽 모두 zone 1에만 노드 생성 | `zone1-burst.csv` |
+| `burst40` | 2 vCPU VM 40대, CAS는 max 10 풀 4개 + `balance-similar-node-groups` | `burst-40-nodes.csv` |
+| `quota-staleness` | 같은 VM 계열 quota를 CAS 풀로 점유했다가 반납 | `quota-staleness.csv` |
 | `migration` | CAS 클러스터에서 경로 1 전환 리허설 | `migration.log`, `migration-probe.log` |
 | `drift` | `migration` 뒤 NAP drift로 노드 전체 교체, `preStop` 없음 → 있음 | `drift.csv` |
 
@@ -101,11 +101,11 @@ CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler
 | `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간 |
 | `results/migration-timeline.md` | `EXPERIMENT="migration drift"` 전환 단계별 시각, drift 교체 시간과 요청 실패 수 |
 | `results/prices-eastus2.json` | 비용 계산에 쓴 v7 VM 시간당 가격(2026-10-31) |
-| `results/mixed-shapes.csv` | A1 혼합 Pod 배치·노드 구성·노드 용량 대비 요청 비율(`*_request_ratio`)·비용 |
-| `results/rightsize-*.csv` | A2·B4 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
-| `results/zone1-burst.csv` | B1 같은 zone 확장 단계 시간 |
-| `results/burst-40-nodes.csv` | B2 40대 확장 단계 시간과 정책 거부 기록 |
-| `results/quota-staleness.csv` | B3 quota 점유·반납 후 NAP가 고른 NodePool. `recorded_s`는 이전 스크립트가 확인용 NodeClaim 정리 뒤 기록한 시각, `probe_s_est`는 스크립트 순서로 역산한 선택 확인 시각(±5초) |
+| `results/mixed-shapes.csv` | 혼합 Pod 배치·노드 구성·노드 용량 대비 요청 비율(`*_request_ratio`)·비용 |
+| `results/rightsize-*.csv` | 축소 후 30초 간격 노드 구성·비용·이동 Pod 수 |
+| `results/zone1-burst.csv` | 같은 zone 확장 단계 시간 |
+| `results/burst-40-nodes.csv` | 40대 확장 단계 시간과 정책 거부 기록 |
+| `results/quota-staleness.csv` | quota 점유·반납 후 NAP가 고른 NodePool. `recorded_s`는 이전 스크립트가 확인용 NodeClaim 정리 뒤 기록한 시각, `probe_s_est`는 스크립트 순서로 역산한 선택 확인 시각(±5초) |
 | `results/nap-nodeclaim-phases.csv` | NAP burst·zone 1·40대 실측의 NodeClaim별 zone과 생성·`Launched`·`Registered`·`Initialized` 시각(실행 시작 기준 초). `bench.sh` 스냅샷의 `nodeclaims.json`에서 계산 |
 | `results/cas-node-object-linger.csv` | CAS 축소 노드별 `ScaleDown` → `NodeNotReady` → node 객체 삭제(`DeletingNode`) 간격(초). 여러 CAS 실측 스냅샷의 Node 이벤트에서 계산 |
 | `results/cas-dealloc-pod-scheduling.csv` | Deallocate 풀 실측의 Pod별 노드 Ready·Pod 배치·Pod Ready 시각(실행 시작 기준 초). `pods.json`·`nodes.json`에서 계산 |

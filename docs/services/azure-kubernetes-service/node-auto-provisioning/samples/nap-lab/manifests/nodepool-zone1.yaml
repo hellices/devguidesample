@@ -1,4 +1,4 @@
-# B1: CAS zone 1 VMSS 풀과 같은 조건(Standard_D4ds_v7, zone 1)
+# 같은 zone 확장 시나리오: CAS zone 1 VMSS 풀과 같은 조건(Standard_D4ds_v7, zone 1)
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
