@@ -36,7 +36,7 @@ published_at: 2026-10-17
 > - 방법: 업체·기관이 공개한 개인정보 처리방침, 도움말, 제품 문서와 법령 원문을 정리했습니다. 제품을 직접 시험하지 않았습니다. 원음을 저장하는지와 저장 위치·조건·기간 중 하나 이상이 공개된 사례만 넣었고, 표에서 해당 사항이 없거나 원문에 내용이 없는 칸은 `—`로 표시했습니다.
 > - 확인일: 발행 2026-10-17, 사례·제품 문서 2026-10-14~20, 법령 2026-10-19, 주요 AI 음성 제품 정책·한국 법령 2026-11-02. Azure 구현은 [Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장](azure-storage/index.md)에 있습니다.
 
-## 음성 서비스의 원음 보관은 다섯 가지 패턴으로 나뉜다 {#retention-patterns}
+## 원음 보관 목적에 따른 다섯 가지 패턴 {#retention-patterns}
 
 아래 절에서 조사한 소비자 음성 서비스와 법령을 원음을 남기는 이유에 따라
 묶었습니다. 같은 서비스도 설정에 따라 여러 패턴에 걸칩니다(예: Bixby 기본값은 1번,
@@ -69,7 +69,7 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 다룹니다.
 
 
-### Azure 음성 플랫폼은 원음을 저장하지 않는 것이 기본이다 {#platform-defaults}
+### 원음을 기본 저장하지 않는 Azure 음성 플랫폼 설정 {#platform-defaults}
 
 아래는 서비스를 만드는 개발자가 정하는 플랫폼 설정입니다. 최종 사용자가 아니라
 애플리케이션이 저장 여부와 기간을 결정합니다.
@@ -80,7 +80,7 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 | Voice Live | 고객 데이터를 저장하지 않음 | 지원 로그를 켜면 진단용 음성을 30일 보관 |
 | Foundry voice agent | `store=false` | `store=true`면 전사·이벤트·원음을 기본 60일 보관 |
 
-## 주요 AI 음성 제품은 원음을 남기는 조건과 기간이 서로 다르다 {#product-storage-comparison}
+## 주요 AI 음성 제품별 원음 저장 조건과 기간 {#product-storage-comparison}
 
 각 서비스가 웹에 공개한 개인정보 처리방침과 도움말에 적힌 내용을
 2026-11-02에 확인해 정리했습니다. 제품을 직접 사용해 저장 동작을
@@ -97,7 +97,7 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 | [Microsoft 365 Copilot](#m365-copilot-policy) / 음성 채팅 | 저장 안 함 | 피드백 기능을 켜면 48시간 | 텍스트 대화와 같은 방식으로 저장 |
 | [Siri·받아쓰기](#siri-policy) / Apple 정책 | Apple 서버에 저장 안 함 | 개선 프로그램에 참여하면 Apple 서버에 최대 2년. 검토된 일부는 2년 초과 | 단말에 요청 이력 저장. Apple 서버에는 개선 참여 시 저장. Siri로 한 검색 요청은 참여와 관계없이 Apple 서버에 저장 |
 
-### Bixby: 녹음 검토를 허용한 경우에만 원음을 1년 보관한다 {#bixby-policy}
+### Bixby: 녹음 검토 동의 시에만 원음 1년 보관 {#bixby-policy}
 
 [Bixby 미국 개인정보 고지](https://d264isyiyrfhr3.cloudfront.net/storage/tos/usa/2.1.3/1782805872274/eng/usa_eng_pp.html)
 (2026-06-01 시행) 기준입니다.
@@ -112,7 +112,7 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 모든 기기에 반영됩니다. 45일은 필요 없어진 개인정보 전반에 대한 삭제
 기한입니다.
 
-### Gemini: 원음 보관 기간은 활동 저장 설정을 따른다 {#gemini-policy}
+### Gemini: 활동 저장 설정에 따른 원음 보관 기간 {#gemini-policy}
 
 [Gemini 앱 개인정보 허브](https://support.google.com/gemini/answer/13594961?hl=en)
 (2026-10-26 갱신)와 [Gemini Live 도움말](https://support.google.com/gemini/answer/15274899?hl=en) 기준입니다.
@@ -128,7 +128,7 @@ Gemini 활동에서 오디오 개선 사용 설정을 켜야 개선과 학습에
 켜면 이미 저장된 오디오도 대상이 됩니다. 전사는 활동 저장 설정이
 따로 통제합니다.
 
-### ChatGPT: Live·Advanced 음성 클립은 30일, 전사는 채팅과 함께 남는다 {#chatgpt-policy}
+### ChatGPT: Live·Advanced 음성 클립 30일과 채팅에 남는 전사 {#chatgpt-policy}
 
 [ChatGPT Voice 도움말](https://help.openai.com/en/articles/20001274-chatgpt-voice)과
 [채팅·파일 보관 도움말](https://help.openai.com/en/articles/8983778-chat-and-file-retention-in-chatgpt) 기준입니다.
@@ -144,7 +144,7 @@ Gemini 활동에서 오디오 개선 사용 설정을 켜야 개선과 학습에
 설정에 따라 학습에 쓰일 수 있습니다. 도움말은 전사가 실제 발화와
 정확히 일치하지 않을 수 있다고 안내합니다.
 
-### Microsoft 365 Copilot: 음성 채팅 원음은 피드백용으로만 48시간 남는다 {#m365-copilot-policy}
+### Microsoft 365 Copilot: 피드백용으로만 48시간 남는 음성 채팅 원음 {#m365-copilot-policy}
 
 [Microsoft 365 Copilot 음성 기능 FAQ](https://support.microsoft.com/en-us/microsoft-365-copilot/frequently-asked-questions-about-voice-features-in-microsoft-365-copilot) 기준입니다.
 
@@ -157,7 +157,7 @@ Gemini 활동에서 오디오 개선 사용 설정을 켜야 개선과 학습에
 FAQ는 음성 채팅의 사용자 데이터를 모델 학습에 쓰지 않으며, `Hey Copilot`
 호출어 감지는 단말에서 동작하고 대화를 녹음·저장하지 않는다고 밝힙니다.
 
-### Siri·받아쓰기: 단말에는 요청 이력이, Apple 서버에는 개선 참여 시 원음이 남는다 {#siri-policy}
+### Siri·받아쓰기: 단말의 요청 이력과 개선 참여 시 Apple 서버의 원음 {#siri-policy}
 
 Apple의 [Siri·받아쓰기 개인정보 안내](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/)와
 [개선 프로그램 안내](https://www.apple.com/legal/privacy/data/en/improve-siri-dictation/)
@@ -178,7 +178,7 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 번 바뀌는 임의의 기기 식별자와 연결되며 Apple 계정과는 연결되지
 않습니다. 원음 검토는 Apple 직원만 합니다.
 
-## 업무형 음성 서비스는 원음을 기본으로 남기지 않거나 목적별 기간을 둔다 {#business-use-cases}
+## 업무형 음성 서비스의 원음 미저장 기본값과 목적별 보관 기간 {#business-use-cases}
 
 업체·기관이 공개한 정책과 도움말에서 저장 위치·조건·기간이 구체적으로
 나온 사례만 모았습니다.
@@ -191,7 +191,7 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 | 금융 문의 | Bank of America Erica | 음성 상호작용을 90일 저장·분석. 보관하는 음성 텍스트는 개인정보를 마스킹. 음성 응답에 외부 서비스 제공자 사용 | [Erica FAQ](https://info.bankofamerica.com/en/digital-banking/erica) |
 | 말하기 학습 | Duolingo | 수학 튜터는 원음을 Apple 음성 인식에 보낸 뒤 즉시 삭제하고 음성 텍스트는 보관·AI 공급자 공유 가능. 일반 AI 기능은 제출 오디오·텍스트를 녹음·전사·저장할 수 있고 계정 삭제까지 보유(법적·분쟁 예외). 아동 음성은 개선용 공유에서 제외 | [개인정보 처리방침](https://www.duolingo.com/privacy) |
 
-## 컨택센터 제품은 녹음 범위와 저장소를 조직이 설정한다 {#contact-center-recording}
+## 조직이 설정하는 컨택센터 녹음 범위와 저장소 {#contact-center-recording}
 
 | 제품 | 녹음·저장 방식 |
 |---|---|
@@ -200,7 +200,7 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 | **Amazon Connect** | 자동응답(IVR)·상담원 단계와 참여자별로 녹음 설정. 고객 S3 버킷에 저장하고 상담 ID로 검색·WAV 다운로드. 분석을 켜면 전사와 민감 정보 마스킹본이 원본과 별도로 생성. [녹음](https://docs.aws.amazon.com/connect/latest/adminguide/about-recording-behavior.html) · [다운로드](https://docs.aws.amazon.com/connect/latest/adminguide/download-recordings.html) · [분석](https://docs.aws.amazon.com/connect/latest/adminguide/analyze-conversations.html) · [마스킹](https://docs.aws.amazon.com/connect/latest/adminguide/sensitive-data-redaction.html) |
 | **NICE CXone** | 녹음/녹음 안 함(Do Not Record) 정책·비율·필터로 녹음 대상 지정. 신규 고객 환경은 기본 100% 음성 녹음. 활성·장기 저장소와 복원 작업 제공. 수명주기 규칙에 맞지 않는 파일은 활성 저장소에 남음. [녹음 정책](https://help.nice-incontact.com/content/recording/definerecordingpolicies.htm) · [저장소](https://help.nice-incontact.com/content/admin/storageservices/storageservices.htm) · [수명주기](https://help.nice-incontact.com/content/admin/storageservices/lifecyclemanagement.htm) · [복원](https://help.nice-incontact.com/content/admin/storageservices/retrievestoredfiles.htm) |
 
-## 법령은 녹음할 수 있는 대상과 지정된 기록의 보존기간을 정한다 {#jurisdiction-rules}
+## 녹음 가능 대상과 지정 기록의 법정 보존기간 {#jurisdiction-rules}
 
 조문이 기간이나 삭제 시점을 숫자로 정한 경우만 모았습니다.
 
@@ -215,7 +215,7 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 | **Illinois BIPA [§10](https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K10.htm)·[§15(a)](https://www.ilga.gov/documents/legislation/ilcs/documents/074000140K15.htm)** | §10이 정의하는 voiceprint 포함 생체 식별자·정보 | §15(a): 목적 달성 또는 마지막 상호작용 후 **3년** 중 빠른 시점 | 일반 녹음이 아니라 voiceprint에 적용 |
 | **[Texas B&amp;C Code §503.001](https://tcss.legis.texas.gov/resources/BC/htm/BC.503.htm)** | 상업 목적으로 수집한 voiceprint 등 생체 식별자 | 목적 종료 후 합리적 기간, 늦어도 **1년**. 다른 법정 문서와 연결되면 그 의무 종료 후 1년 | 금융기관 voiceprint와 일부 AI·보안·사기 용도는 예외 조항 확인 |
 
-### 한국 법령은 녹음할 수 있는 대화·동의 방식·판매 녹취를 따로 정한다
+### 한국 법령의 녹음 대상·동의 방식·판매 녹취 규정
 
 | 법령 | 규정 | 음성 서비스에 적용할 때 |
 |---|---|---|
@@ -224,7 +224,22 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 | **개인정보 보호법 [제25조 제5항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=283839&joNo=0025)** | 고정형 영상정보처리기기(CCTV 등)는 녹음 기능을 사용할 수 없음 | 매장·시설에 고정 설치한 카메라 기기에 음성 기능을 붙일 때 해당 |
 | **자본시장법 시행령 [제68조 제5항 제2호의2·제2호의3](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=291081&joNo=0068&joBrNo=00)과 금융투자업규정 제4-20조의2** | 적합성·적정성 평가에서 부적합 판정을 받았거나 65세 이상인 개인 일반투자자에게 정해진 투자성 상품을 팔 때 판매과정을 녹취하고, 투자자가 요청하면 녹취 파일을 제공해야 함. 투자권유를 거쳐 판매한 경우에는 2영업일 이상 숙려기간도 부여. 녹취 대상 상품은 [금융소비자보호법 시행령 제12조 제1항 제2호](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=285715&joNo=0012&joBrNo=00)의 투자성 상품(파생상품·파생결합증권, 조건부자본증권 성격의 사채, 고난도금융투자상품 등)이며, 거래소·해외 시장에서 투자자가 직접 매매하는 상장 상품은 제외. 고난도금융투자상품은 제2호의3에 따라 모든 개인 일반투자자에게 같은 의무 적용 | 음성 에이전트가 이 대상에게 해당 상품을 권유·판매하면 판매과정 녹취가 의무. 의무 조항은 금융소비자보호법 시행 뒤에도 자본시장법 시행령에 있으며, 대상 판정 기준만 금융소비자보호법을 따름. 녹취 보존기간은 이 조문에 없고, 금융소비자보호법 시행령 제26조가 계약체결 자료를 10년 보존하도록 정함 |
 
-### 개인정보 보호법·GDPR·CCPA는 공통 보존 일수를 정하지 않는다
+> **한국 법령에는 음성 녹음의 보존기간을 직접 정한 조문이 없습니다.** 위 조문은 녹음해도
+> 되는 대상, 동의 방식, 녹취 의무를 정할 뿐 녹취 파일을 얼마나 둘지는 정하지 않습니다.
+> 보관 기간을 정할 때는 다음 조문을 기준으로 삼을 수 있습니다.
+>
+> - **기본 원칙:** [개인정보 보호법 제21조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=283839&joNo=0021)에
+>   따라 보유기간이 지나거나 처리 목적을 달성하면 지체 없이 파기합니다. 다른 법령이
+>   보존을 요구하면 예외이며, 이때는 다른 개인정보와 분리해 보관합니다(제3항).
+> - **녹취가 계약·거래 기록 역할을 할 때:** 녹취가 계약 체결이나 청약 철회의 근거가
+>   된다면 그 기록의 기간을 비슷한 기준으로 볼 수 있습니다. 전자상거래법 시행령
+>   제6조는 계약·청약철회 기록 5년, 불만·분쟁 처리 기록 3년이고, 금융소비자보호법
+>   시행령 제26조는 계약체결 자료 10년입니다. 다만 두 조문 모두 "녹취"를 대상으로
+>   명시하지는 않으므로 이 적용은 해석입니다.
+> - **판매 녹취를 할 때:** 자본시장법 시행령 제68조는 녹취와 제공 의무만 정하므로,
+>   녹취 파일의 기간은 위 금융소비자보호법 기준을 함께 검토합니다.
+
+### 공통 보존 일수가 없는 개인정보 보호법·GDPR·CCPA
 
 한국 개인정보 보호법, GDPR, CCPA/CPRA는 목적·필요성·고지한 기준 또는
 필요 종료 후 삭제를 요구할 뿐 음성 원음에 적용할 공통 일수는 정하지
@@ -244,9 +259,9 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 | FINRA Rule 4511 | 적용 장부·기록에 별도 기간이 없을 때 최소 6년. [규칙](https://www.finra.org/rules-guidance/rulebooks/finra-rules/4511) |
 | PCI DSS 민감 인증정보 | 승인 후 CVV 등 민감 인증정보는 통화 녹음에도 보관 금지. 녹음에서 안전하게 지울 수 없으면 보완 통제(compensating controls)를 적용. [PCI FAQ 1210](https://www.pcisecuritystandards.org/faqs/1210/) |
 
-## Alexa 사건은 아동 음성의 무기한 보관과 삭제 후 남은 전사가 쟁점이었다 {#alexa-deletion-case}
+## Alexa 사건: 아동 음성 무기한 보관과 삭제 후 남은 전사 {#alexa-deletion-case}
 
-### 사건 개요
+### 당사자·경과·적용 법률
 
 | 항목 | 내용 |
 |---|---|
@@ -256,7 +271,7 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 | **적용 법률** | 아동 온라인 개인정보 보호법(COPPA)과 FTC법 제5조(기만적·불공정 행위) |
 | **대상 제품** | Alexa 음성 비서와 Echo 기기, 아동용 Echo Dot Kids Edition, 부모가 아동 이용을 관리하는 FreeTime on Alexa·FreeTime Unlimited |
 
-### 무슨 일이 있었나
+### 녹음 무기한 보관과 삭제 후 남은 전사의 경위
 
 Alexa는 사용자가 말을 걸 때마다 녹음 파일과 전사문을 만들어 Amazon
 클라우드에 저장합니다. Amazon은 아동용 Echo Dot Kids Edition과 부모용
@@ -302,7 +317,7 @@ COPPA는 아동 개인정보를 수집 목적에 합리적으로 필요한 기�
 | **삭제 요청 이행** | Amazon이 제공한 삭제 기능으로 요청된 Alexa 위치·음성정보와 아동 개인정보 삭제 |
 | **삭제 뒤 모델·제품 이용** | 삭제 처리한 정보를 이후 **어떤 데이터 제품이든** 생성·개선하는 데 사용 금지. 삭제 처리 전에 이미 만든 데이터 제품의 이용은 제한하지 않음 |
 
-## 기록마다 담당자·보관 기준·삭제 증빙을 따로 정한다 {#record-retention-checklist}
+## 기록별 담당자·보관 기준·삭제 증빙 {#record-retention-checklist}
 
 <div class="voice-diagram-scroll" role="region" aria-label="음성 데이터 산출물과 삭제 검증 수명주기 검토 예시 도식 가로 스크롤" tabindex="0" markdown="1">
 
@@ -325,7 +340,7 @@ COPPA는 아동 개인정보를 수집 목적에 합리적으로 필요한 기�
 삭제 완료는 객체·버전·등록 원음·템플릿 삭제 로그처럼 저장소 상태를 보여주는
 자료로 확인합니다.
 
-## Microsoft 업무 제품은 녹음·전사·Copilot 기록을 서로 다른 저장소에 둔다 {#microsoft-record-locations}
+## Microsoft 업무 제품별 녹음·전사·Copilot 기록 저장소 {#microsoft-record-locations}
 
 Teams·Copilot Studio·Dynamics 365처럼 이미 쓰고 있는 Microsoft 업무 제품에 음성 기능을 붙일 때
 기록이 어디에 남는지 정리했습니다.

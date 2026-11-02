@@ -126,7 +126,7 @@ topic_order: 1
 > - **Microsoft 일반 지침:** Blob Storage·Data Lake Storage·Speech 성능 문서의 명시적 권고. 음성 에이전트 전용 지침이 아닐 때는 그 범위를 함께 표시.
 > - **단순 계산:** Microsoft가 공개한 샘플률·비트 수·채널 수에 표준 계산식을 적용한 값.
 
-## 실시간 음성은 네이티브 Realtime과 분리형 파이프라인으로 나뉜다 {#realtime-voice-architectures}
+## 네이티브 Realtime과 분리형 파이프라인의 처리 구조 차이 {#realtime-voice-architectures}
 
 Azure의 실시간 음성 처리는 어떤 모델을 쓰느냐에 따라 두 구조로 나뉩니다.
 
@@ -153,7 +153,7 @@ Realtime 모델을 고르면 네이티브 구조로, GPT-4.1·GPT-5 같은 텍�
 > ([이벤트 레퍼런스](https://learn.microsoft.com/azure/foundry-classic/openai/realtime-audio-reference-ga)).
 > 점선은 애플리케이션 녹음·세션 저장·추적을 각각 켤 수 있는 지점입니다.
 
-## 입력 전사는 세션 옵션으로 켜고 결과는 이벤트로만 받는다 {#input-transcription}
+## 세션 옵션으로 켜는 입력 전사와 전사 이벤트 {#input-transcription}
 
 네이티브 Realtime 모델은 오디오를 직접 처리하므로 사용자 발화의 텍스트가 따로
 생기지 않습니다. 텍스트가 필요하면 세션에서 입력 전사(input audio transcription)를
@@ -219,7 +219,7 @@ Azure OpenAI Realtime GA 형식의 설정 예시입니다.
 · [OpenAI Realtime 세션 레퍼런스](https://developers.openai.com/api/reference/resources/realtime/subresources/calls/methods/create)
 · [OpenAI 실시간 전사 가이드](https://developers.openai.com/api/docs/guides/realtime-transcription)
 
-## 원음을 저장할 캡처 지점은 연결 방식마다 다르다 {#audio-capture-path}
+## 연결 방식별 원음 캡처 지점 {#audio-capture-path}
 
 서비스가 원음을 저장하지 않는 구성에서 원음을 남기려면 애플리케이션이 음성을
 받을 지점을 정해야 합니다. 음성이 앱 서버를 지나는 WebSocket 구조는 그 방법 중
@@ -260,7 +260,7 @@ ACS 통화 녹음은 다음과 같이 저장됩니다.
 - **신규 전화번호 제한:** 2026-10-23 이전에 만든 ACS 리소스가 없는 고객은 PSTN 통화·SMS
   같은 종료 대상 전화 업무용 전화번호를 새로 받을 수 없습니다.
 
-## 처리 구조에 따라 생기는 원음·전사·이벤트 기록이 다르다 {#records-by-architecture}
+## 처리 구조별로 생기는 원음·전사·이벤트 기록 {#records-by-architecture}
 
 | 기록 | 네이티브 Realtime | 분리형 파이프라인 | 통화 후 분석 |
 |---|---|---|---|
@@ -284,7 +284,7 @@ ACS 통화 녹음은 다음과 같이 저장됩니다.
 없으므로 필요한 기록은 애플리케이션이 저장합니다. Azure OpenAI 모델의 남용
 모니터링에 따른 보관은 [아래](#persistence-controls)에 따로 정리했습니다.
 
-### Realtime API는 음성 대화 중에 요약을 별도 응답으로 받을 수 있다 {#out-of-band-summary}
+### Realtime out-of-band 응답으로 받는 대화 중 요약 {#out-of-band-summary}
 
 Realtime API의 `response.create`에 `"conversation": "none"`을 지정하면 기본
 대화와 별개인 응답(out-of-band response)이 생성됩니다
@@ -334,9 +334,9 @@ WebRTC·SIP 연결에서는 서버가 자동으로 자르고, WebSocket 연결�
 - 애플리케이션이 출력 자막 이벤트를 모아 다른 텍스트 모델로 요약할 때: 자막은
   재생 지점에 맞춰 잘리지 않으므로 실제로 들린 내용보다 많을 수 있습니다.
 
-## Azure 음성 서비스는 원음을 기본 저장하지 않고 기능별 설정으로 저장한다 {#persistence-controls}
+## 기능별 설정으로만 저장되는 Azure 음성 서비스 데이터 {#persistence-controls}
 
-### 실시간 세션 저장
+### 서비스별 원음·대화 내용 저장 여부
 
 각 서비스의 데이터 처리 문서가 밝힌 원음·대화 내용의 서비스 측 저장
 방식입니다. 서비스가 저장하지 않는다는 설명은 애플리케이션 녹음이나 연결
@@ -350,7 +350,7 @@ WebRTC·SIP 연결에서는 서버가 자동으로 자르고, WebSocket 연결�
 | **Foundry voice agent / `store=true`** | 전사문·이벤트 시간선·원음 | 음성 에이전트 소유 저장소. agent endpoint의 저장 대화 API로 조회. BYOS 녹음은 고객 Azure Storage의 URI로 반환되며 계정 RBAC 적용 | 저장 대화·Microsoft 관리 오디오의 기본 보유기간 60일. 저장 대화 삭제 시 responses·items·오디오도 삭제. BYOS 사본은 고객 저장소 정책 |
 | **미리 구축된 음성의 실시간 합성(TTS)** | 입력 텍스트·출력 오디오는 서비스 로그에 저장하지 않음 | 이 실시간 합성의 내용 저장소 없음 | 고객 앱이 저장한 출력과 배치 합성·학습용 음성 데이터는 별도 정책 |
 
-#### Foundry voice agent는 `store=true`일 때 전사·이벤트·원음을 60일 보관한다 {#voice-agent-persistence}
+#### Foundry voice agent `store=true`의 전사·이벤트·원음 60일 보관 {#voice-agent-persistence}
 
 [구성 문서](https://learn.microsoft.com/azure/foundry/agents/how-to/configure-voice-agent#persist-conversations)의
 `store` 기본값은 `false`이며, `true`일 때 전사·이벤트·원음을 함께
@@ -363,7 +363,7 @@ Foundry voice agent의 기능입니다.
 - **얼마나·어떻게 지우는가:** [서비스 기본 제한](https://learn.microsoft.com/azure/foundry/agents/concepts/limits-quotas-regions#default-service-limits)은 저장 대화와 Microsoft 관리 오디오에 60일을 명시합니다. 저장 대화 삭제는 그 responses·items·오디오를 함께 삭제합니다. BYOS 오디오·다운로드본·외부 반출본·추적은 각 저장소의 보유 정책을 따릅니다.
 - **고객 저장소:** BYOS 저장소의 리전·접근 역할·수명주기와 반출·백업 사본의 삭제는 고객이 정합니다.
 
-### 연결 모델과 관측성
+### 모델 상태 유지·남용 모니터링·추적의 별도 저장소
 
 | 기능 | Microsoft 문서에 명시된 동작 | 저장 위치·기간 |
 |---|---|---|
@@ -381,7 +381,7 @@ Application Insights에는 오디오 참조가 기록되고, 녹음 자체는 �
 에이전트 소유 저장소에 남습니다. 그래서 추적과 원음의 보유기간은 따로
 관리됩니다.
 
-### 배치 전사와 사후 분석
+### 배치 전사 결과의 저장 위치와 보유 기간
 
 | 기능 | 입력·결과 동작 | 보유·삭제 |
 |---|---|---|
@@ -392,7 +392,7 @@ Application Insights에는 오디오 참조가 기록되고, 녹음 자체는 �
 Microsoft 관리 결과는 transcription 작업을 삭제하면 함께 삭제됩니다. 고객
 컨테이너에 저장한 결과는 그 컨테이너의 수명주기 정책으로 관리합니다.
 
-### 공식 참조에서 확인되는 저장·처리 시점
+### 공식 참조의 단계별 저장 위치
 
 | 시점 | 대상 | 저장소 또는 처리 주체 | Microsoft 자료의 범위 |
 |---|---|---|---|
@@ -416,7 +416,7 @@ Microsoft 관리 결과는 transcription 작업을 삭제하면 함께 삭제됩
 - [Text to speech 데이터 처리](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/speech-service/text-to-speech/data-privacy-security)
 - [Foundry 추적 데이터](https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-data)
 
-## 원음을 한국 리전에 저장해도 음성·모델 처리 위치는 따로 정해진다 {#storage-and-processing-scope}
+## 원음 저장 리전과 따로 정해지는 음성·모델 처리 위치 {#storage-and-processing-scope}
 
 음성 데이터의 저장·처리 위치는 다섯 곳으로 나뉩니다.
 
@@ -437,7 +437,7 @@ Global·Data Zone·Regional 범위를 가질 수 있습니다.
 - **지원 로그:** Voice Live 지원 로그를 켠 경우 Voice Live 리소스와 같은 리전의 Microsoft 관리 Storage
 - **추적:** Foundry 프로젝트에 연결한 Application Insights·Log Analytics 리소스
 
-## PII는 모델에 전달하기 전 단계에서만 전송을 막을 수 있다 {#pii-by-stage}
+## 모델 전달 전후로 갈리는 PII 통제 범위 {#pii-by-stage}
 
 | 경로 | PII 통제 시점 | 통제가 되돌리지 못하는 범위 |
 |---|---|---|
@@ -455,7 +455,7 @@ Global·Data Zone·Regional 범위를 가질 수 있습니다.
 Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 언어 지원 문서는 `2024-11-01` GA를 제시합니다.
 
-## 통화 후 분석 참조는 녹음·전사·분석 결과를 Blob Storage에 따로 둔다 {#post-call-architecture}
+## 녹음·전사·분석 결과를 Blob Storage에 나눠 두는 통화 후 분석 참조 {#post-call-architecture}
 
 [Azure Architecture Center의 콜센터 데이터 추출·분석 아키텍처](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/openai/architecture/call-center-openai-analytics)는
 통화가 끝난 뒤 녹음과 전사를 배치 처리하는 Microsoft 공식 참조
@@ -478,7 +478,7 @@ Architecture Center 본문은 Conversation PII를 `preview`로 표기하지만,
 > Content Understanding 결과는 애플리케이션이 바로 저장하거나, 필요한
 > 경우 별도 PII 처리를 거친 뒤 같은 결과 저장 단계로 합류합니다.
 
-## Blob 수명주기 삭제는 soft delete·버전·불변 보존이 있으면 바로 끝나지 않는다 {#storage-lifecycle}
+## soft delete·버전·불변 보존이 늦추는 Blob 수명주기 삭제 {#storage-lifecycle}
 
 [Blob 수명주기 관리](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)는
 생성·수정 시각, 경로 prefix와 blob tag를 기준으로 계층 이동·삭제 규칙을
@@ -500,7 +500,7 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 - **실행 시간:** 최대 24시간은 정책 반영과 첫 실행 시작까지의 시간이며,
   삭제 완료까지는 대상 수와 계정 요청률에 따라 더 걸릴 수 있음.
 
-## 원음 저장소는 키·네트워크·인증·불변 보존·감사를 함께 설정한다 {#storage-security}
+## 원음 저장소의 키·네트워크·인증·불변 보존·감사 설정 {#storage-security}
 
 원음과 전사는 개인정보이므로 저장소 계정에 다음 통제를 함께 겁니다.
 
@@ -515,7 +515,7 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 | 접근 감사 | [진단 설정과 `StorageBlobLogs`](https://learn.microsoft.com/azure/storage/blobs/monitor-blob-storage) | 진단 설정을 만들어야 읽기·쓰기·삭제 요청 로그가 수집됨. 로그에 인증 유형 등 요청 정보가 남음 |
 | 민감 데이터 발견 | [Microsoft Purview](https://learn.microsoft.com/purview/register-scan-azure-blob-storage-source) | Blob Storage 계정을 등록·스캔해 메타데이터를 추출하고 민감 데이터를 분류. [스캔 지원 형식](https://learn.microsoft.com/purview/data-map-data-sources#file-types-supported-for-scanning)은 CSV·JSON·TXT 같은 정형 파일과 문서 파일이며 WAV·MP3 같은 오디오는 포함되지 않으므로, 전사 텍스트를 Blob에 저장할 때 해당. 스캔만으로 접근이 제한되지는 않으며, 민감도 레이블이 붙은 데이터의 접근을 막으려면 [보호 정책](https://learn.microsoft.com/purview/data-gov-protection-policy-azure-sources)(preview)을 따로 만듦 |
 
-## 보존 등급별 컨테이너와 연결 키를 정해 두면 기록별 삭제와 감사를 할 수 있다 {#storage-layout}
+## 기록별 삭제·감사를 위한 보존 등급별 컨테이너와 연결 키 {#storage-layout}
 
 다음은 위 기능을 조합한 설계 예시입니다.
 
@@ -543,7 +543,7 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 | 응답 텍스트·요약 | 애플리케이션 DB | `response.id`, out-of-band 요약은 `metadata` 값 |
 | 업무 결과 | 업무 시스템 | 세션 키, 도구 호출 `call_id` |
 
-## 저장 형식이 용량·복원 시간·음질을 정한다 {#audio-format}
+## 용량·복원 시간·음질을 정하는 저장 형식 {#audio-format}
 
 | 결정 항목 | 기준 |
 |---|---|
