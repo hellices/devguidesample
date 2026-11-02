@@ -24,6 +24,8 @@ spec:
   cooldownPeriod: 120
   triggers:
     - type: prometheus
+      # Azure Managed Prometheus 인증은 TriggerAuthentication의 azure-workload가 맡습니다. KEDA Prometheus scaler 문서는
+      # Azure Workload Identity와 함께 다른 authModes를 지정할 수 없다고 하므로 authModes를 두지 않습니다.
       authenticationRef:
         name: azure-wi
       metadata:

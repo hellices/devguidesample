@@ -4,8 +4,8 @@
 # 실제 Pod 3개를 추가해 Ready까지 걸린 시간을 기록합니다.
 # nodeSelector는 이 벤치마크 전용 노드 풀의 노드만 가리켜야 합니다(예: CAS agentpool=<bench-pool>,
 # NAP karpenter.sh/nodepool=<bench-pool> 또는 그 NodePool template에만 둔 label). "노드 1대" 조건을 이 selector로 세므로
-# 시작할 때 selector에 맞는 Ready 노드가 하나라도 있으면(다른 워크로드 노드, 이전 실행의 잔류 노드) 바로 실패합니다.
-# TIMEOUT=900  placeholder 배치·노드 1대 안정·Pod Ready·placeholder 복구를 각각 기다릴 최대 시간(초). 넘으면 실패로 종료합니다.
+# 시작할 때 selector에 맞는 노드가 상태와 관계없이 하나라도 있으면(다른 워크로드 노드, 이전 실행의 잔류 노드) 바로 실패합니다.
+# TIMEOUT=900  placeholder 배치·노드 1대 안정·Pod Ready를 각각 기다릴 최대 시간(초). placeholder 복구는 burst부터 TIMEOUT×2. 넘으면 실패로 종료합니다.
 # pods_ready_s: burst 뒤 inflate Deployment가 이번 scale을 반영하고 readyReplicas 3이 된 시각
 # placeholder_rescheduled_s: burst 전 placeholder Pod가 모두 선점·교체되고 새 placeholder 3개가 Ready가 된 시각
 set -euo pipefail
@@ -98,10 +98,21 @@ for (( run = 1; run <= RUNS; run++ )); do
   single_ready_node || { log "run $run: burst 직전 selector 노드가 Ready 1대가 아닙니다"; exit 1; }
   t0=$(date +%s)
   k -n bench scale deployment inflate --replicas 3 >/dev/null
-  wait_until "$TIMEOUT" 1 inflate_ready || { log "run $run: timeout waiting for inflate readyReplicas=3"; exit 1; }
-  t1=$(date +%s)
-  # 선점된 placeholder가 새 노드에서 다시 Running이 될 때까지(다음 burst를 받을 여유가 복구되는 시간)
-  wait_until "$TIMEOUT" 2 placeholders_replaced || { log "run $run: timeout waiting for placeholders to be replaced and Ready"; exit 1; }
-  t2=$(date +%s)
+  # 두 조건을 한 polling loop에서 따로 확인해, 각각 처음 성립한 시각을 t1·t2로 남깁니다.
+  # placeholder 복구(선점된 placeholder가 새 노드에서 다시 Ready, 다음 burst를 받을 여유 복구)가 inflate보다 먼저 끝나도
+  # 실제 시각을 잃지 않습니다. inflate는 burst부터 TIMEOUT, placeholder는 burst부터 TIMEOUT×2까지 기다립니다.
+  t1="" t2=""
+  while [[ -z $t1 || -z $t2 ]]; do
+    now=$(date +%s)
+    if [[ -z $t1 ]]; then
+      if inflate_ready; then t1=$(date +%s); elif (( now - t0 >= TIMEOUT )); then
+        log "run $run: timeout waiting for inflate readyReplicas=3"; exit 1; fi
+    fi
+    if [[ -z $t2 ]]; then
+      if placeholders_replaced; then t2=$(date +%s); elif (( now - t0 >= 2 * TIMEOUT )); then
+        log "run $run: timeout waiting for placeholders to be replaced and Ready"; exit 1; fi
+    fi
+    [[ -n $t1 && -n $t2 ]] || sleep 1
+  done
   echo "$SCENARIO,$run,$((t1 - t0)),$((t2 - t0))"
 done

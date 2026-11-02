@@ -41,6 +41,8 @@ official_sources:
     url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_config.go
   - title: Supported Kubernetes versions in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/supported-kubernetes-versions
+  - title: Karpenter provider Azure VM instance provider
+    url: https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/vminstance.go
 published_at: 2026-10-30
 topic_order: 1
 ---
@@ -74,7 +76,7 @@ NAP(관리형 Karpenter)가 VMSS 기반 CAS보다 빠르다면 어느 단계에�
 | 단계 | CAS 기준 | NAP 기준 |
 |---|---|---|
 | 확장 결정 | `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 이벤트 중 이른 시각 | NodeClaim 생성 |
-| VM 생성 요청 완료 | 측정하지 않음 (로그상 scale-up plan → VMSS PUT 호출 약 3초) | NodeClaim `Launched` |
+| VM 생성 요청 접수 | 측정하지 않음 (로그상 scale-up plan → VMSS PUT 호출 약 3초) | NodeClaim `Launched` (VM 생성 요청이 접수된 시점, 아래 설명 참고) |
 | 노드 Ready | Node `Ready` 전환 | 같음 |
 | Pod Ready | 모든 Pod `Ready` 전환 | 같음 |
 | 축소 완료 | VMSS 인스턴스 0개 | NodeClaim 0개 또는 Ready 노드 0개 |
@@ -87,6 +89,13 @@ NodeClaim을 만들고(확장 결정), 클라우드에 VM 생성을 요청해 `L
 
 *그림: [Karpenter NodeClaims](https://karpenter.sh/docs/concepts/nodeclaims/), Apache License 2.0.
 원본은 AWS 예시이며 AKS NAP에서는 EC2 Fleet·EC2 Instance 대신 Azure VM을 직접 만듭니다.*
+
+AKS NAP의 Azure provider는 VM 생성 요청(`BeginCreateOrUpdate`)이 접수되면 바로 `Launched`를
+기록하고, VM 프로비저닝 완료는 그 뒤 비동기로 기다립니다
+([karpenter-provider-azure `vminstance.go`](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/vminstance.go)의
+`BeginCreate` 주석: "the returned instance may not be finished provisioning yet").
+그래서 이 문서의 NodeClaim 생성 → `Launched` 시간은 VM 생성 요청 접수까지의 시간이며, VM이 실제로
+준비되는 시간은 노드 Ready 단계에 포함됩니다.
 
 ## 측정 환경: 2026-10-30 East US 2, AKS 1.36.5, v7 on-demand
 
@@ -294,3 +303,4 @@ VM 생성 요청이 접수된 뒤의 할당 실패는 재현하지 못해 소스
 - [Cluster Autoscaler 1.35 Azure scale set instance cache](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go)
 - [Cluster Autoscaler 1.35 Azure config](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_config.go)
 - [Supported Kubernetes versions in AKS](https://learn.microsoft.com/azure/aks/supported-kubernetes-versions)
+- [Karpenter provider Azure VM instance provider](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/providers/instance/vminstance.go)

@@ -37,7 +37,7 @@ fam() { # 조회 실패나 정수 하나가 아닌 출력은 nonzero
 }
 usage() { fam || echo unknown; }   # 기록용. 실패를 0으로 남기지 않습니다.
 
-# 실패·중단으로 끝나도 quota를 점유하는 CAS 소비용 Pod와 NAP 확인용 Pod를 0으로 되돌립니다.
+# 실패·중단으로 끝나도 quota를 점유하는 CAS 소비용 Pod와 NAP 확인용 Pod를 0으로 되돌리고 확인용 NodeClaim을 지웁니다.
 # 첫 리소스 변경과 첫 probe 전에 등록합니다. CAS는 소비용 Pod를 배포한 뒤에만 되돌립니다.
 cas_used=0
 cleanup() {
@@ -45,6 +45,10 @@ cleanup() {
     kc -n bench scale deployment inflate --replicas 0 >/dev/null || log "cleanup failed: CAS inflate"
   fi
   kn -n bench scale deployment inflate --replicas 0 >/dev/null || log "cleanup failed: NAP inflate"
+  # probe 도중 중단되면 확인용 NodeClaim이 quota를 계속 쓰므로 정상 경로와 같이 지우고 사라졌는지 확인합니다(최대 900초).
+  if declare -F drop_claims >/dev/null; then
+    drop_claims || log "cleanup failed: pref64/alt NodeClaim이 남았을 수 있습니다. kubectl get nodeclaims로 확인하세요"
+  fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 사용법: bench.sh <kube-context> <scenario> <replicas> <runs> [nodeSelector key=value]
-#   CPU=1            Pod당 CPU 요청(Kubernetes CPU 수량, 예: 1, 0.5, 500m)
+#   CPU=1            Pod당 CPU 요청. 십진 core(예: 1, 0.5) 또는 정수 millicore(예: 500m)만 받습니다
 #   TIMEOUT=1800     시작 조건·Pod Ready·축소를 각각 기다릴 최대 시간(초)
 #   WAVES="5 5 5 5"  지정하면 replica를 여러 번에 나눠 늘림(WAVE_INTERVAL초 간격, 기본 30). 합계는 replicas와 같아야 함
 #   OUT=<dir>        실행별 원본 스냅샷 저장 위치(기본 ./out). 같은 실행 디렉터리의 이전 산출물은 시작할 때 지웁니다.
@@ -25,8 +25,8 @@ RUNS=$(int_arg runs "$RUNS" 1) || usage_exit
 TIMEOUT=$(int_arg TIMEOUT "$TIMEOUT" 1) || usage_exit
 WAVE_INTERVAL=$(int_arg WAVE_INTERVAL "$WAVE_INTERVAL" 0) || usage_exit
 check_scenario "$SCENARIO" || usage_exit
-# CPU는 patch JSON에 그대로 들어가므로 0보다 큰 CPU 수량 형식만 받습니다.
-[[ $CPU =~ ^([0-9]+m|[0-9]+(\.[0-9]+)?)$ && $CPU =~ [1-9] ]] || { echo "CPU는 0보다 큰 CPU 수량(예: 1, 0.5, 500m)이어야 합니다: ${CPU}" >&2; usage_exit; }
+# CPU는 patch JSON에 그대로 들어가므로 0보다 큰 십진 core 또는 정수 millicore만 받습니다(지수 표기·u·n 단위는 받지 않음).
+[[ $CPU =~ ^([0-9]+m|[0-9]+(\.[0-9]+)?)$ && $CPU =~ [1-9] ]] || { echo "CPU는 0보다 큰 십진 core(예: 1, 0.5) 또는 정수 millicore(예: 500m)여야 합니다: ${CPU}" >&2; usage_exit; }
 if [[ -n $SELECTOR ]]; then split_selector "$SELECTOR" || usage_exit; fi
 # WAVES 합계가 replicas와 다르면 측정 부하와 완료 조건이 어긋나므로 리소스를 바꾸기 전에 실패합니다.
 wave_list=()

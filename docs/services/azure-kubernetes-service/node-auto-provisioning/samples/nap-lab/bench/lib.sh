@@ -42,7 +42,10 @@ count_matching() { awk -v re="$1" '$0 ~ re { n++ } END { print n + 0 }'; }
 
 # wait_until <제한 초> <간격 초> <명령...>: 명령이 성공하면 0, 제한 시간이 지나면 1을 반환합니다.
 # 확인할 때마다 마감을 보고, 마감 시각 이후에 끝난 확인은 성공이어도 timeout으로 봅니다.
-# 명령의 조회 실패는 미충족으로 보고 다시 확인합니다. 대기는 남은 시간을 넘기지 않습니다.
+# 명령의 조회 실패는 미충족으로 보고 다시 확인합니다. 확인 사이의 대기는 남은 시간을 넘기지 않습니다.
+# 확인 명령은 현재 셸에서 실행해야 변수 설정(예: quota-staleness.sh의 released가 남기는 cur)이 유지되므로
+# 여기서 강제로 끊지 않습니다. 대신 확인 명령마다 kubectl --request-timeout이나 azq·bounded로 자체 제한을 두며,
+# 반환은 마감 뒤 최대 그 제한 시간만큼 늦어질 수 있습니다.
 wait_until() {
   local limit=$1 step=$2 deadline left; shift 2
   deadline=$(( $(date +%s) + limit ))

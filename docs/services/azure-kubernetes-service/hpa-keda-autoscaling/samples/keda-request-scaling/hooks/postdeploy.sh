@@ -114,10 +114,14 @@ podinfo_scaled_to_zero() { # Deployment가 replica 0을 원하면 성공
   local r; r=$(kq -n demo get deploy podinfo -o jsonpath='{.spec.replicas}') || return 1
   [[ $r == 0 ]] || { echo "spec.replicas=${r}" >&2; return 1; }
 }
-podinfo_available() { # podinfo_available <n>: 사용 가능한 podinfo replica가 n개 이상이면 성공
-  local avail; avail=$(kq -n demo get deploy podinfo -o jsonpath='{.status.availableReplicas}') || return 1
-  [[ $avail =~ ^[0-9]*$ ]] || return 1
-  (( ${avail:-0} >= $1 )) || { echo "available ${avail:-0}개" >&2; return 1; }
+podinfo_exactly() { # podinfo_exactly <n>: 원하는·현재·사용 가능 replica와 종료 중이 아닌 Pod가 모두 정확히 n개이면 성공
+  local st pods spec cur avail
+  st=$(kq -n demo get deploy podinfo -o jsonpath='{.spec.replicas} {.status.replicas} {.status.availableReplicas}') || return 1
+  pods=$(kq -n demo get pods -l app=podinfo -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}') || return 1
+  pods=$(count_lines "$pods") || return 1
+  read -r spec cur avail <<<"$st"
+  [[ ${spec:-0} == "$1" && ${cur:-0} == "$1" && ${avail:-0} == "$1" && $pods == "$1" ]] ||
+    { echo "spec ${spec:-0}, replicas ${cur:-0}, available ${avail:-0}, Pod ${pods}개" >&2; return 1; }
 }
 no_podinfo_hpa() { # demo에서 Deployment podinfo를 대상으로 하는 HPA가 없으면 성공
   local rows name target found=""
@@ -186,10 +190,10 @@ reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n
   k -n demo scale deploy podinfo --replicas "$1" >/dev/null
   log "워크로드 노드가 ${1}대 이하가 될 때까지 대기(NAP consolidation)"
   wait_until "노드 축소" 1800 nodes_at_most "$1"
-  # podinfo가 Pending인 채로 warm 패턴이 시작되지 않도록 replica <n>개가 사용 가능해질 때까지 기다립니다.
+  # podinfo가 Pending이거나 이전 패턴의 Pod가 남은 채로 warm 패턴이 시작되지 않도록 정확히 replica <n>개가 될 때까지 기다립니다.
   if (( $1 >= 1 )); then
-    log "podinfo replica ${1}개 사용 가능 대기"
-    wait_until "podinfo 준비" 900 podinfo_available "$1"
+    log "podinfo replica 정확히 ${1}개 대기"
+    wait_until "podinfo 준비" 900 podinfo_exactly "$1"
   fi
 }
 apply_scaledobject() { # apply_scaledobject <manifest>

@@ -37,11 +37,16 @@ csv() {
   fi
   tee -a "$f.pending"
 }
-commit_csv() { # 성공한 실험의 .pending 행을 결과 CSV에 덧붙이고 지웁니다.
-  local p
+commit_csv() { # 성공한 실험의 .pending 행을 결과 CSV에 합칩니다. 기존 CSV와 합친 임시 파일을 다 쓴 뒤에만 바꿔 일부 행만 붙지 않게 합니다.
+  local p f tmp
   for p in "$OUT"/*.pending; do
     [[ -e $p ]] || continue
-    cat "$p" >> "${p%.pending}" && rm -f "$p"
+    f=${p%.pending} tmp=${p%.pending}.tmp
+    if { if [[ -e $f ]]; then cat "$f"; fi; cat "$p"; } > "$tmp"; then
+      mv -f "$tmp" "$f" && rm -f "$p"
+    else
+      rm -f "$tmp"; log "${f}에 결과를 합치지 못했습니다(기존 파일은 그대로)"; return 1
+    fi
   done
 }
 
@@ -259,6 +264,10 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
       log "WARNING drift $1: client Pod 교체·재시작으로 결과 불완전(${client0} → ${client1}). drift.csv에 기록하지 않음: ${row}"
       return 1
     fi
+    # 측정 구간에 요청 로그가 하나도 없으면(client 정지·로그 형식 불일치) 무중단처럼 보이는 0건 행을 남기지 않습니다.
+    local requests; IFS=, read -r _ _ _ requests _ <<<"$row"
+    [[ $requests =~ ^[0-9]+$ ]] && (( requests > 0 )) ||
+      { log "drift $1: 측정 구간의 요청 로그가 없습니다. drift.csv에 기록하지 않음: ${row}"; return 1; }
     echo "$row"
   }
   # 이전 실행에서 남은 preStop을 지우고 rollout이 끝난 뒤 시작합니다. 조회 실패는 lifecycle 없음으로 보지 않습니다.

@@ -29,10 +29,16 @@ while url:
     with urllib.request.urlopen(url, timeout=60) as r:
         page = json.load(r)
     for it in page["Items"]:
+        # Linux on-demand meter만 씁니다. 기본 Linux 상품명은 "… Series"나 "…-series Linux"로 다르므로
+        # OS 접미사가 아니라 Windows·Spot·Low Priority 제외로 거릅니다.
         name = it.get("productName", "") + " " + it.get("skuName", "")
         if "Windows" in name or "Spot" in name or "Low Priority" in name:
             continue
-        prices[it["armSkuName"]] = it["retailPrice"]
+        sku, price = it["armSkuName"], it["retailPrice"]
+        # 같은 SKU에 다른 가격이 오면 응답 순서에 따라 값이 바뀌지 않도록 임의로 고르지 않고 실패합니다.
+        if sku in prices and prices[sku] != price:
+            sys.exit(f"{sku}의 Linux on-demand 가격이 둘 이상입니다: {prices[sku]}, {price}")
+        prices[sku] = price
     url = page.get("NextPageLink")
 if not prices:
     sys.exit(f"가격을 찾지 못했습니다: region={region} sku-substring={needle}")

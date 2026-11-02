@@ -10,7 +10,7 @@ decision_s           확장 결정: CAS ScaledUpGroup('setting group') 또는 Tr
                      NAP는 이번 실행에 생성되어 대상 노드에 연결됐거나, 노드 없이 inflate Pod의
                      Nominated 이벤트(nodeclaim/<이름>)가 가리킨 NodeClaim만 봅니다.
                      이전 실행 이벤트에 합쳐진 반복 이벤트는 lastTimestamp(이번 실행 발생 시각의 상한)를 씁니다.
-vm_launched_s        NAP NodeClaim Launched(VM 생성 API 완료). CAS는 측정하지 않음
+vm_launched_s        NAP NodeClaim Launched(Azure provider는 VM 생성 요청이 접수되면 기록, 프로비저닝 완료 아님). CAS는 측정하지 않음
 first_node_ready_s   첫 워크로드 노드 Ready
 last_node_ready_s    마지막 워크로드 노드 Ready
 all_pods_ready_s     모든 inflate Pod Ready. 실행 디렉터리의 replicas(요청 replica 수)보다 Ready Pod가 적으면 빈 값
@@ -102,7 +102,7 @@ def main():
 
     cas = [ev_time(e) for e in events if is_cas_decision(e) and ev_time(e) and ev_time(e) >= t0]
     decision = min(cas) if cas else (min(ts(c["metadata"]["creationTimestamp"]) for c in claims) if claims else None)
-    # Launched는 status가 True일 때만 VM 생성 완료를 뜻합니다(False/Unknown은 실패·재시도 중).
+    # Launched는 status가 True일 때만 VM 생성 요청이 접수됐다는 뜻입니다(False/Unknown은 실패·재시도 중).
     launched = [ts(cond(c, "Launched")["lastTransitionTime"]) for c in claims
                 if (cond(c, "Launched") or {}).get("status") == "True"]
 
