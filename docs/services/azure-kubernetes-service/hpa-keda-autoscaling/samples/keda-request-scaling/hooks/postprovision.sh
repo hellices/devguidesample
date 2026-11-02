@@ -18,8 +18,13 @@ log "KEDA HTTP Add-on 설치"
 
 [[ ${ENABLE_AGC:-true} == true ]] || exit 0
 MC=$(az aks show -g "$RG" -n "$CLUSTER" --query nodeResourceGroup -o tsv)
-SUBNET_ID=$(az network vnet list -g "$MC" --query "[0].subnets[?name=='aks-appgateway'].id | [0]" -o tsv)
-[[ -n $SUBNET_ID ]] || { echo "aks-appgateway 서브넷이 없습니다. AGC add-on 상태를 확인하세요." >&2; exit 1; }
+# 노드 리소스 그룹의 모든 VNet에서 aks-appgateway 서브넷을 찾고, 정확히 하나일 때만 진행합니다.
+SUBNET_ID=$(az network vnet list -g "$MC" --query "[].subnets[?name=='aks-appgateway'][].id" -o tsv)
+COUNT=$(grep -c . <<<"$SUBNET_ID" || true)
+if (( COUNT != 1 )); then
+  echo "노드 리소스 그룹 ${MC}에서 aks-appgateway 서브넷을 ${COUNT}개 찾았습니다. 정확히 1개여야 합니다. AGC add-on 상태를 확인하세요." >&2
+  exit 1
+fi
 sed "s|<alb-subnet-id>|$SUBNET_ID|" agc/gateway.yaml | kubectl --context "$CTX" apply -f - >/dev/null
 log "AGC Gateway 준비 대기"
 kubectl --context "$CTX" -n demo wait gateway/web --for=condition=Programmed --timeout=20m >/dev/null

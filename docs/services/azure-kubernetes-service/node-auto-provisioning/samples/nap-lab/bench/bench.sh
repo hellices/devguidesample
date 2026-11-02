@@ -18,9 +18,9 @@ CPU=${CPU:-1} TIMEOUT=${TIMEOUT:-1800} WAVE_INTERVAL=${WAVE_INTERVAL:-30}
 OUT=${OUT:-./out} HERE=$(cd "$(dirname "$0")" && pwd)
 # 잘못된 runs·nodeSelector로 patch만 적용되고 측정이 없거나 엉뚱한 노드를 세지 않도록 리소스를 바꾸기 전에 확인합니다.
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
-# scenario는 CSV 첫 열에 그대로 들어가므로 열·행을 깨는 문자를 막습니다.
-if [[ $SCENARIO == *[$',\r\n"']* ]]; then
-  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+# scenario는 CSV 첫 열과 결과 경로(OUT/<scenario>)에 그대로 쓰므로 열·행을 깨거나 경로를 벗어나는 값을 막습니다.
+if [[ ! $SCENARIO =~ ^[A-Za-z0-9._-]+$ || $SCENARIO == . || $SCENARIO == .. ]]; then
+  echo "scenario는 영문자, 숫자, '.', '_', '-'만 쓸 수 있고 '.'이나 '..'일 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
 # nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
 # key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
@@ -86,9 +86,12 @@ trap 'exit 143' TERM
 k -n bench patch deployment inflate --type strategic -p \
   "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"pause\",\"resources\":{\"requests\":{\"cpu\":\"$CPU\",\"memory\":\"1Gi\"}}}]}}}}" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
+# 생략하면 이전 실행에서 남은 nodeSelector를 지웁니다(apply는 매니페스트에 없는 필드를 지우지 않음).
 if [[ -n $SELECTOR ]]; then
   k -n bench patch deployment inflate --type json -p \
     "[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]" >/dev/null
+else
+  k -n bench patch deployment inflate --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":null}}}}' >/dev/null
 fi
 
 # pipefail로 명령 안의 조회 실패(예: kubectl | wc -l)를 실패로 전파하고, 성공한 출력만 0과 비교합니다.

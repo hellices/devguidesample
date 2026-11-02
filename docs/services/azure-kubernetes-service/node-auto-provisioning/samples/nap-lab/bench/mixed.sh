@@ -11,9 +11,9 @@ BIG=${BIG:-4} MEM=${MEM:-6} SMALL=${SMALL:-10} TIMEOUT=${TIMEOUT:-900} OUT=${OUT
 HERE=$(cd "$(dirname "$0")" && pwd)
 # 리소스를 바꾸기 전에 확인합니다. 0이나 정수가 아닌 값이면 측정 없이 성공으로 끝나지 않게 합니다.
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
-# scenario는 CSV 첫 열에 그대로 들어가므로 열·행을 깨는 문자를 막습니다.
-if [[ $SCENARIO == *[$',\r\n"']* ]]; then
-  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+# scenario는 CSV 첫 열과 결과 경로(OUT/<scenario>)에 그대로 쓰므로 열·행을 깨거나 경로를 벗어나는 값을 막습니다.
+if [[ ! $SCENARIO =~ ^[A-Za-z0-9._-]+$ || $SCENARIO == . || $SCENARIO == .. ]]; then
+  echo "scenario는 영문자, 숫자, '.', '_', '-'만 쓸 수 있고 '.'이나 '..'일 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
 # nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
 # key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.

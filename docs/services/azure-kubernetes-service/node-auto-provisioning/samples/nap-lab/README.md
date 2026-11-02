@@ -77,6 +77,11 @@ eval "$(azd env get-values)"; export AZURE_RESOURCE_GROUP CAS_CLUSTER_NAME NAP_C
 OUT=./out ./bench/bench.sh "$NAP_CLUSTER_NAME" nap-burst 20 3 bench=fixed
 ```
 
+`bench` 스크립트의 `<scenario>`는 CSV 첫 열과 결과 경로(`OUT/<scenario>`)에 쓰이므로 영문자,
+숫자, `.`, `_`, `-`만 쓸 수 있고 `.`·`..`은 쓸 수 없습니다. `overprovision.sh`의
+nodeSelector는 벤치마크 전용 풀의 노드만 가리켜야 하며, 시작 전에 selector에 맞는 Ready
+노드가 있으면 실패합니다.
+
 `bench/analyze.py`가 실행마다 다음 열의 CSV 한 줄을 출력합니다.
 
 | 열 | 의미 |

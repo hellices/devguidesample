@@ -14,9 +14,9 @@ USAGE="사용법: rightsize.sh <kube-context> <scenario> <nodeSelector key=value
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE}
 FROM=${FROM:-20} TO=${TO:-3} WINDOW=${WINDOW:-720}
 HERE=$(cd "$(dirname "$0")" && pwd)
-# scenario는 CSV에 쓰지 않지만 다른 bench 스크립트와 같은 규칙으로 리소스를 바꾸기 전에 확인합니다.
-if [[ $SCENARIO == *[$',\r\n"']* ]]; then
-  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+# scenario는 CSV·경로에 쓰지 않지만 다른 bench 스크립트와 같은 규칙으로 리소스를 바꾸기 전에 확인합니다.
+if [[ ! $SCENARIO =~ ^[A-Za-z0-9._-]+$ || $SCENARIO == . || $SCENARIO == .. ]]; then
+  echo "scenario는 영문자, 숫자, '.', '_', '-'만 쓸 수 있고 '.'이나 '..'일 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
 # nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
 # key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
@@ -76,10 +76,14 @@ start=$(date +%s)
 # 기준 행의 elapsed_s는 기준 측정을 마친 시각에서 축소 명령 완료 시각(start)을 뺀 실제 값입니다(보통 0~-2).
 echo "$(( base_at - start )),$n,$c,$usd,$skus,$(grep -c . <<<"$base" || true),0,$ready,$gone"
 while :; do
+  # 기한을 먼저 확인하고, 측정이 끝난 시각도 WINDOW 안일 때만 기록합니다.
+  (( $(date +%s) - start <= WINDOW )) || break
   cur=$(pods); seen=$(printf '%s\n%s\n' "$seen" "$cur" | sort -u)
   moved=$(comm -13 <(echo "$base") <(echo "$seen") | grep -c . || true)
   read -r n ready gone c usd skus < <(node_state)
-  echo "$(( $(date +%s) - start )),$n,$c,$usd,$skus,$(echo "$cur" | grep -c .),$moved,$ready,$gone"
+  el=$(( $(date +%s) - start ))
+  (( el <= WINDOW )) || break
+  echo "$el,$n,$c,$usd,$skus,$(echo "$cur" | grep -c .),$moved,$ready,$gone"
   # 관찰 시간을 넘기지 않도록 남은 시간이 30초보다 짧으면 그만큼만 기다립니다.
   left=$(( WINDOW - ($(date +%s) - start) ))
   (( left > 0 )) || break

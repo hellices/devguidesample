@@ -48,11 +48,15 @@ kubectl --context "$NAP" -n bench patch deployment inflate --type strategic -p \
 kubectl --context "$NAP" -n bench patch deployment inflate --type json -p \
   '[{"op":"add","path":"/spec/template/spec/nodeSelector","value":{"bench":"stale"}}]' >/dev/null
 
-claims() { # 대상 NodePool의 NodeClaim을 "<개수> <NodePool>;" 목록으로 출력. 조회 실패는 nonzero
+claims() { # 대상 NodePool의 NodeClaim을 정렬한 "<이름> <NodePool>;" 목록으로 출력. 조회 실패는 nonzero
+  # 개수가 같아도 NodeClaim이 교체되면 다른 값이 되도록 이름을 포함해 안정 여부를 비교합니다.
   local out
   out=$(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' \
-    -o jsonpath='{range .items[*]}{.metadata.labels.karpenter\.sh/nodepool}{"\n"}{end}') || return 1
-  [[ -z $out ]] || sort <<<"$out" | uniq -c | tr -s ' ' | tr '\n' ';'
+    -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.labels.karpenter\.sh/nodepool}{"\n"}{end}') || return 1
+  [[ -z $out ]] || LC_ALL=C sort <<<"$out" | tr '\n' ';'
+}
+summary() { # claims 출력을 기록용 "<개수> <NodePool>;" 목록으로 바꿉니다(이전 결과 CSV와 같은 형식).
+  [[ -z $1 ]] || tr ';' '\n' <<<"$1" | awk 'NF { print $2 }' | sort | uniq -c | tr -s ' ' | tr '\n' ';'
 }
 
 PROBE_PODS=20
@@ -82,17 +86,20 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
   # 이전 probe·실행에서 남은 Pod나 pref64/alt NodeClaim이 있으면 이번 선택과 섞이므로 먼저 비웁니다. 정리에 실패하면 probe를 시작하지 않습니다.
   kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || { log "probe: scale to 0 failed"; return 1; }
   drop_claims || { log "probe: leftover pref64/alt NodeClaims; not starting probe"; return 1; }
-  kubectl --context "$NAP" -n bench scale deployment inflate --replicas "$PROBE_PODS" >/dev/null
+  # probe는 $(...) 안에서 실행돼 errexit가 적용되지 않으므로 중요한 명령의 실패를 직접 확인합니다.
+  kubectl --context "$NAP" -n bench scale deployment inflate --replicas "$PROBE_PODS" >/dev/null || {
+    log "probe: scale to ${PROBE_PODS} failed"; kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || true
+    drop_claims || true; return 1; }
   # 배정·지정되지 않은 Pod가 0개이고 NodeClaim 목록이 두 번 연속 같을 때까지 기다립니다.
   # 일부 Pod만 반영된 중간 선택을 기록하지 않습니다. timeout이면 빈 결과를 기록하지 않고 실패합니다.
-  local pools="" prev="" left seen start
+  local ids="" prev="" left seen start
   start=$(date +%s)
   while :; do
     sleep 5
-    pools=$(claims) || pools=""
+    ids=$(claims) || ids=""
     left=$(unplaced) || left=unknown
-    if [[ -n $pools && $pools == "$prev" && $left == 0 ]]; then break; fi
-    prev=$pools
+    if [[ -n $ids && $ids == "$prev" && $left == 0 ]]; then break; fi
+    prev=$ids
     if (( $(date +%s) - start > PROBE_TIMEOUT )); then
       log "timeout: pref64/alt NodeClaim selection not stable within ${PROBE_TIMEOUT}s (unplaced pods: ${left})"
       kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || true
@@ -101,13 +108,15 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
     fi
   done
   seen=$(date +%s)
-  kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null
+  kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || {
+    log "probe: scale to 0 failed"; drop_claims || true; return 1; }
   drop_claims || return 1
-  echo "$seen $pools"
+  echo "$seen $(summary "$ids")"
 }
 
 pool_set() { # 선택 결과의 NodePool 집합(예: pref64, alt, alt+pref64). 없으면 빈 값
-  grep -oE 'pref64|alt' <<<"$1" | sort -u | paste -sd+ - || true
+  # ';'로 나눈 항목의 마지막 필드(NodePool label)만 씁니다. NodeClaim 이름(pref64-xxxxx 등)은 보지 않습니다.
+  tr ';' '\n' <<<"$1" | awk 'NF { print $NF }' | sort -u | paste -sd+ - || true
 }
 precondition_failed=0
 check() { # check <phase> <기대 NodePool> <chosen>: 결과를 pc에 ok 또는 failed(...)로 남깁니다.

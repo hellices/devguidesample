@@ -108,7 +108,9 @@ count=$(az aks nodepool show -g $RG --cluster-name $CLUSTER -n user --query coun
 for (( n = count - 1; n >= 0; n-- )); do   # 이미 0대이면 축소 없이 5단계로 넘어갑니다.
   # 축소나 rollout 확인이 실패하면 다음 단계와 풀 삭제로 넘어가지 않고 멈춥니다.
   az aks nodepool scale -g $RG --cluster-name $CLUSTER -n user --node-count $n || exit 1
-  kubectl rollout status deploy/web -n app --timeout=15m || exit 1   # 모든 replica Ready 확인 후 다음 단계
+  # 예시는 Deployment 하나(web)만 확인합니다. 운영에서는 이 풀에 있던 모든 Deployment·StatefulSet에
+  # rollout status를 실행하고, Pending·NotReady Pod가 없는지까지 확인한 뒤 다음 단계로 넘어갑니다.
+  kubectl rollout status deploy/web -n app --timeout=15m || exit 1
 done
 
 # 5. 노드 수가 0인 것을 다시 확인한 뒤 풀 삭제

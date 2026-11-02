@@ -178,14 +178,20 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
     local start client0 client1 row
     client0=$(client_id) || return 1
     [[ -n $client0 ]] || { log "drift $1: client Pod가 없습니다"; return 1; }
-    # patch 직전 시각입니다. 이보다 먼저 만들어진 NodeClaim을 교체 대상으로 보고 client 로그도 이 시각부터 셉니다.
+    # patch 직전 시각입니다. client 로그를 이 시각부터 셉니다.
     start=$(date -u +%FT%TZ)
+    # patch 직전에 있던 대상 NodePool의 NodeClaim 이름을 교체 대상으로 기록합니다. 조회 실패는 실패로 봅니다.
+    local old
+    old=$(kubectl --context "$ctx" get nodeclaims -l karpenter.sh/nodepool=default \
+      -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}') || return 1
     kubectl --context "$ctx" patch nodepool default --type merge \
       -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"rotation\":\"$1\"}}}}}" >/dev/null
     log "drift $1 시작"
-    old_claims() { # drift 시작 전에 만들어진 NodeClaim 수. 조회에 실패하면 nonzero로 반환해 완료로 오인하지 않습니다.
-      local j; j=$(kubectl --context "$ctx" get nodeclaims -l karpenter.sh/nodepool=default -o json) || return 1
-      python3 -c "import json,sys;print(sum(c['metadata']['creationTimestamp']<'$start' for c in json.load(sys.stdin)['items']))" <<<"$j"
+    old_claims() { # patch 전 NodeClaim 중 아직 남은 수. 조회에 실패하면 nonzero로 반환해 완료로 오인하지 않습니다.
+      local cur; cur=$(kubectl --context "$ctx" get nodeclaims -l karpenter.sh/nodepool=default \
+        -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}') || return 1
+      awk 'NR == FNR { if ($0 != "") o[$0] = 1; next } ($0 in o) { n++ } END { print n + 0 }' \
+        <(printf '%s\n' "$old") <(printf '%s\n' "$cur")
     }
     local n
     local limit=$(( $(date +%s) + 3600 ))

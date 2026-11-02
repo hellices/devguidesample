@@ -2,6 +2,9 @@
 # 사용법: overprovision.sh <kube-context> <scenario> <nodeSelector key=value> [runs]
 # placeholder Pod(PriorityClass -10) 3개로 노드 1대분 여유를 잡아 둔 상태에서
 # 실제 Pod 3개를 추가해 Ready까지 걸린 시간을 기록합니다.
+# nodeSelector는 이 벤치마크 전용 노드 풀의 노드만 가리켜야 합니다(예: CAS agentpool=<bench-pool>,
+# NAP karpenter.sh/nodepool=<bench-pool> 또는 그 NodePool template에만 둔 label). "노드 1대" 조건을 이 selector로 세므로
+# 시작할 때 selector에 맞는 Ready 노드가 하나라도 있으면(다른 워크로드 노드, 이전 실행의 잔류 노드) 바로 실패합니다.
 # TIMEOUT=900  Pod·placeholder Ready 대기 제한(초). 넘으면 실패로 종료합니다.
 # placeholder_rescheduled_s: burst 전 placeholder Pod가 모두 선점·교체되고 새 placeholder 3개가 Ready가 된 시각
 set -euo pipefail
@@ -10,9 +13,9 @@ CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE} RUNS=${4:-2} TIMEOU
 HERE=$(cd "$(dirname "$0")" && pwd)
 # 리소스를 바꾸기 전에 확인합니다. 0이나 정수가 아닌 값이면 측정 없이 성공으로 끝나지 않게 합니다.
 [[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
-# scenario는 CSV 첫 열에 그대로 들어가므로 열·행을 깨는 문자를 막습니다.
-if [[ $SCENARIO == *[$',\r\n"']* ]]; then
-  echo "scenario에 쉼표, CR, LF, 큰따옴표를 쓸 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
+# scenario는 CSV 첫 열에 그대로 들어가므로 다른 bench 스크립트와 같은 규칙으로 안전한 문자만 허용합니다.
+if [[ ! $SCENARIO =~ ^[A-Za-z0-9._-]+$ || $SCENARIO == . || $SCENARIO == .. ]]; then
+  echo "scenario는 영문자, 숫자, '.', '_', '-'만 쓸 수 있고 '.'이나 '..'일 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
 fi
 # nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
 # key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
@@ -46,6 +49,15 @@ placeholders_replaced() { # 선점 전 placeholder($old_uids)가 모두 사라�
   [[ $(grep -c ' True$' <<<"$out" || true) -ge 3 ]]
 }
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]"
+
+# placeholder를 배포하기 전에 selector가 전용 풀만 가리키고 그 풀이 비어 있는지 확인합니다. 조회 실패도 실패로 봅니다.
+out=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || {
+  log "node 조회에 실패했습니다"; exit 1; }
+n=$(grep -c True <<<"$out" || true)
+if (( n > 0 )); then
+  log "nodeSelector ${SEL_KEY}=${SEL_VAL}에 맞는 Ready 노드가 시작 전에 ${n}대 있습니다. 전용 벤치마크 풀만 가리키는 selector를 쓰고, 이전 실행의 노드가 축소된 뒤 다시 실행하세요."
+  exit 1
+fi
 
 # 첫 리소스 변경 전에 등록해 apply·patch 부분 실패도 정리합니다.
 trap cleanup EXIT
