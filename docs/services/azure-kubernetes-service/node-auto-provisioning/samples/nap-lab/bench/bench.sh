@@ -72,8 +72,9 @@ pods_ready() { local n; n=$(ready_pods) || return 1; [[ $n -ge $REPLICAS ]]; }
 vms_gone() {
   local out
   out=$(bounded 300 bash -o pipefail -c "$SCALE_IN_COUNT") || return 1
-  out=$(tr -d '[:space:]' <<<"$out")
-  [[ $out =~ ^[0-9]+$ ]] || { log "SCALE_IN_COUNT 출력이 정수가 아닙니다: ${out}"; return 1; }
+  # 앞뒤 공백만 허용합니다. "0 0"이나 두 줄의 0처럼 정수 하나가 아닌 출력은 실패로 봅니다.
+  [[ $out =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ ]] || { log "SCALE_IN_COUNT 출력이 정수 하나가 아닙니다: ${out}"; return 1; }
+  out=${BASH_REMATCH[1]}
   (( 10#$out == 0 ))
 }
 # 삭제·할당 해제된 VM의 node 객체는 NotReady로 남을 수 있으므로 Ready 워크로드 노드 0개를 시작 조건으로 씁니다.
@@ -118,7 +119,7 @@ for (( run = 1; run <= RUNS; run++ )); do
   else
     k -n bench scale deployment inflate --replicas "$REPLICAS" >/dev/null
   fi
-  # timeout이어도 그 시점 스냅샷을 남기며, analyze.py가 Ready가 아닌 Pod가 있으면 all_pods_ready_s를 빈 값으로 둡니다.
+  # timeout이어도 그 시점 스냅샷을 남기며, analyze.py가 Ready Pod가 요청 수보다 적으면 all_pods_ready_s를 빈 값으로 둡니다.
   if wait_for "pods ready" pods_ready; then log "run $run: pods ready"; fi
 
   k -n bench get pods -o json > "$dir/pods.json"

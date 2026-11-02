@@ -127,11 +127,13 @@ def main():
         c = [x for x in p["status"].get("conditions", []) if x["type"] == "Ready" and x["status"] == "True"]
         if c and ts(c[0]["lastTransitionTime"]) >= t0:
             pods.append(ts(c[0]["lastTransitionTime"]))
-    # timeout으로 일부 Pod만 Ready이거나 Pod가 요청 replica 수만큼 생기지 않은 실행은 완료 시간으로 기록하지 않습니다.
+    # timeout으로 Ready Pod가 요청 replica 수보다 적은 실행은 완료 시간으로 기록하지 않습니다.
+    # 교체 등으로 Pod가 요청 수보다 많으면 요청 수만큼 Ready가 된 시각을 씁니다.
     # replicas 파일이 없는 이전 스냅샷은 t0 이후 생성된 Pod 수를 요청 수로 봅니다.
     rf = d / "replicas"
     want = int(rf.read_text().strip()) if rf.exists() else targets
-    all_ready = max(pods) if pods and len(pods) == targets >= want else None
+    pods.sort()
+    all_ready = pods[want - 1] if want >= 1 and len(pods) >= want else None
     msg = re.sub(r"/subscriptions/[^/]+", "/subscriptions/<subscription-id>", msg)
     msg = msg.replace(",", ";").replace("\n", " ")[:200]
     print(",".join([scenario, run, sec(first), sec(fail), sec(fb), sec(min(ready) if ready else None),

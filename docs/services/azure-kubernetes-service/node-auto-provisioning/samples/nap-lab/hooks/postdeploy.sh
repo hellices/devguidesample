@@ -7,7 +7,7 @@
 #       zone1 burst40 quota-staleness migration drift
 # migration은 CAS 클러스터에 NAP를 켜므로 CAS 실험을 모두 끝낸 뒤 마지막에 실행합니다.
 # 실험 이름·RUNS 등 입력은 첫 실험을 시작하기 전에 모두 확인합니다.
-# 결과 CSV는 다시 실행하면 행을 덧붙이고(header가 다르면 실패), rightsize-*.csv·quota-staleness.csv·migration*.log는 덮어씁니다.
+# 결과 CSV는 실험이 성공했을 때만 행을 덧붙이고(header가 다르면 실패), rightsize-*.csv·quota-staleness.csv·migration*.log는 덮어씁니다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source bench/lib.sh
@@ -25,16 +25,24 @@ log() { echo "[$(date -u +%T)] $*" >&2; }
 k() { local ctx=$1; shift; kubectl --context "$ctx" --request-timeout="$KUBE_RT" "$@"; }   # k <context> <kubectl 인수...>
 
 BENCH_HEADER=scenario,run,replicas,decision_s,vm_launched_s,first_node_ready_s,last_node_ready_s,all_pods_ready_s,new_nodes,skus,scale_in_s,wave_latency_s
-# csv <file> <header>: 표준 입력을 결과 CSV에 덧붙입니다(처음이면 header 먼저). 기존 header가 다르면 섞지 않고 실패합니다.
+# csv <file> <header>: 표준 입력을 <file>.pending에 모으고 그대로 출력합니다. 실험이 성공해야 commit_csv가 결과 CSV에
+# 덧붙이므로, 중간에 실패한 실험의 일부 행이 재실행 결과와 섞이지 않습니다. 기존 header가 다르면 섞지 않고 실패합니다.
 csv() {
   local f=$OUT/$1 first=""
   if [[ -s $f ]]; then
     IFS= read -r first < "$f" || true
     [[ $first == "$2" ]] || { log "${f}의 header가 현재 형식과 다릅니다. 파일을 옮긴 뒤 다시 실행하세요"; return 1; }
-  else
-    echo "$2" > "$f"
+  elif [[ ! -s $f.pending ]]; then
+    echo "$2" > "$f.pending"
   fi
-  tee -a "$f"
+  tee -a "$f.pending"
+}
+commit_csv() { # 성공한 실험의 .pending 행을 결과 CSV에 덧붙이고 지웁니다.
+  local p
+  for p in "$OUT"/*.pending; do
+    [[ -e $p ]] || continue
+    cat "$p" >> "${p%.pending}" && rm -f "$p"
+  done
 }
 
 # scale_in_cmd <CAS 풀>: 그 풀의 VMSS가 정확히 하나일 때 남은 VM 수를 출력하는 명령을 SCALE_CMD에 설정합니다.
@@ -270,12 +278,26 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
 }
 
 # 이름을 모두 확인한 뒤 실행합니다. 뒤쪽 이름이 틀려 앞 실험만 실행되고 끝나지 않게 합니다.
+# migration은 CAS 클러스터에 NAP를 켜므로 그 뒤에는 migration 이후가 전제인 drift만 올 수 있습니다.
 read -r -a exps <<<"${list//,/ }"
+migrated=0 uses_cas=0
 for e in "${exps[@]}"; do
   declare -F "exp_${e//-/_}" >/dev/null || { echo "알 수 없는 실험: ${e}" >&2; exit 1; }
+  if (( migrated )) && [[ $e != drift ]]; then
+    echo "migration 뒤에는 drift만 실행할 수 있습니다: ${e}. CAS 실험을 migration 앞에 두세요" >&2; exit 1
+  fi
+  [[ $e == migration ]] && migrated=1
+  [[ $e == migration || $e == drift ]] || uses_cas=1
 done
+# 이전 실행에서 이미 migration을 했다면 CAS 클러스터는 더 이상 CAS 결과를 낼 수 없습니다.
+if (( uses_cas )); then
+  mode=$(azq aks show -g "$RG" -n "$CAS" --query nodeProvisioningProfile.mode -o tsv) || exit 1
+  [[ $mode != Auto ]] || { echo "${CAS}에 NAP가 이미 켜져 있어 CAS 실험을 실행할 수 없습니다" >&2; exit 1; }
+fi
 mkdir -p "$OUT"
+# 실패한 이전 실행이 남긴 미확정 결과는 버립니다.
+rm -f "$OUT"/*.pending
 for e in "${exps[@]}"; do
-  log "실험 $e 시작"; "exp_${e//-/_}"; log "실험 $e 완료"
+  log "실험 $e 시작"; "exp_${e//-/_}"; commit_csv; log "실험 $e 완료"
 done
 echo "결과: $OUT"

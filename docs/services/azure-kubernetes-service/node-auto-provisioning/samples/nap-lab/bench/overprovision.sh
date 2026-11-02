@@ -89,8 +89,10 @@ for (( run = 1; run <= RUNS; run++ )); do
     sleep "$(( left < 10 ? left : 10 ))"
   done
   # readyReplicas는 선점 직후에도 이전 값 3으로 남을 수 있으므로 burst 전 placeholder UID를 기록해 교체 여부로 판단합니다.
-  old_uids=$(k -n bench get pods -l app=overprovisioning -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}')
-  [[ -n ${old_uids//[[:space:]]/} ]] || { log "run $run: no placeholder pods before burst"; exit 1; }
+  # 삭제 중이 아니고 Ready인 placeholder가 정확히 3개일 때 그 UID만 기록합니다(Pending 교체 Pod는 선점 대상이 아님).
+  old_uids=$(k -n bench get pods -l app=overprovisioning -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{$uid := .metadata.uid}}{{range .status.conditions}}{{if and (eq .type "Ready") (eq .status "True")}}{{$uid}}{{"\n"}}{{end}}{{end}}{{end}}{{end}}')
+  n=$(count_matching . <<<"$old_uids")
+  (( n == 3 )) || { log "run $run: burst 직전 Ready placeholder가 ${n}개입니다(3개 필요)"; exit 1; }
   # 안정 확인 뒤 상태가 바뀌지 않았는지 burst 직전에 다시 확인합니다.
   single_ready_node || { log "run $run: burst 직전 selector 노드가 Ready 1대가 아닙니다"; exit 1; }
   t0=$(date +%s)

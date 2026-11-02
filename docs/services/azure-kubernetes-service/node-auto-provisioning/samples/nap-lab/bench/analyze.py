@@ -113,11 +113,13 @@ def main():
         ready_at = ts(c["lastTransitionTime"]) if c and c["status"] == "True" else None
         pod_times.append((ts(p["metadata"]["creationTimestamp"]), ready_at))
     pod_ready = [(c, r) for c, r in pod_times if r is not None]
-    # timeout으로 일부 Pod만 Ready이거나 Pod가 요청 replica 수만큼 생기지 않은 실행은 완료 시간으로 기록하지 않습니다.
+    # timeout으로 Ready Pod가 요청 replica 수보다 적은 실행은 완료 시간으로 기록하지 않습니다.
+    # 교체 등으로 Pod가 요청 수보다 많으면 요청 수만큼 Ready가 된 시각을 씁니다.
     # replicas 파일이 없는 이전 스냅샷은 스냅샷의 Pod 수를 요청 수로 봅니다.
     rf = d / "replicas"
     want = int(rf.read_text().strip()) if rf.exists() else len(pods)
-    all_ready = max(r for _, r in pod_ready) if pods and len(pod_ready) == len(pods) >= want else None
+    ready_sorted = sorted(r for _, r in pod_ready)
+    all_ready = ready_sorted[want - 1] if want >= 1 and len(ready_sorted) >= want else None
 
     wave_lat = ""
     wf = d / "waves"

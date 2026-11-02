@@ -220,6 +220,8 @@ print(json.dumps({"apiVersion": "v1", "kind": "Pod",
 }
 run_load() { # run_load <결과 이름> <TARGET_URL> [Host 헤더]
   local name=$1 target=$2 host=${3:-} m w_uid k6_uid wpod row k6_pod started k6_start phase
+  # 같은 이름으로 다시 실행할 때 중간에 실패하면 이전 실행 결과가 남아 섞이므로 먼저 지웁니다.
+  rm -f "$OUT/$name-k6.txt" "$OUT/$name.raw" "$OUT/$name.csv"
   # 기록은 클러스터 안의 watcher Job이 합니다. 로컬 네트워크가 끊겨도 간격이 유지됩니다.
   # 같은 이름의 Job이 남아 있으면 apply가 이전 Job을 재사용하므로 Pod까지 지운 뒤 만듭니다.
   kwait 5 -n demo delete job watcher k6 --ignore-not-found --cascade=foreground >/dev/null

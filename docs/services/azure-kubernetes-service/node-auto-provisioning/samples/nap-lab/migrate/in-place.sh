@@ -55,14 +55,14 @@ disabled=""   # "<풀> <min> <max>" 줄 목록. 실패한 변경도 일부 적�
 rollback() {
   local rc=$? p min max
   trap '' INT TERM   # 복구 중 들어온 중단 신호로 복구가 끊기지 않게 합니다.
-  # NAP 활성화 요청이 실패로 끝나도 실제로는 적용됐을 수 있습니다. NAP가 켜졌거나 확인하지 못하면 CAS를 다시 켜지 않습니다.
+  # NAP 활성화 요청이 실패로 끝나도 실제로는 적용됐을 수 있습니다. mode가 Manual로 확인될 때만 CAS를 다시 켭니다.
   if [[ -n $disabled ]]; then
     local mode
     if ! mode=$(azq aks show -g "$RG" -n "$CLUSTER" --query nodeProvisioningProfile.mode -o tsv); then
       log "rollback skipped: node provisioning mode 조회 실패. CAS를 다시 켜지 않습니다. 풀 상태를 직접 확인하세요"; exit "$rc"
     fi
-    if [[ $mode == Auto ]]; then
-      log "rollback skipped: NAP(mode Auto)가 켜져 있어 CAS를 다시 켜지 않습니다"; exit "$rc"
+    if [[ $mode != Manual ]]; then
+      log "rollback skipped: node provisioning mode가 '${mode}'(Manual 아님)라 CAS를 다시 켜지 않습니다. 풀 상태를 직접 확인하세요"; exit "$rc"
     fi
   fi
   while read -r -u 3 p min max; do

@@ -77,6 +77,6 @@ def vm_removed(node):
     NotReady로 몇 분 더 남습니다. 두 조건을 모두 만족하는 객체만 제외하므로 생성 중이라 NotReady인
     노드와 삭제 표시만 되고 아직 Ready인 노드는 비용·용량에 남습니다.
     """
-    ready = any(c["type"] == "Ready" and c["status"] == "True" for c in node["status"].get("conditions", []))
-    marked = any(t.get("key") == "ToBeDeletedByClusterAutoscaler" for t in node["spec"].get("taints", []))
+    ready = any(c["type"] == "Ready" and c["status"] == "True" for c in (node.get("status") or {}).get("conditions") or [])
+    marked = any(t.get("key") == "ToBeDeletedByClusterAutoscaler" for t in (node.get("spec") or {}).get("taints") or [])
     return marked and not ready

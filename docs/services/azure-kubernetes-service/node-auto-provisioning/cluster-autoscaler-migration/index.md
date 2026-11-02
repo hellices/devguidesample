@@ -248,7 +248,8 @@ CAS와 NAP는 둘 다 Pending Pod에 반응하므로 같은 Pod 때문에 양쪽
 1. NAP, Azure CNI Overlay + Cilium, 관리 ID로 green 클러스터를 만들고
    인증서·Workload Identity·Key Vault·ACR 권한·관측 구성을 먼저 맞춥니다.
 2. GitOps나 CI/CD로 blue와 같은 버전의 매니페스트를 배포합니다.
-   probe, requests, PDB가 있어야 NAP가 노드를 만들고 안전하게 정리합니다.
+   NAP는 Pending Pod의 requests로 VM 크기를 고르므로 requests를 먼저 맞춥니다. probe는 트래픽을
+   받을 준비 확인에, PDB는 NAP가 노드를 정리할 때 동시에 내려가는 Pod 수 제한에 씁니다.
 3. 데이터 경로를 확인합니다. 상태는 가능하면 클러스터 밖(Azure DB, Storage)에 두고,
    PV가 있으면 CSI snapshot, Azure Files, Velero로 복사·동기화합니다.
 4. 클러스터 앞단의 트래픽 분산 계층에서 green 비중을 단계적으로 늘리고,

@@ -37,7 +37,9 @@ azd up
 
 `EXPERIMENT` 환경 값에 실험을 공백이나 쉼표로 나열하고 postdeploy hook을 실행합니다.
 결과 CSV와 실행별 원본 스냅샷은 `out/<환경 이름>/`에 남습니다. hook은 실험 이름과 `RUNS`를 첫
-실험 전에 모두 확인합니다. 다시 실행하면 결과 CSV에는 행이 덧붙고(header가 다르면 실패),
+실험 전에 모두 확인합니다. `migration` 뒤에는 `drift`만 둘 수 있고, CAS 클러스터에 NAP가 이미 켜져
+있으면 CAS 실험을 시작하지 않습니다. 결과 행은 실험이 성공했을 때만 결과 CSV에 덧붙고(header가 다르면
+실패), 실패한 실험의 행은 `*.pending`에 남았다가 다음 실행 시작 때 지워집니다.
 `rightsize-*.csv`·`quota-staleness.csv`·`migration*.log`와 실행별 스냅샷 디렉터리는 새 실행으로 바뀝니다.
 
 ```bash
@@ -95,7 +97,7 @@ nodeSelector는 벤치마크 전용 풀의 노드만 가리켜야 하며, 시작
 | `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성. CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 `bench` inflate Pod의 `TriggeredScaleUp`과, 이번 실행에 그 `TriggeredScaleUp`이 가리킨 그룹의 `ScaledUpGroup`만, NAP는 이번 실행에 생성된 NodeClaim 중 대상 노드에 연결됐거나, 노드가 없으면 `bench` inflate Pod의 Karpenter `Nominated` 이벤트가 가리킨 NodeClaim만 봄(같은 NodePool의 다른 워크로드 NodeClaim 제외). 이전 실행 이벤트에 합쳐진 반복 이벤트는 `lastTimestamp`(이번 실행 발생 시각의 상한), `series`로 합쳐진 이벤트는 `series.lastObservedTime`을 씀 |
 | `vm_launched_s` | NAP NodeClaim `Launched=True` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
-| `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니거나 Ready Pod가 요청 replica 수(실행 디렉터리의 `replicas`)보다 적으면 빈 값 |
+| `all_pods_ready_s` | 요청 replica 수(실행 디렉터리의 `replicas`)만큼 Pod가 Ready가 된 시각. 교체 등으로 Pod가 요청 수보다 많으면 Ready 시각 순으로 요청 수번째 값을 쓰고, Ready Pod가 요청 수보다 적으면 빈 값 |
 | `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값. `SCALE_IN_COUNT` timeout이면 그 실행 행을 남긴 뒤 실패로 종료하고, 각 실행은 그 명령이 `0`을 출력해야 시작. 명령은 300초 안에 정수를 출력해야 함 |
 | `wave_latency_s` | wave별 추가 → 해당 wave Pod 모두 Ready |
 

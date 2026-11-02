@@ -10,19 +10,21 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
 if len(sys.argv) < 3 or not sys.argv[1].isascii() or not sys.argv[1].isdigit() or int(sys.argv[1]) < 1:
     sys.exit("사용법: bounded.py <1 이상의 초> <명령> [인수...]")
 limit, cmd = int(sys.argv[1]), sys.argv[2:]
 stdin = subprocess.DEVNULL if sys.stdin is None or sys.stdin.isatty() else None
-try:
-    proc = subprocess.Popen(cmd, stdin=stdin, preexec_fn=os.setpgrp)
-except OSError as e:
-    print(f"bounded.py: {cmd[0]}: {e.strerror}", file=sys.stderr)
-    sys.exit(127)
+proc = None
+pending = []
 
 
 def forward(sig, _frame):
+    # 명령을 만들기 전에 받은 신호는 보관했다가 생성 직후 전달합니다.
+    if proc is None:
+        pending.append(sig)
+        return
     try:
         os.killpg(proc.pid, sig)
     except ProcessLookupError:
@@ -32,9 +34,27 @@ def forward(sig, _frame):
 for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
     signal.signal(s, forward)
 
+try:
+    proc = subprocess.Popen(cmd, stdin=stdin, preexec_fn=os.setpgrp)
+except OSError as e:
+    print(f"bounded.py: {cmd[0]}: {e.strerror}", file=sys.stderr)
+    sys.exit(127)
+for s in pending:
+    forward(s, None)
+
 
 def code(rc):
     return 128 - rc if rc < 0 else rc
+
+
+def group_alive():
+    try:
+        os.killpg(proc.pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
 
 
 try:
@@ -42,9 +62,16 @@ try:
 except subprocess.TimeoutExpired:
     print(f"bounded.py: {limit}초 안에 끝나지 않아 중단합니다: {' '.join(cmd)}", file=sys.stderr)
     forward(signal.SIGTERM, None)
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
+    # 그룹 리더가 먼저 끝나도 같은 그룹의 자식이 남을 수 있으므로 그룹 전체를 확인합니다.
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            proc.wait(timeout=0.2)
+        except subprocess.TimeoutExpired:
+            pass
+        if not group_alive():
+            break
+    else:
         forward(signal.SIGKILL, None)
         proc.wait()
     sys.exit(124)

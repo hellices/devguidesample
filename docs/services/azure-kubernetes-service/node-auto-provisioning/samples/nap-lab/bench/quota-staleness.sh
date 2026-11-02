@@ -182,9 +182,9 @@ while (( $(date +%s) - rel < 1200 )); do
   # probe 실패는 기록하지 않고 기한 안에서 다시 시도합니다. 기한을 넘기면 아래 timeout 행으로 끝납니다.
   if ! r=$(probe); then log "WARNING: probe failed after release; retrying"; wait_retry; continue; fi
   chosen=${r#* }; el=$(( ${r%% *} - rel ))
-  echo "released,$el,$(usage),$chosen,"
-  # 선택을 읽은 시각이 1200초 이상이면 pref64여도 기한 안 복귀로 보지 않고 timeout(censored)으로 남깁니다.
+  # 선택을 읽은 시각이 1200초 이상이면 기록하지 않고 아래 timeout(censored) 행만 남깁니다.
   (( el < 1200 )) || break
+  echo "released,$el,$(usage),$chosen,"
   # 대조군과 같이 NodePool 집합이 정확히 pref64일 때만 복귀로 봅니다(alt와 섞이면 아님).
   got=$(pool_set "$chosen")
   [[ $got == pref64 ]] && { found=1; break; }
