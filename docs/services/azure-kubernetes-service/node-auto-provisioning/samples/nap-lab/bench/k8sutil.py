@@ -1,7 +1,7 @@
 """bench 분석 스크립트가 함께 쓰는 Kubernetes 시각·Quantity 파서입니다."""
 import re
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_UP, Decimal
 
 _TS = re.compile(r"(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2}:\d{2})(?:\.(\d+))?([Zz]|[+-]\d{2}:\d{2})")
 _QTY = re.compile(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))([eE][+-]?\d+|Ki|Mi|Gi|Ti|Pi|Ei|n|u|m|k|M|G|T|P|E)?")
@@ -11,6 +11,7 @@ _SUFFIX = {
     "k": Decimal("1e3"), "M": Decimal("1e6"), "G": Decimal("1e9"), "T": Decimal("1e12"),
     "P": Decimal("1e15"), "E": Decimal("1e18"),
 }
+_MILLI = Decimal("1e-3")
 
 
 def ts(value):
@@ -48,14 +49,25 @@ def event_time(e, t0):
 
 
 def qty(value):
-    """Kubernetes Quantity(binary/decimal SI, 지수 표기)를 기본 단위 float로 바꿉니다."""
+    """Kubernetes Quantity(binary/decimal SI, 지수 표기)를 기본 단위 float로 바꿉니다.
+
+    decimal SI 접미사·지수 표기·접미사 없음 값이 milli(1e-3)보다 세밀하면 0에서 먼 쪽으로 1e-3 단위로 올립니다
+    (예: 0.0001 → 0.001, 1500u → 0.002). Kubernetes가 CPU를 1m보다 세밀하게 다루지 않는 것과 맞춥니다.
+    binary 접미사(Ki, Mi 등) 값은 바꾸지 않습니다.
+    """
     m = _QTY.fullmatch(str(value).strip())
     if not m:
         raise ValueError(f"Kubernetes Quantity가 아닙니다: {value!r}")
     num, suffix = m.group(1), m.group(2) or ""
+    if suffix.endswith("i"):
+        return float(Decimal(num) * _SUFFIX[suffix])
     if suffix[:1] in ("e", "E") and len(suffix) > 1:
-        return float(Decimal(num + suffix))
-    return float(Decimal(num) * _SUFFIX[suffix])
+        v = Decimal(num + suffix)
+    else:
+        v = Decimal(num) * _SUFFIX[suffix]
+    if v.as_tuple().exponent < -3:
+        v = v.quantize(_MILLI, rounding=ROUND_UP)
+    return float(v)
 
 
 def vm_removed(node):

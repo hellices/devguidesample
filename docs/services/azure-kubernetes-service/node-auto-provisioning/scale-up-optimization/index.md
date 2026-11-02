@@ -133,7 +133,7 @@ Deployment 상태 갱신이 늦어 측정 스크립트에는 126초로 기록됐
 남아 있습니다.
 
 ```bash
-az aks nodepool add -g $RG --cluster-name $CLUSTER -n burst \
+az aks nodepool add -g "$RG" --cluster-name "$CLUSTER" -n burst \
   --node-osdisk-type Managed --scale-down-mode Deallocate \
   --enable-cluster-autoscaler --min-count 0 --max-count 10
 ```

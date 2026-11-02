@@ -91,7 +91,7 @@ drop_claims() { # 확인용 NodeClaim을 삭제하고 사라질 때까지(최대
   kubectl --context "$NAP" delete nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --wait=false >/dev/null 2>&1 || true
   start=$(date +%s)
   until left=$(kubectl --context "$NAP" get nodeclaims -l 'karpenter.sh/nodepool in (pref64,alt)' --no-headers) && [[ -z $left ]]; do
-    (( $(date +%s) - start <= 900 )) || { log "timeout: probe NodeClaims not deleted within 900s"; return 1; }
+    (( $(date +%s) - start < 900 )) || { log "timeout: probe NodeClaims not deleted within 900s"; return 1; }
     sleep 5
   done
 }
@@ -115,7 +115,7 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
     left=$(unplaced) || left=unknown
     if [[ -n $ids && $ids == "$prev" && $left == 0 ]]; then break; fi
     prev=$ids
-    if (( $(date +%s) - start > PROBE_TIMEOUT )); then
+    if (( $(date +%s) - start >= PROBE_TIMEOUT )); then
       log "timeout: pref64/alt NodeClaim selection not stable within ${PROBE_TIMEOUT}s (unplaced pods: ${left})"
       kubectl --context "$NAP" -n bench scale deployment inflate --replicas 0 >/dev/null || true
       drop_claims || true   # timeout 전에 생긴 NodeClaim도 정상 경로와 같이 정리합니다.
@@ -163,7 +163,7 @@ log "waiting for consumer VMs to be deleted"
 # 조회에 성공한 정수 값만 비교합니다. 실패는 재시도하고 30분 안에 반납되지 않으면 실패로 종료합니다.
 wait_start=$(date +%s)
 until cur=$(fam) && (( cur <= BASELINE_USAGE )); do
-  (( $(date +%s) - wait_start <= 1800 )) || { log "timeout: Ddsv7 usage not back to $BASELINE_USAGE"; exit 1; }
+  (( $(date +%s) - wait_start < 1800 )) || { log "timeout: Ddsv7 usage not back to $BASELINE_USAGE"; exit 1; }
   sleep 15
 done
 rel=$(date +%s); log "released; Ddsv7 usage $cur"

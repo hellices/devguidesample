@@ -6,9 +6,11 @@
 # epoch를 k6 시작 시각 기준 경과 초(elapsed_s)로 바꿔 저장합니다. 조회에 실패한 값은 빈 칸으로 남깁니다.
 set -uo pipefail
 NS=${NS:-demo} DEPLOY=${DEPLOY:-podinfo} HPA=${HPA:-keda-hpa-$DEPLOY} DURATION=${DURATION:-1200} INTERVAL=${INTERVAL:-5}
-pos_int() { [[ $2 =~ ^[1-9][0-9]*$ ]] || { echo "${1}는 양의 정수여야 합니다: '${2}'" >&2; exit 2; }; }
+pos_int() { [[ $2 =~ ^[0-9]+$ ]] && (( 10#$2 > 0 )) || { echo "${1}는 양의 정수여야 합니다: '${2}'" >&2; exit 2; }; }
 pos_int DURATION "$DURATION"
 pos_int INTERVAL "$INTERVAL"
+# 앞자리 0(예: 08)이 있어도 8진수로 해석하지 않도록 검증 뒤 10진수로 바꿉니다.
+DURATION=$((10#$DURATION)) INTERVAL=$((10#$INTERVAL))
 k() { kubectl ${CTX:+--context "$CTX"} "$@"; }
 echo "epoch,desired,ready,hpa_metric,user_nodes"
 start=$(date +%s) next=$(( start + INTERVAL ))

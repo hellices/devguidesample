@@ -91,7 +91,7 @@ NAP는 2025년 7월 GA됐습니다. Microsoft Learn은
 | 축소 방식 | 빈 노드·저사용 노드 삭제(기본 10분 미사용 + 추가 후 10분 지연) | 빈 노드 삭제, 여러 노드 합치기, 더 저렴한 VM으로 교체 | NAP |
 | 축소 중 옮겨진 Pod(20 → 3 Pod) | 1개(`D4ds_v7` 풀) | 3개 | CAS |
 | 중지한 VM 재시작 | `Deallocate` 모드, 첫 노드 50초 | 기능 없음 | CAS |
-| 다른 클러스터와 VM 계열 quota 공유 | 매번 VMSS 확장을 시도해 바로 반영 | quota를 10분 주기로 갱신. 반납 뒤 약 4~7.5분 대체 VM 사용(1회) | CAS |
+| 다른 클러스터와 VM 계열 quota 공유 | 매번 VMSS 확장을 시도해 바로 반영 | quota를 10분 주기로 갱신(소스 코드 기준). 반납 뒤 약 4~7.5분 대체 VM 사용(1회, 원인 미확정) | CAS(추정) |
 | VMSS 10대·노드 풀 10개 제한 정책 | 0→40 확장 거부 | 단독 VM이라 영향 없음 | NAP(정책 환경) |
 | 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget | NAP |
 | 구성 범위 | Windows, 서비스 주체, kubenet 등 대부분 | 일부 구성 미지원([목록](#nap-unsupported)) | CAS |
@@ -275,10 +275,10 @@ spec:
 
 ```bash
 # 기존 클러스터
-az aks update -g $RG -n $CLUSTER --node-provisioning-mode Auto
+az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto
 
 # 새 클러스터
-az aks create -g $RG -n $CLUSTER \
+az aks create -g "$RG" -n "$CLUSTER" \
   --node-provisioning-mode Auto \
   --network-plugin azure --network-plugin-mode overlay --network-dataplane cilium \
   --generate-ssh-keys

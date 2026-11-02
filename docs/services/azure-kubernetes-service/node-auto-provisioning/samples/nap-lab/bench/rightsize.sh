@@ -53,11 +53,11 @@ vcpu='unknown' if any(v is None for v in cpu) else round(sum(qty(v) for v in cpu
 print(len(n), len(r), len(a)-len(n), vcpu, usd, ' '.join(f'{t}x{c}' for t,c in sorted(s.items())))" "$PRICES" "$HERE"
 }
 
-k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
-# 중간 실패·중단에도 inflate를 0으로 되돌립니다. 정리 실패가 원래 종료 상태를 덮지 않습니다.
+# 첫 리소스 변경 전에 등록해 중간 실패·중단에도 inflate를 0으로 되돌립니다. 정리 실패가 원래 종료 상태를 덮지 않습니다.
 trap 'k -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 k -n bench patch deployment inflate --type strategic -p \
   '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"1","memory":"1Gi"}}}]}}}}' >/dev/null
 k -n bench patch deployment inflate --type json -p \
@@ -68,9 +68,9 @@ sleep 60
 echo "elapsed_s,nodes,vcpu,usd_per_hour,skus,pods,moved_pods,ready_nodes,removed_nodes"
 # 축소 직전 Pod 집합을 기준으로 삼아, 축소 직후 재생성된 Pod도 이동으로 집계합니다.
 # 기준 행의 Pod 수는 FROM이 아니라 실제로 조회한 Pod 수입니다(빈 출력은 0).
-base=$(pods); seen="$base"
+# 노드 상태를 먼저 측정하고 Pod 집합은 축소 명령 직전에 읽어, 그 사이 새로 생긴 Pod를 이동으로 잘못 세지 않게 합니다.
 read -r n ready gone c usd skus < <(node_state)
-base_at=$(date +%s)
+base=$(pods); seen="$base"; base_at=$(date +%s)
 k -n bench scale deployment inflate --replicas "$TO" >/dev/null
 start=$(date +%s)
 # 기준 행의 elapsed_s는 기준 측정을 마친 시각에서 축소 명령 완료 시각(start)을 뺀 실제 값입니다(보통 0~-2).

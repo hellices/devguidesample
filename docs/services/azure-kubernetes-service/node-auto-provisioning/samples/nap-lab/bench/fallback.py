@@ -5,8 +5,8 @@
   fallback-pool-pattern: CAS는 대체 VMSS 이름 일부(예: aks-user), NAP는 NodePool 이름(예: fallback)
   분석 모드는 마지막 인수로 지정하고, 생략하면 scenario 접두사(nap-/cas-)로 정합니다.
   first_attempt_s와 failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS만 봅니다. 선호 VM을 시도하지 않은 실행은
-  first_attempt_s가 빈 값입니다. NAP에서 선호 NodeClaim이 스냅샷 전에 삭제됐으면 그 NodeClaim의 가장 이른
-  이벤트 시각을 first_attempt_s로 씁니다. fallback_node_ready_s는 t0 이후 생성된 대체 노드만 봅니다.
+  first_attempt_s가 빈 값입니다. NAP는 스냅샷에 남은 선호 NodeClaim 생성 시각과 선호 NodeClaim 이벤트 시각
+  중 가장 이른 값을 first_attempt_s로 씁니다(스냅샷 전에 삭제된 NodeClaim 포함). fallback_node_ready_s는 t0 이후 생성된 대체 노드만 봅니다.
   all_pods_ready_s는 run-dir의 replicas(요청 replica 수)만큼 Pod가 Ready여야 기록합니다.
 출력: scenario,run,first_attempt_s,failure_seen_s,fallback_decision_s,fallback_node_ready_s,all_pods_ready_s,failure_message
 """
@@ -40,7 +40,6 @@ def main():
     first = fail = fb = None
     msg = ""
     if nap:
-        first = min((ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) != pattern), default=None)
         fbs = [ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) == pattern]
         fb = min(fbs) if fbs else None
         # 선호 NodeClaim의 경고만 실패로 봅니다. 실패한 NodeClaim은 스냅샷 전에 삭제될 수 있으므로
@@ -68,10 +67,12 @@ def main():
         if bad:
             b = min(bad, key=et)
             fail, msg = et(b), (b.get("reason") or "") + ": " + (b.get("message") or "")
-        if first is None:
-            # 선호 NodeClaim이 스냅샷 전에 모두 삭제됐으면 그 NodeClaim의 가장 이른 이벤트를 시도 시각으로 씁니다.
-            first = min((et(e) for e in events if e["involvedObject"].get("kind") == "NodeClaim"
-                         and preferred(e["involvedObject"])), default=None)
+        # 일부 선호 NodeClaim만 스냅샷 전에 삭제될 수 있으므로 남은 NodeClaim 생성 시각과
+        # 선호 NodeClaim 이벤트 시각을 모두 모아 가장 이른 값을 시도 시각으로 씁니다.
+        tries = [ts(c["metadata"]["creationTimestamp"]) for c in claims if pool(c) != pattern]
+        tries += [et(e) for e in events if e["involvedObject"].get("kind") == "NodeClaim"
+                  and preferred(e["involvedObject"])]
+        first = min(tries, default=None)
     else:  # CAS
         def group(e):
             m = (GROUP if e.get("reason") != "TriggeredScaleUp" else TRIGGERED).search(e.get("message") or "")

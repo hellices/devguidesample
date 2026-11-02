@@ -92,30 +92,30 @@ NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없으므로 네�
 ```bash
 # 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
 #    하나라도 남아 있으면 AllowClusterAutoscalerAndNAP 없이는 NAP를 켤 수 없습니다.
-for p in $(az aks nodepool list -g $RG --cluster-name $CLUSTER --query "[?enableAutoScaling].name" -o tsv); do
-  az aks nodepool update -g $RG --cluster-name $CLUSTER -n $p --disable-cluster-autoscaler
+for p in $(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv); do
+  az aks nodepool update -g "$RG" --cluster-name "$CLUSTER" -n "$p" --disable-cluster-autoscaler
 done
-az aks nodepool list -g $RG --cluster-name $CLUSTER --query "[?enableAutoScaling].name" -o tsv   # 빈 결과 확인
+az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv   # 빈 결과 확인
 
 # 2. NAP 활성화. default·system-surge NodePool이 생성됩니다.
-az aks update -g $RG -n $CLUSTER --node-provisioning-mode Auto
+az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto
 kubectl get nodepools.karpenter.sh
 
 # 3. (선택) 기존 풀의 label·taint를 재현한 NodePool 적용
 # 4. 기존 풀을 현재 노드 수에서 한 대씩 축소. AKS가 cordon·drain하며 PDB를 지킵니다.
-count=$(az aks nodepool show -g $RG --cluster-name $CLUSTER -n user --query count -o tsv) || exit 1
+count=$(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n user --query count -o tsv) || exit 1
 [[ $count =~ ^[0-9]+$ ]] || { echo "풀 노드 수를 읽지 못했습니다: '${count}'" >&2; exit 1; }
 for (( n = count - 1; n >= 0; n-- )); do   # 이미 0대이면 축소 없이 5단계로 넘어갑니다.
   # 축소나 rollout 확인이 실패하면 다음 단계와 풀 삭제로 넘어가지 않고 멈춥니다.
-  az aks nodepool scale -g $RG --cluster-name $CLUSTER -n user --node-count $n || exit 1
+  az aks nodepool scale -g "$RG" --cluster-name "$CLUSTER" -n user --node-count "$n" || exit 1
   # 예시는 Deployment 하나(web)만 확인합니다. 운영에서는 이 풀에 있던 모든 Deployment·StatefulSet에
   # rollout status를 실행하고, Pending·NotReady Pod가 없는지까지 확인한 뒤 다음 단계로 넘어갑니다.
   kubectl rollout status deploy/web -n app --timeout=15m || exit 1
 done
 
 # 5. 노드 수가 0인 것을 다시 확인한 뒤 풀 삭제
-[[ $(az aks nodepool show -g $RG --cluster-name $CLUSTER -n user --query count -o tsv) == 0 ]] || exit 1
-az aks nodepool delete -g $RG --cluster-name $CLUSTER -n user
+[[ $(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n user --query count -o tsv) == 0 ]] || exit 1
+az aks nodepool delete -g "$RG" --cluster-name "$CLUSTER" -n user
 ```
 
 노드 단위로 더 세밀하게 제어하려면 풀을 줄이기 전에 Pod를 직접 옮깁니다.

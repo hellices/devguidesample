@@ -70,19 +70,19 @@ snap_crd() { # snap_crd <resource> <file>: CRD가 없는 클러스터(CAS)만 �
 wait_for() { # wait_for <desc> <predicate...>
   local desc=$1; shift; local start; start=$(date +%s)
   until "$@"; do
-    (( $(date +%s) - start > TIMEOUT )) && { log "timeout: $desc"; return 1; }
+    (( $(date +%s) - start >= TIMEOUT )) && { log "timeout: $desc"; return 1; }
     sleep 2
   done
 }
 no_ready_nodes() { local n; n=$(ready_nodes) || return 1; [[ $n -eq 0 ]]; }
 pods_ready() { local n; n=$(ready_pods) || return 1; [[ $n -ge $REPLICAS ]]; }
 
-k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
-# 스냅샷 조회 실패나 중단으로 끝나도 inflate를 0으로 되돌려 Pod와 노드가 남지 않게 합니다.
-# 정리 실패가 원래 종료 상태를 덮지 않습니다.
+# 적용 도중이나 스냅샷 조회 실패·중단으로 끝나도 inflate를 0으로 되돌려 Pod와 노드가 남지 않게 합니다.
+# 첫 변경 명령보다 먼저 등록하며, 정리 실패가 원래 종료 상태를 덮지 않습니다.
 trap 'k -n bench scale deployment inflate --replicas 0 >/dev/null 2>&1 || log "cleanup failed"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+k apply -f "$HERE/../manifests/inflate.yaml" >/dev/null
 k -n bench patch deployment inflate --type strategic -p \
   "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"pause\",\"resources\":{\"requests\":{\"cpu\":\"$CPU\",\"memory\":\"1Gi\"}}}]}}}}" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).

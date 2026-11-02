@@ -64,7 +64,7 @@ for run in $(seq 1 "$RUNS"); do
   log "run $run: waiting for zero workload node objects"
   wait_start=$(date +%s)
   until n=$(node_objects) && [[ $n -eq 0 ]]; do
-    (( $(date +%s) - wait_start <= 1800 )) || { log "run $run: timeout waiting for zero workload node objects"; exit 1; }
+    (( $(date +%s) - wait_start < 1800 )) || { log "run $run: timeout waiting for zero workload node objects"; exit 1; }
     sleep 5
   done
   date -u +%Y-%m-%dT%H:%M:%SZ > "$dir/t0"
@@ -76,7 +76,7 @@ for run in $(seq 1 "$RUNS"); do
   while :; do
     n=$(ready_pods) || exit 1
     [[ $n -ge $total ]] && break
-    if (( $(date +%s) - start > TIMEOUT )); then timed_out=1; break; fi
+    if (( $(date +%s) - start >= TIMEOUT )); then timed_out=1; break; fi
     sleep 3
   done
   # timeout이면 지연 없이 그 시점 상태를 기록합니다.

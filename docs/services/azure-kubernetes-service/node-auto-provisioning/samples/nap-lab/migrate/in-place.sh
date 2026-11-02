@@ -26,7 +26,9 @@ k -n migrate get pods -l app=web -o wide --no-headers | awk '{print $7}' | sort 
 # client가 요청을 보내 200 응답을 기록하기 전에 바꾸면 전환 중 실패를 측정하지 못하므로, 풀·NAP를 바꾸기 전에 확인합니다.
 log "wait for client 200 sample"
 client_deadline=$(( $(date +%s) + 120 ))
-client_ok() { local out; out=$(k -n migrate logs deploy/client --tail=200 2>/dev/null) || return 1; grep -q ' 200$' <<<"$out"; }
+# 확인 시작 뒤에 기록된 200 응답만 인정합니다(이전 실행·확인 전 로그의 200으로 통과하지 않게).
+client_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+client_ok() { local out; out=$(k -n migrate logs deploy/client --since-time="$client_since" 2>/dev/null) || return 1; grep -q ' 200$' <<<"$out"; }
 until client_ok; do
   (( $(date +%s) < client_deadline )) || { log "client 로그에 120초 안에 200 응답이 없습니다. 변경 전에 중단합니다"; exit 1; }
   sleep 5

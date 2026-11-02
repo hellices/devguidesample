@@ -11,11 +11,22 @@ export CTX=$AKS_CLUSTER_NAME
 OUT=out/$AZURE_ENV_NAME; mkdir -p "$OUT"
 # 로컬 네트워크가 잠시 끊겨도 실험이 멈추지 않도록 kubectl을 최대 6번(10초 간격) 다시 시도합니다.
 # 반복해도 결과가 같은 조회·적용·삭제에만 씁니다. 요청을 보내는 cold start 측정은 kubectl을 직접 호출합니다.
-k() { local i; for i in 1 2 3 4 5 6; do kubectl --context "$CTX" "$@" && return 0; sleep 10; done; return 1; }
+# API 호출이 멈춰도 다음 시도로 넘어가도록 요청마다 --request-timeout(기본 30초)을 둡니다.
+kretry() { # kretry <request-timeout> <kubectl 인수...>
+  local rt=$1 i; shift
+  for i in 1 2 3 4 5 6; do kubectl --context "$CTX" --request-timeout="$rt" "$@" && return 0; sleep 10; done; return 1
+}
+k() { kretry 30s "$@"; }
+# --request-timeout은 watch 요청도 끊으므로 자체 --timeout까지 기다리는 wait·rollout status·delete(기본 --wait=true)는
+# 이 함수로 대기 시간을 함께 지정하고 요청 제한을 대기 시간보다 1분 길게 둡니다.
+kwait() { # kwait <대기 분> <kubectl 인수...>
+  local m=$1; shift
+  kretry "$(( m + 1 ))m" "$@" --timeout="${m}m"
+}
 # 표준 입력의 manifest를 한 번 읽어 두고 시도마다 같은 내용으로 적용합니다.
-kapply() { local m i; m=$(cat); for i in 1 2 3 4 5 6; do kubectl --context "$CTX" apply -f - <<<"$m" >/dev/null && return 0; sleep 10; done; return 1; }
+kapply() { local m i; m=$(cat); for i in 1 2 3 4 5 6; do kubectl --context "$CTX" --request-timeout=30s apply -f - <<<"$m" >/dev/null && return 0; sleep 10; done; return 1; }
 # kubectl 출력을 시도마다 파일에 새로 씁니다(부분 출력이 이어 붙지 않게).
-kto() { local f=$1 i; shift; for i in 1 2 3 4 5 6; do kubectl --context "$CTX" "$@" > "$f" && return 0; sleep 10; done; return 1; }
+kto() { local f=$1 i; shift; for i in 1 2 3 4 5 6; do kubectl --context "$CTX" --request-timeout=30s "$@" > "$f" && return 0; sleep 10; done; return 1; }
 log() { echo "[$(date -u +%T)] $*" >&2; }
 INTERCEPTOR=http://keda-add-ons-http-interceptor-proxy.kube-system:8080/
 HOST=podinfo.example.com
@@ -54,12 +65,12 @@ wait_until() { # wait_until <설명> <제한 초> <명령...>
   echo "$what: ${limit}초 안에 끝나지 않았습니다" >&2; return 1
 }
 reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n>, 워크로드 노드를 <n>대 이하로 맞춥니다.
-  k -n demo delete scaledobject podinfo --ignore-not-found >/dev/null
-  k -n demo delete triggerauthentication azure-wi --ignore-not-found >/dev/null
-  k -n demo delete interceptorroute podinfo --ignore-not-found >/dev/null 2>&1 || true
-  k -n demo delete job k6 --ignore-not-found --wait >/dev/null
+  kwait 5 -n demo delete scaledobject podinfo --ignore-not-found >/dev/null
+  kwait 5 -n demo delete triggerauthentication azure-wi --ignore-not-found >/dev/null
+  kwait 5 -n demo delete interceptorroute podinfo --ignore-not-found >/dev/null 2>&1 || true
+  kwait 5 -n demo delete job k6 --ignore-not-found --wait >/dev/null
   # 이전 실행이 중간에 멈춰 남은 keeper가 워크로드 노드를 붙잡지 않도록 지웁니다(cold start 재실행 대비).
-  k -n demo delete deploy keeper --ignore-not-found --wait >/dev/null
+  kwait 5 -n demo delete deploy keeper --ignore-not-found --wait >/dev/null
   k -n demo scale deploy podinfo --replicas "$1" >/dev/null
   log "워크로드 노드가 $1대 이하가 될 때까지 대기(NAP consolidation)"
   wait_until "노드 축소" 1800 nodes_at_most "$1"
@@ -69,7 +80,7 @@ reset() { # 이전 패턴의 scaler와 부하를 지우고 podinfo를 replica <n
     wait_until "podinfo 준비" 900 podinfo_available "$1"
   fi
 }
-ready_scaledobject() { k -n demo wait scaledobject/podinfo --for=condition=Ready --timeout=5m >/dev/null; }
+ready_scaledobject() { kwait 5 -n demo wait scaledobject/podinfo --for=condition=Ready >/dev/null; }
 apply_http_scaler() { # apply_http_scaler <minReplicaCount>
   sed "s/minReplicaCount: 0/minReplicaCount: $1/" http-add-on/scaling.yaml | kapply
   ready_scaledobject
@@ -77,7 +88,7 @@ apply_http_scaler() { # apply_http_scaler <minReplicaCount>
 run_load() { # run_load <결과 이름> <TARGET_URL> [Host 헤더]
   local name=$1 target=$2 host=${3:-}
   # 기록은 클러스터 안의 watcher Job이 합니다. 로컬 네트워크가 끊겨도 간격이 유지됩니다.
-  k -n demo delete job watcher --ignore-not-found --wait >/dev/null
+  kwait 5 -n demo delete job watcher --ignore-not-found --wait >/dev/null
   k -n demo create configmap watch-script --from-file=load/watch-replicas.sh --dry-run=client -o yaml | kapply
   sed "s|value: \"1200\"|value: \"${DURATION:-1200}\"|" load/watcher.yaml | kapply
   # watcher가 첫 기록을 남긴 뒤 부하를 시작합니다(이미지 준비 시간만큼 기록이 늦게 시작되는 것을 막음).
@@ -130,12 +141,12 @@ pattern_http_add_on_cold_start() {
     kubectl patch --local -f - --type merge -o yaml \
       -p '{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.azure.com/mode":"user"}}}}}' | kapply
   k -n demo set resources deploy keeper --requests=cpu=100m,memory=64Mi >/dev/null
-  k -n demo rollout status deploy keeper --timeout=10m >/dev/null
+  kwait 10 -n demo rollout status deploy keeper >/dev/null
   local n; n=$(user_nodes) || n=""
   [[ $n =~ ^[0-9]+$ ]] && (( n >= 1 )) || { echo "keeper 배치 뒤 워크로드 노드가 없습니다(조회 값: ${n:-실패})" >&2; return 1; }
   for r in 1 2 3; do cold_request "$r"; done
   # 새 노드가 필요한 경우: keeper를 지우고 워크로드 노드가 0대가 된 뒤 요청합니다.
-  k -n demo delete deploy keeper --ignore-not-found >/dev/null
+  kwait 5 -n demo delete deploy keeper --ignore-not-found >/dev/null
   wait_until "replica 0" 900 bash -c "[[ \$(kubectl --context $CTX --request-timeout=30s -n demo get deploy podinfo -o jsonpath='{.spec.replicas}') == 0 ]]"
   wait_until "워크로드 노드 0" 1800 nodes_at_most 0
   cold_request node-cold
