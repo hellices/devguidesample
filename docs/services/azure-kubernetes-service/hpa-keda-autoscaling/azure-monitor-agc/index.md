@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [build, networking]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Integrations with Kubernetes Event-driven Autoscaling (KEDA) on Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/keda-integrations
@@ -29,7 +29,7 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/keda-about
   - title: KEDA Azure Monitor scaler
     url: https://keda.sh/docs/2.19/scalers/azure-monitor/
-last_verified: 2026-10-31
+last_verified: 2026-11-02
 review_cycle_days: 90
 estimated_time: 75m
 cost: paid
@@ -73,8 +73,8 @@ AKS 관리 VNet에서는 add-on이 `Microsoft.ServiceNetworking/trafficControlle
 delegation된 `aks-appgateway` 서브넷을 만듭니다. Learn에는 이 서브넷의 NSG를 add-on이
 만든다는 설명이 없습니다. 실습 구독에서는 서브넷이 생긴 뒤 이름에 `appgateway`가 들어간
 NSG가 기본 규칙만 있는 상태로 연결되었습니다. azd로 다시 만든 클러스터에서는 add-on 설정 직후에는 NSG가
-없다가 부하 실험 전에 연결되어 frontend가 막혔습니다. 구독 정책 등으로 NSG가 나중에 붙을 수
-있으므로 부하를 주기 직전에 서브넷 상태를 다시 확인합니다.
+없다가 부하 실험 전에 연결되어 frontend가 막혔습니다. NSG를 연결한 주체는 확인하지 못했고(구독 정책
+등으로 추정), NSG가 나중에 붙을 수 있으므로 부하를 주기 직전에 서브넷 상태를 다시 확인합니다.
 
 ## 비용: AGC·frontend·association 시간, capacity unit, 추가 노드
 
@@ -105,8 +105,8 @@ azd hooks run postdeploy      # 결과: out/<환경 이름>/azure-monitor-agc.cs
 ```
 
 hook은 `agc/scaledobject.yaml`의 `<...>` 값(AGC 이름, node resource group, 구독·테넌트, KEDA
-client ID)을 채워 적용하고, k6로 Gateway 주소(`http://<gateway-address>/`)에 초당 최대 400건을
-6분간 보냅니다.
+client ID)을 채워 적용하고, k6로 Gateway 주소(`http://<gateway-address>/`)에 다른 패턴과 같은
+부하(1분 ramp-up → 초당 400건 5분 유지 → 30초 감소)를 보냅니다.
 
 ## 실측 결과: 첫 확장과 전체 Ready 시점
 
@@ -132,7 +132,8 @@ NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 
 ## 적합한 경우: 급증보다 지속 트래픽
 
 - 앱 코드와 모니터링을 바꾸지 않고 진입점 기준으로 확장할 수 있습니다.
-- 몇십 초 안에 반응해야 하는 burst에는 Managed Prometheus나 HTTP Add-on이 적합합니다.
+- 급증에 더 빨리 반응해야 하면 이번 1회 실측에서 첫 확장이 빨랐던 Managed Prometheus(약 70초)나
+  HTTP Add-on(약 40초)을 먼저 검토합니다.
 - AGC 하나를 여러 앱이 공유하면 전체 요청 수가 섞이므로 앱별 frontend를 나누고
   `metricFilter: Frontend eq '<frontend-name>'`로 범위를 좁힙니다.
 

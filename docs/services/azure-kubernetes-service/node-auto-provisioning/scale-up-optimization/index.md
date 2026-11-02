@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [optimize, operate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Azure Kubernetes Service (AKS) scaling overview — HPA, VPA, Cluster Autoscaler, and KEDA
     url: https://learn.microsoft.com/azure/aks/concepts-scale
@@ -37,7 +37,7 @@ official_sources:
     url: https://karpenter.sh/docs/reference/settings/
   - title: Karpenter Disruption
     url: https://karpenter.sh/docs/concepts/disruption/
-last_verified: 2026-10-31
+last_verified: 2026-11-02
 review_cycle_days: 180
 applies_to: [AKS 1.36]
 topic_order: 3
@@ -46,7 +46,7 @@ topic_order: 3
 # AKS 노드 확장 지연 단축: 여유 용량, VM 재사용, VM 범위, 이미지 스트리밍
 
 새 노드가 필요한 Pod는 autoscaler가 확장을 결정하고, VM이 만들어져 노드로 등록되고,
-Pod가 시작된 뒤에야 요청을 받습니다. 실측에서는 이 가운데 VM 준비(60~80초)가 대부분을
+Pod가 시작된 뒤에야 요청을 받습니다. 실측에서는 이 가운데 VM 준비(결정 후 첫 노드 Ready까지 약 60~90초)가 대부분을
 차지했습니다. autoscaler 종류에 따른 차이는 확장 결정 단계의 약 10초(최대 25초)로, CAS가 새 Pending
 Pod를 보고 한 주기를 기다릴 때 생겼습니다. 따라서 Pod가 VM을 기다리지 않게 하는 방법이
 가장 효과가 큽니다.
@@ -66,13 +66,13 @@ Pod를 보고 한 주기를 기다릴 때 생겼습니다. 따라서 Pod가 VM�
 | 단계 | CAS (VMSS) | NAP | 줄이는 방법 |
 |---|---|---|---|
 | 확장 결정 | 12~27초 (대기가 없으면 3초) | 2~5초 | CAS `scan-interval`, NAP는 기본 동작 |
-| VM 생성·첫 노드 Ready | 결정 후 약 66초 (zone 1 고정 시 55~70초) | 결정 후 약 81초 (zone 1 고정 시 50~57초), 일부 노드 130~270초 | 여유 용량, VM 재사용 |
+| VM 생성·첫 노드 Ready | 결정 후 약 66초 (zone 1 고정 시 55~70초) | 결정 후 약 81초 (zone 1 고정 시 50~57초). 마지막 노드 Ready가 165·264초인 run 있음 | 여유 용량, VM 재사용 |
 | Pod 시작 | 수 초 + 이미지 pull | 같음 | 작은 이미지, artifact streaming |
 
 - CAS는 가장 오래된 Pending Pod가 2초 미만이면 다음 `scan-interval`(기본 10초)까지
   기다립니다. GPU Pod는 이 대기 시간이 30초입니다.
 - NAP는 Pending Pod가 1초 동안 더 생기지 않으면 결정합니다(최대 10초).
-- VM 준비 시간은 autoscaler보다 zone 조건과 측정 시점에 따라 달랐습니다. zone을 나누지 않은
+- VM 준비 시간은 autoscaler보다 zone 조건과 측정 시점에 따라 달랐습니다. zone을 제한하지 않은
   첫 측정에서는 CAS가, zone 1로 고정한 측정에서는 NAP가 조금 빨랐습니다(각 3~5회).
   자세한 조건은 [NAP·CAS 시나리오별 실측](../scenario-comparison/index.md)에 있습니다.
 
@@ -116,7 +116,7 @@ spec:
 | CAS (2회) | 1~3초 | 76~127초 |
 | NAP (3회) | 대부분 1초, 마지막 Pod 11~22초 | 93~100초 |
 
-NAP 측정에서는 Pod 2개가 바로 시작했고, 세 번째 Pod는 scheduler가 placeholder를 한 번 더
+NAP 3회차 이벤트에서는 Pod 2개가 바로 시작했고, 세 번째 Pod는 scheduler가 placeholder를 한 번 더
 밀어낼 때까지 약 10초를 기다렸습니다. CAS 1회차는 컨테이너가 1초 만에 시작했지만
 Deployment 상태 갱신이 늦어 측정 스크립트에는 126초로 기록됐습니다.
 
@@ -146,7 +146,7 @@ az aks nodepool add -g "$RG" --cluster-name "$CLUSTER" -n burst \
 
 할당 해제한 VM을 다시 시작하자 첫 노드 Ready가 일반 풀의 새 VM보다 28~40초 빨랐습니다.
 
-- ephemeral OS disk를 쓸 수 없어 처음 만드는 VM은 1회 측정에서 104초로 일반 풀보다
+- ephemeral OS disk를 쓸 수 없고, 처음 만드는 VM은 1회 측정에서 104초로 일반 풀(78~90초)보다
   늦었습니다. 확장·축소가 반복되는 풀에 씁니다.
 - 할당 해제된 VM은 compute 비용은 없지만 OS 디스크 비용이 남습니다.
 - 재시작한 노드는 Ready가 된 뒤에도 taint가 남아 Pod 배치가 중앙값 약 23초 늦었습니다
@@ -195,7 +195,7 @@ az aks nodepool add -g "$RG" --cluster-name "$CLUSTER" -n burst \
 
 | 설정 | 실측 축소 완료 |
 |---|---|
-| CAS 기본 profile (`scale-down-unneeded-time` 10분) | 10분 이상 |
+| CAS 기본 profile (`scale-down-unneeded-time` 10분) | 10분 이상(기본값 기준, 미측정) |
 | CAS `scale-down-unneeded-time=1m`, `scale-down-delay-after-add=0m` | 109~306초 |
 | NAP `consolidateAfter: 0s`, budget 30% | 214~344초 |
 | NAP `consolidateAfter: 0s`, budget 100% | 56~92초 |
@@ -210,7 +210,7 @@ spec:
     budgets:
       - nodes: "100%"
       - nodes: "20%"
-        schedule: "0 0 * * 1-5"   # UTC 기준
+        schedule: "0 0 * * 1-5"   # UTC 0~10시(KST 9~19시)
         duration: 10h
 ```
 

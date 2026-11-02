@@ -1,5 +1,5 @@
-# <keda-client-id>: setup-keda-identity.sh 출력값
-# <amw-query-endpoint>: az monitor account show --query metrics.prometheusQueryEndpoint
+# <keda-client-id>: Bicep 출력 KEDA_CLIENT_ID(azd env get-value KEDA_CLIENT_ID)
+# <amw-query-endpoint>: Bicep 출력 AMW_QUERY_ENDPOINT(az monitor account show --query metrics.prometheusQueryEndpoint와 같은 값)
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:

@@ -1,88 +1,73 @@
 #!/usr/bin/env bash
 # 사용법: mixed.sh <kube-context> <scenario> <nodeSelector key=value> [runs]
-#   BIG=4 MEM=6 SMALL=10  워크로드별 replica 수
+#   BIG=4 MEM=6 SMALL=10  워크로드별 replica 수(0 이상, 합계 1 이상)
 #   TIMEOUT=900           모든 Pod Ready를 기다릴 최대 시간(초). 넘으면 그 시점 상태를 기록
 #   PRICES=prices.json    prices.py 출력. 노드 시간당 비용 계산에 사용
 #                         (생략하면 results/prices-$AZURE_LOCATION.json)
+#   OUT=<dir>             실행별 원본 스냅샷 저장 위치(기본 ./out). 같은 실행 디렉터리의 이전 산출물은 시작할 때 지웁니다.
+# 각 실행은 selector에 맞는 node 객체가 0개가 될 때까지(최대 1800초) 기다린 뒤 시작합니다.
 set -euo pipefail
 USAGE="사용법: mixed.sh <kube-context> <scenario> <nodeSelector key=value> [runs]"
 CTX=${1:?$USAGE} SCENARIO=${2:?$USAGE} SELECTOR=${3:?$USAGE} RUNS=${4:-1}
 BIG=${BIG:-4} MEM=${MEM:-6} SMALL=${SMALL:-10} TIMEOUT=${TIMEOUT:-900} OUT=${OUT:-./out}
 HERE=$(cd "$(dirname "$0")" && pwd)
+source "$HERE/lib.sh"
 # 리소스를 바꾸기 전에 확인합니다. 0이나 정수가 아닌 값이면 측정 없이 성공으로 끝나지 않게 합니다.
-[[ $RUNS =~ ^[1-9][0-9]*$ ]] || { echo "runs는 1 이상의 정수여야 합니다: ${RUNS}" >&2; echo "$USAGE" >&2; exit 2; }
-# scenario는 CSV 첫 열과 결과 경로(OUT/<scenario>)에 그대로 쓰므로 열·행을 깨거나 경로를 벗어나는 값을 막습니다.
-if [[ ! $SCENARIO =~ ^[A-Za-z0-9._-]+$ || $SCENARIO == . || $SCENARIO == .. ]]; then
-  echo "scenario는 영문자, 숫자, '.', '_', '-'만 쓸 수 있고 '.'이나 '..'일 수 없습니다: ${SCENARIO}" >&2; echo "$USAGE" >&2; exit 2
-fi
-# nodeSelector는 Kubernetes label 문법의 key=value 하나여야 합니다('=' 1개, key 필수, value는 비어도 됨).
-# key: [DNS subdomain 접두사/]이름(63자 이하), value: 빈 값 또는 이름과 같은 규칙. 나눈 key·value를 patch와 노드 조회에 함께 씁니다.
-split_selector() { # split_selector <key=value>: 성공하면 SEL_KEY, SEL_VAL을 설정
-  local name='[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?' dns='[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?'
-  local key=${1%%=*} val=${1#*=}
-  [[ $1 == *=* && $val != *=* && $key =~ ^(($dns)(\.$dns)*/)?$name$ && $val =~ ^($name)?$ ]] || return 1
-  local prefix=${key%/*}
-  [[ $key != */* || ${#prefix} -le 253 ]] || return 1
-  SEL_KEY=$key SEL_VAL=$val
-}
-split_selector "$SELECTOR" || {
-  echo "nodeSelector는 Kubernetes label 문법의 key=value여야 합니다: ${SELECTOR}" >&2; echo "$USAGE" >&2; exit 2; }
+usage_exit() { echo "$USAGE" >&2; exit 2; }
+RUNS=$(int_arg runs "$RUNS" 1) || usage_exit
+BIG=$(int_arg BIG "$BIG" 0) || usage_exit
+MEM=$(int_arg MEM "$MEM" 0) || usage_exit
+SMALL=$(int_arg SMALL "$SMALL" 0) || usage_exit
+TIMEOUT=$(int_arg TIMEOUT "$TIMEOUT" 1) || usage_exit
+total=$((BIG + MEM + SMALL))
+(( total > 0 )) || { echo "BIG·MEM·SMALL 합계는 1 이상이어야 합니다" >&2; usage_exit; }
+check_scenario "$SCENARIO" || usage_exit
+split_selector "$SELECTOR" || usage_exit
 PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_LOCATION이 필요합니다}.json}
 [[ -f $PRICES ]] || { echo "가격 파일이 없습니다: $PRICES (bench/prices.py로 생성)" >&2; exit 1; }
-k() { kubectl --context "$CTX" "$@"; }
+k() { kubectl --context "$CTX" --request-timeout="$KUBE_RT" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
-total=$((BIG + MEM + SMALL))
 ready_pods() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
   local statuses
   statuses=$(k -n mixed get pods -l app=mix \
     -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
-  grep -c True <<<"$statuses" || true
+  count_matching '^True$' <<<"$statuses"
 }
-node_objects() { # Ready 여부와 관계없는 node 객체 수. 조회 실패는 0개가 아니라 nonzero로 반환합니다.
+all_ready() { local n; n=$(ready_pods) || return 1; [[ $n -ge $total ]]; }
+no_node_objects() { # Ready 여부와 관계없이 selector node 객체가 0개면 성공. 조회 실패는 nonzero
   local out
   out=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o name) || return 1
-  grep -c . <<<"$out" || true
+  [[ -z ${out//[[:space:]]/} ]]
 }
 scale_zero() { # 모든 Deployment를 시도하고 하나라도 실패하면 nonzero
   local d rc=0
-  for d in big mem small; do k -n mixed scale deployment $d --replicas 0 >/dev/null || rc=1; done
+  for d in big mem small; do k -n mixed scale deployment "$d" --replicas 0 >/dev/null || rc=1; done
   return "$rc"
 }
-# 첫 리소스 변경 전에 등록해 중간 실패·중단에도 세 Deployment를 0으로 되돌립니다(best-effort).
-trap 'scale_zero 2>/dev/null || log "cleanup failed"' EXIT
+# 첫 리소스 변경 전에 등록해 중간 실패·중단에도 세 Deployment를 0으로 되돌립니다. 정리 실패가 원래 종료 상태를 덮지 않습니다.
+trap 'scale_zero || log "cleanup failed"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
 k apply -f "$HERE/../manifests/mixed.yaml" >/dev/null
 # nodeSelector 전체를 교체합니다(strategic merge는 이전 키를 남김).
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]"
-for d in big mem small; do k -n mixed patch deployment $d --type json -p "$sel" >/dev/null; done
+for d in big mem small; do k -n mixed patch deployment "$d" --type json -p "$sel" >/dev/null; done
 
-for run in $(seq 1 "$RUNS"); do
+for (( run = 1; run <= RUNS; run++ )); do
   dir="$OUT/$SCENARIO/run$run"; mkdir -p "$dir"
+  rm -f "$dir"/{t0,pods.json,nodes.json,events.json}   # 이전 실행 스냅샷이 이번 t0와 섞이지 않게 합니다.
   # 이전 실행의 VM이 지워진 뒤 NotReady로 남은 node 객체까지 사라져야 다음 실행의 구성에 섞이지 않습니다.
   log "run $run: waiting for zero workload node objects"
-  wait_start=$(date +%s)
-  until n=$(node_objects) && [[ $n -eq 0 ]]; do
-    (( $(date +%s) - wait_start < 1800 )) || { log "run $run: timeout waiting for zero workload node objects"; exit 1; }
-    sleep 5
-  done
+  wait_until 1800 5 no_node_objects || { log "run $run: timeout waiting for zero workload node objects"; exit 1; }
   date -u +%Y-%m-%dT%H:%M:%SZ > "$dir/t0"
   k -n mixed scale deployment big --replicas "$BIG" >/dev/null
   k -n mixed scale deployment mem --replicas "$MEM" >/dev/null
   k -n mixed scale deployment small --replicas "$SMALL" >/dev/null
-  start=$(date +%s)
-  timed_out=0
-  while :; do
-    n=$(ready_pods) || exit 1
-    [[ $n -ge $total ]] && break
-    if (( $(date +%s) - start >= TIMEOUT )); then timed_out=1; break; fi
-    sleep 3
-  done
-  # timeout이면 지연 없이 그 시점 상태를 기록합니다.
-  (( timed_out )) || sleep 5
+  # timeout이면 지연 없이 그 시점 상태를 기록합니다. 완료 여부는 analyze_mixed.py가 스냅샷으로 판단합니다.
+  if wait_until "$TIMEOUT" 3 all_ready; then sleep 5; else log "run $run: timeout after ${TIMEOUT}s"; fi
   k -n mixed get pods -o json > "$dir/pods.json"
-  n=$(ready_pods) || exit 1
+  n=$(ready_pods)
   log "run $run: ${n}/${total} pods ready"
   k get nodes -o json > "$dir/nodes.json"
   k get events -n mixed -o json > "$dir/events.json"

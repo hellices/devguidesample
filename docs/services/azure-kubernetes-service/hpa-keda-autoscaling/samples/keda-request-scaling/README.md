@@ -15,7 +15,8 @@ NodePool(on-demand 전용)에서 만들어지며 spot VM은 쓰지 않습니다.
 
 - Azure Developer CLI 1.29 이상, Azure CLI 2.76 이상, `kubectl`, Helm 3, Python 3(`python3`)
 - 대상 리전에 약 40 vCPU quota(시스템 풀 2노드 + 워크로드 노드)
-- k6 Job은 시스템 풀에서 CPU 1·메모리 1Gi를 예약합니다. 시스템 VM 크기(`systemVmSize`, 기본 `Standard_D4ds_v7`)를 줄이면 이 여유가 있는지 확인합니다.
+- k6 Job은 시스템 풀에서 CPU 1·메모리 1Gi를 예약합니다. `infra/main.bicep`의 시스템 VM 크기(`systemVmSize`, 기본 `Standard_D4ds_v7`)를 줄이면 이 여유가 있는지 확인합니다.
+- Azure CLI의 현재 구독(`az account show`)이 azd 환경의 `AZURE_SUBSCRIPTION_ID`와 같아야 합니다. 두 hook이 시작할 때 확인하고 다르면 중단합니다(postdeploy는 `azure-monitor-agc` 패턴에서만).
 
 ## 실행
 
@@ -40,11 +41,13 @@ azd up                                        # Bicep 배포 + postprovision hoo
    - **AGC:** Gateway를 만들고 frontend NSG를 허용하며, AGC에 대한 `Monitoring Reader`를 부여합니다.
 
 AGC 실습을 하지 않으면 `azd up` 전에 `azd env set ENABLE_AGC false`를 실행하고, 아래 `PATTERN`에서
-`azure-monitor-agc`를 뺍니다.
+`azure-monitor-agc`를 뺍니다. `ENABLE_AGC`는 `true`(기본값) 또는 `false`만 받습니다.
 
-패턴은 `PATTERN` 환경 값으로 고르고 `postdeploy` hook으로 실행합니다. 패턴마다 이전
-`ScaledObject`를 지우고 워크로드 노드가 줄어든 뒤 같은 부하를 주며, replica·노드 수를 5초마다
-1200초 동안 기록합니다.
+패턴은 `PATTERN` 환경 값으로 고르고 `postdeploy` hook으로 실행합니다. hook은 실행 전에 모든 패턴
+이름을 확인하고(알 수 없는 이름·중복은 중단), 패턴마다 이전 `ScaledObject`를 지우고 워크로드 노드가
+줄어든 뒤 시작합니다. `http-add-on-cold-start`를 뺀 패턴은 같은 k6 부하를 주며 replica·노드 수를
+5초마다 1200초 동안 기록합니다. hook이 실패하거나 중단되면 k6·watcher Job, keeper Deployment,
+임시 curl Pod를 지웁니다.
 
 ```bash
 # ENABLE_AGC=true(기본값)일 때 5개 패턴 모두
@@ -63,8 +66,9 @@ azd hooks run postdeploy                      # 결과: out/<환경 이름>/
 | `azure-monitor-agc` | AGC `TotalRequests` 기준 확장 |
 
 한 Deployment에는 `ScaledObject`를 하나만 두고, 같은 Deployment를 대상으로 하는 기존 HPA는
-먼저 지웁니다. KEDA admission webhook은 기존 HPA가 있으면 `ScaledObject`를 거부하지만, 이
-검증에 기대지 않고 실습 전에 HPA가 없는지 확인합니다.
+먼저 지웁니다. KEDA admission webhook은 기존 HPA가 있으면 `ScaledObject`를 거부하지만, hook은 이
+검증에 기대지 않고 패턴마다 `ScaledObject`를 지운 뒤 `demo`에 podinfo를 대상으로 하는 HPA가 남아
+있지 않은지 확인합니다. 5분 안에 사라지지 않으면 그 HPA 이름을 보여 주고 중단합니다.
 
 ## 결과 파일
 

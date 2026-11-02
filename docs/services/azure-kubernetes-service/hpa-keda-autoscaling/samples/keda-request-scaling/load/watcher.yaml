@@ -91,7 +91,11 @@ spec:
                 aarch64) ARCH=arm64 ;;
                 *) echo "지원하지 않는 아키텍처: $(uname -m)" >&2; exit 1 ;;
               esac
-              retry curl -sSfLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+              # 내려받기마다 시간 제한을 두고, 같은 릴리스의 sha256으로 바이너리를 확인합니다.
+              url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+              retry curl -sSfL --connect-timeout 10 -m 300 -o /tmp/kubectl "$url"
+              retry curl -sSfL --connect-timeout 10 -m 60 -o /tmp/kubectl.sha256 "$url.sha256"
+              echo "$(cat /tmp/kubectl.sha256)  /tmp/kubectl" | sha256sum -c --quiet -
               chmod +x /tmp/kubectl
               PATH=/tmp:$PATH exec bash /scripts/watch-replicas.sh
           env:

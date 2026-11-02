@@ -22,7 +22,8 @@ azd up
 
 - **Bicep(`infra/`):**
   - CAS 클러스터: 시스템 풀 + `user` 풀(`Standard_D4ds_v7`, Regular, 0–10대), autoscaler profile
-    `scan-interval=10s`, `scale-down-unneeded-time=1m`, `scale-down-delay-after-add=0m`
+    `scan-interval=10s`, `scale-down-unneeded-time=1m`, `scale-down-unready-time=1m`,
+    `scale-down-delay-after-add=0m`
   - NAP 클러스터: 시스템 풀 + NAP(`default`·`system-surge` NodePool은 on-demand 전용)
 - **postprovision hook:** 두 클러스터의 kubeconfig context(이름 = 클러스터 이름)를 만들고 NAP에
   `manifests/nodepool-fixed.yaml`(`Standard_D4ds_v7` 고정)과 `nodepool-flex.yaml`(v7 D 계열
@@ -35,7 +36,9 @@ azd up
 ## 실험 실행
 
 `EXPERIMENT` 환경 값에 실험을 공백이나 쉼표로 나열하고 postdeploy hook을 실행합니다.
-결과 CSV와 실행별 원본 스냅샷은 `out/<환경 이름>/`에 남습니다.
+결과 CSV와 실행별 원본 스냅샷은 `out/<환경 이름>/`에 남습니다. hook은 실험 이름과 `RUNS`를 첫
+실험 전에 모두 확인합니다. 다시 실행하면 결과 CSV에는 행이 덧붙고(header가 다르면 실패),
+`rightsize-*.csv`·`quota-staleness.csv`·`migration*.log`와 실행별 스냅샷 디렉터리는 새 실행으로 바뀝니다.
 
 ```bash
 azd env set EXPERIMENT "scale-out waves"
@@ -77,6 +80,9 @@ eval "$(azd env get-values)"; export AZURE_RESOURCE_GROUP CAS_CLUSTER_NAME NAP_C
 OUT=./out ./bench/bench.sh "$NAP_CLUSTER_NAME" nap-burst 20 3 bench=fixed
 ```
 
+스크립트는 `bench/lib.sh`의 공통 입력 검사·대기 함수를 씁니다. 숫자 입력·nodeSelector·scenario는
+리소스를 바꾸기 전에 확인하고, `kubectl` 요청은 60초(자체 `--timeout`으로 기다리는 명령은 그보다 길게),
+`az` 호출은 `bench/bounded.py`로 조회 5분·변경 60분 안에 끝나지 않으면 중단합니다.
 `bench` 스크립트의 `<scenario>`는 CSV 첫 열과 결과 경로(`OUT/<scenario>`)에 쓰이므로 영문자,
 숫자, `.`, `_`, `-`만 쓸 수 있고 `.`·`..`은 쓸 수 없습니다. `overprovision.sh`의
 nodeSelector는 벤치마크 전용 풀의 노드만 가리켜야 하며, 시작 전에 selector에 맞는 Ready
@@ -90,7 +96,7 @@ nodeSelector는 벤치마크 전용 풀의 노드만 가리켜야 하며, 시작
 | `vm_launched_s` | NAP NodeClaim `Launched=True` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
 | `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니거나 Ready Pod가 요청 replica 수(실행 디렉터리의 `replicas`)보다 적으면 빈 값 |
-| `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값. `SCALE_IN_COUNT` timeout이면 그 실행 행을 남긴 뒤 실패로 종료하고, 각 실행은 그 명령이 `0`을 출력해야 시작 |
+| `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값. `SCALE_IN_COUNT` timeout이면 그 실행 행을 남긴 뒤 실패로 종료하고, 각 실행은 그 명령이 `0`을 출력해야 시작. 명령은 300초 안에 정수를 출력해야 함 |
 | `wave_latency_s` | wave별 추가 → 해당 wave Pod 모두 Ready |
 
 CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler` 범주를 Log Analytics로

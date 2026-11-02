@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [migrate, operate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-11-01
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Migrate from cluster autoscaler to node auto-provisioning
     url: https://learn.microsoft.com/azure/aks/migrate-from-autoscaler-to-node-auto-provisioning
@@ -33,7 +33,11 @@ official_sources:
     url: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/
   - title: Karpenter Scheduling
     url: https://karpenter.sh/docs/concepts/scheduling/
-last_verified: 2026-11-01
+  - title: Use a system-assigned managed identity in Azure Kubernetes Service (AKS)
+    url: https://learn.microsoft.com/azure/aks/system-assigned-managed-identity
+  - title: Feature Gates
+    url: https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/
+last_verified: 2026-11-02
 review_cycle_days: 180
 applies_to: [AKS 1.36, Azure CLI 2.76+]
 topic_order: 2
@@ -55,7 +59,7 @@ CAS를 끄고 NAP를 켠 뒤 기존 VMSS 풀을 단계적으로 줄이면, Pod�
 |---|---|---|
 | 대부분의 클러스터: Azure CNI Overlay/Node Subnet, 관리 ID, Linux 풀 | 경로 1(기본): CAS 끄기 → NAP 켜기 → 풀 단계 축소 | 같은 클러스터에서 전환. 전환 중 기존 풀은 고정 크기 |
 | 워크로드별로 몇 주에 걸쳐 옮겨야 함 | 경로 2: CAS·NAP 동시 운영 | `AllowClusterAutoscalerAndNAP` feature flag 등록과 taint·toleration 관리 필요 |
-| kubenet, Calico, 서비스 주체 | 먼저 클러스터 설정 변경 검토, 불가하면 경로 3: 새 클러스터 blue-green | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 비용이 두 배지만 롤백이 가장 빠름 |
+| kubenet, Calico, 서비스 주체 | 먼저 클러스터 설정 변경 검토, 불가하면 경로 3: 새 클러스터 blue-green | 설정 변경은 노드 재이미지를 동반. 새 클러스터는 전환 기간 비용이 두 배지만 롤백이 가장 빠름 |
 | Azure CNI Pod Subnet 동적 할당 | 경로 3만 가능 | Overlay로 바꿀 수 없고 NAP도 지원하지 않음 |
 
 클러스터 설정 변경에는 다음 조건이 붙습니다.
@@ -92,13 +96,15 @@ NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없으므로 네�
 ```bash
 # 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
 #    하나라도 남아 있으면 AllowClusterAutoscalerAndNAP 없이는 NAP를 켤 수 없습니다.
-for p in $(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv); do
-  az aks nodepool update -g "$RG" --cluster-name "$CLUSTER" -n "$p" --disable-cluster-autoscaler
+pools=$(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv) || exit 1
+for p in $pools; do
+  az aks nodepool update -g "$RG" --cluster-name "$CLUSTER" -n "$p" --disable-cluster-autoscaler || exit 1
 done
-az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv   # 빈 결과 확인
+left=$(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv) || exit 1
+[[ -z $left ]] || { echo "CAS가 켜진 풀이 남아 있습니다: $left" >&2; exit 1; }
 
 # 2. NAP 활성화. default·system-surge NodePool이 생성됩니다.
-az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto
+az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto || exit 1
 kubectl get nodepools.karpenter.sh
 
 # 3. (선택) 기존 풀의 label·taint를 재현한 NodePool 적용
@@ -288,3 +294,5 @@ Learn 절차는 2·3단계 뒤에 고정 크기 풀을 늘리지만, 순서를 �
 - [Kubernetes: Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/)
 - [Kubernetes: Container Lifecycle Hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/)
 - [Karpenter Scheduling](https://karpenter.sh/docs/concepts/scheduling/)
+- [Use a system-assigned managed identity in AKS](https://learn.microsoft.com/azure/aks/system-assigned-managed-identity)
+- [Kubernetes Feature Gates (`PodLifecycleSleepAction`)](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/)

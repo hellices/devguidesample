@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [evaluate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Overview of Node Auto-Provisioning (NAP) in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/node-auto-provisioning
@@ -39,6 +39,8 @@ official_sources:
     url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go
   - title: Cluster Autoscaler 1.35 Azure config
     url: https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_config.go
+  - title: Supported Kubernetes versions in Azure Kubernetes Service (AKS)
+    url: https://learn.microsoft.com/azure/aks/supported-kubernetes-versions
 published_at: 2026-10-30
 topic_order: 1
 ---
@@ -59,9 +61,9 @@ Pod 실행까지의 시간은 두 방식이 비슷합니다. NAP가 앞선 경�
 | NAP, `Standard_D4ds_v7` 고정 (5회) | 3초 | 83초 | 119초 | D4 × 7 |
 | NAP, v7 D 계열 자유 선택 (2회) | 2초 | 88초 | 103초 | D32als_v7 × 1 |
 
-`azd`로 클러스터를 새로 만들어 같은 burst를 3회씩 다시 실행해도 같은 경향이 나왔습니다(중앙값,
-`results/scale-out-azd-rerun.csv`). 결정은 CAS 18초, NAP 2초였고, 첫 노드 Ready는 CAS 69초,
-NAP 57초, 전체 Pod Ready는 CAS 99초, NAP 100초입니다.
+`azd`로 클러스터를 새로 만들어 같은 burst를 3회씩 다시 실행해도 확장 결정에서 NAP가 앞서고 전체 Pod
+Ready는 비슷했습니다(중앙값, `results/scale-out-azd-rerun.csv`). 결정은 CAS 18초, NAP 2초였고, 첫 노드
+Ready는 CAS 69초, NAP 57초로 이번에는 NAP가 빨랐습니다. 전체 Pod Ready는 CAS 99초, NAP 100초입니다.
 
 ## 측정 단계: 확장 결정·VM 생성·노드 준비·Pod 준비·축소
 
@@ -113,7 +115,7 @@ CAS 축소 값은 기본값(10분)으로 두면 비교에 수십 분이 걸려 1
 
 - CAS도 Pending Pod가 생기면 바로 loop를 돌립니다. 하지만 가장 오래된 Pending Pod가
   2초가 안 됐으면 Pod가 더 올 수 있다고 보고 다음 `scan-interval`(10초)까지 기다립니다.
-  GPU를 요청하는 Pod는 이 대기 시간이 30초입니다(AKS 1.35 이상이 쓰는 CAS v1.35 소스의 `unschedulablePodTimeBuffer`,
+  GPU를 요청하는 Pod는 이 대기 시간이 30초입니다(AKS 1.35·1.36이 쓰는 CAS v1.35 소스의 `unschedulablePodTimeBuffer`,
   `unschedulablePodWithGpuTimeBuffer`).
 - NAP는 첫 Pending Pod 이후 1초 동안 새 Pod가 없으면 바로 결정합니다(Karpenter
   `BATCH_IDLE_DURATION` 기본 1초, 최대 10초).
@@ -137,7 +139,7 @@ CAS 축소 값은 기본값(10분)으로 두면 비교에 수십 분이 걸려 1
   제공했습니다(2026-11-01 `az vm list-skus --location eastus2 --size Standard_D4ds_v7` 기준).
   NAP는 노드를 4개 zone(`topology.kubernetes.io/zone` 값 `eastus2-1`~`eastus2-4`,
   `results/nap-nodeclaim-phases.csv`)에 나눠 만들었고, 7대 중
-  1~2대가 130~270초까지 늦어진 run이 있었습니다. 1회차에서는 zone 2 NodeClaim의 `Launched`가
+  1~2대가 크게 늦어 마지막 노드 Ready가 165초·264초였던 run이 있었습니다. 1회차에서는 zone 2 NodeClaim의 `Launched`가
   126초에야 기록됐습니다. CAS 풀은 zone을 지정하지 않은 regional VMSS여서 burst에서는
   마지막 노드가 96~115초 안에 들어왔습니다.
 - 마지막 노드가 늦으면 그 노드에 배치될 Pod도 늦어지므로, 전체 Pod Ready 중앙값은
@@ -162,9 +164,10 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 표의 값은 
 - CAS는 wave마다 VMSS를 1~2대씩 늘렸고(0→2→3→…→7), 매번 "very new" 대기를 거쳤습니다.
 - CAS 2회차에서는 Pod 5개가 Pending인데도 CAS가 약 2분 동안 `Schedulable pods present`로
   판단해 확장하지 않았고, VMSS 목록을 새로 고친 뒤에야 5→7로 늘렸습니다. CAS는 자체
-  스케줄링 시뮬레이션과 VMSS 캐시를 기준으로 판단하므로 이런 지연이 생길 수 있습니다.
-- NAP는 첫 wave에서 2초 만에 NodeClaim을 만들었지만, 노드 준비 시간이 CAS와 비슷해 전체
-  시간도 큰 차이가 없었습니다.
+  스케줄링 시뮬레이션과 VMSS 캐시를 기준으로 판단하므로, 캐시가 갱신되기 전 상태로 판단한 것으로
+  추정합니다(로그 기반, 1회).
+- NAP는 첫 wave에서 2초 만에 NodeClaim을 만들었지만, 노드 준비 시간이 CAS와 비슷해 CAS
+  2회차의 확장 지연을 빼면 전체 시간에 큰 차이가 없었습니다.
 
 ## VM 크기 선택: CAS 풀보다 큰 Pod도 NAP는 수용
 
@@ -173,7 +176,7 @@ Pod 5개씩 30초 간격으로 4번 추가했습니다(각 2회). 표의 값은 
 | 1 vCPU Pod 20개 | D4 × 7, 108초 | D32als_v7 × 1, 103초. 축소 86~93초 |
 | 6 vCPU Pod 4개 | 확장하지 않음 (`NotTriggerScaleUp: Insufficient cpu`) | D32als_v7 × 1, 96초 |
 
-- CAS는 풀마다 VM 크기가 하나이므로 4 vCPU보다 큰 Pod를 받으려면 큰 VM 풀을 미리
+- CAS는 풀마다 VM 크기가 하나이므로 4 vCPU 노드의 할당 가능량보다 큰 Pod를 받으려면 큰 VM 풀을 미리
   만들어 둬야 합니다.
 - NAP는 허용 범위 안에서 Pending Pod 전체를 담을 VM을 고릅니다. 이번에는 메모리가
   적은 AMD v7(`Dals`)을 골랐습니다. `kubernetes.io/arch`를 지정하지 않으면 Arm64 VM도
@@ -203,8 +206,9 @@ Karpenter는 선호 VM의 용량이 없을 때 다른 후보로 빠르게 넘어
   compatible available instance types") 하나로, SKU를 뺀 이유는 적혀 있지 않습니다. 실행 당시
   `StandardDdsv7Family` 한도·사용량과 controller 로그는 기록하지 않았으므로 quota가 원인이라고
   실측으로 확인하지는 못했습니다. karpenter-provider-azure의 quota provider는 VM 계열별
-  quota를 10분마다 조회해 남은 quota로 만들 수 없는 SKU를 후보에서 빼므로, 16 vCPU를 이미 쓴
-  계열에 96 vCPU가 남지 않아 제외됐다고 해석합니다.
+  quota를 10분마다 조회해 남은 quota로 만들 수 없는 SKU를 후보에서 빼고, 리전 전체 vCPU 한도는
+  이 사전 확인에 쓰지 않습니다. 따라서 `StandardDdsv7Family` 한도가 112 vCPU 미만이었다면 16 vCPU를
+  이미 쓴 계열에 96 vCPU가 남지 않아 제외됐다고 해석합니다.
 - 같은 해석이면 quota가 풀린 뒤에도 최대 10분은 이전 사용량으로 판단합니다. 리전 여유가
   84 vCPU로 돌아온 직후 1순위를 64 vCPU VM으로 바꿨지만 NAP는 이를 제외하고 대체 VM을
   만들었습니다. 반납 뒤 1순위 VM으로 돌아오기까지의 지연은
@@ -256,7 +260,7 @@ VM 생성 요청이 접수된 뒤의 할당 실패는 재현하지 못해 소스
 | Pod가 수십 초 안에 떠야 함 | autoscaler 교체보다 여유 용량 확보. [AKS 노드 확장 지연 단축](../scale-up-optimization/index.md) 참고 |
 | 워크로드마다 VM 크기가 다르거나 큰 Pod가 가끔 생김 | NAP. 풀을 미리 만들지 않아도 됨 |
 | 빈 노드를 빨리 정리해 비용을 줄여야 함 | NAP + budget 상향, 또는 CAS 축소 profile 조정 |
-| 노드 준비 시간 편차가 작아야 함 | autoscaler보다 zone 범위와 여유 용량이 좌우함. 같은 zone에서는 두 방식 모두 꼬리 지연이 생김 |
+| 노드 준비 시간 편차가 작아야 함 | autoscaler보다 zone 범위와 여유 용량의 영향이 큰 것으로 보임(각 2~5회). 같은 zone에서는 두 방식 모두 꼬리 지연이 생김 |
 
 시나리오별 유불리와 CAS가 나은 경우는 [NAP·CAS 시나리오별 실측](../scenario-comparison/index.md)에 있습니다.
 
@@ -269,8 +273,8 @@ VM 생성 요청이 접수된 뒤의 할당 실패는 재현하지 못해 소스
 - `pause` 컨테이너라 이미지 pull 시간이 거의 없습니다. 큰 이미지에서는 Pod 시작 시간이
   더 길어집니다.
 - 대규모 확장(수십~수백 노드), Azure API throttling, VM이 만들어진 뒤의 할당 실패
-  (AllocationFailed)는 재현하지 못했습니다. 할당 실패에서는 위 절의 소스 분석처럼 CAS와
-  NAP의 차이가 몇 분 단위로 커질 수 있습니다.
+  (AllocationFailed)는 재현하지 못했습니다. 위 절의 소스 분석대로라면 CAS의 fast delete 옵션이
+  꺼진 환경의 할당 실패에서는 CAS와 NAP의 차이가 몇 분 단위로 커질 수 있습니다.
 
 ## 공식 출처
 
@@ -289,3 +293,4 @@ VM 생성 요청이 접수된 뒤의 할당 실패는 재현하지 못해 소스
 - [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
 - [Cluster Autoscaler 1.35 Azure scale set instance cache](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_scale_set_instance_cache.go)
 - [Cluster Autoscaler 1.35 Azure config](https://github.com/kubernetes/autoscaler/blob/cluster-autoscaler-release-1.35/cluster-autoscaler/cloudprovider/azure/azure_config.go)
+- [Supported Kubernetes versions in AKS](https://learn.microsoft.com/azure/aks/supported-kubernetes-versions)

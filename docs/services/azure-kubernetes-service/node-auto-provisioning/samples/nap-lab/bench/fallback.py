@@ -23,6 +23,8 @@ TRIGGERED = re.compile(r"\{(\S+?) \d+->")
 
 
 def main():
+    if len(sys.argv) not in (5, 6):
+        sys.exit("사용법: fallback.py <run-dir> <scenario> <run> <fallback-pool-pattern> [nap|cas]")
     d, scenario, run, pattern = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
     # 스냅샷에 남은 NodeClaim 유무로 추정하지 않습니다. 실패한 NodeClaim이 모두 삭제된 NAP 실행도 NAP로 분석합니다.
     mode = sys.argv[5] if len(sys.argv) > 5 else scenario.split("-", 1)[0]

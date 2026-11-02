@@ -7,7 +7,7 @@ technologies: [kubernetes, keda, prometheus]
 tags: [build, operate]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Integrations with Kubernetes Event-driven Autoscaling (KEDA) on Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/keda-integrations
@@ -21,7 +21,7 @@ official_sources:
     url: https://keda.sh/docs/2.19/concepts/scaling-deployments/
   - title: Simplified application autoscaling with Kubernetes Event-driven Autoscaling (KEDA) add-on
     url: https://learn.microsoft.com/azure/aks/keda-about
-last_verified: 2026-10-31
+last_verified: 2026-11-02
 review_cycle_days: 90
 estimated_time: 60m
 cost: paid
@@ -89,7 +89,7 @@ hook은 이전 `ScaledObject`를 지우고, 워크로드 노드가 1대로 줄�
 3. `load/k6-job.yaml`을 시스템 노드에서 실행합니다(1분 ramp-up → 400 RPS 5분 유지 → 30초 감소).
 
 podinfo와 PodMonitor는 postprovision에서 배포합니다. PodMonitor는 OSS와 같은 스펙이지만 API
-group이 `azmonitoring.coreos.com/v1`이며, 첫 데이터가 workspace에 보이기까지 1–2분이 걸립니다.
+group이 `azmonitoring.coreos.com/v1`입니다.
 
 ## 실측 결과: 첫 확장 시점과 NAP 노드 준비 시간
 
@@ -117,7 +117,7 @@ k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, KEDA 2
 - k6 결과(`results/k6-summary.csv`): 137,999건, 실패 0건, p99 1 ms. podinfo는 가벼워 2개로도 처리할 수 있었지만,
   replica 수는 설정한 Pod당 RPS 목표를 그대로 따랐습니다.
 - 확장 지연은 `rate(...[1m])` 창, 15초 scrape, 수집 지연, HPA sync 주기(기본 15초)가
-  더해진 결과입니다. 1 → N 구간에서는 HPA가 sync 주기마다 KEDA metrics server를 거쳐
+  더해진 것으로 봅니다(구간별 지연은 측정하지 않음). 1 → N 구간에서는 HPA가 sync 주기마다 KEDA metrics server를 거쳐
   query를 실행하므로, `useCachedMetrics`를 쓰지 않는 한 `pollingInterval`은 이 지연에
   영향을 주지 않습니다(`pollingInterval`은 0 ↔ 1 판단 주기). 더 빨리 반응해야 하면
   rate 창과 scrape 간격을 줄이고, 그만큼 커지는 흔들림도 함께 확인합니다.

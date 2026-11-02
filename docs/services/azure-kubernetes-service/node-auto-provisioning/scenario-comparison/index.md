@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [evaluate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Overview of Node Auto-Provisioning (NAP) in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/node-auto-provisioning
@@ -29,6 +29,8 @@ official_sources:
     url: https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md
   - title: Azure Retail Prices overview
     url: https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices
+  - title: AKS release notes (CHANGELOG)
+    url: https://github.com/Azure/AKS/blob/master/CHANGELOG.md
 published_at: 2026-10-31
 topic_order: 4
 ---
@@ -52,7 +54,7 @@ VM 크기 선택과 비용에서 앞섰고, CAS는 중지한 VM 재시작과 축
 | 40대 동시 확장, 모든 Pod Ready | 198초 | 221초 | 비슷(1회) |
 | 축소 중 옮겨진 Pod(20 → 3 Pod) | 1개(`D4ds_v7` 풀) | 3개 | CAS |
 | 중지한 VM 재시작, 첫 노드 Ready | `Deallocate` 50초(새 VM 78~104초) | 기능 없음 | CAS |
-| 다른 클러스터가 같은 계열 quota를 반납한 뒤 | quota를 미리 거르지 않아 바로 1순위 풀 시도 | 약 4분 뒤까지 대체 VM, 약 7.5분 뒤 1순위 VM(1회, 대조군 실패로 원인 미확정) | CAS(추정) |
+| 다른 클러스터가 같은 계열 quota를 반납한 뒤 | quota를 미리 거르지 않아 바로 1순위 풀 시도(미측정) | 약 4분 뒤까지 대체 VM, 약 7.5분 뒤 1순위 VM(1회, 대조군 실패로 원인 미확정) | CAS(추정) |
 
 ## 측정 환경: East US 2, AKS 1.36.5, v7 on-demand
 
@@ -107,8 +109,8 @@ Pod 20개(각 1 vCPU)를 띄운 뒤 3개로 줄이고 12분 동안 30초마다 �
 [CAS·NAP 확장 시간 단계별 실측](../scale-out-benchmark/index.md)에서 측정한 결과입니다(각 2회). 시스템 풀이 같은
 계열 16 vCPU를 쓰는 상태에서 96 vCPU VM을 1순위로 두자 CAS는 요청이 리전 quota 초과로 실패한
 뒤 23초에 대체 풀로 넘어갔고, NAP는 1순위 VM을 시도하지 않고 2~3초 만에 대체 VM을
-골랐습니다. NAP 이벤트에는 제외 이유가 없어, VM 계열 quota 사전 확인 때문이라는 해석은 소스
-코드에 근거한 추정입니다. NAP가 앞선 단계는 대체 결정뿐입니다. 첫 노드 Ready는 CAS 66~76초, NAP 83초였고
+골랐습니다. NAP 이벤트에는 제외 이유가 없고 계열 quota 한도도 기록하지 않아, VM 계열 quota 사전 확인
+때문이라는 해석은 소스 코드에 근거한 추정입니다. NAP가 앞선 단계는 대체 결정뿐입니다. 첫 노드 Ready는 CAS 66~76초, NAP 83초였고
 모든 Pod Ready는 CAS 104~112초, NAP 96~130초였습니다.
 
 ## VMSS·노드 풀 수 제한 정책: CAS만 영향
@@ -118,7 +120,7 @@ Pod 20개(각 1 vCPU)를 띄운 뒤 3개로 줄이고 12분 동안 30초마다 �
 | 정책 | CAS에 미친 영향 | NAP에 미친 영향 |
 |---|---|---|
 | VMSS 인스턴스 10대 초과 배포 거부 | 2 vCPU 풀을 0→40대로 늘리는 요청이 거부되어 풀이 backoff, Pod 40개가 Pending으로 남음 | 단독 VM 40대 생성, 영향 없음 |
-| AKS 노드 풀 10개 초과 거부 | 풀이 11개가 되자 클러스터 설정 변경이 거부됨 | NodePool은 AKS 노드 풀이 아니므로 영향 없음 |
+| AKS 노드 풀 10개 초과 거부 | 풀이 11개가 되자 클러스터 설정 변경이 거부됨 | NodePool은 AKS 노드 풀이 아니므로 영향 없음. 다만 2026-10-25 릴리스부터 NAP 클러스터에는 AKS 관리 `aksmanagednap` 노드 풀 1개가 추가됨 |
 
 CAS는 VM 크기마다, 그리고 VMSS 크기 제한마다 노드 풀을 따로 만들어야 합니다. 같은 40대를
 CAS로 만들 때는 10대 상한 풀 4개와 `balance-similar-node-groups=true`를 사용했습니다. 이 정책은
@@ -188,7 +190,7 @@ zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측
 - quota가 남아 있는데도 부족하다고 판단하면 시도 없이 대체 VM으로 갑니다. 반대로 quota가
   부족한데도 충분하다고 판단하면 VM 생성이 실패하고 일반 오류 처리로 넘어갑니다.
 - CAS는 quota를 미리 거르지 않고 매번 VMSS 확장을 시도합니다. 실패하면 그 풀을 처음 5분(최대
-  30분) backoff하므로, 한 번 실패한 뒤에는 CAS도 수 분 동안 1순위 풀을 쓰지 않습니다. 이번
+  30분, upstream 기본값) backoff하므로, 한 번 실패한 뒤에는 CAS도 수 분 동안 1순위 풀을 쓰지 않습니다. 이번
   시나리오처럼 실패 없이 quota만 바뀐 경우에는 CAS가 바로 반영합니다.
 - 같은 구독에서 여러 클러스터나 VMSS가 같은 VM 계열 quota를 나눠 쓰면, 위 소스 코드 동작대로
   NAP가 고르는 VM 크기가 최대 10분 전 quota 상태를 따를 수 있습니다. 1순위 VM 계열에는 quota
@@ -205,7 +207,7 @@ zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측
 ## 할당 해제 VM 재시작: CAS에만 있는 방식
 
 CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 중지했다가 다시 시작합니다.
-재시작 시 첫 노드 Ready는 50초로 새 VM(78~104초)보다 빨랐습니다. NAP에는 같은 기능이 없습니다.
+재시작 시 첫 노드 Ready는 50초(2회)로 새 VM(78~104초)보다 빨랐습니다. NAP에는 같은 기능이 없습니다.
 자세한 측정은 [AKS 노드 확장 지연 단축](../scale-up-optimization/index.md)에 있습니다.
 
 ## CAS 운영상 약점: NotReady node 객체 잔류와 expander 기본값
@@ -229,7 +231,7 @@ CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 �
 | VMSS·풀 수 제한 정책 | 사전 예상 없음 | 실험 중 발견 |
 | 같은 zone 확장 | NAP VM 준비가 느림 | 틀림 |
 | 40대 동시 확장 | NAP 꼬리 지연이 큼 | 차이 작음 |
-| quota 정보 갱신 지연 | NAP가 최대 10분 선호 VM 제외 | 맞음(1회, 대조군 실패) |
+| quota 정보 갱신 지연 | NAP가 최대 10분 선호 VM 제외 | 관측은 예상과 일치, 원인 미확정(1회, 대조군 실패) |
 | 축소 중 Pod 이동 | NAP가 더 많이 옮김 | 맞음 |
 | 할당 해제 VM 재시작 | CAS만 가능 | 맞음 |
 
@@ -237,12 +239,12 @@ CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 �
 
 | 환경 | 권장 |
 |---|---|
-| Pod 크기가 다양하거나 자주 바뀜 | NAP. 풀 설계 없이 비용이 낮음 |
+| Pod 크기가 다양하거나 자주 바뀜 | NAP. 이번 혼합 시나리오(2회)에서 풀 설계 없이 비용이 46~54% 낮음 |
 | 큰 VM에서 부하가 크게 줄어드는 패턴 | NAP. VM 교체로 비용 절감, PDB로 이동 제어 |
 | 선호 VM의 quota가 자주 부족함 | NAP. NAP가 캐시한 quota 정보가 부족 상태를 반영하고 있으면 다른 VM으로 빨리 대체. 다른 클러스터·VMSS가 같은 계열 quota를 바꾸면 최대 10분 전 정보로 판단할 수 있고, VM 생성 요청 뒤의 용량 부족(`AllocationFailed`) 대체 속도는 측정하지 않음 |
-| VMSS·노드 풀 수를 제한하는 정책이 있음 | NAP |
+| VMSS 인스턴스 수를 제한하는 정책이 있음 | NAP(NAP 노드는 VMSS 인스턴스가 아님) |
 | 같은 크기 Pod 위주, 풀 설계가 끝남 | CAS로도 충분. 속도 차이는 작음 |
-| 축소·재확장이 잦고 노드를 빨리 되살려야 함 | CAS `Deallocate` 풀 |
+| 축소·재확장이 잦고 노드를 빨리 되살려야 함 | CAS `Deallocate` 풀(Managed OS disk 필요, 중지 중에도 디스크 비용 발생) |
 | 노드 이동을 최소화해야 하는 장시간 워크로드 | CAS 또는 NAP `WhenEmpty`·PDB |
 
 ## 측정 한계: 반복 횟수와 실험 환경
@@ -265,3 +267,4 @@ CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 �
 - [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
 - [Cluster Autoscaler FAQ](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md)
 - [Azure Retail Prices overview](https://learn.microsoft.com/rest/api/cost-management/retail-prices/azure-retail-prices)
+- [AKS release notes](https://github.com/Azure/AKS/blob/master/CHANGELOG.md)

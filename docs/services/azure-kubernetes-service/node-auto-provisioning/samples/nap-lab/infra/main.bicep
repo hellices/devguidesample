@@ -15,7 +15,8 @@ param kubernetesVersion string = '1.36'
 @description('시스템 풀과 CAS user 풀의 VM 크기')
 param vmSize string = 'Standard_D4ds_v7'
 
-@description('시스템 풀 노드 수')
+@minValue(1)
+@description('클러스터별 시스템 풀 노드 수')
 param systemNodeCount int = 2
 
 var token = toLower(uniqueString(subscription().id, environmentName, location))

@@ -12,7 +12,7 @@ param location string
 @description('AKS Kubernetes 버전(<major.minor> 또는 <major.minor.patch>). 기본값은 1.36이며, 빈 문자열이면 버전 속성을 생략해 버전 선택을 AKS에 맡깁니다.')
 param kubernetesVersion string = '1.36'
 
-@description('시스템 풀 VM 크기. k6 부하 Job도 시스템 풀에서 실행합니다.')
+@description('시스템 풀 VM 크기. k6 부하 Job, watcher Job, HTTP Add-on 구성 요소, 임시 curl Pod도 시스템 풀에서 실행합니다.')
 param systemVmSize string = 'Standard_D4ds_v7'
 
 var token = toLower(uniqueString(subscription().id, environmentName, location))

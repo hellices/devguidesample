@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [build, operate]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-11-01
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Simplified application autoscaling with Kubernetes Event-driven Autoscaling (KEDA) add-on
     url: https://learn.microsoft.com/azure/aks/keda-about
@@ -23,7 +23,7 @@ official_sources:
     url: https://keda.sh/http-add-on/0.16/user-guide/configure-cold-start/
   - title: KEDA ScaledObject specification
     url: https://keda.sh/docs/2.19/reference/scaledobject-spec/
-last_verified: 2026-11-01
+last_verified: 2026-11-02
 review_cycle_days: 90
 estimated_time: 60m
 cost: paid

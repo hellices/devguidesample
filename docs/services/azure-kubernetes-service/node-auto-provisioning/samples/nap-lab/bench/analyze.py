@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """bench.sh 스냅샷에서 단계별 시간(초)을 계산해 CSV 한 줄을 출력합니다.
 
+사용법: analyze.py <run-dir> <scenario> <run> <nodeSelector key=value>
+
 decision_s           확장 결정: CAS ScaledUpGroup('setting group') 또는 TriggeredScaleUp 중 이른 시각 / NAP NodeClaim 생성
                      CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 inflate Pod의 TriggeredScaleUp과
                      ScaledUpGroup만 봅니다. 노드를 만들지 못한 그룹(예: quota로 실패한 선호 풀)은 제외합니다.
@@ -39,6 +41,8 @@ def secs(t, t0):
 
 
 def main():
+    if len(sys.argv) != 5:
+        sys.exit("사용법: analyze.py <run-dir> <scenario> <run> <nodeSelector key=value>")
     d, scenario, run, node_sel = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
     t0 = ts((d / "t0").read_text().strip())
     key, _, val = node_sel.partition("=")

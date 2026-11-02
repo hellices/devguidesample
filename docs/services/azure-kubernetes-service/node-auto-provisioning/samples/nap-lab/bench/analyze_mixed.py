@@ -15,6 +15,8 @@ from pathlib import Path
 from k8sutil import qty, ts, vm_removed
 
 
+if len(sys.argv) not in (6, 9):
+    sys.exit("사용법: analyze_mixed.py <run-dir> <scenario> <run> <nodeSelector key=value> <prices.json> [big mem small]")
 d, scenario, run, sel, prices_file = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 t0 = ts((d / "t0").read_text().strip())
 key, _, val = sel.partition("=")
@@ -30,7 +32,7 @@ node_names = {n["metadata"]["name"] for n in nodes}
 
 ready = {"big": 0, "mem": 0, "small": 0}
 if len(sys.argv) > 6:
-    if len(sys.argv) != 9 or not all(a.isascii() and a.isdigit() for a in sys.argv[6:9]):
+    if not all(a.isascii() and a.isdigit() for a in sys.argv[6:9]):
         sys.exit("기대 replica 수는 big mem small 세 개의 0 이상 정수여야 합니다")
     expected = dict(zip(ready, map(int, sys.argv[6:9])))
 else:  # 생성되지 않은 Pod는 알 수 없으므로 스냅샷에 있는 Pod 수를 기대 수로 봅니다.

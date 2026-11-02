@@ -7,7 +7,7 @@ technologies: [kubernetes, karpenter]
 tags: [operate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-10-31
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Overview of Node Auto-Provisioning (NAP) in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/node-auto-provisioning
@@ -48,12 +48,12 @@ official_sources:
   - title: Use Scale-down Mode to delete/deallocate nodes in Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/scale-down-mode
   - title: Configure AKSNodeClass resources for node auto-provisioning (NAP) in Azure Kubernetes Service (AKS)
-    url: https://learn.microsoft.com/azure/aks/node-autoprovision-aksnodeclass
+    url: https://learn.microsoft.com/azure/aks/node-auto-provisioning-aksnodeclass
   - title: "Generally Available: Node auto-provisioning support in AKS"
     url: https://azure.microsoft.com/updates?id=498247
   - title: AKS release notes (CHANGELOG)
     url: https://github.com/Azure/AKS/blob/master/CHANGELOG.md
-last_verified: 2026-10-31
+last_verified: 2026-11-02
 review_cycle_days: 180
 applies_to: [AKS 1.36, Azure CLI 2.76+]
 featured: true
@@ -91,8 +91,8 @@ NAP는 2025년 7월 GA됐습니다. Microsoft Learn은
 | 축소 방식 | 빈 노드·저사용 노드 삭제(기본 10분 미사용 + 추가 후 10분 지연) | 빈 노드 삭제, 여러 노드 합치기, 더 저렴한 VM으로 교체 | NAP |
 | 축소 중 옮겨진 Pod(20 → 3 Pod) | 1개(`D4ds_v7` 풀) | 3개 | CAS |
 | 중지한 VM 재시작 | `Deallocate` 모드, 첫 노드 50초 | 기능 없음 | CAS |
-| 다른 클러스터와 VM 계열 quota 공유 | 매번 VMSS 확장을 시도해 바로 반영 | quota를 10분 주기로 갱신(소스 코드 기준). 반납 뒤 약 4~7.5분 대체 VM 사용(1회, 원인 미확정) | CAS(추정) |
-| VMSS 10대·노드 풀 10개 제한 정책 | 0→40 확장 거부 | 단독 VM이라 영향 없음 | NAP(정책 환경) |
+| 다른 클러스터와 VM 계열 quota 공유 | 매번 VMSS 확장을 시도해 바로 반영(실패한 풀은 backoff, 미측정) | quota를 10분 주기로 갱신(소스 코드 기준). 반납 뒤 약 4분까지 대체 VM, 약 7.5분 뒤 1순위 VM(1회, 원인 미확정) | CAS(추정) |
+| VMSS 10대·노드 풀 10개 제한 정책 | 0→40 확장 거부 | 단독 VM이라 VMSS 정책 영향 없음 | NAP(정책 환경) |
 | 노드 수명 관리 | 업그레이드 시 surge | drift 감지, `expireAfter`, disruption budget | NAP |
 | 구성 범위 | Windows, 서비스 주체, kubenet 등 대부분 | 일부 구성 미지원([목록](#nap-unsupported)) | CAS |
 | 향후 개발 | 유지보수, 최소한의 기능 개선 | 지속 개발, 새 기능 추가 | NAP |
@@ -149,7 +149,7 @@ Pod가 1초 동안 더 생기지 않으면 그 묶음에 맞는 VM 크기와 수
 용량이 없을 때의 재시도도 빠릅니다. Karpenter는 node group 없이 인스턴스를 직접 관리하므로
 용량이 없으면 몇 분이 아니라 밀리초 단위로 다시 시도합니다
 ([Karpenter Concepts](https://karpenter.sh/docs/concepts/)). 선호 VM의 quota나 용량이 부족하면
-NAP는 다른 SKU로 곧바로 넘어갑니다.
+NAP는 다른 SKU로 곧바로 넘어갑니다. 다만 quota는 10분 주기로 갱신한 계열 quota 정보로 판단합니다.
 
 VM 부팅 시간은 그대로입니다. VM을 만들고 노드로 준비하는 시간은 autoscaler가 줄이지 못하며,
 VM 준비에는 보통 2~5분이 걸립니다. 이 시간을 기다릴 수 없는 Linux 급증 부하에는 ACI virtual
@@ -171,7 +171,7 @@ NAP가 더 빠른 상황은 다음 세 가지입니다.
 |---|---|---|---|
 | 새 Pending Pod를 보고 확장 결정 | 가장 오래된 Pending Pod가 2초 미만이면 한 loop 대기(GPU Pod는 30초) | 1초 동안 Pod가 더 없으면 결정 | Pod 생성 직후 CAS 12~27초, NAP 2~5초. Pod가 이미 2초 넘게 대기 중이면 CAS도 3초 |
 | 필요한 VM 크기가 기존 풀에 없음 | 확장하지 않음. 풀을 추가해야 함 | 허용 범위에서 맞는 VM 선택 | 6 vCPU Pod: CAS 확장 안 함, NAP 96초 |
-| 선호 VM을 만들 수 없음 (quota·용량) | quota 오류처럼 즉시 실패하면 다음 loop에서 다른 풀로 대체. VM이 만들어진 뒤 할당에 실패하면 기본 설정에서 노드 등록 제한 시간(15분)까지 기다릴 수 있음 | 계열 quota가 부족한 SKU는 미리 제외하고, 할당 실패한 SKU는 일정 시간 제외한 뒤 바로 다른 SKU로 재시도 | quota 초과: CAS 23초 뒤 대체, NAP 2~3초 만에 대체 |
+| 선호 VM을 만들 수 없음 (quota·용량) | quota 오류처럼 즉시 실패하면 다음 loop에서 다른 풀로 대체. VM이 만들어진 뒤 할당에 실패하면 기본 설정에서 노드 등록 제한 시간(15분)까지 기다릴 수 있음 | 캐시한 계열 quota(10분 주기 갱신)가 부족한 SKU는 미리 제외하고, 할당 실패한 SKU는 일정 시간 제외한 뒤 바로 다른 SKU로 재시도 | quota 초과: CAS 23초 뒤 대체, NAP 2~3초 만에 대체 |
 
 워크로드가 균일하고 풀 설계가 잘 되어 있으며 용량이 넉넉하면 CAS로도 속도는 충분합니다.
 측정 방법은 [CAS·NAP 확장 시간 단계별 실측](scale-out-benchmark/index.md)에서, Pod 대기
@@ -333,6 +333,6 @@ CAS로 두고 Linux를 NAP로 운영하는 구성은 위 feature flag가 필요�
 - [Karpenter Disruption](https://karpenter.sh/docs/concepts/disruption/)
 - [Karpenter provider Azure quota controller](https://github.com/Azure/karpenter-provider-azure/blob/main/pkg/controllers/quota/controller.go)
 - [Use Scale-down Mode to delete/deallocate nodes](https://learn.microsoft.com/azure/aks/scale-down-mode)
-- [Configure AKSNodeClass resources for NAP](https://learn.microsoft.com/azure/aks/node-autoprovision-aksnodeclass)
+- [Configure AKSNodeClass resources for NAP](https://learn.microsoft.com/azure/aks/node-auto-provisioning-aksnodeclass)
 - [Generally Available: Node auto-provisioning support in AKS](https://azure.microsoft.com/updates?id=498247)
 - [AKS release notes](https://github.com/Azure/AKS/blob/master/CHANGELOG.md)

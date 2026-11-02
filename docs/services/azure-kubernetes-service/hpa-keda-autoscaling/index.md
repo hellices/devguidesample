@@ -7,7 +7,7 @@ technologies: [kubernetes, keda]
 tags: [operate, optimize]
 status: current
 verification_status: verified
-sources_checked_at: 2026-11-01
+sources_checked_at: 2026-11-02
 official_sources:
   - title: Azure Kubernetes Service (AKS) scaling overview — HPA, VPA, Cluster Autoscaler, and KEDA
     url: https://learn.microsoft.com/azure/aks/concepts-scale
@@ -35,7 +35,13 @@ official_sources:
     url: https://keda.sh/docs/2.19/reference/scaledobject-spec/
   - title: KEDA scaling deployments, StatefulSets and custom resources
     url: https://keda.sh/docs/2.19/concepts/scaling-deployments/
-last_verified: 2026-11-01
+  - title: KEDA Cluster (gRPC Metrics Service)
+    url: https://keda.sh/docs/2.19/operate/cluster/
+  - title: KEDA Admission Webhooks
+    url: https://keda.sh/docs/2.19/concepts/admission-webhooks/
+  - title: KEDA v2.19.0 scale_scaledobjects.go
+    url: https://github.com/kedacore/keda/blob/v2.19.0/pkg/scaling/executor/scale_scaledobjects.go
+last_verified: 2026-11-02
 review_cycle_days: 180
 applies_to: [AKS 1.36, KEDA add-on 2.19]
 ---
@@ -242,8 +248,8 @@ HTTP Add-on처럼 별도 controller나 external scaler가 필요한 기능은 He
 0개 상태에서 요청을 붙잡아 두는 것은 KEDA HTTP Add-on의 interceptor뿐입니다. Managed
 Prometheus와 AGC 패턴은 요청이 앱 Service로 바로 가므로 Pod가 0개인 동안 들어온 요청은 보류되지
 않고 실패합니다. HTTP Add-on도 보류 시간에는 한도가 있습니다. Pod와 워크로드 노드가 모두 없는
-상태에서 burst를 받은 1회 실측에서는 NAP 노드와 첫 Pod가 준비되기까지 약 110초 동안 계획한
-요청의 약 22%가 실패하거나 아예 전송되지 못했습니다. `minReplicaCount: 1`에서는
+상태에서 burst를 받은 1회 실측에서는 NAP 노드와 첫 Pod가 준비되기까지 약 110초가 걸렸고, 전체
+실행에서 계획한 요청의 약 22%가 실패하거나 아예 전송되지 못했습니다. `minReplicaCount: 1`에서는
 실패가 없었습니다.
 
 ## 노드 autoscaler: Pod 확장 이후의 노드 추가
@@ -279,3 +285,6 @@ NAP를 쓰면 이 두 번째 단계에서 Pending Pod에 맞는 VM 크기를 직
 - [Kubernetes Horizontal Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/)
 - [Kubernetes Feature Gates (`HPAScaleToZero`)](https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/)
 - [KEDA ScaledObject specification](https://keda.sh/docs/2.19/reference/scaledobject-spec/)
+- [KEDA Cluster (gRPC Metrics Service)](https://keda.sh/docs/2.19/operate/cluster/)
+- [KEDA Admission Webhooks](https://keda.sh/docs/2.19/concepts/admission-webhooks/)
+- [KEDA v2.19.0 scale_scaledobjects.go (`Active` 조건)](https://github.com/kedacore/keda/blob/v2.19.0/pkg/scaling/executor/scale_scaledobjects.go)
