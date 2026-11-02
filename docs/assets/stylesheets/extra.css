@@ -715,6 +715,22 @@ body {
   border-left-color: var(--dg-border);
 }
 
+.md-typeset .voice-diagram-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.md-typeset .voice-diagram-scroll > p {
+  margin: 0;
+}
+
+.md-typeset .voice-diagram-scroll a,
+.md-typeset .voice-diagram-scroll img {
+  display: block;
+  width: 100%;
+}
+
 .md-typeset table:not([class]) {
   background: var(--dg-surface);
   border-color: var(--dg-border);
@@ -1402,6 +1418,10 @@ body {
   .md-content__inner,
   .md-content__inner:has(.dg-landing) {
     padding-inline: 0.8rem;
+  }
+
+  .md-typeset .voice-diagram-scroll > p {
+    min-width: 900px;
   }
 
   .dg-landing {
