@@ -108,6 +108,10 @@ class FencedCodeTest(unittest.TestCase):
         report = analyze("# 문단\n\n설정을 확인하는 방법은\n    따라서, 문단의 연속이다.\n")
         self.assertEqual(report.metrics["adverb_comma"], 1)
 
+    def test_indented_code_after_thematic_break_is_code(self) -> None:
+        report = analyze("# 코드\n\n본문이다.\n\n---\n    되어진다.\n\n본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 0)
+
     def test_list_continuation_is_not_code(self) -> None:
         report = analyze("# 목록\n\n- 첫 항목이다.\n\n    따라서, 항목의 둘째 문단이다.\n")
         self.assertEqual(report.metrics["adverb_comma"], 1)
@@ -130,6 +134,27 @@ class QuoteTest(unittest.TestCase):
     def test_apostrophes_do_not_open_quotes(self) -> None:
         report = analyze("# 따옴표\n\ndon't 때문에 번역투에 의해 user's 값을 설명합니다.\n")
         self.assertEqual(report.metrics["translationese"], 1)
+
+
+class LinkTargetTest(unittest.TestCase):
+    def test_target_with_balanced_parentheses_is_removed(self) -> None:
+        report = analyze("# 링크\n\n[설명](https://example.test/a_(b)/되어진다) 본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.findings, [])
+
+    def test_angle_and_escaped_targets_are_removed(self) -> None:
+        report = analyze("# 링크\n\n[가](<a/되어진다 b>) [나](c\\)/되어진다) 본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 0)
+
+
+class ThresholdTest(unittest.TestCase):
+    def test_threshold_uses_unrounded_value(self) -> None:
+        # One bold in 499 prose characters is 2.004 per 1,000, above 2.0, but
+        # rounds to 2.0 for display.
+        report = analyze("# 굵게\n\n**강조** " + "가" * 494 + "이다.\n")
+        self.assertEqual(report.prose_chars, 499)
+        self.assertEqual(report.metrics["bold_per_1000_chars"], 2.0)
+        self.assertIn("bold_per_1000_chars", flagged(report))
 
 
 class TableTest(unittest.TestCase):

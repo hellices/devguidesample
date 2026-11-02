@@ -37,17 +37,17 @@ GPT-5.x 모델을 Microsoft Foundry에서 운영하면 메모리는 세 계층�
 
 | 레이어 | 범위 | 지속성 | 관리 주체 |
 |--------|------|--------|-----------|
-| ① Prompt Cache (컨텍스트 메모리) | 요청 간 프롬프트 프리픽스 KV 텐서 | in_memory: 5~10분 / 24h: 최대 24시간 | Azure 플랫폼 (자동, opt-out 불가) |
+| ① Prompt Cache (컨텍스트 메모리) | 요청 간 프롬프트 프리픽스 KV 텐서 | gpt-5.4 이하: `in_memory` 5~10분(기본) 또는 `24h` 최대 24시간 / gpt-5.5: 24h 확장 보존 / gpt-5.6 이상: `prompt_cache_retention` 미적용, Standard 종량제는 최소 30분(`prompt_cache_options.ttl`). [모델별 상세](#prompt-cache-retention) | Azure 플랫폼 (기본 활성화, gpt-5.6 이상 Standard 종량제만 끌 수 있음) |
 | ② Session Memory (대화 상태) | 단일 세션 내 턴 히스토리 | 세션 수명 (개발자가 TTL 관리) | 개발자 (Redis 등 외부 저장소) |
 | ③ Long-term Memory (유저 메모리) | 세션 간 사용자 프로필·요약·절차 | default_ttl_seconds 설정 (0 = 무제한) | Foundry Memory Service 또는 자체 구현 |
 
 ---
 
-## ① 끌 수 없는 자동 프롬프트 캐시
+## ① 기본으로 켜지는 자동 프롬프트 캐시
 
 ### 같은 프리픽스의 KV 텐서 재사용
 
-Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모리나 GPU-local 스토리지에 유지합니다. 같은 프리픽스로 다시 요청하면 그 부분을 다시 계산하지 않습니다. 지원 모델에서는 모두 기본으로 켜져 있고 끌 수 없습니다.
+Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모리나 GPU-local 스토리지에 유지합니다. 같은 프리픽스로 다시 요청하면 그 부분을 다시 계산하지 않습니다. 지원 모델에서는 모두 기본으로 켜져 있습니다. gpt-5.5 이하와 PTU-M 배포에서는 끌 수 없고, gpt-5.6 이상 Standard 종량제 배포에서만 `prompt_cache_options.mode`를 `explicit`로 두고 breakpoint를 넣지 않으면 캐싱과 cache write 과금 없이 요청할 수 있습니다.
 
 요청이 들어오면 프롬프트 프리픽스(일반적으로 처음 256 토큰)의 해시로 라우팅합니다. 캐시된 KV 텐서와 일치하면 cache hit가 됩니다.
 
@@ -59,7 +59,7 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
 
 캐시되는 토큰 수를 사용자가 직접 지정하거나 제한할 수는 없습니다. 캐시 범위는 프롬프트 프리픽스가 일치하는 길이로 자동 결정됩니다. 대신 아래 두 파라미터로 캐시 동작을 간접 제어합니다.
 
-#### 캐시 유지 시간을 정하는 `prompt_cache_retention`
+#### 캐시 유지 시간을 정하는 `prompt_cache_retention` { #prompt-cache-retention }
 
 | 모델 | 허용 값 | 기본값 | 비고 |
 |------|---------|--------|------|
@@ -499,7 +499,7 @@ Redis 기반 세션 메모리를 이미 운영하고 있다면 세 계층을 분
 - [ ] Foundry Memory Service가 GA인지 확인합니다. 지금은 Public Preview이므로 프로덕션 적용에 주의합니다.
 - [ ] VNet이 필수라면 Redis를 유지합니다. Foundry Memory는 VNet을 지원하지 않습니다.
 - [ ] 스코프 100개, 스코프당 항목 10K 한도가 워크로드에 충분한지 검증합니다.
-- [ ] gpt-5.4 이하에서는 `prompt_cache_retention`의 `"in_memory"`와 `"24h"`를 비교합니다. 두 정책의 캐시 가격은 같으므로 `cached_tokens`로 적중률 차이를 확인합니다. gpt-5.5는 확장 보존(24h)이 기본이라 바꿀 값이 없습니다. gpt-5.6 이상에서는 이 필드가 적용되지 않고 cache write가 별도 과금되므로 `cache_write_tokens`와 `cached_tokens`로 쓰기·읽기 비용을 함께 산정합니다.
+- [ ] gpt-5.4 이하에서는 `prompt_cache_retention`의 `"in_memory"`와 `"24h"`를 비교합니다. 두 정책의 캐시 가격은 같으므로 `cached_tokens`로 적중률 차이를 확인합니다. gpt-5.5는 확장 보존(24h)이 기본이라 바꿀 값이 없습니다. gpt-5.6 이상에서는 이 필드가 적용되지 않고 cache write가 별도 과금되므로 쓰기·읽기 비용을 함께 산정합니다. Usage 응답에 `cache_write_tokens`가 있으면 `cached_tokens`와 함께 쓰고, 필드가 빠진 응답은 0으로 간주하지 말고 Azure Cost Management 비용 분석의 실제 미터별 청구로 산정합니다.
 - [ ] gpt-5.6 Responses API 캐싱 버그가 해결되기 전까지 Chat Completions API를 사용합니다.
 - [ ] gpt-5.6 가격은 Azure Billing 지원 티켓으로 확인한 뒤 비용을 계획합니다.
 - [ ] Memory Store API 버전은 `2025-11-15-preview`, SDK는 `azure-ai-projects >= 2.0.0`을 사용합니다.
@@ -519,4 +519,4 @@ Redis 기반 세션 메모리를 이미 운영하고 있다면 세 계층을 분
 
 ---
 
-*마지막 업데이트: 2026년 7월 22일. 공식 원문 의미 검증 대기*
+*마지막 업데이트: 2026년 11월 2일(프롬프트 캐시 적중 조건·보존 정책·Explicit Caching을 Microsoft Learn과 대조해 갱신). 나머지 내용은 2026년 7월 22일 기준이며 공식 원문 의미 검증 대기*

@@ -34,7 +34,6 @@ TABLE_BREAK = re.compile(
     r"(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|[-*+]\s|\d{1,9}[.)]\s|(?:[-*_]\s*){3,}$)"
 )
 INLINE_CODE = re.compile(r"`[^`\n]+`")
-LINK_TARGET = re.compile(r"\]\([^)]*\)")
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
 SETEXT_UNDERLINE = re.compile(r" {0,3}(=+|-+)[ \t]*$")
@@ -263,7 +262,11 @@ def remove_fenced_code(text: str) -> str:
                 fence, fence_depth = opener.group(1), len(stack)
                 in_paragraph = False
                 continue
-            in_paragraph = bool(rest.strip()) and not BLOCK_START.match(rest)
+            in_paragraph = (
+                bool(rest.strip())
+                and not BLOCK_START.match(rest)
+                and not THEMATIC_BREAK.match(rest)
+            )
         kept.append(raw)
     return "\n".join(kept)
 
@@ -386,6 +389,53 @@ def is_exempt_label(lines: list[str], index: int, tables: set[int]) -> bool:
     return False
 
 
+def strip_link_targets(text: str) -> str:
+    """Remove inline link destinations, keeping "]" so link labels stay visible.
+
+    A destination is "<...>" or a run that may contain balanced parentheses
+    and backslash escapes, as in CommonMark: "[설명](https://x/a_(b)/c)".
+    An unbalanced destination is left as it is.
+    """
+    out: list[str] = []
+    index, length = 0, len(text)
+    while index < length:
+        if text.startswith("](", index):
+            end = _link_target_end(text, index + 2)
+            if end is not None:
+                out.append("]")
+                index = end
+                continue
+        out.append(text[index])
+        index += 1
+    return "".join(out)
+
+
+def _link_target_end(text: str, start: int) -> int | None:
+    """Return the index after the ")" closing a link target that starts at start."""
+    if start < len(text) and text[start] == "<":
+        close = text.find(">", start)
+        if close == -1 or "\n" in text[start:close]:
+            return None
+        start = close + 1
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == "\n" and (index + 1 >= len(text) or text[index + 1] == "\n"):
+            return None
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            if depth == 0:
+                return index + 1
+            depth -= 1
+        index += 1
+    return None
+
+
 def mask_quotes(prose: str) -> str:
     """Join each paragraph onto one line and replace quoted spans with a token."""
     paragraphs = []
@@ -403,7 +453,7 @@ def strip_markup(text: str) -> tuple[str, str]:
     text = remove_fenced_code(text)
     text = convert_setext_headings(text)
     text = INLINE_CODE.sub("CODE", text)
-    markdown = LINK_TARGET.sub("]", text)
+    markdown = strip_link_targets(text)
     lines = markdown.splitlines()
     tables = table_rows(lines)
     prose_lines = []
@@ -470,6 +520,12 @@ def analyze(path: Path, limits: Thresholds) -> Report:
         lines=sum(1 for line in markdown.splitlines() if line.strip()),
     )
     metrics, examples = report.metrics, report.examples
+    # Unrounded values for threshold checks; metrics hold rounded values for display.
+    raw: dict[str, float] = {}
+
+    def ratio(key: str, value: float, digits: int) -> None:
+        raw[key] = value
+        metrics[key] = round(value, digits)
     per100 = 100 / max(len(sentences), 1)
 
     headings = [
@@ -496,17 +552,17 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     bold = sum(len(BOLD.findall(lines[i])) for i in paragraphs if i not in exempt)
     metrics["bold"] = len(BOLD.findall(markdown))
     metrics["paragraph_bold"] = bold
-    metrics["bold_per_1000_chars"] = round(bold * 1000 / max(report.prose_chars, 1), 2)
+    ratio("bold_per_1000_chars", bold * 1000 / max(report.prose_chars, 1), 2)
     flagged_labels = [lines[i].strip() for i in labels if i not in exempt]
     metrics["bold_label_lines"] = len(flagged_labels)
     if flagged_labels:
         examples["bold_label_lines"] = [label[:40] for label in flagged_labels[:3]]
-    metrics["bullet_line_ratio"] = round(len(BULLET.findall(markdown)) / max(report.lines, 1), 2)
-    metrics["table_line_ratio"] = round(len(tables) / max(report.lines, 1), 2)
+    ratio("bullet_line_ratio", len(BULLET.findall(markdown)) / max(report.lines, 1), 2)
+    ratio("table_line_ratio", len(tables) / max(report.lines, 1), 2)
 
     count, found = collect_connective_commas(text)
     metrics["connective_comma"] = count
-    metrics["connective_comma_per_100_sentences"] = round(count * per100, 1)
+    ratio("connective_comma_per_100_sentences", count * per100, 1)
     if found:
         examples["connective_comma"] = found
 
@@ -522,7 +578,7 @@ def analyze(path: Path, limits: Thresholds) -> Report:
             total += count
             examples[f"translationese:{name}"] = found
     metrics["translationese"] = total
-    metrics["translationese_per_100_sentences"] = round(total * per100, 1)
+    ratio("translationese_per_100_sentences", total * per100, 1)
 
     total = 0
     for name, pattern in SIGNATURE.items():
@@ -539,14 +595,14 @@ def analyze(path: Path, limits: Thresholds) -> Report:
 
     dashes = sum(len(EM_DASH.findall(QUOTED.sub("QUOTE", lines[i]))) for i in paragraphs)
     metrics["em_dash"] = dashes
-    metrics["em_dash_per_100_sentences"] = round(dashes * per100, 1)
+    ratio("em_dash_per_100_sentences", dashes * per100, 1)
 
     formal = sum(1 for s in sentences if FORMAL_END.search(s))
     plain = sum(1 for s in sentences if not FORMAL_END.search(s) and PLAIN_END.search(s))
     ended = formal + plain
     metrics["formal_endings"] = formal
     metrics["plain_endings"] = plain
-    metrics["minority_ending_ratio"] = round(min(formal, plain) / ended, 2) if ended else 0.0
+    ratio("minority_ending_ratio", min(formal, plain) / ended if ended else 0.0, 2)
 
     lengths = [len(re.sub(r"\s", "", s)) for s in sentences]
     if len(lengths) >= 2:
@@ -581,9 +637,10 @@ def analyze(path: Path, limits: Thresholds) -> Report:
          "글머리표 줄 비율이 높다. 결과·비교가 아닌 설명은 문단으로 쓴다."),
     ]
     for key, limit, message in checks:
-        value = metrics.get(key, 0)
+        value = raw.get(key, metrics.get(key, 0))
         if value > limit:
-            report.findings.append(f"{key}={value} (기준 {limit}) {message}")
+            shown = round(value, 3) if isinstance(value, float) else value
+            report.findings.append(f"{key}={shown} (기준 {limit}) {message}")
     return report
 
 
