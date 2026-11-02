@@ -123,6 +123,9 @@ def main():
         # 이전 실행에서 남은 Pod와 t0 이전 Ready 전환은 이번 실행 결과로 세지 않습니다.
         if p["metadata"].get("labels", {}).get("app") != "inflate" or ts(p["metadata"]["creationTimestamp"]) < t0:
             continue
+        # 종료 중인 Pod는 마지막 Ready=True 조건이 남아 있어도 replica로 세지 않습니다(bench.sh의 대기 판정과 같음).
+        if p["metadata"].get("deletionTimestamp"):
+            continue
         targets += 1
         c = [x for x in p["status"].get("conditions", []) if x["type"] == "Ready" and x["status"] == "True"]
         if c and ts(c[0]["lastTransitionTime"]) >= t0:

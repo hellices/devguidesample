@@ -107,10 +107,12 @@ def main():
                 if (cond(c, "Launched") or {}).get("status") == "True"]
 
     # (생성 시각, Ready 시각 또는 None). wave는 미준비 Pod를 포함한 전체 대상 Pod로 나눕니다.
+    # 종료 중인 Pod는 마지막 Ready=True 조건이 남아 있어도 replica로 세지 않습니다(bench.sh의 대기 판정과 같음).
     pod_times = []
     for p in pods:
         c = cond(p, "Ready")
-        ready_at = ts(c["lastTransitionTime"]) if c and c["status"] == "True" else None
+        live = not p["metadata"].get("deletionTimestamp")
+        ready_at = ts(c["lastTransitionTime"]) if live and c and c["status"] == "True" else None
         pod_times.append((ts(p["metadata"]["creationTimestamp"]), ready_at))
     pod_ready = [(c, r) for c, r in pod_times if r is not None]
     # timeout으로 Ready Pod가 요청 replica 수보다 적은 실행은 완료 시간으로 기록하지 않습니다.

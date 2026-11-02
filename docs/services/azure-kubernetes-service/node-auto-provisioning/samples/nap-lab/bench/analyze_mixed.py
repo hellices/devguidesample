@@ -2,7 +2,7 @@
 """mixed.sh 스냅샷에서 Pod 준비 결과, 노드 구성, 요청 대비 할당 비율, 시간당 비용을 계산합니다.
 
 사용법: analyze_mixed.py <run-dir> <scenario> <run> <nodeSelector key=value> <prices.json> [big mem small]
-  big mem small: 워크로드별 기대 replica 수. 생략하면 pods.json에 있는 kind별 Pod 수를 씁니다.
+  big mem small: 워크로드별 기대 replica 수. 생략하면 pods.json에서 종료 중이 아닌 kind별 Pod 수를 씁니다.
   all_ready_s는 kind별 Ready Pod 수가 모두 기대 수와 같을 때만 기록합니다. 기대 수가 모두 0이고 Pod가 없으면 0입니다.
 출력: scenario,run,ready_big,ready_mem,ready_small,all_ready_s,nodes,skus,vcpu_alloc,mem_alloc_gib,
       cpu_request_ratio,mem_request_ratio,usd_per_hour
@@ -24,6 +24,8 @@ if not Path(prices_file).is_file():
     sys.exit(f"가격 파일이 없습니다: {prices_file}")
 prices = json.loads(Path(prices_file).read_text())
 pods = json.loads((d / "pods.json").read_text())["items"]
+# 종료 중인 Pod는 마지막 Ready=True 조건이 남아 있어도 replica로 세지 않습니다(mixed.sh의 대기 판정과 같음).
+live_pods = [p for p in pods if not p["metadata"].get("deletionTimestamp")]
 # selector와 일치하는 노드를 구성·용량·비용에 넣습니다. 생성 중인 NotReady 노드는 포함하고,
 # CAS가 VM을 삭제한 뒤 NotReady로 남은 node 객체(이전 실행의 잔류 포함)는 제외합니다.
 nodes = [n for n in json.loads((d / "nodes.json").read_text())["items"]
@@ -37,10 +39,10 @@ if len(sys.argv) > 6:
     expected = dict(zip(ready, map(int, sys.argv[6:9])))
 else:  # 생성되지 않은 Pod는 알 수 없으므로 스냅샷에 있는 Pod 수를 기대 수로 봅니다.
     expected = dict.fromkeys(ready, 0)
-    for p in pods:
+    for p in live_pods:
         expected[p["metadata"]["labels"].get("kind")] += 1
 last, req_cpu, req_mem = None, 0.0, 0.0
-for p in pods:
+for p in live_pods:
     kind = p["metadata"]["labels"].get("kind")
     r = p["spec"]["containers"][0]["resources"]["requests"]
     if p["spec"].get("nodeName") in node_names:  # 분모에 넣은 노드에 배치된 Pod만 할당 비율에 포함
@@ -54,7 +56,7 @@ for p in pods:
 # 아직 생성되지 않은 Pod가 있으면 스냅샷의 Pod가 모두 Ready여도 완료로 보지 않습니다.
 all_ready = ready == expected
 # 기대 수가 모두 0이고 Pod도 없으면 기다릴 Pod가 없으므로 0초에 완료한 것으로 봅니다.
-if all_ready and last is None and not pods and not any(expected.values()):
+if all_ready and last is None and not live_pods and not any(expected.values()):
     last = t0
 
 skus, cpu, mem, cost, unpriced = {}, 0.0, 0.0, 0.0, set()

@@ -27,10 +27,10 @@ PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_L
 [[ -f $PRICES ]] || { echo "가격 파일이 없습니다: $PRICES (bench/prices.py로 생성)" >&2; exit 1; }
 k() { kubectl --context "$CTX" --request-timeout="$KUBE_RT" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
-ready_pods() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
+ready_pods() { # 종료 중이 아닌 Ready Pod 수. 조회 실패는 0개가 아니라 nonzero로 반환합니다.
   local statuses
   statuses=$(k -n mixed get pods -l app=mix \
-    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
+    -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{"\n"}}{{end}}{{end}}{{end}}{{end}}') || return 1
   count_matching '^True$' <<<"$statuses"
 }
 all_ready() { local n; n=$(ready_pods) || return 1; [[ $n -ge $total ]]; }
