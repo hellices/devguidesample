@@ -226,7 +226,7 @@ HTTP Add-on처럼 별도 controller나 external scaler가 필요한 기능은 He
 |---|---|---|
 | add-on 포함 | operator, metrics server, admission webhook, CRD | AKS가 설치·업그레이드 |
 | add-on 포함 내장 scaler | Azure Monitor, Service Bus, Event Hubs, Storage Queue/Blob, Log Analytics, Application Insights, Data Explorer, Azure Pipelines, Prometheus, cron, CPU·memory 등 | trigger `type`으로 사용. Prometheus scaler는 Azure Monitor managed service for Prometheus 조회가 지원 범위이고 자체 운영 Prometheus는 범위 밖 |
-| add-on 미포함 | KEDA HTTP Add-on(beta), Azure Cosmos DB change feed external scaler 등 | Helm 등으로 직접 설치, 커뮤니티 지원 |
+| add-on 미포함 | KEDA HTTP Add-on(Learn 표기 preview, KEDA 표기 beta), Azure Cosmos DB change feed external scaler 등 | Helm 등으로 직접 설치, 커뮤니티 지원 |
 
 - Workload Identity로 Azure 지표를 읽으려면 Workload Identity를 KEDA add-on보다
   먼저 켜는 순서가 권장됩니다. 순서가 바뀌었으면 `keda-operator`

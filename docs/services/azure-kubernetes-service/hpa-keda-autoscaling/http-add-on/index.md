@@ -53,9 +53,13 @@ HTTP에는 큐가 없어서 scaler가 조회할 대기 건수가 없습니다. H
 | operator | HTTP Add-on 0.16.0(Helm) | `InterceptorRoute`를 읽어 interceptor의 routing 설정을 맞춥니다. |
 | KEDA operator·metrics server | AKS KEDA add-on(AKS 1.36, KEDA 2.19) | `external-push` trigger로 scaler에 연결합니다. 0↔1은 operator가 직접 바꾸고, 1↔N은 metrics server가 HPA에 요청률을 넘겨 HPA controller가 계산합니다. |
 
-AKS KEDA add-on은 HTTP Add-on을 설치하지 않으므로 업그레이드와 지원은 KEDA
-커뮤니티 몫이며, 0.16.0은 beta입니다. HTTP Add-on 설치 문서가 KEDA와 같은
-namespace를 안내해 AKS add-on이 KEDA를 두는 `kube-system`에 설치했습니다. 0.14부터는
+AKS KEDA add-on은 HTTP Add-on을 설치하지 않습니다. Microsoft Learn은 HTTP Add-on을
+"preview"로, KEDA 프로젝트는 "beta"(v1.0 전, 사소한 호환성 변경 가능)로 표기하며, 둘 다
+정식(GA) 버전이 아니라는 뜻입니다. AKS 지원 정책은 오픈 소스 통합을 다루지 않으므로 업그레이드와
+지원은 KEDA 커뮤니티 몫입니다. HTTP Add-on은 이미 설치된 KEDA core를 전제로 하므로, 관리형
+KEDA add-on 위에 HTTP Add-on Helm chart만 추가로 설치하면 됩니다(KEDA core를 다시 설치하지
+않음). HTTP Add-on 설치 문서가 KEDA와 같은 namespace를 안내해 AKS add-on이 KEDA를 두는
+`kube-system`에 설치했습니다. 0.14부터는
 `HTTPScaledObject` 대신 `InterceptorRoute`와 `external-push` trigger를 쓴
 `ScaledObject`를 함께 만듭니다.
 
