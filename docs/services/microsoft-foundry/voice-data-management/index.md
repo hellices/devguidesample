@@ -32,27 +32,24 @@ published_at: 2026-10-17
 
 # 앱 음성 서비스 기록관리 사례와 정책
 
-> - 리서치 발행일: 2026-10-17 (한국시간)
 > - 목적: 음성 서비스를 추가할 때 원음과 파생 데이터(전사·요약·업무 결과)를 어디에 얼마나 저장할지 정하는 데 참고할 기준을 모읍니다.
-> - 조사 방법: 업체·기관이 웹에 공개한 개인정보 처리방침, 도움말, 제품 문서와 법령 원문을 읽고 정리했습니다. 제품을 직접 사용하거나 업체에 문의해 동작을 시험하지 않았습니다. 저장 위치·조건·기간이 공개되지 않은 사례는 넣지 않았습니다.
-> - 주요 AI 음성 제품 정책 확인일: 2026-11-02 (Bixby·Gemini·ChatGPT·Microsoft 365 Copilot·Siri).
-> - Teams Copilot 임시 STT, Be My Eyes 기업 지원, LG Smart TV 확인일: 2026-10-20 UTC.
-> - 그 밖의 사례·제품 문서 확인일: 2026-10-14.
-> - 법령·집행 원문 확인일: 2026-10-19 (한국시간). 통신비밀보호법, 개인정보 보호법 제15·22·25조, 자본시장법 시행령 제68조 판매 녹취는 2026-11-02 확인.
-> - 연결 문서: [Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장](azure-storage/index.md)
+> - 방법: 업체·기관이 공개한 개인정보 처리방침, 도움말, 제품 문서와 법령 원문을 정리했습니다. 제품을 직접 시험하지 않았고, 저장 위치·조건·기간이 공개되지 않은 사례는 넣지 않았습니다.
+> - 확인일: 발행 2026-10-17, 사례·제품 문서 2026-10-14~20, 법령 2026-10-19, 주요 AI 음성 제품 정책·한국 법령 2026-11-02. Azure 구현은 [Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장](azure-storage/index.md)에 있습니다.
 
 ## 음성 서비스의 원음 보관은 다섯 가지 패턴으로 나뉜다 {#retention-patterns}
 
-아래 절에서 조사한 서비스와 법령을 원음을 남기는 이유에 따라 묶었습니다. 같은
-서비스도 설정에 따라 여러 패턴에 걸칩니다(예: Bixby 기본값은 1번, 녹음 검토에
-동의하면 2번).
+아래 절에서 조사한 소비자 음성 서비스와 법령을 원음을 남기는 이유에 따라
+묶었습니다. 같은 서비스도 설정에 따라 여러 패턴에 걸칩니다(예: Bixby 기본값은 1번,
+녹음 검토에 동의하면 2번). Azure Speech·Voice Live·Foundry voice agent처럼
+개발자가 설정하는 플랫폼의 기본 동작은 [아래 표](#platform-defaults)와
+[Azure 문서](azure-storage/index.md#persistence-controls)에 따로 정리했습니다.
 
 | 패턴 | 사례 | 원음 | 전사·파생 기록 |
 |---|---|---|---|
-| **1. 미저장·임시 처리** | Teams Copilot 회의·통화 중 전용 모드, Microsoft 365 Copilot 음성 채팅, Bixby 기본값, ChatGPT Standard, LG Smart TV 호출어 대기, Azure Speech 실시간 인식·Voice Live | 요청을 처리한 뒤 바로 삭제하거나 단말에서 폐기 | Teams Copilot의 임시 STT는 회의·통화가 끝나면 저장하지 않음. 서비스에 따라 전사는 대화 기록으로 남음(ChatGPT Standard) |
-| **2. 동의 시 개선·진단용 저장** | Microsoft 365 Copilot 피드백 48시간, Voice Live 지원 로그 30일, Bixby 녹음 검토 1년, Siri 개선 참여 최대 2년(검토된 일부는 2년 초과) | 사용자가 켜거나 동의한 경우에만 저장. 기간은 서비스가 고정 | 원음과 다른 규칙. Siri 요청 데이터는 참여와 관계없이 최대 2년 |
-| **3. 계정 이력형(사용자 제어)** | Gemini 기본 18개월(3·36개월·무기한 선택), Alexa 3·18개월 또는 미저장, ChatGPT Live·Advanced 클립 30일, Foundry voice agent `store` 60일 | 사용자가 다시 듣거나 지울 수 있게 계정에 저장. 기간을 사용자가 고르는 경우가 많음 | 원음과 기간이 다름. ChatGPT 전사는 채팅을 지울 때까지, Alexa는 미저장 모드에서도 텍스트 30일 |
-| **4. 업무·규제 증빙형** | 금융소비자보호법 계약 자료 10년, 자본시장법 시행령의 고령자·부적합 투자자 판매 녹취, MiFID II 투자 주문 통화 5~7년, [AXA UK 통화 녹음](https://www.axa.co.uk/privacy-policy/how-we-collect-data/)(규제 기준 점검·민원·사기 조사), Bank of America Erica 90일, 컨택센터 녹음 | 법령이나 업무 목적에 따라 조직이 기간을 정함 | 계약·상담·민원 기록을 업무 시스템에 따로 보존 |
+| **1. 미저장·임시 처리** | Teams Copilot 회의·통화 중 전용 모드, Microsoft 365 Copilot 음성 채팅, Bixby 기본값, ChatGPT Standard, LG Smart TV 호출어 대기 | 요청을 처리한 뒤 바로 삭제하거나 단말에서 폐기 | Teams Copilot의 임시 STT는 회의·통화가 끝나면 저장하지 않음. 서비스에 따라 전사는 대화 기록으로 남음(ChatGPT Standard) |
+| **2. 개선·진단·품질 분석용 저장** | 동의·설정 시: Microsoft 365 Copilot 피드백 48시간, Bixby 녹음 검토 1년, Siri 개선 참여 최대 2년(검토된 일부는 2년 초과). 모든 대화: [Bank of America Erica](https://info.bankofamerica.com/en/digital-banking/erica) 품질 확인·정확도 분석 90일 | 서비스 개선·품질 확인 목적으로 서비스가 정한 기간만 저장. 소비자 서비스는 대부분 사용자 동의를 조건으로 함 | 원음과 다른 규칙. Siri 요청 데이터는 참여와 관계없이 최대 2년 |
+| **3. 계정 이력형(사용자 제어)** | Gemini 기본 18개월(3·36개월·무기한 선택), Alexa 3·18개월 또는 미저장, ChatGPT Live·Advanced 클립 30일 | 사용자가 다시 듣거나 지울 수 있게 계정에 저장. 기간을 사용자가 고르는 경우가 많음 | 원음과 기간이 다름. ChatGPT 전사는 채팅을 지울 때까지, Alexa는 미저장 모드에서도 텍스트 30일 |
+| **4. 업무·규제 증빙형** | 금융소비자보호법 계약 자료 10년, 자본시장법 시행령의 고령자·부적합 투자자 대상 고위험 투자상품 판매 녹취, MiFID II 투자 주문 통화 5~7년, [AXA UK 통화 녹음](https://www.axa.co.uk/privacy-policy/how-we-collect-data/)(규제 기준 점검·민원·사기 조사), 컨택센터 녹음 | 법령이나 업무 목적에 따라 조직이 기간을 정함 | 계약·상담·민원 기록을 업무 시스템에 따로 보존 |
 | **5. 생체 인증형** | [HMRC Voice ID](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice), Illinois BIPA, Texas 생체 식별자 법 | 등록 녹음을 voiceprint로 변환해 저장. HMRC는 3년마다 재동의, 최대 7년 | BIPA는 수집 목적 달성 시점과 마지막 상호작용 후 3년 중 빠른 시점에 삭제, Texas는 목적 종료 후 1년 안에 삭제 |
 
 패턴과 관계없이 두 가지가 공통으로 나타납니다.
@@ -67,20 +64,17 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 [Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장](azure-storage/index.md)에서
 다룹니다.
 
-## Microsoft 제품은 녹음·전사·Copilot 기록을 서로 다른 저장소에 둔다 {#microsoft-record-locations}
 
-| 기록 | 저장 위치·기간 |
-|---|---|
-| **Teams 녹음·전사(음성 텍스트)** | 회의·이벤트: 주최자 OneDrive. 채널 회의: SharePoint. 1:1·그룹 통화: 녹화 시작 사용자 OneDrive. 주최자·공동 주최자·내부/외부 참여자별 권한 차이. [저장·권한](https://learn.microsoft.com/en-us/microsoftteams/tmr-meeting-recording-change) |
-| **Teams Copilot / 회의·이벤트** | `Only during the meeting`에서는 녹음·전사 저장 기능을 켜지 않아도 사용 가능하지만 임시 STT 데이터로 음성을 텍스트로 변환합니다. 이 처리 데이터는 회의·이벤트 종료 후 저장되지 않음. [회의 전용 모드](https://learn.microsoft.com/microsoftteams/copilot-teams-transcription#only-during-the-meeting) 상용 클라우드에서는 Copilot 질문·응답이 Purview 보유 정책의 준법 보존 대상이 될 수 있음. |
-| **Teams Copilot / 통화** | `Only during the call`도 임시 STT 데이터를 사용합니다. 통화 전용 정책 문서는 통화 종료 후 이 처리 데이터와 사용자·Copilot 사이의 교환 정보를 저장하지 않는다고 설명. [통화 전용 모드](https://learn.microsoft.com/microsoftteams/copilot-teams-calling-transcription#only-during-the-call) |
-| **Purview Copilot 질문·응답 보유** | Microsoft Copilot experiences 정책 위치에서 Microsoft 365 Copilot·Copilot Studio 등의 질문·응답에 대한 보유·삭제 정책을 설정. 준법 사본은 사용자 Exchange 사서함의 숨김 폴더에 저장되고 eDiscovery로 검색. [Copilot·AI 앱 보유](https://learn.microsoft.com/en-us/purview/retention-policies-copilot) |
-| **Copilot Studio 임시 저장** | 세션 정보(session information) 등 제품 기능 지원용 임시 데이터는 Copilot Studio 저장소에서 최대 28일 보관 후 자동 삭제한다고 설명. [대화 기록 제어](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-transcript-controls) |
-| **Copilot Studio Dataverse 대화 기록** | 대화 기록과 관련 부가정보(metadata)를 기본적으로 Dataverse에 저장하며 환경별 저장 여부·제작자 열람/다운로드·보안 역할·보유기간을 제어. 저장을 끈 뒤 최대 24시간 추가 저장 가능. Dataverse for Teams 환경·Microsoft Copilot 에이전트는 Dataverse 대화 기록 테이블 대상에서 제외. [대화 기록 제어](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-transcript-controls) |
-| **Copilot Studio 감사 이벤트** | Purview Audit의 상호작용 이벤트에는 시각·조직·사용자·리소스 ID·대화 기록 스레드 ID 등의 부가정보가 포함되며, 전체 대화 텍스트는 감사 이벤트 자체가 아니라 별도로 저장됨. [감사 로그](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-logging-copilot-studio) |
-| **D365 통화 녹음·전사(음성 텍스트)** | 업무 흐름별 음성 텍스트 또는 음성 텍스트+녹음, 자동/수동 시작, 일시정지/재개. Copilot Studio AI 에이전트 대화 기록은 통화 녹음 설정과 독립 생성 가능. 전화 키패드 음 전용(DTMF-only) 구성은 발화 미저장. [설정](https://learn.microsoft.com/en-us/dynamics365/customer-service/administer/voice-channel-configure-transcripts) · [FAQ](https://learn.microsoft.com/en-us/dynamics365/customer-service/administer/voice-channel-faqs) |
-| **D365 분석 결과·Dataverse** | 통화 녹음 기반 대화 지표·전체 음성 텍스트 제공. Copilot 질문·응답, 피드백, 요약, 상호작용은 Dataverse의 대화 기록·상호작용·이벤트·대화 분석 테이블에 저장·다운로드 가능. [분석](https://learn.microsoft.com/en-us/dynamics365/customer-service/use/voice-channel-reports-analytics) · [Dataverse 테이블](https://learn.microsoft.com/en-us/dynamics365/customer-service/develop/download-copilot-transcript-data) |
-| **Teams 음성 요약** | 최대 8개 회의 음성 텍스트로 새 음성 요약 생성, OneDrive 저장. 회의 음성 텍스트는 기본 120일이며 주최자가 더 일찍 삭제할 수 있고, 음성 요약은 60일 후 자동 삭제. [음성 요약](https://support.microsoft.com/en-us/teams/copilot/listen-to-audio-recaps-of-your-meetings) |
+### Azure 음성 플랫폼은 원음을 저장하지 않는 것이 기본이다 {#platform-defaults}
+
+아래는 서비스를 만드는 개발자가 정하는 플랫폼 설정입니다. 최종 사용자가 아니라
+애플리케이션이 저장 여부와 기간을 결정합니다.
+
+| 플랫폼 | 기본 동작 | 저장하는 경우 |
+|---|---|---|
+| Azure Speech 실시간 음성 인식 | 원음을 메모리에서 처리하고 저장하지 않음 | 애플리케이션이 직접 저장 |
+| Voice Live | 고객 데이터를 저장하지 않음 | 지원 로그를 켜면 진단용 음성을 30일 보관 |
+| Foundry voice agent | `store=false` | `store=true`면 전사·이벤트·원음을 기본 60일 보관 |
 
 ## 주요 AI 음성 제품은 원음을 남기는 조건과 기간이 서로 다르다 {#product-storage-comparison}
 
@@ -220,10 +214,10 @@ Cloud Compute에서 처리될 수 있고, Apple은 이 데이터를 저장하지
 
 | 법령 | 규정 | 음성 서비스에 적용할 때 |
 |---|---|---|
-| **통신비밀보호법 [제3조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=290003&joNo=0003)·[제14조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=290003&joNo=0014)·[제16조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=290003&joNo=0016)** | 공개되지 않은 타인 간의 대화를 녹음하거나 청취하지 못함. 위반하면 1년 이상 10년 이하 징역과 5년 이하 자격정지. [대법원 2006도4981](https://law.go.kr/LSW/precInfoP.do?evtNo=2006%EB%8F%844981)은 대화에 참여한 사람이 녹음한 경우는 타인 간의 대화가 아니라고 판단 | 사용자와 서비스 사이의 대화 녹음은 해당하지 않음. 공용기기나 호출어 대기 중에 주변 사람들끼리 나눈 대화를 녹음하면 해당함. 호출어를 감지하기 전 오디오를 단말에서 폐기하는 설계(LG Smart TV)가 이 경우를 막음 |
+| **통신비밀보호법 [제3조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=290003&joNo=0003)·[제14조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=290003&joNo=0014)·[제16조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=290003&joNo=0016)** | 공개되지 않은 타인 간의 대화를 녹음하거나 청취하지 못함. 위반하면 1년 이상 10년 이하 징역과 5년 이하 자격정지. [대법원 2006도4981](https://law.go.kr/LSW/precInfoP.do?evtNo=2006%EB%8F%844981)은 대화에 참여한 사람이 녹음한 경우는 타인 간의 대화가 아니라고 판단 | 사용자와 서비스 사이의 대화 녹음은 해당하지 않음. 공용기기나 호출어 대기 중에 주변 사람들끼리 나눈 대화를 녹음하면 해당할 수 있음. 호출어를 감지하기 전 오디오를 단말에서 폐기하는 설계(LG Smart TV)는 이 위험을 줄이는 예이지만, 호출어를 잘못 인식하면 주변 대화가 녹음될 수 있음 |
 | **개인정보 보호법 [제15조 제2항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=283839&joNo=0015)·[제22조 제1항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=283839&joNo=0022)** | 동의를 받을 때 수집·이용 목적, 항목, 보유·이용 기간, 동의 거부권과 불이익을 알려야 함. 동의 사항을 각각 구분해 받아야 함 | 원음 저장, 사람 검토, 학습 사용을 각각 따로 동의받음(Bixby 녹음 검토, Siri 개선 참여와 같은 구조). 고지문에 원음과 전사의 보유기간을 따로 적음 |
 | **개인정보 보호법 [제25조 제5항](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=283839&joNo=0025)** | 고정형 영상정보처리기기(CCTV 등)는 녹음 기능을 사용할 수 없음 | 매장·시설에 고정 설치한 카메라 기기에 음성 기능을 붙일 때 해당 |
-| **자본시장법 시행령 [제68조 제5항 제2호의2](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=291081&joNo=0068&joBrNo=00)** | 적합성·적정성 평가에서 부적합 판정을 받았거나 65세 이상인 개인 일반투자자에게 금융투자상품을 팔 때 판매과정을 녹취하고, 투자자가 요청하면 녹취 파일을 제공해야 함. 2영업일 이상의 숙려기간도 부여 | 음성 에이전트가 이 대상에게 투자상품을 권유·판매하면 판매과정 녹취가 의무. 시행령은 녹취 보존기간을 따로 정하지 않으며, 금융소비자보호법 시행령 제26조는 계약체결 자료를 10년 보존하도록 정함 |
+| **자본시장법 시행령 [제68조 제5항 제2호의2·제2호의3](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=291081&joNo=0068&joBrNo=00)과 금융투자업규정 제4-20조의2** | 적합성·적정성 평가에서 부적합 판정을 받았거나 65세 이상인 개인 일반투자자에게 정해진 투자성 상품을 팔 때 판매과정을 녹취하고, 투자자가 요청하면 녹취 파일을 제공해야 함. 2영업일 이상 숙려기간도 부여. 녹취 대상 상품은 [금융소비자보호법 시행령 제12조 제1항 제2호](https://www.law.go.kr/LSW/lsSideInfoP.do?lsiSeq=285715&joNo=0012&joBrNo=00)의 투자성 상품(파생상품·파생결합증권, 조건부자본증권 성격의 사채, 고난도금융투자상품 등)이며, 거래소·해외 시장에서 투자자가 직접 매매하는 상장 상품은 제외. 고난도금융투자상품은 제2호의3에 따라 모든 개인 일반투자자에게 같은 의무 적용 | 음성 에이전트가 이 대상에게 해당 상품을 권유·판매하면 판매과정 녹취가 의무. 의무 조항은 금융소비자보호법 시행 뒤에도 자본시장법 시행령에 있으며, 대상 판정 기준만 금융소비자보호법을 따름. 녹취 보존기간은 이 조문에 없고, 금융소비자보호법 시행령 제26조가 계약체결 자료를 10년 보존하도록 정함 |
 
 ### 개인정보 보호법·GDPR·CCPA는 공통 보존 일수를 정하지 않는다
 
@@ -338,3 +332,26 @@ COPPA는 아동 개인정보를 수집 목적에 합리적으로 필요한 기�
 
 삭제 완료는 객체·버전·등록 원음·템플릿 삭제 로그처럼 저장소 상태를 보여주는
 자료로 확인합니다.
+
+## Microsoft 업무 제품은 녹음·전사·Copilot 기록을 서로 다른 저장소에 둔다 {#microsoft-record-locations}
+
+Teams·Copilot Studio·Dynamics 365처럼 이미 쓰고 있는 Microsoft 업무 제품에 음성 기능을 붙일 때
+기록이 어디에 남는지 정리했습니다.
+
+<details markdown="1">
+<summary>Microsoft 업무 제품별 기록 위치 보기</summary>
+
+| 기록 | 저장 위치·기간 |
+|---|---|
+| **Teams 녹음·전사(음성 텍스트)** | 회의·이벤트: 주최자 OneDrive. 채널 회의: SharePoint. 1:1·그룹 통화: 녹화 시작 사용자 OneDrive. 주최자·공동 주최자·내부/외부 참여자별 권한 차이. [저장·권한](https://learn.microsoft.com/en-us/microsoftteams/tmr-meeting-recording-change) |
+| **Teams Copilot / 회의·이벤트** | `Only during the meeting`에서는 녹음·전사 저장 기능을 켜지 않아도 사용 가능하지만 임시 STT 데이터로 음성을 텍스트로 변환합니다. 이 처리 데이터는 회의·이벤트 종료 후 저장되지 않음. [회의 전용 모드](https://learn.microsoft.com/microsoftteams/copilot-teams-transcription#only-during-the-meeting) 상용 클라우드에서는 Copilot 질문·응답이 Purview 보유 정책의 준법 보존 대상이 될 수 있음. |
+| **Teams Copilot / 통화** | `Only during the call`도 임시 STT 데이터를 사용합니다. 통화 전용 정책 문서는 통화 종료 후 이 처리 데이터와 사용자·Copilot 사이의 교환 정보를 저장하지 않는다고 설명. [통화 전용 모드](https://learn.microsoft.com/microsoftteams/copilot-teams-calling-transcription#only-during-the-call) |
+| **Purview Copilot 질문·응답 보유** | Microsoft Copilot experiences 정책 위치에서 Microsoft 365 Copilot·Copilot Studio 등의 질문·응답에 대한 보유·삭제 정책을 설정. 준법 사본은 사용자 Exchange 사서함의 숨김 폴더에 저장되고 eDiscovery로 검색. [Copilot·AI 앱 보유](https://learn.microsoft.com/en-us/purview/retention-policies-copilot) |
+| **Copilot Studio 임시 저장** | 세션 정보(session information) 등 제품 기능 지원용 임시 데이터는 Copilot Studio 저장소에서 최대 28일 보관 후 자동 삭제한다고 설명. [대화 기록 제어](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-transcript-controls) |
+| **Copilot Studio Dataverse 대화 기록** | 대화 기록과 관련 부가정보(metadata)를 기본적으로 Dataverse에 저장하며 환경별 저장 여부·제작자 열람/다운로드·보안 역할·보유기간을 제어. 저장을 끈 뒤 최대 24시간 추가 저장 가능. Dataverse for Teams 환경·Microsoft Copilot 에이전트는 Dataverse 대화 기록 테이블 대상에서 제외. [대화 기록 제어](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-transcript-controls) |
+| **Copilot Studio 감사 이벤트** | Purview Audit의 상호작용 이벤트에는 시각·조직·사용자·리소스 ID·대화 기록 스레드 ID 등의 부가정보가 포함되며, 전체 대화 텍스트는 감사 이벤트 자체가 아니라 별도로 저장됨. [감사 로그](https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-logging-copilot-studio) |
+| **D365 통화 녹음·전사(음성 텍스트)** | 업무 흐름별 음성 텍스트 또는 음성 텍스트+녹음, 자동/수동 시작, 일시정지/재개. Copilot Studio AI 에이전트 대화 기록은 통화 녹음 설정과 독립 생성 가능. 전화 키패드 음 전용(DTMF-only) 구성은 발화 미저장. [설정](https://learn.microsoft.com/en-us/dynamics365/customer-service/administer/voice-channel-configure-transcripts) · [FAQ](https://learn.microsoft.com/en-us/dynamics365/customer-service/administer/voice-channel-faqs) |
+| **D365 분석 결과·Dataverse** | 통화 녹음 기반 대화 지표·전체 음성 텍스트 제공. Copilot 질문·응답, 피드백, 요약, 상호작용은 Dataverse의 대화 기록·상호작용·이벤트·대화 분석 테이블에 저장·다운로드 가능. [분석](https://learn.microsoft.com/en-us/dynamics365/customer-service/use/voice-channel-reports-analytics) · [Dataverse 테이블](https://learn.microsoft.com/en-us/dynamics365/customer-service/develop/download-copilot-transcript-data) |
+| **Teams 음성 요약** | 최대 8개 회의 음성 텍스트로 새 음성 요약 생성, OneDrive 저장. 회의 음성 텍스트는 기본 120일이며 주최자가 더 일찍 삭제할 수 있고, 음성 요약은 60일 후 자동 삭제. [음성 요약](https://support.microsoft.com/en-us/teams/copilot/listen-to-audio-recaps-of-your-meetings) |
+
+</details>

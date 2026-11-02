@@ -27,6 +27,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/foundry/agents/concepts/limits-quotas-regions
 - title: Realtime API reference
   url: https://learn.microsoft.com/azure/foundry/openai/realtime-audio-reference
+- title: How to use the Voice Live API
+  url: https://learn.microsoft.com/azure/ai-services/speech-service/voice-live-how-to
 - title: Realtime client events reference (classic)
   url: https://learn.microsoft.com/azure/foundry-classic/openai/realtime-audio-reference-ga
 - title: Azure OpenAI in Microsoft Foundry Models quotas and limits
@@ -94,7 +96,7 @@ status: current
 verification_status: needs-review
 sources_checked_at: 2026-11-02
 title: Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장
-description: Microsoft 참조 아키텍처와 제품 문서에서 음성 원본·텍스트·분석 결과의 저장과 성능 근거를 확인합니다.
+description: Azure 음성 에이전트에서 원음을 캡처하는 위치, 서비스별 저장 설정, 저장소 보안과 설계를 Microsoft 공식 문서로 정리합니다.
 technologies:
 - rest-api
 tags:
@@ -107,16 +109,9 @@ topic_order: 1
 
 # Microsoft 공식 문서로 본 Azure 음성 에이전트 데이터 저장
 
-> - 리서치 발행일: 2026-10-17 (한국시간)
-> - Microsoft 주요 공식 원문 재확인일: 2026-10-18
-> - 추가 원문 확인일: 2026-10-19 (Archive 복원 우선순위, 통화 후 분석의 선택 PII·저장 경로).
-> - 이번 원문 재확인일: 2026-10-20 UTC (한국시간 2026-10-21). Realtime 입력 전사·이벤트, 음성 API의 미저장 범위, Foundry voice agent의 저장 대상·위치·60일 보유·삭제·추적을 대조했습니다.
-> - 추가 원문 확인일: 2026-11-02 UTC. Realtime 기본 대화 밖 응답(`conversation: none`·`metadata`·`input`)과 응답 중단 시 전사 처리, 입력 전사의 세션 옵션·비동기 처리·GA 필드명, 연결 방식별 음성 경로, ACS 녹음 저장, Azure Storage 보안 기능을 Azure·OpenAI 원문과 대조했습니다.
-> - 연결 문서: [앱 음성 서비스 기록관리 사례와 정책](../index.md)
-> - 범위: Microsoft 제품 문서의 네이티브 Realtime·분리형 음성 처리, 통화 후 참조 아키텍처, 연결 방식별 음성 캡처 위치, 구조별 원음·음성 텍스트·분석 결과의 저장과 처리 범위, 저장소 보안·설계, 오디오 형식·압축, 저장 성능 지침.
-> - 조사 방법: Microsoft Learn과 Azure Architecture Center 문서의 기재 내용을 정리했습니다. Azure 리소스를 배포해 저장 동작을 시험하지는 않았습니다.
-> - API 범위: Azure OpenAI Realtime과 Azure Voice Live를 다룹니다. [OpenAI 직접 API인 GPT-Live](https://developers.openai.com/api/docs/guides/live)는 다루지 않습니다.
-> - 제외: 특정 애플리케이션의 확정 아키텍처 · 이 문서가 독자적으로 정한 저장 위치나 보유기간 · 법률 의견 · 가격 견적.
+> - 목적: Azure로 음성 에이전트를 만들 때 원음과 전사를 어디서 받아 어디에 얼마나 저장할지, 저장소를 어떻게 보호할지 정합니다. Azure OpenAI Realtime·Voice Live·Foundry voice agent·Azure Communication Services를 다루며, OpenAI 직접 API는 다루지 않습니다.
+> - 방법: Microsoft Learn·Azure Architecture Center와 OpenAI Realtime 문서의 기재 내용을 정리했습니다. Azure 리소스를 배포해 동작을 시험하지는 않았습니다.
+> - 확인일: 발행 2026-10-17, 원문 확인 2026-10-18~20, 연결 방식·ACS 녹음·저장소 보안·out-of-band 응답 2026-11-02. 사례와 법령은 [앱 음성 서비스 기록관리 사례와 정책](../index.md)에 있습니다.
 
 > **읽는 기준**
 >
@@ -131,7 +126,7 @@ Azure의 실시간 음성 처리는 어떤 모델을 쓰느냐에 따라 두 구
 
 | 구조 | 처리 흐름 | 전사문의 의미 |
 |---|---|---|
-| **네이티브 Realtime** | 오디오를 Realtime 음성 모델이 직접 처리하고 음성으로 응답 | 입력 전사 설정(GA `audio.input.transcription`, preview `input_audio_transcription`)을 켜면 별도 ASR 배포가 비동기로 만드는 보조 기록. 모델의 해석과 다를 수 있음 |
+| **네이티브 Realtime** | 오디오를 Realtime 음성 모델이 직접 처리하고 음성으로 응답 | [입력 전사](#input-transcription)를 켜면 별도 전사 모델이 비동기로 만드는 보조 기록. 모델의 해석과 다를 수 있음 |
 | **분리형 파이프라인** | STT → 텍스트 모델·에이전트 → TTS | STT 결과가 텍스트 모델 입력이 됨. 단계마다 로그·사본이 생길 수 있음 |
 
 [Voice Live](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live)는
@@ -151,6 +146,68 @@ Realtime 모델을 고르면 네이티브 구조로, GPT-4.1·GPT-5 같은 텍�
 > 응답 생성과 동시에 전사하며, 그 결과는 모델의 해석과 다를 수 있습니다
 > ([이벤트 레퍼런스](https://learn.microsoft.com/azure/foundry-classic/openai/realtime-audio-reference-ga)).
 > 점선은 애플리케이션 녹음·세션 저장·추적을 각각 켤 수 있는 지점입니다.
+
+## 입력 전사는 세션 옵션으로 켜고 결과는 이벤트로만 받는다 {#input-transcription}
+
+네이티브 Realtime 모델은 오디오를 직접 처리하므로 사용자 발화의 텍스트가 따로
+생기지 않습니다. 텍스트가 필요하면 세션에서 입력 전사(input audio transcription)를
+켭니다. 켜면 서비스가 커밋된 입력 오디오를 별도 전사 모델로 보내고, 결과를
+이벤트로 돌려줍니다. 위 그림의 `OPTIONAL INPUT TRANSCRIPTION`이 이 설정입니다.
+
+| 항목 | Azure OpenAI Realtime | Voice Live |
+|---|---|---|
+| 설정 위치 | GA: `session.audio.input.transcription`. Azure how-to 예시와 preview: `session.input_audio_transcription` | `session.input_audio_transcription` |
+| `model` 값 | Azure에 배포한 전사 모델의 **배포 이름** | 모델 이름. `gpt-realtime`·`gpt-realtime-mini`와는 `whisper-1`·`gpt-4o-transcribe`·`gpt-4o-mini-transcribe`·`gpt-4o-transcribe-diarize`·`mai-transcribe`를, 텍스트 모델·에이전트와는 `azure-speech`·`mai-transcribe`를 사용 |
+| 기본값 | 꺼짐 | 텍스트 모델(분리형)을 쓰면 `azure-speech`가 자동으로 켜짐 |
+| 인식 보정 | `language`(ISO-639-1 코드)와 `prompt`로 전사 모델에 힌트 제공 | `language`, `prompt`(OpenAI 전사 모델), `phrase_list`(MAI Transcribe), phrase list·custom speech(`azure-speech`) |
+
+Azure OpenAI Realtime GA 형식의 설정 예시입니다.
+
+```json
+{
+  "type": "session.update",
+  "session": {
+    "type": "realtime",
+    "audio": {
+      "input": {
+        "transcription": {
+          "model": "<전사 모델 배포 이름>",
+          "language": "ko"
+        }
+      }
+    }
+  }
+}
+```
+
+전사 결과는 다음 이벤트로 옵니다. 모든 이벤트에 입력 오디오 항목의 `item_id`가
+들어 있으므로, 이 값으로 원음·전사·응답을 연결합니다.
+
+| 이벤트 | 내용 |
+|---|---|
+| `conversation.item.input_audio_transcription.delta` | 전사 중간 결과 |
+| `conversation.item.input_audio_transcription.completed` | 최종 전사(`transcript`) |
+| `conversation.item.input_audio_transcription.failed` | 전사 실패 |
+
+입력 전사는 다음처럼 동작합니다.
+
+- **시작 시점:** 입력 오디오 버퍼가 커밋될 때 시작합니다. 서버 VAD를 쓰면 발화가
+  끝날 때, 수동 턴 처리에서는 `input_audio_buffer.commit`을 보낼 때입니다.
+- **순서:** 응답 생성과 별개로 비동기로 실행되므로 `completed` 이벤트가 응답
+  이벤트보다 먼저 올 수도, 나중에 올 수도 있습니다.
+- **정확도:** 전사는 별도 ASR 모델의 결과라 Realtime 모델이 이해한 내용과 다를 수
+  있습니다. OpenAI 레퍼런스는 이 전사를 "모델이 들은 내용 그대로가 아니라 입력
+  오디오에 대한 참고(guidance)"로 다루라고 설명합니다.
+- **저장:** Realtime API와 Voice Live는 전사를 저장하지 않습니다. 남기려면
+  애플리케이션이 `completed` 이벤트를 받아 `item_id`와 함께 저장하거나, Foundry
+  voice agent의 `store=true`를 씁니다.
+
+근거: [Azure Realtime 사용법](https://learn.microsoft.com/azure/foundry/openai/how-to/realtime-audio#session-configuration)
+· [Azure Realtime API reference](https://learn.microsoft.com/azure/foundry/openai/realtime-audio-reference)(배포 이름 차이)
+· [Realtime 이벤트 레퍼런스](https://learn.microsoft.com/azure/foundry-classic/openai/realtime-audio-reference-ga)
+· [Voice Live 사용법](https://learn.microsoft.com/azure/ai-services/speech-service/voice-live-how-to#audio-input-transcription)
+· [OpenAI Realtime 세션 레퍼런스](https://developers.openai.com/api/reference/resources/realtime/subresources/calls/methods/create)
+· [OpenAI 실시간 전사 가이드](https://developers.openai.com/api/docs/guides/realtime-transcription)
 
 ## 원음을 저장할 캡처 지점은 연결 방식마다 다르다 {#audio-capture-path}
 
@@ -196,12 +253,8 @@ ACS는 일부 서비스를 종료하는 변경을 발표했으므로 녹음 시�
 
 전사문은 구조마다 만드는 주체가 다릅니다.
 
-- **네이티브 Realtime:** 세션의 입력 전사 설정을 켜면 별도 ASR 배포가 입력
-  오디오를 전사합니다. 필드 이름은 GA API에서 `session.audio.input.transcription`,
-  preview API와 Azure how-to 예시에서 `input_audio_transcription`입니다.
-  [OpenAI 레퍼런스](https://developers.openai.com/api/reference/resources/realtime/subresources/calls/methods/create)는
-  이 전사가 비동기로 실행되며 "모델이 들은 내용 그대로가 아니라 입력 오디오에 대한
-  참고(guidance)"로 다루라고 설명합니다.
+- **네이티브 Realtime:** [입력 전사](#input-transcription)를 켜면 별도 전사 모델이
+  입력 오디오를 전사합니다. 모델이 이해한 내용과 다를 수 있습니다.
 - **분리형:** STT 결과가 그대로 텍스트 모델의 입력입니다.
 - **통화 후 분석:** 저장된 녹음을 배치 전사로 다시 처리한 결과입니다.
 
@@ -300,8 +353,8 @@ Foundry voice agent의 기능입니다.
 Application Insights와 Log Analytics의 보유 정책을 따릅니다. 실시간
 세션 저장, 추적, 남용 모니터링, 상태 유지 기능은 각각 따로 설정합니다.
 
-[음성 추적 문서](https://learn.microsoft.com/azure/foundry/agents/concepts/voice-agent-observability#transcripts-and-audio)는
-에 따르면 전사·오디오 참조는 기본 수집하지 않습니다. 수집을 켜면
+[음성 추적 문서](https://learn.microsoft.com/azure/foundry/agents/concepts/voice-agent-observability#transcripts-and-audio)에
+따르면 전사·오디오 참조는 기본 수집하지 않습니다. 수집을 켜면
 Application Insights에는 오디오 참조가 기록되고, 녹음 자체는 음성
 에이전트 소유 저장소에 남습니다. 그래서 추적과 원음의 보유기간은 따로
 관리됩니다.
