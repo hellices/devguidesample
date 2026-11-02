@@ -30,8 +30,13 @@ log "AGC Gateway 준비 대기"
 kubectl --context "$CTX" -n demo wait gateway/web --for=condition=Programmed --timeout=20m >/dev/null
 ./agc/allow-frontend.sh
 # AGC(trafficController)는 ALB Controller가 node resource group에 만듭니다. KEDA ID에 지표 읽기 권한을 줍니다.
-ALB_ID=$(az resource list -g "$MC" --resource-type Microsoft.ServiceNetworking/trafficControllers --query "[0].id" -o tsv)
-[[ -n $ALB_ID ]] || { echo "노드 리소스 그룹 ${MC}에 AGC(trafficController)가 없습니다." >&2; exit 1; }
+# 여러 개가 있으면 어느 AGC에 권한을 줄지 정할 수 없으므로 정확히 하나일 때만 진행합니다.
+ALB_ID=$(az resource list -g "$MC" --resource-type Microsoft.ServiceNetworking/trafficControllers --query "[].id" -o tsv)
+ALB_COUNT=$(grep -c . <<<"$ALB_ID" || true)
+if (( ALB_COUNT != 1 )); then
+  echo "노드 리소스 그룹 ${MC}에서 AGC(trafficController)를 ${ALB_COUNT}개 찾았습니다. 정확히 1개여야 합니다." >&2
+  exit 1
+fi
 # 다시 실행해도 실패하지 않도록 같은 역할 할당이 없을 때만 만듭니다. 조회가 실패하면 중단합니다.
 ASSIGNED=$(az role assignment list --assignee "$KEDA_PRINCIPAL_ID" --role "Monitoring Reader" --scope "$ALB_ID" --query "length(@)" -o tsv)
 if [[ $ASSIGNED == 0 ]]; then

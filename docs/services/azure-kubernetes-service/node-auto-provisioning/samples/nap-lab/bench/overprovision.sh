@@ -48,6 +48,11 @@ placeholders_replaced() { # 선점 전 placeholder($old_uids)가 모두 사라�
   for uid in $old_uids; do grep -q "^$uid " <<<"$out" && return 1; done
   [[ $(grep -c ' True$' <<<"$out" || true) -ge 3 ]]
 }
+single_ready_node() { # 삭제 중이 아닌 selector 노드가 Ready 상태와 관계없이 정확히 1대이고 그 노드가 Ready면 0, 아니면 1, 조회 실패는 2
+  local out
+  out=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}node:{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}{{"\n"}}{{end}}{{end}}') || return 2
+  [[ $(grep -c '^node:' <<<"$out" || true) == 1 && $(grep -c '^node:True$' <<<"$out" || true) == 1 ]]
+}
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]"
 
 # placeholder를 배포하기 전에 selector가 전용 풀만 가리키고 그 풀이 비어 있는지 확인합니다. 조회 실패도 실패로 봅니다.
@@ -77,16 +82,21 @@ for run in $(seq 1 "$RUNS"); do
   k -n bench rollout status deployment/overprovisioning --timeout="${TIMEOUT}s" >/dev/null
   # 빈 여유 노드가 남아 있으면 선점 없이 바로 배치되므로, placeholder가 있는 노드 1대만 남을 때까지 기다립니다.
   # placeholder 3개가 노드 1대에 들어가지 않는 VM 크기면 이 조건을 만족할 수 없으므로 TIMEOUT 뒤 실패로 종료합니다.
+  # NotReady 노드도 세어 정확히 1대이고 Ready일 때만 안정으로 봅니다. 세 번째 확인 뒤에는 기다리지 않고 burst로 넘어갑니다.
   stable=0 deadline=$(( $(date +%s) + TIMEOUT ))
-  until (( stable >= 3 )); do
+  while :; do
     (( $(date +%s) < deadline )) || { log "run $run: timeout waiting for placeholders on a single node"; exit 1; }
-    n=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true)
-    if [[ $n == 1 ]]; then stable=$((stable + 1)); else stable=0; fi
+    single_ready_node && rc=0 || rc=$?
+    (( rc != 2 )) || { log "run $run: node 조회에 실패했습니다"; exit 1; }
+    if (( rc == 0 )); then stable=$((stable + 1)); else stable=0; fi
+    (( stable < 3 )) || break
     sleep 10
   done
   # readyReplicas는 선점 직후에도 이전 값 3으로 남을 수 있으므로 burst 전 placeholder UID를 기록해 교체 여부로 판단합니다.
   old_uids=$(k -n bench get pods -l app=overprovisioning -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}')
   [[ -n $old_uids ]] || { log "run $run: no placeholder pods before burst"; exit 1; }
+  # 안정 확인 뒤 상태가 바뀌지 않았는지 burst 직전에 다시 확인합니다.
+  single_ready_node || { log "run $run: burst 직전 selector 노드가 Ready 1대가 아닙니다"; exit 1; }
   t0=$(date +%s)
   k -n bench scale deployment inflate --replicas 3 >/dev/null
   wait_ready3 inflate 1

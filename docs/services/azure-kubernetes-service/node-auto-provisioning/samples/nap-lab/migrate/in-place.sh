@@ -23,6 +23,14 @@ wait_web_ready() { # 새 revision의 replica가 모두 Ready·Available이고 �
 
 log "deploy probe"; k apply -f "$(dirname "$0")/probe.yaml" >/dev/null; wait_web_ready
 k -n migrate get pods -l app=web -o wide --no-headers | awk '{print $7}' | sort | uniq -c
+# client가 요청을 보내 200 응답을 기록하기 전에 바꾸면 전환 중 실패를 측정하지 못하므로, 풀·NAP를 바꾸기 전에 확인합니다.
+log "wait for client 200 sample"
+client_deadline=$(( $(date +%s) + 120 ))
+client_ok() { local out; out=$(k -n migrate logs deploy/client --tail=200 2>/dev/null) || return 1; grep -q ' 200$' <<<"$out"; }
+until client_ok; do
+  (( $(date +%s) < client_deadline )) || { log "client 로그에 120초 안에 200 응답이 없습니다. 변경 전에 중단합니다"; exit 1; }
+  sleep 5
+done
 
 # AllowClusterAutoscalerAndNAP 없이 NAP를 켜려면 CAS가 켜진 풀이 하나도 없어야 합니다.
 # 변경 전 각 풀의 min/max를 저장하고, NAP 활성화 전에 실패·중단하면 CAS를 원래 값으로 되돌립니다.
@@ -32,6 +40,16 @@ disabled=""   # "<풀> <min> <max>" 줄 목록. 실패한 변경도 일부 적�
 rollback() {
   local rc=$? p min max
   trap '' INT TERM   # 복구 중 들어온 중단 신호로 복구가 끊기지 않게 합니다.
+  # NAP 활성화 요청이 실패로 끝나도 실제로는 적용됐을 수 있습니다. NAP가 켜졌거나 확인하지 못하면 CAS를 다시 켜지 않습니다.
+  if [[ -n $disabled ]]; then
+    local mode
+    if ! mode=$(az aks show -g "$RG" -n "$CLUSTER" --query nodeProvisioningProfile.mode -o tsv); then
+      log "rollback skipped: node provisioning mode 조회 실패. CAS를 다시 켜지 않습니다. 풀 상태를 직접 확인하세요"; exit "$rc"
+    fi
+    if [[ $mode == Auto ]]; then
+      log "rollback skipped: NAP(mode Auto)가 켜져 있어 CAS를 다시 켜지 않습니다"; exit "$rc"
+    fi
+  fi
   while read -r -u 3 p min max; do
     [[ -n $p ]] || continue
     log "rollback: enable cluster autoscaler on $p (min $min, max $max)"

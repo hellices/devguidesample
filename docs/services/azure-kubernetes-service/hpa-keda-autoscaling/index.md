@@ -89,8 +89,9 @@ desiredReplicas = ceil(currentReplicas × currentMetricValue / desiredMetricValu
 | Scale up | 안정화 창 0초, 15초마다 100% 또는 4개 중 큰 값까지 추가 | 급증에 바로 반응 |
 | Scale down | 안정화 창 300초, 15초마다 100%까지 감소 | 최근 5분 최고 권장값 아래로는 줄이지 않음 |
 
-CPU utilization 목표는 container `requests` 대비 비율이므로 requests가
-없는 Pod는 계산되지 않습니다. 다음은 기존 Pod 분산 예제의 HPA를 운영 환경에
+CPU utilization 목표는 container `requests` 대비 비율입니다. Pod의 container 중 하나라도
+CPU request가 없으면 그 Pod의 utilization이 정의되지 않고 HPA는 이 지표로 replica를 조정하지
+않으므로, 모든 container에 CPU request를 둡니다. 다음은 기존 Pod 분산 예제의 HPA를 운영 환경에
 맞게 보강한 예입니다.
 
 ```yaml

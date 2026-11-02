@@ -36,6 +36,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      # 공개 결과는 k6를 시스템 풀에서 실행해 측정했습니다. 워크로드 노드 수와 확장 지표에 섞이지 않게 같은 위치를 유지합니다.
+      # requests로 시스템 풀에 k6 몫(CPU 1, 메모리 1Gi)을 예약해 다른 시스템 Pod와 자원을 다투지 않게 합니다.
       nodeSelector:
         kubernetes.azure.com/mode: system
       tolerations:
@@ -45,6 +47,9 @@ spec:
         - name: k6
           image: grafana/k6:1.8.2
           args: ["run", "--summary-trend-stats=avg,p(95),p(99)", "/scripts/script.js"]
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }
           env:
             - name: TARGET_URL
               value: http://podinfo.demo.svc/

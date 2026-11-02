@@ -7,6 +7,7 @@
   first_attempt_s와 failure_seen_s는 선호(대체가 아닌) NodeClaim·VMSS만 봅니다. 선호 VM을 시도하지 않은 실행은
   first_attempt_s가 빈 값입니다. NAP에서 선호 NodeClaim이 스냅샷 전에 삭제됐으면 그 NodeClaim의 가장 이른
   이벤트 시각을 first_attempt_s로 씁니다. fallback_node_ready_s는 t0 이후 생성된 대체 노드만 봅니다.
+  all_pods_ready_s는 run-dir의 replicas(요청 replica 수)만큼 Pod가 Ready여야 기록합니다.
 출력: scenario,run,first_attempt_s,failure_seen_s,fallback_decision_s,fallback_node_ready_s,all_pods_ready_s,failure_message
 """
 import json
@@ -123,8 +124,11 @@ def main():
         c = [x for x in p["status"].get("conditions", []) if x["type"] == "Ready" and x["status"] == "True"]
         if c and ts(c[0]["lastTransitionTime"]) >= t0:
             pods.append(ts(c[0]["lastTransitionTime"]))
-    # timeout으로 일부 Pod만 Ready인 실행은 완료 시간으로 기록하지 않습니다.
-    all_ready = max(pods) if pods and len(pods) == targets else None
+    # timeout으로 일부 Pod만 Ready이거나 Pod가 요청 replica 수만큼 생기지 않은 실행은 완료 시간으로 기록하지 않습니다.
+    # replicas 파일이 없는 이전 스냅샷은 t0 이후 생성된 Pod 수를 요청 수로 봅니다.
+    rf = d / "replicas"
+    want = int(rf.read_text().strip()) if rf.exists() else targets
+    all_ready = max(pods) if pods and len(pods) == targets >= want else None
     msg = re.sub(r"/subscriptions/[^/]+", "/subscriptions/<subscription-id>", msg)
     msg = msg.replace(",", ";").replace("\n", " ")[:200]
     print(",".join([scenario, run, sec(first), sec(fail), sec(fb), sec(min(ready) if ready else None),

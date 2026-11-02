@@ -108,6 +108,7 @@ for run in $(seq 1 "$RUNS"); do
   k -n bench delete events --all >/dev/null 2>&1 || true
 
   t0=$(now); echo "$t0" > "$dir/t0"
+  echo "$REPLICAS" > "$dir/replicas"   # analyze.py·fallback.py가 Ready Pod 수를 요청 replica 수와 비교합니다.
   if [[ -n ${WAVES:-} ]]; then
     total=0; : > "$dir/waves"
     for w in $WAVES; do

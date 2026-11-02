@@ -234,7 +234,7 @@ CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 �
 |---|---|
 | Pod 크기가 다양하거나 자주 바뀜 | NAP. 풀 설계 없이 비용이 낮음 |
 | 큰 VM에서 부하가 크게 줄어드는 패턴 | NAP. VM 교체로 비용 절감, PDB로 이동 제어 |
-| 선호 VM의 quota가 자주 부족함 | NAP. 다른 VM으로 빨리 대체. VM 생성 요청 뒤의 용량 부족(`AllocationFailed`)은 이번에 재현하지 못해 대체 속도를 측정하지 않음 |
+| 선호 VM의 quota가 자주 부족함 | NAP. NAP가 캐시한 quota 정보가 부족 상태를 반영하고 있으면 다른 VM으로 빨리 대체. 다른 클러스터·VMSS가 같은 계열 quota를 바꾸면 최대 10분 전 정보로 판단할 수 있고, VM 생성 요청 뒤의 용량 부족(`AllocationFailed`) 대체 속도는 측정하지 않음 |
 | VMSS·노드 풀 수를 제한하는 정책이 있음 | NAP |
 | 같은 크기 Pod 위주, 풀 설계가 끝남 | CAS로도 충분. 속도 차이는 작음 |
 | 축소·재확장이 잦고 노드를 빨리 되살려야 함 | CAS `Deallocate` 풀 |

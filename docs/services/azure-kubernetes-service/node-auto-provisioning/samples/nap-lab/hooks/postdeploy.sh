@@ -184,6 +184,8 @@ exp_drift() { # migration 뒤 NAP drift로 노드 전체 교체. preStop 없음 
     local old
     old=$(kubectl --context "$ctx" get nodeclaims -l karpenter.sh/nodepool=default \
       -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}') || return 1
+    # 교체할 NodeClaim이 없으면 drift가 측정되지 않으므로 patch 전에 실패로 끝내고 drift.csv에 기록하지 않습니다.
+    [[ -n ${old//[[:space:]]/} ]] || { log "drift $1: 교체할 default NodeClaim이 없습니다. drift.csv에 기록하지 않음"; return 1; }
     kubectl --context "$ctx" patch nodepool default --type merge \
       -p "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"rotation\":\"$1\"}}}}}" >/dev/null
     log "drift $1 시작"

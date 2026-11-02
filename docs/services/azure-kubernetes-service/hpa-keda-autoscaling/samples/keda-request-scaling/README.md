@@ -15,6 +15,7 @@ NodePool(on-demand 전용)에서 만들어지며 spot VM은 쓰지 않습니다.
 
 - Azure Developer CLI 1.29 이상, Azure CLI 2.76 이상, `kubectl`, Helm 3, Python 3(`python3`)
 - 대상 리전에 약 40 vCPU quota(시스템 풀 2노드 + 워크로드 노드)
+- k6 Job은 시스템 풀에서 CPU 1·메모리 1Gi를 예약합니다. 시스템 VM 크기(`systemVmSize`, 기본 `Standard_D4ds_v7`)를 줄이면 이 여유가 있는지 확인합니다.
 
 ## 실행
 

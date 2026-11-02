@@ -4,13 +4,14 @@
 decision_s           확장 결정: CAS ScaledUpGroup('setting group') 또는 TriggeredScaleUp 중 이른 시각 / NAP NodeClaim 생성
                      CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 inflate Pod의 TriggeredScaleUp과
                      ScaledUpGroup만 봅니다. 노드를 만들지 못한 그룹(예: quota로 실패한 선호 풀)은 제외합니다.
+                     ScaledUpGroup은 이번 실행에 inflate Pod의 TriggeredScaleUp이 가리킨 그룹일 때만 씁니다.
                      NAP는 이번 실행에 생성되어 대상 노드에 연결됐거나, 노드 없이 inflate Pod의
                      Nominated 이벤트(nodeclaim/<이름>)가 가리킨 NodeClaim만 봅니다.
                      이전 실행 이벤트에 합쳐진 반복 이벤트는 lastTimestamp(이번 실행 발생 시각의 상한)를 씁니다.
 vm_launched_s        NAP NodeClaim Launched(VM 생성 API 완료). CAS는 측정하지 않음
 first_node_ready_s   첫 워크로드 노드 Ready
 last_node_ready_s    마지막 워크로드 노드 Ready
-all_pods_ready_s     모든 inflate Pod Ready
+all_pods_ready_s     모든 inflate Pod Ready. 실행 디렉터리의 replicas(요청 replica 수)보다 Ready Pod가 적으면 빈 값
 wave_latency_s       WAVES 사용 시 wave별 '추가 → 해당 Pod 모두 Ready' 시간
 """
 import json
@@ -82,6 +83,10 @@ def main():
     # 노드를 만든 그룹은 대상 노드 providerID의 VMSS로만 정합니다. 실패한 그룹을 가리킨 이벤트는 제외합니다.
     groups = {m.group(1).lower() for n in nodes if (m := VMSS.search(n.get("spec", {}).get("providerID") or ""))}
 
+    # ScaledUpGroup에는 Pod 정보가 없으므로 이번 실행에 inflate Pod의 TriggeredScaleUp이 가리킨 그룹만 받습니다.
+    triggered = {g.lower() for e in events if e.get("reason") == "TriggeredScaleUp" and our_pod(e["involvedObject"])
+                 and ev_time(e) and ev_time(e) >= t0 for g in TRIGGERED.findall(e.get("message") or "")}
+
     def is_cas_decision(e):
         msg = e.get("message") or ""
         if e.get("reason") == "TriggeredScaleUp":
@@ -89,7 +94,7 @@ def main():
         if e.get("reason") != "ScaledUpGroup":
             return False
         m = SETTING.match(msg)
-        return bool(m) and m.group(1).lower() in groups
+        return bool(m) and m.group(1).lower() in groups and m.group(1).lower() in triggered
 
     cas = [ev_time(e) for e in events if is_cas_decision(e) and ev_time(e) and ev_time(e) >= t0]
     decision = min(cas) if cas else (min(ts(c["metadata"]["creationTimestamp"]) for c in claims) if claims else None)
@@ -104,8 +109,11 @@ def main():
         ready_at = ts(c["lastTransitionTime"]) if c and c["status"] == "True" else None
         pod_times.append((ts(p["metadata"]["creationTimestamp"]), ready_at))
     pod_ready = [(c, r) for c, r in pod_times if r is not None]
-    # timeout으로 일부 Pod만 Ready인 실행은 완료 시간으로 기록하지 않습니다.
-    all_ready = max(r for _, r in pod_ready) if pods and len(pod_ready) == len(pods) else None
+    # timeout으로 일부 Pod만 Ready이거나 Pod가 요청 replica 수만큼 생기지 않은 실행은 완료 시간으로 기록하지 않습니다.
+    # replicas 파일이 없는 이전 스냅샷은 스냅샷의 Pod 수를 요청 수로 봅니다.
+    rf = d / "replicas"
+    want = int(rf.read_text().strip()) if rf.exists() else len(pods)
+    all_ready = max(r for _, r in pod_ready) if pods and len(pod_ready) == len(pods) >= want else None
 
     wave_lat = ""
     wf = d / "waves"

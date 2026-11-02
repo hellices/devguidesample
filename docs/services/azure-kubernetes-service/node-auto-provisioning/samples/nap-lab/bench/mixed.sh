@@ -32,9 +32,11 @@ PRICES=${PRICES:-$HERE/../results/prices-${AZURE_LOCATION:?PRICES 또는 AZURE_L
 k() { kubectl --context "$CTX" "$@"; }
 log() { echo "[$(date -u +%T)] $SCENARIO $*" >&2; }
 total=$((BIG + MEM + SMALL))
-ready_pods() {
-  k -n mixed get pods -l app=mix \
-    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' | grep -c True || true
+ready_pods() { # 조회 실패는 0개가 아니라 nonzero로 반환합니다.
+  local statuses
+  statuses=$(k -n mixed get pods -l app=mix \
+    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || return 1
+  grep -c True <<<"$statuses" || true
 }
 node_objects() { # Ready 여부와 관계없는 node 객체 수. 조회 실패는 0개가 아니라 nonzero로 반환합니다.
   local out
@@ -71,14 +73,17 @@ for run in $(seq 1 "$RUNS"); do
   k -n mixed scale deployment small --replicas "$SMALL" >/dev/null
   start=$(date +%s)
   timed_out=0
-  until [[ $(ready_pods) -ge $total ]]; do
+  while :; do
+    n=$(ready_pods) || exit 1
+    [[ $n -ge $total ]] && break
     if (( $(date +%s) - start > TIMEOUT )); then timed_out=1; break; fi
     sleep 3
   done
   # timeout이면 지연 없이 그 시점 상태를 기록합니다.
   (( timed_out )) || sleep 5
   k -n mixed get pods -o json > "$dir/pods.json"
-  log "run $run: $(ready_pods)/$total pods ready"
+  n=$(ready_pods) || exit 1
+  log "run $run: ${n}/${total} pods ready"
   k get nodes -o json > "$dir/nodes.json"
   k get events -n mixed -o json > "$dir/events.json"
   # 생성되지 않은 Pod도 미완료로 보도록 기대 replica 수를 넘깁니다.

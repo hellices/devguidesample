@@ -86,10 +86,10 @@ nodeSelector는 벤치마크 전용 풀의 노드만 가리켜야 하며, 시작
 
 | 열 | 의미 |
 |---|---|
-| `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성. CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 `bench` inflate Pod의 `TriggeredScaleUp`과 `ScaledUpGroup`만, NAP는 이번 실행에 생성된 NodeClaim 중 대상 노드에 연결됐거나, 노드가 없으면 `bench` inflate Pod의 Karpenter `Nominated` 이벤트가 가리킨 NodeClaim만 봄(같은 NodePool의 다른 워크로드 NodeClaim 제외). 이전 실행 이벤트에 합쳐진 반복 이벤트는 `lastTimestamp`(이번 실행 발생 시각의 상한), `series`로 합쳐진 이벤트는 `series.lastObservedTime`을 씀 |
+| `decision_s` | CAS `TriggeredScaleUp`과 `ScaledUpGroup`(setting group size) 중 이른 이벤트 또는 NAP NodeClaim 생성. CAS는 대상 노드 providerID의 VMSS(노드를 만든 그룹)를 가리킨 `bench` inflate Pod의 `TriggeredScaleUp`과, 이번 실행에 그 `TriggeredScaleUp`이 가리킨 그룹의 `ScaledUpGroup`만, NAP는 이번 실행에 생성된 NodeClaim 중 대상 노드에 연결됐거나, 노드가 없으면 `bench` inflate Pod의 Karpenter `Nominated` 이벤트가 가리킨 NodeClaim만 봄(같은 NodePool의 다른 워크로드 NodeClaim 제외). 이전 실행 이벤트에 합쳐진 반복 이벤트는 `lastTimestamp`(이번 실행 발생 시각의 상한), `series`로 합쳐진 이벤트는 `series.lastObservedTime`을 씀 |
 | `vm_launched_s` | NAP NodeClaim `Launched=True` |
 | `first_node_ready_s`, `last_node_ready_s` | 새 워크로드 노드 Ready |
-| `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니면 빈 값 |
+| `all_pods_ready_s` | 모든 Pod Ready. 하나라도 Ready가 아니거나 Ready Pod가 요청 replica 수(실행 디렉터리의 `replicas`)보다 적으면 빈 값 |
 | `scale_in_s` | 축소 시작(replicas 0)부터 완료까지. `SCALE_IN_COUNT`(남은 VM 수를 출력하는 명령)를 지정하면 그 명령이 `0`을 출력한 시각, 지정하지 않으면 selector와 일치하는 Ready 워크로드 노드가 0개가 된 시각. timeout이면 빈 값. `SCALE_IN_COUNT` timeout이면 그 실행 행을 남긴 뒤 실패로 종료하고, 각 실행은 그 명령이 `0`을 출력해야 시작 |
 | `wave_latency_s` | wave별 추가 → 해당 wave Pod 모두 Ready |
 
@@ -111,7 +111,7 @@ CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler
 | `results/zone1-burst.csv` | 같은 zone 확장 단계 시간 |
 | `results/burst-40-nodes.csv` | 40대 확장 단계 시간과 정책 거부 기록 |
 | `results/quota-staleness.csv` | quota 점유·반납 후 NAP가 고른 NodePool. `recorded_s`는 이전 스크립트가 확인용 NodeClaim 정리 뒤 기록한 시각, `probe_s_est`는 스크립트 순서로 역산한 선택 확인 시각(±5초). 현재 스크립트는 사전 조건 확인 결과를 `precondition` 열(`ok` 또는 `failed(...)`)로 남기고, 반납 뒤 확인이 실패하면 기록 없이 1200초 기한 안에서 다시 시도하고, 확인용 Pod 20개가 모두 배정·지정되고 NodeClaim 목록이 두 번 연속 같을 때 선택을 읽으며, 1200초 안에 선택이 정확히 `pref64`만으로 나오지 않으면 `timeout` 행(`censored`)을 남긴 뒤 실패로 종료. `STRICT=1`이면 사전 조건 실패도 실패로 종료 |
-| `results/nap-nodeclaim-phases.csv` | NAP burst·zone 1·40대 실측의 NodeClaim별 zone과 생성·`Launched`·`Registered`·`Initialized` 시각(실행 시작 기준 초). `bench.sh` 스냅샷의 `nodeclaims.json`에서 계산 |
+| `results/nap-nodeclaim-phases.csv` | NAP burst·zone 1·40대 실측의 NodeClaim별 zone과 생성·`Launched`·`Registered`·`Initialized` 시각(실행 시작 기준 초). `bench.sh` 스냅샷의 `nodeclaims.json`에서 계산. `zone`은 노드의 `topology.kubernetes.io/zone` label 그대로이며, 실험 구독의 East US 2는 zone 1~4를 제공했습니다(`az vm list-skus --location eastus2 --size Standard_D4ds_v7`, 2026-11-01) |
 | `results/cas-node-object-linger.csv` | CAS 축소 노드별 `ScaleDown` → `NodeNotReady` → node 객체 삭제(`DeletingNode`) 간격(초). 여러 CAS 실측 스냅샷의 Node 이벤트에서 계산 |
 | `results/cas-dealloc-pod-scheduling.csv` | Deallocate 풀 실측의 Pod별 노드 Ready·Pod 배치·Pod Ready 시각(실행 시작 기준 초). `pods.json`·`nodes.json`에서 계산 |
 
