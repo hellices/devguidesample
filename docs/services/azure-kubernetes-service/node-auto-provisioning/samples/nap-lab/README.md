@@ -41,6 +41,9 @@ azd up
 있으면 CAS 실험을 시작하지 않습니다. 결과 행은 실험이 성공했을 때만 결과 CSV에 덧붙고(header가 다르면
 실패), 실패한 실험의 행은 `*.pending`에 남았다가 다음 실행 시작 때 지워집니다.
 `rightsize-*.csv`·`quota-staleness.csv`·`migration*.log`와 실행별 스냅샷 디렉터리는 새 실행으로 바뀝니다.
+스크립트의 `az` 호출은 시간 제한 wrapper(`bench/bounded.py`)가 명령의 자식 프로세스까지 기다리므로,
+명령 뒤에 남는 telemetry 전송이 측정 시각을 늦추지 않도록 이 sample 안에서는
+`AZURE_CORE_COLLECT_TELEMETRY=false`로 실행합니다(`bench/lib.sh`).
 
 ```bash
 azd env set EXPERIMENT "scale-out waves"

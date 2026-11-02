@@ -52,8 +52,9 @@ KEDA `ScaledObject`는 Kubernetes HPA를 이용해 Pod 수를 바꿉니다. `Sca
 operator가 같은 Deployment를 대상으로 하는 HPA(`keda-hpa-<이름>`)를 만들고, KEDA metrics
 server가 그 HPA에 요청 수·큐 길이 같은 외부 지표를 제공합니다. replica가 1개 이상일 때
 수를 계산하고 바꾸는 것은 HPA controller입니다. KEDA operator가 replica를 직접 바꾸는 것은
-HPA가 하지 못하는 0개에서의 시작·0개로의 축소와, `autoscaling.keda.sh/paused-replicas`로
-자동 확장을 멈출 때뿐입니다. Job을 만드는 `ScaledJob`은 HPA를 쓰지 않습니다.
+HPA가 하지 못하는 0개에서의 시작·0개로의 축소, `autoscaling.keda.sh/paused-replicas`로
+자동 확장을 멈출 때, 그리고 `advanced.restoreToOriginalReplicaCount: true`인 `ScaledObject`를
+삭제해 원래 replica 수로 되돌릴 때입니다. Job을 만드는 `ScaledJob`은 HPA를 쓰지 않습니다.
 
 | 구분 | HPA 직접 사용 | KEDA `ScaledObject` |
 |---|---|---|
@@ -137,8 +138,9 @@ HPA를 적용한 Deployment manifest에서는 `replicas`를 지워 배포 때마
 ## KEDA 구성 요소: operator, scaler, metrics server, admission webhook
 
 `ScaledObject`에서 KEDA는 HPA를 대신하지 않습니다. KEDA operator가 HPA를 만들어 관리하고,
-KEDA metrics server가 외부 지표를 HPA가 읽는 external metrics API로 내보냅니다. replica
-수를 KEDA가 직접 바꾸는 것은 0개 전환과 `paused-replicas` 일시 중지뿐입니다. AKS KEDA
+KEDA metrics server가 외부 지표를 HPA가 읽는 external metrics API로 내보냅니다. 평상시 replica
+수를 KEDA가 직접 바꾸는 것은 0개 전환과 `paused-replicas` 일시 중지이며, `ScaledObject`를 삭제할 때
+`restoreToOriginalReplicaCount: true`면 원래 replica 수로 되돌립니다. AKS KEDA
 add-on을 켜면 `kube-system`에 다음 Pod가 뜨고, replica 계산은 control plane의
 HPA controller가 맡습니다.
 

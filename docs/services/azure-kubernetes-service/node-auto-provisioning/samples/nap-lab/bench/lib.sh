@@ -6,6 +6,9 @@ LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBE_RT=60s
 # bounded <초> <명령...>: 제한 시간을 넘기면 명령과 자식 프로세스를 끝내고 124를 반환합니다(bounded.py).
 bounded() { python3 "$LIB_DIR/bounded.py" "$@"; }
+# az CLI는 명령이 끝난 뒤 telemetry 전송 프로세스를 같은 프로세스 그룹에 몇 초 남깁니다. bounded.py는 그룹 전체가
+# 끝날 때까지 기다리므로, 측정 시각(예: SCALE_IN_COUNT)이 늦어지지 않게 이 sample의 az 호출에서는 telemetry 수집을 끕니다.
+export AZURE_CORE_COLLECT_TELEMETRY=false
 azq() { bounded 300 az "$@"; }     # az 조회
 azop() { bounded 3600 az "$@"; }   # 풀 추가·삭제·변경, 클러스터 변경 같은 장시간 az 작업
 

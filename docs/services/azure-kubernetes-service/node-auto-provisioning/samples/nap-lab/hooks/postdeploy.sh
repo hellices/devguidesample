@@ -69,11 +69,38 @@ pool_exists() { # 목록에 있으면 0, 없으면 1, 조회 실패(인증·네�
   found=$(azq aks nodepool list -g "$RG" --cluster-name "$CAS" --query "[?name=='$1'].name" -o tsv) || return 2
   [[ -n $found ]]
 }
-add_pool() { # add_pool <name> <az aks nodepool add 추가 인수...>. 이미 있으면 그대로 씁니다.
-  local name=$1 rc=0; shift
+# POOL_CHECK: 기존 CAS 풀 JSON(표준 입력)이 add_pool 인수(<이름> <옵션 값>...)와 같은 구성인지 확인하는 Python 코드.
+POOL_CHECK='
+import json, sys
+name, args, p = sys.argv[1], sys.argv[2:], json.load(sys.stdin)
+want = dict(zip(args[::2], args[1::2]))
+# zone·label은 지정하지 않으면 새 풀처럼 없어야 합니다(다른 zone에 고정된 풀을 zone 미지정 실험에 쓰지 않게).
+want.setdefault("--zones", "")
+want.setdefault("--labels", "")
+have = {
+    "--node-vm-size": p.get("vmSize"),
+    "--zones": " ".join(sorted(p.get("availabilityZones") or [])),
+    "--labels": " ".join(sorted(f"{k}={v}" for k, v in (p.get("nodeLabels") or {}).items())),
+    "--os-sku": p.get("osSku"),
+    "--node-osdisk-type": p.get("osDiskType"),
+    "--scale-down-mode": p.get("scaleDownMode"),
+    "--max-count": str(p.get("maxCount")),
+}
+bad = [f"{k}: 기존 {have.get(k)!r}, 요청 {v!r}" for k, v in want.items()
+       if k not in have or str(have[k] or "").lower() != " ".join(sorted(v.split())).lower()]
+if bad:
+    sys.exit(f"CAS 풀 {name}이 이미 있지만 구성이 다릅니다. 풀을 지운 뒤 다시 실행하세요: " + "; ".join(bad))
+'
+add_pool() { # add_pool <name> <az aks nodepool add 추가 인수...>. 이미 있으면 요청한 구성과 같을 때만 그대로 씁니다.
+  local name=$1 rc=0 json; shift
   pool_exists "$name" || rc=$?
   (( rc != 2 )) || return 1
-  (( rc != 0 )) || return 0
+  if (( rc == 0 )); then
+    # 이전 실행이 남긴 같은 이름의 풀이 다른 VM 크기·zone·label 등으로 만들어졌으면 잘못된 구성으로 측정하지 않고 멈춥니다.
+    json=$(azq aks nodepool show -g "$RG" --cluster-name "$CAS" -n "$name" -o json) || return 1
+    python3 -c "$POOL_CHECK" "$name" "$@" <<<"$json" || return 1
+    log "CAS 풀 $name 재사용(구성 일치)"; return 0
+  fi
   log "CAS 풀 $name 추가"
   azop aks nodepool add -g "$RG" --cluster-name "$CAS" -n "$name" --mode User --node-count 0 \
     --enable-cluster-autoscaler --min-count 0 "$@" -o none

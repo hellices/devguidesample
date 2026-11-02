@@ -22,6 +22,12 @@ data:
           ],
         },
       },
+      // URL 오타·DNS·연결 실패처럼 부하가 대상에 거의 전달되지 않으면 k6가 nonzero로 끝나 Job이 Failed가 됩니다.
+      // 상한 50%는 공개 결과의 가장 높은 실패율(HTTP Add-on 0개 시작, 전송 요청의 7.6%)을 측정 결과로 남기기 위한 값입니다.
+      thresholds: {
+        http_req_failed: ['rate<0.5'],
+        http_reqs: ['count>0'],
+      },
     };
     const headers = __ENV.HOST_HEADER ? { Host: __ENV.HOST_HEADER } : {};
     export default function () { http.get(__ENV.TARGET_URL, { headers, timeout: '10s' }); }

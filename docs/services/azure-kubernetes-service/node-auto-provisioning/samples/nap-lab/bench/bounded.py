@@ -3,6 +3,7 @@
 
 사용법: bounded.py <초> <명령> [인수...]
   명령은 새 프로세스 그룹에서 실행하고, 제한 시간을 넘기면 그룹 전체에 TERM(10초 뒤 KILL)을 보내 124로 끝납니다.
+  명령이 먼저 끝나도 같은 그룹에 남은 자식이 있으면 제한 시간까지 기다리고, 그때도 남아 있으면 같은 방식으로 끝내 124를 반환합니다.
   이 프로세스가 받은 INT·TERM·HUP은 명령의 프로세스 그룹에 전달합니다. 그 밖에는 명령의 종료 코드를 그대로 반환합니다.
   표준 입력이 터미널이면 명령에 넘기지 않습니다(배경 그룹이 터미널을 읽으면 멈추므로 입력을 기다리지 않게 함).
 """
@@ -57,10 +58,8 @@ def group_alive():
         return True
 
 
-try:
-    sys.exit(code(proc.wait(timeout=limit)))
-except subprocess.TimeoutExpired:
-    print(f"bounded.py: {limit}초 안에 끝나지 않아 중단합니다: {' '.join(cmd)}", file=sys.stderr)
+def stop_group():
+    """그룹 전체에 TERM을 보내고 10초 안에 사라지지 않으면 KILL합니다."""
     forward(signal.SIGTERM, None)
     # 그룹 리더가 먼저 끝나도 같은 그룹의 자식이 남을 수 있으므로 그룹 전체를 확인합니다.
     deadline = time.monotonic() + 10
@@ -79,4 +78,18 @@ except subprocess.TimeoutExpired:
     else:
         forward(signal.SIGKILL, None)
         proc.wait()
-    sys.exit(124)
+
+
+end = time.monotonic() + limit
+try:
+    rc = proc.wait(timeout=limit)
+except subprocess.TimeoutExpired:
+    rc = None
+# 리더가 끝나도 같은 그룹에 남은 자식은 제한 시간까지 기다립니다. 그 안에 모두 끝나면 리더의 종료 코드를 반환합니다.
+while rc is not None and group_alive() and time.monotonic() < end:
+    time.sleep(min(0.2, max(0.0, end - time.monotonic())))
+if rc is not None and not group_alive():
+    sys.exit(code(rc))
+print(f"bounded.py: {limit}초 안에 끝나지 않아 중단합니다: {' '.join(cmd)}", file=sys.stderr)
+stop_group()
+sys.exit(124)

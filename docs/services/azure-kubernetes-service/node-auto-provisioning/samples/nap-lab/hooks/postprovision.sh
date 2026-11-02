@@ -23,7 +23,25 @@ sed -e "s/Standard_D4ds_v7/${VM_SIZE}/" -e "s/cpu: \"40\"/cpu: \"$((10#$vcpu * 1
 kubectl --context "$NAP_CLUSTER_NAME" --request-timeout="$KUBE_RT" apply -f manifests/nodepool-flex.yaml >/dev/null
 
 prices="results/prices-$AZURE_LOCATION.json"
+# 혼합·rightsize 실험의 고정 SKU는 v7이므로 v7 가격을 받습니다. AKS_VM_SIZE(CAS user 풀, rightsize cas-d4)가
+# v7이 아니거나 기존 파일에 없으면 그 SKU 가격도 받아 합칩니다. 가격이 없으면 비용 계산이 unknown이 되므로 실패합니다.
 [[ -f $prices ]] || python3 bench/prices.py "$AZURE_LOCATION" "$prices" _v7
+if ! python3 -c 'import json,sys; sys.exit(sys.argv[2] not in json.load(open(sys.argv[1])))' "$prices" "$VM_SIZE"; then
+  python3 bench/prices.py "$AZURE_LOCATION" "$prices.vm" "$VM_SIZE"
+  python3 - "$prices" "$prices.vm" "$VM_SIZE" <<'PY'
+import json, os, sys
+base, extra, sku = sys.argv[1], sys.argv[2], sys.argv[3]
+merged = json.load(open(base))
+add = json.load(open(extra))
+if sku not in add:
+    sys.exit(f"{sku}의 Linux on-demand 가격을 찾지 못했습니다")
+merged[sku] = add[sku]
+with open(base + ".tmp", "w") as f:
+    json.dump(dict(sorted(merged.items())), f, indent=1)
+os.replace(base + ".tmp", base)
+os.remove(extra)
+PY
+fi
 
 echo "준비 완료: kubectl context $CAS_CLUSTER_NAME, $NAP_CLUSTER_NAME"
 echo "실험 실행: azd env set EXPERIMENT scale-out && azd hooks run postdeploy"

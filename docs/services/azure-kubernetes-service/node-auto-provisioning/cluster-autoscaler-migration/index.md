@@ -96,6 +96,10 @@ NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없으므로 네�
 ```bash
 # RG·CLUSTER와 옮길 user 풀 이름(POOLS, 공백 구분)을 먼저 지정합니다. 시스템 풀은 넣지 않습니다.
 : "${RG:?}" "${CLUSTER:?}" "${POOLS:?옮길 user 풀 이름을 지정하세요}"
+# 대상 클러스터 전용 kubectl context를 만들어 모든 kubectl 호출에 씁니다.
+# 현재 context가 다른 클러스터를 가리켜도 다른 클러스터의 rollout을 확인하고 이 클러스터 풀을 지우는 일이 없게 합니다.
+CTX="nap-migrate-${CLUSTER}"
+az aks get-credentials -g "$RG" -n "$CLUSTER" --context "$CTX" --overwrite-existing || exit 1
 
 # 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
 #    하나라도 남아 있으면 AllowClusterAutoscalerAndNAP 없이는 NAP를 켤 수 없습니다.
@@ -108,7 +112,7 @@ left=$(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enable
 
 # 2. NAP 활성화. default·system-surge NodePool이 생성됩니다.
 az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto || exit 1
-kubectl get nodepools.karpenter.sh
+kubectl --context "$CTX" get nodepools.karpenter.sh
 
 # 3. (선택) 기존 풀의 label·taint를 재현한 NodePool 적용
 # 4·5. 옮길 풀마다 현재 노드 수에서 한 대씩 축소하고, 0대가 되면 삭제합니다.
@@ -121,7 +125,7 @@ for pool in $POOLS; do
     az aks nodepool scale -g "$RG" --cluster-name "$CLUSTER" -n "$pool" --node-count "$n" || exit 1
     # 예시는 Deployment 하나(web)만 확인합니다. 운영에서는 이 풀에 있던 모든 Deployment·StatefulSet에
     # rollout status를 실행하고, Pending·NotReady Pod가 없는지까지 확인한 뒤 다음 단계로 넘어갑니다.
-    kubectl rollout status deploy/web -n app --timeout=15m || exit 1
+    kubectl --context "$CTX" rollout status deploy/web -n app --timeout=15m || exit 1
   done
   # 노드 수가 0인 것을 다시 확인한 뒤 풀 삭제
   [[ $(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n "$pool" --query count -o tsv) == 0 ]] || exit 1

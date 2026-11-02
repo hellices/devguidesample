@@ -248,7 +248,10 @@ run_load() { # run_load <결과 이름> <TARGET_URL> [Host 헤더]
   row=$(job_pod_started "$k6_uid") || { echo "k6 Pod 시작 시각을 읽지 못했습니다" >&2; return 1; }
   k6_pod=${row%% *} started=${row#* }
   k6_start=$(python3 -c "import datetime,sys;print(int(datetime.datetime.fromisoformat(sys.argv[1].replace('Z','+00:00')).timestamp()))" "$started")
-  wait_until "k6 종료" 1200 job_finished k6
+  # k6가 threshold(실패율 50% 이상 등)로 실패하면 원인을 볼 수 있도록 로그를 남긴 뒤 멈춥니다.
+  wait_until "k6 종료" 1200 job_finished k6 || {
+    kto "$OUT/$name-k6.txt" -n demo logs "pod/$k6_pod" || true
+    echo "k6가 실패했습니다. ${OUT}/${name}-k6.txt를 확인하세요(대상 URL·연결·실패율 threshold)" >&2; return 1; }
   kto "$OUT/$name-k6.txt" -n demo logs "pod/$k6_pod"
   wait_until "watcher 종료" $(( WATCH_SECONDS + 300 )) job_finished watcher
   # 부하 시작 전부터 기록하던 Pod가 끝까지 기록했을 때만 결과로 씁니다(재시도 Pod는 부하 구간 일부가 빠짐).

@@ -120,7 +120,7 @@ NAP는 2025년 7월 GA됐습니다. Microsoft Learn은
 |---|---|
 | 기존 CAS 클러스터, NAP 지원 구성(Azure CNI Overlay·Node Subnet, 관리 ID, Linux) | 같은 클러스터에서 CAS 끄기 → NAP 켜기 → 기존 풀 축소 |
 | 기존 CAS 클러스터, [NAP 미지원 구성](#nap-unsupported)(kubenet, Calico, 서비스 주체, Windows GA 필요 등) | 바꿀 수 있는 설정은 변경 후 전환. 바꿀 수 없으면 NAP를 켠 새 클러스터로 이전하거나 CAS 유지 |
-| `Deallocate` 재시작, 같은 VM 계열 quota 공유, Pod 이동 최소화가 꼭 필요함 | NAP에서 quota 여유, `WhenEmpty`, PDB, `do-not-disrupt`로 완화되는지 먼저 확인. 완화되지 않으면 클러스터 전체를 CAS로 유지. CAS 풀과 NAP를 함께 쓰는 구성은 `AllowClusterAutoscalerAndNAP` feature flag가 필요한 전환 기간용 경로([경로 2](cluster-autoscaler-migration/index.md))이며 상시 운영 구성으로 권장하지 않음 |
+| `Deallocate` 재시작, 같은 VM 계열 quota 공유, Pod 이동 최소화가 꼭 필요함 | NAP에서 quota 여유, `WhenEmpty`, `do-not-disrupt`로 완화되는지 먼저 확인(PDB는 이동 중 가용성만 보호하고 이동 자체는 막지 않음). 완화되지 않으면 클러스터 전체를 CAS로 유지. CAS 풀과 NAP를 함께 쓰는 구성은 `AllowClusterAutoscalerAndNAP` feature flag가 필요한 전환 기간용 경로([경로 2](cluster-autoscaler-migration/index.md))이며 상시 운영 구성으로 권장하지 않음 |
 | 새 Linux 클러스터 | 처음부터 NAP로 생성 |
 
 ## 확장 단위: CAS는 풀의 노드 수, NAP는 VM 크기와 수

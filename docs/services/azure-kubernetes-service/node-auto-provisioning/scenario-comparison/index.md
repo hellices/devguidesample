@@ -201,8 +201,9 @@ zone 1에 `Standard_D4ds_v7` 노드를 만들게 하고 Pod 20개로 3회씩 측
 
 큰 노드 축소 시나리오에서 NAP는 큰 VM을 작은 VM으로 바꾸면서 남은 Pod 3개를 모두 새 노드로 옮겼습니다. CAS의
 `D4ds_v7` 풀은 빈 노드를 지우면서 1개를 옮겼고, `D32als_v7` 풀은 아무것도 옮기지 않았습니다.
-재시작 비용이 큰 워크로드는 PDB나 `karpenter.sh/do-not-disrupt` annotation으로 이동을 제한하고,
-`consolidationPolicy: WhenEmpty`로 빈 노드만 정리하게 할 수 있습니다.
+재시작 비용이 큰 워크로드의 이동 자체를 막으려면 `karpenter.sh/do-not-disrupt` annotation을 붙이거나
+`consolidationPolicy: WhenEmpty`로 빈 노드만 정리하게 합니다. PDB는 이동 중 동시에 내려가는 Pod 수만
+제한하므로, 예를 들어 replica 3·`minAvailable: 2`이면 한 번에 하나씩 옮겨 결국 3개 모두 이동할 수 있습니다.
 
 ## 할당 해제 VM 재시작: CAS에만 있는 방식
 
@@ -240,12 +241,12 @@ CAS 풀의 `--scale-down-mode Deallocate`는 축소 때 VM을 지우지 않고 �
 | 환경 | 권장 |
 |---|---|
 | Pod 크기가 다양하거나 자주 바뀜 | NAP. 이번 혼합 시나리오(2회)에서 풀 설계 없이 비용이 46~54% 낮음 |
-| 큰 VM에서 부하가 크게 줄어드는 패턴 | NAP. VM 교체로 비용 절감, PDB로 이동 제어 |
+| 큰 VM에서 부하가 크게 줄어드는 패턴 | NAP. VM 교체로 비용 절감, 이동 중 가용성은 PDB로 보호 |
 | 선호 VM의 quota가 자주 부족함 | NAP. NAP가 캐시한 quota 정보가 부족 상태를 반영하고 있으면 다른 VM으로 빨리 대체. 다른 클러스터·VMSS가 같은 계열 quota를 바꾸면 최대 10분 전 정보로 판단할 수 있고, VM 생성 요청 뒤의 용량 부족(`AllocationFailed`) 대체 속도는 측정하지 않음 |
 | VMSS 인스턴스 수를 제한하는 정책이 있음 | NAP(NAP 노드는 VMSS 인스턴스가 아님) |
 | 같은 크기 Pod 위주, 풀 설계가 끝남 | CAS로도 충분. 속도 차이는 작음 |
 | 축소·재확장이 잦고 노드를 빨리 되살려야 함 | CAS `Deallocate` 풀(Managed OS disk 필요, 중지 중에도 디스크 비용 발생) |
-| 노드 이동을 최소화해야 하는 장시간 워크로드 | CAS 또는 NAP `WhenEmpty`·PDB |
+| 노드 이동을 최소화해야 하는 장시간 워크로드 | CAS 또는 NAP `WhenEmpty`·`karpenter.sh/do-not-disrupt`(PDB는 이동 중 가용성만 보호) |
 
 ## 측정 한계: 반복 횟수와 실험 환경
 

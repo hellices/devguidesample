@@ -103,14 +103,22 @@ for (( run = 1; run <= RUNS; run++ )); do
   # 실제 시각을 잃지 않습니다. inflate는 burst부터 TIMEOUT, placeholder는 burst부터 TIMEOUT×2까지 기다립니다.
   t1="" t2=""
   while [[ -z $t1 || -z $t2 ]]; do
-    now=$(date +%s)
+    # 각 조건은 기한을 먼저 확인하고, 조회가 성공해도 기한 안에 끝났을 때만 시각을 기록합니다.
     if [[ -z $t1 ]]; then
-      if inflate_ready; then t1=$(date +%s); elif (( now - t0 >= TIMEOUT )); then
-        log "run $run: timeout waiting for inflate readyReplicas=3"; exit 1; fi
+      (( $(date +%s) - t0 < TIMEOUT )) || { log "run $run: timeout waiting for inflate readyReplicas=3"; exit 1; }
+      if inflate_ready; then
+        now=$(date +%s)
+        (( now - t0 < TIMEOUT )) || { log "run $run: timeout waiting for inflate readyReplicas=3"; exit 1; }
+        t1=$now
+      fi
     fi
     if [[ -z $t2 ]]; then
-      if placeholders_replaced; then t2=$(date +%s); elif (( now - t0 >= 2 * TIMEOUT )); then
-        log "run $run: timeout waiting for placeholders to be replaced and Ready"; exit 1; fi
+      (( $(date +%s) - t0 < 2 * TIMEOUT )) || { log "run $run: timeout waiting for placeholders to be replaced and Ready"; exit 1; }
+      if placeholders_replaced; then
+        now=$(date +%s)
+        (( now - t0 < 2 * TIMEOUT )) || { log "run $run: timeout waiting for placeholders to be replaced and Ready"; exit 1; }
+        t2=$now
+      fi
     fi
     [[ -n $t1 && -n $t2 ]] || sleep 1
   done
