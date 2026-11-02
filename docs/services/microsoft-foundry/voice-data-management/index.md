@@ -78,7 +78,7 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 |---|---|---|
 | Azure Speech 실시간 음성 인식 | 원음을 메모리에서 처리하고 저장하지 않음 | 애플리케이션이 직접 저장 |
 | Voice Live | 고객 데이터를 저장하지 않음 | 지원 로그를 켜면 진단용 음성을 30일 보관 |
-| Foundry voice agent | `store=false` | `store=true`면 전사·이벤트·원음을 기본 60일 보관 |
+| Foundry voice agent(Preview) | `store=false` | `store=true`면 전사·이벤트·원음을 기본 60일 보관 |
 
 ## 주요 AI 음성 제품별 원음 저장 조건과 기간 {#product-storage-comparison}
 
