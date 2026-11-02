@@ -39,7 +39,7 @@ HTML_COMMENT = re.compile(r"<!--(?:(?!\n[ \t]*\n).)*?-->", re.S)
 HTML_COMMENT_BLOCK = re.compile(r" {0,3}<!--")
 # Only spaces and tabs may follow the marker, so an empty "#" heading never
 # swallows the next line.
-HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", re.M)
+HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", re.M)
 SETEXT_UNDERLINE = re.compile(r" {0,3}(=+|-+)[ \t]*$")
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+", re.M)
 BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
@@ -410,18 +410,32 @@ def strip_link_targets(text: str) -> str:
 
     A destination is "<...>" or a run that may contain balanced parentheses
     and backslash escapes, as in CommonMark: "[설명](https://x/a_(b)/c)".
-    An unbalanced destination is left as it is.
+    Only a "](" that closes an unescaped "[" in the same paragraph starts a
+    destination, so plain text such as "조건](작업을 수행한다.)" is kept. An
+    unbalanced destination is left as it is.
     """
     out: list[str] = []
+    open_brackets = 0
     index, length = 0, len(text)
     while index < length:
-        if text.startswith("](", index):
-            end = _link_target_end(text, index + 2)
-            if end is not None:
-                out.append("]")
-                index = end
-                continue
-        out.append(text[index])
+        char = text[index]
+        if char == "\\" and index + 1 < length:
+            out.append(text[index : index + 2])
+            index += 2
+            continue
+        if char == "\n" and text.startswith("\n", index + 1):
+            open_brackets = 0
+        elif char == "[":
+            open_brackets += 1
+        elif char == "]" and open_brackets:
+            open_brackets -= 1
+            if text.startswith("(", index + 1):
+                end = _link_target_end(text, index + 2)
+                if end is not None:
+                    out.append("]")
+                    index = end
+                    continue
+        out.append(char)
         index += 1
     return "".join(out)
 

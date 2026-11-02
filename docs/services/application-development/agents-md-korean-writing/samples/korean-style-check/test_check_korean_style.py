@@ -51,13 +51,33 @@ class SentenceHeadingTest(unittest.TestCase):
                 self.assertEqual(report.metrics["sentence_headings"], 1)
 
     def test_empty_atx_heading_does_not_take_next_line(self) -> None:
-        report = analyze("#\n설정한다.\n\n## 개요\n\n본문이다.\n")
+        report = analyze("#\n따라서, 설정한다.\n\n## 개요\n\n본문이다.\n")
         self.assertEqual(report.metrics["sentence_headings"], 0)
+        # The line after the empty heading stays prose.
+        self.assertEqual(report.metrics["adverb_comma"], 1)
+
+    def test_atx_heading_indented_up_to_three_spaces(self) -> None:
+        for indent in (1, 2, 3):
+            with self.subTest(indent=indent):
+                report = analyze(" " * indent + "## 구성: 세부 정보\n\n본문이다.\n")
+                self.assertEqual(report.metrics["colon_headings"], 1)
+        # An indented heading is left out of the prose checks.
+        report = analyze("   ## 따라서, 설정한다\n\n본문이다.\n")
+        self.assertEqual(report.metrics["adverb_comma"], 0)
+
+    def test_four_space_indent_is_not_a_heading(self) -> None:
+        report = analyze("# 제목\n\n본문이다.\n\n    ## 구성: 세부 정보\n\n본문이다.\n")
+        self.assertEqual(report.metrics["colon_headings"], 0)
 
     def test_setext_headings_are_headings(self) -> None:
-        report = analyze("설정합니다\n===\n\n본문이다.\n\n캐시를\n끕니다\n---\n\n본문이다.\n")
+        report = analyze(
+            "따라서, 설정합니다\n===\n\n본문이다.\n\n"
+            "애플리케이션에 의해\n저장됩니다\n---\n\n본문이다.\n"
+        )
         self.assertEqual(report.metrics["sentence_headings"], 2)
-        self.assertNotIn("설정합니다", report.examples.get("connective_comma", []))
+        # Heading text is left out of the prose checks.
+        self.assertEqual(report.metrics["adverb_comma"], 0)
+        self.assertEqual(report.metrics["translationese"], 0)
 
     def test_thematic_break_is_not_setext_heading(self) -> None:
         report = analyze("# 제목\n\n본문이다.\n\n---\n\n본문이다.\n")
@@ -164,6 +184,10 @@ class LinkTargetTest(unittest.TestCase):
         report = analyze("# 링크\n\n[설명](https://example.test/a_(b)/되어진다) 본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 0)
         self.assertEqual(report.findings, [])
+
+    def test_unmatched_bracket_is_not_a_link(self) -> None:
+        report = analyze("# 링크\n\n조건](작업을 수행한다.) 뒤에 본문이 있다.\n")
+        self.assertEqual(report.metrics["translationese"], 1)
 
     def test_angle_and_escaped_targets_are_removed(self) -> None:
         report = analyze("# 링크\n\n[가](<a/되어진다 b>) [나](c\\)/되어진다) 본문이다.\n")
