@@ -81,6 +81,12 @@ official_sources:
   url: https://learn.microsoft.com/azure/storage/blobs/immutable-storage-overview
 - title: Manage and find Azure Blob data with blob index tags
   url: https://learn.microsoft.com/azure/storage/blobs/storage-manage-find-blobs
+- title: Azure Communication Services retirement and breaking changes guide
+  url: https://learn.microsoft.com/azure/communication-services/acs-retirement-and-breaking-changes-guide
+- title: Bring your own storage for call recording quickstart
+  url: https://learn.microsoft.com/azure/communication-services/quickstarts/call-automation/call-recording/bring-your-own-storage
+- title: Enable and configure Microsoft Defender for Storage
+  url: https://learn.microsoft.com/azure/defender-for-cloud/tutorial-enable-storage-plan
 - title: Overview of Microsoft Defender for Storage
   url: https://learn.microsoft.com/azure/defender-for-cloud/defender-for-storage-introduction
 - title: Monitor Azure Blob Storage
@@ -200,9 +206,11 @@ Azure OpenAI Realtime GA 형식의 설정 예시입니다.
 - **정확도:** 전사는 별도 ASR 모델의 결과라 Realtime 모델이 이해한 내용과 다를 수
   있습니다. OpenAI 레퍼런스는 이 전사를 "모델이 들은 내용 그대로가 아니라 입력
   오디오에 대한 참고(guidance)"로 다루라고 설명합니다.
-- **저장:** Realtime API와 Voice Live는 전사를 저장하지 않습니다. 남기려면
-  애플리케이션이 `completed` 이벤트를 받아 `item_id`와 함께 저장하거나, Foundry
-  voice agent의 `store=true`를 씁니다.
+- **저장:** Voice Live는 고객 데이터를 저장하지 않고, Realtime API에는 세션 내용을
+  저장해 두는 기능이 없습니다. 단, Azure OpenAI 모델은 남용 모니터링으로 사람
+  검토 대상이 된 일부 프롬프트·응답을 보관할 수 있습니다([아래](#persistence-controls)).
+  전사를 남기려면 애플리케이션이 `completed` 이벤트를 받아 `item_id`와 함께
+  저장하거나, Foundry voice agent의 `store=true`를 씁니다.
 
 근거: [Azure Realtime 사용법](https://learn.microsoft.com/azure/foundry/openai/how-to/realtime-audio#session-configuration)
 · [Azure Realtime API reference](https://learn.microsoft.com/azure/foundry/openai/realtime-audio-reference)(배포 이름 차이)
@@ -230,17 +238,27 @@ ACS 통화 녹음은 다음과 같이 저장됩니다.
   없습니다. Event Grid의 `RecordingFileStatusUpdated` 이벤트를 받아 24시간 안에
   가져가야 합니다.
 - **고객 저장소(BYOS):** [Bring Your Own Storage](https://learn.microsoft.com/azure/communication-services/concepts/call-automation/call-recording/bring-your-own-storage)를
-  설정하면 고객 Blob Storage에 바로 저장합니다. ACS 리소스의 시스템 할당 관리 ID에
-  `Storage Blob Data Contributor` 역할을 줍니다. 내보내기가 성공해도 ACS 임시 저장소에
+  설정하면 고객 Blob Storage에 바로 저장합니다.
+  [BYOS 빠른 시작](https://learn.microsoft.com/azure/communication-services/quickstarts/call-automation/call-recording/bring-your-own-storage)에
+  따라 ACS 리소스의 시스템 할당 관리 ID에 `Storage Blob Data Contributor` 역할을 줍니다. 내보내기가 성공해도 ACS 임시 저장소에
   24시간 사본이 남습니다.
 - **형식:** 혼합 녹음은 mp3·wav(16kHz), 비혼합 녹음은 참여자별 채널을 나눈 wav(최대
   5채널)입니다.
 - **실시간 스트리밍:** 오디오 스트리밍은 16비트 PCM mono 16kHz·24kHz를 앱 WebSocket으로
   보내며, 혼합 스트림과 참여자별 비혼합 스트림(최대 4채널)을 고를 수 있습니다.
 
-ACS는 일부 서비스를 종료하는 변경을 발표했으므로 녹음 시나리오가 대상인지
-[종료·변경 가이드](https://learn.microsoft.com/azure/communication-services/acs-retirement-and-breaking-changes-guide)에서
-도입 전에 확인합니다.
+신규 서비스에서 ACS를 캡처 경로로 고르기 전에
+[종료·변경 가이드](https://learn.microsoft.com/azure/communication-services/acs-retirement-and-breaking-changes-guide)의
+다음 내용을 확인합니다.
+
+- **단독 서비스 종료:** Microsoft는 2026-09-23에 ACS 단독 서비스(standalone offering)를
+  2028-09-30에 종료한다고 발표했습니다.
+- **Teams 연동만 지원:** Call Automation·Call Recording·Audio Streaming은 종료가 아닌
+  호환성 변경(breaking change) 대상입니다. 2028-09-30 이후에도 남지만 Teams와
+  연동하는 시나리오에서만 지원되고, Teams와 연동하지 않는 단독 시나리오는 지원되지
+  않습니다.
+- **신규 전화번호 제한:** 2026-10-23 이전에 만든 ACS 리소스가 없는 고객은 PSTN 통화·SMS
+  같은 종료 대상 전화 업무용 전화번호를 새로 받을 수 없습니다.
 
 ## 처리 구조에 따라 생기는 원음·전사·이벤트 기록이 다르다 {#records-by-architecture}
 
@@ -262,8 +280,9 @@ ACS는 일부 서비스를 종료하는 변경을 발표했으므로 녹음 시�
 
 세션 기록을 서비스 쪽에 저장해 두고 다시 조회하려면 Foundry voice agent의
 `store`를 씁니다. 네이티브·분리형 voice agent 모두 `store=true`면 전사·이벤트·원음을
-저장합니다. GPT Realtime API나 Voice Live API를 직접 호출하면 서비스가 세션
-내용을 저장하지 않으므로 필요한 기록은 애플리케이션이 저장합니다.
+저장합니다. GPT Realtime API나 Voice Live API를 직접 호출하면 세션 내용을 저장해 두는 기능이
+없으므로 필요한 기록은 애플리케이션이 저장합니다. Azure OpenAI 모델의 남용
+모니터링에 따른 보관은 [아래](#persistence-controls)에 따로 정리했습니다.
 
 ### Realtime API는 음성 대화 중에 요약을 별도 응답으로 받을 수 있다 {#out-of-band-summary}
 
@@ -290,13 +309,14 @@ Realtime API의 `response.create`에 `"conversation": "none"`을 지정하면 �
 | `conversation: "none"` | 응답을 기본 대화에 추가하지 않음. 음성 응답의 맥락에 요약이 섞이지 않음 |
 | `metadata` | 같은 값이 `response.done`에 담겨 옴. 이 값으로 요약 응답과 음성 응답을 구분 |
 | `input` | 요약에 쓸 대화 범위를 기존 item 참조나 새 메시지로 직접 지정(예: 최근 N턴). 생략하면 지금까지의 기본 대화를 근거로 응답 |
-| 동시 생성 | 음성 응답과 요약 응답을 동시에 생성할 수 있음. 두 응답 모두 같은 배포의 [할당량](https://learn.microsoft.com/azure/foundry/openai/quotas-limits)을 사용 |
+| 동시 생성 | 여러 응답을 동시에 생성할 수 있음 |
 
 위 예시는 [OpenAI Realtime 사양](https://developers.openai.com/api/docs/guides/realtime-conversations)의
 필드 이름(`output_modalities`·`instructions`)을 씁니다.
 [Azure Realtime API](https://learn.microsoft.com/azure/foundry/openai/realtime-audio-reference)는
-이 사양을 따르며, Azure how-to 예시에는 이전 필드 이름(`modalities`·`prompt`)이
-남아 있습니다.
+이 사양을 따릅니다. Azure how-to 예시의 `modalities`는 `output_modalities`의 이전
+이름입니다. 예시의 문자열 `prompt`는 GA 사양에서 프롬프트 템플릿을 참조하는 필드이므로,
+요약 지시문은 `instructions`로 보냅니다.
 
 요약은 원음·전사와 다른 새 파생 기록이므로 저장 위치와 보유기간을 애플리케이션이
 따로 정합니다.
@@ -407,7 +427,7 @@ Microsoft 관리 결과는 transcription 작업을 삭제하면 함께 삭제됩
 5. Application Insights·Log Analytics 추적 저장 위치
 
 Blob Storage를 한국 리전에 두어도 Voice Live 음성 기능, LLM 추론, 지원
-로그, 추적 데이터의 처리·저장 위치는 각각의 배포 범위를 따릅니다. [Voice Live 리전 표](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/regions?tabs=voice-live#voice-live)는
+로그, 추적 데이터의 처리·저장 위치는 각각의 배포 범위를 따릅니다. [Voice Live 리전 표](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/regions?tabs=voice-live#llm-availability-and-processing-scope)는
 음성 기능과 LLM의 지역 가용성·처리 범위를 별도로 제시하며, 각 기능은
 Global·Data Zone·Regional 범위를 가질 수 있습니다.
 
@@ -491,7 +511,7 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 | 인증 | [Microsoft Entra ID와 관리 ID](https://learn.microsoft.com/azure/storage/common/authorize-data-access) | Microsoft는 Entra ID와 관리 ID를 권장하고 Shared Key(계정 키) 인증은 허용하지 않도록 설정하라고 권장 |
 | 임시 다운로드 | [user delegation SAS](https://learn.microsoft.com/azure/storage/blobs/storage-blob-user-delegation-sas-create-cli) | 계정 키 대신 Entra 자격 증명으로 서명. 최대 7일까지만 유효 |
 | 법적 보존 | [불변 저장소(WORM)](https://learn.microsoft.com/azure/storage/blobs/immutable-storage-overview) | 시간 기반 보존 정책이나 법적 보존(legal hold)이 걸린 동안 생성·읽기만 되고 수정·삭제는 안 됨. 컨테이너 단위 또는 계정·컨테이너·버전 단위로 설정. 수명주기 삭제도 동작하지 않음 |
-| 위협 탐지 | [Microsoft Defender for Storage](https://learn.microsoft.com/azure/defender-for-cloud/defender-for-storage-introduction) | 업로드 시 악성코드 검사, 민감 데이터에 대한 비정상 접근과 유출 시도 탐지 |
+| 위협 탐지 | [Microsoft Defender for Storage](https://learn.microsoft.com/azure/defender-for-cloud/defender-for-storage-introduction) | 비정상 접근·유출 시도 같은 위협 탐지가 기본. 업로드 시 악성코드 검사와 민감 데이터 위협 탐지는 [켜고 끌 수 있는 기능](https://learn.microsoft.com/azure/defender-for-cloud/tutorial-enable-storage-plan)이라 구독 또는 스토리지 계정 설정에서 켜져 있는지 확인. 업로드 검사에는 계정별 월 검사량 상한(기본 10,000GB)이 있음 |
 | 접근 감사 | [진단 설정과 `StorageBlobLogs`](https://learn.microsoft.com/azure/storage/blobs/monitor-blob-storage) | 진단 설정을 만들어야 읽기·쓰기·삭제 요청 로그가 수집됨. 로그에 인증 유형 등 요청 정보가 남음 |
 | 민감 데이터 발견 | [Microsoft Purview](https://learn.microsoft.com/purview/register-scan-azure-blob-storage-source) | Blob Storage 계정을 등록·스캔해 메타데이터를 추출하고 민감 데이터를 분류. [스캔 지원 형식](https://learn.microsoft.com/purview/data-map-data-sources#file-types-supported-for-scanning)은 CSV·JSON·TXT 같은 정형 파일과 문서 파일이며 WAV·MP3 같은 오디오는 포함되지 않으므로, 전사 텍스트를 Blob에 저장할 때 해당. 스캔만으로 접근이 제한되지는 않으며, 민감도 레이블이 붙은 데이터의 접근을 막으려면 [보호 정책](https://learn.microsoft.com/purview/data-gov-protection-policy-azure-sources)(preview)을 따로 만듦 |
 
@@ -624,8 +644,7 @@ Microsoft 문서에 나온 샘플률·비트 수·채널 수에 다음 표준 �
 Cool 30일·Cold 90일은 general-purpose v2(GPv2) 계정에서 조기 삭제
 요금을 계산하는 최소 저장기간입니다. 기간 안에도 삭제·덮어쓰기·다른
 계층 이동은 가능하지만 남은 기간에 비례한 요금이 발생할 수 있습니다.
-legacy Blob Storage 계정의 Cool에는 최소기간이 없으며, Cold를
-사용하려면 GPv2 계정이 필요합니다.
+legacy Blob Storage 계정은 Cool·Cold 모두 최소기간이 없습니다.
 
 [Smart tier](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-smart)는 사용 패턴에 따라 Hot·Cool·Cold 온라인 계층 사이에서 데이터를 자동으로 이동해 비용을 최적화합니다.
 
