@@ -106,7 +106,7 @@ CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler
 
 | 파일 | 내용 |
 |---|---|
-| `results/scale-out-v7.csv` | v7 on-demand 조건의 시나리오별 단계 시간 |
+| `results/scale-out-v7.csv` | v7 on-demand 조건의 시나리오별 단계 시간. CAS 행의 `scale_in_s`는 VMSS VM 수가 0이 된 시각 기준입니다. `cas-burst`는 VMSS 수 확인을 도입하기 전에 실행해 node 객체가 사라진 시각(552~557초, 축소 결정 뒤 VM 삭제와 NotReady node 객체 정리까지 포함)만 남았으므로 빈 값으로 둡니다 |
 | `results/scale-out-azd-rerun.csv` | `azd`로 새로 만든 클러스터에서 `EXPERIMENT=scale-out`을 다시 실행한 결과(3회씩) |
 | `results/overprovisioning.csv` | placeholder가 있을 때 Pod 시작과 placeholder 복구 시간 |
 | `results/quota-fallback.csv` | 선호 VM이 quota 초과로 실패할 때 실패 확인·대체 결정·노드·Pod 준비 시간. `preferred_attempt_s`는 선호 VM을 실제로 시도한 실행에만 값이 있음 |
@@ -114,7 +114,7 @@ CAS 확장 판단 로그는 클러스터 진단 설정에서 `cluster-autoscaler
 | `results/prices-eastus2.json` | 비용 계산에 쓴 v7 VM 시간당 가격(2026-10-31) |
 | `results/mixed-shapes.csv` | 혼합 Pod 배치·노드 구성·노드 용량 대비 요청 비율(`*_request_ratio`)·비용 |
 | `results/rightsize-*.csv` | 축소 후 30초 간격 노드 구성·비용·이동 Pod 수. 공개 결과는 node 객체 기준이며, 현재 스크립트는 CAS가 VM을 삭제한 뒤 남은 NotReady 객체를 비용에서 빼고 `ready_nodes`·`removed_nodes` 열을 함께 기록. 기준 행 `elapsed_s`는 공개 결과의 `-60`(고정 표기)과 달리 현재 스크립트가 축소 시작 기준 실제 오프셋(0 이하)을 기록하고, `capacity.cpu`가 없는 노드가 있으면 `vcpu`를 `unknown`으로 기록 |
-| `results/zone1-burst.csv` | 같은 zone 확장 단계 시간 |
+| `results/zone1-burst.csv` | 같은 zone 확장 단계 시간. CAS 쪽 축소를 VMSS VM 수가 아닌 Ready 워크로드 노드 수로 기록해 VM 제거 기준과 비교할 수 없으므로 `scale_in_s`는 두 방식 모두 빈 값입니다 |
 | `results/burst-40-nodes.csv` | 40대 확장 단계 시간과 정책 거부 기록 |
 | `results/quota-staleness.csv` | quota 점유·반납 후 NAP가 고른 NodePool. `recorded_s`는 이전 스크립트가 확인용 NodeClaim 정리 뒤 기록한 시각, `probe_s_est`는 스크립트 순서로 역산한 선택 확인 시각(±5초). 현재 스크립트는 사전 조건 확인 결과를 `precondition` 열(`ok` 또는 `failed(...)`)로 남기고, 반납 뒤 확인이 실패하면 기록 없이 1200초 기한 안에서 다시 시도하고, 확인용 Pod 20개가 모두 배정·지정되고 NodeClaim 목록이 두 번 연속 같을 때 선택을 읽으며, 1200초 안에 선택이 정확히 `pref64`만으로 나오지 않으면 `timeout` 행(`censored`)을 남긴 뒤 실패로 종료. `STRICT=1`이면 사전 조건 실패도 실패로 종료 |
 | `results/nap-nodeclaim-phases.csv` | NAP burst·zone 1·40대 실측의 NodeClaim별 zone과 생성·`Launched`·`Registered`·`Initialized` 시각(실행 시작 기준 초). `bench.sh` 스냅샷의 `nodeclaims.json`에서 계산. `zone`은 노드의 `topology.kubernetes.io/zone` label 그대로이며, 실험 구독의 East US 2는 zone 1~4를 제공했습니다(`az vm list-skus --location eastus2 --size Standard_D4ds_v7`, 2026-11-01) |
