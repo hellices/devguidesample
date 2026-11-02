@@ -201,6 +201,8 @@ spec:
     metadata:
       labels:
         workload: general            # 워크로드 nodeSelector와 짝
+        # Azure CNI Cilium 클러스터에서 Karpenter가 Cilium DaemonSet 리소스를 노드 용량 계산에 반영하는 데 필요
+        kubernetes.azure.com/ebpf-dataplane: cilium
     spec:
       expireAfter: Never
       taints:

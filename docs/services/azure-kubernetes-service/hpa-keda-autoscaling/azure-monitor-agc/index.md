@@ -101,7 +101,7 @@ AGC 준비는 postprovision hook이 다음 순서로 진행합니다.
 
 ```bash
 azd env set PATTERN azure-monitor-agc
-azd hooks run postdeploy      # 결과: out/<환경 이름>/azure-monitor-agc.csv
+azd hooks run postdeploy      # 결과: out/<환경 이름>/azure-monitor-agc.csv, azure-monitor-agc-state.txt
 ```
 
 hook은 `agc/scaledobject.yaml`의 `<...>` 값(AGC 이름, node resource group, 구독·테넌트, KEDA
@@ -138,6 +138,10 @@ NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 
   `metricFilter: Frontend eq '<frontend-name>'`로 범위를 좁힙니다.
 
 ## 성공 기준: ScaledObject Ready와 분당 요청 수를 따르는 HPA 목표
+
+postdeploy hook은 마지막에 ScaledObject·HPA를 지우고 podinfo를 1개로 되돌립니다. 그래서 아래 `kubectl`
+확인은 hook 실행 중 다른 터미널에서 하고, 종료 후에는 패턴이 끝난 직후 저장한
+`out/<환경 이름>/<패턴>-state.txt`(ScaledObject·HPA·podinfo replica)와 결과 CSV의 `desired`·`hpa_metric` 열로 확인합니다.
 
 - `kubectl -n demo get scaledobject podinfo`: `READY=True`
 - `kubectl -n demo get hpa keda-hpa-podinfo`: 부하 중 `<값>/3k (avg)`

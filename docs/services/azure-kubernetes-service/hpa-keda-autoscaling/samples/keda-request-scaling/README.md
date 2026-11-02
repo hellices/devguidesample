@@ -46,8 +46,11 @@ AGC 실습을 하지 않으면 `azd up` 전에 `azd env set ENABLE_AGC false`를
 패턴은 `PATTERN` 환경 값으로 고르고 `postdeploy` hook으로 실행합니다. hook은 실행 전에 모든 패턴
 이름을 확인하고(알 수 없는 이름·중복은 중단), 패턴마다 이전 `ScaledObject`를 지우고 워크로드 노드가
 줄어든 뒤 시작합니다. `http-add-on-cold-start`를 뺀 패턴은 같은 k6 부하를 주며 replica·노드 수를
-5초마다 1200초 동안 기록합니다. hook이 실패하거나 중단되면 k6·watcher Job, keeper Deployment,
-임시 curl Pod를 지웁니다.
+5초마다 1200초 동안 기록합니다. 패턴이 끝날 때마다 ScaledObject·HPA·podinfo replica 상태를
+`out/<환경 이름>/<패턴>-state.txt`에 저장하고, 모든 패턴이 끝나면 ScaledObject를 지우고 podinfo를 1개로
+되돌립니다. 실행 중 상태는 다른 터미널에서 `kubectl`로, 종료 후 상태는 이 파일로 확인합니다.
+hook이 실패하거나 중단되면 k6·watcher Job, keeper Deployment, 임시 curl Pod를 지웁니다. k6는 실패율이
+50% 이상이거나 요청이 0건이면 실패로 끝나고, 그 출력은 `<패턴>-k6.txt`에 남습니다.
 
 ```bash
 # ENABLE_AGC=true(기본값)일 때 5개 패턴 모두

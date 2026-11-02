@@ -377,9 +377,24 @@ cleanup() { # 실패·중단 시 부하와 임시 리소스를 멈춥니다. 여
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+save_state() { # save_state <패턴>: 다음 reset이 ScaledObject·HPA를 지우기 전에 성공 기준 확인용 상태를 저장합니다.
+  local f=$OUT/$1-state.txt
+  {
+    echo "# $(date -u +%FT%TZ) 패턴 $1 종료 직후 상태"
+    echo "## kubectl -n demo get scaledobject podinfo"
+    kq -n demo get scaledobject podinfo 2>&1 || true
+    echo "## kubectl -n demo get hpa"
+    kq -n demo get hpa 2>&1 || true
+    echo "## kubectl -n demo get deployment podinfo -o jsonpath={.spec.replicas}"
+    kq -n demo get deployment podinfo -o jsonpath='{.spec.replicas}' 2>&1 || true
+    echo
+  } > "$f"
+  log "상태 저장: $f"
+}
 mkdir -p "$OUT"
 for p in "${pats[@]}"; do
-  log "패턴 $p 시작"; "pattern_${p//-/_}"; log "패턴 $p 완료"
+  log "패턴 $p 시작"; "pattern_${p//-/_}"; save_state "$p"; log "패턴 $p 완료"
 done
+# 마지막에 scaler를 지우고 podinfo를 1개로 돌려 둡니다. 성공 기준은 위에서 저장한 <패턴>-state.txt와 결과 CSV로 확인합니다.
 reset 1
 echo "결과: $OUT"

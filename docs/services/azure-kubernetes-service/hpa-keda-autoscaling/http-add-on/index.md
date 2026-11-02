@@ -156,9 +156,15 @@ AKS 1.36.5, HTTP Add-on 0.16.0에서 `PATTERN=http-add-on-cold-start`로 측정�
 
 ## 성공 기준: 첫 요청 성공과 부하 중 실패율 0%
 
+postdeploy hook은 마지막에 ScaledObject·HPA를 지우고 podinfo를 1개로 되돌립니다. 그래서 아래 `kubectl`
+확인은 hook 실행 중 다른 터미널에서 하고, 종료 후에는 패턴이 끝난 직후 저장한
+`out/<환경 이름>/<패턴>-state.txt`(ScaledObject·HPA·podinfo replica)와 결과 파일(CSV의 `desired` 열, `http-add-on-cold-start.txt`, k6 출력)로 확인합니다.
+
 - `kubectl -n demo get scaledobject podinfo`가 `READY=True`이고, 유휴 상태에서
   `kubectl -n demo get deployment podinfo -o jsonpath='{.spec.replicas}'`가 `0`. ScaledObject
   출력의 `MIN`은 설정값이므로 cooldown이 끝나 실제 replica가 0이 됐는지는 Deployment에서 확인합니다.
+  종료 후에는 부하가 끝나고 1200초 기록을 마친 뒤 저장한 `http-add-on-min0-state.txt`의 replica 값으로 확인합니다
+  (`http-add-on-cold-start-state.txt`는 마지막 요청 직후 상태라 replica가 1일 수 있음).
 - 0개 상태의 첫 요청이 200으로 응답하고 cold start header가 `true`
 - `minReplicaCount: 1` 부하에서 실패율 0%, replica가 `ceil(RPS/50)` 근처에 머묾
 

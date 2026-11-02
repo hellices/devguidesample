@@ -78,7 +78,7 @@ azd up
 
 ```bash
 azd env set PATTERN prometheus-rps
-azd hooks run postdeploy      # 결과: out/<환경 이름>/prometheus-rps.csv, prometheus-rps-k6.txt
+azd hooks run postdeploy      # 결과: out/<환경 이름>/prometheus-rps.csv, prometheus-rps-k6.txt, prometheus-rps-state.txt
 ```
 
 hook은 이전 `ScaledObject`를 지우고, 워크로드 노드가 1대로 줄어들면 다음 순서로 진행합니다.
@@ -124,6 +124,10 @@ k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, KEDA 2
   rate 창과 scrape 간격을 줄이고, 그만큼 커지는 흔들림도 함께 확인합니다.
 
 ## 성공 기준: ScaledObject Ready와 RPS를 따르는 HPA 목표
+
+postdeploy hook은 마지막에 ScaledObject·HPA를 지우고 podinfo를 1개로 되돌립니다. 그래서 아래 `kubectl`
+확인은 hook 실행 중 다른 터미널에서 하고, 종료 후에는 패턴이 끝난 직후 저장한
+`out/<환경 이름>/<패턴>-state.txt`(ScaledObject·HPA·podinfo replica)와 결과 CSV의 `desired`·`hpa_metric` 열로 확인합니다.
 
 - `kubectl -n demo get scaledobject podinfo`: `READY=True`, 부하 중 `ACTIVE=True`
 - `kubectl -n demo get hpa keda-hpa-podinfo`: `TARGETS`가 `<값>/50 (avg)`로 갱신
