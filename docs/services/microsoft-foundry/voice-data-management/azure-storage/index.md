@@ -523,36 +523,6 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 | 응답 텍스트·요약 | 애플리케이션 DB | `response.id`, out-of-band 요약은 `metadata` 값 |
 | 업무 결과 | 업무 시스템 | 세션 키, 도구 호출 `call_id` |
 
-## 보충: Blob Storage와 Data Lake 성능
-
-### 참조 아키텍처에서 저장하는 자료
-
-Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합니다.
-
-- 전화 서버가 만든 원음 파일
-- 선택적으로 남기는 원문 음성 텍스트 파일
-- Foundry 모델 또는 Azure Content Understanding이 만든 처리 결과
-
-[Blob 유형 문서](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs)는 block blob을 텍스트·이진 파일과 같은 개체에 사용하는 유형으로 설명합니다. [Blob 액세스 계층 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)는 Hot·Cool·Cold·Archive와 Smart tier를 설명하며, 액세스 계층 설정은 block blob에만 허용된다고 명시합니다.
-
-### Microsoft의 Blob 성능 지침
-
-[Blob Storage 확장성·성능 목표](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets)에 명시된 내용:
-
-- `Put Blob` 또는 `Put Block`에서 blob이나 block 크기가 **256KiB보다 클 때** 고처리량 block blob 최적화를 활용할 수 있음.
-- 단일 block blob 요청률은 초당 최대 약 3,000회(목표값)입니다. 같은 표의 단일 page blob 목표값은 초당 최대 500회입니다.
-- 실제 처리량은 동시성, 요청 크기, 성능 계층, 업로드 원본과 다운로드 목적지 속도 등에 따라 달라짐.
-- 순차적이거나 append-only인 blob 이름은 한 partition에 트래픽을 집중시킬 수 있음.
-- Microsoft는 트래픽을 점진적으로 늘리고, 503 오류가 발생하면 지수형 backoff를 사용하라고 안내합니다.
-
-### Data Lake Storage 분석 지침
-
-[Azure Data Lake Storage 모범 사례](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-best-practices)에 명시된 분석용 데이터 세트 기준:
-
-- Azure 안의 원본 자료는 Data Lake Storage 계정과 같은 Azure 지역에 있을 때 성능이 가장 좋음.
-- Hadoop·Spark 같은 분석 엔진에서는 파일당 처리 부담 때문에 256MB~100GB 크기의 큰 파일이 일반적으로 더 나은 성능을 냄.
-- 실시간으로 들어오는 작은 파일은 Event Hubs·Kafka와 Stream Analytics·Spark Streaming 등을 사용해 더 큰 분석 파일로 모을 수 있음.
-
 ## 저장 형식이 용량·복원 시간·음질을 정한다 {#audio-format}
 
 | 결정 항목 | 기준 |
@@ -586,6 +556,36 @@ Azure 음성 서비스별 입력·출력 형식은 다음과 같습니다.
 - [Voice Live 출력 형식](https://learn.microsoft.com/en-us/javascript/api/@azure/ai-voicelive/outputaudioformat?view=azure-node-latest)
 - [Realtime 2.x 오디오 형식](https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/realtime-2)
 - [배치 음성 인식 오디오 형식](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/batch-transcription-audio-data)
+
+## 보충: Blob Storage와 Data Lake 성능
+
+### 참조 아키텍처에서 저장하는 자료
+
+Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합니다.
+
+- 전화 서버가 만든 원음 파일
+- 선택적으로 남기는 원문 음성 텍스트 파일
+- Foundry 모델 또는 Azure Content Understanding이 만든 처리 결과
+
+[Blob 유형 문서](https://learn.microsoft.com/en-us/rest/api/storageservices/understanding-block-blobs--append-blobs--and-page-blobs)는 block blob을 텍스트·이진 파일과 같은 개체에 사용하는 유형으로 설명합니다. [Blob 액세스 계층 문서](https://learn.microsoft.com/en-us/azure/storage/blobs/access-tiers-overview)는 Hot·Cool·Cold·Archive와 Smart tier를 설명하며, 액세스 계층 설정은 block blob에만 허용된다고 명시합니다.
+
+### Microsoft의 Blob 성능 지침
+
+[Blob Storage 확장성·성능 목표](https://learn.microsoft.com/en-us/azure/storage/blobs/scalability-targets)에 명시된 내용:
+
+- `Put Blob` 또는 `Put Block`에서 blob이나 block 크기가 **256KiB보다 클 때** 고처리량 block blob 최적화를 활용할 수 있음.
+- 단일 block blob 요청률은 초당 최대 약 3,000회(목표값)입니다. 같은 표의 단일 page blob 목표값은 초당 최대 500회입니다.
+- 실제 처리량은 동시성, 요청 크기, 성능 계층, 업로드 원본과 다운로드 목적지 속도 등에 따라 달라짐.
+- 순차적이거나 append-only인 blob 이름은 한 partition에 트래픽을 집중시킬 수 있음.
+- Microsoft는 트래픽을 점진적으로 늘리고, 503 오류가 발생하면 지수형 backoff를 사용하라고 안내합니다.
+
+### Data Lake Storage 분석 지침
+
+[Azure Data Lake Storage 모범 사례](https://learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-best-practices)에 명시된 분석용 데이터 세트 기준:
+
+- Azure 안의 원본 자료는 Data Lake Storage 계정과 같은 Azure 지역에 있을 때 성능이 가장 좋음.
+- Hadoop·Spark 같은 분석 엔진에서는 파일당 처리 부담 때문에 256MB~100GB 크기의 큰 파일이 일반적으로 더 나은 성능을 냄.
+- 실시간으로 들어오는 작은 파일은 Event Hubs·Kafka와 Stream Analytics·Spark Streaming 등을 사용해 더 큰 분석 파일로 모을 수 있음.
 
 ## 보충: 공식 입력값으로 계산한 저장량
 
