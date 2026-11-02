@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="920" viewBox="0 0 1280 920" role="img" aria-labelledby="azure-realtime-architectures-title azure-realtime-architectures-desc">
   <title id="azure-realtime-architectures-title">Azure 음성 에이전트의 네이티브 Realtime과 분리형 파이프라인</title>
-  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 같은 입력 오디오를 별도 전사 모델로 보낼 수 있는 경로입니다. 입력 전사는 모델 내부 텍스트 추출이 아닙니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent store, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
+  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 Realtime 세션 옵션으로 커밋된 입력 오디오를 별도 전사 모델이 비동기로 처리할 수 있는 경로입니다. 입력 전사 결과는 모델 해석과 다를 수 있습니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent store, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
   <defs>
     <marker id="azure-realtime-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
@@ -43,7 +43,7 @@
   <path d="M430 217 H280" fill="none" stroke="#0284c7" stroke-width="1.8" marker-end="url(#azure-realtime-arrow-link)"/>
   <path d="M710 179 H910" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#azure-realtime-arrow)"/>
   <path d="M910 217 H710" fill="none" stroke="#0284c7" stroke-width="1.8" marker-end="url(#azure-realtime-arrow-link)"/>
-  <path id="native-input-to-transcription" d="M220 237 V316 H340" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-session-to-transcription" d="M490 247 V282" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <path id="native-input-to-records" d="M110 237 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <path id="native-transcription-to-records" d="M490 350 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <path id="native-model-to-records" d="M670 247 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
@@ -67,7 +67,7 @@
   <text x="355" y="239" text-anchor="middle" class="label">음성 응답</text>
   <text x="810" y="167" text-anchor="middle" class="label">필요 시 도구 호출</text>
   <text x="810" y="239" text-anchor="middle" class="label">업무 결과</text>
-  <text x="235" y="270" class="label">같은 입력 오디오</text>
+  <text x="502" y="270" class="label">세션 옵션 · 커밋된 입력 오디오</text>
   <text x="125" y="355" class="label">원음</text>
   <text x="685" y="343" class="label">응답·세션 이벤트</text>
   <text x="1055" y="343" class="label">도구 이벤트</text>
@@ -103,7 +103,7 @@
   <rect id="native-transcription" x="340" y="282" width="300" height="68" rx="8" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
   <text x="358" y="301" class="tag" fill="#075985">OPTIONAL INPUT TRANSCRIPTION</text>
   <text x="490" y="323" text-anchor="middle" class="node">별도 입력 전사 모델</text>
-  <text x="490" y="342" text-anchor="middle" class="small">모델 내부 텍스트 추출 아님</text>
+  <text x="490" y="342" text-anchor="middle" class="small">별도 ASR · 비동기 · 모델 해석과 다를 수 있음</text>
 
   <rect id="native-records" x="80" y="380" width="1090" height="50" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
   <text x="625" y="400" text-anchor="middle" class="body">공통 선택 기록 · 원음 · 입력 전사 · 모델 응답 · 도구 이벤트</text>
@@ -142,8 +142,8 @@
   <text x="645" y="770" text-anchor="middle" class="body">공통 선택 기록 · 원음 · STT 전사 · 모델 응답 · 도구 이벤트 · TTS 출력</text>
   <text x="645" y="791" text-anchor="middle" class="small">단계별로 노출된 데이터만 수집 · 앱 녹음·store·추적의 보유·삭제는 별도 정책</text>
 
-  <text x="40" y="842" class="small">점선은 선택 전사·저장·관측 경로입니다. 서비스/API가 노출한 데이터만 수집하며 관리형 내부 단계 접근을 보장하지 않습니다.</text>
-  <text x="40" y="864" class="small">요약·분석·사본은 구현에 따라 세션 중 또는 종료 후 생성·저장됩니다. 공통 기록 영역은 단일 저장 스위치나 기본 녹음을 뜻하지 않습니다.</text>
+  <text x="40" y="842" class="small">점선은 선택해서 켜는 전사·저장·관측 경로입니다. 기록할 수 있는 데이터는 서비스·API가 이벤트로 내보내는 데이터입니다.</text>
+  <text x="40" y="864" class="small">요약·분석·사본은 세션 중이나 종료 후 애플리케이션이 생성·저장합니다. 앱 녹음·store·추적은 각각 따로 켭니다.</text>
 
   <!-- Legend -->
   <line x1="40" y1="882" x2="1240" y2="882" stroke="#cbd5e1"/>
@@ -151,5 +151,5 @@
   <text x="124" y="904" class="legend">실시간 처리</text>
   <line x1="246" y1="900" x2="294" y2="900" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <text x="306" y="904" class="legend">선택 분기·저장·관측</text>
-  <text x="1240" y="904" text-anchor="end" class="source">원문 확인 2026-10-20 UTC · 모델·리전·기능별 지원 범위 별도 확인</text>
+  <text x="1240" y="904" text-anchor="end" class="source">원문 확인 2026-11-02 UTC · 모델·리전·기능별 지원 범위 별도 확인</text>
 </svg>
