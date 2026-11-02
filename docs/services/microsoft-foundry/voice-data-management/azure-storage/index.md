@@ -85,6 +85,10 @@ official_sources:
   url: https://learn.microsoft.com/azure/storage/blobs/monitor-blob-storage
 - title: Connect to Azure Blob Storage in Microsoft Purview
   url: https://learn.microsoft.com/purview/register-scan-azure-blob-storage-source
+- title: Data sources that connect to Data Map
+  url: https://learn.microsoft.com/purview/data-map-data-sources
+- title: Authoring and publishing protection policies for Azure sources (preview)
+  url: https://learn.microsoft.com/purview/data-gov-protection-policy-azure-sources
 document_type: research
 status: current
 verification_status: needs-review
@@ -148,10 +152,11 @@ Realtime 모델을 고르면 네이티브 구조로, GPT-4.1·GPT-5 같은 텍�
 > ([이벤트 레퍼런스](https://learn.microsoft.com/azure/foundry-classic/openai/realtime-audio-reference-ga)).
 > 점선은 애플리케이션 녹음·세션 저장·추적을 각각 켤 수 있는 지점입니다.
 
-## 원음을 직접 저장하려면 음성이 애플리케이션 서버를 지나는 연결 방식을 고른다 {#audio-capture-path}
+## 원음을 저장할 캡처 지점은 연결 방식마다 다르다 {#audio-capture-path}
 
 서비스가 원음을 저장하지 않는 구성에서 원음을 남기려면 애플리케이션이 음성을
-받아야 합니다. Realtime API는 연결 방식에 따라 음성이 지나가는 위치가 다릅니다.
+받을 지점을 정해야 합니다. 음성이 앱 서버를 지나는 WebSocket 구조는 그 방법 중
+하나이고, WebRTC처럼 음성이 앱 서버를 거치지 않는 연결에도 캡처 방법이 있습니다.
 
 | 연결 방식 | 음성 경로 | 애플리케이션이 원음을 저장하는 방법 |
 |---|---|---|
@@ -433,7 +438,7 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 | 법적 보존 | [불변 저장소(WORM)](https://learn.microsoft.com/azure/storage/blobs/immutable-storage-overview) | 시간 기반 보존 정책이나 법적 보존(legal hold)이 걸린 동안 생성·읽기만 되고 수정·삭제는 안 됨. 컨테이너 단위 또는 계정·컨테이너·버전 단위로 설정. 수명주기 삭제도 동작하지 않음 |
 | 위협 탐지 | [Microsoft Defender for Storage](https://learn.microsoft.com/azure/defender-for-cloud/defender-for-storage-introduction) | 업로드 시 악성코드 검사, 민감 데이터에 대한 비정상 접근과 유출 시도 탐지 |
 | 접근 감사 | [진단 설정과 `StorageBlobLogs`](https://learn.microsoft.com/azure/storage/blobs/monitor-blob-storage) | 진단 설정을 만들어야 읽기·쓰기·삭제 요청 로그가 수집됨. 로그에 인증 유형 등 요청 정보가 남음 |
-| 데이터 거버넌스 | [Microsoft Purview](https://learn.microsoft.com/purview/register-scan-azure-blob-storage-source) | Blob Storage 계정을 등록·스캔해 민감 데이터를 찾고 민감도 레이블로 접근을 제한 |
+| 민감 데이터 발견 | [Microsoft Purview](https://learn.microsoft.com/purview/register-scan-azure-blob-storage-source) | Blob Storage 계정을 등록·스캔해 메타데이터를 추출하고 민감 데이터를 분류. [스캔 지원 형식](https://learn.microsoft.com/purview/data-map-data-sources#file-types-supported-for-scanning)은 CSV·JSON·TXT 같은 정형 파일과 문서 파일이며 WAV·MP3 같은 오디오는 포함되지 않으므로, 전사 텍스트를 Blob에 저장할 때 해당. 스캔만으로 접근이 제한되지는 않으며, 민감도 레이블이 붙은 데이터의 접근을 막으려면 [보호 정책](https://learn.microsoft.com/purview/data-gov-protection-policy-azure-sources)(preview)을 따로 만듦 |
 
 ## 보존 등급별 컨테이너와 연결 키를 정해 두면 기록별 삭제와 감사를 할 수 있다 {#storage-layout}
 

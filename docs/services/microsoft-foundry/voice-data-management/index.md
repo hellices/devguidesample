@@ -50,10 +50,10 @@ published_at: 2026-10-17
 | 패턴 | 사례 | 원음 | 전사·파생 기록 |
 |---|---|---|---|
 | **1. 미저장·임시 처리** | Teams Copilot 회의·통화 중 전용 모드, Microsoft 365 Copilot 음성 채팅, Bixby 기본값, ChatGPT Standard, LG Smart TV 호출어 대기, Azure Speech 실시간 인식·Voice Live | 요청을 처리한 뒤 바로 삭제하거나 단말에서 폐기 | Teams Copilot의 임시 STT는 회의·통화가 끝나면 저장하지 않음. 서비스에 따라 전사는 대화 기록으로 남음(ChatGPT Standard) |
-| **2. 동의 시 개선·진단용 저장** | Microsoft 365 Copilot 피드백 48시간, Voice Live 지원 로그 30일, Bixby 녹음 검토 1년, Siri 개선 참여 최대 2년 | 사용자가 켜거나 동의한 경우에만 저장. 기간은 서비스가 고정 | 원음과 다른 규칙. Siri 요청 데이터는 참여와 관계없이 최대 2년 |
+| **2. 동의 시 개선·진단용 저장** | Microsoft 365 Copilot 피드백 48시간, Voice Live 지원 로그 30일, Bixby 녹음 검토 1년, Siri 개선 참여 최대 2년(검토된 일부는 2년 초과) | 사용자가 켜거나 동의한 경우에만 저장. 기간은 서비스가 고정 | 원음과 다른 규칙. Siri 요청 데이터는 참여와 관계없이 최대 2년 |
 | **3. 계정 이력형(사용자 제어)** | Gemini 기본 18개월(3·36개월·무기한 선택), Alexa 3·18개월 또는 미저장, ChatGPT Live·Advanced 클립 30일, Foundry voice agent `store` 60일 | 사용자가 다시 듣거나 지울 수 있게 계정에 저장. 기간을 사용자가 고르는 경우가 많음 | 원음과 기간이 다름. ChatGPT 전사는 채팅을 지울 때까지, Alexa는 미저장 모드에서도 텍스트 30일 |
 | **4. 업무·규제 증빙형** | 금융소비자보호법 계약 자료 10년, 자본시장법 시행령의 고령자·부적합 투자자 판매 녹취, MiFID II 투자 주문 통화 5~7년, [AXA UK 통화 녹음](https://www.axa.co.uk/privacy-policy/how-we-collect-data/)(규제 기준 점검·민원·사기 조사), Bank of America Erica 90일, 컨택센터 녹음 | 법령이나 업무 목적에 따라 조직이 기간을 정함 | 계약·상담·민원 기록을 업무 시스템에 따로 보존 |
-| **5. 생체 인증형** | [HMRC Voice ID](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice), Illinois BIPA, Texas 생체 식별자 법 | 등록 녹음을 voiceprint로 변환해 저장. HMRC는 3년마다 재동의, 최대 7년 | BIPA는 마지막 상호작용 후 3년, Texas는 목적 종료 후 1년 안에 삭제 |
+| **5. 생체 인증형** | [HMRC Voice ID](https://www.gov.uk/government/publications/voice-identification-privacy-notice/voice-identification-privacy-notice), Illinois BIPA, Texas 생체 식별자 법 | 등록 녹음을 voiceprint로 변환해 저장. HMRC는 3년마다 재동의, 최대 7년 | BIPA는 수집 목적 달성 시점과 마지막 상호작용 후 3년 중 빠른 시점에 삭제, Texas는 목적 종료 후 1년 안에 삭제 |
 
 패턴과 관계없이 두 가지가 공통으로 나타납니다.
 
@@ -97,7 +97,7 @@ Azure로 구현할 때 음성을 어디서 받아 어디에 저장하는지, 저
 | [Gemini](#gemini-policy) / 개인 계정 | 활동 저장(Keep Activity)이 켜져 있으면 Gemini 활동에 저장 | 활동 자동 삭제 기본 18개월(3·36개월·무기한 선택). 활동 저장을 끄면 72시간 | 원음과 함께 Gemini 활동에 저장 |
 | [ChatGPT](#chatgpt-policy) / 음성 모드별 | Live·Advanced는 클립 저장. Standard는 전사 후 삭제 | Live·Advanced 클립 30일 | 사용자가 채팅을 지울 때까지 채팅 기록에 저장 |
 | [Microsoft 365 Copilot](#m365-copilot-policy) / 음성 채팅 | 저장 안 함 | 피드백 기능을 켜면 48시간 | 텍스트 대화와 같은 방식으로 저장 |
-| [Siri·받아쓰기](#siri-policy) / Apple 정책 | Apple 서버에 저장 안 함 | 개선 프로그램에 참여하면 Apple 서버에 최대 2년 | 단말에 요청 이력 저장. Apple 서버에는 개선 참여 시 저장 |
+| [Siri·받아쓰기](#siri-policy) / Apple 정책 | Apple 서버에 저장 안 함 | 개선 프로그램에 참여하면 Apple 서버에 최대 2년. 검토된 일부는 2년 초과 | 단말에 요청 이력 저장. Apple 서버에는 개선 참여 시 저장 |
 
 ### Bixby: 녹음 검토를 허용한 경우에만 원음을 1년 보관한다 {#bixby-policy}
 
