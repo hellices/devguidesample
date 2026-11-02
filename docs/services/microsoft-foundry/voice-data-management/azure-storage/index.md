@@ -157,9 +157,11 @@ Realtime 모델을 고르면 네이티브 구조로, GPT-4.1·GPT-5 같은 텍�
 | 항목 | Azure OpenAI Realtime | Voice Live |
 |---|---|---|
 | 설정 위치 | GA: `session.audio.input.transcription`. Azure how-to 예시와 preview: `session.input_audio_transcription` | `session.input_audio_transcription` |
-| `model` 값 | Azure에 배포한 전사 모델의 **배포 이름** | 모델 이름. `gpt-realtime`·`gpt-realtime-mini`와는 `whisper-1`·`gpt-4o-transcribe`·`gpt-4o-mini-transcribe`·`gpt-4o-transcribe-diarize`·`mai-transcribe`를, 텍스트 모델·에이전트와는 `azure-speech`·`mai-transcribe`를 사용 |
+| `model` 값 | Azure에 배포한 전사 모델의 **배포 이름** | 모델 이름. `gpt-realtime`·`gpt-realtime-mini`와는 `whisper-1`·`gpt-4o-transcribe`·`gpt-4o-mini-transcribe`·`gpt-4o-transcribe-diarize`·`mai-transcribe`(preview)를, 텍스트 모델·에이전트와는 `azure-speech`·`mai-transcribe`(preview)를 사용. `mai-transcribe`는 현재 `mai-transcribe-2`(preview)를 가리키며, 스트리밍용 `mai-transcribe-2-streaming`(preview)도 선택 가능 |
 | 기본값 | 꺼짐 | 텍스트 모델(분리형)을 쓰면 `azure-speech`가 자동으로 켜짐 |
 | 인식 보정 | `language`(ISO-639-1 코드)와 `prompt`로 전사 모델에 힌트 제공 | `language`, `prompt`(OpenAI 전사 모델), `phrase_list`(MAI Transcribe), phrase list·custom speech(`azure-speech`) |
+
+Voice Live 전사 모델은 모델마다 지원 리전과 처리 범위가 다르고, `mai-transcribe-2-streaming`은 `mai-transcribe-2`와도 리전이 다릅니다. 모델을 고르기 전에 [Speech 기능 가용성과 처리 범위](https://learn.microsoft.com/azure/ai-services/speech-service/regions?tabs=voice-live#speech-feature-availability-and-processing-scope)를 확인합니다.
 
 Azure OpenAI Realtime GA 형식의 설정 예시입니다.
 
@@ -485,7 +487,7 @@ account에서 last access time tracking을 먼저 켜야 합니다.
 | 통제 | Azure Storage 기능 | 동작 |
 |---|---|---|
 | 암호화 키 | [고객 관리 키(CMK)](https://learn.microsoft.com/azure/storage/common/customer-managed-keys-overview) | Key Vault 또는 Managed HSM에 둔 키로 암호화. 스토리지 계정의 관리 ID가 Microsoft Entra ID로 Key Vault에 접근 |
-| 네트워크 | [Private Endpoint](https://learn.microsoft.com/azure/storage/common/storage-private-endpoints) | 가상 네트워크의 클라이언트 트래픽이 Microsoft 백본의 Private Link로만 흐름. 공용 네트워크 액세스를 꺼도 연결된 가상 네트워크 트래픽은 허용 |
+| 네트워크 | [Private Endpoint](https://learn.microsoft.com/azure/storage/common/storage-private-endpoints) | 가상 네트워크의 클라이언트가 Microsoft 백본의 Private Link로 접근. 가상 네트워크에서 Storage FQDN이 private endpoint IP로 해석되도록 private DNS zone(기본 생성)이나 자체 DNS를 구성. Private Endpoint를 만들어도 public endpoint는 자동으로 막히지 않으므로, Private Link로만 접근하게 하려면 스토리지 방화벽에서 public endpoint 접근을 거부하거나 공용 네트워크 액세스를 끔. 이렇게 해도 private endpoint가 연결된 가상 네트워크 트래픽은 허용 |
 | 인증 | [Microsoft Entra ID와 관리 ID](https://learn.microsoft.com/azure/storage/common/authorize-data-access) | Microsoft는 Entra ID와 관리 ID를 권장하고 Shared Key(계정 키) 인증은 허용하지 않도록 설정하라고 권장 |
 | 임시 다운로드 | [user delegation SAS](https://learn.microsoft.com/azure/storage/blobs/storage-blob-user-delegation-sas-create-cli) | 계정 키 대신 Entra 자격 증명으로 서명. 최대 7일까지만 유효 |
 | 법적 보존 | [불변 저장소(WORM)](https://learn.microsoft.com/azure/storage/blobs/immutable-storage-overview) | 시간 기반 보존 정책이나 법적 보존(legal hold)이 걸린 동안 생성·읽기만 되고 수정·삭제는 안 됨. 컨테이너 단위 또는 계정·컨테이너·버전 단위로 설정. 수명주기 삭제도 동작하지 않음 |
@@ -551,7 +553,20 @@ Azure Architecture Center 참조는 Blob Storage에 다음 자료를 저장합�
 - Hadoop·Spark 같은 분석 엔진에서는 파일당 처리 부담 때문에 256MB~100GB 크기의 큰 파일이 일반적으로 더 나은 성능을 냄.
 - 실시간으로 들어오는 작은 파일은 Event Hubs·Kafka와 Stream Analytics·Spark Streaming 등을 사용해 더 큰 분석 파일로 모을 수 있음.
 
-## 보충: 오디오 형식과 압축
+## 저장 형식이 용량·복원 시간·음질을 정한다 {#audio-format}
+
+| 결정 항목 | 기준 |
+|---|---|
+| 저장비용 | 파일 크기 × 사본 수 × 보관 기간에 요청·복원 비용을 더함 |
+| 복원 시간 | Archive 계층은 복원 대기가 있으므로 즉시 재생이 필요한 기간에는 온라인 계층에 둠 |
+| 음질 | 손실 압축에서 버린 정보는 복원할 수 없으므로 코덱·비트레이트를 저장 시점에 정함 |
+
+- **컨테이너 vs 코덱:** WAV는 컨테이너라서 확장자만으로 무압축 여부나 원래 전화망 음질 보존을 알 수 없음. [WAVE 설명](https://www.loc.gov/preservation/digital/formats/fdd/fdd000001.shtml).
+- **전화망 음질:** G.711 같은 전화망 코덱과 전처리 단계에서 이미 정보가 줄어 있음. [음성 품질 요소](https://www.loc.gov/preservation/digital/formats/content/sound_quality.shtml) · [ITU-T G.711](https://www.itu.int/ITU-T/recommendations/rec.aspx?rec=10653).
+- **ZIP 패키징:** 이미 압축된 오디오는 ZIP으로 묶어도 거의 줄지 않음.
+- **전사로 원음 대체:** 전사를 음성 합성으로 되살려도 원래 음색·억양·속도·침묵은 남지 않음.
+
+Azure 음성 서비스별 입력·출력 형식은 다음과 같습니다.
 
 | 경로 | Microsoft 문서에 명시된 형식·처리 |
 |---|---|

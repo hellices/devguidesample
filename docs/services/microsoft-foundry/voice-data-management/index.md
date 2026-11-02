@@ -297,19 +297,6 @@ COPPA는 아동 개인정보를 수집 목적에 합리적으로 필요한 기�
 | **삭제 요청 이행** | Amazon이 제공한 삭제 기능으로 요청된 Alexa 위치·음성정보와 아동 개인정보 삭제 |
 | **삭제 뒤 모델·제품 이용** | 삭제 처리한 정보를 이후 **어떤 데이터 제품이든** 생성·개선하는 데 사용 금지. |
 
-## 저장 형식과 계층이 용량·복원 시간·음질을 정한다 {#audio-format-cost}
-
-| 결정 항목 | 기준 |
-|---|---|
-| 저장비용 | 파일 크기 × 사본 수 × 보관 기간에 요청·복원 비용을 더함 |
-| 복원 시간 | Archive 계층은 복원 대기가 있으므로 즉시 재생이 필요한 기간에는 온라인 계층에 둠 |
-| 음질 | 손실 압축에서 버린 정보는 복원할 수 없으므로 코덱·비트레이트를 저장 시점에 정함 |
-
-- **컨테이너 vs 코덱:** WAV는 컨테이너라서 확장자만으로 무압축 여부나 원래 전화망 음질 보존을 알 수 없음. [WAVE 설명](https://www.loc.gov/preservation/digital/formats/fdd/fdd000001.shtml).
-- **전화망 음질:** G.711 같은 전화망 코덱과 전처리 단계에서 이미 정보가 줄어 있음. [음성 품질 요소](https://www.loc.gov/preservation/digital/formats/content/sound_quality.shtml) · [ITU-T G.711](https://www.itu.int/ITU-T/recommendations/rec.aspx?rec=10653).
-- **ZIP 패키징:** 이미 압축된 오디오는 ZIP으로 묶어도 거의 줄지 않음.
-- **전사로 원음 대체:** 전사를 음성 합성으로 되살려도 원래 음색·억양·속도·침묵은 남지 않음.
-
 ## 기록마다 담당자·보관 기준·삭제 증빙을 따로 정한다 {#record-retention-checklist}
 
 <div class="voice-diagram-scroll" role="region" aria-label="음성 데이터 산출물과 삭제 검증 수명주기 검토 예시 도식 가로 스크롤" tabindex="0" markdown="1">
