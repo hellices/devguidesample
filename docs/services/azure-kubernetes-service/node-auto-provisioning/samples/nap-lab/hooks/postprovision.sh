@@ -6,7 +6,7 @@ source bench/lib.sh
 : "${AZURE_RESOURCE_GROUP:?}" "${CAS_CLUSTER_NAME:?}" "${NAP_CLUSTER_NAME:?}" "${AZURE_LOCATION:?}"
 # VM 크기와 리전은 az 조회식·sed 치환·파일 이름에 들어가므로 Azure를 호출하기 전에 형식을 확인합니다.
 VM_SIZE=${AKS_VM_SIZE:-Standard_D4ds_v7}
-[[ $VM_SIZE =~ ^Standard_[A-Za-z0-9_]+$ ]] || { echo "AKS_VM_SIZE는 Standard_<크기> 형식이어야 합니다: ${VM_SIZE}" >&2; exit 2; }
+[[ $VM_SIZE =~ ^Standard_[A-Za-z0-9_-]+$ ]] || { echo "AKS_VM_SIZE는 Standard_<크기> 형식이어야 합니다: ${VM_SIZE}" >&2; exit 2; }
 [[ $AZURE_LOCATION =~ ^[a-z0-9]+$ ]] || { echo "AZURE_LOCATION은 Azure 리전 이름(소문자·숫자)이어야 합니다: ${AZURE_LOCATION}" >&2; exit 2; }
 
 for c in "$CAS_CLUSTER_NAME" "$NAP_CLUSTER_NAME"; do

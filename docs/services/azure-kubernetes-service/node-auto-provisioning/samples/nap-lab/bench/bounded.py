@@ -65,10 +65,15 @@ except subprocess.TimeoutExpired:
     # 그룹 리더가 먼저 끝나도 같은 그룹의 자식이 남을 수 있으므로 그룹 전체를 확인합니다.
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        try:
-            proc.wait(timeout=0.2)
-        except subprocess.TimeoutExpired:
-            pass
+        # 리더가 이미 끝났으면 wait가 바로 돌아오므로, 그때는 잠시 쉬며 남은 그룹을 확인합니다.
+        step = min(0.2, max(0.0, deadline - time.monotonic()))
+        if proc.poll() is None:
+            try:
+                proc.wait(timeout=step)
+            except subprocess.TimeoutExpired:
+                pass
+        else:
+            time.sleep(step)
         if not group_alive():
             break
     else:

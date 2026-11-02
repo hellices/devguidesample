@@ -124,11 +124,13 @@ def main():
     wave_lat = ""
     wf = d / "waves"
     if wf.exists():
+        # wave는 그 wave 시작 시각부터 다음 wave 시작 전까지 생성된 Pod로 나눕니다. 교체 Pod는 어느 wave의 것인지
+        # 알 수 없으므로(새 UID), 생성 수가 wave 크기와 다르거나 미준비 Pod가 남은 wave는 값을 비웁니다.
         waves = [(ts(line.split()[0]), int(line.split()[1])) for line in wf.read_text().split("\n") if line.strip()]
-        pod_times.sort(key=lambda x: x[0])
         out, prev = [], 0
-        for wt, cum in waves:
-            batch = pod_times[prev:cum]
+        for i, (wt, cum) in enumerate(waves):
+            end = waves[i + 1][0] if i + 1 < len(waves) else None
+            batch = [(c, r) for c, r in pod_times if c >= wt and (end is None or c < end)]
             done = batch and len(batch) == cum - prev and all(r is not None for _, r in batch)
             out.append(str(round((max(r for _, r in batch) - wt).total_seconds())) if done else "")
             prev = cum

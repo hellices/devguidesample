@@ -43,7 +43,8 @@ web_nodes
 # client가 요청을 보내 200 응답을 기록하기 전에 바꾸면 전환 중 실패를 측정하지 못하므로, 풀·NAP를 바꾸기 전에 확인합니다.
 log "wait for client 200 sample"
 # 확인 시작 뒤에 기록된 200 응답만 인정합니다(이전 실행·확인 전 로그의 200으로 통과하지 않게).
-client_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# --since-time은 초 단위로 비교하므로, 같은 초의 이전 로그가 섞이지 않게 다음 초부터 봅니다.
+client_since=$(python3 -c 'import datetime as d; t = d.datetime.now(d.timezone.utc).replace(microsecond=0) + d.timedelta(seconds=1); print(t.strftime("%Y-%m-%dT%H:%M:%SZ"))')
 client_ok() { local out; out=$(k -n migrate logs deploy/client --since-time="$client_since") || return 1; grep -q ' 200$' <<<"$out"; }
 wait_until 120 5 client_ok || { log "client 로그에 120초 안에 200 응답이 없습니다. 변경 전에 중단합니다"; exit 1; }
 

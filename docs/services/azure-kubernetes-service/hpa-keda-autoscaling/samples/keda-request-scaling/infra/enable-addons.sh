@@ -11,7 +11,8 @@ ENABLE_AGC=${ENABLE_AGC:-true}
 # Managed Prometheus가 이미 켜져 있어도 이 sample의 workspace로 Prometheus 지표를 보내는 DCR이 연결되어 있지 않으면 다시 연결합니다.
 # DCR에 $AMW_ID를 가리키는 monitoringAccounts destination이 있고, Microsoft-PrometheusMetrics stream을
 # 그 destination으로 보내는 dataFlow가 있을 때만 연결된 것으로 봅니다(ID는 대소문자 구분 없이 비교).
-# 조회가 실패하면 연결되지 않은 것으로 넘기지 않고 중단합니다.
+# 연결 목록·클러스터 조회가 실패하면 중단합니다. 연결된 DCR 자체를 읽지 못하면(삭제됨·권한 없음·일시 오류)
+# 경고를 남기고 연결되지 않은 것으로 보아, 읽을 수 있는 일치 DCR이 없으면 az aks update로 다시 연결합니다.
 aks_id=$(az aks show -g "$RG" -n "$CLUSTER" --query id -o tsv)
 metrics_enabled=$(az aks show -g "$RG" -n "$CLUSTER" --query "azureMonitorProfile.metrics.enabled" -o tsv)
 linked=false
@@ -19,9 +20,9 @@ if [[ $metrics_enabled == true ]]; then
   dcrs=$(az monitor data-collection rule association list --resource "$aks_id" --query "[].dataCollectionRuleId" -o tsv)
   while IFS= read -r dcr; do
     [[ -n $dcr ]] || continue
-    # 연결이 남아 있어도 DCR을 읽을 수 없으면(삭제됨·권한 없음) 오류를 보여 주고 연결되지 않은 것으로 봅니다.
+    # 연결이 남아 있어도 DCR을 읽을 수 없으면(삭제됨·권한 없음·일시 오류) 경고를 남기고 연결되지 않은 것으로 봅니다.
     if ! dcr_json=$(az monitor data-collection rule show --ids "$dcr" -o json </dev/null); then
-      echo "DCR ${dcr}을 읽지 못해 이 sample workspace 연결 여부를 확인할 수 없습니다. 다시 연결합니다." >&2
+      echo "WARNING: DCR ${dcr}을 읽지 못했습니다. 이 DCR은 연결되지 않은 것으로 보고, 일치하는 DCR이 없으면 다시 연결합니다." >&2
       continue
     fi
     if python3 -c '

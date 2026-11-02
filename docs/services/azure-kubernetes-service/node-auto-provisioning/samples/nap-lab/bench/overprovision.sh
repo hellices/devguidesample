@@ -48,11 +48,12 @@ single_ready_node() { # 삭제 중이 아닌 selector 노드가 Ready 상태와 
 sel="[{\"op\":\"add\",\"path\":\"/spec/template/spec/nodeSelector\",\"value\":{\"${SEL_KEY}\":\"${SEL_VAL}\"}}]"
 
 # placeholder를 배포하기 전에 selector가 전용 풀만 가리키고 그 풀이 비어 있는지 확인합니다. 조회 실패도 실패로 봅니다.
-out=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}') || {
+# NotReady 노드도 나중에 Ready로 돌아오면 새 노드 없이 측정이 진행되므로, 삭제 중이 아닌 노드는 상태와 관계없이 셉니다.
+out=$(k get nodes -l "${SEL_KEY}=${SEL_VAL}" -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}node:{{range .status.conditions}}{{if eq .type "Ready"}}{{.status}}{{end}}{{end}}{{"\n"}}{{end}}{{end}}') || {
   log "node 조회에 실패했습니다"; exit 1; }
-n=$(count_matching '^True$' <<<"$out")
+n=$(count_matching '^node:' <<<"$out")
 if (( n > 0 )); then
-  log "nodeSelector ${SEL_KEY}=${SEL_VAL}에 맞는 Ready 노드가 시작 전에 ${n}대 있습니다. 전용 벤치마크 풀만 가리키는 selector를 쓰고, 이전 실행의 노드가 축소된 뒤 다시 실행하세요."
+  log "nodeSelector ${SEL_KEY}=${SEL_VAL}에 맞는 노드가 시작 전에 ${n}대(Ready $(count_matching '^node:True$' <<<"$out")대) 있습니다. 전용 벤치마크 풀만 가리키는 selector를 쓰고, 이전 실행의 노드와 node 객체가 정리된 뒤 다시 실행하세요."
   exit 1
 fi
 

@@ -94,6 +94,9 @@ NAP가 켜진 클러스터는 Cilium으로 업데이트할 수 없으므로 네�
 ## 경로 1: CAS 끄기, NAP 켜기, 기존 풀 순차 축소 { #path-1 }
 
 ```bash
+# RG·CLUSTER와 옮길 user 풀 이름(POOLS, 공백 구분)을 먼저 지정합니다. 시스템 풀은 넣지 않습니다.
+: "${RG:?}" "${CLUSTER:?}" "${POOLS:?옮길 user 풀 이름을 지정하세요}"
+
 # 1. CAS가 켜진 모든 풀의 CAS를 끕니다. 풀은 현재 노드 수로 고정됩니다.
 #    하나라도 남아 있으면 AllowClusterAutoscalerAndNAP 없이는 NAP를 켤 수 없습니다.
 pools=$(az aks nodepool list -g "$RG" --cluster-name "$CLUSTER" --query "[?enableAutoScaling].name" -o tsv) || exit 1
@@ -108,20 +111,22 @@ az aks update -g "$RG" -n "$CLUSTER" --node-provisioning-mode Auto || exit 1
 kubectl get nodepools.karpenter.sh
 
 # 3. (선택) 기존 풀의 label·taint를 재현한 NodePool 적용
-# 4. 기존 풀을 현재 노드 수에서 한 대씩 축소. AKS가 cordon·drain하며 PDB를 지킵니다.
-count=$(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n user --query count -o tsv) || exit 1
-[[ $count =~ ^[0-9]+$ ]] || { echo "풀 노드 수를 읽지 못했습니다: '${count}'" >&2; exit 1; }
-for (( n = count - 1; n >= 0; n-- )); do   # 이미 0대이면 축소 없이 5단계로 넘어갑니다.
-  # 축소나 rollout 확인이 실패하면 다음 단계와 풀 삭제로 넘어가지 않고 멈춥니다.
-  az aks nodepool scale -g "$RG" --cluster-name "$CLUSTER" -n user --node-count "$n" || exit 1
-  # 예시는 Deployment 하나(web)만 확인합니다. 운영에서는 이 풀에 있던 모든 Deployment·StatefulSet에
-  # rollout status를 실행하고, Pending·NotReady Pod가 없는지까지 확인한 뒤 다음 단계로 넘어갑니다.
-  kubectl rollout status deploy/web -n app --timeout=15m || exit 1
+# 4·5. 옮길 풀마다 현재 노드 수에서 한 대씩 축소하고, 0대가 되면 삭제합니다.
+#      AKS가 cordon·drain하며 PDB를 지킵니다.
+for pool in $POOLS; do
+  count=$(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n "$pool" --query count -o tsv) || exit 1
+  [[ $count =~ ^[0-9]+$ ]] || { echo "${pool} 풀 노드 수를 읽지 못했습니다: '${count}'" >&2; exit 1; }
+  for (( n = count - 1; n >= 0; n-- )); do   # 이미 0대이면 축소 없이 삭제로 넘어갑니다.
+    # 축소나 rollout 확인이 실패하면 다음 단계와 풀 삭제로 넘어가지 않고 멈춥니다.
+    az aks nodepool scale -g "$RG" --cluster-name "$CLUSTER" -n "$pool" --node-count "$n" || exit 1
+    # 예시는 Deployment 하나(web)만 확인합니다. 운영에서는 이 풀에 있던 모든 Deployment·StatefulSet에
+    # rollout status를 실행하고, Pending·NotReady Pod가 없는지까지 확인한 뒤 다음 단계로 넘어갑니다.
+    kubectl rollout status deploy/web -n app --timeout=15m || exit 1
+  done
+  # 노드 수가 0인 것을 다시 확인한 뒤 풀 삭제
+  [[ $(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n "$pool" --query count -o tsv) == 0 ]] || exit 1
+  az aks nodepool delete -g "$RG" --cluster-name "$CLUSTER" -n "$pool" || exit 1
 done
-
-# 5. 노드 수가 0인 것을 다시 확인한 뒤 풀 삭제
-[[ $(az aks nodepool show -g "$RG" --cluster-name "$CLUSTER" -n user --query count -o tsv) == 0 ]] || exit 1
-az aks nodepool delete -g "$RG" --cluster-name "$CLUSTER" -n user
 ```
 
 노드 단위로 더 세밀하게 제어하려면 풀을 줄이기 전에 Pod를 직접 옮깁니다.

@@ -21,7 +21,8 @@ while now=$(date +%s); (( now - start < DURATION )); do
   # 지표가 아직 없으면 [0] 대신 [*]로 읽어 오류 없이 빈 칸을 남깁니다(ScaledObject당 trigger는 하나).
   metric=$(k -n demo get hpa keda-hpa-podinfo -o jsonpath='{.status.currentMetrics[*].external.current.averageValue}') || metric=""
   if nl=$(k get nodes -l kubernetes.azure.com/mode=user -o name); then
-    nodes=$(grep -c . <<<"$nl")
+    # 조회가 성공하고 노드가 없으면 빈 칸이 아니라 0을 기록합니다.
+    nodes=$(awk 'NF { n++ } END { print n + 0 }' <<<"$nl")
   else
     nodes=""
   fi

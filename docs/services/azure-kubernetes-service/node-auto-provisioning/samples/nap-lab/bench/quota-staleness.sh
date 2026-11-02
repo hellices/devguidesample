@@ -103,10 +103,13 @@ drop_claims() { # 확인용 NodeClaim을 삭제하고 사라질 때까지(최대
   wait_until 900 5 no_claims || { log "timeout: probe NodeClaims not deleted within 900s"; return 1; }
 }
 
-probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
+probe() { # probe [마감 epoch 초]. 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
+  # 마감을 주면 선택 대기는 PROBE_TIMEOUT과 마감 중 이른 쪽까지만 합니다(정리 대기는 별도).
+  local due=${1:-}
   # 이전 probe·실행에서 남은 Pod나 pref64/alt NodeClaim이 있으면 이번 선택과 섞이므로 먼저 비웁니다. 정리에 실패하면 probe를 시작하지 않습니다.
   kn -n bench scale deployment inflate --replicas 0 >/dev/null || { log "probe: scale to 0 failed"; return 1; }
   drop_claims || { log "probe: leftover pref64/alt NodeClaims; not starting probe"; return 1; }
+  if [[ -n $due ]] && (( $(date +%s) >= due )); then log "probe: deadline passed before start"; return 1; fi
   # probe는 $(...) 안에서 실행돼 errexit가 적용되지 않으므로 중요한 명령의 실패를 직접 확인합니다.
   PROBE_START=$(date -u +%FT%TZ)
   kn -n bench scale deployment inflate --replicas "$PROBE_PODS" >/dev/null || {
@@ -115,15 +118,16 @@ probe() { # 출력: "<선택을 읽은 epoch 초> <선택된 NodePool 목록>"
   # 배정·지정되지 않은 Pod가 0개이고 NodeClaim 목록이 두 번 연속 같을 때까지 기다립니다.
   # 일부 Pod만 반영된 중간 선택을 기록하지 않습니다. timeout이면 빈 결과를 기록하지 않고 실패합니다.
   # 마감 시각 이후에 끝난 확인은 안정돼도 timeout으로 봅니다. 대기는 남은 시간을 넘기지 않습니다.
-  local ids="" prev="" pending rest seen start
-  start=$(date +%s)
+  local ids="" prev="" pending rest seen start limit
+  start=$(date +%s) limit=$(( start + PROBE_TIMEOUT ))
+  if [[ -n $due ]] && (( due < limit )); then limit=$due; fi
   while :; do
-    rest=$(( start + PROBE_TIMEOUT - $(date +%s) ))
+    rest=$(( limit - $(date +%s) ))
     if (( rest > 0 )); then sleep "$(( rest < 5 ? rest : 5 ))"; fi
     ids=$(claims) || ids=""
     pending=$(unplaced) || pending=unknown
-    if (( $(date +%s) - start >= PROBE_TIMEOUT )); then
-      log "timeout: pref64/alt NodeClaim selection not stable within ${PROBE_TIMEOUT}s (unplaced pods: ${pending})"
+    if (( $(date +%s) >= limit )); then
+      log "timeout: pref64/alt NodeClaim selection not stable within $(( limit - start ))s (unplaced pods: ${pending})"
       kn -n bench scale deployment inflate --replicas 0 >/dev/null || log "probe: cleanup scale to 0 failed"
       drop_claims || true   # timeout 전에 생긴 NodeClaim도 정상 경로와 같이 정리합니다.
       return 1
@@ -180,7 +184,7 @@ found=0
 wait_retry() { local rest=$(( rel + 1200 - $(date +%s) )); if (( rest > 0 )); then sleep "$(( rest < 45 ? rest : 45 ))"; fi; }
 while (( $(date +%s) - rel < 1200 )); do
   # probe 실패는 기록하지 않고 기한 안에서 다시 시도합니다. 기한을 넘기면 아래 timeout 행으로 끝납니다.
-  if ! r=$(probe); then log "WARNING: probe failed after release; retrying"; wait_retry; continue; fi
+  if ! r=$(probe "$(( rel + 1200 ))"); then log "WARNING: probe failed after release; retrying"; wait_retry; continue; fi
   chosen=${r#* }; el=$(( ${r%% *} - rel ))
   # 선택을 읽은 시각이 1200초 이상이면 기록하지 않고 아래 timeout(censored) 행만 남깁니다.
   (( el < 1200 )) || break
