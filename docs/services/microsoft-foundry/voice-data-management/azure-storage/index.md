@@ -377,7 +377,9 @@ WebRTC·SIP 연결에서는 서버가 자동으로 자르고, WebSocket 연결�
 `store` 기본값은 `false`이며, `true`일 때 전사·이벤트·원음을 함께
 영속화합니다. 별도의 오디오 저장 스위치는 없습니다. 연결 요청의
 `store` 매개변수로 한 세션만 재정의할 수 있습니다. 이 설정은 미리 보기인
-Foundry voice agent의 기능입니다.
+Foundry voice agent의 기능입니다. `store`는 별도 서비스가 아니라 Foundry Agent Service에서
+만든 voice agent의 설정이므로, Realtime API나 Voice Live에 모델을 직접 지정한 세션에는
+해당하지 않습니다. 이 경우 필요한 기록은 애플리케이션이 저장합니다.
 
 - **왜·무엇을:** 세션의 대화 내용을 다시 조회·재생하거나 조사·평가하려는 경우 저장을 명시적으로 선택합니다. [저장 대화 조회 문서](https://learn.microsoft.com/azure/foundry/agents/concepts/voice-agent-observability#read-stored-conversations)는 턴별 전사·오디오와 발신자 왼쪽/에이전트 오른쪽의 병합 스테레오 녹음을 설명합니다.
 - **어디에·누가 접근하는가:** 음성 에이전트 소유 저장소의 대화·오디오를 서비스 endpoint로 읽습니다. 고객 저장소를 가져오는 BYOS에서는 녹음 URI가 고객 계정을 가리키며 그 계정의 Azure RBAC가 접근을 통제합니다.

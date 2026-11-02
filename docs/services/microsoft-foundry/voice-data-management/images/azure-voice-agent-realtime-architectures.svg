@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="920" viewBox="0 0 1280 920" role="img" aria-labelledby="azure-realtime-architectures-title azure-realtime-architectures-desc">
   <title id="azure-realtime-architectures-title">Azure 음성 에이전트의 네이티브 Realtime과 분리형 파이프라인</title>
-  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 Realtime 세션 옵션으로 커밋된 입력 오디오를 별도 전사 모델이 비동기로 처리할 수 있는 경로입니다. 입력 전사 결과는 모델 해석과 다를 수 있습니다. 같은 세션에서 conversation none으로 요청한 out-of-band 응답은 기본 대화에 추가되지 않는 요약 같은 별도 텍스트 응답을 만듭니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent store, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
+  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 Realtime 세션 옵션으로 커밋된 입력 오디오를 별도 전사 모델이 비동기로 처리할 수 있는 경로입니다. 입력 전사 결과는 모델 해석과 다를 수 있습니다. 같은 세션에서 conversation none으로 요청한 out-of-band 응답은 기본 대화에 추가되지 않는 요약 같은 별도 텍스트 응답을 만듭니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent의 store 설정, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
   <defs>
     <marker id="azure-realtime-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
@@ -114,7 +114,7 @@
   <text x="812" y="276" class="label">response.create</text>
   <rect id="native-records" x="80" y="380" width="1090" height="50" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
   <text x="625" y="400" text-anchor="middle" class="body">공통 선택 기록 · 원음 · 입력 전사 · 모델 응답 · 대화 밖 요약 · 도구 이벤트</text>
-  <text x="625" y="421" text-anchor="middle" class="small">앱 녹음 · Foundry voice agent store · tracing은 각각 별도 설정</text>
+  <text x="625" y="421" text-anchor="middle" class="small">앱 녹음 · voice agent store=true · tracing은 각각 별도 설정</text>
 
   <!-- Cascaded nodes -->
   <rect id="pipeline-input" x="80" y="516" width="170" height="78" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
