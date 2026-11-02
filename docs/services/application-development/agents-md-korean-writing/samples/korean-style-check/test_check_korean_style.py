@@ -56,6 +56,13 @@ class SentenceHeadingTest(unittest.TestCase):
         # The line after the empty heading stays prose.
         self.assertEqual(report.metrics["adverb_comma"], 1)
 
+    def test_closing_hashes_follow_site_renderer(self) -> None:
+        # MkDocs renders "# 처리한다#" as the heading "처리한다", so it is a sentence heading.
+        for heading in ("# 처리한다#", "# 처리한다 #"):
+            with self.subTest(heading=heading):
+                report = analyze(f"{heading}\n\n본문이다.\n")
+                self.assertEqual(report.metrics["sentence_headings"], 1)
+
     def test_atx_heading_indented_up_to_three_spaces(self) -> None:
         for indent in (1, 2, 3):
             with self.subTest(indent=indent):
@@ -160,6 +167,17 @@ class QuoteTest(unittest.TestCase):
         self.assertEqual(report.metrics["translationese"], 1)
 
 
+class DashTest(unittest.TestCase):
+    def test_dash_inside_multiline_quote_is_not_counted(self) -> None:
+        report = analyze("# 대시\n\n“처리한다 —\n계속한다.”\n\n본문이다.\n")
+        self.assertEqual(report.metrics["em_dash"], 0)
+        self.assertNotIn("em_dash_per_100_sentences", flagged(report))
+
+    def test_dash_in_prose_is_counted(self) -> None:
+        report = analyze("# 대시\n\n처리한다 —\n계속한다.\n")
+        self.assertEqual(report.metrics["em_dash"], 1)
+
+
 class HtmlCommentTest(unittest.TestCase):
     def test_comment_opener_inside_code_is_code(self) -> None:
         text = (
@@ -186,6 +204,12 @@ class LinkTargetTest(unittest.TestCase):
         # The text after the closing parenthesis is still prose.
         self.assertEqual(report.metrics["adverb_comma"], 1)
         self.assertEqual(report.metrics["plain_endings"], 2)
+
+    def test_destination_with_spaces_follows_site_renderer(self) -> None:
+        # MkDocs renders "[설명](작업을 수행한다.)" as a link that shows only "설명".
+        report = analyze("# 링크\n\n[설명](작업을 수행한다.) 본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["plain_endings"], 1)
 
     def test_unmatched_bracket_is_not_a_link(self) -> None:
         report = analyze("# 링크\n\n조건](작업을 수행한다.) 뒤에 본문이 있다.\n")

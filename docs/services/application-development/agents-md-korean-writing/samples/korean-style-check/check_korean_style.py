@@ -659,7 +659,15 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     if found:
         examples["contrast"] = found
 
-    dashes = sum(len(EM_DASH.findall(QUOTED.sub("QUOTE", lines[i]))) for i in paragraphs)
+    # Join each run of consecutive paragraph lines before masking quotes, so a
+    # quotation that wraps across lines is masked as a whole.
+    blocks: list[list[str]] = []
+    for position, line_index in enumerate(paragraphs):
+        if position and line_index == paragraphs[position - 1] + 1:
+            blocks[-1].append(lines[line_index].strip())
+        else:
+            blocks.append([lines[line_index].strip()])
+    dashes = sum(len(EM_DASH.findall(QUOTED.sub("QUOTE", " ".join(block)))) for block in blocks)
     metrics["em_dash"] = dashes
     ratio("em_dash_per_100_sentences", dashes * per100, 1)
 
