@@ -438,8 +438,11 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
 점검하고 걸린 문장만 다시 씁니다.
 
 ```bash
-python docs/services/application-development/agents-md-korean-writing/samples/korean-style-check/check_korean_style.py --strict <문서 경로>
+DOCUMENT_PATH=docs/services/azure-ai-search/custom-vectorization/a10-vs-t4/index.md
+python docs/services/application-development/agents-md-korean-writing/samples/korean-style-check/check_korean_style.py --strict "$DOCUMENT_PATH"
 ```
+
+`DOCUMENT_PATH`는 저장소 루트 기준으로 점검할 문서 경로로 바꿉니다.
 
 검사기는 패턴의 개수와 밀도만 셉니다. 굵은 글씨, 꼬리표와 대시는 설명 문단에서만
 세고 표·글머리표·인용 블록은 세지 않습니다. `research`·`lab` 문서의 보고서형 콜론

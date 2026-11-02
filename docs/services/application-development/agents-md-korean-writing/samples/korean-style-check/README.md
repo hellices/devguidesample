@@ -6,10 +6,20 @@
 
 ## 실행
 
+아래 명령은 모두 이 sample 디렉터리에서 실행한다. 저장소 루트에서 시작한다면 먼저
+이동한다.
+
 ```bash
+cd docs/services/application-development/agents-md-korean-writing/samples/korean-style-check
 python check_korean_style.py examples/
-python check_korean_style.py --strict docs/
-python check_korean_style.py --json path/to/doc.md
+python check_korean_style.py --strict ../../../../../services/
+python check_korean_style.py --json ../../index.md
+```
+
+저장소 루트에 머물러 있다면 스크립트를 전체 경로로 지정한다.
+
+```bash
+python docs/services/application-development/agents-md-korean-writing/samples/korean-style-check/check_korean_style.py --strict docs/services/
 ```
 
 `--strict`를 주면 기준을 넘는 파일이 하나라도 있을 때 종료 코드 1을 반환한다.
@@ -51,7 +61,10 @@ python check_korean_style.py --json path/to/doc.md
 문자로 여는 펜스와 길이가 같거나 더 긴 펜스로만 닫힌다. 각 줄에서 인용 블록(`>`),
 목록 항목과 MkDocs의 admonition·접힘·탭 블록 접두사를 먼저 걷어 낸 뒤 남은 내용에서
 펜스를 찾는다. 그래서 `> ```text`나 `- ```text`도 펜스로 보고, 최상위에서 네 칸
-들여쓴 펜스는 코드 블록으로 보지 않는다. 소속 블록이 끝나면 열린 펜스도 닫힌다.
+들여쓴 펜스는 펜스가 아니라 들여쓰기 코드 블록으로 본다. 소속 블록이 끝나면 열린
+펜스도 닫힌다. 소속 블록 접두사를 걷어 낸 뒤 네 칸 이상 들여쓴 줄은 문단을 이어 가는
+줄이 아니면 들여쓰기 코드 블록으로 보고 뺀다. `제목\n===`, `제목\n---` 형식의 Setext
+제목도 `#` 제목과 같이 검사하며, 빈 줄 뒤의 `---`는 구분선으로 둔다.
 표는 구분 행(`--- | ---`)으로 찾으며 바깥쪽 `|`를 생략한 표도 인식한다.
 따옴표 안의 문구도 예시를 인용한 경우가 많아 패턴 검사와 문장 수
 계산에서 뺀다. 영문자나 숫자에 붙은 작은따옴표(`don't`, `user's`)는 인용 부호로 보지
@@ -65,17 +78,20 @@ python check_korean_style.py --json path/to/doc.md
 
 ## 테스트
 
-`test_check_korean_style.py`는 표준 라이브러리 `unittest`로 문장형 제목, 연결어미
-쉼표, 코드 펜스, 인용, 표와 스캔형 구성 판정을 검증한다.
+`test_check_korean_style.py`는 표준 라이브러리 `unittest`로 문장형·Setext 제목, 연결어미
+쉼표, 코드 펜스와 들여쓰기 코드 블록, 인용, 표와 스캔형 구성 판정을 검증한다.
+
+sample 디렉터리에서 실행한다. 저장소 루트에서는 `-s`로 시작 디렉터리를 지정한다.
 
 ```bash
 python -m unittest -v
+python -m unittest discover -v -s docs/services/application-development/agents-md-korean-writing/samples/korean-style-check
 ```
 
 ## 예시
 
 `examples/before.md`는 AI 문체 패턴을 일부러 모은 글이고 `examples/after.md`는
-같은 내용을 고쳐 쓴 글이다.
+같은 내용을 고쳐 쓴 글이다. sample 디렉터리에서 실행한다.
 
 ```bash
 python check_korean_style.py --strict examples/after.md   # 종료 코드 0

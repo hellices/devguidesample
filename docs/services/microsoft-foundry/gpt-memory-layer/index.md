@@ -65,7 +65,7 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
 |------|---------|--------|------|
 | gpt-5.4 이하 (gpt-5.4, 5.3-codex, 5.2, 5.1 계열, 5, 5-codex, 4.1) | `"in_memory"`, `"24h"` | `"in_memory"` | 비 ZDR 조직은 2026.05.29부터 기본값 `"24h"`로 변경됨 |
 | gpt-5.5 | `"24h"` 만 허용 | `"24h"` | 확장 보존이 기본. `"in_memory"` 미지원. ZDR 조직 포함 전체 적용 |
-| gpt-5.6 이상 | 적용 안 됨 (사용 중단) | — | 최소 수명은 `prompt_cache_options.ttl`로 지정하며 `"30m"`이 기본값이자 유일한 값 |
+| gpt-5.6 이상 | 적용 안 됨 (사용 중단) | — | Standard 종량제 배포는 `prompt_cache_options.ttl`로 최소 수명을 지정하며 `"30m"`이 기본값이자 유일한 값. PTU-M 배포는 미지원 |
 
 두 보존 정책의 캐시 가격은 같습니다. `in_memory`는 5~10분 동안 요청이 없으면 캐시를 비우고 늦어도 1시간 안에 반드시 제거합니다. Azure 구독 사이에는 캐시를 공유하지 않습니다. `24h`는 KV 텐서를 GPU-local 스토리지로 옮겨 최대 24시간 유지합니다. 원본 프롬프트 텍스트는 디스크에 절대 저장하지 않습니다.
 
@@ -143,13 +143,13 @@ gpt-5.6의 Usage 응답에서 `cache_write_tokens` 필드가 빠지는 이슈가
 3. gpt-5.6 이상에서 같은 키로 분당 약 15건을 넘으면 `prompt_cache_key`를 여러 개로 나눕니다. 이때도 프리픽스와 키의 대응은 바꾸지 않습니다.
 4. 데이터 레지던시를 확인합니다. in_memory는 모든 리전과 호환되며 24h 확장 캐시는 Data Zone이나 Regional 배포 경계 안에 유지됩니다.
 
-### 캐싱·과금의 알려진 이슈 네 가지(2026년 7월 22일 기준)
+### 캐싱·과금의 알려진 이슈 네 가지(2026년 7월 22일 기준, Explicit Caching은 11월 2일 갱신)
 
 | 이슈 | 상태 | 영향 | 워크어라운드 |
 |------|------|------|-------------|
 | gpt-5.6 + Responses API 캐싱 미작동 | Microsoft 수정 중 (7/10 확인, "late next week" 예고) | `cached_tokens: 0` 반환. Chat Completions API (~95% 히트율)는 정상 | Chat Completions API 사용 |
 | gpt-5.6 `cache_write_tokens` 필드 누락 | API 버전 이슈 가능성, MS 조사 중 | Usage 응답에 cache write 토큰 수 미표시 (과금은 적용) | 최신 API 버전 사용 확인 |
-| Explicit Caching 미지원 | Azure 미지원 (지원 일정 미정) | `prompt_cache_options`, `prompt_cache_breakpoint` 파라미터 수락하나 동작 안 함 | Implicit caching만 사용 |
+| Explicit Caching 지원 범위 | 2026-11-02 Learn 기준 gpt-5.6 이상 Standard 종량제 배포에서 지원. PTU-M 배포와 gpt-5.5 이하는 미지원 (7월 22일 기준 미지원에서 변경) | gpt-5.5 이하에 `prompt_cache_options`·`prompt_cache_breakpoint`를 보내면 `400` 오류 | gpt-5.5 이하·PTU-M은 자동(implicit) 캐싱 사용 |
 | gpt-5.6 가격 불확실 | 미터 ID가 Retail Prices API에 미등록 | 모든 토큰 카테고리 $0.01/1M 표시 (의도적 여부 불명) | Azure Billing 지원 티켓 오픈 |
 
 ---

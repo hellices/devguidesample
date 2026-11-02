@@ -50,6 +50,15 @@ class SentenceHeadingTest(unittest.TestCase):
                 report = analyze(f"# {heading}\n\n본문이다.\n")
                 self.assertEqual(report.metrics["sentence_headings"], 1)
 
+    def test_setext_headings_are_headings(self) -> None:
+        report = analyze("설정합니다\n===\n\n본문이다.\n\n캐시를\n끕니다\n---\n\n본문이다.\n")
+        self.assertEqual(report.metrics["sentence_headings"], 2)
+        self.assertNotIn("설정합니다", report.examples.get("connective_comma", []))
+
+    def test_thematic_break_is_not_setext_heading(self) -> None:
+        report = analyze("# 제목\n\n본문이다.\n\n---\n\n본문이다.\n")
+        self.assertEqual(report.metrics["sentence_headings"], 0)
+
     def test_link_label_and_emphasis_are_normalized(self) -> None:
         report = analyze("# [설정합니다.](#setup)\n\n## **캐시를 끕니다**\n\n본문이다.\n")
         self.assertEqual(report.metrics["sentence_headings"], 2)
@@ -70,8 +79,12 @@ class ConnectiveCommaTest(unittest.TestCase):
 
 class FencedCodeTest(unittest.TestCase):
     def test_inner_fence_does_not_close_longer_fence(self) -> None:
-        text = "# 펜스\n\n````markdown\n```bash\n따라서, 실행한다.\n```\n하지만, 코드다.\n````\n\n본문이다.\n"
-        self.assertEqual(analyze(text).metrics["adverb_comma"], 0)
+        text = (
+            "# 펜스\n\n````markdown\n```bash\n따라서, 실행한다.\n```\n하지만, 코드다.\n````\n\n"
+            "그리고, 본문이다.\n"
+        )
+        # Only the prose after the matching four-backtick fence is counted.
+        self.assertEqual(analyze(text).metrics["adverb_comma"], 1)
 
     def test_fences_inside_quote_and_list_marker_are_code(self) -> None:
         text = (
@@ -83,6 +96,21 @@ class FencedCodeTest(unittest.TestCase):
     def test_top_level_indented_fence_is_not_a_fence(self) -> None:
         text = f"# 펜스\n\n본문이다.\n\n    ```\n    코드 줄\n\n그리고, 본문이다.\n\n{FILLER}\n"
         self.assertEqual(analyze(text).metrics["adverb_comma"], 1)
+
+    def test_indented_code_block_is_code(self) -> None:
+        text = "# 코드\n\n본문이다.\n\n    되어진다.\n    따라서, 코드다.\n\n    이어지는 코드다.\n\n본문이다.\n"
+        report = analyze(text)
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["adverb_comma"], 0)
+        self.assertEqual(report.findings, [])
+
+    def test_indented_line_continues_paragraph(self) -> None:
+        report = analyze("# 문단\n\n설정을 확인하는 방법은\n    따라서, 문단의 연속이다.\n")
+        self.assertEqual(report.metrics["adverb_comma"], 1)
+
+    def test_list_continuation_is_not_code(self) -> None:
+        report = analyze("# 목록\n\n- 첫 항목이다.\n\n    따라서, 항목의 둘째 문단이다.\n")
+        self.assertEqual(report.metrics["adverb_comma"], 1)
 
     def test_fence_nested_in_list_and_admonition_is_code(self) -> None:
         text = (

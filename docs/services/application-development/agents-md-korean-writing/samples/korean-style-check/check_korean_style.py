@@ -37,6 +37,7 @@ INLINE_CODE = re.compile(r"`[^`\n]+`")
 LINK_TARGET = re.compile(r"\]\([^)]*\)")
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
+SETEXT_UNDERLINE = re.compile(r" {0,3}(=+|-+)[ \t]*$")
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+", re.M)
 BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
 # A paragraph that opens with a bold label: "**결론**: ..." or "**정리:** ...".
@@ -196,21 +197,28 @@ def open_containers(rest: str, stack: list[int | None]) -> str:
 
 
 def remove_fenced_code(text: str) -> str:
-    """Drop fenced code blocks, including their fence lines.
+    """Drop fenced and indented code blocks.
 
     Each line is matched against the open block quotes, list items and MkDocs
     admonition, details and tab blocks first. A fence is recognized in what is
-    left, indented at most three spaces, so "> ```" and "- ```" open a fence
-    while a top-level line indented four or more spaces does not. A fence
-    closes on a line of the same character at least as long as the opening
-    fence, or when a container it belongs to ends. An unclosed fence runs to
-    the end of the document.
+    left, indented at most three spaces, so "> ```" and "- ```" open a fence.
+    A fence closes on a line of the same character at least as long as the
+    opening fence, or when a container it belongs to ends. An unclosed fence
+    runs to the end of the document.
+
+    What is left after the container prefixes and indented four or more spaces
+    is an indented code block, unless it continues a paragraph. A top-level
+    "    ```" line is therefore code, as in CommonMark, and so is the indented
+    text under it.
     """
     kept: list[str] = []
     stack: list[int | None] = []
     fence: str | None = None
     fence_depth = 0
     previous_blank = True
+    # True while the previous kept line belongs to a paragraph that an indented
+    # line could lazily continue.
+    in_paragraph = False
     for raw in text.splitlines():
         rest = raw.expandtabs(4)
         matched = 0
@@ -230,26 +238,66 @@ def remove_fenced_code(text: str) -> str:
                 ):
                     fence = None
                     previous_blank = False
+                    in_paragraph = False
                 continue
-            fence, previous_blank = None, True
+            fence, previous_blank, in_paragraph = None, True, False
         blank = not rest.strip()
         # An unmatched container ends unless the line lazily continues the
         # previous paragraph.
         if matched < len(stack) and (previous_blank or blank or BLOCK_START.match(rest)):
             del stack[matched:]
+            in_paragraph = False
         if blank:
             kept.append(raw)
             previous_blank = True
+            in_paragraph = False
             continue
         previous_blank = False
         if matched == len(stack):
+            indent = len(rest) - len(rest.lstrip(" "))
+            if indent >= 4 and not in_paragraph:
+                continue
             rest = open_containers(rest, stack)
             opener = FENCE_OPEN.match(rest)
             if opener:
                 fence, fence_depth = opener.group(1), len(stack)
+                in_paragraph = False
                 continue
+            in_paragraph = bool(rest.strip()) and not BLOCK_START.match(rest)
         kept.append(raw)
     return "\n".join(kept)
+
+
+def convert_setext_headings(text: str) -> str:
+    """Rewrite Setext headings ("제목\n===", "제목\n---") as ATX headings.
+
+    The underline turns the paragraph right above it into one heading, which
+    may span several lines. A "---" after a blank line stays a thematic break,
+    and lines that start another block or contain a table pipe are not
+    paragraph text. The front matter is removed before this runs.
+    """
+    lines = text.splitlines()
+
+    def paragraph_line(line: str) -> bool:
+        return (
+            bool(line.strip())
+            and len(line) - len(line.lstrip(" ")) <= 3
+            and not BLOCK_START.match(line)
+            and not HEADING.match(line)
+            and "|" not in line
+        )
+
+    for index in range(1, len(lines)):
+        underline = SETEXT_UNDERLINE.fullmatch(lines[index])
+        if not underline or not paragraph_line(lines[index - 1]):
+            continue
+        first = index - 1
+        while first > 0 and paragraph_line(lines[first - 1]):
+            first -= 1
+        title = " ".join(line.strip() for line in lines[first:index])
+        level = "#" if underline.group(1)[0] == "=" else "##"
+        lines[first:index + 1] = [f"{level} {title}"] + [""] * (index - first)
+    return "\n".join(lines)
 
 
 def table_cells(row: str) -> int:
@@ -353,6 +401,7 @@ def strip_markup(text: str) -> tuple[str, str]:
     text = FRONT_MATTER.sub("", text, count=1)
     text = HTML_COMMENT.sub("", text)
     text = remove_fenced_code(text)
+    text = convert_setext_headings(text)
     text = INLINE_CODE.sub("CODE", text)
     markdown = LINK_TARGET.sub("]", text)
     lines = markdown.splitlines()
