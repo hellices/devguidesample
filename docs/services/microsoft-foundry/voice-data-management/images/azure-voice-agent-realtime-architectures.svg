@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="920" viewBox="0 0 1280 920" role="img" aria-labelledby="azure-realtime-architectures-title azure-realtime-architectures-desc">
   <title id="azure-realtime-architectures-title">Azure 음성 에이전트의 네이티브 Realtime과 분리형 파이프라인</title>
-  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 Realtime 세션 옵션으로 커밋된 입력 오디오를 별도 전사 모델이 비동기로 처리할 수 있는 경로입니다. 입력 전사 결과는 모델 해석과 다를 수 있습니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent store, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
+  <desc id="azure-realtime-architectures-desc">위쪽은 입력 오디오가 Realtime 모델로 직접 들어가고 Realtime 세션 옵션으로 커밋된 입력 오디오를 별도 전사 모델이 비동기로 처리할 수 있는 경로입니다. 입력 전사 결과는 모델 해석과 다를 수 있습니다. 같은 세션에서 conversation none으로 요청한 out-of-band 응답은 기본 대화에 추가되지 않는 요약 같은 별도 텍스트 응답을 만듭니다. 아래쪽은 STT, 텍스트 모델, 도구, TTS를 구분합니다. 두 구조 모두 각 단계에서 노출한 원음, 전사, 응답과 도구 이벤트를 공통 선택 기록 영역으로 연결하지만 앱 녹음, Foundry voice agent store, 추적은 별도 설정입니다. 분석과 사본은 구현에 따라 세션 중 또는 종료 후 생성됩니다.</desc>
   <defs>
     <marker id="azure-realtime-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
@@ -47,6 +47,8 @@
   <path id="native-input-to-records" d="M110 237 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <path id="native-transcription-to-records" d="M490 350 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <path id="native-model-to-records" d="M670 247 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-model-to-oob" d="M700 247 V264 H800 V280" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
+  <path id="native-oob-to-records" d="M860 350 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
   <path id="native-tools-to-records" d="M1040 237 V380" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azure-realtime-arrow-link)"/>
 
   <!-- Cascaded connectors -->
@@ -69,7 +71,7 @@
   <text x="810" y="239" text-anchor="middle" class="label">업무 결과</text>
   <text x="502" y="270" class="label">세션 옵션 · 커밋된 입력 오디오</text>
   <text x="125" y="355" class="label">원음</text>
-  <text x="685" y="343" class="label">응답·세션 이벤트</text>
+  <text x="662" y="372" text-anchor="end" class="label">응답·세션 이벤트</text>
   <text x="1055" y="343" class="label">도구 이벤트</text>
 
   <text x="275" y="538" text-anchor="middle" class="label">음성</text>
@@ -105,8 +107,13 @@
   <text x="490" y="323" text-anchor="middle" class="node">별도 입력 전사 모델</text>
   <text x="490" y="342" text-anchor="middle" class="small">별도 ASR · 비동기 · 모델 해석과 다를 수 있음</text>
 
+  <rect id="native-oob" x="720" y="282" width="290" height="68" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-dasharray="5,4"/>
+  <text x="738" y="301" class="tag" fill="#9a3412">OUT-OF-BAND RESPONSE</text>
+  <text x="865" y="323" text-anchor="middle" class="node">대화 밖 요약 응답</text>
+  <text x="865" y="342" text-anchor="middle" class="small">conversation: none · 기본 대화에 추가 안 됨</text>
+  <text x="812" y="276" class="label">response.create</text>
   <rect id="native-records" x="80" y="380" width="1090" height="50" rx="6" fill="#ffffff" stroke="#0284c7" stroke-dasharray="5,4"/>
-  <text x="625" y="400" text-anchor="middle" class="body">공통 선택 기록 · 원음 · 입력 전사 · 모델 응답 · 도구 이벤트</text>
+  <text x="625" y="400" text-anchor="middle" class="body">공통 선택 기록 · 원음 · 입력 전사 · 모델 응답 · 대화 밖 요약 · 도구 이벤트</text>
   <text x="625" y="421" text-anchor="middle" class="small">앱 녹음 · Foundry voice agent store · tracing은 각각 별도 설정</text>
 
   <!-- Cascaded nodes -->
@@ -142,7 +149,7 @@
   <text x="645" y="770" text-anchor="middle" class="body">공통 선택 기록 · 원음 · STT 전사 · 모델 응답 · 도구 이벤트 · TTS 출력</text>
   <text x="645" y="791" text-anchor="middle" class="small">단계별로 노출된 데이터만 수집 · 앱 녹음·store·추적의 보유·삭제는 별도 정책</text>
 
-  <text x="40" y="842" class="small">점선은 선택해서 켜는 전사·저장·관측 경로입니다. 기록할 수 있는 데이터는 서비스·API가 이벤트로 내보내는 데이터입니다.</text>
+  <text x="40" y="842" class="small">점선은 선택해서 켜는 전사·요약·저장·관측 경로입니다. 기록할 수 있는 데이터는 서비스·API가 이벤트로 내보내는 데이터입니다.</text>
   <text x="40" y="864" class="small">요약·분석·사본은 세션 중이나 종료 후 애플리케이션이 생성·저장합니다. 앱 녹음·store·추적은 각각 따로 켭니다.</text>
 
   <!-- Legend -->

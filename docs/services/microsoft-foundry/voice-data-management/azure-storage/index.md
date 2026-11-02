@@ -83,6 +83,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/storage/blobs/storage-manage-find-blobs
 - title: Azure Communication Services retirement and breaking changes guide
   url: https://learn.microsoft.com/azure/communication-services/acs-retirement-and-breaking-changes-guide
+- title: "Quickstart: Server-side Audio Streaming"
+  url: https://learn.microsoft.com/azure/communication-services/how-tos/call-automation/audio-streaming-quickstart
 - title: Bring your own storage for call recording quickstart
   url: https://learn.microsoft.com/azure/communication-services/quickstarts/call-automation/call-recording/bring-your-own-storage
 - title: Enable and configure Microsoft Defender for Storage
@@ -151,6 +153,8 @@ Realtime 모델을 고르면 네이티브 구조로, GPT-4.1·GPT-5 같은 텍�
 > 세션 옵션입니다. 켜면 서비스가 커밋된 입력 오디오를 별도 ASR 모델로 보내
 > 응답 생성과 동시에 전사하며, 그 결과는 모델의 해석과 다를 수 있습니다
 > ([이벤트 레퍼런스](https://learn.microsoft.com/azure/foundry-classic/openai/realtime-audio-reference-ga)).
+> `OUT-OF-BAND RESPONSE`는 같은 세션에서 `conversation: none`으로 요청해 기본 대화에
+> 추가되지 않는 요약 같은 별도 응답입니다([아래](#out-of-band-summary)).
 > 점선은 애플리케이션 녹음·세션 저장·추적을 각각 켤 수 있는 지점입니다.
 
 ## 세션 옵션으로 켜는 입력 전사와 전사 이벤트 {#input-transcription}
@@ -224,6 +228,23 @@ Azure OpenAI Realtime GA 형식의 설정 예시입니다.
 서비스가 원음을 저장하지 않는 구성에서 원음을 남기려면 애플리케이션이 음성을
 받을 지점을 정해야 합니다. 음성이 앱 서버를 지나는 WebSocket 구조는 그 방법 중
 하나이고, WebRTC처럼 음성이 앱 서버를 거치지 않는 연결에도 캡처 방법이 있습니다.
+
+- **WebRTC:** 브라우저·모바일 앱용 실시간 미디어 연결입니다. 앱 서비스는 임시 토큰만
+  발급하고, 음성은 클라이언트와 Azure가 직접 주고받습니다.
+- **WebSocket:** 서버 간 양방향 연결입니다. 앱 서버가 클라이언트 음성을 받아
+  base64 오디오가 담긴 JSON 이벤트로 Azure에 보내고 응답을 돌려받습니다.
+- **SIP:** 전화망의 통화 신호 프로토콜입니다. 통신사·PBX의 SIP 트렁크가 통화를 Azure로
+  보내고, 앱은 webhook으로 통화를 수락합니다.
+- **Azure Communication Services(ACS):** Azure의 통화·전화번호 서비스입니다. Call
+  Automation이 전화·VoIP 통화를 처리하고, 녹음하거나 오디오를 앱 서버로 스트리밍합니다.
+  [양방향 스트리밍](https://learn.microsoft.com/azure/communication-services/how-tos/call-automation/audio-streaming-quickstart)을
+  켜면 앱 서버가 Azure OpenAI 같은 AI 서비스로 처리한 응답 음성을 통화로 돌려보낼 수 있습니다.
+
+<div class="voice-diagram-scroll" role="region" aria-label="연결 방식별 음성 경로와 원음 캡처 지점 도식 가로 스크롤" tabindex="0" markdown="1">
+
+[![WebRTC, WebSocket, SIP, Azure Communication Services 연결 방식별 음성 경로와 원음 캡처 지점](../images/azure-voice-connection-paths.svg)](../images/azure-voice-connection-paths.svg)
+
+</div>
 
 | 연결 방식 | 음성 경로 | 애플리케이션이 원음을 저장하는 방법 |
 |---|---|---|

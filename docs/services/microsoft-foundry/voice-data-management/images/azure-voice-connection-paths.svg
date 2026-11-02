@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1140" viewBox="0 0 1280 1140" role="img" aria-labelledby="voice-connection-title voice-connection-desc">
+  <title id="voice-connection-title">WebRTC, WebSocket, SIP, Azure Communication Services 연결 방식별 음성 경로와 원음 캡처 지점</title>
+  <desc id="voice-connection-desc">네 가지 연결 방식을 위에서 아래로 비교합니다. WebRTC는 브라우저가 앱 서비스에서 임시 토큰을 받아 Azure Realtime과 음성을 직접 주고받으며, 앱 서비스는 선택적으로 관찰자 WebSocket으로 세션을 녹음·제어합니다. WebSocket은 클라이언트 음성이 앱 서버를 거쳐 Azure Realtime으로 가므로 앱 서버에서 원음을 저장할 수 있습니다. SIP는 전화망 SIP 트렁크가 Azure Realtime으로 통화를 보내고, 앱은 webhook으로 수신 이벤트를 받아 통화를 수락한 뒤 WebSocket으로 이벤트를 받고 명령을 보냅니다. Azure Communication Services는 전화·VoIP 통화를 Call Automation이 처리하고, Call Recording으로 녹음 파일을 임시 저장소나 고객 Blob Storage에 저장하거나, 오디오 스트리밍으로 앱 서버에 실시간 오디오를 보내며 앱 서버가 AI 서비스로 중계한 응답 음성을 통화로 돌려보냅니다.</desc>
+  <defs>
+    <marker id="vc-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#334155"/>
+    </marker>
+    <marker id="vc-arrow-start" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto">
+      <polygon points="8 0, 0 3, 8 6" fill="#334155"/>
+    </marker>
+    <marker id="vc-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#0284c7"/>
+    </marker>
+    <style>
+      text{font-family:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#0f172a}
+      .title{font-size:28px;font-weight:700}
+      .subtitle{font-size:13px;fill:#475569}
+      .source{font-size:12px;fill:#64748b}
+      .zone-label{font-size:12px;font-weight:700;fill:#475569;letter-spacing:.04em}
+      .node{font-size:16px;font-weight:700}
+      .body{font-size:13px;fill:#334155}
+      .small{font-size:12px;fill:#64748b}
+      .tag{font-size:12px;font-weight:700;letter-spacing:.04em}
+      .label{font-size:12px;font-weight:700;fill:#475569}
+      .link-label{font-size:12px;font-weight:700;fill:#0369a1}
+      .capture{font-size:12px;font-weight:700;fill:#9a3412}
+      .legend{font-size:12px;fill:#64748b}
+    </style>
+  </defs>
+
+  <rect width="1280" height="1140" fill="#ffffff"/>
+  <text x="40" y="44" class="title">연결 방식별 음성 경로와 원음 캡처 지점</text>
+  <text x="40" y="70" class="subtitle">실선은 음성, 점선은 토큰·이벤트·제어 메시지, 주황 점은 애플리케이션이 원음을 저장할 수 있는 지점</text>
+  <text x="1240" y="70" text-anchor="end" class="source">공식 문서를 기반으로 한 구성 예시</text>
+
+  <!-- Lane 1: WebRTC -->
+  <rect x="40" y="96" width="1200" height="212" rx="8" fill="#eff6ff" fill-opacity=".58" stroke="#93c5fd"/>
+  <rect x="52" y="104" width="470" height="22" rx="3" fill="#ffffff"/>
+  <text x="64" y="120" class="zone-label">WEBRTC · 브라우저·모바일 앱이 Azure와 직접 연결</text>
+
+  <rect x="80" y="168" width="220" height="86" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="100" y="190" class="tag" fill="#475569">CLIENT</text>
+  <text x="190" y="216" text-anchor="middle" class="node">브라우저 · 모바일 앱</text>
+  <text x="190" y="238" text-anchor="middle" class="small">마이크·스피커</text>
+
+  <rect x="520" y="136" width="240" height="70" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="540" y="156" class="tag" fill="#475569">APP SERVICE</text>
+  <text x="640" y="182" text-anchor="middle" class="node">토큰 서비스</text>
+  <text x="640" y="199" text-anchor="middle" class="small">임시 토큰 발급 · 세션 설정</text>
+
+  <rect x="960" y="168" width="240" height="86" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="1.6"/>
+  <text x="980" y="190" class="tag" fill="#075985">AZURE</text>
+  <text x="1080" y="216" text-anchor="middle" class="node">Realtime API</text>
+  <text x="1080" y="238" text-anchor="middle" class="small">음성 모델</text>
+
+  <path d="M300 186 H410 V171 H520" fill="none" stroke="#0284c7" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#vc-link)"/>
+  <text x="330" y="162" class="link-label">① 임시 토큰 요청</text>
+  <path d="M302 236 H958" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="630" y="228" text-anchor="middle" class="label">② 음성 직접 송수신(WebRTC) · 앱 서버를 거치지 않음</text>
+  <path d="M760 171 H860 V186 H958" fill="none" stroke="#0284c7" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#vc-link)"/>
+  <text x="786" y="160" class="link-label">③ 선택: 관찰자 WebSocket(녹음·제어)</text>
+
+  <circle cx="300" cy="168" r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="760" cy="136" r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <text x="80" y="290" class="capture">캡처 지점: 브라우저에서 따로 녹음해 업로드 · 앱 서비스가 세션 협상을 대신 처리하면 관찰자 WebSocket으로 세션 녹음</text>
+
+  <!-- Lane 2: WebSocket -->
+  <rect x="40" y="326" width="1200" height="182" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <rect x="52" y="334" width="470" height="22" rx="3" fill="#ffffff"/>
+  <text x="64" y="350" class="zone-label">WEBSOCKET · 앱 서버가 클라이언트와 Azure 사이를 중계</text>
+
+  <rect x="80" y="384" width="220" height="80" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="100" y="406" class="tag" fill="#475569">CLIENT</text>
+  <text x="190" y="432" text-anchor="middle" class="node">앱 · 단말</text>
+  <text x="190" y="452" text-anchor="middle" class="small">음성을 앱 서버로 전송</text>
+
+  <rect x="520" y="384" width="240" height="80" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="540" y="406" class="tag" fill="#475569">APP SERVER</text>
+  <text x="640" y="432" text-anchor="middle" class="node">중계 서버</text>
+  <text x="640" y="452" text-anchor="middle" class="small">오디오를 base64 JSON 이벤트로 전달</text>
+
+  <rect x="960" y="384" width="240" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="1.6"/>
+  <text x="980" y="406" class="tag" fill="#075985">AZURE</text>
+  <text x="1080" y="432" text-anchor="middle" class="node">Realtime API</text>
+  <text x="1080" y="452" text-anchor="middle" class="small">음성 모델</text>
+
+  <path d="M302 424 H518" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="410" y="416" text-anchor="middle" class="label">음성</text>
+  <path d="M762 424 H958" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="860" y="416" text-anchor="middle" class="label">음성 + 이벤트(WebSocket)</text>
+
+  <circle cx="760" cy="384" r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <text x="80" y="492" class="capture">캡처 지점: 앱 서버가 주고받는 오디오를 그대로 저장</text>
+
+  <!-- Lane 3: SIP -->
+  <rect x="40" y="526" width="1200" height="226" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <rect x="52" y="534" width="470" height="22" rx="3" fill="#ffffff"/>
+  <text x="64" y="550" class="zone-label">SIP · 전화망 통화를 Azure가 직접 받음</text>
+
+  <rect x="80" y="576" width="220" height="80" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="100" y="598" class="tag" fill="#475569">PHONE</text>
+  <text x="190" y="624" text-anchor="middle" class="node">전화 · SIP 트렁크</text>
+  <text x="190" y="644" text-anchor="middle" class="small">통신사·PBX에서 SIP로 연결</text>
+
+  <rect x="520" y="646" width="240" height="70" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="540" y="666" class="tag" fill="#475569">APP SERVER</text>
+  <text x="640" y="692" text-anchor="middle" class="node">webhook 서버</text>
+  <text x="640" y="708" text-anchor="middle" class="small">통화 수락·거절·세션 설정</text>
+
+  <rect x="960" y="576" width="240" height="140" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="1.6"/>
+  <text x="980" y="598" class="tag" fill="#075985">AZURE</text>
+  <text x="1080" y="624" text-anchor="middle" class="node">Realtime API (SIP)</text>
+  <text x="1080" y="644" text-anchor="middle" class="small">East US 2 · Sweden Central</text>
+
+  <path d="M302 606 H958" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="630" y="598" text-anchor="middle" class="label">음성(SIP 통화)</text>
+  <path d="M960 664 H762" fill="none" stroke="#0284c7" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#vc-link)"/>
+  <text x="860" y="656" text-anchor="middle" class="link-label">① 수신 이벤트(webhook)</text>
+  <path d="M760 700 H958" fill="none" stroke="#0284c7" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#vc-link)"/>
+  <text x="860" y="692" text-anchor="middle" class="link-label">② 수락 API · WebSocket(이벤트·명령)</text>
+
+  <text x="80" y="738" class="capture">캡처 지점: 문서는 이 WebSocket을 이벤트·명령용으로 설명 · 통화 원음은 전화 채널(ACS 등)에서 녹음</text>
+
+  <!-- Lane 4: Azure Communication Services -->
+  <rect x="40" y="770" width="1200" height="266" rx="8" fill="#f0fdf4" fill-opacity=".7" stroke="#86efac"/>
+  <rect x="52" y="778" width="620" height="22" rx="3" fill="#ffffff"/>
+  <text x="64" y="794" class="zone-label">AZURE COMMUNICATION SERVICES · 전화·VoIP 통화를 ACS가 처리</text>
+
+  <rect x="80" y="836" width="200" height="80" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="100" y="858" class="tag" fill="#475569">PHONE</text>
+  <text x="180" y="884" text-anchor="middle" class="node">전화(PSTN) · VoIP</text>
+  <text x="180" y="904" text-anchor="middle" class="small">발신자</text>
+
+  <rect x="380" y="826" width="260" height="100" rx="8" fill="#ffffff" stroke="#16a34a" stroke-width="1.6"/>
+  <text x="400" y="848" class="tag" fill="#166534">ACS</text>
+  <text x="510" y="876" text-anchor="middle" class="node">Call Automation</text>
+  <text x="510" y="898" text-anchor="middle" class="small">통화 제어 · 녹음 · 오디오 스트리밍</text>
+
+  <rect x="760" y="826" width="200" height="100" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+  <text x="780" y="848" class="tag" fill="#475569">APP SERVER</text>
+  <text x="860" y="876" text-anchor="middle" class="node">WebSocket 서버</text>
+  <text x="860" y="898" text-anchor="middle" class="small">PCM 16·24kHz mono</text>
+
+  <rect x="1040" y="826" width="170" height="100" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="1.6"/>
+  <text x="1060" y="848" class="tag" fill="#075985">AI SERVICE</text>
+  <text x="1125" y="876" text-anchor="middle" class="node">Realtime 등</text>
+  <text x="1125" y="898" text-anchor="middle" class="small">음성 모델</text>
+
+  <rect x="380" y="960" width="260" height="56" rx="6" fill="#ffffff" stroke="#16a34a" stroke-dasharray="5,4"/>
+  <text x="510" y="984" text-anchor="middle" class="body">녹음 파일 · ACS 임시 저장소 24시간</text>
+  <text x="510" y="1004" text-anchor="middle" class="small">BYOS를 설정하면 고객 Blob Storage</text>
+
+  <path d="M282 876 H378" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="330" y="868" text-anchor="middle" class="label">통화</text>
+  <path d="M642 876 H758" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="700" y="868" text-anchor="middle" class="label">오디오 스트리밍</text>
+  <path d="M962 876 H1038" fill="none" stroke="#334155" stroke-width="2.6" marker-start="url(#vc-arrow-start)" marker-end="url(#vc-arrow)"/>
+  <text x="1000" y="868" text-anchor="middle" class="label">중계</text>
+  <path d="M510 926 V958" fill="none" stroke="#334155" stroke-width="2.2" marker-end="url(#vc-arrow)"/>
+  <text x="522" y="946" class="label">Call Recording</text>
+
+  <circle cx="640" cy="960" r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="960" cy="826" r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <text x="700" y="980" class="capture">캡처 지점: Call Recording 녹음 파일</text>
+  <text x="700" y="1000" class="capture">또는 앱 서버가 받은 스트리밍 오디오</text>
+
+  <!-- Notes and legend -->
+  <text x="40" y="1062" class="small">ACS 오디오 스트리밍은 양방향이라 앱 서버가 AI 서비스로 중계한 응답 음성을 통화로 돌려보낼 수 있습니다.</text>
+  <text x="40" y="1084" class="small">ACS의 Call Automation·Call Recording·오디오 스트리밍은 2028-09-30 이후 Teams 연동 시나리오에서만 지원됩니다.</text>
+
+  <line x1="40" y1="1100" x2="1240" y2="1100" stroke="#cbd5e1"/>
+  <line x1="64" y1="1120" x2="112" y2="1120" stroke="#334155" stroke-width="2.6" marker-end="url(#vc-arrow)"/>
+  <text x="124" y="1124" class="legend">음성(오디오)</text>
+  <line x1="236" y1="1120" x2="284" y2="1120" stroke="#0284c7" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#vc-link)"/>
+  <text x="296" y="1124" class="legend">토큰·이벤트·제어</text>
+  <circle cx="430" cy="1120" r="7" fill="#f97316" stroke="#ffffff" stroke-width="2"/>
+  <text x="446" y="1124" class="legend">원음 캡처 지점</text>
+  <text x="1240" y="1124" text-anchor="end" class="source">원문 확인 2026-11-02 · 리전·기능 지원 범위 별도 확인</text>
+</svg>
