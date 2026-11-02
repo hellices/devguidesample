@@ -1,0 +1,157 @@
+---
+title: "KEDA Prometheus scaler: Managed Prometheus 요청률 기반 확장"
+description: Azure Monitor managed service for Prometheus에서 podinfo의 HTTP 요청률을 조회하는 KEDA Prometheus scaler 구성과, 1회 실측한 확장·축소 시점과 NAP 노드 추가 시간을 다룹니다.
+document_type: lab
+services: [azure-kubernetes-service, azure-monitor]
+technologies: [kubernetes, keda, prometheus]
+tags: [build, operate]
+status: verified
+verification_status: verified
+sources_checked_at: 2026-11-02
+official_sources:
+  - title: Integrations with Kubernetes Event-driven Autoscaling (KEDA) on Azure Kubernetes Service (AKS)
+    url: https://learn.microsoft.com/azure/aks/keda-integrations
+  - title: Securely scale your applications using the KEDA add-on and workload identity on Azure Kubernetes Service (AKS)
+    url: https://learn.microsoft.com/azure/aks/keda-workload-identity
+  - title: Create custom Prometheus scrape job from your Kubernetes cluster using CRDs
+    url: https://learn.microsoft.com/azure/azure-monitor/containers/prometheus-metrics-scrape-crd
+  - title: KEDA Prometheus scaler
+    url: https://keda.sh/docs/2.19/scalers/prometheus/
+  - title: KEDA scaling deployments, StatefulSets and custom resources
+    url: https://keda.sh/docs/2.19/concepts/scaling-deployments/
+  - title: Simplified application autoscaling with Kubernetes Event-driven Autoscaling (KEDA) add-on
+    url: https://learn.microsoft.com/azure/aks/keda-about
+last_verified: 2026-11-02
+review_cycle_days: 90
+estimated_time: 60m
+cost: paid
+cleanup_required: true
+topic_order: 1
+---
+
+# KEDA Prometheus scaler: Managed Prometheus 요청률 기반 확장
+
+앱이 내보내는 Prometheus counter를 Azure Monitor managed service for
+Prometheus(Managed Prometheus)로 수집합니다. KEDA add-on의 내장 `prometheus`
+scaler가 Workload Identity로 요청률을 조회하고, HPA가 Pod당 목표값으로 replica를
+계산합니다. 초당 400건 부하의 1회
+실측에서 Pod는 약 70초 뒤 늘기 시작해 약 130초에 목표 수에 도달했습니다. 새 Pod를
+담을 NAP 노드가 준비되고 모든 Pod가 Ready가 되기까지는 약 2분이 더 걸렸습니다.
+
+## 확장 조건: Pod당 요청률 목표와 query
+
+- 지표: podinfo의 `http_request_duration_seconds_count` 중 `path="root"`(probe·scrape 제외)
+- query: `sum(rate(http_request_duration_seconds_count{namespace="demo", path="root"}[1m]))`
+- 목표: `threshold: 50` → replica = ceil(전체 RPS / 50), 1–20개
+- 지원 범위: Prometheus scaler와 Managed Prometheus 조합은 AKS KEDA add-on 지원
+  범위입니다. 자체 운영 Prometheus는 범위 밖입니다.
+
+## 준비: azd up으로 Workload Identity·KEDA·Managed Prometheus 구성
+
+[HPA·KEDA 가이드](../index.md)의 sample `keda-request-scaling`을 저장소 루트에서 실행합니다.
+
+```bash
+cd docs/services/azure-kubernetes-service/hpa-keda-autoscaling/samples/keda-request-scaling
+azd env new keda-lab --location eastus2
+azd up
+```
+
+- Bicep이 NAP 클러스터에 OIDC issuer·Workload Identity와 KEDA add-on을 함께 켜고, Azure
+  Monitor workspace와 KEDA용 관리 ID를 만듭니다. 관리 ID에는 `keda-operator` service
+  account에 대한 federated credential과 workspace의 `Monitoring Data Reader` 역할이 붙습니다.
+- postprovision hook이 Managed Prometheus를 켜고 `keda-operator`에 관리 ID annotation을 단 뒤
+  재시작합니다. Workload Identity 환경 변수는 새 Pod에만 주입되므로, KEDA를 먼저 켠
+  클러스터에서도 재시작으로 적용됩니다.
+- 관리 ID의 client ID와 workspace query endpoint는 azd 환경 값(`KEDA_CLIENT_ID`,
+  `AMW_QUERY_ENDPOINT`)에 저장되고, 다음 단계에서 그대로 쓰입니다.
+
+## 비용: 노드, workspace 수집량, AGC, 부하 시간
+
+- AKS 시스템 노드 2대와 확장 중 NAP가 만드는 노드(이 실습에서는 최대 4대 추가)
+- Azure Monitor workspace의 Prometheus 수집·조회량
+- 기본 `azd up`은 [AGC 실습](../azure-monitor-agc/index.md)용 Application Gateway for
+  Containers도 만듭니다(AGC·frontend·association 시간과 capacity unit 과금). Prometheus
+  패턴만 실습하려면 `azd up` 전에 `azd env set ENABLE_AGC false`를 실행합니다.
+- 실습 후 `azd down --purge --force`로 리소스 그룹을 삭제하면 과금이 멈춥니다.
+
+## 실행: postdeploy hook의 ScaledObject 적용과 k6 부하
+
+```bash
+azd env set PATTERN prometheus-rps
+azd hooks run postdeploy      # 결과: out/<환경 이름>/prometheus-rps.csv, prometheus-rps-k6.txt, prometheus-rps-state.txt
+```
+
+hook은 이전 `ScaledObject`를 지우고, 워크로드 노드가 1대로 줄어들면 다음 순서로 진행합니다.
+
+1. `prometheus/scaledobject.yaml`의 `<keda-client-id>`, `<amw-query-endpoint>`를 azd 환경 값으로
+   채워 적용하고 `READY=True`를 기다립니다.
+2. `load/watch-replicas.sh`로 replica·HPA 지표·워크로드 노드 수를 5초마다 1200초 동안 기록합니다.
+3. `load/k6-job.yaml`을 시스템 노드에서 실행합니다(1분 ramp-up → 400 RPS 5분 유지 → 30초 감소).
+
+podinfo와 PodMonitor는 postprovision에서 배포합니다. PodMonitor는 OSS와 같은 스펙이지만 API
+group이 `azmonitoring.coreos.com/v1`입니다.
+
+## 실측 결과: 첫 확장 시점과 NAP 노드 준비 시간
+
+k6 컨테이너 시작을 0초로 둔 1회 관측값입니다(AKS 1.36.5, KEDA 2.19, 워크로드 노드는 NAP
+`default` NodePool의 on-demand VM). 클러스터 안의 watcher Job이 5초 간격으로 기록한
+`results/prometheus-rps.csv` 기준이므로 시점은 구간으로 표시했습니다.
+
+| 시점 | 관측 |
+|---|---|
+| 0초 | k6 시작, 1분간 0 → 400 RPS |
+| 약 25–30초 | query 값이 0에서 늘기 시작 |
+| 약 70초 | 첫 확장 1 → 3 |
+| 약 130초 | 목표 replica 8 도달 |
+| 약 105–200초 | NAP가 워크로드 노드 1 → 5대로 확장 |
+| 약 255초 | 8개 Pod 모두 Ready |
+| 약 390초 | k6 부하 종료(1분 + 5분 + 30초) |
+| 약 450초 | query 값 0(`rate(...[1m])` 창이 부하 종료 시점을 지난 뒤) |
+| 약 590–725초 | 8 → 1로 축소(마지막 replica 8 권장 시점 약 293초 + HPA 축소 안정화 창 300초) |
+| 약 910초 | NAP consolidation으로 워크로드 노드 1대로 정리 |
+
+- 축소는 부하가 끝난 약 390초나 query 값이 0이 된 약 450초가 아니라 그보다 이른 시점을 기준으로 시작했습니다. k6는 360초까지
+  초당 400건을 유지했지만 HPA가 읽은 Pod당 query 값은 약 295초부터 목표 50 아래(11.5~37.1)로
+  내려갔고, 권장 replica가 8 미만이 됐습니다. 축소 안정화 창은 최근 300초의 가장 큰 권장값을
+  쓰므로, 마지막으로 8을 권장한 약 293초에서 300초가 지난 약 590초에 첫 축소가 일어났습니다.
+  부하 중 query 값이 낮아진 원인은 이번 기록으로 확인하지 못했습니다.
+- k6 결과(`results/k6-summary.csv`): 137,999건, 실패 0건, p99 1 ms. podinfo는 가벼워 2개로도 처리할 수 있었지만,
+  replica 수는 설정한 Pod당 RPS 목표를 그대로 따랐습니다.
+- 확장 지연은 `rate(...[1m])` 창, 15초 scrape, 수집 지연, HPA sync 주기(기본 15초)가
+  더해진 것으로 봅니다(구간별 지연은 측정하지 않음). 1 → N 구간에서는 HPA가 sync 주기마다 KEDA metrics server를 거쳐
+  query를 실행하므로, `useCachedMetrics`를 쓰지 않는 한 `pollingInterval`은 이 지연에
+  영향을 주지 않습니다(`pollingInterval`은 0 ↔ 1 판단 주기). 더 빨리 반응해야 하면
+  rate 창과 scrape 간격을 줄이고, 그만큼 커지는 흔들림도 함께 확인합니다.
+
+## 성공 기준: ScaledObject Ready와 RPS를 따르는 HPA 목표
+
+postdeploy hook은 마지막에 ScaledObject·HPA를 지우고 podinfo를 1개로 되돌립니다. 그래서 아래 `kubectl`
+확인은 hook 실행 중 다른 터미널에서 하고, 종료 후에는 패턴이 끝난 직후 저장한
+`out/<환경 이름>/<패턴>-state.txt`(ScaledObject·HPA·podinfo replica)와 결과 CSV의 `desired`·`hpa_metric` 열로 확인합니다.
+
+- `kubectl -n demo get scaledobject podinfo`: `READY=True`, 부하 중 `ACTIVE=True`
+- `kubectl -n demo get hpa keda-hpa-podinfo`: `TARGETS`가 `<값>/50 (avg)`로 갱신
+- 부하 중 replica가 `ceil(RPS/50)` 근처에 머물고 요청 실패가 없어야 합니다.
+
+## 정리: azd down
+
+```bash
+azd down --purge --force
+```
+
+## 문제 해결: 인증·query 오류와 ScaledObject 이벤트
+
+| 증상 | 원인과 조치 |
+|---|---|
+| `TARGETS`가 `<unknown>` | KEDA ID에 `Monitoring Data Reader`가 없거나 federated credential subject가 `system:serviceaccount:kube-system:keda-operator`가 아님 |
+| `ScaledObject` 생성 실패 | 같은 Deployment를 대상으로 하는 HPA가 이미 있어 KEDA admission webhook이 거부. 기존 HPA를 삭제하거나 `scaledobject.keda.sh/transfer-hpa-ownership: "true"` annotation과 `advanced.horizontalPodAutoscalerConfig.name`으로 소유권을 넘김 |
+| query 값이 계속 0 | PodMonitor가 다른 namespace의 Pod를 선택하거나 port 이름 불일치. `up{job="demo/podinfo"}` 확인 |
+| replica가 예상보다 많음 | probe·scrape 요청까지 세는 지표 사용. 앱 경로로 필터링 |
+
+## 공식 참고 자료
+
+- [Integrations with KEDA on AKS](https://learn.microsoft.com/azure/aks/keda-integrations)
+- [KEDA add-on and workload identity](https://learn.microsoft.com/azure/aks/keda-workload-identity)
+- [Create custom Prometheus scrape job using CRDs](https://learn.microsoft.com/azure/azure-monitor/containers/prometheus-metrics-scrape-crd)
+- [KEDA Prometheus scaler](https://keda.sh/docs/2.19/scalers/prometheus/)
+- [KEDA scaling deployments: caching metrics](https://keda.sh/docs/2.19/concepts/scaling-deployments/#caching-metrics)

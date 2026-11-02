@@ -1,0 +1,124 @@
+# 마이그레이션 중 가용성을 확인하는 대상 앱(podinfo)과 0.2초 간격 요청 클라이언트
+# 클라이언트는 응답을 기다리지 않고 0.2초 고정 주기로 요청을 시작하고(요청 timeout 1초), 요청 시작 시각과 HTTP 코드를 남깁니다.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: migrate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: migrate
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      # 측정 대상은 마이그레이션되는 노드(user 풀, 이후 NAP 노드)입니다. system 풀에는 배치하지 않습니다.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.azure.com/mode
+                    operator: NotIn
+                    values: [system]
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: web
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.15.0
+          ports:
+            - containerPort: 9898
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9898
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: "1"
+              memory: 256Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  namespace: migrate
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: migrate
+spec:
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 9898
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: migrate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client
+  template:
+    metadata:
+      labels:
+        app: client
+    spec:
+      # 마이그레이션 대상 노드 밖(system pool)에서 요청을 보냅니다.
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+      containers:
+        - name: curl
+          image: mcr.microsoft.com/azurelinux/base/core:3.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # 최소 이미지에 curl이 없을 수 있으므로 먼저 설치합니다. 설치에 실패하면 측정하지 않고 종료합니다.
+              tdnf -q -y install ca-certificates curl >/dev/null || exit 1
+              # 실패 요청이 timeout까지 기다려도 다음 요청은 예약된 시각에 시작합니다.
+              # 프로세스가 멈춰 지난 슬롯은 몰아서 보내지 않고 현재 시각부터 0.2초 뒤로 다시 잡습니다.
+              next=$(date +%s%N)
+              while true; do
+                (
+                  at=$(date -u +%FT%T.%3NZ)
+                  code=$(curl -s -o /dev/null -m 1 -w '%{http_code}' http://web.migrate.svc/healthz || true)
+                  echo "$at $code"
+                ) &
+                next=$((next + 200000000))
+                now=$(date +%s%N)
+                if (( next <= now )); then next=$((now + 200000000)); fi
+                wait_ns=$((next - now))
+                sleep "$(printf '%d.%09d' $((wait_ns / 1000000000)) $((wait_ns % 1000000000)))"
+              done
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi

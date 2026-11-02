@@ -1,0 +1,6 @@
+scenario,run,pods_ready_s,placeholder_rescheduled_s,note
+cas-overprov,1,126,127,Deployment readyReplicas 갱신 지연. 이벤트상 컨테이너는 생성 1초 뒤 시작
+cas-overprov,2,3,76,
+nap-overprov,1,22,100,
+nap-overprov,2,11,93,
+nap-overprov2,1,13,96,3번째 Pod는 두 번째 선점까지 약 10초 대기

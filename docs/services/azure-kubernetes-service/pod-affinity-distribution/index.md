@@ -24,7 +24,7 @@ redirect_from:
 
 # ✅ AKS에서 Pod 분산 예제
 
-**PodAntiAffinity + TopologySpreadConstraints + HPA 예시**
+**PodAntiAffinity + TopologySpreadConstraints 예시와 HPA 연계**
 
 ***
 
@@ -78,28 +78,12 @@ spec:
 
 ***
 
-## ✅ HPA YAML
+## ✅ HPA로 replica 수 조정
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: my-app-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: my-app
-  minReplicas: 4
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60
-```
+분산된 Deployment의 replica 수를 부하에 맞추는 HPA 예시, 동작 기본값과
+KEDA를 이용한 요청 수 기반 확장은
+[AKS KEDA와 HPA: KEDA가 만든 HPA로 외부 지표 확장, 요청 수 기반 패턴](../hpa-keda-autoscaling/index.md)에서
+다룹니다.
 
 ***
 
@@ -110,7 +94,7 @@ spec:
 *   `ScheduleAnyway` 옵션으로 스케줄링 실패 방지.
 *   라벨(`app: my-app`)은 Deployment와 Constraints 모두 동일하게 유지.
 *   AZ 기반 분산: `topologyKey: topology.kubernetes.io/zone`로 변경 가능.
-*   HPA와 함께 사용 시 **Cluster Autoscaler 활성화** 권장.
+*   HPA와 함께 사용 시 노드 autoscaler(Cluster Autoscaler 또는 [NAP](../node-auto-provisioning/index.md)) 활성화 권장. `ScheduleAnyway`는 기존 노드에 배치할 수 있으면 Pod를 Pending으로 만들지 않으므로 이 설정만으로 노드가 늘지는 않습니다. 다만 다른 이유로 Pending인 Pod에 노드를 만들 때 NAP(Karpenter)는 `ScheduleAnyway` spread도 먼저 지키려 해 노드를 예상보다 더 만들 수 있습니다([Karpenter Scheduling](https://karpenter.sh/docs/concepts/scheduling/)). 노드를 늘려서라도 분산을 강제하려면 `DoNotSchedule`과 충분한 autoscaler 한도가 필요합니다.
 
 ***
 

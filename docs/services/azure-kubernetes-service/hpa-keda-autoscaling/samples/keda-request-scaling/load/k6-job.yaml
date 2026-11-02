@@ -1,0 +1,70 @@
+# TARGET_URL과 HOST_HEADER를 바꿔 같은 부하를 Service, HTTP Add-on interceptor, AGC frontend에 보냅니다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-script
+  namespace: demo
+data:
+  script.js: |
+    import http from 'k6/http';
+    export const options = {
+      scenarios: {
+        ramp: {
+          executor: 'ramping-arrival-rate',
+          // 공개 결과와 같은 조건을 유지하려고 maxVUs를 1000으로 둡니다. 400 RPS에서 평균 응답이 2.5초를 넘으면
+          // VU가 모자라 목표율을 유지하지 못하고 dropped_iterations가 생깁니다(HTTP Add-on 0개 시작에서 관측).
+          // 결과를 읽을 때는 http_reqs와 dropped_iterations를 함께 봅니다.
+          startRate: 0, timeUnit: '1s', preAllocatedVUs: 200, maxVUs: 1000,
+          stages: [
+            { target: 400, duration: '1m' },
+            { target: 400, duration: '5m' },
+            { target: 0, duration: '30s' },
+          ],
+        },
+      },
+      // URL 오타·DNS·연결 실패처럼 부하가 대상에 거의 전달되지 않으면 k6가 nonzero로 끝나 Job이 Failed가 됩니다.
+      // 상한 50%는 공개 결과의 가장 높은 실패율(HTTP Add-on 0개 시작, 전송 요청의 7.6%)을 측정 결과로 남기기 위한 값입니다.
+      thresholds: {
+        http_req_failed: ['rate<0.5'],
+        http_reqs: ['count>0'],
+      },
+    };
+    const headers = __ENV.HOST_HEADER ? { Host: __ENV.HOST_HEADER } : {};
+    export default function () { http.get(__ENV.TARGET_URL, { headers, timeout: '10s' }); }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6
+  namespace: demo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      # 공개 결과는 k6를 시스템 풀에서 실행해 측정했습니다. 워크로드 노드 수와 확장 지표에 섞이지 않게 같은 위치를 유지합니다.
+      # requests로 시스템 풀에 k6 몫(CPU 1, 메모리 1Gi)을 예약해 다른 시스템 Pod와 자원을 다투지 않게 합니다.
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+      containers:
+        - name: k6
+          image: grafana/k6:1.8.2
+          args: ["run", "--summary-trend-stats=avg,p(95),p(99)", "/scripts/script.js"]
+          resources:
+            requests: { cpu: "1", memory: 1Gi }
+            limits: { cpu: "2", memory: 2Gi }
+          env:
+            - name: TARGET_URL
+              value: http://podinfo.demo.svc/
+            - name: HOST_HEADER
+              value: ""
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: k6-script

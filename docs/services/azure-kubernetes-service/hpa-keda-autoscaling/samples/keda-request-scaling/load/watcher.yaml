@@ -1,0 +1,116 @@
+# replica·HPA 지표·워크로드 노드 수를 클러스터 안에서 5초마다 기록하는 Job입니다.
+# 로컬 네트워크가 끊겨도 기록 간격이 흔들리지 않도록 시스템 노드에서 실행합니다.
+# postdeploy hook이 load/watch-replicas.sh로 ConfigMap watch-script를 만든 뒤 적용합니다.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: watcher
+  namespace: demo
+---
+# 노드 수 조회만 클러스터 범위로 두고, Deployment·HPA 조회는 demo namespace Role로 제한합니다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: demo-watcher
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: demo-watcher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: demo-watcher
+subjects:
+  - kind: ServiceAccount
+    name: watcher
+    namespace: demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: watcher
+  namespace: demo
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: watcher
+  namespace: demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: watcher
+subjects:
+  - kind: ServiceAccount
+    name: watcher
+    namespace: demo
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: watcher
+  namespace: demo
+spec:
+  # 패키지 설치·다운로드 재시도로도 실패하면 Pod를 최대 2번 다시 만듭니다.
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: watcher
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.azure.com/mode: system
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+      containers:
+        - name: watch
+          image: mcr.microsoft.com/azurelinux/base/core:3.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              # 일시적인 네트워크 오류에 대비해 최대 5번(10초 간격) 시도합니다.
+              retry() { local i; for i in 1 2 3 4 5; do "$@" && return 0; sleep 10; done; return 1; }
+              # 최소 이미지라 kubectl 다운로드 전에 ca-certificates와 curl을 설치합니다.
+              retry tdnf -q -y install ca-certificates curl >/dev/null
+              # 시스템 노드의 CPU 아키텍처(amd64·arm64)에 맞는 kubectl을 받습니다.
+              case $(uname -m) in
+                x86_64) ARCH=amd64 ;;
+                aarch64) ARCH=arm64 ;;
+                *) echo "지원하지 않는 아키텍처: $(uname -m)" >&2; exit 1 ;;
+              esac
+              # 내려받기마다 시간 제한을 두고, 같은 릴리스의 sha256으로 바이너리를 확인합니다.
+              url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
+              retry curl -sSfL --connect-timeout 10 -m 300 -o /tmp/kubectl "$url"
+              retry curl -sSfL --connect-timeout 10 -m 60 -o /tmp/kubectl.sha256 "$url.sha256"
+              echo "$(cat /tmp/kubectl.sha256)  /tmp/kubectl" | sha256sum -c --quiet -
+              chmod +x /tmp/kubectl
+              PATH=/tmp:$PATH exec bash /scripts/watch-replicas.sh
+          env:
+            - name: KUBECTL_VERSION
+              value: v1.36.5
+            - name: DURATION
+              value: "1200"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+      volumes:
+        - name: script
+          configMap:
+            name: watch-script

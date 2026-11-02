@@ -1,0 +1,45 @@
+# <alb-subnet-id>: AGC add-on이 AKS 관리 VNet에 만든 aks-appgateway 서브넷 ID
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: alb-infra
+---
+apiVersion: alb.networking.azure.io/v1
+kind: ApplicationLoadBalancer
+metadata:
+  name: alb-lab
+  namespace: alb-infra
+spec:
+  associations:
+    - <alb-subnet-id>
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: web
+  namespace: demo
+  annotations:
+    alb.networking.azure.io/alb-namespace: alb-infra
+    alb.networking.azure.io/alb-name: alb-lab
+spec:
+  gatewayClassName: azure-alb-external
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  parentRefs:
+    - name: web
+  rules:
+    - backendRefs:
+        - name: podinfo
+          port: 80

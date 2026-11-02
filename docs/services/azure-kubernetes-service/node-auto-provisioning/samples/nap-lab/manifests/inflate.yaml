@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inflate
+  namespace: bench
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: inflate
+  template:
+    metadata:
+      labels:
+        app: inflate
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: mcr.microsoft.com/oss/kubernetes/pause:3.6
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi

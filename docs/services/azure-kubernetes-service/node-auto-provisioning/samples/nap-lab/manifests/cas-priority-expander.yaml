@@ -1,0 +1,13 @@
+# CAS가 big 풀(Standard_D96ds_v7)을 먼저 시도하고, 실패하면 user 풀(Standard_D4ds_v7)을 쓰도록 합니다.
+# cluster autoscaler profile에 expander=priority가 설정되어 있어야 합니다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-autoscaler-priority-expander
+  namespace: kube-system
+data:
+  priorities: |-
+    50:
+      - .*big.*
+    10:
+      - .*user.*

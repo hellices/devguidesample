@@ -1,0 +1,36 @@
+# 우선순위가 낮은 placeholder Pod로 노드 여유 용량을 미리 확보합니다.
+# 실제 Pod가 Pending이 되면 scheduler가 placeholder를 선점(preempt)하고,
+# 밀려난 placeholder가 Pending이 되어 autoscaler가 다음 노드를 미리 만듭니다.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: overprovisioning
+value: -10            # CAS는 -10 미만 Pod로는 확장하지 않으므로 -10을 사용
+preemptionPolicy: Never
+globalDefault: false
+description: Placeholder pods that reserve spare node capacity.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: overprovisioning
+  namespace: bench
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: overprovisioning
+  template:
+    metadata:
+      labels:
+        app: overprovisioning
+    spec:
+      priorityClassName: overprovisioning
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: pause
+          image: mcr.microsoft.com/oss/kubernetes/pause:3.6
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi

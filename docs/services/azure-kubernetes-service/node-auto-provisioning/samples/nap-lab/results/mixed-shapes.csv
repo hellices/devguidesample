@@ -1,0 +1,8 @@
+scenario,run,ready_big,ready_mem,ready_small,all_ready_s,nodes,skus,vcpu_alloc,mem_alloc_gib,cpu_request_ratio,mem_request_ratio,usd_per_hour
+cas-one-pool,1,0,6,10,not-all-ready,6,Standard_D4as_v7x6,24,93.7,0.46,0.62,1.092
+cas-three-pools-random,1,4,6,10,92,6,Standard_F8as_v7x6,48,188.0,0.73,0.48,3.276
+cas-three-pools-random,2,4,6,10,148,11,Standard_D4as_v7x6 Standard_F8as_v7x5,64,250.4,0.55,0.36,3.822
+nap-def-v7,1,4,6,10,139,2,Standard_D32as_v7x1 Standard_D8als_v7x1,40,141.4,0.88,0.64,1.775
+nap-def-v7,2,4,6,10,102,2,Standard_D32as_v7x1 Standard_D8als_v7x1,40,141.4,0.88,0.64,1.775
+cas-three-pools-least-waste,1,4,6,10,96,7,Standard_F8as_v7x7,56,219.4,0.62,0.41,3.822
+cas-three-pools-least-waste,2,4,6,10,80,7,Standard_F8as_v7x7,56,219.4,0.62,0.41,3.822

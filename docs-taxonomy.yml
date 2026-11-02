@@ -62,6 +62,8 @@ technologies:
   grafana: Grafana
   java: Java
   kafka: Apache Kafka
+  karpenter: Karpenter
+  keda: KEDA
   kubernetes: Kubernetes
   mcp: Model Context Protocol
   micrometer: Micrometer
@@ -128,6 +130,7 @@ verification_statuses: [verified, needs-review]
 required_source_host: learn.microsoft.com
 official_source_hosts:
   - learn.microsoft.com
+  - azure.microsoft.com
   - www.copilotkit.ai
   - docs.copilotkit.ai
   - docs.ag-ui.com
@@ -137,6 +140,8 @@ official_source_hosts:
   - blog.google
   - openjdk.org
   - kubernetes.io
+  - karpenter.sh
+  - keda.sh
   - www.cncf.io
   - cncf.io
   - github.com

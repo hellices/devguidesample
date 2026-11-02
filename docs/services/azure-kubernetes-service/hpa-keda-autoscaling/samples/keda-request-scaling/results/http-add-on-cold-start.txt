@@ -1,0 +1,4 @@
+run=1 user_nodes_before=1 X-Keda-Http-Cold-Start: true code=200 total=4.697549  warm_after=0.016824
+run=2 user_nodes_before=1 X-Keda-Http-Cold-Start: true code=200 total=1.648731  warm_after=0.021381
+run=3 user_nodes_before=1 X-Keda-Http-Cold-Start: true code=200 total=2.448973  warm_after=0.004311
+run=node-cold user_nodes_before=0 X-Keda-Http-Cold-Start: true code=200 total=110.598054  warm_after=0.007987

@@ -1,0 +1,36 @@
+# interceptor가 요청을 대신 받고 대기시키므로 0개 replica에서도 첫 요청을 잃지 않습니다.
+apiVersion: http.keda.sh/v1beta1
+kind: InterceptorRoute
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  target:
+    service: podinfo
+    port: 80
+  rules:
+    - hosts:
+        - podinfo.example.com
+  scalingMetric:
+    requestRate:
+      targetValue: 50
+      window: 1m
+      granularity: 1s
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  scaleTargetRef:
+    name: podinfo
+  minReplicaCount: 0
+  maxReplicaCount: 20
+  # 0에서 깨어날 때 새 노드 준비(1~3분)보다 길어야 Pod가 Ready 되기 전에 다시 0으로 줄지 않습니다.
+  cooldownPeriod: 300
+  triggers:
+    - type: external-push
+      metadata:
+        scalerAddress: keda-add-ons-http-external-scaler.kube-system:9090
+        interceptorRoute: podinfo
