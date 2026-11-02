@@ -59,9 +59,9 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
 
 공식 문서 기준으로 프롬프트가 1,024 토큰 이상이어야 캐시 대상이 됩니다. 처음 1,024 토큰이 완전히 같아야 cache hit가 나며 이 구간에서 한 글자만 달라도 cache miss가 나고 `cached_tokens`는 0이 됩니다. 처음 1,024 토큰 뒤에서 달라지면 그 앞까지 일치한 프리픽스는 계속 적중하므로 `cached_tokens`가 0보다 클 수 있습니다. gpt-5.5 이하에서는 1,024 토큰 뒤의 적중을 128 토큰 단위로 계산하며 gpt-5.6 이상에는 이 단위가 적용되지 않습니다.
 
-### 토큰 수 지정 대신 두 파라미터로 하는 간접 제어
+### 모델별 캐시 범위 제어 방법
 
-캐시되는 토큰 수를 사용자가 직접 지정하거나 제한할 수는 없습니다. 캐시 범위는 프롬프트 프리픽스가 일치하는 길이로 자동 결정됩니다. 대신 아래 두 파라미터로 캐시 동작을 간접 제어합니다.
+gpt-5.5 이하에서는 캐시되는 토큰 수를 지정하거나 제한할 수 없습니다. 캐시 범위는 프롬프트 프리픽스가 일치하는 길이로 자동 결정되며 `prompt_cache_retention`으로 보존 정책만 고릅니다. gpt-5.6 이상에서는 `prompt_cache_key`로 캐시 라우팅을 고정하고, Standard 종량제 배포라면 [명시적 breakpoint](#prompt-cache-breakpoint)로 재사용할 프리픽스의 끝을 직접 지정할 수 있습니다.
 
 #### 캐시 유지 시간을 정하는 `prompt_cache_retention` { #prompt-cache-retention }
 
@@ -92,6 +92,40 @@ Prompt Caching은 동일한 프롬프트 프리픽스의 KV 텐서를 GPU 메모
   "model": "gpt-5.6-sol",
   "messages": [...],
   "prompt_cache_key": "support-agent-system-v2"
+}
+```
+
+#### gpt-5.6 이상 Standard 종량제의 명시적 캐시 breakpoint { #prompt-cache-breakpoint }
+
+gpt-5.6 이상에서는 콘텐츠 블록에 `prompt_cache_breakpoint: { "mode": "explicit" }`를 붙여 재사용할 프리픽스의 끝을 표시합니다. 그 블록과 앞의 모든 프롬프트가 재사용 프리픽스가 되며, breakpoint 뒤의 내용은 바뀌어도 캐시된 프리픽스가 무효화되지 않습니다. Responses API와 Chat Completions API 모두 지원하고, Standard 종량제 배포에서만 쓸 수 있습니다. PTU-M 배포와 gpt-5.5 이하는 지원하지 않으며 gpt-5.5 이하에 이 파라미터를 보내면 `400` 오류가 납니다.
+
+| 설정 | 동작 |
+|------|------|
+| `prompt_cache_options.mode: "implicit"` (기본) | 마지막 메시지에 breakpoint를 자동으로 두고 명시한 breakpoint도 함께 사용 |
+| `prompt_cache_options.mode: "explicit"` | 명시한 breakpoint만 캐시 읽기·쓰기에 사용. breakpoint가 없으면 캐싱과 cache write 과금 없음 |
+| `prompt_cache_options.ttl: "30m"` | 요청의 모든 breakpoint에 최소 30분 수명 지정. 기본값이자 유일한 값이며 보존 정책을 고르지는 않음 |
+
+- breakpoint를 둘 수 있는 블록은 Responses API의 `input_text`·`input_image`·`input_file`, Chat Completions API의 `text`·`image_url`·`input_audio`·`file`입니다.
+- breakpoint까지의 렌더링된 프리픽스가 1,024 토큰 이상이어야 캐시됩니다.
+- 요청 하나는 새 cache write를 최대 4개 만듭니다. `implicit` 모드에서는 마지막 메시지가 한 자리를 쓰므로 명시한 breakpoint는 최근 3개까지 기록됩니다.
+- 이전 대화 턴의 breakpoint는 읽기 전용이며, 캐시 읽기에는 대화의 최근 breakpoint 50개까지 고려합니다.
+
+```json
+{
+  "model": "<your-gpt-5.6-deployment-name>",
+  "prompt_cache_key": "tenant:contoso:support-policy-v2",
+  "prompt_cache_options": { "mode": "explicit", "ttl": "30m" },
+  "messages": [
+    {
+      "role": "system",
+      "content": [{
+        "type": "text",
+        "text": "<1,024 토큰 이상의 재사용 지침>",
+        "prompt_cache_breakpoint": { "mode": "explicit" }
+      }]
+    },
+    { "role": "user", "content": "<가변 사용자 입력>" }
+  ]
 }
 ```
 

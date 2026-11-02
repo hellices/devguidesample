@@ -189,6 +189,14 @@ class LinkTargetTest(unittest.TestCase):
         report = analyze("# 링크\n\n조건](작업을 수행한다.) 뒤에 본문이 있다.\n")
         self.assertEqual(report.metrics["translationese"], 1)
 
+    def test_whitespace_blank_line_resets_open_bracket(self) -> None:
+        report = analyze("# 링크\n\n열린 [괄호가 있다.\n  \n조건](작업이 수행되어진다.) 본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 1)
+
+    def test_link_target_does_not_cross_whitespace_blank_line(self) -> None:
+        report = analyze("# 링크\n\n[레이블](열린 대상\n \t\n작업이 수행되어진다.) 본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 1)
+
     def test_angle_and_escaped_targets_are_removed(self) -> None:
         report = analyze("# 링크\n\n[가](<a/되어진다 b>) [나](c\\)/되어진다) 본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 0)
@@ -205,6 +213,12 @@ class ThresholdTest(unittest.TestCase):
 
 
 class TableTest(unittest.TestCase):
+    def test_short_delimiter_cells_form_a_table(self) -> None:
+        # GFM and the site's Markdown renderer accept one hyphen per delimiter cell.
+        report = analyze("# 표\n\n옵션 | 설명\n- | -\n접속 | 그리고, 셀이다.\n\n본문이다.\n")
+        self.assertEqual(report.metrics["adverb_comma"], 0)
+        self.assertGreater(report.metrics["table_line_ratio"], 0)
+
     def test_table_without_outer_pipes_is_not_prose(self) -> None:
         text = "# 표\n\n항목 | 설명\n--- | ---\n접속 | 그리고, 셀이다.\n\n본문이다.\n"
         report = analyze(text)

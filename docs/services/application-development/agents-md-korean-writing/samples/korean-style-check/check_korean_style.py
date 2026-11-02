@@ -46,6 +46,8 @@ BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
 # A paragraph that opens with a bold label: "**결론**: ..." or "**정리:** ...".
 BOLD_LABEL = re.compile(r"\s*\*\*[^*\n]+?(?:[:：]\*\*|\*\*\s*[:：])")
 LINK_LABEL = re.compile(r"\[[^\]]*\]")
+# The rest of a line that holds only spaces or tabs, i.e. a blank line.
+BLANK_LINE_AHEAD = re.compile(r"[ \t]*(?:\n|$)")
 # What may remain on a sources line once link labels are removed. A URL with its
 # own parentheses leaves a stray ")" after the link target is stripped.
 LINK_SEPARATORS = re.compile(r"[\s·,|/)]*")
@@ -423,7 +425,7 @@ def strip_link_targets(text: str) -> str:
             out.append(text[index : index + 2])
             index += 2
             continue
-        if char == "\n" and text.startswith("\n", index + 1):
+        if char == "\n" and BLANK_LINE_AHEAD.match(text, index + 1):
             open_brackets = 0
         elif char == "[":
             open_brackets += 1
@@ -454,7 +456,7 @@ def _link_target_end(text: str, start: int) -> int | None:
         if char == "\\":
             index += 2
             continue
-        if char == "\n" and (index + 1 >= len(text) or text[index + 1] == "\n"):
+        if char == "\n" and (index + 1 >= len(text) or BLANK_LINE_AHEAD.match(text, index + 1)):
             return None
         if char == "(":
             depth += 1
