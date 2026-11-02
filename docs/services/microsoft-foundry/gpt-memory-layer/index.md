@@ -6,6 +6,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/ai-foundry/
 - title: Prompt caching
   url: https://learn.microsoft.com/azure/foundry/openai/how-to/prompt-caching
+- title: Azure OpenAI reasoning models
+  url: https://learn.microsoft.com/azure/foundry/openai/how-to/reasoning
 - title: Memory management for Azure Managed Redis
   url: https://learn.microsoft.com/azure/redis/best-practices-memory-management
 - title: Choose a tier and plan capacity for Azure Managed Redis
@@ -129,9 +131,16 @@ gpt-5.6 이상에서는 콘텐츠 블록에 `prompt_cache_breakpoint: { "mode": 
 }
 ```
 
-### `cached_tokens`로 보는 적중 여부
+### API별 `cached_tokens` 위치로 보는 적중 여부
 
-응답의 `usage.prompt_tokens_details.cached_tokens` 필드로 확인합니다.
+캐시 적중 토큰 수는 API마다 다른 위치에 있습니다.
+
+| API | 캐시 읽기 | 캐시 쓰기 (gpt-5.6 이상 Standard 종량제) |
+|-----|-----------|------------------------------------------|
+| Chat Completions | `usage.prompt_tokens_details.cached_tokens` | `usage.prompt_tokens_details.cache_write_tokens` |
+| Responses | `usage.input_tokens_details.cached_tokens` | Microsoft Learn에 위치가 명시되지 않음. 응답 본문을 확인하고 없으면 비용 분석의 청구 미터로 산정 |
+
+Chat Completions 응답:
 
 ```json
 {
@@ -145,6 +154,24 @@ gpt-5.6 이상에서는 콘텐츠 블록에 `prompt_cache_breakpoint: { "mode": 
     "prompt_tokens_details": {
       "cached_tokens": 12800
     }
+  }
+}
+```
+
+Responses API 응답:
+
+```json
+{
+  "usage": {
+    "input_tokens": 15000,
+    "input_tokens_details": {
+      "cached_tokens": 12800
+    },
+    "output_tokens": 1518,
+    "output_tokens_details": {
+      "reasoning_tokens": 576
+    },
+    "total_tokens": 16518
   }
 }
 ```

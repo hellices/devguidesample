@@ -46,6 +46,13 @@ BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
 # A paragraph that opens with a bold label: "**결론**: ..." or "**정리:** ...".
 BOLD_LABEL = re.compile(r"\s*\*\*[^*\n]+?(?:[:：]\*\*|\*\*\s*[:：])")
 LINK_LABEL = re.compile(r"\[[^\]]*\]")
+# A link reference definition: "[label]: destination" with an optional title
+# in quotes or parentheses on the same line or the next line.
+LINK_REFERENCE = re.compile(
+    r" {0,3}\[(?:[^\]\\\n]|\\.)+\]:[ \t]*(?:<[^>\n]*>|\S+)"
+    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*$"
+)
+LINK_REFERENCE_TITLE = re.compile(r"[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\))[ \t]*$")
 # The rest of a line that holds only spaces or tabs, i.e. a blank line.
 BLANK_LINE_AHEAD = re.compile(r"[ \t]*(?:\n|$)")
 # What may remain on a sources line once link labels are removed. A URL with its
@@ -478,6 +485,31 @@ def mask_quotes(prose: str) -> str:
     return "\n\n".join(paragraphs)
 
 
+def remove_link_references(text: str) -> str:
+    """Blank out link reference definitions, which are not rendered.
+
+    A definition starts a paragraph and may carry its title on the next line.
+    It cannot interrupt a paragraph, so "[a]: b" in the middle of prose stays.
+    """
+    lines = text.splitlines()
+    previous_blank = True
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if previous_blank and LINK_REFERENCE.fullmatch(line):
+            lines[index] = ""
+            following = index + 1
+            if following < len(lines) and LINK_REFERENCE_TITLE.fullmatch(lines[following]):
+                lines[following] = ""
+                index = following
+            # Consecutive definitions may follow without a blank line.
+            index += 1
+            continue
+        previous_blank = not line.strip()
+        index += 1
+    return "\n".join(lines)
+
+
 def strip_markup(text: str) -> tuple[str, str]:
     """Return (markdown without code, prose-only text)."""
     text = FRONT_MATTER.sub("", text, count=1)
@@ -486,6 +518,7 @@ def strip_markup(text: str) -> tuple[str, str]:
     text = convert_setext_headings(text)
     text = INLINE_CODE.sub("CODE", text)
     text = HTML_COMMENT.sub("", text)
+    text = remove_link_references(text)
     markdown = strip_link_targets(text)
     lines = markdown.splitlines()
     tables = table_rows(lines)

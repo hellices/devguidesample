@@ -181,9 +181,11 @@ class HtmlCommentTest(unittest.TestCase):
 
 class LinkTargetTest(unittest.TestCase):
     def test_target_with_balanced_parentheses_is_removed(self) -> None:
-        report = analyze("# 링크\n\n[설명](https://example.test/a_(b)/되어진다) 본문이다.\n")
+        report = analyze("# 링크\n\n[설명](https://example.test/a_(b)/되어진다) 본문이다. 그리고, 센다.\n")
         self.assertEqual(report.metrics["translationese"], 0)
-        self.assertEqual(report.findings, [])
+        # The text after the closing parenthesis is still prose.
+        self.assertEqual(report.metrics["adverb_comma"], 1)
+        self.assertEqual(report.metrics["plain_endings"], 2)
 
     def test_unmatched_bracket_is_not_a_link(self) -> None:
         report = analyze("# 링크\n\n조건](작업을 수행한다.) 뒤에 본문이 있다.\n")
@@ -200,6 +202,23 @@ class LinkTargetTest(unittest.TestCase):
     def test_angle_and_escaped_targets_are_removed(self) -> None:
         report = analyze("# 링크\n\n[가](<a/되어진다 b>) [나](c\\)/되어진다) 본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 0)
+
+
+class LinkReferenceTest(unittest.TestCase):
+    def test_reference_definitions_are_not_prose(self) -> None:
+        text = (
+            "# 참조\n\n본문은 합니다체로 씁니다.\n\n"
+            "[ref]: /target (것이 중요하다.)\n"
+            "[next]: <a b>\n  \"되어진다.\"\n"
+        )
+        report = analyze(text)
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["plain_endings"], 0)
+        self.assertEqual(report.findings, [])
+
+    def test_reference_syntax_inside_paragraph_is_prose(self) -> None:
+        report = analyze("# 참조\n\n문단 중간이다.\n[a]: /b (것이 중요하다.)\n")
+        self.assertEqual(report.metrics["translationese"], 1)
 
 
 class ThresholdTest(unittest.TestCase):
