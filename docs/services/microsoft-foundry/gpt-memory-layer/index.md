@@ -6,6 +6,10 @@ official_sources:
   url: https://learn.microsoft.com/azure/ai-foundry/
 - title: Prompt caching
   url: https://learn.microsoft.com/azure/foundry/openai/how-to/prompt-caching
+- title: Memory management for Azure Managed Redis
+  url: https://learn.microsoft.com/azure/redis/best-practices-memory-management
+- title: Choose a tier and plan capacity for Azure Managed Redis
+  url: https://learn.microsoft.com/azure/redis/plan-tiers-and-capacity
 document_type: guide
 status: needs-review
 verification_status: needs-review
@@ -480,7 +484,7 @@ Azure AI Content Safety와 Prompt Injection Detection은 필수 구성입니다.
 | VNet/프라이빗 엔드포인트 | 완전 지원 | 미지원 |
 | 데이터 주권 제어 | 완전 제어 | 제한적 (19개 리전) |
 | 성숙도 | GA | Public Preview |
-| 스케일 한도 | 사실상 무제한 | 스코프 100, 항목 10K/스코프 |
+| 스케일 한도 | 스코프·항목 수의 고정 한도 없음. 배포 SKU의 메모리 한도 안에서 동작하며 부족하면 키가 퇴거되거나 상위 SKU로 확장 필요 | 스코프 100, 항목 10K/스코프 |
 | 비용 모델 | Redis 인스턴스 비용 (고정) | Chat + Embedding 모델 토큰 비용 (사용량 비례) |
 | 멀티모달 메모리 | 직접 구현 | 이미지 이해·보존 지원 (Build 2026 발표) |
 
@@ -499,6 +503,7 @@ Redis 기반 세션 메모리를 이미 운영하고 있다면 세 계층을 분
 - [ ] Foundry Memory Service가 GA인지 확인합니다. 지금은 Public Preview이므로 프로덕션 적용에 주의합니다.
 - [ ] VNet이 필수라면 Redis를 유지합니다. Foundry Memory는 VNet을 지원하지 않습니다.
 - [ ] 스코프 100개, 스코프당 항목 10K 한도가 워크로드에 충분한지 검증합니다.
+- [ ] Redis를 유지한다면 키 수, 키당 오버헤드와 증가분으로 SKU 메모리를 산정합니다. 기본 퇴거 정책 `volatile-lru`는 TTL이 있는 키만 퇴거하므로, Used Memory Percentage가 계속 75%를 넘으면 상위 SKU로 확장합니다. 축소에는 제약이 있어 처음부터 여유를 둡니다.
 - [ ] gpt-5.4 이하에서는 `prompt_cache_retention`의 `"in_memory"`와 `"24h"`를 비교합니다. 두 정책의 캐시 가격은 같으므로 `cached_tokens`로 적중률 차이를 확인합니다. gpt-5.5는 확장 보존(24h)이 기본이라 바꿀 값이 없습니다. gpt-5.6 이상에서는 이 필드가 적용되지 않고 cache write가 별도 과금되므로 쓰기·읽기 비용을 함께 산정합니다. Usage 응답에 `cache_write_tokens`가 있으면 `cached_tokens`와 함께 쓰고, 필드가 빠진 응답은 0으로 간주하지 말고 Azure Cost Management 비용 분석의 실제 미터별 청구로 산정합니다.
 - [ ] gpt-5.6 Responses API 캐싱 버그가 해결되기 전까지 Chat Completions API를 사용합니다.
 - [ ] gpt-5.6 가격은 Azure Billing 지원 티켓으로 확인한 뒤 비용을 계획합니다.

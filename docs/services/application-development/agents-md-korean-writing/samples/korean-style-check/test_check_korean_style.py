@@ -50,6 +50,10 @@ class SentenceHeadingTest(unittest.TestCase):
                 report = analyze(f"# {heading}\n\n본문이다.\n")
                 self.assertEqual(report.metrics["sentence_headings"], 1)
 
+    def test_empty_atx_heading_does_not_take_next_line(self) -> None:
+        report = analyze("#\n설정한다.\n\n## 개요\n\n본문이다.\n")
+        self.assertEqual(report.metrics["sentence_headings"], 0)
+
     def test_setext_headings_are_headings(self) -> None:
         report = analyze("설정합니다\n===\n\n본문이다.\n\n캐시를\n끕니다\n---\n\n본문이다.\n")
         self.assertEqual(report.metrics["sentence_headings"], 2)
@@ -134,6 +138,25 @@ class QuoteTest(unittest.TestCase):
     def test_apostrophes_do_not_open_quotes(self) -> None:
         report = analyze("# 따옴표\n\ndon't 때문에 번역투에 의해 user's 값을 설명합니다.\n")
         self.assertEqual(report.metrics["translationese"], 1)
+
+
+class HtmlCommentTest(unittest.TestCase):
+    def test_comment_opener_inside_code_is_code(self) -> None:
+        text = (
+            "# 주석\n\n```html\n<!-- sample\n```\n\n"
+            "파일이 애플리케이션에 의해 저장된다.\n\n<!-- end -->\n"
+        )
+        self.assertEqual(analyze(text).metrics["translationese"], 1)
+
+    def test_comment_opener_in_inline_code_is_code(self) -> None:
+        text = "# 주석\n\n`<!--`로 시작한다. 파일이 사용자에 의해 저장된다. <!-- 끝 -->\n"
+        self.assertEqual(analyze(text).metrics["translationese"], 1)
+
+    def test_comment_block_is_removed(self) -> None:
+        text = "# 주석\n\n<!--\n```\n되어진다.\n-->\n\n본문이다. 그리고, 센다.\n"
+        report = analyze(text)
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["adverb_comma"], 1)
 
 
 class LinkTargetTest(unittest.TestCase):

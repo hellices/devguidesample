@@ -34,8 +34,12 @@ TABLE_BREAK = re.compile(
     r"(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|[-*+]\s|\d{1,9}[.)]\s|(?:[-*_]\s*){3,}$)"
 )
 INLINE_CODE = re.compile(r"`[^`\n]+`")
-HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
-HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
+# An inline comment inside a paragraph; it may wrap lines but not cross a blank line.
+HTML_COMMENT = re.compile(r"<!--(?:(?!\n[ \t]*\n).)*?-->", re.S)
+HTML_COMMENT_BLOCK = re.compile(r" {0,3}<!--")
+# Only spaces and tabs may follow the marker, so an empty "#" heading never
+# swallows the next line.
+HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", re.M)
 SETEXT_UNDERLINE = re.compile(r" {0,3}(=+|-+)[ \t]*$")
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+", re.M)
 BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
@@ -196,7 +200,7 @@ def open_containers(rest: str, stack: list[int | None]) -> str:
 
 
 def remove_fenced_code(text: str) -> str:
-    """Drop fenced and indented code blocks.
+    """Drop fenced and indented code blocks and HTML comment blocks.
 
     Each line is matched against the open block quotes, list items and MkDocs
     admonition, details and tab blocks first. A fence is recognized in what is
@@ -209,16 +213,24 @@ def remove_fenced_code(text: str) -> str:
     is an indented code block, unless it continues a paragraph. A top-level
     "    ```" line is therefore code, as in CommonMark, and so is the indented
     text under it.
+
+    A line that starts with "<!--" opens an HTML comment block that runs to
+    the line containing "-->". Fences inside it are ignored.
     """
     kept: list[str] = []
     stack: list[int | None] = []
     fence: str | None = None
     fence_depth = 0
+    in_comment = False
     previous_blank = True
     # True while the previous kept line belongs to a paragraph that an indented
     # line could lazily continue.
     in_paragraph = False
     for raw in text.splitlines():
+        if in_comment:
+            # An HTML comment block runs to the line that contains "-->".
+            in_comment = "-->" not in raw
+            continue
         rest = raw.expandtabs(4)
         matched = 0
         for width in stack:
@@ -257,6 +269,10 @@ def remove_fenced_code(text: str) -> str:
             if indent >= 4 and not in_paragraph:
                 continue
             rest = open_containers(rest, stack)
+            if HTML_COMMENT_BLOCK.match(rest):
+                in_comment = "-->" not in rest[rest.index("<!--") + 4:]
+                in_paragraph = False
+                continue
             opener = FENCE_OPEN.match(rest)
             if opener:
                 fence, fence_depth = opener.group(1), len(stack)
@@ -449,10 +465,11 @@ def mask_quotes(prose: str) -> str:
 def strip_markup(text: str) -> tuple[str, str]:
     """Return (markdown without code, prose-only text)."""
     text = FRONT_MATTER.sub("", text, count=1)
-    text = HTML_COMMENT.sub("", text)
+    # Code is removed before comments so "<!--" inside code never starts one.
     text = remove_fenced_code(text)
     text = convert_setext_headings(text)
     text = INLINE_CODE.sub("CODE", text)
+    text = HTML_COMMENT.sub("", text)
     markdown = strip_link_targets(text)
     lines = markdown.splitlines()
     tables = table_rows(lines)
