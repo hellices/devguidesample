@@ -23,6 +23,25 @@ Verify product behavior, support status, limits, versions, configuration steps, 
 
 If the server is unavailable, no relevant full article can be fetched, or a material conflict remains, set `verification_status: needs-review` and report the unresolved claim. Never use `last_verified` to imply a check that did not occur.
 
+## Citing Learn in the body
+
+The rules live in `docs/contributing/index.md#learn-citations`.
+
+1. Link each Microsoft or Azure claim to the Learn section that supports it (`...#section-anchor`). `official_sources` alone does not count.
+2. Before you explain a topology, request flow, or option comparison, look for a diagram, table, or screenshot in the fetched article. If one exists, build the explanation on it. Do not redraw it or turn it into prose.
+3. Copy an image only after you prove its license:
+   - Read `<meta name="original_content_git_url">` from the Learn page HTML.
+   - If the repository ends in `-pr`, open the same path in the public repository without `-pr`, such as `MicrosoftDocs/azure-docs`.
+   - Confirm that the repository's `LICENSE` is CC BY 4.0. Download the file from `raw.githubusercontent.com`, because `gh api` can return a SAML 403.
+4. If you cannot prove the license, link the section instead of copying the image. You may also add your own drawing based on it.
+5. Never copy Microsoft or Azure logos or product icons on their own; trademarks are outside CC BY 4.0.
+6. Save the image in the bundle's `images/` folder with Korean alt text that describes the figure.
+7. Below the image, add a caption with:
+   - the Learn article, section, and link
+   - the public source file
+   - the CC BY 4.0 license link
+   - what you changed, or "원본을 수정하지 않았습니다"
+
 ## Evidence contract
 
 ```yaml
@@ -43,6 +62,7 @@ Use at least one claim-relevant `https://learn.microsoft.com/` article. Add upst
 | Configuration procedure | Prerequisites, command syntax, defaults, permissions |
 | Limit or performance statement | Units, scope, exceptions, last-updated context |
 | Historical incident | Observation date separately from current product behavior |
+| Reused Learn figure | Public source file, CC BY 4.0 `LICENSE`, caption with section link and changes |
 
 ## Common mistakes
 
@@ -50,3 +70,5 @@ Use at least one claim-relevant `https://learn.microsoft.com/` article. Add upst
 - Citing a product landing page that does not support the claim
 - Using blogs, Q&A, or copied examples when an official article exists
 - Marking a document verified while one material claim is unresolved
+- Copying a Learn image because it appears on learn.microsoft.com, without finding its public CC BY 4.0 source
+- Redrawing or paraphrasing an official diagram that could be reused with attribution

@@ -44,7 +44,10 @@ taxonomy의 `legacy_tag_redirects`에서 관리합니다.
 
 Microsoft 또는 Azure 기술 내용을 새로 쓰거나 바꿀 때는 repository skill
 `verify-with-microsoft-learn`을 사용해 Microsoft Learn 원문과 대조하고
-출처 메타데이터를 갱신해야 합니다.
+출처 메타데이터를 갱신해야 합니다. 본문에는 근거가 된 Learn 절을 링크하고,
+공식 다이어그램·표는
+[Learn 인용과 공식 그림 기준](docs/contributing/index.md#learn-citations)에
+따라 출처와 함께 가져옵니다.
 
 제출 전 다음을 실행하세요.
 

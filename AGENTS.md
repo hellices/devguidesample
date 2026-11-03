@@ -108,6 +108,14 @@
   upstream 공식 문서도 함께 확인한다.
 - 의미 검증을 완료하지 못하면 `verification_status: needs-review`로
   남기고 완료했다고 표현하지 않는다.
+- Microsoft·Azure 동작을 설명하는 문단에는 근거가 된 Microsoft Learn
+  문서의 절을 본문 링크로 건다. `official_sources`만으로 대신하지 않는다.
+- 구성·흐름·비교를 설명할 때는 Learn 원문의 공식 다이어그램·표·화면을
+  먼저 찾아 활용한다. 그림 파일은 원본이 CC BY 4.0인 공개 MicrosoftDocs
+  저장소에 있을 때만 복사하고, 출처 문단에 Learn 절·원본 파일·라이선스·
+  변경 여부를 적는다. 확인하지 못하면 링크하거나 직접 그린다. 기준은
+  [Learn 인용과 공식 그림](docs/contributing/index.md#learn-citations)을
+  따른다.
 
 ## Public safety
 

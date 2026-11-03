@@ -497,8 +497,8 @@ front matter는 `title`, `description`, `report_date`, `generated_at`을
 넣지 않습니다. 각 주요 기능 앞에는 기능의 목적·배경과 이번 변화의
 의미를 설명합니다. Control plane·Data plane 등 통용되는 기술 용어는
 영어를 유지하고 동작은 한국어로 설명합니다. 업데이트 원문의 연결
-문서와 Microsoft Learn 원문을 확인하고, 재배포가 허용된 공식
-다이어그램을 출처와 함께 활용합니다. 해당 페이지에 사용하는 이미지는
+문서와 Microsoft Learn 원문을 확인하고, 공식 다이어그램은
+[Learn 그림 재사용 기준](#learn-citations)에 따라 출처와 함께 활용합니다. 해당 페이지에 사용하는 이미지는
 같은 날짜 bundle의 `images/`에 둡니다.
 
 리전 정보는 전체 지원 범위와 지역별 차이를 설명하고, 한국 리전의
@@ -529,6 +529,53 @@ Microsoft 또는 Azure의 동작, 지원 상태, 제한, 버전, 구성 단계�
 기준으로 작성합니다. 로컬·PR CI·Pages의 검증기도 같은 기준으로 오늘 날짜를
 판정하며, KST 기준의 미래 날짜는 허용하지 않습니다. 실행 환경의 시간대
 차이를 피하려고 실제 확인일을 앞당기거나 검증 날짜를 삭제하지 않습니다.
+
+## Microsoft Learn 절 링크와 CC BY 4.0 공식 그림의 우선 사용 { #learn-citations }
+
+Microsoft·Azure 동작을 설명하는 문단에는 근거가 된 Microsoft Learn 문서의
+해당 절을 본문 링크로 겁니다. `official_sources`에만 적으면 독자는 어느
+주장이 어느 원문에서 왔는지 확인할 수 없습니다. 블로그나 Q&A가 같은 내용을
+다루더라도 Learn 문서가 있으면 Learn을 링크합니다.
+
+구성, 요청 흐름, 옵션 비교를 설명하기 전에 원문에 공식 다이어그램·표·화면이
+있는지 먼저 확인합니다. 있으면 같은 내용을 새로 그리거나 문장으로 풀어 쓰지
+않고 원문 그림을 가져와 설명의 기준으로 삼습니다.
+
+Microsoft Learn 이용 약관은 별도 라이선스가 없는 그림의 복사를 허용하지
+않으므로 그림 파일은 라이선스를 확인한 뒤에만 복사합니다.
+
+1. Learn 페이지 HTML의 `original_content_git_url` 메타 태그에서 원본 저장소와
+   경로를 찾습니다. 저장소 이름이 `-pr`로 끝나면 비공개 저장소이므로 `-pr`을
+   뺀 공개 저장소(예: `MicrosoftDocs/azure-docs`)에서 같은 경로를 찾습니다.
+2. 공개 저장소의 `LICENSE`가 CC BY 4.0이고 그 저장소에 그림 파일이 있으면
+   재사용할 수 있습니다. 파일은 `raw.githubusercontent.com`에서 받습니다.
+   `gh api`는 조직 SAML 설정 때문에 403을 반환할 수 있습니다.
+3. 공개 저장소나 라이선스를 확인하지 못하면 그림을 복사하지 않습니다. 원문
+   절을 링크하고 필요하면 원문을 바탕으로 직접 그린 그림을 넣습니다.
+
+Microsoft·Azure 로고와 상표는 CC BY 4.0 허락 범위에 들어가지 않으므로
+로고나 제품 아이콘만 잘라 쓰지 않습니다. 표는 설명에 필요한 행과 열만 옮기고
+같은 방식으로 출처를 적습니다. 제한, 가격, 지원 리전처럼 자주 바뀌는 값은
+확인일과 함께 적고 전체 표는 원문 링크로 대신합니다.
+
+가져온 그림은 같은 bundle의 `images/`에 두고 그림 내용을 설명하는 대체
+텍스트를 씁니다. 그림 바로 아래 출처 문단에는 Learn 문서와 절, 공개 원본
+파일, 라이선스와 변경 여부를 적습니다.
+
+```markdown
+[![두 구독의 가상 네트워크가 서비스 엔드포인트에 공용 IP network identifier 하나를 공유하고 network security perimeter가 이 트래픽을 Azure PaaS 리소스로 허용하는 구성](images/service-endpoint-standard-diagram.png)](images/service-endpoint-standard-diagram.png)
+
+*출처: Microsoft Learn,
+[What is a standard service endpoint? — How a standard service endpoint works](https://learn.microsoft.com/azure/private-link/service-endpoint-standard-overview#how-a-standard-service-endpoint-works)
+([원본 파일](https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/private-link/media/service-endpoint-standard-overview/service-endpoint-standard-diagram.png),
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+원본을 수정하지 않았습니다. 그림을 선택하면 원본 크기로 볼 수 있습니다.*
+```
+
+자르거나 한국어 주석을 더했으면 "원본을 수정하지 않았습니다" 대신 "한국어
+주석을 추가했습니다"처럼 바꾼 내용을 적습니다. 원문 화면의 값은 공식
+예시이므로 실제 환경의 값처럼 설명하지 않습니다. 직접 캡처한 portal 화면에는
+아래 공개 안전성 기준을 적용합니다.
 
 ## 본문과 공개 안전성
 
