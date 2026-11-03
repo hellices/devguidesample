@@ -28,12 +28,12 @@ If the server is unavailable, no relevant full article can be fetched, or a mate
 The rules live in `docs/contributing/index.md#learn-citations`.
 
 1. Link each Microsoft or Azure claim to the Learn section that supports it (`...#section-anchor`). `official_sources` alone does not count.
-2. Before you explain a topology, request flow, or option comparison, look for a diagram, table, or screenshot in the fetched article. If one exists, build the explanation on it. Do not redraw it or turn it into prose.
+2. Before you explain a topology, request flow, or option comparison, look for a diagram, table, or screenshot in the fetched article. If one exists, build the explanation on it. When step 3 proves its license, reuse the original; do not redraw it or turn it into prose.
 3. Copy an image only after you prove its license:
    - Read `<meta name="original_content_git_url">` from the Learn page HTML.
    - If the repository ends in `-pr`, open the same path in the public repository without `-pr`, such as `MicrosoftDocs/azure-docs`.
    - Confirm that the repository's `LICENSE` is CC BY 4.0. Download the file from `raw.githubusercontent.com`, because `gh api` can return a SAML 403.
-4. If you cannot prove the license, link the section instead of copying the image. You may also add your own drawing based on it.
+4. If you cannot prove the license, link the section instead of copying the image. If the page still needs a figure, draw a new one, such as Mermaid, from the article's text: its components, flow, and conditions. Do not trace, crop, or recreate the official image's layout, shapes, or icons.
 5. Never copy Microsoft or Azure logos or product icons on their own; trademarks are outside CC BY 4.0.
 6. Save the image in the bundle's `images/` folder with Korean alt text that describes the figure.
 7. Below the image, add a caption with:
