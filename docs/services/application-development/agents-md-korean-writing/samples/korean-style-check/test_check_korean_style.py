@@ -190,6 +190,17 @@ class HtmlCommentTest(unittest.TestCase):
         text = "# 주석\n\n`<!--`로 시작한다. 파일이 사용자에 의해 저장된다. <!-- 끝 -->\n"
         self.assertEqual(analyze(text).metrics["translationese"], 1)
 
+    def test_comment_in_block_quote_ends_with_the_quote(self) -> None:
+        text = "# 주석\n\n> <!--\n> 숨김\n\n본문은 작업이 수행되어진다.\n\n-->\n"
+        self.assertEqual(analyze(text).metrics["translationese"], 1)
+
+    def test_comment_in_list_item_stays_open(self) -> None:
+        # The site renderer keeps this comment open inside the list item.
+        text = "# 주석\n\n- 항목이다.\n  <!--\n  작업이 수행되어진다.\n  -->\n\n본문이다.\n"
+        report = analyze(text)
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["plain_endings"], 2)
+
     def test_comment_block_is_removed(self) -> None:
         text = "# 주석\n\n<!--\n```\n되어진다.\n-->\n\n본문이다. 그리고, 센다.\n"
         report = analyze(text)
@@ -223,9 +234,15 @@ class LinkTargetTest(unittest.TestCase):
         report = analyze("# 링크\n\n[레이블](열린 대상\n \t\n작업이 수행되어진다.) 본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 1)
 
-    def test_angle_and_escaped_targets_are_removed(self) -> None:
-        report = analyze("# 링크\n\n[가](<a/되어진다 b>) [나](c\\)/되어진다) 본문이다.\n")
+    def test_angle_target_is_removed(self) -> None:
+        report = analyze("# 링크\n\n[가](<a/되어진다 b>) 본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["plain_endings"], 1)
+
+    def test_escaped_parenthesis_target_is_removed(self) -> None:
+        report = analyze("# 링크\n\n[나](c\\)/되어진다) 본문이다.\n")
+        self.assertEqual(report.metrics["translationese"], 0)
+        self.assertEqual(report.metrics["plain_endings"], 1)
 
 
 class LinkReferenceTest(unittest.TestCase):
@@ -256,6 +273,10 @@ class ThresholdTest(unittest.TestCase):
 
 
 class TableTest(unittest.TestCase):
+    def test_table_ends_at_admonition(self) -> None:
+        text = "# 표\n\n| a | b |\n|---|---|\n| 1 | 2 |\n!!! note\n    작업이 수행되어진다.\n"
+        self.assertEqual(analyze(text).metrics["translationese"], 1)
+
     def test_short_delimiter_cells_form_a_table(self) -> None:
         # GFM and the site's Markdown renderer accept one hyphen per delimiter cell.
         report = analyze("# 표\n\n옵션 | 설명\n- | -\n접속 | 그리고, 셀이다.\n\n본문이다.\n")

@@ -224,22 +224,21 @@ def remove_fenced_code(text: str) -> str:
     text under it.
 
     A line that starts with "<!--" opens an HTML comment block that runs to
-    the line containing "-->". Fences inside it are ignored.
+    the line containing "-->". Fences inside it are ignored. A comment opened
+    inside a block quote also ends when that quote ends, as the site renderer
+    does; inside a list item it stays open, as it does on the rendered page.
     """
     kept: list[str] = []
     stack: list[int | None] = []
     fence: str | None = None
     fence_depth = 0
     in_comment = False
+    comment_depth = 0
     previous_blank = True
     # True while the previous kept line belongs to a paragraph that an indented
     # line could lazily continue.
     in_paragraph = False
     for raw in text.splitlines():
-        if in_comment:
-            # An HTML comment block runs to the line that contains "-->".
-            in_comment = "-->" not in raw
-            continue
         rest = raw.expandtabs(4)
         matched = 0
         for width in stack:
@@ -247,6 +246,14 @@ def remove_fenced_code(text: str) -> str:
             if remainder is None:
                 break
             rest, matched = remainder, matched + 1
+        if in_comment:
+            if None in stack[matched:comment_depth]:
+                # The block quote holding the comment ended; this line is new content.
+                in_comment = False
+            else:
+                # An HTML comment block runs to the line that contains "-->".
+                in_comment = "-->" not in raw
+                continue
         if fence is not None:
             if matched >= fence_depth:
                 closing = rest.strip()
@@ -280,6 +287,7 @@ def remove_fenced_code(text: str) -> str:
             rest = open_containers(rest, stack)
             if HTML_COMMENT_BLOCK.match(rest):
                 in_comment = "-->" not in rest[rest.index("<!--") + 4:]
+                comment_depth = len(stack)
                 in_paragraph = False
                 continue
             opener = FENCE_OPEN.match(rest)
@@ -358,7 +366,7 @@ def table_rows(lines: list[str]) -> set[int]:
             index += 1
             while index < len(lines):
                 row = lines[index].strip()
-                if not row or TABLE_BREAK.match(row):
+                if not row or TABLE_BREAK.match(row) or BLOCK_CONTAINER.match(row):
                     break
                 rows.add(index)
                 index += 1
