@@ -239,6 +239,16 @@ class LinkTargetTest(unittest.TestCase):
         self.assertEqual(report.metrics["translationese"], 0)
         self.assertEqual(report.metrics["plain_endings"], 1)
 
+    def test_parenthesis_in_quoted_title_does_not_change_depth(self) -> None:
+        # MkDocs renders both as links whose titles hold the parenthesis. A
+        # leftover '"' would pair with the later quote and hide "그리고,".
+        for target in ('https://example.test "하는 것이 중요하다 ("', '/b "제목 )"'):
+            with self.subTest(target=target):
+                report = analyze(f'# 링크\n\n[설명]({target}) 본문이다. 그리고, "인용" 센다.\n')
+                self.assertEqual(report.metrics["translationese"], 0)
+                self.assertEqual(report.metrics["adverb_comma"], 1)
+                self.assertEqual(report.metrics["plain_endings"], 2)
+
     def test_escaped_parenthesis_target_is_removed(self) -> None:
         report = analyze("# 링크\n\n[나](c\\)/되어진다) 본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 0)

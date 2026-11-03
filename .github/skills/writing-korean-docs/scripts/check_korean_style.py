@@ -55,6 +55,8 @@ LINK_REFERENCE = re.compile(
 LINK_REFERENCE_TITLE = re.compile(r"[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\))[ \t]*$")
 # The rest of a line that holds only spaces or tabs, i.e. a blank line.
 BLANK_LINE_AHEAD = re.compile(r"[ \t]*(?:\n|$)")
+# Python-Markdown's RE_LINK form "(<target> \"title\")".
+LINK_ANGLE_TARGET = re.compile(r"""\(\s*<[^<>]*>\s*(?:'[^']*'|"[^"]*")?\s*\)""")
 # What may remain on a sources line once link labels are removed. A URL with its
 # own parentheses leaves a stray ")" after the link target is stripped.
 LINK_SEPARATORS = re.compile(r"[\s·,|/)]*")
@@ -458,29 +460,78 @@ def strip_link_targets(text: str) -> str:
 
 
 def _link_target_end(text: str, start: int) -> int | None:
-    """Return the index after the ")" closing a link target that starts at start."""
-    if start < len(text) and text[start] == "<":
-        close = text.find(">", start)
-        if close == -1 or "\n" in text[start:close]:
-            return None
-        start = close + 1
-    depth = 0
+    """Return the index after the ")" closing a link target that starts at start.
+
+    This follows Python-Markdown's LinkInlineProcessor.getLink, which the site
+    uses: a quoted title may hold "(" or ")", and spaces are allowed in the
+    destination. Backslash escapes are already placeholders there, so "\\)"
+    never closes the target. The target cannot cross a blank line.
+    """
+    limit = _paragraph_end(text, start)
+    angle = LINK_ANGLE_TARGET.match(text, start - 1, limit)
+    if angle:
+        return angle.end()
     index = start
-    while index < len(text):
+    while index < limit and text[index].isspace():
+        index += 1
+    bracket_count = backtrack_count = 1
+    last_bracket = -1
+    quote = alt_quote = None
+    exit_quote = exit_alt_quote = -1
+    in_title = False
+    last = ""
+    while index < limit:
         char = text[index]
         if char == "\\":
+            last = char
             index += 2
             continue
-        if char == "\n" and (index + 1 >= len(text) or BLANK_LINE_AHEAD.match(text, index + 1)):
-            return None
         if char == "(":
-            depth += 1
+            if not in_title:
+                bracket_count += 1
+            elif backtrack_count > 0:
+                backtrack_count -= 1
         elif char == ")":
-            if depth == 0:
-                return index + 1
-            depth -= 1
+            if (exit_quote != -1 and quote == last) or (exit_alt_quote != -1 and alt_quote == last):
+                bracket_count = 0
+            elif not in_title:
+                bracket_count -= 1
+            elif backtrack_count > 0:
+                backtrack_count -= 1
+                if backtrack_count == 0:
+                    last_bracket = index + 1
+        elif char in "'\"":
+            if not quote:
+                in_title = True
+                backtrack_count = bracket_count
+                bracket_count = 1
+                quote = char
+            elif char != quote and not alt_quote:
+                alt_quote = char
+            elif char == quote:
+                exit_quote = index + 1
+            elif char == alt_quote:
+                exit_alt_quote = index + 1
         index += 1
+        if bracket_count == 0:
+            return index
+        if char != " ":
+            last = char
+    if backtrack_count == 0:
+        # Python-Markdown keeps index -1 here, so the link runs to the
+        # paragraph's last character.
+        return last_bracket if last_bracket != -1 else max(limit - 1, start)
     return None
+
+
+def _paragraph_end(text: str, start: int) -> int:
+    """Return the index of the newline that starts the next blank line."""
+    index = text.find("\n", start)
+    while index != -1:
+        if BLANK_LINE_AHEAD.match(text, index + 1):
+            return index
+        index = text.find("\n", index + 1)
+    return len(text)
 
 
 def mask_quotes(prose: str) -> str:

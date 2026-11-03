@@ -71,6 +71,8 @@ python .github/skills/writing-korean-docs/scripts/check_korean_style.py --json d
 Markdown 해석은 CommonMark를 따르되 이 사이트의 렌더러(MkDocs의 Python-Markdown)와 다를
 때는 화면에 보이는 결과를 따른다. 예를 들어 `# 처리한다#`는 제목 "처리한다"로,
 `[설명](작업을 수행한다.)`는 "설명"만 보이는 링크로 렌더링되므로 그렇게 검사한다.
+링크 대상 끝도 렌더러와 같은 방법으로 찾으므로 `[설명](/a "제목 (")`처럼 따옴표 제목 안에
+있는 괄호는 대상을 닫거나 여는 괄호로 세지 않는다.
 
 기준 판정은 반올림하기 전 값으로 하고, 출력하는 지표만 반올림한다. 기준을 넘은
 항목은 소수 셋째 자리까지 보여 준다(`minority_ending_ratio=0.152 (기준 0.15)`).

@@ -22,7 +22,7 @@ The normative rules live in `docs/contributing/index.md` (`#content-first-headin
 2. Classify every section before editing it:
    - **Result section**: it holds a comparison table, measured numbers, option ratings, or recommended parameters. Keep its table, bullet findings, bold labels, bold winning numbers, ✅·△·❌ ratings, noun-ending fragments, scope blockquote, and `<details>`.
    - **Explanation section**: everything else. Write paragraphs.
-3. Edit with the recipes below. In result sections, change only wording inside cells and bullets; never convert them to paragraphs.
+3. Edit with the recipes below. In result sections, keep the table and list structure and change only wording inside cells and bullets; fix a result-section heading only as [Headings](#headings) allows. Never convert result sections to paragraphs.
 4. Re-run the checker. Re-read every remaining finding; leave intended structure as is. Never edit just to reach zero.
 5. Report content problems you noticed (missing source, unclear number) separately instead of fixing them silently.
 
@@ -58,5 +58,5 @@ Apply the pairs in [rewrite-examples.md](rewrite-examples.md). The most frequent
 | Rewriting a benchmark section as prose | Keep the table and bullet findings; fix wording only |
 | Turning a heading into a sentence while removing a colon | Use a noun phrase |
 | Removing "추정", "본 측정 조건 기준" while tightening | Hedges are content; keep them |
-| Deleting a list-intro sentence and leaving "다음 세 가지" with no list | Remove the intro together, or keep the list |
+| Deleting a list but leaving an intro such as "다음 세 가지" | Remove the intro together with the list, or keep the list |
 | Chasing checker zero | Findings are places to re-read, not targets |
