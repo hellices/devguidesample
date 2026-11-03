@@ -32,8 +32,12 @@ The rules live in `docs/contributing/index.md#learn-citations`.
 3. Copy an image only after you prove its license:
    - Read `<meta name="original_content_git_url">` from the Learn page HTML.
    - If the repository ends in `-pr`, open the same path in the public repository without `-pr`, such as `MicrosoftDocs/azure-docs`.
-   - Confirm that the repository's `LICENSE` is CC BY 4.0. Download the file from `raw.githubusercontent.com`, because `gh api` can return a SAML 403.
-4. If you cannot prove the license, link the section instead of copying the image. If the page still needs a figure, draw a new one, such as Mermaid, from the article's text: its components, flow, and conditions. Do not trace, crop, or recreate the official image's layout, shapes, or icons.
+   - Confirm that the repository's `LICENSE` is CC BY 4.0. A repository license alone does not prove the file is covered, so also confirm that the file is under that license:
+     - `ThirdPartyNotices.md` and the README license section do not exclude the file or its folder.
+     - Neither the Markdown around the image nor the Learn page shows another rights holder or a separate notice such as "Image courtesy of" or "Used with permission".
+     - The image itself contains no third-party screenshot, logo, or copyright notice.
+   - Download the file from `raw.githubusercontent.com`, because `gh api` can return a SAML 403.
+4. If any part of the license or its coverage is unclear, link the section instead of copying the image. If the page still needs a figure, draw a new one, such as Mermaid, from the article's text: its components, flow, and conditions. Do not trace, crop, or recreate the official image's layout, shapes, or icons.
 5. Never copy Microsoft or Azure logos or product icons on their own; trademarks are outside CC BY 4.0.
 6. Save the image in the bundle's `images/` folder with Korean alt text that describes the figure.
 7. Below the image, add a caption with:
