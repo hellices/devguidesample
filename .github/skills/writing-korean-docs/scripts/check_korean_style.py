@@ -583,7 +583,7 @@ def strip_markup(text: str) -> tuple[str, str]:
     tables = table_rows(lines)
     prose_lines = []
     for index, line in enumerate(lines):
-        if HEADING.match(line) or index in tables:
+        if HEADING.match(line) or index in tables or THEMATIC_BREAK.match(line):
             prose_lines.append("")
             continue
         prose_lines.append(BULLET.sub("", line))
@@ -682,7 +682,9 @@ def analyze(path: Path, limits: Thresholds) -> Report:
     metrics["bold_label_lines"] = len(flagged_labels)
     if flagged_labels:
         examples["bold_label_lines"] = [label[:40] for label in flagged_labels[:3]]
-    ratio("bullet_line_ratio", len(BULLET.findall(markdown)) / max(report.lines, 1), 2)
+    # "* * *" and "- - -" are thematic breaks, not list items.
+    bullets = sum(1 for line in lines if BULLET.match(line) and not THEMATIC_BREAK.match(line))
+    ratio("bullet_line_ratio", bullets / max(report.lines, 1), 2)
     ratio("table_line_ratio", len(tables) / max(report.lines, 1), 2)
 
     count, found = collect_connective_commas(text)

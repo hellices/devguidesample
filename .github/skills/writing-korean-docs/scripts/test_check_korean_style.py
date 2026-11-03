@@ -143,6 +143,13 @@ class FencedCodeTest(unittest.TestCase):
         report = analyze("# 코드\n\n본문이다.\n\n---\n    되어진다.\n\n본문이다.\n")
         self.assertEqual(report.metrics["translationese"], 0)
 
+    def test_thematic_break_is_not_a_bullet(self) -> None:
+        for rule in ("* * *", "- - -"):
+            with self.subTest(rule=rule):
+                report = analyze(f"# 구분선\n\n설명이다.\n\n{rule}\n\n다음 설명이다.\n")
+                self.assertEqual(report.metrics["bullet_line_ratio"], 0)
+                self.assertNotIn("bullet_line_ratio", flagged(report))
+
     def test_list_continuation_is_not_code(self) -> None:
         report = analyze("# 목록\n\n- 첫 항목이다.\n\n    따라서, 항목의 둘째 문단이다.\n")
         self.assertEqual(report.metrics["adverb_comma"], 1)
@@ -150,9 +157,10 @@ class FencedCodeTest(unittest.TestCase):
     def test_fence_nested_in_list_and_admonition_is_code(self) -> None:
         text = (
             "# 펜스\n\n*   항목이다.\n    ```yaml\n    그리고, 코드다.\n    ```\n\n"
-            '??? example "예시"\n    설명이다.\n\n    ```yaml\n    그러나, 코드다.\n    ```\n\n본문이다.\n'
+            '??? example "예시"\n    설명이다.\n\n    ```yaml\n    그러나, 코드다.\n    ```\n\n그리고, 본문이다.\n'
         )
-        self.assertEqual(analyze(text).metrics["adverb_comma"], 0)
+        # Only the prose after both fences close is counted.
+        self.assertEqual(analyze(text).metrics["adverb_comma"], 1)
 
 
 class QuoteTest(unittest.TestCase):
