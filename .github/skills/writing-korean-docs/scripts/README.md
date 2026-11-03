@@ -6,20 +6,12 @@
 
 ## 실행
 
-아래 명령은 모두 이 sample 디렉터리에서 실행한다. 저장소 루트에서 시작한다면 먼저
-이동한다.
+저장소 루트에서 실행한다.
 
 ```bash
-cd docs/services/application-development/agents-md-korean-writing/samples/korean-style-check
-python check_korean_style.py examples/
-python check_korean_style.py --strict ../../../../../services/
-python check_korean_style.py --json ../../index.md
-```
-
-저장소 루트에 머물러 있다면 스크립트를 전체 경로로 지정한다.
-
-```bash
-python docs/services/application-development/agents-md-korean-writing/samples/korean-style-check/check_korean_style.py --strict docs/services/
+python .github/skills/writing-korean-docs/scripts/check_korean_style.py --strict docs/services/<service>/<topic>/index.md
+python .github/skills/writing-korean-docs/scripts/check_korean_style.py docs/services/
+python .github/skills/writing-korean-docs/scripts/check_korean_style.py --json docs/contributing/index.md
 ```
 
 `--strict`를 주면 기준을 넘는 파일이 하나라도 있을 때 종료 코드 1을 반환한다.
@@ -44,7 +36,7 @@ python docs/services/application-development/agents-md-korean-writing/samples/ko
 
 굵은 글씨, 꼬리표와 대시는 설명 문단에서만 센다. 대시는 문단을 한 줄로 합친 뒤 따옴표
 안을 가리고 세므로 여러 줄에 걸친 인용 안의 대시는 세지 않는다. 표, 글머리표와 인용 블록은
-결과·비교 절의 [스캔형 구성](../../../../../contributing/index.md#scan-format)이 비교 표의
+결과·비교 절의 [스캔형 구성](../../../../docs/contributing/index.md#scan-format)이 비교 표의
 우위 수치, 발견 목록의 꼬리표와 판정 기호를 두는 곳이라 세지 않는다. 목록이나 표를
 여는 단독 꼬리표 줄(`**분석:**`)과 링크만 담은 출처 줄(`**출처:** [..] · [..]`)도
 세지 않는다. 결론 꼬리표 문단(`**정리:** ...`)은 두 번 이상 반복될 때만 건다.
@@ -103,23 +95,18 @@ Markdown 해석은 CommonMark를 따르되 이 사이트의 렌더러(MkDocs의 
 쉼표, 코드 펜스와 들여쓰기 코드 블록, HTML 주석, 링크 대상과 참조 정의, 인용, 표, 기준 경계와 스캔형 구성
 판정을 검증한다.
 
-sample 디렉터리에서 실행한다. 저장소 루트에서는 `-s`로 시작 디렉터리를 지정한다.
+저장소 루트에서 실행한다. `tests/docs`도 이 테스트를 함께 실행한다.
 
 ```bash
-python -m unittest -v
-python -m unittest discover -v -s docs/services/application-development/agents-md-korean-writing/samples/korean-style-check
+python -m unittest discover -v -s .github/skills/writing-korean-docs/scripts
 ```
 
 ## 예시
 
 `examples/before.md`는 AI 문체 패턴을 일부러 모은 글이고 `examples/after.md`는
-같은 내용을 고쳐 쓴 글이다. sample 디렉터리에서 실행한다.
+같은 내용을 고쳐 쓴 글이다.
 
 ```bash
-python check_korean_style.py --strict examples/after.md   # 종료 코드 0
-python check_korean_style.py --strict examples/before.md  # 종료 코드 1
+python .github/skills/writing-korean-docs/scripts/check_korean_style.py --strict .github/skills/writing-korean-docs/scripts/examples/after.md   # 종료 코드 0
+python .github/skills/writing-korean-docs/scripts/check_korean_style.py --strict .github/skills/writing-korean-docs/scripts/examples/before.md  # 종료 코드 1
 ```
-
-## 정리
-
-설치하거나 생성하는 파일이 없다. 스크립트만 복사해 쓰고 필요 없으면 지운다.

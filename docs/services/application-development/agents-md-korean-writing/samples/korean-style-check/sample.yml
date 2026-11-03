@@ -1,5 +1,0 @@
-title: Korean style density check
-description: Dependency-free Python script that counts translationese, connective-ending commas, colon headings, bold labels and other density signals in Korean Markdown.
-kind: runnable
-used_by:
-  - index

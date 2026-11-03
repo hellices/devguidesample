@@ -17,8 +17,10 @@
   절마다 반복되는 `**정리:**` 결론 문단을 피한다. 측정 결과·비교 절은
   [스캔형 구성](docs/contributing/index.md#scan-format)에 따라 비교 표와 굵은
   꼬리표 글머리표로 쓰며 문단으로 풀어 쓰지 않는다. 상세 기준은
-  [한국어 문체 기준](docs/contributing/index.md#korean-writing)을 따르고, 새로
-  쓰거나 고친 문서는 그 절의 문체 밀도 검사기로 점검한다.
+  [한국어 문체 기준](docs/contributing/index.md#korean-writing)을 따른다.
+- 한국어 문서를 쓰거나 고치거나 검토할 때 repository skill `writing-korean-docs`를
+  반드시 사용한다. 이 skill의 검사기로 쓰기 전후를 점검하되 결과 수치를 0으로
+  맞추려고 구조나 주장을 바꾸지 않는다.
 - 공개 기술 문서는
   `docs/services/<service>/<topic>[/<child>]/index.md` topic package로
   작성한다.

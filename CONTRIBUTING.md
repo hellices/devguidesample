@@ -12,7 +12,8 @@
 단건 레이턴시"처럼 절의 종류와 대상을 잇는 보고서형 절 제목을 쓸 수 있습니다.
 
 한국어 본문은 [한국어 문체 기준](docs/contributing/index.md#korean-writing)에
-따라 번역투와 LLM 특유의 서식을 덜어 내고, 새로 쓰거나 고친 문서는 문체 밀도
+따라 번역투와 LLM 특유의 서식을 덜어 냅니다. 에이전트로 작성할 때는 repository
+skill `writing-korean-docs`를 사용하고, 새로 쓰거나 고친 문서는 그 skill의 문체 밀도
 검사기로 점검합니다. 측정 결과·비교 절은
 [스캔형 구성](docs/contributing/index.md#scan-format)에 따라 비교 표와 굵은
 꼬리표 글머리표로 씁니다.

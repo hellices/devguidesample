@@ -368,9 +368,9 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
 ## 처음부터 한국어로 쓴 글처럼 읽히는 문체 기준 { #korean-writing }
 
 에이전트가 쓴 한국어 문서는 내용이 정확해도 번역투와 LLM 특유의 서식 때문에
-기계가 쓴 글처럼 읽히기 쉽습니다. 근거와 연구 출처는 리서치 문서
-[짧은 원칙·경로별 예시·밀도 검사로 줄이는 AGENTS.md 한국어 문서의 AI 문체](../services/application-development/agents-md-korean-writing/index.md)에
-정리했습니다. 공개 문서와 sample README는 다음 기준을 따릅니다.
+기계가 쓴 글처럼 읽히기 쉽습니다. 공개 문서와 sample README는 다음 기준을 따릅니다.
+에이전트는 문서를 쓰거나 고칠 때 repository skill `writing-korean-docs`로 이 기준을
+적용합니다.
 
 - 한 문서 안에서 종결어미를 `~다`나 `~합니다` 중 하나로 통일합니다.
 - 누가 무엇을 하는지 주어를 세우고 동사로 끝냅니다. "흐름 런타임 뷰의 부재"
@@ -438,13 +438,12 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
 
 ### 문체 밀도 검사기로 다시 읽을 위치 찾기 { #korean-style-check }
 
-새로 쓰거나 고친 문서는 표준 라이브러리만 쓰는
-[한국어 문체 밀도 검사기](https://github.com/hellices/devguidesample/tree/main/docs/services/application-development/agents-md-korean-writing/samples/korean-style-check)로
-점검하고 걸린 문장만 다시 씁니다.
+새로 쓰거나 고친 문서는 `writing-korean-docs` skill에 포함된 표준 라이브러리
+검사기로 점검하고 걸린 문장만 다시 씁니다.
 
 ```bash
 DOCUMENT_PATH=docs/services/azure-ai-search/custom-vectorization/a10-vs-t4/index.md
-python docs/services/application-development/agents-md-korean-writing/samples/korean-style-check/check_korean_style.py --strict "$DOCUMENT_PATH"
+python .github/skills/writing-korean-docs/scripts/check_korean_style.py --strict "$DOCUMENT_PATH"
 ```
 
 `DOCUMENT_PATH`는 저장소 루트 기준으로 점검할 문서 경로로 바꿉니다.
