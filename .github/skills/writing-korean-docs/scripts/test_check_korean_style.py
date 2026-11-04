@@ -76,6 +76,10 @@ class SentenceHeadingTest(unittest.TestCase):
         # The visible text is prose, so its comma is counted.
         report = analyze("   ## 따라서, 설정한다\n\n본문이다.\n")
         self.assertEqual(report.metrics["adverb_comma"], 1)
+        # A top-level sentence heading indented three spaces is not a heading either.
+        report = analyze("   # 설치합니다\n\n본문이다.\n")
+        self.assertEqual(report.metrics["sentence_headings"], 0)
+        self.assertEqual(report.metrics["formal_endings"], 0)
 
     def test_headings_inside_containers_follow_site_renderer(self) -> None:
         rendered = (
@@ -368,6 +372,22 @@ class ScanFormatTest(unittest.TestCase):
             "**정리**: 코드가 문서를 이겼다.\n"
         )
         self.assertIn("bold_label_lines", flagged(analyze(text)))
+
+
+class IterMarkdownTest(unittest.TestCase):
+    def test_overlapping_paths_are_listed_once(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "a.md").write_text("# 가\n", encoding="utf-8")
+            (root / "sub").mkdir()
+            (root / "sub" / "b.md").write_text("# 나\n", encoding="utf-8")
+            files = checker.iter_markdown(
+                [str(root / "sub" / "b.md"), folder, str(root / "a.md"), f"{folder}/./a.md"]
+            )
+            self.assertEqual(
+                [f.resolve() for f in files],
+                [(root / "sub" / "b.md").resolve(), (root / "a.md").resolve()],
+            )
 
 
 class ExampleFilesTest(unittest.TestCase):

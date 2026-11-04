@@ -834,15 +834,22 @@ def analyze(path: Path, limits: Thresholds) -> Report:
 
 
 def iter_markdown(paths: list[str]) -> list[Path]:
+    """Return Markdown files under the given paths once each, in input order."""
     files: list[Path] = []
+    seen: set[Path] = set()
     for item in paths:
         path = Path(item)
         if path.is_dir():
-            files.extend(sorted(p for p in path.rglob("*.md") if p.is_file()))
+            found = sorted(p for p in path.rglob("*.md") if p.is_file())
         elif path.is_file():
-            files.append(path)
+            found = [path]
         else:
             raise FileNotFoundError(item)
+        for file in found:
+            key = file.resolve()
+            if key not in seen:
+                seen.add(key)
+                files.append(file)
     return files
 
 
