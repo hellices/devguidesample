@@ -167,6 +167,16 @@ class FencedCodeTest(unittest.TestCase):
         self.assertEqual(analyze(text).metrics["adverb_comma"], 1)
 
 
+class EndingTest(unittest.TestCase):
+    def test_polite_endings_are_not_plain(self) -> None:
+        for second in ("확인하죠.", "값이 있어요.", "다시 돼요."):
+            with self.subTest(second=second):
+                report = analyze(f"# 종결\n\n설정합니다. {second}\n")
+                self.assertEqual(report.metrics["formal_endings"], 2)
+                self.assertEqual(report.metrics["plain_endings"], 0)
+                self.assertNotIn("minority_ending_ratio", flagged(report))
+
+
 class QuoteTest(unittest.TestCase):
     def test_quoted_examples_do_not_count_as_endings(self) -> None:
         text = '# 인용\n\n본문은 합니다체로 씁니다. 예시 문구는 "파일을 저장한다. 다음 파일을 읽는다."입니다.\n'

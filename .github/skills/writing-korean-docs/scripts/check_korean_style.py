@@ -120,7 +120,8 @@ SIGNATURE = {
 }
 CONTRAST = re.compile(r"[가-힣A-Za-z0-9)]+(?:이|가)\s?아니라(?=\s)")
 
-FORMAL_END = re.compile(r"(?:니다|니까|세요|십시오|해요|에요|예요|까요)[.!?]$")
+# Same polite endings as SENTENCE_HEADING: ~니다, ~요 after a verb stem, and ~죠.
+FORMAL_END = re.compile(rf"(?:니다|니까|십시오|[{_YO_STEM}]요|[가-힣]죠)[.!?]$")
 PLAIN_END = re.compile(r"[가-힣][.!?]$")
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 # Quoted spans usually cite an example of a pattern rather than use it. A straight
