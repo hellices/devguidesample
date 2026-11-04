@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" role="img" aria-labelledby="storage-actions-title storage-actions-desc">
+  <title id="storage-actions-title">Storage Actions task definition and assignments</title>
+  <desc id="storage-actions-desc">One shared task defines conditions and operations for assignments on different storage accounts. Definition updates apply to later scheduled runs, not queued or running runs. Stop requests are asynchronous.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#475569"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2563eb"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#0284c7"/></marker>
+  </defs>
+  <rect width="960" height="440" fill="#f8fafc"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+    <text x="480" y="40" font-size="24" font-weight="700">Azure Storage Actions: one task, multiple assignments</text>
+    <path d="M400 160V196Q400 204 392 204H248Q240 204 240 212V248" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-accent)"/>
+    <path d="M560 160V196Q560 204 568 204H712Q720 204 720 212V248" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-accent)"/>
+    <rect x="424" y="184" width="112" height="20" fill="#f8fafc"/>
+    <text x="480" y="199" font-size="14" fill="#475569">NEXT RUN</text>
+    <rect x="280" y="68" width="400" height="92" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="480" y="105" font-size="20" font-weight="700">Shared storage task</text>
+    <text x="480" y="135" font-size="16">Conditions + Operations + Managed identity</text>
+    <rect x="80" y="248" width="320" height="100" rx="8" fill="#fff" stroke="#94a3b8"/>
+    <text x="240" y="280" font-size="19" font-weight="700">Assignment A · Account A</text>
+    <text x="240" y="307" font-size="15">Object scope + Schedule + Report</text>
+    <text x="240" y="331" font-size="14" fill="#475569">Blob / Data Lake Storage</text>
+    <rect x="560" y="248" width="320" height="100" rx="8" fill="#fff" stroke="#94a3b8"/>
+    <text x="720" y="280" font-size="19" font-weight="700">Assignment B · Account B</text>
+    <text x="720" y="307" font-size="15">Object scope + Schedule + Report</text>
+    <text x="720" y="331" font-size="14" fill="#475569">Blob / Data Lake Storage</text>
+    <line x1="32" y1="372" x2="928" y2="372" stroke="#cbd5e1"/>
+    <text x="480" y="398" font-size="16">Queued / running: existing definition · Later scheduled run: updated definition</text>
+    <text x="480" y="424" font-size="15" fill="#475569">Stop request accepted ≠ processing stopped · Check each run status</text>
+  </g>
+</svg>

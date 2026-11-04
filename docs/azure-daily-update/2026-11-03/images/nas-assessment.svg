@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="nas-assessment-title nas-assessment-desc">
+  <title id="nas-assessment-title">Azure Migrate NAS discovery and assessment</title>
+  <desc id="nas-assessment-desc">NAS share metadata passes through the Azure Migrate appliance to the project inventory and per-share assessment. The assessment produces readiness, target configuration and cost estimates, not a data migration.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#475569"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2563eb"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#0284c7"/></marker>
+  </defs>
+  <rect width="960" height="360" fill="#f8fafc"/>
+  <g font-family="Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+    <text x="480" y="44" font-size="24" font-weight="700">Azure Migrate: NAS discovery → per-share assessment</text>
+    <path d="M232 164H276" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M476 164H520" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-link)"/>
+    <path d="M696 164H740" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-accent)"/>
+    <rect x="238" y="128" width="32" height="16" fill="#f8fafc"/>
+    <text x="254" y="139" font-size="10" fill="#475569">READ</text>
+    <rect x="482" y="128" width="32" height="16" fill="#f8fafc"/>
+    <text x="498" y="139" font-size="10" fill="#475569">META</text>
+    <rect x="704" y="128" width="28" height="16" fill="#f8fafc"/>
+    <text x="718" y="139" font-size="10" fill="#475569">EVAL</text>
+    <rect x="32" y="100" width="200" height="128" rx="8" fill="#fff" stroke="#94a3b8"/>
+    <text x="132" y="135" font-size="18" font-weight="700">NAS clusters</text>
+    <text x="132" y="165" font-size="15">Dell PowerScale</text>
+    <text x="132" y="188" font-size="15">NetApp ONTAP</text>
+    <text x="132" y="211" font-size="13" fill="#475569">SMB / NFS / S3 shares</text>
+    <rect x="276" y="100" width="200" height="128" rx="8" fill="#fff" stroke="#94a3b8"/>
+    <text x="376" y="135" font-size="18" font-weight="700">Migrate appliance</text>
+    <text x="376" y="170" font-size="14">Read-only credentials</text>
+    <text x="376" y="198" font-size="14" fill="#475569">Collect share metadata</text>
+    <rect x="520" y="100" width="176" height="128" rx="8" fill="#fff" stroke="#94a3b8"/>
+    <text x="608" y="135" font-size="18" font-weight="700">Project inventory</text>
+    <text x="608" y="170" font-size="14">NAS + file shares</text>
+    <text x="608" y="198" font-size="14" fill="#475569">Group / tag / filter</text>
+    <rect x="740" y="100" width="188" height="128" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="834" y="135" font-size="18" font-weight="700">Share assessment</text>
+    <text x="834" y="166" font-size="14">Readiness</text>
+    <text x="834" y="188" font-size="14">Target configuration</text>
+    <text x="834" y="210" font-size="14">Monthly cost estimate</text>
+    <line x1="32" y1="268" x2="928" y2="268" stroke="#cbd5e1"/>
+    <text x="480" y="295" font-size="17">Metadata collection and planning — not file-data migration</text>
+    <text x="480" y="325" font-size="15" fill="#475569">Targets: Azure Files / Blob · Azure NetApp Files only for NetApp-origin shares</text>
+  </g>
+</svg>
