@@ -1,4 +1,8 @@
-"""Regression tests for check_korean_style.py. Run: python -m unittest -v"""
+"""Regression tests for check_korean_style.py.
+
+Run from the repository root:
+    python -m unittest discover -v -s .github/skills/writing-korean-docs/scripts
+"""
 
 from __future__ import annotations
 
