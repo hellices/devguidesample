@@ -310,55 +310,103 @@ def remove_fenced_code(text: str) -> str:
     return "\n".join(kept)
 
 
+@dataclass
+class LineBody:
+    """A line split into its container prefix and the content inside it."""
+    prefix: str
+    body: str
+    # Quote depth and whether a four-space container block was stripped.
+    container: tuple[int, bool]
+
+
+def container_bodies(lines: list[str]) -> list[LineBody]:
+    """Strip block quote markers and the indent of container blocks from each line.
+
+    A line indented four or more spaces belongs to a container block (a list
+    item's later block, or an admonition, details or tab body) when its
+    indented run starts after a blank line or a "!!!", "???" or "===" opener.
+    Otherwise the indent is kept, as for a line that lazily continues a list
+    item's first block.
+    """
+    out: list[LineBody] = []
+    starts_block = False
+    for index, line in enumerate(lines):
+        quoted = _strip_quotes(line)
+        if index:
+            previous = _strip_quotes(lines[index - 1])
+            if not previous.strip() or BLOCK_CONTAINER.match(previous):
+                starts_block = True
+            elif _indent(previous) < 4:
+                starts_block = False
+        indented = _indent(quoted) >= 4 and starts_block
+        body = quoted.lstrip(" \t") if indented else quoted
+        depth = line[: len(line) - len(quoted)].count(">")
+        out.append(LineBody(line[: len(line) - len(body)], body, (depth, indented)))
+    return out
+
+
 def convert_setext_headings(text: str) -> str:
     """Rewrite Setext headings ("제목\n===", "제목\n---") as ATX headings.
 
-    The underline turns the paragraph right above it into one heading, which
-    may span several lines. A "---" after a blank line stays a thematic break,
-    and lines that start another block or contain a table pipe are not
-    paragraph text. The front matter is removed before this runs.
+    Python-Markdown, which the site uses, makes a heading only from the first
+    line of a block followed by the underline in the same container. A longer
+    paragraph above "---" stays a paragraph and the "---" becomes a thematic
+    break; "===" stays text. A block starts after a blank line, an ATX
+    heading, or a change of container such as a new block quote. The front
+    matter is removed before this runs.
     """
     lines = text.splitlines()
-
-    def paragraph_line(line: str) -> bool:
-        return (
-            bool(line.strip())
-            and len(line) - len(line.lstrip(" ")) <= 3
-            and not BLOCK_START.match(line)
-            and not HEADING.match(line)
-            and "|" not in line
-        )
-
+    bodies = container_bodies(lines)
     for index in range(1, len(lines)):
-        underline = SETEXT_UNDERLINE.fullmatch(lines[index])
-        if not underline or not paragraph_line(lines[index - 1]):
+        under, title = bodies[index], bodies[index - 1]
+        underline = SETEXT_UNDERLINE.fullmatch(under.body)
+        if (
+            not underline
+            or under.container != title.container
+            or not _setext_title(title.body)
+            or not _starts_block(bodies, index - 1)
+        ):
             continue
-        first = index - 1
-        while first > 0 and paragraph_line(lines[first - 1]):
-            first -= 1
-        title = " ".join(line.strip() for line in lines[first:index])
         level = "#" if underline.group(1)[0] == "=" else "##"
-        lines[first:index + 1] = [f"{level} {title}"] + [""] * (index - first)
+        lines[index - 1] = f"{title.prefix}{level} {title.body.strip()}"
+        lines[index] = under.prefix.rstrip()
     return "\n".join(lines)
+
+
+def _setext_title(body: str) -> bool:
+    return (
+        bool(body.strip())
+        and _indent(body) <= 3
+        and not BLOCK_START.match(body)
+        and "|" not in body
+    )
+
+
+def _starts_block(bodies: list[LineBody], index: int) -> bool:
+    if index == 0:
+        return True
+    previous = bodies[index - 1]
+    return (
+        previous.container != bodies[index].container
+        or not previous.body.strip()
+        or bool(HEADING.match(previous.body) and previous.body.startswith("#"))
+    )
 
 
 def heading_matches(lines: list[str]) -> dict[int, re.Match[str]]:
     """Return ATX heading matches by line index, including headings in containers.
 
     The site renderer shows these as headings, so they are matched after the
-    container prefix is removed:
+    container prefix is removed (see container_bodies):
     - "> ## 제목" at any quote depth, including a quote that continues a paragraph
     - "- ## 제목" and "1. ## 제목" on the list marker line ("1)" is not a list)
-    - a line in a block indented by four or more spaces that starts after a
-      blank line or an admonition, details or tab opener
+    - a line in a container block indented by four or more spaces
     A line that lazily continues a list item's first block keeps its indent
     and is not a heading, and neither is any line that starts with a space.
     """
     found: dict[int, re.Match[str]] = {}
-    for index, line in enumerate(lines):
-        body = _strip_quotes(line)
-        if _indent(body) >= 4 and _in_indented_block(lines, index):
-            body = body.expandtabs(4).lstrip(" ")
+    for index, line in enumerate(container_bodies(lines)):
+        body = line.body
         item = HEADING_LIST_MARKER.match(body)
         if item:
             body = body[item.end():]
@@ -379,17 +427,6 @@ def _indent(line: str) -> int:
     return len(expanded) - len(expanded.lstrip(" "))
 
 
-def _in_indented_block(lines: list[str], index: int) -> bool:
-    """Whether the indented run holding lines[index] starts a container block."""
-    for previous in range(index - 1, -1, -1):
-        line = _strip_quotes(lines[previous])
-        if not line.strip() or BLOCK_CONTAINER.match(line):
-            return True
-        if _indent(line) < 4:
-            return False
-    return False
-
-
 def table_cells(row: str) -> int:
     row = row.strip()
     if row.startswith("|"):
@@ -403,14 +440,21 @@ def table_rows(lines: list[str]) -> set[int]:
     """Return line indexes of GFM tables, with or without outer pipes.
 
     A table starts with a header row followed by a delimiter row with the same
-    number of cells and runs until a blank line or another block starts.
+    number of cells and runs until a blank line or another block starts. Rows
+    are matched after container prefixes are removed, so a table inside a
+    block quote, list item or admonition counts. As on the site, a line
+    without the quote marker lazily continues a quoted table as another row.
     """
     rows: set[int] = set()
+    bodies = container_bodies(lines)
     index = 1
     while index < len(lines):
-        header, delimiter = lines[index - 1].strip(), lines[index].strip()
+        header, delimiter = bodies[index - 1].body.strip(), bodies[index].body.strip()
         if (
             index - 1 not in rows
+            # An unquoted delimiter lazily continues a quoted header; a quoted
+            # one under an unquoted header starts a new block.
+            and bodies[index].container[0] <= bodies[index - 1].container[0]
             and "|" in header
             and "|" in delimiter
             and TABLE_DELIMITER.fullmatch(delimiter)
@@ -419,7 +463,7 @@ def table_rows(lines: list[str]) -> set[int]:
             rows.update((index - 1, index))
             index += 1
             while index < len(lines):
-                row = lines[index].strip()
+                row = bodies[index].body.strip()
                 if not row or TABLE_BREAK.match(row) or BLOCK_CONTAINER.match(row):
                     break
                 rows.add(index)

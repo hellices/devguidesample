@@ -101,7 +101,10 @@ class SentenceHeadingTest(unittest.TestCase):
         # The site shows these as text, not headings.
         for text in ("1) ## 설치합니다.\n", "- 항목이다.\n  ## 설치합니다.\n", "- 항목이다.\n    ## 설치합니다.\n"):
             with self.subTest(text=text):
-                self.assertEqual(analyze("# 제목\n\n" + text).metrics["sentence_headings"], 0)
+                report = analyze("# 제목\n\n" + text)
+                self.assertEqual(report.metrics["sentence_headings"], 0)
+                # The line is checked as prose instead of being dropped.
+                self.assertEqual(report.metrics["formal_endings"], 1)
 
     def test_four_space_indent_is_not_a_heading(self) -> None:
         report = analyze("# 제목\n\n본문이다.\n\n    ## 구성: 세부 정보\n\n본문이다.\n")
@@ -110,12 +113,33 @@ class SentenceHeadingTest(unittest.TestCase):
     def test_setext_headings_are_headings(self) -> None:
         report = analyze(
             "따라서, 설정합니다\n===\n\n본문이다.\n\n"
-            "애플리케이션에 의해\n저장됩니다\n---\n\n본문이다.\n"
+            "애플리케이션에 의해 저장됩니다\n---\n\n본문이다.\n"
         )
         self.assertEqual(report.metrics["sentence_headings"], 2)
         # Heading text is left out of the prose checks.
         self.assertEqual(report.metrics["adverb_comma"], 0)
         self.assertEqual(report.metrics["translationese"], 0)
+
+    def test_setext_needs_a_single_line_block_on_site(self) -> None:
+        # MkDocs renders a longer paragraph followed by "---" as a paragraph and a rule.
+        for text in ("첫 줄이다.\n결과: 지연\n---\n", "첫 줄이다.\n결과: 지연\n===\n"):
+            with self.subTest(text=text):
+                report = analyze("# 제목\n\n" + text)
+                self.assertEqual(report.metrics["colon_headings"], 0)
+                self.assertEqual(report.metrics["plain_endings"], 1)
+
+    def test_setext_headings_inside_containers(self) -> None:
+        for text in (
+            "> 결과: 지연 시간\n> ---\n",
+            "> 본문이다.\n>\n> 결과: 지연\n> ===\n",
+            "- 항목이다.\n\n    결과: 지연\n    ---\n",
+            '!!! note "참고"\n    결과: 지연\n    ---\n',
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(analyze("# 제목\n\n" + text).metrics["colon_headings"], 1)
+        # The underline must be in the same block quote as the title.
+        report = analyze("# 제목\n\n> 결과: 지연\n> 둘째 줄이다.\n> ---\n")
+        self.assertEqual(report.metrics["colon_headings"], 0)
 
     def test_thematic_break_is_not_setext_heading(self) -> None:
         report = analyze("# 제목\n\n본문이다.\n\n---\n\n본문이다.\n")
@@ -351,6 +375,26 @@ class TableTest(unittest.TestCase):
     def test_pipe_in_prose_is_not_a_table(self) -> None:
         report = analyze("# 표\n\n명령은 a | b 형태다. 그리고, 이 쉼표는 센다.\n")
         self.assertEqual(report.metrics["adverb_comma"], 1)
+
+
+class ContainerTableTest(unittest.TestCase):
+    def test_tables_inside_containers_are_not_prose(self) -> None:
+        for text in (
+            "> | 항목 | 설명 |\n> | --- | --- |\n> | 결론적으로 | 그리고, 값 |\n",
+            "> > | 항목 | 설명 |\n> > |---|---|\n> > | 결론적으로 | 그리고, 값 |\n",
+            "- 목록이다.\n\n    | 항목 | 설명 |\n    | --- | --- |\n    | 결론적으로 | 그리고, 값 |\n",
+            '!!! note "참고"\n    | 항목 | 설명 |\n    | --- | --- |\n    | 결론적으로 | 그리고, 값 |\n',
+        ):
+            with self.subTest(text=text):
+                report = analyze("# 표\n\n" + text + "\n본문이다.\n")
+                self.assertEqual(report.metrics["signature_phrases"], 0)
+                self.assertEqual(report.metrics["adverb_comma"], 0)
+
+    def test_lazy_line_continues_quoted_table(self) -> None:
+        # MkDocs renders the unquoted line as another row of the quoted table.
+        report = analyze("# 표\n\n> | 항목 | 설명 |\n> | --- | --- |\n결론적으로, 셀이다.\n\n본문이다.\n")
+        self.assertEqual(report.metrics["signature_phrases"], 0)
+        self.assertEqual(report.metrics["plain_endings"], 1)
 
 
 class ScanFormatTest(unittest.TestCase):
