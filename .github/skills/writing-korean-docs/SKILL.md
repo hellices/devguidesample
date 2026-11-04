@@ -28,7 +28,7 @@ The normative rules live in `docs/contributing/index.md` (`#content-first-headin
 
 ## Invariants
 
-Keep every number, unit, date, proper noun, code, link, quotation, claim, and hedge ("~할 수 있다", "추정", "본 측정 조건 기준"). Do not add a claim or make one more or less certain. Inflation and vague filler ("새로운 패러다임", "근본적으로", "다양한 요소", "핵심") are not claims: remove them, and if a sentence is left with nothing to say, remove it and list it in the step 5 report. Keep the document's existing ending style (`~다` or `~합니다`).
+Keep every number, unit, date, proper noun, code, link, quotation, claim, and hedge ("~할 수 있다", "추정", "본 측정 조건 기준"). Do not add a claim or make one more or less certain. Remove inflation and vague filler ("새로운 패러다임", "근본적으로", "다양한 요소", "핵심") only where the word adds nothing: if deleting it leaves the meaning unchanged, it is filler. Keep it when it carries a classification, scope, or degree, as in "핵심 API와 보조 API". If a sentence is left with nothing to say, remove it and list it in the step 5 report. Keep the document's existing ending style (`~다` or `~합니다`).
 
 ## Headings
 
@@ -48,7 +48,7 @@ Apply the pairs in [rewrite-examples.md](rewrite-examples.md). The most frequent
 - Put the actor first: "운영팀에 의해 결정되어진다" → "운영팀이 정한다".
 - Drop padding verbs: "만료 작업을 수행한다" → "키를 만료시킨다".
 - No comma after `-고`·`-며`·`-지만` or after 그리고·따라서.
-- Delete summary openers and closers ("결론적으로", "크게 세 가지로 나눌 수 있다") and inflation ("새로운 패러다임", "핵심").
+- Delete summary openers and closers ("결론적으로", "크게 세 가지로 나눌 수 있다") and inflation that adds nothing ("새로운 패러다임", "핵심" used only for emphasis; see [Invariants](#invariants)).
 - One `**결론**:` box per document at most; turn others into a plain final sentence.
 
 ## Common mistakes
