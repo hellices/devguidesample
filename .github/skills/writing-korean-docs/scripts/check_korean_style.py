@@ -40,6 +40,9 @@ HTML_COMMENT_BLOCK = re.compile(r" {0,3}<!--")
 # Only spaces and tabs may follow the marker, so an empty "#" heading never
 # swallows the next line.
 HEADING = re.compile(r"^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", re.M)
+QUOTE_PREFIX = re.compile(r"(?: {0,3}> ?)+")
+# Python-Markdown treats "1)" as text, so only "1." opens an ordered item here.
+HEADING_LIST_MARKER = re.compile(r" {0,3}(?:[-*+]|\d{1,9}\.)[ \t]+")
 SETEXT_UNDERLINE = re.compile(r" {0,3}(=+|-+)[ \t]*$")
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+", re.M)
 BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
@@ -339,6 +342,54 @@ def convert_setext_headings(text: str) -> str:
     return "\n".join(lines)
 
 
+def heading_matches(lines: list[str]) -> dict[int, re.Match[str]]:
+    """Return ATX heading matches by line index, including headings in containers.
+
+    The site renderer shows these as headings, so they are matched after the
+    container prefix is removed:
+    - "> ## 제목" at any quote depth, including a quote that continues a paragraph
+    - "- ## 제목" and "1. ## 제목" on the list marker line ("1)" is not a list)
+    - a line in a block indented by four or more spaces that starts after a
+      blank line or an admonition, details or tab opener
+    A line that lazily continues a list item's first block keeps its indent
+    and is not a heading, and neither is any line that starts with a space.
+    """
+    found: dict[int, re.Match[str]] = {}
+    for index, line in enumerate(lines):
+        body = _strip_quotes(line)
+        if _indent(body) >= 4 and _in_indented_block(lines, index):
+            body = body.expandtabs(4).lstrip(" ")
+        item = HEADING_LIST_MARKER.match(body)
+        if item:
+            body = body[item.end():]
+        # Python-Markdown needs "#" at the start of the line, so "   ## 제목" is text.
+        match = HEADING.match(body) if body.startswith("#") else None
+        if match:
+            found[index] = match
+    return found
+
+
+def _strip_quotes(line: str) -> str:
+    quotes = QUOTE_PREFIX.match(line)
+    return line[quotes.end():] if quotes else line
+
+
+def _indent(line: str) -> int:
+    expanded = line.expandtabs(4)
+    return len(expanded) - len(expanded.lstrip(" "))
+
+
+def _in_indented_block(lines: list[str], index: int) -> bool:
+    """Whether the indented run holding lines[index] starts a container block."""
+    for previous in range(index - 1, -1, -1):
+        line = _strip_quotes(lines[previous])
+        if not line.strip() or BLOCK_CONTAINER.match(line):
+            return True
+        if _indent(line) < 4:
+            return False
+    return False
+
+
 def table_cells(row: str) -> int:
     row = row.strip()
     if row.startswith("|"):
@@ -387,6 +438,7 @@ def paragraph_lines(lines: list[str], tables: set[int]) -> list[int]:
     dash-joined fragments.
     """
     kept: list[int] = []
+    headings = heading_matches(lines)
     in_list = False
     previous_blank = True
     for index, line in enumerate(lines):
@@ -395,7 +447,7 @@ def paragraph_lines(lines: list[str], tables: set[int]) -> list[int]:
             previous_blank = True
             continue
         indented = len(line) - len(line.lstrip(" ")) >= 2
-        if index in tables or HEADING.match(line):
+        if index in tables or index in headings:
             in_list = False
         elif re.match(r" {0,3}>", line) or body.startswith("<"):
             in_list = False
@@ -582,9 +634,10 @@ def strip_markup(text: str) -> tuple[str, str]:
     markdown = strip_link_targets(text)
     lines = markdown.splitlines()
     tables = table_rows(lines)
+    headings = heading_matches(lines)
     prose_lines = []
     for index, line in enumerate(lines):
-        if HEADING.match(line) or index in tables or THEMATIC_BREAK.match(line):
+        if index in headings or index in tables or THEMATIC_BREAK.match(line):
             prose_lines.append("")
             continue
         prose_lines.append(BULLET.sub("", line))
@@ -656,7 +709,7 @@ def analyze(path: Path, limits: Thresholds) -> Report:
 
     headings = [
         normalize_inline(HEADING_ANCHOR.sub("", m.group(2)))
-        for m in HEADING.finditer(markdown)
+        for m in heading_matches(markdown.splitlines()).values()
     ]
     colon_headings = [h for h in headings if re.search(r"\S\s?[:：]\s+\S", h)]
     if document_type in REPORT_TYPES:

@@ -67,14 +67,37 @@ class SentenceHeadingTest(unittest.TestCase):
                 report = analyze(f"{heading}\n\n본문이다.\n")
                 self.assertEqual(report.metrics["sentence_headings"], 1)
 
-    def test_atx_heading_indented_up_to_three_spaces(self) -> None:
+    def test_space_before_hash_is_text_on_site(self) -> None:
+        # MkDocs renders "   ## 구성: 세부 정보" as a paragraph, not a heading.
         for indent in (1, 2, 3):
             with self.subTest(indent=indent):
                 report = analyze(" " * indent + "## 구성: 세부 정보\n\n본문이다.\n")
-                self.assertEqual(report.metrics["colon_headings"], 1)
-        # An indented heading is left out of the prose checks.
+                self.assertEqual(report.metrics["colon_headings"], 0)
+        # The visible text is prose, so its comma is counted.
         report = analyze("   ## 따라서, 설정한다\n\n본문이다.\n")
-        self.assertEqual(report.metrics["adverb_comma"], 0)
+        self.assertEqual(report.metrics["adverb_comma"], 1)
+
+    def test_headings_inside_containers_follow_site_renderer(self) -> None:
+        rendered = (
+            "> ## 설치합니다.\n",
+            "> 본문이다.\n> ## 설치합니다.\n",
+            "- ## 설치합니다.\n",
+            "1. ## 설치합니다.\n",
+            "> - ## 설치합니다.\n",
+            '!!! note "참고"\n    본문이다.\n    ## 설치합니다.\n',
+            "- 항목이다.\n\n    ## 설치합니다.\n",
+            "- 항목이다.\n\n    - ## 설치합니다.\n",
+        )
+        for text in rendered:
+            with self.subTest(text=text):
+                report = analyze("# 제목\n\n" + text)
+                self.assertEqual(report.metrics["sentence_headings"], 1)
+                # The heading is not counted again as a "~니다" prose sentence.
+                self.assertEqual(report.metrics["formal_endings"], 0)
+        # The site shows these as text, not headings.
+        for text in ("1) ## 설치합니다.\n", "- 항목이다.\n  ## 설치합니다.\n", "- 항목이다.\n    ## 설치합니다.\n"):
+            with self.subTest(text=text):
+                self.assertEqual(analyze("# 제목\n\n" + text).metrics["sentence_headings"], 0)
 
     def test_four_space_indent_is_not_a_heading(self) -> None:
         report = analyze("# 제목\n\n본문이다.\n\n    ## 구성: 세부 정보\n\n본문이다.\n")
