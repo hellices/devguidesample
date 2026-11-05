@@ -355,6 +355,17 @@ class LinkReferenceTest(unittest.TestCase):
         report = analyze("# [설정합니다.][없음]\n\n본문이다.\n")
         self.assertEqual(report.metrics["sentence_headings"], 0)
 
+    def test_brackets_that_are_not_links_stay_in_headings(self) -> None:
+        # MkDocs shows "[설정합니다.]" with its brackets when no definition exists.
+        for heading in ("[설정합니다.]", "[설정합니다.][]"):
+            with self.subTest(heading=heading):
+                report = analyze(f"# {heading}\n\n본문이다.\n")
+                self.assertEqual(report.metrics["sentence_headings"], 0)
+        # A defined shortcut reference and an inline link show only the label.
+        for text in ("# [설정합니다.]\n\n본문이다.\n\n[설정합니다.]: /guide\n", "# [설정합니다.](/guide)\n\n본문이다.\n"):
+            with self.subTest(text=text):
+                self.assertEqual(analyze(text).metrics["sentence_headings"], 1)
+
     def test_reference_syntax_inside_paragraph_is_prose(self) -> None:
         report = analyze("# 참조\n\n문단 중간이다.\n[a]: /b (것이 중요하다.)\n")
         self.assertEqual(report.metrics["translationese"], 1)

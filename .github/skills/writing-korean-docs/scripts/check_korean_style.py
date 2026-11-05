@@ -59,13 +59,15 @@ LINK_REFERENCE_TITLE = re.compile(r"[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)
 # A full or collapsed reference link, "[text][ref]", "[text] [ref]" or "[text][]".
 # Python-Markdown allows one whitespace character between the brackets.
 REFERENCE_LINK = re.compile(r"(!?\[([^\]\n]*)\])\s?\[([^\]\n]*)\]")
+# A shortcut reference link "[text]" not followed by a target, label or ":".
+SHORTCUT_LINK = re.compile(r"!?\[([^\]\n]*)\](?![\[(:\ue000])")
 # The rest of a line that holds only spaces or tabs, i.e. a blank line.
 BLANK_LINE_AHEAD = re.compile(r"[ \t]*(?:\n|$)")
 # Python-Markdown's RE_LINK form "(<target> \"title\")".
 LINK_ANGLE_TARGET = re.compile(r"""\(\s*<[^<>]*>\s*(?:'[^']*'|"[^"]*")?\s*\)""")
 # What may remain on a sources line once link labels are removed. A URL with its
 # own parentheses leaves a stray ")" after the link target is stripped.
-LINK_SEPARATORS = re.compile(r"[\s·,|/)]*")
+LINK_SEPARATORS = re.compile(r"[\s·,|/)\ue000]*")
 EM_DASH = re.compile(r"—|(?<=\S) -- (?=\S)")
 DOCUMENT_TYPE = re.compile(r"^document_type:\s*['\"]?([a-z-]+)", re.M)
 # Report genres may title sections as "결과 1: 단건 레이턴시" or "부록: 비용 참고".
@@ -138,7 +140,10 @@ QUOTED = re.compile(
     r"|(?<![A-Za-z0-9])'[^'\n]*'(?![A-Za-z0-9])"
 )
 # Inline Markdown that wraps heading text: images, link labels, emphasis.
-INLINE_LINK = re.compile(r"!?\[([^\]]*)\]")
+# Put after the "]" of a real link: an inline link whose target was removed, or
+# a reference link whose label is defined. Other "[text]" renders with brackets.
+LINK_END = "\ue000"
+INLINE_LINK = re.compile(r"!?\[([^\]]*)\]" + LINK_END)
 INLINE_EMPHASIS = re.compile(
     r"(\*\*|\*|~~)(?=\S)(.+?)(?<=\S)\1"
     r"|(?<![A-Za-z0-9])(__|_)(?=\S)(.+?)(?<=\S)\3(?![A-Za-z0-9])"
@@ -525,7 +530,7 @@ def is_exempt_label(lines: list[str], index: int, tables: set[int]) -> bool:
 
 
 def strip_link_targets(text: str) -> str:
-    """Remove inline link destinations, keeping "]" so link labels stay visible.
+    """Remove inline link destinations, keeping "]" and marking it with LINK_END.
 
     A destination is "<...>" or a run that may contain balanced parentheses
     and backslash escapes, as in CommonMark: "[설명](https://x/a_(b)/c)".
@@ -551,7 +556,7 @@ def strip_link_targets(text: str) -> str:
             if text.startswith("(", index + 1):
                 end = _link_target_end(text, index + 2)
                 if end is not None:
-                    out.append("]")
+                    out.append("]" + LINK_END)
                     index = end
                     continue
         out.append(char)
@@ -678,16 +683,24 @@ def _reference_label(label: str) -> str:
 
 
 def resolve_reference_links(text: str, labels: set[str]) -> str:
-    """Keep only the visible "[text]" of a full or collapsed reference link.
+    """Mark reference links whose label is defined, keeping only "[text]".
 
-    The site shows "[설정합니다.][guide]" as "설정합니다." when "guide" is
-    defined. An undefined reference stays as the literal text it renders as.
+    The site shows "[설정합니다.][guide]", "[설정합니다.][]" and
+    "[설정합니다.]" as "설정합니다." when the label is defined. An undefined
+    reference stays as the literal text it renders as, brackets included.
     """
-    def visible(match: re.Match[str]) -> str:
+    def full(match: re.Match[str]) -> str:
         label = match.group(3) or match.group(2)
-        return match.group(1) if _reference_label(label) in labels else match.group(0)
+        if _reference_label(label) in labels:
+            return match.group(1) + LINK_END
+        return match.group(0)
 
-    return REFERENCE_LINK.sub(visible, text)
+    def shortcut(match: re.Match[str]) -> str:
+        if _reference_label(match.group(1)) in labels:
+            return match.group(0) + LINK_END
+        return match.group(0)
+
+    return SHORTCUT_LINK.sub(shortcut, REFERENCE_LINK.sub(full, text))
 
 
 def strip_markup(text: str) -> tuple[str, str]:
@@ -713,12 +726,15 @@ def strip_markup(text: str) -> tuple[str, str]:
         prose_lines.append(BULLET.sub("", line))
     prose = "\n".join(prose_lines)
     prose = re.sub(r"\*\*([^*\n]+)\*\*|__([^_\n]+)__", lambda m: m.group(1) or m.group(2), prose)
-    return markdown, prose
+    return markdown, prose.replace(LINK_END, "")
 
 
 def normalize_inline(text: str) -> str:
-    """Reduce link labels and emphasis to plain text."""
-    text = INLINE_LINK.sub(r"\1", text)
+    """Reduce real link labels and emphasis to plain text.
+
+    Brackets that are not a link stay, as the site shows them.
+    """
+    text = INLINE_LINK.sub(r"\1", text).replace(LINK_END, "")
     previous = None
     while previous != text:
         previous, text = text, INLINE_EMPHASIS.sub(lambda m: m.group(2) or m.group(4), text)
