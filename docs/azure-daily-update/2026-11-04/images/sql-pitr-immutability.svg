@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" role="img" aria-labelledby="sql-title sql-desc">
+  <title id="sql-title">PITR retention과 immutability의 관계</title>
+  <desc id="sql-desc">35일 PITR retention 예시에서 기본 immutability는 최근 최대 7일을 보호하고, 영구 lock은 설정한 retention 전체를 보호한다. Lock을 켠 뒤에는 보존 기간을 줄이거나 lock을 해제할 수 없다.</desc>
+  <defs><style>text{font-family:Arial,'Apple SD Gothic Neo',sans-serif;fill:#172554;font-size:22px}.heading{font-size:28px;font-weight:700}.detail{font-size:20px}</style></defs>
+  <rect width="960" height="440" fill="#fff"/>
+  <text x="40" y="48" class="heading">35일 보존과 35일 변경·삭제 방지는 다른 설정</text>
+  <text x="40" y="112" font-weight="700">기본 보호</text>
+  <rect x="264" y="84" width="640" height="64" rx="4" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <rect x="776" y="84" width="128" height="64" rx="4" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="484" y="124" text-anchor="middle" class="detail">PITR retention: 35일 예시</text>
+  <text x="840" y="124" text-anchor="middle" class="detail">최대 7일</text>
+  <text x="40" y="212" font-weight="700">PITR retention lock</text>
+  <rect x="264" y="180" width="640" height="64" rx="4" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="584" y="220" text-anchor="middle">설정한 retention 전체의 immutability</text>
+  <text x="264" y="284" class="detail">과거 복원 시점</text>
+  <text x="904" y="284" text-anchor="end" class="detail">최근 백업</text>
+  <path d="M40 316H920" stroke="#cbd5e1"/>
+  <text x="40" y="352" font-weight="700">Lock 이후: 해제 불가 · 기간 축소 불가 · 지원 한도 내 연장만 가능</text>
+  <text x="40" y="388" class="detail">파란색: 변경·삭제 방지 기간 · 회색: 보존 기간</text>
+  <text x="40" y="420" class="detail">백업 보호 ≠ database 삭제 방지 · 모든 tier가 35일을 지원하는 것은 아님</text>
+</svg>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" role="img" aria-labelledby="mcp-title mcp-desc">
+  <title id="mcp-title">MCP gateway의 발견과 호출</title>
+  <desc id="mcp-desc">Gateway가 독립 MCP 서버들의 기능 목록을 합치고 Service 이름으로 구분해 client에 제공하며, tool 호출은 해당 기능을 소유한 서버로 전달한다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#475569"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <style>text{font-family:Arial,'Apple SD Gothic Neo',sans-serif;fill:#172554;font-size:22px}.heading{font-size:28px;font-weight:700}.detail{font-size:19px}.flow{fill:none;stroke:#2563eb;stroke-width:3;marker-end:url(#arrow-link)}.reply{fill:none;stroke:#475569;stroke-width:2;stroke-dasharray:6 4;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="960" height="600" fill="#fff"/>
+  <text x="40" y="48" class="heading">서버별 소유권은 유지하고, client 접점은 하나로</text>
+  <rect x="616" y="84" width="304" height="352" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="636" y="120" class="detail">Kubernetes MCP backends</text>
+  <path d="M216 256H296" class="flow"/>
+  <path d="M296 344H216" class="reply"/>
+  <path d="M536 256H576Q584 256 584 248V204Q584 196 592 196H640" class="flow"/>
+  <path d="M536 352H600Q608 352 608 360V372Q608 380 616 380H640" class="flow"/>
+  <rect x="40" y="216" width="176" height="184" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="128" y="280" text-anchor="middle" font-weight="700">MCP client</text>
+  <text x="128" y="316" text-anchor="middle" class="detail">한 endpoint</text>
+  <text x="128" y="348" text-anchor="middle" class="detail">발견 · 호출</text>
+  <rect x="296" y="184" width="240" height="216" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="416" y="228" text-anchor="middle" font-weight="700">AGC gateway</text>
+  <text x="416" y="264" text-anchor="middle" class="detail">Gateway + MCPRoute</text>
+  <text x="416" y="304" text-anchor="middle" class="detail">발견 응답 병합</text>
+  <text x="416" y="336" text-anchor="middle" class="detail">Service별 이름 구분</text>
+  <text x="416" y="372" text-anchor="middle" class="detail">소유 서버로 호출 전달</text>
+  <rect x="640" y="144" width="256" height="112" rx="8" fill="#fff" stroke="#94a3b8"/>
+  <text x="768" y="180" text-anchor="middle" font-weight="700">orders Service</text>
+  <text x="768" y="216" text-anchor="middle" class="detail">get_order</text>
+  <rect x="640" y="300" width="256" height="112" rx="8" fill="#fff" stroke="#94a3b8"/>
+  <text x="768" y="344" text-anchor="middle" font-weight="700">inventory Service</text>
+  <text x="768" y="380" text-anchor="middle" class="detail">get_stock</text>
+  <rect x="256" y="472" width="624" height="32" fill="#fff"/>
+  <text x="256" y="496" class="detail">호출 예: orders__get_order → orders의 get_order</text>
+  <path d="M40 528H920" stroke="#cbd5e1"/>
+  <text x="40" y="562" class="detail">목록: orders__get_order · inventory__get_stock</text>
+  <text x="40" y="588" class="detail">실선: 요청 / 호출 · 점선: 병합한 기능 목록 응답</text>
+</svg>

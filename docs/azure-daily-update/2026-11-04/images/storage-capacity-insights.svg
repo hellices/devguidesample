@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" role="img" aria-labelledby="storage-title storage-desc">
+  <title id="storage-title">Storage Discovery의 상세 용량 조사</title>
+  <desc id="storage-desc">Blob 메타데이터를 account·container·prefix 수준으로 집계하고, Capacity details 차트에서 패턴을 확인한 후 View resources와 CSV로 원인 리소스를 조사한다. 자동 삭제나 tier 변경은 수행하지 않는다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#475569"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <style>text{font-family:Arial,'Apple SD Gothic Neo',sans-serif;fill:#172554;font-size:22px}.heading{font-size:28px;font-weight:700}.detail{font-size:20px}.flow{fill:none;stroke:#2563eb;stroke-width:3;marker-end:url(#arrow-link)}</style>
+  </defs>
+  <rect width="960" height="520" fill="#fff"/>
+  <text x="40" y="48" class="heading">용량 증가 패턴에서 원인 리소스까지 내려가기</text>
+  <path d="M264 248H312" class="flow"/>
+  <path d="M632 248H680" class="flow"/>
+  <rect x="40" y="140" width="224" height="232" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="152" y="184" text-anchor="middle" font-weight="700">Blob metadata</text>
+  <text x="152" y="228" text-anchor="middle" class="detail">접근 · 생성 · 수정</text>
+  <text x="152" y="264" text-anchor="middle" class="detail">tier · 크기</text>
+  <text x="152" y="300" text-anchor="middle" class="detail">version · snapshot</text>
+  <text x="152" y="336" text-anchor="middle" class="detail">soft-deleted data</text>
+  <rect x="312" y="100" width="320" height="312" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="472" y="148" text-anchor="middle" font-weight="700">Capacity details</text>
+  <text x="472" y="192" text-anchor="middle" class="detail">account · container · prefix</text>
+  <path d="M336 216H608" stroke="#93c5fd"/>
+  <text x="472" y="252" text-anchor="middle" class="detail">tier × recency</text>
+  <text x="472" y="288" text-anchor="middle" class="detail">구성 · object 크기 분포</text>
+  <text x="472" y="324" text-anchor="middle" class="detail">최소 보존 · 삭제 후 보존</text>
+  <text x="472" y="376" text-anchor="middle" class="detail">coverage 확인</text>
+  <rect x="680" y="160" width="240" height="192" rx="8" fill="#fff" stroke="#94a3b8"/>
+  <text x="800" y="208" text-anchor="middle" font-weight="700">View resources</text>
+  <text x="800" y="252" text-anchor="middle" class="detail">필터 · 정렬 · 조사</text>
+  <text x="800" y="292" text-anchor="middle" class="detail">CSV export</text>
+  <path d="M40 448H920" stroke="#cbd5e1"/>
+  <text x="40" y="484" class="detail">실선: 분석 흐름 · 개별 blob inventory나 자동 tier 변경 기능은 아님</text>
+</svg>
