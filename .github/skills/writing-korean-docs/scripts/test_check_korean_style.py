@@ -77,9 +77,10 @@ class SentenceHeadingTest(unittest.TestCase):
         report = analyze("   ## 따라서, 설정한다\n\n본문이다.\n")
         self.assertEqual(report.metrics["adverb_comma"], 1)
         # A top-level sentence heading indented three spaces is not a heading either.
-        report = analyze("   # 설치합니다\n\n본문이다.\n")
+        report = analyze("   # 설치합니다.\n\n본문이다.\n")
         self.assertEqual(report.metrics["sentence_headings"], 0)
-        self.assertEqual(report.metrics["formal_endings"], 0)
+        # The visible "# 설치합니다." is a prose sentence.
+        self.assertEqual(report.metrics["formal_endings"], 1)
 
     def test_headings_inside_containers_follow_site_renderer(self) -> None:
         rendered = (
@@ -339,6 +340,20 @@ class LinkReferenceTest(unittest.TestCase):
         self.assertEqual(report.metrics["translationese"], 0)
         self.assertEqual(report.metrics["plain_endings"], 0)
         self.assertEqual(report.findings, [])
+
+    def test_full_and_collapsed_reference_links_show_first_label(self) -> None:
+        # MkDocs renders each heading below as the link text "설정합니다." only.
+        for heading, definition in (
+            ("[설정합니다.][guide]", "[guide]: /guide"),
+            ("[설정합니다.] [Guide]", "[guide]: /guide"),
+            ("[설정합니다.][]", "[설정합니다.]: /guide"),
+        ):
+            with self.subTest(heading=heading):
+                report = analyze(f"# {heading}\n\n본문이다.\n\n{definition}\n")
+                self.assertEqual(report.metrics["sentence_headings"], 1)
+        # An undefined reference renders as literal text, which is not a sentence heading.
+        report = analyze("# [설정합니다.][없음]\n\n본문이다.\n")
+        self.assertEqual(report.metrics["sentence_headings"], 0)
 
     def test_reference_syntax_inside_paragraph_is_prose(self) -> None:
         report = analyze("# 참조\n\n문단 중간이다.\n[a]: /b (것이 중요하다.)\n")
