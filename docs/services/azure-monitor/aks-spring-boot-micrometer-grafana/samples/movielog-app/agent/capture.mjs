@@ -1,21 +1,33 @@
 // Captures a Managed Grafana dashboard or Explore view without an interactive login.
-// The Entra access token is sent as a bearer header on every request, so nothing is stored.
+// The Entra access token is attached only to requests for the Grafana origin and is never stored.
 //
 // GRAFANA_TOKEN=$(az account get-access-token --resource https://dashboard.azure.com \
 //   --query accessToken -o tsv) node capture.mjs "<grafana-url-path-and-query>" out.png [width] [height]
 import { chromium } from "playwright";
 
 const [path, out, width = "1600", height = "1200"] = process.argv.slice(2);
-const base = process.env.GRAFANA_URL.replace(/\/$/, "");
-const token = process.env.GRAFANA_TOKEN;
+const { GRAFANA_URL, GRAFANA_TOKEN } = process.env;
+if (!GRAFANA_URL || !GRAFANA_TOKEN || !path || !out) {
+  console.error("usage: GRAFANA_URL=... GRAFANA_TOKEN=... node capture.mjs <path-and-query> <out.png> [width] [height]");
+  process.exit(2);
+}
+const base = GRAFANA_URL.replace(/\/$/, "");
+const grafanaOrigin = new URL(base).origin;
 
 const browser = await chromium.launch();
 const context = await browser.newContext({
   viewport: { width: Number(width), height: Number(height) },
   deviceScaleFactor: 1,
-  extraHTTPHeaders: { Authorization: `Bearer ${token}` },
   locale: "ko-KR",
   timezoneId: "Asia/Seoul",
+});
+// Send the bearer token to Grafana only, never to CDNs or other hosts the page loads.
+await context.route("**/*", (route) => {
+  const request = route.request();
+  if (new URL(request.url()).origin !== grafanaOrigin) {
+    return route.continue();
+  }
+  return route.continue({ headers: { ...request.headers(), authorization: `Bearer ${GRAFANA_TOKEN}` } });
 });
 const page = await context.newPage();
 await page.goto(base + path, { waitUntil: "networkidle", timeout: 120000 });

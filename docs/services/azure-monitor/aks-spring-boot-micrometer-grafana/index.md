@@ -241,14 +241,18 @@ kubectl create secret generic appinsights -n movielog \
 # 1) webhook이 이전 주입분을 걷어내도록 annotation만 먼저 끕니다.
 kubectl patch deployment movielog -n movielog --type merge -p \
   '{"spec":{"template":{"metadata":{"annotations":{"instrumentation.opentelemetry.io/inject-java":"false"}}}}}'
+kubectl rollout status deploy/movielog -n movielog
 # 2) 정리된 Deployment에 3.7.10 init image와 agent 환경 변수를 넣습니다.
 envsubst < k8s/21-agent-3.7.10.patch.yaml > /tmp/agent-patch.yaml
 kubectl patch deployment movielog -n movielog --type strategic --patch-file /tmp/agent-patch.yaml
-kubectl logs deploy/movielog -n movielog -c movielog | grep "Agent .* started"
+kubectl rollout status deploy/movielog -n movielog
+# Pod마다 시작한 agent 버전을 확인합니다.
+kubectl logs -n movielog -l app=movielog -c movielog --tail=-1 --prefix | grep "Agent .* started"
 ```
 
 ```text
-Application Insights Java Agent 3.7.10 started successfully (PID 1, JVM running for 4.568 s)
+[pod/movielog-54bb48b5b7-f6wzm/movielog] ... Application Insights Java Agent 3.7.10 started successfully
+[pod/movielog-54bb48b5b7-k8jjm/movielog] ... Application Insights Java Agent 3.7.10 started successfully
 ```
 
 ### 이미 주입된 Deployment를 한 번에 바꾸면 webhook이 agent 설정을 지웁니다 { #webhook-revert }
@@ -274,6 +278,8 @@ patch로 넣으면 유지됩니다. 처음부터 custom agent로 배포한다면
 
 ```bash
 envsubst < k8s/20-movielog.yaml | kubectl replace -f -
+# replace는 manifest의 replicas: 1로 되돌리므로 다시 늘립니다.
+kubectl scale deploy/movielog -n movielog --replicas=2
 ```
 
 ## agent에게는 probe → build → verify → look 순서로 대시보드를 시킵니다 { #agent-method }
@@ -402,6 +408,7 @@ customMetrics
 | where name in ("movielog_reviews_stored", "movielog_comments_stored", "movielog_members_stored")
 | extend series = case(name == "movielog_reviews_stored", "리뷰",
                        name == "movielog_comments_stored", "댓글", "회원")
+| where timestamp < bin(now(), max_of($__interval, 1m))   // 채워지는 중인 현재 bin 제외
 | summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m)), series
 | order by timestamp asc
 ```
@@ -416,7 +423,7 @@ Grafana Viewer 이상 역할이 필요합니다.
 ```bash
 export GRAFANA_URL="$(az grafana show -g $RG -n <grafana-name> --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token --resource https://dashboard.azure.com --query accessToken -o tsv)"
-python3 verify_panels.py ../grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
+python3 agent/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
 ```
 
 첫 실행에서 한 panel이 실패했습니다.
@@ -447,11 +454,12 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 | 정상 건수가 빨간색 | stat 기본 threshold 80 | stat 색을 고정색으로 지정 |
 | legend가 `perMin api` | 값 column 이름이 series 이름 앞에 붙음 | `displayName`에 dimension label 사용 |
 | 아래쪽 panel이 비어 보임 | Grafana의 내부 scroll과 `fullPage` 캡처 불일치 | viewport를 dashboard 높이로 지정 |
+| 모든 분당 series가 오른쪽 끝에서 급락 | 아직 채워지는 현재 bin까지 그림 | 시계열 query에 `where timestamp < bin(now(), <bin>)` 추가 |
 
 수정 뒤 캡처가 이 문서 맨 위의 대시보드입니다. 캡처에서 다음도 확인했습니다.
 
-- Pod별 분당 영화 조회가 한 Pod에 약 370, 다른 Pod에 약 70으로 치우쳐
-  있습니다. 로그인 세션 때문에 Service에 `sessionAffinity: ClientIP`를 둔
+- Pod별 분당 영화 조회가 한 Pod에 약 300, 다른 Pod에 약 150으로 고르지
+  않습니다. 로그인 세션 때문에 Service에 `sessionAffinity: ClientIP`를 둔
   결과입니다. 처음 합성 사용자 3개일 때는 모든 요청이 한 Pod로 갔고, 6개로
   늘린 뒤 두 Pod에 나뉘었습니다.
 - `댓글 · web`이 0으로 평평합니다. 0으로 미리 등록한 counter이고 합성 사용자는

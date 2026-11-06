@@ -46,6 +46,7 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
    - 정상 값이 경고색(빨강)으로 보이는가
    - legend가 "<column> <value>"처럼 읽기 어려운가
    - 시간축이 비어 보이거나 한 Pod에만 데이터가 몰리는가
+   - 모든 series가 오른쪽 끝에서 함께 떨어지는가(채워지는 중인 현재 bin)
    문제가 있으면 5단계로 돌아간다.
 9. report: 최종 panel 목록, 각 집계식의 근거가 된 probe 결과, 남은 한계를 보고한다.
 ```
@@ -61,4 +62,5 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
   한 panel이 400으로 실패했습니다.
 - 8단계는 query로는 보이지 않는 문제를 잡습니다. 실습에서 resource ID 변수에
   subscription ID가 노출됐고, stat 기본 threshold 때문에 정상 값이 빨갛게
-  보였습니다.
+  보였습니다. 리뷰 뒤 다시 캡처했을 때는 현재 bin 때문에 모든 분당 series가
+  오른쪽 끝에서 떨어지는 것을 찾았습니다.

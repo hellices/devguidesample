@@ -15,6 +15,8 @@ import json
 DS = {"type": "grafana-azure-monitor-datasource", "uid": "${datasource}"}
 STEP = "max_of($__interval, 1m)"
 PER_MIN = f"({STEP} / 1m)"
+# The current bin is still filling, so drop it to avoid a false dip at the right edge.
+COMPLETE = f"| where timestamp < bin(now(), {STEP})\n"
 
 
 def base(metric):
@@ -108,13 +110,13 @@ def build(appinsights_id):
     lay.add("timeseries", "분당 영화 조회 (채널별)", "bin마다 증가량을 더한 뒤 분당 값으로 환산합니다.",
             base("movielog_movie_views")
             + "| extend channel = tostring(customDimensions.channel)\n"
-              f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), channel\n"
+              + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), channel\n"
               "| order by timestamp asc",
             "short", 0, 12, 8, "time_series", options=LINES, label="channel")
     lay.add("timeseries", "분당 새 리뷰 (fresh / rotten)", "verdict dimension으로 나눈 리뷰 작성량입니다.",
             base("movielog_reviews_posted")
             + "| extend verdict = tostring(customDimensions.verdict)\n"
-              f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), verdict\n"
+              + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), verdict\n"
               "| order by timestamp asc",
             "short", 12, 12, 8, "time_series", defaults={"custom": BARS}, options=LINES, label="verdict")
     lay.newline(8)
@@ -126,12 +128,12 @@ def build(appinsights_id):
             '| where name in ("movielog_review_views", "movielog_comments_posted")\n'
             '| extend series = strcat(iff(name == "movielog_review_views", "리뷰 조회", "댓글"), " · ",\n'
             "                         tostring(customDimensions.channel))\n"
-            f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), series\n"
+            + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), series\n"
             "| order by timestamp asc",
             "short", 0, 12, 8, "time_series", options=LINES, label="series")
     lay.add("timeseries", "평균 별점 추이", "bin마다 sum(valueSum) / sum(valueCount)로 가중 평균을 계산합니다.",
             base("movielog_review_rating")
-            + f"| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, {STEP})\n"
+            + COMPLETE + f"| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, {STEP})\n"
               "| order by timestamp asc",
             "none", 12, 12, 8, "time_series", defaults={"decimals": 2, "min": 0, "max": 5, "displayName": "평균 별점"},
             options=LINES)
@@ -149,7 +151,7 @@ def build(appinsights_id):
             '| where name in ("movielog_reviews_stored", "movielog_comments_stored", "movielog_members_stored")\n'
             '| extend series = case(name == "movielog_reviews_stored", "리뷰",\n'
             '                       name == "movielog_comments_stored", "댓글", "회원")\n'
-            f"| summarize stored = max(value) by bin(timestamp, {STEP}), series\n"
+            + COMPLETE + f"| summarize stored = max(value) by bin(timestamp, {STEP}), series\n"
             "| order by timestamp asc",
             "short", 4, 20, 8, "time_series", options=LINES, label="series")
     lay.newline(8)
@@ -157,13 +159,13 @@ def build(appinsights_id):
     lay.row("운영 (Pod 분포와 수신 상태)")
     lay.add("timeseries", "Pod별 분당 영화 조회", "cloud_RoleInstance로 나눠 트래픽이 한 Pod에 몰리는지 봅니다.",
             base("movielog_movie_views")
-            + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), cloud_RoleInstance\n"
+            + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), cloud_RoleInstance\n"
               "| order by timestamp asc",
             "short", 0, 12, 8, "time_series", options=LINES, label="cloud_RoleInstance")
     lay.add("timeseries", "분당 카탈로그 조회 (출처별)", "TMDB 키 없이 seed 데이터만 쓰면 cache_hit만 나타납니다.",
             base("movielog_movie_catalog_lookups")
             + "| extend outcome = tostring(customDimensions.outcome)\n"
-              f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), outcome\n"
+              + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), outcome\n"
               "| order by timestamp asc",
             "short", 12, 12, 8, "time_series", options=LINES, label="outcome")
     lay.newline(8)

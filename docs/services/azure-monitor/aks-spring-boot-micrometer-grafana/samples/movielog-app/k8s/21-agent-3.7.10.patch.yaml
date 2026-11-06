@@ -3,8 +3,8 @@
 # Sending both in one update makes the webhook strip the APPLICATIONINSIGHTS_* variables below.
 #   envsubst < k8s/21-agent-3.7.10.patch.yaml > /tmp/agent-patch.yaml
 #   kubectl patch deployment movielog -n movielog --type strategic --patch-file /tmp/agent-patch.yaml
-# Return to managed injection with `envsubst < k8s/20-movielog.yaml | kubectl replace -f -`;
-# `kubectl apply` keeps these init container and volume entries and is rejected.
+# Return to managed injection with `envsubst < k8s/20-movielog.yaml | kubectl replace -f -`, then scale
+# back to 2 replicas; `kubectl apply` keeps these init container and volume entries and is rejected.
 spec:
   template:
     metadata:

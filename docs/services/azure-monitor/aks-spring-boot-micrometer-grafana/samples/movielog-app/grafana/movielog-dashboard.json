@@ -371,7 +371,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| extend channel = tostring(customDimensions.channel)\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), channel\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| extend channel = tostring(customDimensions.channel)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), channel\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -420,7 +420,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), verdict\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), verdict\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -478,7 +478,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_review_views\", \"movielog_comments_posted\")\n| extend series = strcat(iff(name == \"movielog_review_views\", \"리뷰 조회\", \"댓글\"), \" · \",\n                         tostring(customDimensions.channel))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_review_views\", \"movielog_comments_posted\")\n| extend series = strcat(iff(name == \"movielog_review_views\", \"리뷰 조회\", \"댓글\"), \" · \",\n                         tostring(customDimensions.channel))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -527,7 +527,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_review_rating\"\n| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_review_rating\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -648,7 +648,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_reviews_stored\", \"movielog_comments_stored\", \"movielog_members_stored\")\n| extend series = case(name == \"movielog_reviews_stored\", \"리뷰\",\n                       name == \"movielog_comments_stored\", \"댓글\", \"회원\")\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_reviews_stored\", \"movielog_comments_stored\", \"movielog_members_stored\")\n| extend series = case(name == \"movielog_reviews_stored\", \"리뷰\",\n                       name == \"movielog_comments_stored\", \"댓글\", \"회원\")\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -710,7 +710,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), cloud_RoleInstance\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), cloud_RoleInstance\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -759,7 +759,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_catalog_lookups\"\n| extend outcome = tostring(customDimensions.outcome)\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), outcome\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_catalog_lookups\"\n| extend outcome = tostring(customDimensions.outcome)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), outcome\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],

@@ -72,8 +72,11 @@ kubectl create secret generic appinsights -n movielog \
   --from-literal=connection-string="$APPLICATIONINSIGHTS_CONNECTION_STRING"
 kubectl patch deployment movielog -n movielog --type merge -p \
   '{"spec":{"template":{"metadata":{"annotations":{"instrumentation.opentelemetry.io/inject-java":"false"}}}}}'
+kubectl rollout status deploy/movielog -n movielog
 envsubst < k8s/21-agent-3.7.10.patch.yaml > /tmp/agent-patch.yaml
 kubectl patch deployment movielog -n movielog --type strategic --patch-file /tmp/agent-patch.yaml
+kubectl rollout status deploy/movielog -n movielog
+kubectl logs -n movielog -l app=movielog -c movielog --tail=-1 --prefix | grep "Agent .* started"
 ```
 
 처음 배포는 replica 1개로 시작합니다. `ddl-auto=update`가 schema를 만들 때 두
