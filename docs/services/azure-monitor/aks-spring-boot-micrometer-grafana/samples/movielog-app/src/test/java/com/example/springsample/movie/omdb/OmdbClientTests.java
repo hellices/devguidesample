@@ -56,6 +56,18 @@ class OmdbClientTests {
 	}
 
 	@Test
+	void ratingWithoutValueIsIgnored() {
+		OmdbClient client = client("omdbkey");
+		server.expect(requestTo(startsWith("https://omdb.test/")))
+			.andRespond(withSuccess("""
+					{"Ratings":[{"Source":"Rotten Tomatoes"},{"Source":"Rotten Tomatoes","Value":null}],
+					 "Metascore":"70","imdbRating":"7.0","Response":"True"}""", MediaType.APPLICATION_JSON));
+
+		assertThat(client.ratings("tt0000002")).contains(new ExternalRatings(null, 7.0, 70));
+		server.verify();
+	}
+
+	@Test
 	void notFoundErrorsAndMissingKeyGiveNoRatings() {
 		OmdbClient client = client("omdbkey");
 		server.expect(requestTo(startsWith("https://omdb.test/")))
@@ -65,6 +77,7 @@ class OmdbClientTests {
 
 		assertThat(client.ratings("tt0")).isEmpty();
 		assertThat(client.ratings("tt0")).isEmpty();
+		server.verify();
 		assertThat(client("").ratings("tt0")).isEmpty();
 	}
 

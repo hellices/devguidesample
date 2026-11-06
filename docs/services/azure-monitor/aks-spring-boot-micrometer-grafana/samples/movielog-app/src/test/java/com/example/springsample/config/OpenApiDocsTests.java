@@ -31,6 +31,7 @@ class OpenApiDocsTests {
 			.andExpect(jsonPath("$.paths", hasKey("/api/reviews")))
 			.andExpect(jsonPath("$.paths", hasKey("/api/reviews/{reviewId}/comments")))
 			.andExpect(jsonPath("$.paths", not(hasKey("/reviews"))))
+			.andExpect(jsonPath("$.paths['/api/movies/{tmdbId}/reviews'].post").exists())
 			.andExpect(jsonPath("$.paths['/api/movies/{tmdbId}/reviews'].post.parameters[?(@.name == 'user')]").isEmpty());
 	}
 

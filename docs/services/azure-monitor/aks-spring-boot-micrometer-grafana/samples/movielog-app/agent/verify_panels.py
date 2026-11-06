@@ -16,13 +16,26 @@ import urllib.request
 
 
 def frames_summary(result):
+    """Counts rows that carry at least one non-null number; a row of nulls is not data, a 0 is."""
     frames = result.get("frames", [])
     rows = 0
     for frame in frames:
+        fields = frame.get("schema", {}).get("fields", [])
         values = frame.get("data", {}).get("values", [])
-        if values:
-            rows += len(values[0])
+        numeric = [i for i, f in enumerate(fields) if f.get("type") == "number" and i < len(values)]
+        columns = [values[i] for i in numeric] if numeric else values
+        length = max((len(c) for c in columns), default=0)
+        rows += sum(1 for r in range(length) if any(r < len(c) and c[r] is not None for c in columns))
     return len(frames), rows
+
+
+def query_panels(panels):
+    """Yields query panels, including those nested in collapsed rows."""
+    for panel in panels:
+        if panel.get("type") == "row":
+            yield from query_panels(panel.get("panels", []))
+        elif panel.get("targets"):
+            yield panel
 
 
 def main():
@@ -39,9 +52,7 @@ def main():
     dashboard = json.load(open(args.dashboard, encoding="utf-8"))
 
     failed = 0
-    for panel in dashboard["panels"]:
-        if panel["type"] == "row":
-            continue
+    for panel in query_panels(dashboard["panels"]):
         queries = []
         for t in panel["targets"]:
             q = json.loads(json.dumps(t))

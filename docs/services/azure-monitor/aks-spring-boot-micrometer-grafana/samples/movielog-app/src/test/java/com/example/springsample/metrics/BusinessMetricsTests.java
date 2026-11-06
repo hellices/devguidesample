@@ -116,6 +116,9 @@ class BusinessMetricsTests extends IntegrationTest {
 		stubMovie(1, "영화", "tt1", null);
 		reviewService.create(1, register("alice"), 8, "첫 리뷰", "내용");
 		double created = count("movielog.reviews.posted", "channel", "api", "verdict", "fresh");
+		DistributionSummary rating = registry.get("movielog.review.rating").summary();
+		long ratings = rating.count();
+		double ratingTotal = rating.totalAmount();
 
 		mockMvc.perform(post("/api/movies/{id}/reviews", 1).with(user("alice")).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
@@ -123,6 +126,8 @@ class BusinessMetricsTests extends IntegrationTest {
 			.andExpect(status().isConflict());
 
 		assertThat(count("movielog.reviews.posted", "channel", "api", "verdict", "fresh")).isEqualTo(created);
+		assertThat(rating.count()).isEqualTo(ratings);
+		assertThat(rating.totalAmount()).isEqualTo(ratingTotal);
 	}
 
 	@Test
@@ -152,6 +157,8 @@ class BusinessMetricsTests extends IntegrationTest {
 		stubMovie(496243, "기생충", "tt6751668", null);
 		double found = count("movielog.movie.searches", "channel", "api", "outcome", "found");
 		double scrolls = count("movielog.movie.search.scrolls", "channel", "api", "outcome", "empty");
+		double searchesEmpty = count("movielog.movie.searches", "channel", "api", "outcome", "empty");
+		double scrollsFound = count("movielog.movie.search.scrolls", "channel", "api", "outcome", "found");
 		double imported = count("movielog.movie.catalog.lookups", "outcome", "imported");
 		double cacheHits = count("movielog.movie.catalog.lookups", "outcome", "cache_hit");
 
@@ -162,6 +169,8 @@ class BusinessMetricsTests extends IntegrationTest {
 
 		assertThat(count("movielog.movie.searches", "channel", "api", "outcome", "found")).isEqualTo(found + 1);
 		assertThat(count("movielog.movie.search.scrolls", "channel", "api", "outcome", "empty")).isEqualTo(scrolls + 1);
+		assertThat(count("movielog.movie.searches", "channel", "api", "outcome", "empty")).isEqualTo(searchesEmpty);
+		assertThat(count("movielog.movie.search.scrolls", "channel", "api", "outcome", "found")).isEqualTo(scrollsFound);
 		assertThat(count("movielog.movie.catalog.lookups", "outcome", "imported")).isEqualTo(imported + 1);
 		assertThat(count("movielog.movie.catalog.lookups", "outcome", "cache_hit")).isEqualTo(cacheHits + 1);
 	}

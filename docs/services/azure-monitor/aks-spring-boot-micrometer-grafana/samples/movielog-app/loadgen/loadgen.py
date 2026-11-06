@@ -1,7 +1,8 @@
 """Synthetic MovieLog users that exercise every movielog.* meter.
 
-Each loop signs up a user, browses movies and reviews on the web and API channels,
-posts a review and a comment, and sometimes deletes them. Only the standard library is used.
+Each loop signs up a user and browses movies and reviews on the web and API channels.
+It may post a review (70%), comment on it (60% of those), delete it (10%) and search (20%),
+so a single loop does not touch every meter. Only the standard library is used.
 """
 import http.cookiejar
 import json
@@ -92,7 +93,7 @@ def user_journey():
                 s.call("DELETE", f"/api/reviews/{review_id}")
 
     if random.random() < 0.2:
-        s.call("GET", "/api/movies/search?query=" + urllib.parse.quote("dune"))
+        s.call("GET", "/api/movies/search?q=" + urllib.parse.quote("dune"))
 
 
 def main():

@@ -102,8 +102,13 @@ python3 build_dashboard.py --appinsights-id "$AIID" > /tmp/live.json
 az grafana dashboard create -g "$RG" -n <grafana-name> --definition @/tmp/live.json --overwrite true
 
 npm i playwright && npx playwright install chromium-headless-shell
-node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png 1600 1700
+node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
 ```
+
+`kql.sh`는 `az monitor app-insights query`의 기본 범위인 최근 1시간만 조회합니다.
+지난 구간을 볼 때는 `KQL_OFFSET=12h ./kql.sh ...`처럼 늘립니다. `capture.mjs`는
+token을 Grafana origin에만 보내고, 내부 scroll 높이에 맞춰 viewport를 늘리며,
+panel 로딩이 60초를 넘으면 실패로 종료합니다.
 
 `--appinsights-id`로 만든 JSON은 resource ID 변수를 숨기므로 저장소에 커밋하지
 않습니다.

@@ -3,7 +3,8 @@ kind: Namespace
 metadata:
   name: movielog
 ---
-# Lab-only database. Data lives in an emptyDir and is lost when the Pod restarts.
+# Lab-only database. Data lives in an emptyDir: it survives a container restart but is lost
+# when the Pod is deleted or replaced.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

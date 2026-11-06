@@ -11,7 +11,7 @@ import org.springframework.util.StringUtils;
  * a blank key disables that source instead of failing startup.
  */
 @ConfigurationProperties("app.movies")
-public record MovieApiProperties(Tmdb tmdb, Omdb omdb, @DefaultValue("7d") Duration syncTtl) {
+public record MovieApiProperties(@DefaultValue Tmdb tmdb, @DefaultValue Omdb omdb, @DefaultValue("7d") Duration syncTtl) {
 
 	/**
 	 * @param apiKey TMDB v3 API key or v4 read access token (a token is sent as a Bearer header)

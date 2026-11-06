@@ -178,8 +178,9 @@ class ReviewWebTests extends IntegrationTest {
 	void hidesEditButtonsFromOtherUsers() throws Exception {
 		stubMovie(1, "영화", "tt1", null);
 		Long id = reviewService.create(1, register("writer"), 8, "제목", "내용").id();
+		register("other");
 
-		mockMvc.perform(get("/reviews/{id}", id))
+		mockMvc.perform(get("/reviews/{id}", id).with(user("other")))
 			.andExpect(status().isOk())
 			.andExpect(content().string(not(containsString("/reviews/" + id + "/edit"))));
 	}

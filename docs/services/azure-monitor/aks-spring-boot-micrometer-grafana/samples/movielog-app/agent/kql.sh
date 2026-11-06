@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Runs a KQL query against Application Insights and prints the result as a table.
 # Usage: kql.sh <query-file.kql>   (needs APPINSIGHTS_APP_ID, or APPINSIGHTS_NAME + RESOURCE_GROUP)
+# The CLI also limits every query to the last KQL_OFFSET (default 1h, format ##d##h), on top of
+# the query's own time filter; raise it to look further back.
 set -euo pipefail
 
 query_file="${1:?usage: kql.sh <query-file.kql>}"
@@ -12,16 +14,24 @@ if [[ -z "$app_id" ]]; then
     --query appId -o tsv)"
 fi
 
-az monitor app-insights query --app "$app_id" --analytics-query "$(cat "$query_file")" -o json \
-  | python3 -c '
+result="$(az monitor app-insights query --app "$app_id" --offset "${KQL_OFFSET:-1h}" \
+  --analytics-query "$(cat "$query_file")" -o json)"
+
+python3 -c '
 import json, sys
-table = json.load(sys.stdin)["tables"][0]
+table = json.loads(sys.argv[1])["tables"][0]
 names = [c["name"] for c in table["columns"]]
-rows = [[("" if v is None else str(v)) for v in row] for row in table["rows"]]
+
+def cell(value):
+    # Keep each cell on one line so rows and columns stay aligned.
+    text = "" if value is None else str(value)
+    return text.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+
+rows = [[cell(v) for v in row] for row in table["rows"]]
 widths = [max([len(n)] + [len(r[i]) for r in rows]) for i, n in enumerate(names)]
 print("  ".join(n.ljust(w) for n, w in zip(names, widths)))
 print("  ".join("-" * w for w in widths))
 for r in rows:
     print("  ".join(v.ljust(w) for v, w in zip(r, widths)))
 print(f"({len(rows)} rows)")
-'
+' "$result"

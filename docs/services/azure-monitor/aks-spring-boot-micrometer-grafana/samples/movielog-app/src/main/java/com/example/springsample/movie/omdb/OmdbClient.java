@@ -67,7 +67,7 @@ public class OmdbClient {
 		ExternalRatings toRatings() {
 			Integer rottenTomatoes = (ratings == null) ? null : ratings.stream()
 				.filter(rating -> "Rotten Tomatoes".equals(rating.source()))
-				.map(rating -> parseInt(rating.value().replace("%", "")))
+				.map(rating -> (rating.value() == null) ? null : parseInt(rating.value().replace("%", "")))
 				.filter(Objects::nonNull)
 				.findFirst()
 				.orElse(null);
@@ -77,7 +77,7 @@ public class OmdbClient {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record Rating(@JsonProperty("Source") String source, @JsonProperty("Value") String value) {
+	record Rating(@JsonProperty("Source") String source, @JsonProperty("Value") @Nullable String value) {
 	}
 
 	private static @Nullable Integer parseInt(@Nullable String value) {

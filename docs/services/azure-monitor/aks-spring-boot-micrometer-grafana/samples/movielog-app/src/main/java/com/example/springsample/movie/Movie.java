@@ -113,8 +113,16 @@ public class Movie {
 		return (value == null || value.isBlank()) ? null : value;
 	}
 
+	/** Cuts at a code point boundary so a surrogate pair is never split. */
 	private static @Nullable String truncate(@Nullable String value, int max) {
-		return (value == null || value.length() <= max) ? value : value.substring(0, max);
+		if (value == null || value.length() <= max) {
+			return value;
+		}
+		int end = max;
+		if (Character.isHighSurrogate(value.charAt(end - 1)) && Character.isLowSurrogate(value.charAt(end))) {
+			end--;
+		}
+		return value.substring(0, end);
 	}
 
 }

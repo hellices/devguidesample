@@ -592,7 +592,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movies_stored\"\n| summarize arg_max(timestamp, value) | project movies = value",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movies_stored\"\n| summarize arg_max(timestamp, value) by cloud_RoleInstance\n| summarize movies = max(value)",
             "resources": [
               "$appinsights"
             ],

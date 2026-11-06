@@ -93,6 +93,10 @@ public class ReviewService {
 	 * then stores the review.
 	 */
 	public ReviewDetail create(long tmdbId, String username, int rating, String title, String content) {
+		// A known duplicate is rejected before the external movie sync; the check below still guards races.
+		reviews.findIdByMovieAndAuthor(tmdbId, username).ifPresent(existing -> {
+			throw new DuplicateReviewException(existing);
+		});
 		Movie movie = movieService.sync(tmdbId);
 		try {
 			return transactionTemplate.execute(status -> {

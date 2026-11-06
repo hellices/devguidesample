@@ -332,6 +332,16 @@ allowlist를 먼저 확인합니다. 실습의 3.7.7-aks 구간이 이 경우였
 inventory는 `cloud_RoleName`(`movielog`)도 알려 줍니다. dashboard의 `role` 변수에
 이 값을 씁니다.
 
+`kql.sh`가 쓰는 `az monitor app-insights query`는 query의 시간 조건과 별개로 기본
+최근 1시간만 조회합니다. 지난 실습 구간을 다시 probe하려면 `KQL_OFFSET=12h`처럼
+범위를 넓힙니다.
+
+inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니다. 실습 당시
+`movielog_movie_searches`가 없었던 것은 load generator가 검색 parameter를 `q`가
+아닌 `query`로 보내 400으로 끝났기 때문입니다. 수정된 load generator에서는
+TMDB key가 없어도 검색 시도가 `outcome=disabled`로 기록되는 코드 경로를 탑니다.
+이 수정 뒤의 도착은 실습에서 다시 확인하지 않았습니다.
+
 ### probe 2: dimension 값 개수로 쓸 수 있는 축을 고릅니다 { #probe-dimensions }
 
 ```kusto
@@ -362,29 +372,39 @@ movielog_*                      application  1               ["spring-sample"]
 customMetrics
 | where timestamp > ago(30m)
 | where name startswith "movielog_"
-| summarize rows = count(),
-            hasValueCount = countif(isnotnull(valueCount) and valueCount > 1) > 0,
+| where isnotempty(cloud_RoleInstance)
+| summarize rows = count(), instances = dcount(cloud_RoleInstance),
+            maxValueCount = max(valueCount),
             minValue = min(value), maxValue = max(value),
             sumValueSum = sum(valueSum), sumValueCount = sum(valueCount)
     by name
+| extend rowsPerInstancePerMin = round(rows * 1.0 / instances / 30, 2)
 ```
 
+실습 30분 구간(09:50~10:20 UTC)의 결과 일부입니다. 이 구간에는 agent 전환으로
+Pod가 교체되어 instance가 3개로 보입니다.
+
 ```text
-name                         hasValueCount  minValue  maxValue  sumValueSum  sumValueCount
-movielog_movie_views         False          0         123       458          12
-movielog_review_rating       True           8.5       147.5     265.5        73
-movielog_members_stored      False          296       409       2007         6
+name                     rows  instances  maxValueCount  minValue  maxValue  sumValueSum  sumValueCount
+movielog_movie_views     112   3          1              0         210       12316        112
+movielog_review_rating   55    2          71             21.5      255       7456.5       2124
+movielog_members_stored  56    3          1              759       3948      123846       56
 ```
 
 | 관측 | 의미 | 집계식 |
 |---|---|---|
-| `valueCount` = 1, `value`가 0부터 증가량 크기 | Counter: export 간격(60초)의 증가량 | `sum(value)` |
-| `valueCount` > 1, `valueSum`이 합계 | DistributionSummary: 간격 안 기록 수와 합계 | `sum(valueSum) / sum(valueCount)` |
+| 모든 행이 `valueCount` = 1, `value`가 0부터 증가량 크기 | Counter: export 간격(60초)의 증가량 | `sum(value)` |
+| `maxValueCount` > 1, `valueSum`이 합계 | DistributionSummary: 간격 안 기록 수와 합계 | `sum(valueSum) / sum(valueCount)` |
 | `*_stored`가 두 Pod에서 같은 값 | Gauge: 각 Pod가 같은 DB `count(*)`를 보고 | Pod 간 `max(value)`, sum 금지 |
 | Pod·series별 1분에 1행 | export 간격 60초 | bin은 `max_of($__interval, 1m)` 이상 |
 
+Counter도 `valueCount`가 비어 있지 않고 1로 들어옵니다. 따라서 `valueCount`가
+있는지가 아니라 1보다 큰 값이 있는지로 분포 meter를 구분합니다. 기록이 드문
+DistributionSummary·Timer는 모든 간격이 1일 수도 있으므로 `maxValueCount` = 1이면
+코드의 meter 종류로 한 번 더 확인합니다.
+
 `movielog.review.rating`은 별점을 `stars` 단위로 기록합니다. 위 결과의 평균은
-265.5 / 73 ≈ 3.6개입니다. 행 단위 `avg(value)`를 쓰면 기록 수가 다른 간격이 같은
+7456.5 / 2124 ≈ 3.5개입니다. 행 단위 `avg(value)`를 쓰면 기록 수가 다른 간격이 같은
 가중치를 받아 왜곡됩니다.
 
 ### build: panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다 { #build }
@@ -397,7 +417,8 @@ movielog_members_stored      False          296       409       2007         6
 | 평균 별점, 평균 별점 추이 | 리뷰 품질이 변했는가 | `sum(valueSum) / sum(valueCount)` |
 | Fresh 비율 | 긍정 리뷰 비율은 | `sumif(value, verdict == "fresh") / sum(value)` |
 | 분당 영화 조회·새 리뷰·리뷰 조회·댓글 | 채널·판정별 처리량은 | bin별 `sum(value) / (bin / 1m)` |
-| 카탈로그 영화 수, 저장된 리뷰·댓글·회원 수 | 누적 규모는 | bin별 Pod 간 `max(value)` |
+| 카탈로그 영화 수 | 현재 카탈로그 규모는 | Pod별 최신 값(`arg_max`)의 `max` |
+| 저장된 리뷰·댓글·회원 수 | 누적 규모 추이는 | bin별 Pod 간 `max(value)` |
 | Pod별 분당 영화 조회 | 트래픽이 한 Pod에 몰리는가 | `cloud_RoleInstance`별 `sum(value)` |
 | metric 수신 상태 | 지표가 끊기지 않았는가 | 최근 10분 행 수와 마지막 수신 후 경과 초 |
 
@@ -439,10 +460,20 @@ OK   새 리뷰     frames=1 rows=1
 모두 통과했고, 그다음에 `az grafana dashboard create --overwrite true`로
 올렸습니다.
 
+`verify_panels.py`는 숫자 field가 모두 null인 행을 데이터로 세지 않고, 접힌 row
+안의 panel도 실행합니다. 0은 정상 값으로 셉니다. 실습 클러스터를 멈춘 뒤 다시
+실행하자 13개 panel은 지난 데이터로 통과하고 최근 10분만 보는 "metric 수신 상태"
+panel이 FAIL로 나왔습니다. 수집이 멈춘 상태를 잡아낸 결과입니다.
+
 ### look: 렌더링한 화면을 캡처해 query로는 안 보이는 문제를 찾습니다 { #look }
 
-`capture.mjs`는 같은 Entra token을 bearer header로 붙여 headless Chromium에서
-dashboard를 캡처합니다. 대화형 로그인이나 service account가 필요 없습니다.
+`capture.mjs`는 같은 Entra token을 Grafana origin 요청에만 bearer header로 붙여
+headless Chromium에서 dashboard를 캡처합니다. redirect는 따라가지 않고 브라우저에
+돌려주므로 다른 origin으로 token이 넘어가지 않습니다. 실습 dashboard도
+`js.monitor.azure.com`을 호출했으므로 이 제한이 필요합니다. 대화형 로그인이나
+service account가 필요 없고, Grafana 내부 scroll 높이를 재서 viewport를 늘리므로
+아래쪽 panel까지 한 장에 담깁니다. panel 로딩이 60초 안에 끝나지 않으면
+실패로 종료합니다.
 agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다음 문제가
 보였습니다.
 
@@ -453,7 +484,7 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 | 변수 막대에 Application Insights resource ID, 즉 subscription ID가 보임 | textbox 변수 노출 | 값을 미리 채운 배포용 JSON에서는 변수를 숨김 |
 | 정상 건수가 빨간색 | stat 기본 threshold 80 | stat 색을 고정색으로 지정 |
 | legend가 `perMin api` | 값 column 이름이 series 이름 앞에 붙음 | `displayName`에 dimension label 사용 |
-| 아래쪽 panel이 비어 보임 | Grafana의 내부 scroll과 `fullPage` 캡처 불일치 | viewport를 dashboard 높이로 지정 |
+| 아래쪽 panel이 비어 보임 | Grafana의 내부 scroll과 `fullPage` 캡처 불일치 | 내부 scroll 높이를 재서 viewport를 늘림 |
 | 모든 분당 series가 오른쪽 끝에서 급락 | 아직 채워지는 현재 bin까지 그림 | 시계열 query에 `where timestamp < bin(now(), <bin>)` 추가 |
 
 수정 뒤 캡처가 이 문서 맨 위의 대시보드입니다. 캡처에서 다음도 확인했습니다.

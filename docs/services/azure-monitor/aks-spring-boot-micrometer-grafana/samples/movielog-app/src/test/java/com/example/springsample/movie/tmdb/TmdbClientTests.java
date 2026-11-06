@@ -83,6 +83,7 @@ class TmdbClientTests {
 		server.expect(requestTo(startsWith(BASE + "/movie/1"))).andRespond(withResourceNotFound());
 
 		assertThat(client.details(1)).isEmpty();
+		server.verify();
 	}
 
 	@Test
@@ -91,6 +92,7 @@ class TmdbClientTests {
 		server.expect(requestTo(startsWith(BASE + "/search/movie"))).andRespond(withServerError());
 
 		assertThatThrownBy(() -> client.search("x", 1)).isInstanceOf(MovieApiUnavailableException.class);
+		server.verify();
 		assertThatThrownBy(() -> client("").search("x", 1)).isInstanceOf(MovieApiUnavailableException.class);
 		assertThat(client("").isEnabled()).isFalse();
 	}

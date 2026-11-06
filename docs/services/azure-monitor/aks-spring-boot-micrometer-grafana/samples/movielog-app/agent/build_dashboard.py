@@ -141,7 +141,9 @@ def build(appinsights_id):
 
     lay.row("누적 현황 (Gauge: DB 기준이라 Pod 간 max)")
     lay.add("stat", "카탈로그 영화 수", "movielog_movies_stored. 모든 Pod가 같은 DB 값을 보고하므로 합산하지 않습니다.",
-            base("movielog_movies_stored") + "| summarize arg_max(timestamp, value) | project movies = value",
+            base("movielog_movies_stored")
+            + "| summarize arg_max(timestamp, value) by cloud_RoleInstance\n"
+              "| summarize movies = max(value)",
             "short", 0, 4, 8, "table", options=STAT)
     lay.add("timeseries", "저장된 리뷰·댓글·회원 수",
             "Pod 수만큼 같은 값이 들어오므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
