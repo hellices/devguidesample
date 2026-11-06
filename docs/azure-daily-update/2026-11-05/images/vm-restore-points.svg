@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="384" viewBox="0 0 960 384" role="img" aria-labelledby="vm-restore-title vm-restore-desc">
+  <title id="vm-restore-title">Multi-disk crash-consistent VM restore points</title>
+  <desc id="vm-restore-desc">A SCSI VM with Premium SSD v2 or Ultra data disks is captured as VM configuration and disk restore points in a collection. Instant Access enables disk restore before background copy completes.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#4f5d75"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#0284c7"/></marker>
+  </defs>
+  <rect width="960" height="384" fill="#f8fafc"/>
+  <g font-family="'Noto Sans KR', Arial, sans-serif" text-anchor="middle" fill="#0f172a">
+    <text x="480" y="40" font-size="24" font-weight="700">Capture together, restore without waiting for full copy</text>
+    <path d="M248 152H312" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)"/>
+    <path d="M632 152H696" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-accent)"/>
+    <path d="M472 224V260" stroke="#4f5d75" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+    <rect x="24" y="88" width="224" height="128" rx="8" fill="#fff" stroke="#64748b"/>
+    <text x="136" y="120" font-size="20" font-weight="700">Source VM</text>
+    <text x="136" y="150" font-size="18">SCSI controller</text>
+    <text x="136" y="178" font-size="17" fill="#334155">Premium SSD v2 / Ultra</text>
+    <text x="136" y="200" font-size="17" fill="#334155">data disks</text>
+    <rect x="312" y="80" width="320" height="144" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="472" y="112" font-size="20" font-weight="700">Restore point collection</text>
+    <text x="472" y="144" font-size="18">VM configuration</text>
+    <text x="472" y="172" font-size="18">Disk restore point per disk</text>
+    <text x="472" y="204" font-size="17" fill="#334155">consistencyMode: CrashConsistent</text>
+    <rect x="696" y="88" width="240" height="128" rx="8" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="816" y="124" font-size="20" font-weight="700">Restored disks</text>
+    <text x="816" y="156" font-size="18">Instant Access enabled</text>
+    <text x="816" y="188" font-size="17" fill="#334155">No full-copy wait</text>
+    <rect x="312" y="260" width="320" height="72" rx="8" fill="#fff" stroke="#64748b" stroke-dasharray="5 4"/>
+    <text x="472" y="290" font-size="18" font-weight="600">Background data copy</text>
+    <text x="472" y="316" font-size="17" fill="#334155">Source disk to snapshot</text>
+    <path d="M24 352H936" stroke="#cbd5e1"/>
+    <text x="480" y="374" font-size="15" fill="#334155">Solid: capture / restore flow · Dashed: asynchronous copy · Conceptual view</text>
+  </g>
+</svg>
