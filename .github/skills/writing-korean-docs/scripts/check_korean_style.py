@@ -32,8 +32,6 @@ BLOCK_START = re.compile(
 TABLE_DELIMITER = re.compile(r"\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?")
 # In a one-column table these lines split the block, so rows above stay a table.
 TABLE_SPLIT = re.compile(r"(?:#{1,6}(?:\s|$)|(?:[-*_][ \t]*){3,}$|<)")
-# The end of a table row that has a closing pipe.
-TABLE_END_PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|$")
 INLINE_CODE = re.compile(r"`[^`\n]+`")
 # An inline comment inside a paragraph; it may wrap lines but not cross a blank line.
 HTML_COMMENT = re.compile(r"<!--(?:(?!\n[ \t]*\n).)*?-->", re.S)
@@ -436,13 +434,26 @@ def _indent(line: str) -> int:
     return len(expanded) - len(expanded.lstrip(" "))
 
 
+def table_pipes(row: str) -> list[int]:
+    """Return the positions of pipes that separate cells.
+
+    A pipe after an odd number of backslashes is escaped; "\\\\|" is a
+    literal backslash followed by a separator, as on the site.
+    """
+    pipes: list[int] = []
+    backslashes = 0
+    for index, char in enumerate(row):
+        if char == "|" and backslashes % 2 == 0:
+            pipes.append(index)
+        backslashes = backslashes + 1 if char == "\\" else 0
+    return pipes
+
+
 def table_cells(row: str) -> int:
     row = row.strip()
-    if row.startswith("|"):
-        row = row[1:]
-    if row.endswith("|") and not row.endswith("\\|"):
-        row = row[:-1]
-    return len(re.split(r"(?<!\\)\|", row))
+    pipes = table_pipes(row)
+    inner = [i for i in pipes if i != 0 and i != len(row) - 1]
+    return len(inner) + 1
 
 
 def table_rows(lines: list[str]) -> set[int]:
@@ -485,7 +496,8 @@ def table_rows(lines: list[str]) -> set[int]:
                 # A line that leaves a container's indented block ends the table.
                 if base.container[1] and not line.container[1]:
                     break
-                if single and not (row.startswith("|") or TABLE_END_PIPE.search(row)):
+                closing_pipe = len(row) - 1 in table_pipes(row)
+                if single and not (row.startswith("|") or closing_pipe):
                     if line.container[0] > base.container[0] or TABLE_SPLIT.match(row):
                         break
                     # The site renders the whole block as a paragraph.
@@ -946,7 +958,7 @@ def iter_markdown(paths: list[str]) -> list[Path]:
     for item in paths:
         path = Path(item)
         if path.is_dir():
-            found = sorted(p for p in path.rglob("*.md") if p.is_file())
+            found = sorted(p for p in path.rglob("*") if p.is_file() and p.suffix.lower() == ".md")
         elif path.is_file():
             found = [path]
         else:

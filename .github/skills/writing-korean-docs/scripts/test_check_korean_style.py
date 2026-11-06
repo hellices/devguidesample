@@ -442,6 +442,20 @@ class TableEndTest(unittest.TestCase):
                 self.assertEqual(report.metrics["translationese"], 0)
 
 
+class TablePipeTest(unittest.TestCase):
+    def test_pipe_after_even_backslashes_separates_cells(self) -> None:
+        # Markdown "| 경로 \\| 상태 |" (two backslashes) renders as two cells, "경로 \" and "상태".
+        text = "# 표\n\n| 경로 \\\\| 그리고, 상태 |\n| --- | --- |\n| 가 | 결론적으로 나 |\n\n본문이다.\n"
+        report = analyze(text)
+        self.assertEqual(report.metrics["adverb_comma"], 0)
+        self.assertEqual(report.metrics["signature_phrases"], 0)
+
+    def test_pipe_after_odd_backslashes_is_escaped(self) -> None:
+        self.assertEqual(checker.table_cells("| 경로 \\| 상태 |"), 1)
+        self.assertEqual(checker.table_cells("| a \\\\\\| b | c |"), 2)
+        self.assertEqual(checker.table_cells("| h \\\\|"), 1)
+
+
 class ScanFormatTest(unittest.TestCase):
     def test_result_section_markup_is_not_counted(self) -> None:
         text = (
@@ -477,6 +491,14 @@ class IterMarkdownTest(unittest.TestCase):
                 [f.resolve() for f in files],
                 [(root / "sub" / "b.md").resolve(), (root / "a.md").resolve()],
             )
+
+    def test_markdown_extension_is_case_insensitive(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "GUIDE.MD").write_text("# 가\n", encoding="utf-8")
+            (root / "note.txt").write_text("가\n", encoding="utf-8")
+            files = checker.iter_markdown([folder])
+            self.assertEqual([f.name for f in files], ["GUIDE.MD"])
 
 
 class ExampleFilesTest(unittest.TestCase):
