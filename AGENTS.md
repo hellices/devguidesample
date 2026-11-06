@@ -8,6 +8,19 @@
   대신하지 않는다. 제목만 읽어도 문서의 요지가 드러나는지 확인하며,
   구체적인 기준과 예시는
   [제목 작성 기준](docs/contributing/index.md#content-first-headings)을 따른다.
+- 제목은 핵심을 담은 명사구로 쓴다. `~합니다`·`~다`로 끝나는 문장형 제목과
+  `X: Y` 형식 콜론 부제목은 쓰지 않는다. `research`·`lab` 문서의 "결과 1: 단건
+  레이턴시"처럼 절의 종류와 대상을 잇는 보고서형 절 제목은 허용한다.
+- 한국어 본문은 처음부터 한국어로 쓴 글처럼 쓴다. 한 문서의 종결어미를
+  통일하고 번역투(~에 의해, 이중 피동, ~에 있어서, 수행·진행 덧붙이기)와
+  연결어미·접속부사 뒤 쉼표를 피한다. 설명 문단에서는 대시(—), 굵은 글씨 남용과
+  절마다 반복되는 `**정리:**` 결론 문단을 피한다. 측정 결과·비교 절은
+  [스캔형 구성](docs/contributing/index.md#scan-format)에 따라 비교 표와 굵은
+  꼬리표 글머리표로 쓰며 문단으로 풀어 쓰지 않는다. 상세 기준은
+  [한국어 문체 기준](docs/contributing/index.md#korean-writing)을 따른다.
+- 한국어 문서를 쓰거나 고치거나 검토할 때 repository skill `writing-korean-docs`를
+  반드시 사용한다. 이 skill의 검사기로 쓰기 전후를 점검하되 결과 수치를 0으로
+  맞추려고 구조나 주장을 바꾸지 않는다.
 - 공개 기술 문서는
   `docs/services/<service>/<topic>[/<child>]/index.md` topic package로
   작성한다.
@@ -95,6 +108,17 @@
   upstream 공식 문서도 함께 확인한다.
 - 의미 검증을 완료하지 못하면 `verification_status: needs-review`로
   남기고 완료했다고 표현하지 않는다.
+- Microsoft·Azure 동작을 설명하는 문단에는 근거가 된 Microsoft Learn
+  문서의 절을 본문 링크로 건다. `official_sources`만으로 대신하지 않는다.
+- 구성·흐름·비교를 설명할 때는 Learn 원문의 공식 다이어그램·표·화면을
+  먼저 찾아 활용한다. 그림 파일은 원본이 CC BY 4.0인 공개 MicrosoftDocs
+  저장소에 있고 해당 파일에 별도 권리 표시·예외가 없을 때만 복사하고,
+  출처 문단에 Learn 절·원본 파일·라이선스·변경 여부를 적는다. 하나라도
+  불명확하면 링크하고, 필요하면 원문 본문을
+  바탕으로 새 그림을 그리되 공식 그림의 배치·도형·아이콘은 따라 그리지
+  않는다. 기준은
+  [Learn 인용과 공식 그림](docs/contributing/index.md#learn-citations)을
+  따른다.
 
 ## Public safety
 

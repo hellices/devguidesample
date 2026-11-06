@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Korean docs"
+  short_description: "Rewrite Korean docs so they don't read as machine-written"
+  default_prompt: "Use $writing-korean-docs to rewrite the Korean prose in this document without changing its claims."

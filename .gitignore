@@ -6,6 +6,8 @@ node_modules/
 .github/skills/*
 !.github/skills/verify-with-microsoft-learn/
 !.github/skills/verify-with-microsoft-learn/**
+!.github/skills/writing-korean-docs/
+!.github/skills/writing-korean-docs/**
 .venv
 sim-env.json
 .mirrord/
