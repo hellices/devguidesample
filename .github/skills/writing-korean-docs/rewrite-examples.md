@@ -1,6 +1,6 @@
 # Korean rewrite examples
 
-Each pair is "AI-like → rewritten". One or two occurrences are fine; rewrite when they cluster in a paragraph.
+Each pair is "AI-like → rewritten". The rewritten cell is an example sentence; keep the original's facts and use the actual names, numbers, and items from your document. One or two occurrences are fine; rewrite when they cluster in a paragraph. An enumeration opener with no list after it is deleted; start with the first item instead.
 
 ## Translationese
 
@@ -14,7 +14,7 @@ Each pair is "AI-like → rewritten". One or two occurrences are fine; rewrite w
 | Chained `~의` | 흐름의 모양의 검사의 결과 | 흐름 모양을 검사한 결과 |
 | `~을 가지고 있다` | 필요한 권한을 가지고 있지 않을 수 있다 | 필요한 권한이 없을 수 있다 |
 | `~하는 것이 중요하다` | 검사하는 것이 중요하다 | 검사해야 한다 |
-| Pronouns and `들` | 그것은 이것들을 통해 검증된다 | Drop the subject or name it |
+| Pronouns and `들` | 게이트웨이는 요청 헤더들을 읽는다. 그것은 이것들을 통해 토큰을 검증한다 | 게이트웨이는 요청 헤더로 토큰을 검증한다 |
 | Comma after a connective ending | 설정을 바꾸고, 다시 배포하며, 로그를 본다 | 설정을 바꾸고 다시 배포한 뒤 로그를 본다 |
 
 ## LLM patterns in explanation paragraphs
@@ -23,10 +23,10 @@ Each pair is "AI-like → rewritten". One or two occurrences are fine; rewrite w
 |---|---|---|
 | Conclusion box | **결론**: 코드가 문서를 이겼다. | 시간이 지나자 그림은 코드와 맞지 않게 됐다. |
 | Habitual contrast | 효과는 지연이 아니라 신뢰성에서 나왔다 | 지연 시간은 그대로였고 화면 실패율이 줄었다 |
-| Vague intensifier | 다양한 요소를 고려한다 | Name the factors, or delete the sentence if none are known |
-| Enumeration opener | 크게 세 가지로 나눌 수 있다 | Before a list: 다음 세 가지를 확인한다. With no list: start with the first item |
+| Vague intensifier | 다양한 요소를 고려해 SKU를 정한다 | 동시 연결 수와 메모리 사용량을 보고 SKU를 정한다 |
+| Enumeration opener | 장애 원인은 크게 세 가지로 나눌 수 있다 | 장애 원인은 다음 세 가지다 (목록이 이어질 때) |
 | Dash joining clauses | 확장한다 — 이것이 핵심이다 | 확장한다. |
-| English term on every mention | 구간(hop) … 구간(hop) | 구간(hop) once, then 구간 |
+| English term on every mention | 구간(hop)마다 지연이 쌓이고 구간(hop) 수가 늘면 | 구간(hop)마다 지연이 쌓이고 구간 수가 늘면 |
 
 ## Result section kept in scan format
 
