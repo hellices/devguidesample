@@ -36,7 +36,7 @@ Write the section's point as a noun phrase.
 
 | Section says | Heading |
 |---|---|
-| 처음 1,024 토큰이 같아야 캐시가 적중한다 | 처음 1,024 토큰의 바이트 일치 조건 |
+| 처음 1,024 토큰이 바이트 단위로 같아야 캐시가 적중한다 | 처음 1,024 토큰의 바이트 일치 조건 |
 | 운영팀이 TTL을 정하고 사용량을 보며 확장한다 | 운영팀의 TTL 결정과 사용량 기반 확장 |
 
 A heading ending in `~다`, `~합니다`, or `~요` is a sentence; shorten it to a noun phrase. `X: Y` subtitles are allowed only for result-section headings in `document_type: research` or `lab` pages, such as `결과 2: 배치 처리량 — 500자 청크`; explanation-section headings in those pages are still noun phrases. Keep result-section headings as they are when they already name the measurement.
@@ -48,7 +48,8 @@ Apply the pairs in [rewrite-examples.md](rewrite-examples.md). The most frequent
 - Put the actor first: "운영팀에 의해 결정되어진다" → "운영팀이 정한다".
 - Drop padding verbs: "만료 작업을 수행한다" → "키를 만료시킨다".
 - No comma after `-고`·`-며`·`-지만` or after 그리고·따라서.
-- Delete summary openers and closers ("결론적으로", "크게 세 가지로 나눌 수 있다") and inflation that adds nothing ("새로운 패러다임", "핵심" used only for emphasis; see [Invariants](#invariants)).
+- Delete summary openers and closers that say nothing on their own ("결론적으로", "정리하면"). When a sentence such as "크게 세 가지로 나눌 수 있다" introduces a list that follows, keep an intro and make it plain ("다음 세 가지를 확인한다"); delete it only if no list follows.
+- Delete inflation that adds nothing ("새로운 패러다임", "핵심" used only for emphasis; see [Invariants](#invariants)).
 - One `**결론**:` box per document at most; turn others into a plain final sentence.
 
 ## Common mistakes

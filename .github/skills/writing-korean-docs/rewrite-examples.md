@@ -24,7 +24,7 @@ Each pair is "AI-like → rewritten". One or two occurrences are fine; rewrite w
 | Conclusion box | **결론**: 코드가 문서를 이겼다. | 시간이 지나자 그림은 코드와 맞지 않게 됐다. |
 | Habitual contrast | 효과는 지연이 아니라 신뢰성에서 나왔다 | 지연 시간은 그대로였고 화면 실패율이 줄었다 |
 | Vague intensifier | 다양한 요소를 고려한다 | Name the factors, or delete the sentence if none are known |
-| Enumeration opener | 크게 세 가지로 나눌 수 있다 | Start with the first item |
+| Enumeration opener | 크게 세 가지로 나눌 수 있다 | Before a list: 다음 세 가지를 확인한다. With no list: start with the first item |
 | Dash joining clauses | 확장한다 — 이것이 핵심이다 | 확장한다. |
 | English term on every mention | 구간(hop) … 구간(hop) | 구간(hop) once, then 구간 |
 
