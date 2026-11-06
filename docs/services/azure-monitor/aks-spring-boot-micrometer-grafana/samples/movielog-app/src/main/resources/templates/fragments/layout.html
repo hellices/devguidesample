@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:fragment="head(title)">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title th:text="|${title} · 무비로그|">무비로그</title>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.css"
+		integrity="sha384-EqZ6IXmk+4jeYN6dm7SEK3B8T8AMiHLEujTTup/LU1rSEjt1Ce8Vz8uI6NQ8czHg" crossorigin="anonymous">
+	<script type="module" src="https://cdn.jsdelivr.net/npm/beercss@5.0.3/dist/cdn/beer.min.js"
+		integrity="sha384-7xZPd8qp8XUHrLKlKeZKr5yHcqeQ0Juz7GLT0AOsAIMhtHNqKJg5bfFCj782KnFh" crossorigin="anonymous"></script>
+	<link rel="stylesheet" th:href="@{/css/app.css}">
+	<script type="module" th:src="@{/js/app.js}"></script>
+</head>
+<body>
+
+<header th:fragment="header" class="fixed primary-container">
+	<nav>
+		<a class="button transparent circle" th:href="@{/reviews}" aria-label="홈">
+			<i>movie</i>
+		</a>
+		<h6 class="m l">
+			<a th:href="@{/reviews}">무비로그</a>
+		</h6>
+		<nav class="max">
+			<a class="button transparent" th:href="@{/reviews}">
+				<i>rate_review</i>
+				<span>리뷰</span>
+			</a>
+			<a class="button transparent" th:href="@{/movies}">
+				<i>search</i>
+				<span>영화 검색</span>
+			</a>
+		</nav>
+		<th:block sec:authorize="isAuthenticated()">
+			<span class="chip no-border m l">
+				<i>account_circle</i>
+				<span sec:authentication="name">user</span>
+			</span>
+			<form th:action="@{/logout}" method="post">
+				<button class="border">
+					<i>logout</i>
+					<span class="m l">로그아웃</span>
+				</button>
+			</form>
+		</th:block>
+		<th:block sec:authorize="!isAuthenticated()">
+			<a class="button border" th:href="@{/login}">
+				<i>login</i>
+				<span class="m l">로그인</span>
+			</a>
+			<a class="button m l" th:href="@{/signup}">회원가입</a>
+		</th:block>
+	</nav>
+</header>
+
+<footer th:fragment="footer" class="responsive app-footer small-text secondary-text">
+	<p>
+		영화 정보와 포스터: <a class="link" href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>
+		· 로튼토마토/IMDb/메타크리틱 점수: <a class="link" href="https://www.omdbapi.com/" target="_blank" rel="noopener">OMDb API</a>
+	</p>
+	<p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
+</footer>
+
+<!-- Rating in half stars (1..10) as five icons. -->
+<span th:fragment="stars(rating)" class="stars" th:title="|별점 ${rating / 2.0}|"
+	th:attr="aria-label=|별점 ${rating / 2.0}점|"><i th:each="i : ${#numbers.sequence(1, 5)}"
+	th:classappend="${rating >= i * 2 or rating == i * 2 - 1} ? 'fill'"
+	th:text="${rating == i * 2 - 1} ? 'star_half' : 'star'">star</i></span>
+
+<!-- Poster image or a placeholder when TMDB has no poster. -->
+<th:block th:fragment="poster(url, alt, css)">
+	<img th:if="${url != null}" th:src="${url}" th:alt="|${alt} 포스터|" th:class="|poster ${css}|" loading="lazy">
+	<div th:if="${url == null}" th:class="|poster poster-empty ${css}|" role="img" th:attr="aria-label=|${alt} 포스터 없음|">
+		<i>movie</i>
+	</div>
+</th:block>
+
+</body>
+</html>

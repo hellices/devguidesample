@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('회원가입')}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<article class="round auth-card">
+		<h5>회원가입</h5>
+
+		<form th:action="@{/signup}" th:object="${form}" method="post">
+			<div class="field label prefix border" th:classappend="${#fields.hasErrors('username')} ? 'invalid'">
+				<i>person</i>
+				<input type="text" th:field="*{username}" placeholder=" " autocomplete="username" maxlength="20" required autofocus>
+				<label for="username">아이디</label>
+				<output class="invalid" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">오류</output>
+				<output th:unless="${#fields.hasErrors('username')}">영문, 숫자, 밑줄(_) 4~20자</output>
+			</div>
+			<div class="field label prefix border" th:classappend="${#fields.hasErrors('nickname')} ? 'invalid'">
+				<i>badge</i>
+				<input type="text" th:field="*{nickname}" placeholder=" " autocomplete="nickname" maxlength="20" required>
+				<label for="nickname">닉네임</label>
+				<output class="invalid" th:if="${#fields.hasErrors('nickname')}" th:errors="*{nickname}">오류</output>
+			</div>
+			<div class="field label prefix border" th:classappend="${#fields.hasErrors('password')} ? 'invalid'">
+				<i>lock</i>
+				<input type="password" th:field="*{password}" placeholder=" " autocomplete="new-password" maxlength="64" required>
+				<label for="password">비밀번호</label>
+				<output class="invalid" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">오류</output>
+				<output th:unless="${#fields.hasErrors('password')}">8~64자</output>
+			</div>
+			<div class="field label prefix border" th:classappend="${#fields.hasErrors('passwordConfirm')} ? 'invalid'">
+				<i>lock_reset</i>
+				<input type="password" th:field="*{passwordConfirm}" placeholder=" " autocomplete="new-password" maxlength="64" required>
+				<label for="passwordConfirm">비밀번호 확인</label>
+				<output class="invalid" th:if="${#fields.hasErrors('passwordConfirm')}" th:errors="*{passwordConfirm}">오류</output>
+			</div>
+			<button class="responsive">가입하기</button>
+		</form>
+
+		<p class="center-align">
+			이미 계정이 있나요? <a class="link" th:href="@{/login}">로그인</a>
+		</p>
+	</article>
+</main>
+</body>
+</html>

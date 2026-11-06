@@ -1,0 +1,14 @@
+// Step 3 - value shape: decide the aggregation per metric before drawing anything.
+// Counter: valueCount is empty and value is the step increment (sum it).
+// DistributionSummary/Timer: valueCount > 1 and valueSum is the total (sum / count = average).
+// Gauge: value is a point-in-time level (do not sum over time).
+customMetrics
+| where timestamp > ago(30m)
+| where name startswith "movielog_"
+| summarize rows = count(),
+            rowsPerInstancePerMin = round(count() * 1.0 / dcount(cloud_RoleInstance) / 30, 2),
+            hasValueCount = countif(isnotnull(valueCount) and valueCount > 1) > 0,
+            minValue = min(value), maxValue = max(value),
+            sumValueSum = sum(valueSum), sumValueCount = sum(valueCount)
+    by name
+| order by name asc

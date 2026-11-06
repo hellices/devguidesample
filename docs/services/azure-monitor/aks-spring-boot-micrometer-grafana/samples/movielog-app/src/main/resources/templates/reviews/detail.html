@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(|${review.title} - ${review.movie.title}|)}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<nav>
+		<a class="button transparent" th:href="@{/reviews}">
+			<i>arrow_back</i>
+			<span>리뷰 목록</span>
+		</a>
+	</nav>
+
+	<a class="movie-banner" th:href="@{/movies/{id}(id=${review.movie.tmdbId})}">
+		<th:block th:replace="~{fragments/layout :: poster(${review.movie.posterUrl}, ${review.movie.title}, 'poster-thumb')}"></th:block>
+		<div class="max">
+			<div class="small-text secondary-text">리뷰한 영화</div>
+			<h6 class="small">
+				<span th:text="${review.movie.title}">영화 제목</span>
+				<span class="secondary-text" th:if="${review.movie.releaseYear != null}" th:text="|(${review.movie.releaseYear})|">(2024)</span>
+			</h6>
+		</div>
+		<i>chevron_right</i>
+	</a>
+
+	<article class="round">
+		<h5 class="post-detail-title" th:text="${review.title}">리뷰 제목</h5>
+		<div class="row small-space">
+			<span th:replace="~{fragments/layout :: stars(${review.rating})}"></span>
+		</div>
+		<nav class="small-text secondary-text wrap">
+			<span class="row small-space">
+				<i class="small">person</i>
+				<span th:text="${review.authorNickname}">작성자</span>
+			</span>
+			<span class="row small-space">
+				<i class="small">schedule</i>
+				<time th:datetime="${review.createdAt}" th:text="${review.createdAt}">작성일</time>
+			</span>
+			<span class="row small-space" title="조회수">
+				<i class="small">visibility</i>
+				<span th:text="${review.viewCount}">0</span>
+			</span>
+		</nav>
+		<div class="divider post-divider"></div>
+		<div class="post-content" th:text="${review.content}">내용</div>
+
+		<nav class="right-align" th:if="${currentUsername == review.authorUsername}">
+			<a class="button border" th:href="@{/reviews/{id}/edit(id=${review.id})}">
+				<i>edit</i>
+				<span>수정</span>
+			</a>
+			<form th:action="@{/reviews/{id}/delete(id=${review.id})}" method="post" data-confirm="이 리뷰를 삭제할까요? 댓글도 함께 삭제됩니다.">
+				<button class="error">
+					<i>delete</i>
+					<span>삭제</span>
+				</button>
+			</form>
+		</nav>
+	</article>
+
+	<section id="comments">
+		<h6>
+			댓글 <span class="primary-text" th:text="${comments.size()}">0</span>
+		</h6>
+
+		<ul class="list border" th:unless="${comments.isEmpty()}">
+			<li th:each="comment : ${comments}" th:id="|comment-${comment.id}|">
+				<i>account_circle</i>
+				<div class="max">
+					<div class="small-text">
+						<b th:text="${comment.authorNickname}">작성자</b>
+						<time class="secondary-text" th:datetime="${comment.createdAt}" th:text="${comment.createdAt}">작성일</time>
+					</div>
+					<div class="comment-content" th:text="${comment.content}">댓글</div>
+				</div>
+				<form th:if="${currentUsername == comment.authorUsername}"
+					th:action="@{/reviews/{reviewId}/comments/{id}/delete(reviewId=${review.id},id=${comment.id})}"
+					method="post" data-confirm="댓글을 삭제할까요?">
+					<button class="transparent circle" aria-label="댓글 삭제" title="삭제">
+						<i>delete</i>
+					</button>
+				</form>
+			</li>
+		</ul>
+		<p class="secondary-text" th:if="${comments.isEmpty()}">아직 댓글이 없습니다.</p>
+
+		<form sec:authorize="isAuthenticated()" class="comment-form"
+			th:action="@{/reviews/{id}/comments(id=${review.id})}" th:object="${commentForm}" method="post">
+			<div class="field label border" th:classappend="${#fields.hasErrors('content')} ? 'invalid'">
+				<textarea th:field="*{content}" placeholder=" " maxlength="1000"></textarea>
+				<label for="content">댓글 쓰기</label>
+				<output class="invalid" th:if="${#fields.hasErrors('content')}" th:errors="*{content}">오류</output>
+			</div>
+			<nav class="right-align">
+				<button>
+					<i>send</i>
+					<span>등록</span>
+				</button>
+			</nav>
+		</form>
+		<p sec:authorize="!isAuthenticated()">
+			<a class="link" th:href="@{/login}">로그인</a>하면 댓글을 쓸 수 있습니다.
+		</p>
+	</section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

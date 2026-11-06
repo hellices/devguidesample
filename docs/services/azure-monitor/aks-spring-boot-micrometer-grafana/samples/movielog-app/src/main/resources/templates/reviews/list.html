@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('리뷰')}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<form th:action="@{/reviews}" method="get" role="search">
+		<div class="field large prefix round fill">
+			<i>search</i>
+			<input type="search" name="q" th:value="${q}" placeholder="리뷰 내용이나 영화 제목으로 검색" aria-label="리뷰 검색어">
+		</div>
+	</form>
+
+	<div class="row" th:if="${!#strings.isEmpty(q)}">
+		<p class="max">
+			<b th:text="|'${q}'|">'검색어'</b> 리뷰 검색 결과
+		</p>
+		<a class="button transparent" th:href="@{/reviews}">
+			<i>close</i>
+			<span>검색 해제</span>
+		</a>
+	</div>
+
+	<div class="infinite" data-renderer="review" data-cursor-param="cursor"
+		th:attr="data-api-url=@{/api/reviews},data-review-url=@{/reviews/},data-movie-url=@{/movies/},
+			data-param-q=${q},data-param-size=${pageSize},data-next=${slice.nextCursor},data-has-next=${slice.hasNext}">
+		<ul class="list border review-list" data-items>
+			<th:block th:each="review : ${slice.items}">
+				<li th:replace="~{reviews/fragments :: item(${review})}"></li>
+			</th:block>
+		</ul>
+		<th:block th:replace="~{reviews/fragments :: scroll-status}"></th:block>
+		<p class="center-align secondary-text large-padding" th:if="${slice.items.isEmpty()}">
+			<th:block th:if="${#strings.isEmpty(q)}">
+				아직 리뷰가 없습니다. <a class="link" th:href="@{/movies}">영화를 검색</a>해서 첫 리뷰를 남겨 보세요!
+			</th:block>
+			<th:block th:unless="${#strings.isEmpty(q)}">검색 결과가 없습니다.</th:block>
+		</p>
+	</div>
+
+	<template th:replace="~{reviews/fragments :: item-template}"></template>
+</main>
+
+<a class="button circle extra primary write-fab" th:href="@{/movies}" aria-label="리뷰 쓸 영화 찾기" title="리뷰 쓸 영화 찾기">
+	<i>edit</i>
+</a>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<script type="module" th:src="@{/js/infinite-scroll.js}"></script>
+</body>
+</html>

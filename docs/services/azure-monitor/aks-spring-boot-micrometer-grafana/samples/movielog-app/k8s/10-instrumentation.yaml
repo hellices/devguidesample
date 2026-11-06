@@ -1,0 +1,12 @@
+# Per-deployment onboarding. The Pod template annotation selects this CR by name.
+# Render the connection string at deploy time; never commit a real value.
+apiVersion: monitor.azure.com/v1
+kind: Instrumentation
+metadata:
+  name: movielog
+  namespace: movielog
+spec:
+  settings:
+    autoInstrumentationPlatforms: []
+  destination:
+    applicationInsightsConnectionString: "${APPLICATIONINSIGHTS_CONNECTION_STRING}"

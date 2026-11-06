@@ -41,6 +41,8 @@ applies_to:
   - AKS Application Monitoring Java autoinstrumentation
   - 관리형 3.7.7-aks가 주입된 Spring Boot 4.x 및 Micrometer workload
   - Application Insights Java agent 3.7.9를 ACR init image로 운영할 수 있는 환경
+related_guides:
+  - ../aks-spring-boot-micrometer-grafana/index.md
 ---
 
 # AKS Java Micrometer custom metric 누락 임시 대응

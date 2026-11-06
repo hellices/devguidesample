@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('영화 검색')}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<form th:action="@{/movies}" method="get" role="search">
+		<div class="field large prefix round fill">
+			<i>movie_filter</i>
+			<input type="search" name="q" th:value="${q}" placeholder="영화 제목으로 검색 (예: 기생충, Inception)"
+				aria-label="영화 검색어" maxlength="100" autofocus>
+		</div>
+	</form>
+
+	<article class="round error-container" th:unless="${searchAvailable}">
+		<h6 class="small">영화 검색이 설정되지 않았습니다</h6>
+		<p>
+			TMDB API 키가 필요합니다. <a class="link" href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">TMDB</a>에서
+			무료 키를 발급받아 프로젝트 루트의 <code>.env</code> 파일에 <code>TMDB_API_KEY=발급받은키</code>를 넣고 앱을 다시 시작하세요.
+			로튼토마토 점수를 보려면 <a class="link" href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener">OMDb</a> 키(<code>OMDB_API_KEY</code>)도 넣어 주세요.
+		</p>
+	</article>
+
+	<article class="round error-container" th:if="${searchFailed}">
+		<p>영화 정보를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
+	</article>
+
+	<p class="secondary-text center-align large-padding" th:if="${searchAvailable and #strings.isEmpty(q)}">
+		리뷰를 쓰고 싶은 영화를 검색해 보세요.
+	</p>
+
+	<th:block th:if="${result != null}">
+		<p class="secondary-text">
+			<b th:text="|'${q}'|">'검색어'</b> 검색 결과 <span th:text="${#numbers.formatInteger(result.totalResults, 1, 'COMMA')}">0</span>편
+		</p>
+
+		<div class="infinite" data-renderer="movie" data-cursor-param="page"
+			th:attr="data-api-url=@{/api/movies/search},data-movie-url=@{/movies/},
+				data-param-q=${q},data-next=${result.nextPage},data-has-next=${result.hasNext}">
+			<div class="movie-grid" data-items>
+				<a class="movie-card" th:each="movie : ${result.items}" th:href="@{/movies/{id}(id=${movie.tmdbId})}">
+					<th:block th:replace="~{fragments/layout :: poster(${movie.posterUrl}, ${movie.title}, 'poster-card')}"></th:block>
+					<div class="movie-card-title" th:text="${movie.title}">제목</div>
+					<div class="small-text secondary-text">
+						<span th:text="${movie.releaseYear} ?: '개봉일 미정'">2024</span>
+						<th:block th:if="${movie.reviewCount > 0}">
+							· <i class="small fill star-icon">star</i><span th:text="${movie.averageRating}">4.0</span>
+							(<span th:text="${movie.reviewCount}">1</span>)
+						</th:block>
+					</div>
+				</a>
+			</div>
+			<th:block th:replace="~{reviews/fragments :: scroll-status}"></th:block>
+			<p class="center-align secondary-text large-padding" th:if="${result.items.isEmpty()}">검색 결과가 없습니다.</p>
+		</div>
+
+		<template id="movie-item-template">
+			<a class="movie-card">
+				<img class="poster poster-card" alt="" loading="lazy">
+				<div class="poster poster-empty poster-card" role="img"><i>movie</i></div>
+				<div class="movie-card-title"></div>
+				<div class="small-text secondary-text">
+					<span class="movie-year"></span>
+					<span class="movie-local-rating" hidden>
+						· <i class="small fill star-icon">star</i><span class="movie-average"></span>
+						(<span class="movie-review-count"></span>)
+					</span>
+				</div>
+			</a>
+		</template>
+	</th:block>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<script type="module" th:src="@{/js/infinite-scroll.js}"></script>
+</body>
+</html>

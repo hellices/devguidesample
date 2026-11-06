@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('오류')}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<article class="round center-align large-padding">
+		<i class="extra">error</i>
+		<h5>일시적인 오류가 발생했습니다.</h5>
+		<p class="secondary-text">잠시 후 다시 시도해 주세요.</p>
+		<a class="button" th:href="@{/reviews}">
+			<i>home</i>
+			<span>리뷰 목록으로</span>
+		</a>
+	</article>
+</main>
+</body>
+</html>

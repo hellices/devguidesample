@@ -1,0 +1,49 @@
+# Strategic merge patch: replace the managed 3.7.7-aks injection with the 3.7.10 init image.
+# On a Deployment the webhook already injected, first set inject-java to "false" in a separate patch.
+# Sending both in one update makes the webhook strip the APPLICATIONINSIGHTS_* variables below.
+#   envsubst < k8s/21-agent-3.7.10.patch.yaml > /tmp/agent-patch.yaml
+#   kubectl patch deployment movielog -n movielog --type strategic --patch-file /tmp/agent-patch.yaml
+# Return to managed injection with `envsubst < k8s/20-movielog.yaml | kubectl replace -f -`;
+# `kubectl apply` keeps these init container and volume entries and is rejected.
+spec:
+  template:
+    metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "false"
+    spec:
+      initContainers:
+        - name: applicationinsights-agent
+          image: "${AGENT_IMAGE}"
+          volumeMounts:
+            - name: applicationinsights-agent
+              mountPath: /azure-monitor-auto-instrumentation-java
+      containers:
+        - name: movielog
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/azure-monitor-auto-instrumentation-java/applicationinsights-agent-codeless.jar -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+            - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: appinsights
+                  key: connection-string
+            - name: APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED
+              value: "true"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Keeps cloud_RoleName and cloud_RoleInstance identical to the managed injection.
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=movielog,service.instance.id=$(POD_NAME),k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE),k8s.container.name=movielog"
+          volumeMounts:
+            - name: applicationinsights-agent
+              mountPath: /azure-monitor-auto-instrumentation-java
+              readOnly: true
+      volumes:
+        - name: applicationinsights-agent
+          emptyDir: {}
