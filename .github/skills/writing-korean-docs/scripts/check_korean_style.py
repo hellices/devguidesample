@@ -30,9 +30,10 @@ BLOCK_START = re.compile(
     r"|!!!|\?\?\?|===)"
 )
 TABLE_DELIMITER = re.compile(r"\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?")
-TABLE_BREAK = re.compile(
-    r"(?:#{1,6}(?:\s|$)|>|`{3,}|~{3,}|[-*+]\s|\d{1,9}[.)]\s|(?:[-*_]\s*){3,}$)"
-)
+# In a one-column table these lines split the block, so rows above stay a table.
+TABLE_SPLIT = re.compile(r"(?:#{1,6}(?:\s|$)|(?:[-*_][ \t]*){3,}$|<)")
+# The end of a table row that has a closing pipe.
+TABLE_END_PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|$")
 INLINE_CODE = re.compile(r"`[^`\n]+`")
 # An inline comment inside a paragraph; it may wrap lines but not cross a blank line.
 HTML_COMMENT = re.compile(r"<!--(?:(?!\n[ \t]*\n).)*?-->", re.S)
@@ -448,10 +449,15 @@ def table_rows(lines: list[str]) -> set[int]:
     """Return line indexes of GFM tables, with or without outer pipes.
 
     A table starts with a header row followed by a delimiter row with the same
-    number of cells and runs until a blank line or another block starts. Rows
-    are matched after container prefixes are removed, so a table inside a
-    block quote, list item or admonition counts. As on the site, a line
-    without the quote marker lazily continues a quoted table as another row.
+    number of cells. Rows are matched after container prefixes are removed, so
+    a table inside a block quote, list item or admonition counts. As in
+    Python-Markdown, which the site uses:
+    - A table with two or more columns takes every line up to a blank line,
+      including "> 인용", "- 목록" and "## 제목", as rows. Only an admonition,
+      details or tab opener or an HTML line starts a new block.
+    - In a one-column table every row needs a pipe. A block quote, ATX heading
+      or thematic break without one splits the block and the rows above stay a
+      table. Any other line without a pipe turns the whole block into a paragraph.
     """
     rows: set[int] = set()
     bodies = container_bodies(lines)
@@ -468,14 +474,28 @@ def table_rows(lines: list[str]) -> set[int]:
             and TABLE_DELIMITER.fullmatch(delimiter)
             and table_cells(header) == table_cells(delimiter)
         ):
-            rows.update((index - 1, index))
+            table = {index - 1, index}
+            single = table_cells(header) == 1
+            base = bodies[index]
             index += 1
             while index < len(lines):
-                row = bodies[index].body.strip()
-                if not row or TABLE_BREAK.match(row) or BLOCK_CONTAINER.match(row):
+                line, row = bodies[index], bodies[index].body.strip()
+                if not row or BLOCK_CONTAINER.match(row) or row.startswith("<"):
                     break
-                rows.add(index)
+                # A line that leaves a container's indented block ends the table.
+                if base.container[1] and not line.container[1]:
+                    break
+                if single and not (row.startswith("|") or TABLE_END_PIPE.search(row)):
+                    if line.container[0] > base.container[0] or TABLE_SPLIT.match(row):
+                        break
+                    # The site renders the whole block as a paragraph.
+                    table = set()
+                    while index < len(lines) and bodies[index].body.strip():
+                        index += 1
+                    break
+                table.add(index)
                 index += 1
+            rows |= table
             continue
         index += 1
     return rows
@@ -901,7 +921,7 @@ def analyze(path: Path, limits: Thresholds) -> Report:
         ("translationese_per_100_sentences", limits.translationese_per_100_sentences,
          "번역투 표현이 몰려 있다. 행위자를 주어로 세우고 동사로 끝낸다."),
         ("signature_phrases", limits.signature_phrases,
-         "결산 접속어·의미 부풀리기·열거 도입이 있다. 지우거나 숫자·사례로 바꾼다."),
+         "결산 접속어·의미 부풀리기·열거 도입이 있다. 지우거나 숫자·사례로 바꾸고, 목록 앞 도입은 '다음 세 가지'처럼 담백하게 고친다."),
         ("contrast", limits.contrast,
          "'A가 아니라 B' 대조가 반복된다. 오해를 바로잡아야 하는 곳에만 남긴다."),
         ("em_dash_per_100_sentences", limits.em_dash_per_100_sentences,

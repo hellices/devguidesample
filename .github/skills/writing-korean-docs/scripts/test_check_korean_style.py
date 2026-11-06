@@ -423,6 +423,25 @@ class ContainerTableTest(unittest.TestCase):
         self.assertEqual(report.metrics["plain_endings"], 1)
 
 
+class TableEndTest(unittest.TestCase):
+    def test_quote_after_one_column_table_is_prose(self) -> None:
+        # MkDocs splits the block: a one-column table, then a block quote.
+        report = analyze("# 표\n\n| h |\n|---|\n> 작업이 수행되어진다.\n")
+        self.assertEqual(report.metrics["translationese"], 1)
+
+    def test_one_column_block_with_plain_line_is_a_paragraph(self) -> None:
+        # MkDocs renders "| h | |---| 그리고, 본문이다." as one paragraph.
+        report = analyze("# 표\n\n| h |\n|---|\n그리고, 본문이다.\n")
+        self.assertEqual(report.metrics["adverb_comma"], 1)
+
+    def test_lines_after_multi_column_table_are_rows(self) -> None:
+        # With two or more columns, MkDocs keeps these lines as table rows.
+        for line in ("> 작업이 수행되어진다.", "- 작업이 수행되어진다.", "작업이 수행되어진다."):
+            with self.subTest(line=line):
+                report = analyze(f"# 표\n\n| 항목 | 설명 |\n| --- | --- |\n{line}\n\n본문이다.\n")
+                self.assertEqual(report.metrics["translationese"], 0)
+
+
 class ScanFormatTest(unittest.TestCase):
     def test_result_section_markup_is_not_counted(self) -> None:
         text = (
