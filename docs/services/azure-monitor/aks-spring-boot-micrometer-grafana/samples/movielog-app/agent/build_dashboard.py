@@ -5,6 +5,13 @@ Every panel states which aggregation the probe justified:
 - DistributionSummary (valueSum + valueCount)      -> sum(valueSum) / sum(valueCount)
 - DB-wide gauges (same value on every Pod)         -> max(value) across instances, never sum
 
+The visualization follows the question each panel answers, not a default line chart:
+- "how many in this range"            -> stat with a sparkline of the same bins
+- "is this value healthy"             -> gauge with thresholds that carry domain meaning
+- "what share does each part have"    -> pie (donut) or bar gauge
+- "how does it move over time"        -> time series (stacked area, bars or line)
+- "is every Pod still reporting"      -> status history
+
 Usage:
   python build_dashboard.py > ../grafana/movielog-dashboard.json
   python build_dashboard.py --appinsights-id <resource-id> > /tmp/live.json   # default for a live push
@@ -15,8 +22,13 @@ import json
 DS = {"type": "grafana-azure-monitor-datasource", "uid": "${datasource}"}
 STEP = "max_of($__interval, 1m)"
 PER_MIN = f"({STEP} / 1m)"
-# The current bin is still filling, so drop it to avoid a false dip at the right edge.
+# The current bin is still filling. Every panel drops it, so time series do not dip at the right edge
+# and totals in stats, gauges, pies and bar gauges agree with each other.
 COMPLETE = f"| where timestamp < bin(now(), {STEP})\n"
+# Reviews at or above 3.5 stars count as fresh, so the rating gauge turns green at the same line.
+RATING_STEPS = [{"color": "red", "value": None}, {"color": "orange", "value": 2.5},
+                {"color": "green", "value": 3.5}]
+BLUE = {"mode": "fixed", "fixedColor": "blue"}
 
 
 def base(metric):
@@ -28,6 +40,21 @@ def base(metric):
     )
 
 
+def names(*metrics):
+    quoted = ", ".join(f'"{m}"' for m in metrics)
+    return (
+        "customMetrics\n"
+        "| where $__timeFilter(timestamp)\n"
+        '| where cloud_RoleName == "$role"\n'
+        f"| where name in ({quoted})\n"
+    )
+
+
+def per_bin(expr, by=""):
+    by = f", {by}" if by else ""
+    return COMPLETE + f"| summarize {expr} by bin(timestamp, {STEP}){by}\n| order by timestamp asc"
+
+
 def target(query, fmt, ref="A"):
     return {
         "refId": ref,
@@ -35,6 +62,10 @@ def target(query, fmt, ref="A"):
         "queryType": "Azure Log Analytics",
         "azureLogAnalytics": {"query": query, "resources": ["$appinsights"], "resultFormat": fmt},
     }
+
+
+def thresholds(steps):
+    return {"mode": "absolute", "steps": steps}
 
 
 class Layout:
@@ -48,10 +79,8 @@ class Layout:
                             "gridPos": {"h": 1, "w": 24, "x": 0, "y": self.y}, "panels": []})
         self.y += 1
 
-    def add(self, kind, title, desc, query, unit, x, w, h, fmt, defaults=None, options=None, label=None):
+    def add(self, kind, title, desc, query, x, w, h, fmt, unit="short", defaults=None, options=None, label=None):
         field_defaults = {"unit": unit, **(defaults or {})}
-        if kind == "stat":
-            field_defaults["color"] = {"mode": "fixed", "fixedColor": "blue"}
         if label:
             # Legend shows the dimension value instead of "<column> <value>".
             field_defaults["displayName"] = "${__field.labels.%s}" % label
@@ -77,9 +106,28 @@ class Layout:
         return self.next_id - 1
 
 
-STAT = {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
-        "colorMode": "value", "graphMode": "none", "textMode": "auto", "justifyMode": "center"}
-LINES = {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+def reduce(calc, values=False):
+    return {"calcs": [calc], "fields": "", "values": values}
+
+
+def stat(calc, sparkline=True):
+    return {"reduceOptions": reduce(calc), "colorMode": "value", "graphMode": "area" if sparkline else "none",
+            "textMode": "value", "justifyMode": "center", "orientation": "auto"}
+
+
+def bar_gauge():
+    # One bar per row of a table result; the string column names the bar.
+    # Names above fixed-height bars (the height includes the name): long Pod names are not truncated
+    # and panels with few rows do not blow up.
+    return {"reduceOptions": reduce("lastNotNull", values=True), "orientation": "horizontal",
+            "displayMode": "gradient", "valueMode": "color", "showUnfilled": True,
+            "namePlacement": "top", "sizing": "manual", "minVizHeight": 32, "maxVizHeight": 32,
+            "text": {"titleSize": 12, "valueSize": 14}}
+
+
+LEGEND = {"displayMode": "list", "placement": "bottom"}
+LINES = {"legend": LEGEND, "tooltip": {"mode": "multi"}}
+AREA = {"drawStyle": "line", "lineWidth": 1, "fillOpacity": 35, "stacking": {"mode": "normal", "group": "A"}}
 BARS = {"drawStyle": "bars", "fillOpacity": 70, "stacking": {"mode": "normal", "group": "A"},
         "lineWidth": 1}
 
@@ -87,90 +135,109 @@ BARS = {"drawStyle": "bars", "fillOpacity": 70, "stacking": {"mode": "normal", "
 def build(appinsights_id):
     lay = Layout()
 
-    lay.row("사용자 행동 (Counter: 구간 증가량 합계)")
-    lay.add("stat", "영화 조회", "movielog_movie_views 증가량 합계. 웹 상세 화면과 API 조회를 모두 셉니다.",
-            base("movielog_movie_views") + "| summarize movieViews = sum(value)", "short", 0, 5, 4, "table", options=STAT)
-    lay.add("stat", "새 리뷰", "movielog_reviews_posted 증가량 합계. 커밋된 리뷰만 집계됩니다.",
-            base("movielog_reviews_posted") + "| summarize reviews = sum(value)", "short", 5, 5, 4, "table",
-            options=STAT)
-    lay.add("stat", "신규 회원", "movielog_members_signups 증가량 합계.",
-            base("movielog_members_signups") + "| summarize signups = sum(value)", "short", 10, 4, 4, "table",
-            options=STAT)
-    lay.add("stat", "평균 별점", "DistributionSummary라 sum(valueSum) / sum(valueCount)로 계산합니다. 행 평균을 쓰면 왜곡됩니다.",
-            base("movielog_review_rating") + "| summarize stars = sum(valueSum) / sum(valueCount)",
-            "none", 14, 5, 4, "table", defaults={"decimals": 2, "min": 0, "max": 5}, options=STAT)
-    lay.add("stat", "Fresh 비율", "verdict=fresh(별 3.5개 이상) 리뷰 비율입니다.",
+    lay.row("핵심 지표 (선택 구간 합계와 평균)")
+    for x, metric, title, desc in [
+        (0, "movielog_movie_views", "영화 조회", "movielog_movie_views 증가량 합계. 웹 상세 화면과 API 조회를 모두 셉니다."),
+        (5, "movielog_reviews_posted", "새 리뷰", "movielog_reviews_posted 증가량 합계. 커밋된 리뷰만 집계됩니다."),
+        (10, "movielog_members_signups", "신규 회원", "movielog_members_signups 증가량 합계."),
+    ]:
+        lay.add("stat", title, desc + " 배경 곡선은 같은 값의 bin별 추이입니다.",
+                base(metric) + per_bin("total = sum(value)"), x, 5, 6, "time_series",
+                defaults={"color": BLUE}, options=stat("sum"))
+    lay.add("gauge", "평균 별점",
+            "DistributionSummary라 sum(valueSum) / sum(valueCount)로 계산합니다. fresh 기준인 3.5개부터 초록색입니다.",
+            base("movielog_review_rating") + COMPLETE + "| summarize stars = sum(valueSum) / sum(valueCount)",
+            15, 4, 6, "table", unit="none",
+            defaults={"decimals": 2, "min": 0, "max": 5, "thresholds": thresholds(RATING_STEPS),
+                      "color": {"mode": "thresholds"}},
+            options={"reduceOptions": reduce("lastNotNull"), "showThresholdMarkers": True,
+                     "showThresholdLabels": False, "orientation": "auto"})
+    lay.add("piechart", "리뷰 판정 비율", "verdict=fresh(별 3.5개 이상)와 rotten 리뷰 수의 비율입니다.",
             base("movielog_reviews_posted")
-            + '| extend verdict = tostring(customDimensions.verdict)\n'
-              '| summarize fresh = sumif(value, verdict == "fresh"), total = sum(value)\n'
-              "| project freshRatio = iff(total == 0, 0.0, 100.0 * fresh / total)",
-            "percent", 19, 5, 4, "table", options=STAT)
-    lay.newline(4)
+            + "| extend verdict = tostring(customDimensions.verdict)\n"
+              + COMPLETE + "| summarize reviews = sum(value) by verdict\n"
+              "| order by verdict asc",
+            19, 5, 6, "table",
+            defaults={"color": {"mode": "palette-classic"}},
+            options={"reduceOptions": reduce("lastNotNull", values=True), "pieType": "donut",
+                     "displayLabels": ["percent"], "legend": {**LEGEND, "values": ["value"]},
+                     "tooltip": {"mode": "single"}})
+    lay.newline(6)
 
-    lay.add("timeseries", "분당 영화 조회 (채널별)", "bin마다 증가량을 더한 뒤 분당 값으로 환산합니다.",
+    lay.add("timeseries", "분당 영화 조회 (채널별 누적)", "bin마다 증가량을 더한 뒤 분당 값으로 환산하고 채널을 쌓아 전체 처리량을 함께 봅니다.",
             base("movielog_movie_views")
             + "| extend channel = tostring(customDimensions.channel)\n"
-              + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), channel\n"
-              "| order by timestamp asc",
-            "short", 0, 12, 8, "time_series", options=LINES, label="channel")
+              + per_bin(f"perMin = sum(value) / {PER_MIN}", "channel"),
+            0, 12, 8, "time_series", defaults={"custom": AREA}, options=LINES, label="channel")
     lay.add("timeseries", "분당 새 리뷰 (fresh / rotten)", "verdict dimension으로 나눈 리뷰 작성량입니다.",
             base("movielog_reviews_posted")
             + "| extend verdict = tostring(customDimensions.verdict)\n"
-              + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), verdict\n"
-              "| order by timestamp asc",
-            "short", 12, 12, 8, "time_series", defaults={"custom": BARS}, options=LINES, label="verdict")
+              + per_bin(f"perMin = sum(value) / {PER_MIN}", "verdict"),
+            12, 12, 8, "time_series", defaults={"custom": BARS}, options=LINES, label="verdict")
     lay.newline(8)
 
-    lay.add("timeseries", "분당 리뷰 조회·댓글 (채널별)", "두 counter를 한 panel에 그리고 metric·channel을 series 이름으로 씁니다.",
-            "customMetrics\n"
-            "| where $__timeFilter(timestamp)\n"
-            '| where cloud_RoleName == "$role"\n'
-            '| where name in ("movielog_review_views", "movielog_comments_posted")\n'
-            '| extend series = strcat(iff(name == "movielog_review_views", "리뷰 조회", "댓글"), " · ",\n'
-            "                         tostring(customDimensions.channel))\n"
-            + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), series\n"
-            "| order by timestamp asc",
-            "short", 0, 12, 8, "time_series", options=LINES, label="series")
-    lay.add("timeseries", "평균 별점 추이", "bin마다 sum(valueSum) / sum(valueCount)로 가중 평균을 계산합니다.",
-            base("movielog_review_rating")
-            + COMPLETE + f"| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, {STEP})\n"
-              "| order by timestamp asc",
-            "none", 12, 12, 8, "time_series", defaults={"decimals": 2, "min": 0, "max": 5, "displayName": "평균 별점"},
+    lay.add("bargauge", "활동별·채널별 합계", "Counter 네 개의 구간 합계를 활동과 채널로 나눠 어느 경로가 많은지 비교합니다.",
+            names("movielog_movie_views", "movielog_review_views", "movielog_reviews_posted",
+                  "movielog_comments_posted")
+            + '| extend activity = case(name == "movielog_movie_views", "영화 조회",\n'
+              '                         name == "movielog_review_views", "리뷰 조회",\n'
+              '                         name == "movielog_reviews_posted", "리뷰 작성", "댓글")\n'
+              '| extend series = strcat(activity, " · ", tostring(customDimensions.channel))\n'
+              + COMPLETE + "| summarize total = sum(value) by series\n"
+              "| order by total desc",
+            0, 9, 11, "table", defaults={"color": {"mode": "continuous-BlPu"}, "min": 0}, options=bar_gauge())
+    lay.add("timeseries", "평균 별점 추이", "bin마다 sum(valueSum) / sum(valueCount)로 가중 평균을 계산합니다. 배경색은 평균 별점 gauge와 같은 기준입니다.",
+            base("movielog_review_rating") + per_bin("stars = sum(valueSum) / sum(valueCount)"),
+            9, 15, 11, "time_series", unit="none",
+            defaults={"decimals": 2, "min": 0, "max": 5, "displayName": "평균 별점",
+                      "color": {"mode": "fixed", "fixedColor": "text"},
+                      "thresholds": thresholds(RATING_STEPS),
+                      "custom": {"lineWidth": 2, "thresholdsStyle": {"mode": "area"}}},
             options=LINES)
-    lay.newline(8)
+    lay.newline(11)
 
     lay.row("누적 현황 (Gauge: DB 기준이라 Pod 간 max)")
-    lay.add("stat", "카탈로그 영화 수", "movielog_movies_stored. 모든 Pod가 같은 DB 값을 보고하므로 합산하지 않습니다.",
-            base("movielog_movies_stored")
-            + "| summarize arg_max(timestamp, value) by cloud_RoleInstance\n"
-              "| summarize movies = max(value)",
-            "short", 0, 4, 8, "table", options=STAT)
-    lay.add("timeseries", "저장된 리뷰·댓글·회원 수",
-            "Pod 수만큼 같은 값이 들어오므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
+    for x, metric, title in [
+        (0, "movielog_movies_stored", "카탈로그 영화"),
+        (6, "movielog_reviews_stored", "저장된 리뷰"),
+        (12, "movielog_comments_stored", "저장된 댓글"),
+        (18, "movielog_members_stored", "가입 회원"),
+    ]:
+        lay.add("stat", title,
+                f"{metric}. 모든 Pod가 같은 DB 값을 보고하므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
+                base(metric) + per_bin("stored = max(value)"), x, 6, 5, "time_series",
+                defaults={"color": {"mode": "fixed", "fixedColor": "purple"}}, options=stat("lastNotNull"))
+    lay.newline(5)
+
+    lay.row("운영 (Pod 분포와 수신 상태)")
+    lay.add("bargauge", "Pod별 영화 조회 분포", "cloud_RoleInstance별 구간 합계로 트래픽이 한 Pod에 몰리는지 봅니다.",
+            base("movielog_movie_views")
+            + COMPLETE + "| summarize total = sum(value) by cloud_RoleInstance\n"
+              "| order by cloud_RoleInstance asc",
+            0, 12, 5, "table", defaults={"color": {"mode": "continuous-BlPu"}, "min": 0}, options=bar_gauge())
+    lay.add("bargauge", "외부 조회 결과 (outcome별)",
+            "카탈로그 조회와 검색의 outcome별 구간 합계입니다. TMDB 키 없이 seed 데이터만 쓰면 cache_hit와 disabled만 나타납니다.",
+            names("movielog_movie_catalog_lookups", "movielog_movie_searches")
+            + '| extend series = strcat(iff(name == "movielog_movie_searches", "검색", "카탈로그"), " · ",\n'
+              "                         tostring(customDimensions.outcome))\n"
+              + COMPLETE + "| summarize total = sum(value) by series\n"
+              "| order by total desc",
+            12, 12, 5, "table", defaults={"color": {"mode": "continuous-BlPu"}, "min": 0}, options=bar_gauge())
+    lay.newline(5)
+    lay.add("status-history", "Pod별 수신 metric 종류 수",
+            "bin마다 Pod가 보낸 movielog_* metric 종류 수입니다. 칸이 비거나 빨개지면 그 시간에 agent나 allowlist가 지표를 보내지 않았습니다.",
             "customMetrics\n"
             "| where $__timeFilter(timestamp)\n"
             '| where cloud_RoleName == "$role"\n'
-            '| where name in ("movielog_reviews_stored", "movielog_comments_stored", "movielog_members_stored")\n'
-            '| extend series = case(name == "movielog_reviews_stored", "리뷰",\n'
-            '                       name == "movielog_comments_stored", "댓글", "회원")\n'
-            + COMPLETE + f"| summarize stored = max(value) by bin(timestamp, {STEP}), series\n"
-            "| order by timestamp asc",
-            "short", 4, 20, 8, "time_series", options=LINES, label="series")
-    lay.newline(8)
-
-    lay.row("운영 (Pod 분포와 수신 상태)")
-    lay.add("timeseries", "Pod별 분당 영화 조회", "cloud_RoleInstance로 나눠 트래픽이 한 Pod에 몰리는지 봅니다.",
-            base("movielog_movie_views")
-            + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), cloud_RoleInstance\n"
-              "| order by timestamp asc",
-            "short", 0, 12, 8, "time_series", options=LINES, label="cloud_RoleInstance")
-    lay.add("timeseries", "분당 카탈로그 조회 (출처별)", "TMDB 키 없이 seed 데이터만 쓰면 cache_hit만 나타납니다.",
-            base("movielog_movie_catalog_lookups")
-            + "| extend outcome = tostring(customDimensions.outcome)\n"
-              + COMPLETE + f"| summarize perMin = sum(value) / {PER_MIN} by bin(timestamp, {STEP}), outcome\n"
-              "| order by timestamp asc",
-            "short", 12, 12, 8, "time_series", options=LINES, label="outcome")
-    lay.newline(8)
+            '| where name startswith "movielog_"\n'
+            + per_bin("metrics = dcount(name)", "cloud_RoleInstance"),
+            0, 24, 6, "time_series",
+            defaults={"color": {"mode": "thresholds"},
+                      "thresholds": thresholds([{"color": "red", "value": None}, {"color": "green", "value": 1}])},
+            options={"showValue": "auto", "rowHeight": 0.8, "colWidth": 0.9, "legend": {**LEGEND, "showLegend": False},
+                     "tooltip": {"mode": "single"}},
+            label="cloud_RoleInstance")
+    lay.newline(6)
     lay.add("table", "metric 수신 상태 (최근 10분)",
             "Pod별로 metric이 1분에 한 행씩 오는지와 마지막 수신 시각을 봅니다. 행이 멈추면 agent나 allowlist를 확인합니다.",
             "customMetrics\n"
@@ -181,7 +248,7 @@ def build(appinsights_id):
             "| extend secondsAgo = datetime_diff('second', now(), lastSeen)\n"
             "| project name, cloud_RoleInstance, rows, secondsAgo\n"
             "| order by name asc, cloud_RoleInstance asc",
-            "short", 0, 24, 9, "table", options={"showHeader": True, "cellHeight": "sm"})
+            0, 24, 9, "table", options={"showHeader": True, "cellHeight": "sm"})
     lay.newline(9)
 
     return {

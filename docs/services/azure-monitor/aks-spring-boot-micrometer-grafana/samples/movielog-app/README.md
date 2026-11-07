@@ -105,6 +105,10 @@ npm i playwright && npx playwright install chromium-headless-shell
 node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
 ```
 
+`now-30m` 같은 상대 범위는 panel마다 query 시각이 조금씩 달라 분 경계에서는
+panel 간 합계가 1분 bin만큼 어긋날 수 있습니다. 문서에 쓸 캡처는 분 단위로 맞춘
+절대 범위(`from=<epoch ms>&to=<epoch ms>`)로 찍습니다.
+
 `kql.sh`는 `az monitor app-insights query`의 기본 범위인 최근 1시간만 조회합니다.
 지난 구간을 볼 때는 `KQL_OFFSET=12h ./kql.sh ...`처럼 늘립니다. `capture.mjs`는
 token을 Grafana origin에만 보내고, 내부 scroll 높이에 맞춰 viewport를 늘리며,

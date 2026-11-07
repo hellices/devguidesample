@@ -57,8 +57,8 @@ related_guides:
 
 [주제 소개](../index.md)에서 설명한 흐름을 영화 리뷰 앱 MovieLog로 직접
 재현합니다. 아래 명령과 수치, 캡처는 Korea Central에서 실제로 구성해 얻은
-결과입니다. 수집과 대시보드 작성은 2026-11-06에, [대시보드 반영](#publish)은
-2026-11-07에 실행했습니다.
+결과입니다. 수집과 첫 대시보드 작성은 2026-11-06에, 질문 유형별 시각화 개편과
+[대시보드 반영](#publish)은 2026-11-07에 실행했습니다.
 
 ```text
 [MovieLog, Spring Boot 4.1.2 / Java 25]
@@ -81,8 +81,9 @@ related_guides:
   12개 지표가 두 Pod에서 도착했습니다([버전 게이트](#version-gate)).
 - 이미 주입된 Deployment에서 custom agent로 바꾸려면 patch를 두 번에 나눠야
   했습니다([webhook 주입 해제](#webhook-revert)).
-- agent의 probe·verify·look 단계가 gauge 중복 합산, KQL 예약어, 식별자 노출을
-  대시보드 공개 전에 잡았습니다([agent 대시보드 방법론](#agent-method)).
+- agent의 probe·verify·look 단계가 gauge 중복 합산, KQL 예약어, 식별자 노출,
+  꺾은선 일색의 화면과 panel 간 합계 불일치를 대시보드 공개 전에 잡았습니다
+  ([agent 대시보드 방법론](#agent-method)).
 
 ## 실습 자원: 단일 resource group 구성 { #resources }
 
@@ -351,12 +352,12 @@ inventory는 `cloud_RoleName`(`movielog`)도 알려 줍니다. dashboard의 `rol
 최근 1시간만 조회합니다. 지난 실습 구간을 다시 probe하려면 `KQL_OFFSET=12h`처럼
 범위를 넓힙니다.
 
-inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니다. 실습 당시
-`movielog_movie_searches`가 없었던 것은 load generator가 검색 parameter를 `q`가
-아닌 `query`로 보내 400으로 끝났기 때문입니다. 수정된 load generator로 앱을
-로컬에서 실행해 보니 TMDB key가 없어도 검색 시도가
-`movielog.movie.searches{outcome=disabled}`로 기록됐습니다. AKS와 `customMetrics`
-도착은 실습 클러스터를 멈춘 뒤라 다시 확인하지 않았습니다.
+inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니다. 2026-11-06
+실습에서 `movielog_movie_searches`가 없었던 것은 load generator가 검색 parameter를
+`q`가 아닌 `query`로 보내 400으로 끝났기 때문입니다. 2026-11-07 같은 클러스터에서
+수정한 load generator ConfigMap을 적용하자 TMDB key 없이도 검색 시도가
+`movielog_movie_searches`(`outcome` = `disabled`)로 두 Pod에서 도착해, 비즈니스 지표가
+13개가 됐습니다.
 
 ### probe 2: dimension 값 개수와 사용 가능한 축 { #probe-dimensions }
 
@@ -433,28 +434,33 @@ panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다
 
 `agent/build_dashboard.py`는 probe 3의 표를 그대로 코드로 옮겼습니다.
 
-| panel | 질문 | 집계식 |
-|---|---|---|
-| 영화 조회, 새 리뷰, 신규 회원 | 기간 동안 몇 건인가 | `sum(value)` |
-| 평균 별점, 평균 별점 추이 | 리뷰 품질이 변했는가 | `sum(valueSum) / sum(valueCount)` |
-| Fresh 비율 | 긍정 리뷰 비율은 | `sumif(value, verdict == "fresh") / sum(value)` |
-| 분당 영화 조회·새 리뷰·리뷰 조회·댓글 | 채널·판정별 처리량은 | bin별 `sum(value) / (bin / 1m)` |
-| 카탈로그 영화 수 | 현재 카탈로그 규모는 | Pod별 최신 값(`arg_max`)의 `max` |
-| 저장된 리뷰·댓글·회원 수 | 누적 규모 추이는 | bin별 Pod 간 `max(value)` |
-| Pod별 분당 영화 조회 | 트래픽이 한 Pod에 몰리는가 | `cloud_RoleInstance`별 `sum(value)` |
-| metric 수신 상태 | 지표가 끊기지 않았는가 | 최근 10분 행 수와 마지막 수신 후 경과 초 |
+| panel | 질문 | 집계식 | 시각화 |
+|---|---|---|---|
+| 영화 조회, 새 리뷰, 신규 회원 | 기간 동안 몇 건인가 | bin별 `sum(value)`의 구간 합계 | stat + sparkline |
+| 평균 별점 | 리뷰 품질이 기준 이상인가 | `sum(valueSum) / sum(valueCount)` | gauge(3.5개부터 초록) |
+| 리뷰 판정 비율 | 긍정 리뷰 비율은 | `verdict`별 `sum(value)` | donut |
+| 분당 영화 조회, 분당 새 리뷰 | 채널·판정별 처리량은 | bin별 `sum(value) / (bin / 1m)` | 누적 area, 누적 bar |
+| 활동별·채널별 합계 | 어느 활동·채널이 많은가 | 활동·`channel`별 `sum(value)` | bar gauge |
+| 평균 별점 추이 | 리뷰 품질이 변했는가 | bin별 `sum(valueSum) / sum(valueCount)` | line + threshold 배경 |
+| 카탈로그 영화, 저장된 리뷰·댓글, 가입 회원 | 누적 규모와 추이는 | bin별 Pod 간 `max(value)`의 마지막 값 | stat + sparkline |
+| Pod별 영화 조회 분포 | 트래픽이 한 Pod에 몰리는가 | `cloud_RoleInstance`별 `sum(value)` | bar gauge |
+| 외부 조회 결과 | 카탈로그·검색이 어떻게 끝나는가 | `outcome`별 `sum(value)` | bar gauge |
+| Pod별 수신 metric 종류 수 | 모든 Pod가 계속 보내는가 | bin별 `dcount(name)` | status history |
+| metric 수신 상태 | 지금 끊기지 않았는가 | 최근 10분 행 수와 마지막 수신 후 경과 초 | table |
 
 ```kusto
 customMetrics
 | where $__timeFilter(timestamp)
 | where cloud_RoleName == "$role"
-| where name in ("movielog_reviews_stored", "movielog_comments_stored", "movielog_members_stored")
-| extend series = case(name == "movielog_reviews_stored", "리뷰",
-                       name == "movielog_comments_stored", "댓글", "회원")
+| where name == "movielog_reviews_stored"
 | where timestamp < bin(now(), max_of($__interval, 1m))   // 채워지는 중인 현재 bin 제외
-| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m)), series
+| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))   // Pod 간 sum 금지
 | order by timestamp asc
 ```
+
+stat panel은 같은 bin 시계열을 받아 마지막 값이나 합계로 줄이고, 배경에
+sparkline을 그립니다. 숫자 하나와 추이를 한 칸에 담으므로 같은 지표의 꺾은선
+panel을 따로 둘 필요가 없습니다.
 
 ### verify: Grafana 전체 panel query 실행 { #verify }
 
@@ -482,7 +488,8 @@ OK   새 리뷰     frames=1 rows=1
 
 `views`는 KQL 예약어입니다. column 이름을 `movieViews`로 바꾼 뒤 14개 query가
 모두 통과했고, 그다음에 `az grafana dashboard create --overwrite true`로
-올렸습니다.
+올렸습니다. 질문 유형별 시각화로 바꾼 뒤의 query 17개도 같은 방법으로 모두
+통과했습니다.
 
 `verify_panels.py`는 숫자 field가 모두 null인 행을 데이터로 세지 않고, 접힌 row
 안의 panel도 실행합니다. 0은 정상 값으로 셉니다. 실습 클러스터를 멈춘 뒤 다시
@@ -513,14 +520,25 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 | 아래쪽 panel이 비어 보임 | Grafana의 내부 scroll과 `fullPage` 캡처 불일치 | 내부 scroll 높이를 재서 viewport를 늘림 |
 | 모든 분당 series가 오른쪽 끝에서 급락 | 아직 채워지는 현재 bin까지 그림 | 시계열 query에 `where timestamp < bin(now(), <bin>)` 추가 |
 
-수정 뒤 캡처가 이 문서 맨 위의 대시보드입니다. 캡처에서 다음도 확인했습니다.
+수정 뒤 대시보드는 query는 맞았지만 query panel 14개 중 9개가 시계열이라 합계·비율·Pod
+분포를 묻는 panel도 꺾은선으로 보였습니다. panel마다 질문 유형에 맞는 시각화를
+고르도록 바꾸고([질문 유형별 panel 시각화](../index.md#visualization)) 다시 look
+단계를 돌리자 다음 문제가 보였습니다.
 
-- Pod별 분당 영화 조회가 한 Pod에 약 300, 다른 Pod에 약 150으로 고르지
-  않습니다. 로그인 세션 때문에 Service에 `sessionAffinity: ClientIP`를 둔
-  결과입니다. 처음 합성 사용자 3개일 때는 모든 요청이 한 Pod로 갔고, 6개로
-  늘린 뒤 두 Pod에 나뉘었습니다.
-- `댓글 · web`이 0으로 평평합니다. 0으로 미리 등록한 counter이고 합성 사용자는
-  API로만 댓글을 씁니다.
+| 화면에서 본 문제 | 원인 | 수정 |
+|---|---|---|
+| stat의 영화 조회 849와 Pod별 bar gauge 합계 1,279가 다름 | stat만 채워지는 현재 bin을 빼고 donut·bar gauge는 포함 | 모든 panel query에서 현재 bin 제외 |
+| 행 두 개짜리 bar gauge가 panel을 가득 채우고 Pod 이름이 잘림 | bar 높이 자동, 이름은 왼쪽 고정 폭 | 이름을 bar 위에 두고 높이를 32px로 고정(이 높이에 이름도 포함되어 14px이면 이름이 사라짐) |
+| 조회가 많은 Pod가 빨간색 | green-yellow-red 색 구간 | 크기만 나타내는 중립 색 구간 |
+| 30분 캡처에서 stat 영화 조회 12.5K와 Pod별 합계 12.95K가 다름 | 상대 범위(`now-30m`)로 분 경계에서 캡처해 panel마다 다른 1분 구간을 집계 | 같은 KQL 한 번으로 세 합계가 12,804로 같음을 확인하고, 문서용 캡처는 분 단위로 맞춘 절대 범위(`from`·`to` epoch ms)로 다시 찍음 |
+
+수정 뒤 대시보드는 [실습 결과](#result)에 있습니다. 캡처에서 다음도 확인했습니다.
+
+- Pod별 영화 조회 분포가 4.32K 대 8.62K로 고르지 않습니다. 로그인 세션 때문에 Service에
+  `sessionAffinity: ClientIP`를 둔 결과입니다. 처음 합성 사용자 3개일 때는 모든
+  요청이 한 Pod로 갔고, 6개로 늘린 뒤 두 Pod에 나뉘었습니다.
+- 활동별·채널별 합계에서 `리뷰 작성 · web`과 `댓글 · web`이 0입니다. 0으로 미리
+  등록한 counter이고 합성 사용자는 API로만 리뷰와 댓글을 씁니다.
 
 ## 대시보드 반영 실습: 로컬 agent 직접 반영과 JSON import { #publish }
 
@@ -625,28 +643,30 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
 실습에서는 두 작업을 따로 실행했습니다. 먼저 live dashboard를 Export하고 2단계
 명령으로 resource ID 3건이 0건이 되는 것을 확인했습니다. import는 저장소의 범용
 JSON(`grafana/movielog-dashboard.json`)을 입력으로 위 명령처럼 UID와 제목을 바꿔
-`--overwrite` 없이 같은 Grafana에 가져왔습니다. 결과는 `status: success`, panel
-17개(row 3개와 query panel 14개)였고,
+`--overwrite` 없이 같은 Grafana에 가져왔습니다. 질문 유형별 시각화로 바꾼 JSON으로
+다시 실행한 결과는 `status: success`, panel 20개(row 3개와 query panel 17개)였고,
 `var-appinsights`로 변수를 채우자 원본과 같은 값이 나왔습니다. 확인 뒤 테스트
 dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 기준이며
-실습에서는 CLI로 실행했습니다.
+실습에서는 CLI로 실행했습니다. 아래 캡처는 resource ID가 보이는 변수 막대를
+잘라냈습니다.
 
-![JSON import 후 변수를 채운 대시보드. 영화 조회 10.1K, 새 리뷰 1.71K, 신규 회원 2.53K, 평균 별점 3.51, fresh 비율 66.2%와 채널별 처리량 panel](../images/json-import-result.png)
+![JSON import 후 변수를 채운 대시보드 상단. 영화 조회 12.9K, 새 리뷰 2.30K, 신규 회원 3.24K stat과 sparkline, 평균 별점 3.52 gauge, fresh 67% donut, 채널별 누적 area와 판정별 막대](../images/json-import-result.png)
 
 ## 실습 결과: 판정 기준과 실측값 { #result }
 
-실습 결과는 아래 기준과 실측값으로 판정합니다.
+실습 결과는 아래 기준과 실측값으로 판정합니다. 대시보드 캡처는 2026-11-07
+08:45~09:15 UTC 구간입니다.
 
-![MovieLog 비즈니스 지표 대시보드. 영화 조회, 새 리뷰, 신규 회원, 평균 별점, fresh 비율 stat과 채널별 처리량, 누적 현황, Pod별 분포, metric 수신 상태 panel](../images/movielog-dashboard.png)
+![MovieLog 비즈니스 지표 대시보드. 영화 조회 12.9K, 새 리뷰 2.30K, 신규 회원 3.24K stat과 sparkline, 평균 별점 3.52 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 수신 status history, metric 수신 상태 table](../images/movielog-dashboard.png)
 
 | 확인 항목 | 기대 | 실측 |
 |---|---|---|
 | 관리형 주입 agent | 3.7.9 미만이면 custom meter 없음 | `3.7.7-aks`, `movielog_*` 0건 |
-| custom init agent | 3.7.10 시작, custom meter 도착 | 시작 로그 확인, 12개 이름 × 2 instance |
+| custom init agent | 3.7.10 시작, custom meter 도착 | 시작 로그 확인, 12개 이름 × 2 instance. 검색 수정 뒤 13개 |
 | export 주기 | Pod·series별 1분 1행 | MCP 조회 15분 동안 `movie_views` 60행(2 series × 2 Pod × 15) |
 | allowlist | `jvm_*`, `http_server_requests` Micrometer 지표 없음 | 없음. agent 기본 JVM 지표와 `http.server.request.duration`만 별도로 존재 |
-| dashboard query | 14개 모두 데이터 반환 | `verify_panels.py` 14/14 OK |
-| 화면 점검 | 식별자 없음, 경고색 없음 | 수정 후 캡처에서 확인 |
+| dashboard query | 17개 모두 데이터 반환 | `verify_panels.py` 17/17 OK |
+| 화면 점검 | 식별자 없음, 경고색 없음, panel 간 합계 일치 | 영화 조회 12.9K = 채널 6.52K + 6.42K = Pod 4.32K + 8.62K |
 
 ## 수집 비용: meter × tag 조합 × Pod 수 { #cost }
 
@@ -698,7 +718,9 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
 
 - 2026-11-06 Korea Central에서 AKS, Application Insights, ACR, Managed Grafana를
   만들고 수집과 대시보드 작성 절차를 실행했고, 2026-11-07에 같은 환경에서
-  대시보드 반영 절차를 실행했습니다. 캡처는 모두 이 실습 환경에서 얻었습니다.
+  대시보드 반영 절차를 실행했습니다. 같은 날 클러스터를 다시 시작해 질문 유형별
+  시각화로 바꾼 대시보드를 배포하고 query 실행과 캡처를 반복했습니다. 캡처는 모두
+  이 실습 환경에서 얻었습니다.
 - Microsoft Learn에서 AKS 자동 계측, Java Micrometer 자동 수집과 이름 변환,
   export 간격, custom metric 저장과 비용, Managed Grafana data source 권한,
   data plane API 인증, MCP endpoint, dashboard import·export를 원문 전체로

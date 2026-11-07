@@ -56,9 +56,9 @@ meter 기록, 자동 수집, agent 검증의 세 단계만 연결하면 비즈�
    query를 실행하고, 렌더링한 화면을 캡처해 확인합니다.
 
 아래는 영화 리뷰 앱 MovieLog를 AKS에 올려 이 흐름 그대로 만든 대시보드입니다.
-2026-11-06 실제 환경에서 합성 사용자 트래픽으로 캡처했습니다.
+2026-11-07 실제 환경에서 합성 사용자 트래픽으로 캡처했습니다.
 
-![MovieLog 비즈니스 지표 대시보드. 영화 조회, 새 리뷰, 신규 회원, 평균 별점, fresh 비율 stat과 채널별 처리량, 평균 별점 추이, 누적 현황, Pod별 분포, metric 수신 상태 panel](images/movielog-dashboard.png)
+![MovieLog 비즈니스 지표 대시보드. 영화 조회·새 리뷰·신규 회원 stat과 sparkline, 평균 별점 gauge, fresh/rotten donut, 채널별 누적 area와 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, Pod별 수신 status history panel](images/movielog-dashboard.png)
 
 ## 앱 코드: 도메인 이벤트 기반 Micrometer meter { #record }
 
@@ -132,13 +132,29 @@ panel을 추측합니다. 실제 데이터를 먼저 보게 하면 추측으로�
 | probe | 실제 `customMetrics`의 이름, dimension, 값 모양 조회 | DB 기준 gauge를 Pod마다 같은 값으로 보내 sum이면 2배 |
 | build | probe가 정한 집계식으로 dashboard JSON 생성 | Counter는 `sum`, 분포는 `sum(valueSum)/sum(valueCount)`로 구분 |
 | verify | 모든 panel query를 Grafana에서 실행 | KQL 예약어 `views`로 panel 1개가 400 |
-| look | 렌더링한 화면을 캡처해 직접 확인 | subscription ID 노출, 정상 값의 빨간색, 끝이 급락하는 미완성 bin |
+| look | 렌더링한 화면을 캡처해 직접 확인 | subscription ID 노출, 정상 값의 빨간색, 끝이 급락하는 미완성 bin, 꺾은선 일색의 화면 |
 
 look 단계의 첫 캡처입니다. query는 모두 성공했지만 화면에서는 정상 건수가
 경고색으로 보이고 legend가 읽기 어려웠습니다. 수정한 결과가 이 문서 맨 위의
 대시보드입니다.
 
 ![수정 전 캡처. 영화 조회 2.17K, 새 리뷰 366, 신규 회원 542가 빨간색으로 표시되고 legend가 perMin api, perMin web으로 표시됨](images/look-step-before-fix.png)
+
+### 질문 유형별 panel 시각화 { #visualization }
+
+panel 시각화는 답할 질문의 유형으로 고릅니다. 지표가 모두 시간 bin으로 들어오기
+때문에 agent에게 따로 말하지 않으면 거의 모든 panel을 꺾은선으로 그립니다.
+MovieLog의 첫 대시보드도 query panel 14개 중 9개가 시계열이었습니다. 그래서 질문
+유형과 시각화의 짝을 prompt에 넣었습니다.
+
+| 질문 유형 | 시각화 | MovieLog panel |
+|---|---|---|
+| 구간 동안 몇 건인가 | stat + sparkline | 영화 조회, 새 리뷰, 신규 회원, 누적 현황 |
+| 값이 정상 범위인가 | gauge(도메인 기준 threshold) | 평균 별점(fresh 기준 3.5개부터 초록) |
+| 구성 비율은 | donut | 리뷰 판정 비율(fresh / rotten) |
+| 무엇이 많은가, 쏠림은 | bar gauge | 활동별·채널별 합계, Pod별 영화 조회 분포, 외부 조회 결과 |
+| 시간에 따라 어떻게 변하는가 | time series(누적 area, bar, line) | 분당 영화 조회, 분당 새 리뷰, 평균 별점 추이 |
+| 모든 Pod가 계속 보내는가 | status history, table | Pod별 수신 metric 종류 수, metric 수신 상태 |
 
 ### MovieLog 대시보드 prompt 예시 { #prompt-example }
 
@@ -163,6 +179,8 @@ MovieLog의 비즈니스 지표로 Grafana 대시보드를 만들어 줘.
 2. 그 결과로 metric마다 집계식을 정해 줘. Counter, 분포(DistributionSummary·Timer),
    Gauge를 구분하고, 근거가 된 조회 결과를 한 줄씩 적어.
 3. panel 목록을 "답할 질문 / metric / 집계식 / 시각화" 표로 먼저 제안해.
+   시각화는 질문 유형으로 골라. 합계는 stat, 정상 범위는 gauge, 비율은 donut,
+   비교와 쏠림은 bar gauge, 추이만 time series로 그려.
 4. dashboard JSON을 만들고 모든 panel query를 Grafana에서 실제로 실행해서
    0행이나 오류가 있으면 고친 뒤 다시 실행해.
 5. Grafana에 올리고 화면을 캡처해서 식별자 노출, 정상 값의 경고색,

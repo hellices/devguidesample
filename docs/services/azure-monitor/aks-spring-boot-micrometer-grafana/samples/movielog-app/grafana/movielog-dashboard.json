@@ -54,7 +54,7 @@
     {
       "id": 1,
       "type": "row",
-      "title": "사용자 행동 (Counter: 구간 증가량 합계)",
+      "title": "핵심 지표 (선택 구간 합계와 평균)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -68,13 +68,13 @@
       "id": 2,
       "type": "stat",
       "title": "영화 조회",
-      "description": "movielog_movie_views 증가량 합계. 웹 상세 화면과 API 조회를 모두 셉니다.",
+      "description": "movielog_movie_views 증가량 합계. 웹 상세 화면과 API 조회를 모두 셉니다. 배경 곡선은 같은 값의 bin별 추이입니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 5,
         "x": 0,
         "y": 1
@@ -88,11 +88,11 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| summarize movieViews = sum(value)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
-            "resultFormat": "table"
+            "resultFormat": "time_series"
           }
         }
       ],
@@ -109,28 +109,29 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "center"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
       }
     },
     {
       "id": 3,
       "type": "stat",
       "title": "새 리뷰",
-      "description": "movielog_reviews_posted 증가량 합계. 커밋된 리뷰만 집계됩니다.",
+      "description": "movielog_reviews_posted 증가량 합계. 커밋된 리뷰만 집계됩니다. 배경 곡선은 같은 값의 bin별 추이입니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 5,
         "x": 5,
         "y": 1
@@ -144,11 +145,11 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| summarize reviews = sum(value)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
-            "resultFormat": "table"
+            "resultFormat": "time_series"
           }
         }
       ],
@@ -165,29 +166,30 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "center"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
       }
     },
     {
       "id": 4,
       "type": "stat",
       "title": "신규 회원",
-      "description": "movielog_members_signups 증가량 합계.",
+      "description": "movielog_members_signups 증가량 합계. 배경 곡선은 같은 값의 bin별 추이입니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
+        "h": 6,
+        "w": 5,
         "x": 10,
         "y": 1
       },
@@ -200,11 +202,11 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_members_signups\"\n| summarize signups = sum(value)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_members_signups\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
-            "resultFormat": "table"
+            "resultFormat": "time_series"
           }
         }
       ],
@@ -221,30 +223,31 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "sum"
           ],
           "fields": "",
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "center"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
       }
     },
     {
       "id": 5,
-      "type": "stat",
+      "type": "gauge",
       "title": "평균 별점",
-      "description": "DistributionSummary라 sum(valueSum) / sum(valueCount)로 계산합니다. 행 평균을 쓰면 왜곡됩니다.",
+      "description": "DistributionSummary라 sum(valueSum) / sum(valueCount)로 계산합니다. fresh 기준인 3.5개부터 초록색입니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 14,
+        "h": 6,
+        "w": 4,
+        "x": 15,
         "y": 1
       },
       "targets": [
@@ -256,7 +259,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_review_rating\"\n| summarize stars = sum(valueSum) / sum(valueCount)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_review_rating\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stars = sum(valueSum) / sum(valueCount)",
             "resources": [
               "$appinsights"
             ],
@@ -270,9 +273,25 @@
           "decimals": 2,
           "min": 0,
           "max": 5,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2.5
+              },
+              {
+                "color": "green",
+                "value": 3.5
+              }
+            ]
+          },
           "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
+            "mode": "thresholds"
           }
         },
         "overrides": []
@@ -285,23 +304,22 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "center"
+        "showThresholdMarkers": true,
+        "showThresholdLabels": false,
+        "orientation": "auto"
       }
     },
     {
       "id": 6,
-      "type": "stat",
-      "title": "Fresh 비율",
-      "description": "verdict=fresh(별 3.5개 이상) 리뷰 비율입니다.",
+      "type": "piechart",
+      "title": "리뷰 판정 비율",
+      "description": "verdict=fresh(별 3.5개 이상)와 rotten 리뷰 수의 비율입니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 5,
         "x": 19,
         "y": 1
@@ -315,7 +333,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| summarize fresh = sumif(value, verdict == \"fresh\"), total = sum(value)\n| project freshRatio = iff(total == 0, 0.0, 100.0 * fresh / total)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize reviews = sum(value) by verdict\n| order by verdict asc",
             "resources": [
               "$appinsights"
             ],
@@ -325,10 +343,9 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "short",
           "color": {
-            "mode": "fixed",
-            "fixedColor": "blue"
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -339,19 +356,29 @@
             "lastNotNull"
           ],
           "fields": "",
-          "values": false
+          "values": true
         },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "center"
+        "pieType": "donut",
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "values": [
+            "value"
+          ]
+        },
+        "tooltip": {
+          "mode": "single"
+        }
       }
     },
     {
       "id": 7,
       "type": "timeseries",
-      "title": "분당 영화 조회 (채널별)",
-      "description": "bin마다 증가량을 더한 뒤 분당 값으로 환산합니다.",
+      "title": "분당 영화 조회 (채널별 누적)",
+      "description": "bin마다 증가량을 더한 뒤 분당 값으로 환산하고 채널을 쌓아 전체 처리량을 함께 봅니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
@@ -360,7 +387,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 5
+        "y": 7
       },
       "targets": [
         {
@@ -382,6 +409,15 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 35,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
           "displayName": "${__field.labels.channel}"
         },
         "overrides": []
@@ -409,7 +445,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 7
       },
       "targets": [
         {
@@ -456,18 +492,18 @@
     },
     {
       "id": 9,
-      "type": "timeseries",
-      "title": "분당 리뷰 조회·댓글 (채널별)",
-      "description": "두 counter를 한 panel에 그리고 metric·channel을 series 이름으로 씁니다.",
+      "type": "bargauge",
+      "title": "활동별·채널별 합계",
+      "description": "Counter 네 개의 구간 합계를 활동과 채널로 나눠 어느 경로가 많은지 비교합니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 11,
+        "w": 9,
         "x": 0,
-        "y": 13
+        "y": 15
       },
       "targets": [
         {
@@ -478,28 +514,43 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_review_views\", \"movielog_comments_posted\")\n| extend series = strcat(iff(name == \"movielog_review_views\", \"리뷰 조회\", \"댓글\"), \" · \",\n                         tostring(customDimensions.channel))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_movie_views\", \"movielog_review_views\", \"movielog_reviews_posted\", \"movielog_comments_posted\")\n| extend activity = case(name == \"movielog_movie_views\", \"영화 조회\",\n                         name == \"movielog_review_views\", \"리뷰 조회\",\n                         name == \"movielog_reviews_posted\", \"리뷰 작성\", \"댓글\")\n| extend series = strcat(activity, \" · \", tostring(customDimensions.channel))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by series\n| order by total desc",
             "resources": [
               "$appinsights"
             ],
-            "resultFormat": "time_series"
+            "resultFormat": "table"
           }
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "displayName": "${__field.labels.series}"
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "min": 0
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
         },
-        "tooltip": {
-          "mode": "multi"
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "namePlacement": "top",
+        "sizing": "manual",
+        "minVizHeight": 32,
+        "maxVizHeight": 32,
+        "text": {
+          "titleSize": 12,
+          "valueSize": 14
         }
       }
     },
@@ -507,16 +558,16 @@
       "id": 10,
       "type": "timeseries",
       "title": "평균 별점 추이",
-      "description": "bin마다 sum(valueSum) / sum(valueCount)로 가중 평균을 계산합니다.",
+      "description": "bin마다 sum(valueSum) / sum(valueCount)로 가중 평균을 계산합니다. 배경색은 평균 별점 gauge와 같은 기준입니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 13
+        "h": 11,
+        "w": 15,
+        "x": 9,
+        "y": 15
       },
       "targets": [
         {
@@ -541,7 +592,34 @@
           "decimals": 2,
           "min": 0,
           "max": 5,
-          "displayName": "평균 별점"
+          "displayName": "평균 별점",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2.5
+              },
+              {
+                "color": "green",
+                "value": 3.5
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          }
         },
         "overrides": []
       },
@@ -564,24 +642,24 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 26
       },
       "panels": []
     },
     {
       "id": 12,
       "type": "stat",
-      "title": "카탈로그 영화 수",
-      "description": "movielog_movies_stored. 모든 Pod가 같은 DB 값을 보고하므로 합산하지 않습니다.",
+      "title": "카탈로그 영화",
+      "description": "movielog_movies_stored. 모든 Pod가 같은 DB 값을 보고하므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 4,
+        "h": 5,
+        "w": 6,
         "x": 0,
-        "y": 22
+        "y": 27
       },
       "targets": [
         {
@@ -592,11 +670,11 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movies_stored\"\n| summarize arg_max(timestamp, value) by cloud_RoleInstance\n| summarize movies = max(value)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movies_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
-            "resultFormat": "table"
+            "resultFormat": "time_series"
           }
         }
       ],
@@ -605,7 +683,7 @@
           "unit": "short",
           "color": {
             "mode": "fixed",
-            "fixedColor": "blue"
+            "fixedColor": "purple"
           }
         },
         "overrides": []
@@ -619,25 +697,26 @@
           "values": false
         },
         "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "center"
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
       }
     },
     {
       "id": 13,
-      "type": "timeseries",
-      "title": "저장된 리뷰·댓글·회원 수",
-      "description": "Pod 수만큼 같은 값이 들어오므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
+      "type": "stat",
+      "title": "저장된 리뷰",
+      "description": "movielog_reviews_stored. 모든 Pod가 같은 DB 값을 보고하므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 20,
-        "x": 4,
-        "y": 22
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 27
       },
       "targets": [
         {
@@ -648,7 +727,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_reviews_stored\", \"movielog_comments_stored\", \"movielog_members_stored\")\n| extend series = case(name == \"movielog_reviews_stored\", \"리뷰\",\n                       name == \"movielog_comments_stored\", \"댓글\", \"회원\")\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -659,22 +738,144 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "displayName": "${__field.labels.series}"
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi"
-        }
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
       }
     },
     {
       "id": 14,
+      "type": "stat",
+      "title": "저장된 댓글",
+      "description": "movielog_comments_stored. 모든 Pod가 같은 DB 값을 보고하므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_comments_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "resources": [
+              "$appinsights"
+            ],
+            "resultFormat": "time_series"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "가입 회원",
+      "description": "movielog_members_stored. 모든 Pod가 같은 DB 값을 보고하므로 bin마다 max(value)를 씁니다. sum을 쓰면 Pod 수배로 부풀려집니다.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_members_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "resources": [
+              "$appinsights"
+            ],
+            "resultFormat": "time_series"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 16,
       "type": "row",
       "title": "운영 (Pod 분포와 수신 상태)",
       "collapsed": false,
@@ -682,24 +883,24 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 32
       },
       "panels": []
     },
     {
-      "id": 15,
-      "type": "timeseries",
-      "title": "Pod별 분당 영화 조회",
-      "description": "cloud_RoleInstance로 나눠 트래픽이 한 Pod에 몰리는지 봅니다.",
+      "id": 17,
+      "type": "bargauge",
+      "title": "Pod별 영화 조회 분포",
+      "description": "cloud_RoleInstance별 구간 합계로 트래픽이 한 Pod에 몰리는지 봅니다.",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
       },
       "gridPos": {
-        "h": 8,
+        "h": 5,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 33
       },
       "targets": [
         {
@@ -710,7 +911,135 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), cloud_RoleInstance\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by cloud_RoleInstance\n| order by cloud_RoleInstance asc",
+            "resources": [
+              "$appinsights"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "namePlacement": "top",
+        "sizing": "manual",
+        "minVizHeight": 32,
+        "maxVizHeight": 32,
+        "text": {
+          "titleSize": 12,
+          "valueSize": 14
+        }
+      }
+    },
+    {
+      "id": 18,
+      "type": "bargauge",
+      "title": "외부 조회 결과 (outcome별)",
+      "description": "카탈로그 조회와 검색의 outcome별 구간 합계입니다. TMDB 키 없이 seed 데이터만 쓰면 cache_hit와 disabled만 나타납니다.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_movie_catalog_lookups\", \"movielog_movie_searches\")\n| extend series = strcat(iff(name == \"movielog_movie_searches\", \"검색\", \"카탈로그\"), \" · \",\n                         tostring(customDimensions.outcome))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by series\n| order by total desc",
+            "resources": [
+              "$appinsights"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true,
+        "namePlacement": "top",
+        "sizing": "manual",
+        "minVizHeight": 32,
+        "maxVizHeight": 32,
+        "text": {
+          "titleSize": 12,
+          "valueSize": 14
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "status-history",
+      "title": "Pod별 수신 metric 종류 수",
+      "description": "bin마다 Pod가 보낸 movielog_* metric 종류 수입니다. 칸이 비거나 빨개지면 그 시간에 agent나 allowlist가 지표를 보내지 않았습니다.",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${datasource}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name startswith \"movielog_\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize metrics = dcount(name) by bin(timestamp, max_of($__interval, 1m)), cloud_RoleInstance\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -721,71 +1050,42 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
           "displayName": "${__field.labels.cloud_RoleInstance}"
         },
         "overrides": []
       },
       "options": {
+        "showValue": "auto",
+        "rowHeight": 0.8,
+        "colWidth": 0.9,
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "showLegend": false
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "single"
         }
       }
     },
     {
-      "id": 16,
-      "type": "timeseries",
-      "title": "분당 카탈로그 조회 (출처별)",
-      "description": "TMDB 키 없이 seed 데이터만 쓰면 cache_hit만 나타납니다.",
-      "datasource": {
-        "type": "grafana-azure-monitor-datasource",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 31
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "grafana-azure-monitor-datasource",
-            "uid": "${datasource}"
-          },
-          "queryType": "Azure Log Analytics",
-          "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_catalog_lookups\"\n| extend outcome = tostring(customDimensions.outcome)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), outcome\n| order by timestamp asc",
-            "resources": [
-              "$appinsights"
-            ],
-            "resultFormat": "time_series"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "displayName": "${__field.labels.outcome}"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 17,
+      "id": 20,
       "type": "table",
       "title": "metric 수신 상태 (최근 10분)",
       "description": "Pod별로 metric이 1분에 한 행씩 오는지와 마지막 수신 시각을 봅니다. 행이 멈추면 agent나 allowlist를 확인합니다.",
@@ -797,7 +1097,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 44
       },
       "targets": [
         {

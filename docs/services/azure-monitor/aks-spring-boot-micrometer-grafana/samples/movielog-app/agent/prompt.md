@@ -36,6 +36,13 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
    Counter·DistributionSummary/Timer·Gauge를 구분하고 metric별 집계식을 표로 정한다.
    Pod마다 같은 값을 보내는 gauge(DB 합계 등)는 Pod 간 sum이 아니라 max를 쓴다.
 4. design: panel마다 "답할 질문 / metric / 집계식 / 시각화"를 표로 먼저 제안한다.
+   시각화는 질문 유형으로 고르고, 모든 질문을 bin별 꺾은선으로 바꾸지 않는다.
+   - 구간 동안 몇 건인가 → stat(같은 bin의 sparkline 포함)
+   - 값이 정상 범위인가 → gauge(도메인 기준을 threshold로)
+   - 구성 비율은 → pie(donut) 또는 bar gauge
+   - 무엇이 가장 많은가, Pod 간 쏠림은 → bar gauge
+   - 시간에 따라 어떻게 변하는가 → time series(누적 area, bar, line)
+   - 모든 Pod가 계속 보내는가 → status history 또는 table
 5. build: build_dashboard.py를 고쳐 JSON을 만든다. bin은 max_of($__interval, 1m) 이상으로 한다.
 6. verify: 모든 panel query를 실제로 실행한다. FAIL이나 0행이 하나라도 있으면 원인을 고치고 다시 실행한다.
    - CLI: verify_panels.py
@@ -52,6 +59,8 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
    - legend가 "<column> <value>"처럼 읽기 어려운가
    - 시간축이 비어 보이거나 한 Pod에만 데이터가 몰리는가
    - 모든 series가 오른쪽 끝에서 함께 떨어지는가(채워지는 중인 현재 bin)
+   - 대부분 panel이 같은 꺾은선이라 무엇을 답하는 panel인지 한눈에 구분되지 않는가
+   - 같은 지표의 합계가 panel마다 다른가(현재 bin 처리 불일치, 또는 상대 범위로 분 경계에서 캡처)
    문제가 있으면 5단계로 돌아간다.
 9. report: 최종 panel 목록, 각 집계식의 근거가 된 probe 결과, 남은 한계를 보고한다.
 ```
@@ -69,3 +78,6 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
   subscription ID가 노출됐고, stat 기본 threshold 때문에 정상 값이 빨갛게
   보였습니다. 리뷰 뒤 다시 캡처했을 때는 현재 bin 때문에 모든 분당 series가
   오른쪽 끝에서 떨어지는 것을 찾았습니다.
+- 4단계의 시각화 규칙은 화면이 꺾은선으로만 채워지는 것을 막습니다. 실습 첫
+  대시보드는 query panel 14개 중 9개가 시계열이어서, 합계·비율·Pod 분포를 묻는
+  panel도 꺾은선으로 그려졌습니다.
