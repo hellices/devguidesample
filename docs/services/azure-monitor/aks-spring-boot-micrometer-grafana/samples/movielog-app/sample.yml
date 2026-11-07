@@ -3,6 +3,7 @@ description: Spring Boot 4.1 MovieLog app, AKS autoinstrumentation manifests, Ap
 kind: runnable
 used_by:
   - index
+  - movielog-lab
 publish:
   - source: grafana/movielog-dashboard.json
     target: downloads/movielog-dashboard.json

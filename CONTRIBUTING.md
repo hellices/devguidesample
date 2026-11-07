@@ -9,6 +9,11 @@
 [제목 작성 기준](docs/contributing/index.md#content-first-headings)에 따라
 제목만 읽어도 요지와 논리 흐름이 드러나는지 검토합니다.
 
+topic entry는 첫 절에서 **주제의 핵심 메시지와 실제 실행 결과**를 먼저
+보여 주고, 실습 절차는 자식 문서로 링크합니다. 버전 호환 같은 부수 제약은
+하단에 요약해 전담 문서로 연결합니다.
+[topic entry 구성 기준](docs/contributing/index.md#topic-entry-message)을 따릅니다.
+
 자동화가 생성하는 `Azure Daily Update`만
 `docs/azure-daily-update/YYYY-MM-DD/index.md`를 사용합니다. 상세한
 front matter와 날짜 규칙은 공개 문서 작성 계약을 따릅니다.

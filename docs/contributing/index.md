@@ -64,6 +64,36 @@ docs/services/<service>/<topic>/
 `index`는 topic entry를 가리키는 예약어이므로 자식 폴더 slug로 사용할 수
 없습니다.
 
+<!-- GitHub uses the named anchor; MkDocs uses the heading ID below. -->
+<a name="topic-entry-message"></a>
+
+### topic entry는 주제의 메시지와 실제 결과를 먼저 보여 주고 세부 절차는 자식 문서로 보냅니다 { #topic-entry-message }
+
+topic entry는 독자가 이 주제를 끝까지 읽을지, 직접 해 볼지 결정하는
+페이지입니다. 실습 절차를 처음부터 늘어놓지 말고, 이 주제로 무엇을 전달하려는지와
+그 결과가 실제로 어떻게 보이는지를 먼저 보여 줍니다.
+
+1. **첫 절에서 핵심 메시지를 한 흐름으로 제시합니다.** "무엇을 하면 어떤 결과가
+   나온다"를 2–4단계로 요약합니다. 독자가 entry만 읽어도 주제의 결론을 알 수
+   있어야 합니다.
+2. **메시지 바로 곁에 실제 결과를 보여 줍니다.** 실제로 실행해 얻은 캡처, 측정값,
+   다이어그램을 첫 화면 가까이에 두어 흥미와 신뢰를 줍니다. 만들어 낸 예시 화면이나
+   실행하지 않은 결과는 쓰지 않으며, 캡처의 식별자는 공개 안전성 기준대로
+   제거합니다.
+3. **각 단계는 짧은 코드·구성 발췌와 근거 캡처로 설명합니다.** 전체 명령,
+   환경 준비, 문제 해결, 비용 측정은 자식 문서에 둡니다.
+4. **실습·벤치마크 같은 상세 문서는 한두 문장과 링크로 안내합니다.** 무엇을
+   재현하는지, 걸리는 시간과 비용 여부만 밝히고 절차를 entry에 다시 쓰지 않습니다.
+   자식 문서는 entry의 메시지를 반복하지 않고 entry로 연결합니다.
+5. **주제의 핵심 흐름이 아닌 제약은 하단에 짧게 두고 전담 문서로 연결합니다.**
+   버전 호환 문제, 임시 우회, 알려진 버그는 entry 아래쪽의 별도 절에 기준일과 함께
+   요약하고 원인과 대응은 해당 문서로 보냅니다. entry를 제약 설명으로 시작하지
+   않습니다.
+
+독립 topic도 첫 절에서 1–2의 순서를 따릅니다. 이 구성의 예는
+[Micrometer 비즈니스 지표와 agent 기반 Grafana 대시보드](../services/azure-monitor/aks-spring-boot-micrometer-grafana/index.md)
+topic입니다.
+
 ### topic 소유 sample
 
 실행 코드, 배포 매니페스트, 재현 프로젝트와 대용량 결과물은 이를 사용하는
@@ -279,7 +309,9 @@ catalog에서 계산한 **주제 수 · 문서 수**를 함께 표시합니다. 
 
 ### 2. 연결된 topic 추가 또는 확장
 
-1. topic entry를 `docs/services/<service>/<topic>/index.md`에 둡니다.
+1. topic entry를 `docs/services/<service>/<topic>/index.md`에 두고
+   [topic entry 구성 기준](#topic-entry-message)에 따라 핵심 메시지와 실제 결과를
+   먼저 보여 줍니다.
 2. 직접 자식마다 `<child>/index.md`를 만들고 연속 `topic_order`를
    지정합니다.
 3. 이전 URL이 있으면 각 canonical 문서에 고유한 `redirect_from`을

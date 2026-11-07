@@ -17,6 +17,11 @@
 - topic entry는 `<topic>/index.md`이며 `topic_order`를 쓰지 않는다. 연결된
   자식 문서는 `<topic>/<child>/index.md`에 두고 `topic_order`를 1부터
   중복 없이 연속으로 지정한다.
+- topic entry는 첫 절에서 주제의 핵심 메시지를 흐름으로 제시하고 실제 실행
+  결과(캡처·측정값)를 곁에 보여 준다. 실습·벤치마크 절차는 자식 문서에 두고
+  entry에서는 링크로만 안내한다. 버전 호환 같은 부수 제약은 하단에 요약하고
+  전담 문서로 연결한다. 상세 기준은
+  [topic entry 구성 기준](docs/contributing/index.md#topic-entry-message)을 따른다.
 - `document_type`은 `case`, `guide`, `lab`, `research` 중 하나이며
   collection 호환 색인과 수명주기 규칙을 선택한다. 물리 경로에는
   collection 이름을 사용하지 않는다.

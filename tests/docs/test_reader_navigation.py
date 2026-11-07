@@ -200,12 +200,12 @@ def targets(markdown: str) -> list[str]:
     return parser.targets
 
 
+@pytest.mark.parametrize("fragment", ["content-first-headings", "topic-entry-message"])
 @pytest.mark.parametrize("mkdocs_mode", [False, True], ids=["plain-markdown", "mkdocs"])
-def test_heading_guidance_anchor_works_without_mkdocs_attributes(mkdocs_mode: bool) -> None:
+def test_heading_guidance_anchor_works_without_mkdocs_attributes(mkdocs_mode: bool, fragment: str) -> None:
     root = Path(__file__).parents[2]
     source = (root / "docs/contributing/index.md").read_text(encoding="utf-8")
     body = source.split("---", 2)[2]
-    fragment = "content-first-headings"
     named_anchor = f'<a name="{fragment}"></a>'
     if mkdocs_mode:
         config = load_config(config_file=str(root / "mkdocs.yml"))
@@ -219,11 +219,11 @@ def test_heading_guidance_anchor_works_without_mkdocs_attributes(mkdocs_mode: bo
 
     assert rendered.count(named_anchor) == 1
     assert re.search(
-        re.escape(named_anchor) + rf"\s*\n## [^\n]+\{{ #{fragment} \}}",
+        re.escape(named_anchor) + rf"\s*\n###? [^\n]+\{{ #{fragment} \}}",
         body,
     )
     if mkdocs_mode:
-        assert f'<h2 id="{fragment}">' in rendered
+        assert re.search(rf'<h[23] id="{fragment}">', rendered)
         assert rendered.count(f'id="{fragment}"') == 1
 
 
