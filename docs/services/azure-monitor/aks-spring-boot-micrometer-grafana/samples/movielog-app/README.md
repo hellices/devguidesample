@@ -38,7 +38,7 @@ JDK 25가 필요합니다.
 상위 문서의 순서를 따릅니다. 핵심 명령은 다음과 같습니다.
 
 ```bash
-RG="<resource-group>"; ACR="<acr-name>"; AI="<app-insights-name>"
+RG="<resource-group>"; ACR="<acr-name>"; AI="<app-insights-name>"; GRAFANA="<grafana-name>"
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 
 az acr build -r "$ACR" -t movielog:1.0.0 --platform linux/amd64 .
@@ -92,14 +92,14 @@ export APPINSIGHTS_APP_ID="$(az monitor app-insights component show -g "$RG" -a 
 ./kql.sh 03-value-shape.kql
 
 AIID="$(az monitor app-insights component show -g "$RG" -a "$AI" --query id -o tsv)"
-export GRAFANA_URL="$(az grafana show -g "$RG" -n <grafana-name> --query properties.endpoint -o tsv)"
+export GRAFANA_URL="$(az grafana show -g "$RG" -n "$GRAFANA" --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token \
   --resource https://dashboard.azure.com --query accessToken -o tsv)"
 
 python3 build_dashboard.py > ../grafana/movielog-dashboard.json
 python3 verify_panels.py ../grafana/movielog-dashboard.json --appinsights-id "$AIID"
 python3 build_dashboard.py --appinsights-id "$AIID" > /tmp/live.json
-az grafana dashboard create -g "$RG" -n <grafana-name> --definition @/tmp/live.json --overwrite true
+az grafana dashboard create -g "$RG" -n "$GRAFANA" --definition @/tmp/live.json --overwrite true
 
 npm i playwright && npx playwright install chromium-headless-shell
 node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png

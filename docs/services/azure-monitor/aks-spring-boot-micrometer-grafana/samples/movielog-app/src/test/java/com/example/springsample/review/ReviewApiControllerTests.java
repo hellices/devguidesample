@@ -2,7 +2,6 @@ package com.example.springsample.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -37,15 +36,17 @@ class ReviewApiControllerTests extends IntegrationTest {
 		stubMovie(496243, "기생충", "tt6751668", 99);
 		register("alice");
 
-		mockMvc.perform(post("/api/movies/{id}/reviews", 496243).with(user("alice")).with(csrf())
+		var created = mockMvc.perform(post("/api/movies/{id}/reviews", 496243).with(user("alice")).with(csrf())
 				.contentType(MediaType.APPLICATION_JSON).content(BODY))
 			.andExpect(status().isCreated())
-			.andExpect(header().string("Location", startsWith("/api/reviews/")))
 			.andExpect(jsonPath("$.rating").value(9))
 			.andExpect(jsonPath("$.authorNickname").value("alice님"))
 			.andExpect(jsonPath("$.movie.title").value("기생충"))
 			.andExpect(jsonPath("$.movie.releaseYear").value(2019))
-			.andExpect(jsonPath("$.movie.posterUrl").value("https://image.tmdb.org/t/p/w185/poster496243.jpg"));
+			.andExpect(jsonPath("$.movie.posterUrl").value("https://image.tmdb.org/t/p/w185/poster496243.jpg"))
+			.andReturn().getResponse();
+		Number createdId = JsonPath.read(created.getContentAsString(), "$.id");
+		assertThat(created.getHeader("Location")).isEqualTo("/api/reviews/" + createdId);
 
 		mockMvc.perform(get("/api/movies/{id}", 496243))
 			.andExpect(jsonPath("$.rottenTomatoes").value(99))
@@ -165,9 +166,14 @@ class ReviewApiControllerTests extends IntegrationTest {
 		register("bob");
 
 		mockMvc.perform(put("/api/reviews/{id}", id).with(user("bob")).with(csrf())
-				.contentType(MediaType.APPLICATION_JSON).content(BODY))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"rating\":2,\"title\":\"남의 수정\",\"content\":\"덮어쓰기\"}"))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.code").value("NOT_OWNER"));
+		mockMvc.perform(get("/api/reviews/{id}", id))
+			.andExpect(jsonPath("$.rating").value(8))
+			.andExpect(jsonPath("$.title").value("제목"))
+			.andExpect(jsonPath("$.content").value("내용"));
 		mockMvc.perform(delete("/api/reviews/{id}", id).with(user("bob")).with(csrf()))
 			.andExpect(status().isForbidden());
 

@@ -101,16 +101,22 @@ related_guides:
 - AKS, Managed Grafana Standard와 수집 데이터에 비용이 발생합니다. 실습이 끝나면
   [정리](#cleanup)를 실행합니다.
 
+이후 명령은 같은 shell에서 아래 변수를 그대로 이어 씁니다. 따옴표 안의 `<...>`만
+자기 값으로 바꿉니다.
+
 ```bash
 RG=rg-movielog-lab; LOC=koreacentral
+ACR="<acr-name>"           # 전역에서 고유한 ACR 이름
+GRAFANA="<grafana-name>"   # Managed Grafana 이름
 az group create -n $RG -l $LOC
 az monitor log-analytics workspace create -g $RG -n law-movielog-lab
 az monitor app-insights component create -g $RG -a appi-movielog-lab -l $LOC \
   --workspace "$(az monitor log-analytics workspace show -g $RG -n law-movielog-lab --query id -o tsv)"
-az acr create -g $RG -n <acr-name> --sku Basic
+az acr create -g $RG -n "$ACR" --sku Basic
+ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 az aks create -g $RG -n aks-movielog-lab --node-count 2 --node-vm-size Standard_D4s_v5 \
-  --enable-azure-monitor-app-monitoring --attach-acr <acr-name> --generate-ssh-keys
-az grafana create -g $RG -n <grafana-name> --sku-tier Standard
+  --enable-azure-monitor-app-monitoring --attach-acr "$ACR" --generate-ssh-keys
+az grafana create -g $RG -n "$GRAFANA" --sku-tier Standard
 ```
 
 `az grafana create`는 Grafana Admin과 Monitoring Reader 역할을 자동으로
@@ -119,12 +125,12 @@ az grafana create -g $RG -n <grafana-name> --sku-tier Standard
 생성 뒤 확인합니다.
 
 ```bash
-az role assignment create --assignee-object-id "$(az grafana show -g $RG -n <grafana-name> --query identity.principalId -o tsv)" \
+az role assignment create --assignee-object-id "$(az grafana show -g $RG -n "$GRAFANA" --query identity.principalId -o tsv)" \
   --assignee-principal-type ServicePrincipal --role "Monitoring Reader" \
   --scope "$(az group show -n $RG --query id -o tsv)"
 az role assignment create --assignee-object-id "$(az ad signed-in-user show --query id -o tsv)" \
   --assignee-principal-type User --role "Grafana Admin" \
-  --scope "$(az grafana show -g $RG -n <grafana-name> --query id -o tsv)"
+  --scope "$(az grafana show -g $RG -n "$GRAFANA" --query id -o tsv)"
 ```
 
 ## MovieLog meter: 도메인 이벤트와 집계 시점 { #meters }
@@ -175,7 +181,7 @@ seed 영화는 local catalog에서 제공되므로 `catalog.lookups`의 `outcome
 
 ```bash
 cd docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app  # 저장소 루트 기준
-az acr build -r <acr-name> -t movielog:1.0.0 --platform linux/amd64 .
+az acr build -r "$ACR" -t movielog:1.0.0 --platform linux/amd64 .
 
 az aks get-credentials -g $RG -n aks-movielog-lab
 kubectl apply -f k8s/00-postgres.yaml
@@ -184,7 +190,7 @@ kubectl create secret generic movielog-db -n movielog \
 
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-lab --query connectionString -o tsv)"
-export APP_IMAGE=<acr-name>.azurecr.io/movielog:1.0.0
+export APP_IMAGE="$ACR_SERVER/movielog:1.0.0"
 envsubst < k8s/10-instrumentation.yaml | kubectl apply -f -
 envsubst < k8s/20-movielog.yaml | kubectl apply -f -
 kubectl rollout status deploy/movielog -n movielog
@@ -216,7 +222,8 @@ JAVA_TOOL_OPTIONS = -javaagent:/azure-monitor-auto-instrumentation-java/applicat
 배포 직후 주입된 agent를 확인했습니다.
 
 ```bash
-kubectl get pod <pod-name> -n movielog \
+POD="$(kubectl get pod -n movielog -l app=movielog -o jsonpath='{.items[0].metadata.name}')"
+kubectl get pod "$POD" -n movielog \
   -o jsonpath='{range .spec.initContainers[*]}{.name}{"\t"}{.image}{"\n"}{end}'
 ```
 
@@ -242,10 +249,10 @@ checksum을 고정한 3.7.10 jar를 ACR init image로 만들어 주입을 바꾸
 ![agent 3.7.10 구간의 customMetrics inventory. movielog_comments_posted부터 movielog_reviews_stored까지 12개 지표가 두 instance에서 도착](../images/probe-inventory-agent-3.7.10.png)
 
 ```bash
-az acr build -r <acr-name> -t observability/applicationinsights-agent:3.7.10 \
+az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 \
   --platform linux/amd64 agent-init
-export AGENT_IMAGE="<acr-name>.azurecr.io/observability/applicationinsights-agent@$(az acr repository show \
-  -n <acr-name> --image observability/applicationinsights-agent:3.7.10 --query digest -o tsv)"
+export AGENT_IMAGE="$ACR_SERVER/observability/applicationinsights-agent@$(az acr repository show \
+  -n "$ACR" --image observability/applicationinsights-agent:3.7.10 --query digest -o tsv)"
 kubectl create secret generic appinsights -n movielog \
   --from-literal=connection-string="$APPLICATIONINSIGHTS_CONNECTION_STRING"
 
@@ -459,7 +466,7 @@ customMetrics
 Grafana Viewer 이상 역할이 필요합니다.
 
 ```bash
-export GRAFANA_URL="$(az grafana show -g $RG -n <grafana-name> --query properties.endpoint -o tsv)"
+export GRAFANA_URL="$(az grafana show -g $RG -n "$GRAFANA" --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token --resource https://dashboard.azure.com --query accessToken -o tsv)"
 python3 agent/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
 ```
@@ -531,7 +538,7 @@ CLI로 반영할 때는 Application Insights resource ID를 채운 JSON을 만�
 ```bash
 AIID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query id -o tsv)"
 python3 agent/build_dashboard.py --appinsights-id "$AIID" > /tmp/movielog-live.json
-az grafana dashboard create -g $RG -n <grafana-name> \
+az grafana dashboard create -g $RG -n "$GRAFANA" \
   --definition @/tmp/movielog-live.json --overwrite true
 ```
 
@@ -557,7 +564,7 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
    **Export > Save to file**을 쓰거나 CLI로 내보냅니다.
 
     ```bash
-    az grafana dashboard show -g $RG -n <grafana-name> \
+    az grafana dashboard show -g $RG -n "$GRAFANA" \
       --dashboard movielog-business-metrics --query dashboard -o json > movielog-export.json
     ```
 
@@ -587,7 +594,8 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
    바꿀 때만 붙입니다.
 
     ```bash
-    az grafana dashboard import -g <target-resource-group> -n <target-grafana-name> \
+    TARGET_RG="<target-resource-group>"; TARGET_GRAFANA="<target-grafana-name>"
+    az grafana dashboard import -g "$TARGET_RG" -n "$TARGET_GRAFANA" \
       --definition movielog-export.json
     ```
 
@@ -603,7 +611,7 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
     d["title"] += " (import test)"
     json.dump(d, open("movielog-import-test.json", "w"), ensure_ascii=False)
     EOF
-    az grafana dashboard import -g $RG -n <grafana-name> --definition movielog-import-test.json
+    az grafana dashboard import -g $RG -n "$GRAFANA" --definition movielog-import-test.json
     ```
 
 4. **변수를 채우고 저장합니다.** import 직후에는 `appinsights`가 비어 있어 panel이

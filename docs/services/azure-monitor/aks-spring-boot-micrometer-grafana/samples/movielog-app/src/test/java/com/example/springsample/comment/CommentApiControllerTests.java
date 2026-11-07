@@ -1,5 +1,6 @@
 package com.example.springsample.comment;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -22,6 +23,9 @@ class CommentApiControllerTests extends IntegrationTest {
 
 	@Autowired
 	private CommentService commentService;
+
+	@Autowired
+	private CommentRepository comments;
 
 	private Long reviewId;
 
@@ -61,10 +65,13 @@ class CommentApiControllerTests extends IntegrationTest {
 
 	@Test
 	void deletingReviewRemovesItsComments() throws Exception {
-		commentService.create(reviewId, "bob", "댓글");
+		Long commentId = commentService.create(reviewId, "bob", "댓글").id();
 
 		mockMvc.perform(delete("/api/reviews/{id}", reviewId).with(user("alice")).with(csrf()))
 			.andExpect(status().isNoContent());
+
+		// The 404 below only proves the review is gone; check the comment row itself.
+		assertThat(comments.existsById(commentId)).isFalse();
 		mockMvc.perform(get("/api/reviews/{id}/comments", reviewId))
 			.andExpect(status().isNotFound());
 	}
