@@ -3,6 +3,7 @@ package com.example.springsample.movie;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 import com.example.springsample.movie.omdb.ExternalRatings;
 import com.example.springsample.movie.tmdb.TmdbDtos;
@@ -84,6 +85,7 @@ public class Movie {
 	}
 
 	public void sync(TmdbDtos.MovieDetails details, @Nullable ExternalRatings ratings, Instant now) {
+		String previousImdbId = this.imdbId;
 		this.imdbId = blankToNull(details.imdbId());
 		this.title = truncate(details.title(), 300);
 		this.originalTitle = truncate(details.originalTitle(), 300);
@@ -97,6 +99,12 @@ public class Movie {
 			this.rottenTomatoes = ratings.rottenTomatoes();
 			this.imdbRating = ratings.imdbRating();
 			this.metascore = ratings.metascore();
+		}
+		else if (!Objects.equals(previousImdbId, this.imdbId)) {
+			// No fresh ratings: cached ones survive an OMDb outage, but never a change of IMDb title.
+			this.rottenTomatoes = null;
+			this.imdbRating = null;
+			this.metascore = null;
 		}
 		this.syncedAt = now;
 	}

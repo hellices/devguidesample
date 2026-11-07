@@ -170,9 +170,9 @@ Managed Grafana MCP endpoint(`/api/azure-mcp`)를 연결한 VS Code의 GitHub Co
 MovieLog의 비즈니스 지표로 Grafana 대시보드를 만들어 줘.
 코드의 meter 이름을 그대로 믿지 말고, 실제로 들어온 데이터를 먼저 조회해서 결정해.
 
-- 데이터: Application Insights <app-insights-name>의 customMetrics
+- 데이터: Application Insights <app-insights-resource-group>/<app-insights-name>의 customMetrics
   (cloud_RoleName = movielog, 지표 prefix = movielog_)
-- Grafana: Azure Managed Grafana <grafana-name>의 Azure Monitor data source
+- Grafana: Azure Managed Grafana <grafana-resource-group>/<grafana-name>의 Azure Monitor data source
 
 1. 최근 30분 동안 들어온 movielog_* 지표의 이름, Pod 수, dimension과 값 개수,
    valueCount·value 모양을 조회해서 표로 보여 줘.

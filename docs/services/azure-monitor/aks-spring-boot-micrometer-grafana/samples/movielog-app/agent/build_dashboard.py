@@ -29,13 +29,20 @@ COMPLETE = f"| where timestamp < bin(now(), {STEP})\n"
 RATING_STEPS = [{"color": "red", "value": None}, {"color": "orange", "value": 2.5},
                 {"color": "green", "value": 3.5}]
 BLUE = {"mode": "fixed", "fixedColor": "blue"}
+# Meters BusinessMetrics exports from startup in every interval: the counters it pre-registers at 0 and the
+# DB gauges. Lazily created counters and the rating distribution can be legitimately absent, so they stay out.
+STEADY_METRICS = [
+    "movielog_movie_views", "movielog_review_views", "movielog_reviews_posted", "movielog_reviews_deleted",
+    "movielog_comments_posted", "movielog_comments_deleted", "movielog_members_signups",
+    "movielog_movies_stored", "movielog_reviews_stored", "movielog_comments_stored", "movielog_members_stored",
+]
 
 
 def base(metric):
     return (
         "customMetrics\n"
         "| where $__timeFilter(timestamp)\n"
-        '| where cloud_RoleName == "$role"\n'
+        "| where cloud_RoleName == ${role:singlequote}\n"
         f'| where name == "{metric}"\n'
     )
 
@@ -45,7 +52,7 @@ def names(*metrics):
     return (
         "customMetrics\n"
         "| where $__timeFilter(timestamp)\n"
-        '| where cloud_RoleName == "$role"\n'
+        "| where cloud_RoleName == ${role:singlequote}\n"
         f"| where name in ({quoted})\n"
     )
 
@@ -225,20 +232,17 @@ def build(appinsights_id):
             12, 12, 5, "table", defaults={"color": {"mode": "continuous-BlPu"}, "min": 0}, options=bar_gauge())
     lay.newline(5)
     lay.add("status-history", "Pod별 누락 metric 수",
-            "bin마다 Pod가 보내지 않은 Counter·Gauge 종류 수입니다. 0이면 초록, 1 이상이면 빨강입니다. "
-            "칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다(교체된 Pod도 종료 뒤 빈 칸). "
-            "DistributionSummary·Timer는 기록이 없는 bin에 행을 보내지 않으므로 기대 목록에서 뺍니다.",
-            "let received = customMetrics\n"
+            "bin마다 Pod가 보내지 않은 상시 meter 수입니다. 기대 목록은 앱이 시작 때 0으로 등록하는 Counter와 DB "
+            "Gauge 11개로 고정하며, 처음 사용할 때 생기는 Counter와 기록이 없으면 행이 없는 DistributionSummary는 뺍니다. "
+            "0이면 초록, 1 이상이면 빨강입니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다"
+            "(교체된 Pod도 종료 뒤 빈 칸).",
+            "let steady = dynamic([" + ", ".join(f'"{m}"' for m in STEADY_METRICS) + "]);\n"
+            "customMetrics\n"
             "| where $__timeFilter(timestamp)\n"
-            '| where cloud_RoleName == "$role"\n'
-            '| where name startswith "movielog_";\n'
-            "// Counters and gauges export every interval; a distribution with no records sends no row.\n"
-            "let steady = received | summarize maxCount = max(valueCount) by name | where maxCount == 1 | project name;\n"
-            "let expected = toscalar(steady | count);\n"
-            "received\n"
+            "| where cloud_RoleName == ${role:singlequote}\n"
             "| where name in (steady)\n"
             + COMPLETE + f"| summarize got = dcount(name) by bin(timestamp, {STEP}), cloud_RoleInstance\n"
-            "| project timestamp, cloud_RoleInstance, absent = expected - got\n"
+            "| project timestamp, cloud_RoleInstance, absent = array_length(steady) - got\n"
             "| order by timestamp asc",
             0, 24, 6, "time_series",
             defaults={"color": {"mode": "thresholds"}, "min": 0,
@@ -252,7 +256,7 @@ def build(appinsights_id):
             "구간 끝이 지금이면 현재 수신 상태입니다. 행이 멈추면 agent나 allowlist를 확인합니다.",
             "customMetrics\n"
             "| where timestamp > $__timeTo() - 10m and timestamp <= $__timeTo()\n"
-            '| where cloud_RoleName == "$role"\n'
+            "| where cloud_RoleName == ${role:singlequote}\n"
             '| where name startswith "movielog_"\n'
             "| summarize rows = count(), lastSeen = max(timestamp) by name, cloud_RoleInstance\n"
             "| extend secondsAgo = datetime_diff('second', $__timeTo(), lastSeen)\n"

@@ -357,7 +357,9 @@ inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니
 `q`가 아닌 `query`로 보내 400으로 끝났기 때문입니다. 2026-11-07 같은 클러스터에서
 수정한 load generator ConfigMap을 적용하자 TMDB key 없이도 검색 시도가
 `movielog_movie_searches`(`outcome` = `disabled`)로 두 Pod에서 도착해, 비즈니스 지표가
-13개가 됐습니다.
+13개가 됐습니다. 리뷰 반영으로 추가한 `movielog.comments.deleted`는 실습 클러스터의
+image가 그보다 오래되어 없었습니다. 현재 코드로 image(`movielog:1.0.1`)를 다시 빌드해
+배포하자 14개가 모두 두 Pod에서 도착했습니다.
 
 ### probe 2: dimension 값 개수와 사용 가능한 축 { #probe-dimensions }
 
@@ -445,13 +447,13 @@ panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다
 | 카탈로그 영화, 저장된 리뷰·댓글, 가입 회원 | 누적 규모와 추이는 | bin별 Pod 간 `max(value)`의 마지막 값 | stat + sparkline |
 | Pod별 영화 조회 분포 | 트래픽이 한 Pod에 몰리는가 | `cloud_RoleInstance`별 `sum(value)` | bar gauge |
 | 외부 조회 결과 | 카탈로그·검색이 어떻게 끝나는가 | `outcome`별 `sum(value)` | bar gauge |
-| Pod별 누락 metric 수 | Pod마다 빠진 지표가 없는가 | 매 간격 내보내는 meter 수 − bin별 `dcount(name)` | status history(0 초록, 1 이상 빨강) |
+| Pod별 누락 metric 수 | Pod마다 빠진 지표가 없는가 | 상시 meter 목록 11개 − bin별 목록 내 `dcount(name)` | status history(0 초록, 1 이상 빨강) |
 | metric 수신 상태 | 구간 끝에서 끊기지 않았는가 | 구간 끝 10분 행 수와 구간 끝 기준 마지막 수신 후 경과 초 | table |
 
 ```kusto
 customMetrics
 | where $__timeFilter(timestamp)
-| where cloud_RoleName == "$role"
+| where cloud_RoleName == ${role:singlequote}   // 입력값을 KQL 문자열로 안전하게 감쌈
 | where name == "movielog_reviews_stored"
 | where timestamp < bin(now(), max_of($__interval, 1m))   // 채워지는 중인 현재 bin 제외
 | summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))   // Pod 간 sum 금지
@@ -462,12 +464,17 @@ stat panel은 같은 bin 시계열을 받아 마지막 값이나 합계로 줄�
 sparkline을 그립니다. 숫자 하나와 추이를 한 칸에 담으므로 같은 지표의 꺾은선
 panel을 따로 둘 필요가 없습니다.
 
-누락 metric 수의 기대 목록에서는 DistributionSummary·Timer를 뺍니다. 실습 40분
-동안 Pod·분 단위로 빠진 metric은 한 번뿐이었고, 기록이 없던 분의
-`movielog_review_rating`이었습니다. 분포 meter는 기록이 없는 간격에 행을 보내지
-않으므로(`valueCount` = 0인 행 0건) 기대 목록에 넣으면 한산한 시간에 빨간 칸이
-생깁니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다.
-교체된 Pod도 종료 뒤에는 빈 칸으로 남습니다.
+누락 metric 수의 기대 목록은 수신 데이터에서 추론하지 않고 코드 기준으로 고정합니다.
+`BusinessMetrics`가 시작 때 0으로 등록하는 Counter 7개와 DB Gauge 4개가 대상입니다.
+받은 데이터에서 목록을 만들면 모든 Pod에서 빠진 meter는 목록에서도 빠져 0(초록)으로
+보이고, `valueCount`로 Counter를 고르면 간격마다 한 번씩만 기록된 분포 meter가
+섞입니다. 처음 사용할 때 생기는 Counter(검색, 카탈로그 조회)와 DistributionSummary는
+목록에서 뺍니다. 실습 40분 동안 Pod·분 단위로 빠진 metric은 기록이 없던 분의
+`movielog_review_rating` 한 번뿐이었습니다. 분포 meter는 기록이 없는 간격에 행을
+보내지 않으므로(`valueCount` = 0인 행 0건) 목록에 넣으면 한산한 시간에 빨간 칸이
+생깁니다. meter를 추가하거나 등록 방식을 바꾸면 `build_dashboard.py`의
+`STEADY_METRICS`도 함께 고칩니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도
+보내지 않은 것입니다. 교체된 Pod도 종료 뒤에는 빈 칸으로 남습니다.
 
 ### verify: Grafana 전체 panel query 실행 { #verify }
 
@@ -541,9 +548,13 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 
 수정 뒤 대시보드는 [실습 결과](#result)에 있습니다. 캡처에서 다음도 확인했습니다.
 
-- Pod별 영화 조회 분포가 4.32K 대 8.62K로 고르지 않습니다. 로그인 세션 때문에 Service에
-  `sessionAffinity: ClientIP`를 둔 결과입니다. 처음 합성 사용자 3개일 때는 모든
-  요청이 한 Pod로 갔고, 6개로 늘린 뒤 두 Pod에 나뉘었습니다.
+- Pod별 영화 조회 분포는 Pod가 바뀔 때마다 달라집니다. 로그인 세션 때문에 Service에
+  `sessionAffinity: ClientIP`를 두어 합성 사용자 Pod마다 한 앱 Pod에 고정되기
+  때문입니다. 처음 합성 사용자 3개일 때는 모든 요청이 한 Pod로 갔고, 6개로 늘린 뒤
+  4.32K 대 8.62K로 나뉘었고, image를 바꿔 Pod가 교체된 뒤에는 6.53K 대 6.43K였습니다.
+- 평균 별점 gauge가 3.50으로 보이는데 주황색입니다. 실제 값이 3.4996이라 표시만
+  반올림됐고 fresh 기준 3.5에는 못 미칩니다. 소수 둘째 자리 표시에서는 경계값 근처
+  색이 숫자와 어긋나 보일 수 있으므로 tooltip이나 query로 실제 값을 확인합니다.
 - 활동별·채널별 합계에서 `리뷰 작성 · web`과 `댓글 · web`이 0입니다. 0으로 미리
   등록한 counter이고 합성 사용자는 API로만 리뷰와 댓글을 씁니다.
 
@@ -661,19 +672,20 @@ dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 
 
 ## 실습 결과: 판정 기준과 실측값 { #result }
 
-실습 결과는 아래 기준과 실측값으로 판정합니다. 대시보드 캡처는 2026-11-07
-08:45~09:15 UTC 구간입니다.
+실습 결과는 아래 기준과 실측값으로 판정합니다. 대시보드 캡처는 현재 sample 코드로
+빌드한 `movielog:1.0.1` image의 2026-11-07 23:05~23:35 UTC 구간입니다. 화면의 시각은
+브라우저 시간대(KST)로 표시됩니다.
 
-![MovieLog 비즈니스 지표 대시보드. 영화 조회 12.9K, 새 리뷰 2.30K, 신규 회원 3.24K stat과 sparkline, 평균 별점 3.52 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 누락 metric status history, metric 수신 상태 table](../images/movielog-dashboard.png)
+![MovieLog 비즈니스 지표 대시보드. 영화 조회 13.0K, 새 리뷰 2.26K, 신규 회원 3.23K stat과 sparkline, 평균 별점 3.50 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 누락 metric status history, metric 수신 상태 table](../images/movielog-dashboard.png)
 
 | 확인 항목 | 기대 | 실측 |
 |---|---|---|
 | 관리형 주입 agent | 3.7.9 미만이면 custom meter 없음 | `3.7.7-aks`, `movielog_*` 0건 |
-| custom init agent | 3.7.10 시작, custom meter 도착 | 시작 로그 확인, 12개 이름 × 2 instance. 검색 수정 뒤 13개 |
+| custom init agent | 3.7.10 시작, custom meter 도착 | 시작 로그 확인, 12개 이름 × 2 instance. 검색 수정 뒤 13개, 현재 코드 image에서 14개 |
 | export 주기 | Pod·series별 1분 1행 | MCP 조회 15분 동안 `movie_views` 60행(2 series × 2 Pod × 15) |
 | allowlist | `jvm_*`, `http_server_requests` Micrometer 지표 없음 | 없음. agent 기본 JVM 지표와 `http.server.request.duration`만 별도로 존재 |
 | dashboard query | 17개 모두 데이터 반환 | `verify_panels.py` 17/17 OK |
-| 화면 점검 | 식별자 없음, 경고색 없음, panel 간 합계 일치 | 영화 조회 12.9K = 채널 6.52K + 6.42K = Pod 4.32K + 8.62K |
+| 화면 점검 | 식별자 없음, panel 간 합계 일치, 누락 metric 0 | 영화 조회 12,958 = 채널 6.51K + 6.45K = Pod 6.53K + 6.43K, 두 Pod 모든 bin 누락 0 |
 
 ## 수집 비용: meter × tag 조합 × Pod 수 { #cost }
 
@@ -726,8 +738,10 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
 - 2026-11-06 Korea Central에서 AKS, Application Insights, ACR, Managed Grafana를
   만들고 수집과 대시보드 작성 절차를 실행했고, 2026-11-07에 같은 환경에서
   대시보드 반영 절차를 실행했습니다. 같은 날 클러스터를 다시 시작해 질문 유형별
-  시각화로 바꾼 대시보드를 배포하고 query 실행과 캡처를 반복했습니다. 캡처는 모두
-  이 실습 환경에서 얻었습니다.
+  시각화로 바꾼 대시보드를 배포하고 query 실행과 캡처를 반복했습니다. 이어서 현재
+  sample 코드로 빌드한 `movielog:1.0.1` image를 같은 Deployment에 배포하고
+  (`kubectl set image`, custom agent 3.7.10 유지) 2026-11-07 23:05~23:35 UTC 구간을
+  다시 캡처했습니다. 캡처는 모두 이 실습 환경에서 얻었습니다.
 - Microsoft Learn에서 AKS 자동 계측, Java Micrometer 자동 수집과 이름 변환,
   export 간격, custom metric 저장과 비용, Managed Grafana data source 권한,
   data plane API 인증, MCP endpoint, dashboard import·export를 원문 전체로

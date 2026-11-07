@@ -33,6 +33,11 @@ def frames_summary(result):
     return len(frames), rows
 
 
+def kql_string(value):
+    """Quotes a value like Grafana's ${var:singlequote} format, so the query sent here matches the dashboard."""
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
 def query_panels(panels):
     """Yields query panels, including those nested in collapsed rows."""
     for panel in panels:
@@ -65,19 +70,21 @@ def main():
             q["datasource"] = {"type": "grafana-azure-monitor-datasource", "uid": args.datasource_uid}
             la = q["azureLogAnalytics"]
             la["resources"] = [args.appinsights_id]
-            la["query"] = la["query"].replace("$role", args.role)
+            la["query"] = la["query"].replace("${role:singlequote}", kql_string(args.role))
             q["intervalMs"] = 60000
             q["maxDataPoints"] = 500
             queries.append(q)
         body = json.dumps({"queries": queries, "from": f"now-{args.hours}h", "to": "now"}).encode()
         request = urllib.request.Request(url, data=body, method="POST", headers={
             "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+        expected = [q["refId"] for q in queries]
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 results = json.load(response)["results"]
         except urllib.error.HTTPError as error:
-            results = {"A": {"error": f"HTTP {error.code}: {error.read().decode()[:200]}"}}
-        expected = [q["refId"] for q in queries]
+            # A request-level failure belongs to every query in the request, whatever its refId.
+            message = f"HTTP {error.code}: {error.read().decode()[:200]}"
+            results = {ref: {"error": message} for ref in expected}
         for ref in expected:
             # A query the response leaves out is a failure, not a silent pass.
             result = results.get(ref, {"error": "no result returned for this refId"})

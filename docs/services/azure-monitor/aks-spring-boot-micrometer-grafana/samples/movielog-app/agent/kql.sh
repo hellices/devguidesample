@@ -14,7 +14,7 @@ if [[ -z "$app_id" ]]; then
     --query appId -o tsv)"
 fi
 
-query="$(cat "$query_file")"
+query="$(cat -- "$query_file")"
 az monitor app-insights query --app "$app_id" --offset "${KQL_OFFSET:-1h}" \
   --analytics-query "$query" -o json \
   | python3 -c '

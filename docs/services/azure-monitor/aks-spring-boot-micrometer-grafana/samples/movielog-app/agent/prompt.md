@@ -16,8 +16,9 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
 코드와 문서에 적힌 meter 이름을 믿지 말고, 실제로 들어온 데이터를 조회해서 결정한다.
 
 환경
-- Application Insights: <resource-group>/<app-insights-name>
-- Grafana: Azure Managed Grafana <grafana-name> (Azure Monitor data source uid: <datasource-uid>)
+- Application Insights: <app-insights-resource-group>/<app-insights-name>
+- Grafana: Azure Managed Grafana <grafana-resource-group>/<grafana-name> (Azure Monitor data source uid: <datasource-uid>)
+  두 resource group은 다를 수 있다. az grafana 명령에는 항상 <grafana-resource-group>을 쓴다.
 - cloud_RoleName: <role-name>, meter prefix: <prefix>_
 - 도구: Grafana MCP(amgmcp_query_resource_log, amgmcp_dashboard_update, amgmcp_dashboard_inspect)
   또는 samples/movielog-app/agent 의 kql.sh, build_dashboard.py, verify_panels.py, capture.mjs
@@ -43,7 +44,8 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
    - 무엇이 가장 많은가, Pod 간 쏠림은 → bar gauge
    - 시간에 따라 어떻게 변하는가 → time series(누적 area, bar, line)
    - Pod마다 빠진 지표가 없는가 → status history(누락 수, 0이 정상) 또는 table.
-     기록이 없는 간격에 행이 없는 DistributionSummary·Timer는 기대 목록에서 뺀다
+     기대 목록은 받은 데이터가 아니라 코드에서 시작 때 등록하는 Counter·Gauge 이름으로 고정한다.
+     처음 사용할 때 생기는 meter와 기록이 없으면 행이 없는 DistributionSummary·Timer는 뺀다
 5. build: build_dashboard.py를 고쳐 JSON을 만든다. bin은 max_of($__interval, 1m) 이상으로 한다.
 6. verify: 모든 panel query를 실제로 실행한다. FAIL이나 0행이 하나라도 있으면 원인을 고치고 다시 실행한다.
    - CLI: verify_panels.py
@@ -51,8 +53,9 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
      - `$__timeFilter(<column>)` → `<column> > ago(1h)` (값이 아니라 조건 전체로 바꿈)
      - `$__interval` → `1m`
      - `$__timeTo()` → `now()`
-     - `$role` 등 dashboard 변수 → 실제 값 (예: `"movielog"`)
-7. push: az grafana dashboard create --overwrite true 또는 amgmcp_dashboard_update로 올린다.
+     - `${role:singlequote}` 등 dashboard 변수 → 따옴표를 포함한 실제 값 (예: `'movielog'`)
+7. push: az grafana dashboard create -g <grafana-resource-group> -n <grafana-name> --overwrite true
+   또는 amgmcp_dashboard_update로 올린다.
    Grafana에 쓰기 권한이 없으면 JSON 파일만 만들고, 환경 값(resource ID)이 빈 상태인지
    확인한 뒤 import 방법(Dashboards > Import 또는 az grafana dashboard import)을 안내한다.
 8. look: capture.mjs로 대시보드를 캡처해서 직접 보고 아래를 점검한다.

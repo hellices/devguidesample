@@ -88,7 +88,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -145,7 +145,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_reviews_posted\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -202,7 +202,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_members_signups\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_members_signups\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -259,7 +259,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_review_rating\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stars = sum(valueSum) / sum(valueCount)",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_review_rating\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stars = sum(valueSum) / sum(valueCount)",
             "resources": [
               "$appinsights"
             ],
@@ -333,7 +333,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize reviews = sum(value) by verdict\n| order by verdict asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize reviews = sum(value) by verdict\n| order by verdict asc",
             "resources": [
               "$appinsights"
             ],
@@ -398,7 +398,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| extend channel = tostring(customDimensions.channel)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), channel\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_movie_views\"\n| extend channel = tostring(customDimensions.channel)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), channel\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -456,7 +456,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), verdict\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_reviews_posted\"\n| extend verdict = tostring(customDimensions.verdict)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize perMin = sum(value) / (max_of($__interval, 1m) / 1m) by bin(timestamp, max_of($__interval, 1m)), verdict\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -514,7 +514,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_movie_views\", \"movielog_review_views\", \"movielog_reviews_posted\", \"movielog_comments_posted\")\n| extend activity = case(name == \"movielog_movie_views\", \"영화 조회\",\n                         name == \"movielog_review_views\", \"리뷰 조회\",\n                         name == \"movielog_reviews_posted\", \"리뷰 작성\", \"댓글\")\n| extend series = strcat(activity, \" · \", tostring(customDimensions.channel))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by series\n| order by total desc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name in (\"movielog_movie_views\", \"movielog_review_views\", \"movielog_reviews_posted\", \"movielog_comments_posted\")\n| extend activity = case(name == \"movielog_movie_views\", \"영화 조회\",\n                         name == \"movielog_review_views\", \"리뷰 조회\",\n                         name == \"movielog_reviews_posted\", \"리뷰 작성\", \"댓글\")\n| extend series = strcat(activity, \" · \", tostring(customDimensions.channel))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by series\n| order by total desc",
             "resources": [
               "$appinsights"
             ],
@@ -578,7 +578,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_review_rating\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_review_rating\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stars = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -670,7 +670,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movies_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_movies_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -727,7 +727,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_reviews_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_reviews_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -784,7 +784,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_comments_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_comments_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -841,7 +841,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_members_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_members_stored\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize stored = max(value) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -911,7 +911,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by cloud_RoleInstance\n| order by cloud_RoleInstance asc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_movie_views\"\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by cloud_RoleInstance\n| order by cloud_RoleInstance asc",
             "resources": [
               "$appinsights"
             ],
@@ -975,7 +975,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name in (\"movielog_movie_catalog_lookups\", \"movielog_movie_searches\")\n| extend series = strcat(iff(name == \"movielog_movie_searches\", \"검색\", \"카탈로그\"), \" · \",\n                         tostring(customDimensions.outcome))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by series\n| order by total desc",
+            "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name in (\"movielog_movie_catalog_lookups\", \"movielog_movie_searches\")\n| extend series = strcat(iff(name == \"movielog_movie_searches\", \"검색\", \"카탈로그\"), \" · \",\n                         tostring(customDimensions.outcome))\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize total = sum(value) by series\n| order by total desc",
             "resources": [
               "$appinsights"
             ],
@@ -1019,7 +1019,7 @@
       "id": 19,
       "type": "status-history",
       "title": "Pod별 누락 metric 수",
-      "description": "bin마다 Pod가 보내지 않은 Counter·Gauge 종류 수입니다. 0이면 초록, 1 이상이면 빨강입니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다(교체된 Pod도 종료 뒤 빈 칸). DistributionSummary·Timer는 기록이 없는 bin에 행을 보내지 않으므로 기대 목록에서 뺍니다.",
+      "description": "bin마다 Pod가 보내지 않은 상시 meter 수입니다. 기대 목록은 앱이 시작 때 0으로 등록하는 Counter와 DB Gauge 11개로 고정하며, 처음 사용할 때 생기는 Counter와 기록이 없으면 행이 없는 DistributionSummary는 뺍니다. 0이면 초록, 1 이상이면 빨강입니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다(교체된 Pod도 종료 뒤 빈 칸).",
       "datasource": {
         "type": "grafana-azure-monitor-datasource",
         "uid": "${datasource}"
@@ -1039,7 +1039,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "let received = customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == \"$role\"\n| where name startswith \"movielog_\";\n// Counters and gauges export every interval; a distribution with no records sends no row.\nlet steady = received | summarize maxCount = max(valueCount) by name | where maxCount == 1 | project name;\nlet expected = toscalar(steady | count);\nreceived\n| where name in (steady)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize got = dcount(name) by bin(timestamp, max_of($__interval, 1m)), cloud_RoleInstance\n| project timestamp, cloud_RoleInstance, absent = expected - got\n| order by timestamp asc",
+            "query": "let steady = dynamic([\"movielog_movie_views\", \"movielog_review_views\", \"movielog_reviews_posted\", \"movielog_reviews_deleted\", \"movielog_comments_posted\", \"movielog_comments_deleted\", \"movielog_members_signups\", \"movielog_movies_stored\", \"movielog_reviews_stored\", \"movielog_comments_stored\", \"movielog_members_stored\"]);\ncustomMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name in (steady)\n| where timestamp < bin(now(), max_of($__interval, 1m))\n| summarize got = dcount(name) by bin(timestamp, max_of($__interval, 1m)), cloud_RoleInstance\n| project timestamp, cloud_RoleInstance, absent = array_length(steady) - got\n| order by timestamp asc",
             "resources": [
               "$appinsights"
             ],
@@ -1109,7 +1109,7 @@
           },
           "queryType": "Azure Log Analytics",
           "azureLogAnalytics": {
-            "query": "customMetrics\n| where timestamp > $__timeTo() - 10m and timestamp <= $__timeTo()\n| where cloud_RoleName == \"$role\"\n| where name startswith \"movielog_\"\n| summarize rows = count(), lastSeen = max(timestamp) by name, cloud_RoleInstance\n| extend secondsAgo = datetime_diff('second', $__timeTo(), lastSeen)\n| project name, cloud_RoleInstance, rows, secondsAgo\n| order by name asc, cloud_RoleInstance asc",
+            "query": "customMetrics\n| where timestamp > $__timeTo() - 10m and timestamp <= $__timeTo()\n| where cloud_RoleName == ${role:singlequote}\n| where name startswith \"movielog_\"\n| summarize rows = count(), lastSeen = max(timestamp) by name, cloud_RoleInstance\n| extend secondsAgo = datetime_diff('second', $__timeTo(), lastSeen)\n| project name, cloud_RoleInstance, rows, secondsAgo\n| order by name asc, cloud_RoleInstance asc",
             "resources": [
               "$appinsights"
             ],
