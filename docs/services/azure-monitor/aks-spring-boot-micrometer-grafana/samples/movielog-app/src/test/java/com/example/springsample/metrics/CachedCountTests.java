@@ -58,6 +58,14 @@ class CachedCountTests {
 		assertThat(count.value()).isEqualTo(3);
 		clock.now = clock.now.plus(BusinessGauges.MAX_AGE).plusSeconds(1);
 		assertThat(count.value()).isEqualTo(3);
+		assertThat(calls).hasValue(2);
+
+		// A failed refresh is throttled like a successful one: no retry until MAX_AGE passes again.
+		assertThat(count.value()).isEqualTo(3);
+		assertThat(calls).hasValue(2);
+		clock.now = clock.now.plus(BusinessGauges.MAX_AGE);
+		assertThat(count.value()).isEqualTo(3);
+		assertThat(calls).hasValue(3);
 	}
 
 	private static final class MutableClock extends Clock {

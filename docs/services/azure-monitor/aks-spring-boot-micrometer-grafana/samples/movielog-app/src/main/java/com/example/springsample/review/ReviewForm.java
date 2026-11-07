@@ -14,6 +14,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class ReviewForm {
 
+	/** Half-star units: 1 = ★0.5 … 10 = ★5, so {@code @Max(MAX_RATING)} is 10 while the message says 5 stars. */
 	@NotNull(message = "별점을 선택하세요.")
 	@Min(value = Review.MIN_RATING, message = "별점을 선택하세요.")
 	@Max(value = Review.MAX_RATING, message = "별점은 최대 5개입니다.")
@@ -27,7 +28,7 @@ public class ReviewForm {
 	@Size(max = Review.CONTENT_MAX_LENGTH, message = "내용은 {max}자 이하로 입력하세요.")
 	private String content;
 
-	/** The empty form preselects ★4; a submitted form keeps rating null unless the request sends one. */
+	/** The empty form preselects ★4 (8 half stars); a submitted form keeps rating null unless the request sends one. */
 	static ReviewForm newReview() {
 		ReviewForm form = new ReviewForm();
 		form.rating = 8;

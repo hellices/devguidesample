@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.time.Duration;
+import java.util.Objects;
 
 import com.example.springsample.movie.MovieApiProperties;
 import com.example.springsample.movie.MovieApiUnavailableException;
@@ -63,6 +64,8 @@ class TmdbClientTests {
 		TmdbClient client = client("header.payload.signature");
 		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/27205"))
 			.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer header.payload.signature"))
+			// The read access token goes only in the header, never in the URL.
+			.andExpect(request -> assertThat(Objects.toString(request.getURI().getRawQuery(), "")).doesNotContain("api_key"))
 			.andRespond(withSuccess("""
 					{"id":27205,"title":"인셉션","original_title":"Inception","release_date":"2010-07-15",
 					 "poster_path":"/p.jpg","overview":"꿈","runtime":148,"imdb_id":"tt1375666",

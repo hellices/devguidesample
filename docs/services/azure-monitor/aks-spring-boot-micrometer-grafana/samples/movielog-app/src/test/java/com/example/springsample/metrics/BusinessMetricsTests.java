@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.BDDMockito.given;
 
@@ -143,8 +144,10 @@ class BusinessMetricsTests extends IntegrationTest {
 		mockMvc.perform(post("/signup").with(csrf())
 				.param("username", "carol").param("nickname", "캐롤")
 				.param("password", "password123").param("passwordConfirm", "password123"))
-			.andExpect(status().is3xxRedirection());
+			.andExpect(status().is3xxRedirection())
+			.andExpect(redirectedUrl("/login?registered"));
 
+		assertThat(members.findByUsername("carol")).isPresent();
 		assertThat(count("movielog.comments.posted", "channel", "web")).isEqualTo(commentsBefore + 1);
 		assertThat(count("movielog.members.signups", "channel", "web")).isEqualTo(signupsBefore + 1);
 	}

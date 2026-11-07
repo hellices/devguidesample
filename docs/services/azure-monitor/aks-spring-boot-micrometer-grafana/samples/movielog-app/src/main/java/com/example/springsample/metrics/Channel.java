@@ -31,7 +31,7 @@ enum Channel {
 		}
 		HttpServletRequest request = servletAttributes.getRequest();
 		String path = request.getRequestURI().substring(request.getContextPath().length());
-		return path.startsWith("/api/") ? API : WEB;
+		return (path.equals("/api") || path.startsWith("/api/")) ? API : WEB;
 	}
 
 }

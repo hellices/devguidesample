@@ -17,6 +17,7 @@ const grafanaOrigin = new URL(base).origin;
 const viewportWidth = Number(width);
 
 const PANEL_LOADING = '[aria-label="Panel loading bar"], [data-testid="panel-loading-bar"]';
+const PANEL = "[data-viz-panel-key], .react-grid-item";
 
 async function waitForPanels(page) {
   await page.waitForTimeout(3000);
@@ -49,8 +50,19 @@ try {
   });
 
   const page = await context.newPage();
-  await page.goto(base + path, { waitUntil: "networkidle", timeout: 120000 });
+  const response = await page.goto(base + path, { waitUntil: "networkidle", timeout: 120000 });
+  // A bad token (401) or route (404) fails here; a sign-in page on another origin fails on the origin check.
+  if (!response || !response.ok()) {
+    throw new Error(`HTTP ${response ? response.status() : "no response"} for ${path}`);
+  }
+  if (new URL(page.url()).origin !== grafanaOrigin || new URL(page.url()).pathname.startsWith("/login")) {
+    throw new Error(`ended outside the Grafana dashboard: ${new URL(page.url()).pathname}`);
+  }
   await waitForPanels(page);
+  // A missing dashboard UID still returns 200 with a "Dashboard not found" page and no panels.
+  if ((await page.locator(PANEL).count()) === 0) {
+    throw new Error(`no panels rendered for ${path}`);
+  }
 
   // Grafana scrolls inside its own container, so grow the viewport to that container's content
   // height; the newly visible panels then load lazily and are awaited again.

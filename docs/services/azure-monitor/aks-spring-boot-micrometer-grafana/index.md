@@ -89,7 +89,9 @@ management.metrics.enable.movielog=true
 
 수집에는 `Instrumentation` CR과 annotation만 있으면 됩니다. 클러스터에서
 Application Monitoring을 켜고, namespace에 `Instrumentation` CR을 만든 뒤
-Deployment의 Pod template에 annotation을 하나 답니다.
+Deployment의 Pod template에 annotation을 하나 답니다. `default`가 아닌 이름의
+CR(per-deployment 방식)은 `autoInstrumentationPlatforms`를 빈 배열로 두고, 언어는
+annotation(`inject-java`)이 정합니다.
 
 ```yaml
 apiVersion: monitor.azure.com/v1
@@ -98,6 +100,7 @@ metadata:
   name: movielog
 spec:
   settings:
+    # Per-deployment CR: the list stays empty and the Pod annotation below picks the language.
     autoInstrumentationPlatforms: []
   destination:
     applicationInsightsConnectionString: "<connection-string>"

@@ -116,6 +116,7 @@ public class MovieService {
 		Movie movie = sync(tmdbId);
 		Long views = transactionTemplate.execute(status -> {
 			movies.incrementViewCount(movie.getId());
+			// Listeners are @TransactionalEventListener, so they run only after this transaction commits.
 			events.publishEvent(new MovieEvents.Viewed(tmdbId));
 			return movies.findViewCountById(movie.getId());
 		});

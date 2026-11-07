@@ -102,7 +102,7 @@ public class Movie {
 	}
 
 	public boolean isStale(Instant now, Duration ttl) {
-		return syncedAt.plus(ttl).isBefore(now);
+		return !now.isBefore(syncedAt.plus(ttl));
 	}
 
 	public @Nullable Integer getReleaseYear() {
