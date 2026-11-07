@@ -79,7 +79,7 @@ class BusinessGauges implements MeterBinder {
 
 		synchronized double value() {
 			Instant now = clock.instant();
-			if (refreshedAt.plus(MAX_AGE).isBefore(now)) {
+			if (!now.isBefore(refreshedAt.plus(MAX_AGE))) {
 				try {
 					value = query.getAsLong();
 				}

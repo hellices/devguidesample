@@ -3,6 +3,10 @@
 The agent uses this before it says a dashboard is done: a panel that renders "No data"
 is a failed panel, not a finished one.
 
+The token audience is https://dashboard.azure.com, as documented in "Authenticate to Azure Managed
+Grafana data plane APIs with Microsoft Entra ID" (learn.microsoft.com/azure/managed-grafana/
+how-to-authenticate-data-plane-api). A token for https://grafana.azure.com is rejected with 401.
+
 Usage:
   GRAFANA_URL=https://<grafana-endpoint> GRAFANA_TOKEN=$(az account get-access-token \
     --resource https://dashboard.azure.com --query accessToken -o tsv) \
@@ -73,7 +77,10 @@ def main():
                 results = json.load(response)["results"]
         except urllib.error.HTTPError as error:
             results = {"A": {"error": f"HTTP {error.code}: {error.read().decode()[:200]}"}}
-        for ref, result in results.items():
+        expected = [q["refId"] for q in queries]
+        for ref in expected:
+            # A query the response leaves out is a failure, not a silent pass.
+            result = results.get(ref, {"error": "no result returned for this refId"})
             frames, rows = frames_summary(result)
             ok = "error" not in result and rows > 0
             failed += 0 if ok else 1

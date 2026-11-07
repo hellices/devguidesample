@@ -48,6 +48,7 @@ class OmdbClientTests {
 	void missingValuesBecomeNull() {
 		OmdbClient client = client("omdbkey");
 		server.expect(requestTo(startsWith("https://omdb.test/")))
+			.andExpect(queryParam("i", "tt0000001"))
 			.andRespond(withSuccess("""
 					{"Ratings":[],"Metascore":"N/A","imdbRating":"N/A","Response":"True"}""",
 					MediaType.APPLICATION_JSON));
@@ -59,8 +60,9 @@ class OmdbClientTests {
 	void ratingWithoutValueIsIgnored() {
 		OmdbClient client = client("omdbkey");
 		server.expect(requestTo(startsWith("https://omdb.test/")))
+			.andExpect(queryParam("i", "tt0000002"))
 			.andRespond(withSuccess("""
-					{"Ratings":[{"Source":"Rotten Tomatoes"},{"Source":"Rotten Tomatoes","Value":null}],
+					{"Ratings":[null,{"Source":"Rotten Tomatoes"},{"Source":"Rotten Tomatoes","Value":null}],
 					 "Metascore":"70","imdbRating":"7.0","Response":"True"}""", MediaType.APPLICATION_JSON));
 
 		assertThat(client.ratings("tt0000002")).contains(new ExternalRatings(null, 7.0, 70));
@@ -71,9 +73,11 @@ class OmdbClientTests {
 	void notFoundErrorsAndMissingKeyGiveNoRatings() {
 		OmdbClient client = client("omdbkey");
 		server.expect(requestTo(startsWith("https://omdb.test/")))
+			.andExpect(queryParam("i", "tt0"))
 			.andRespond(withSuccess("{\"Response\":\"False\",\"Error\":\"Incorrect IMDb ID.\"}",
 					MediaType.APPLICATION_JSON));
-		server.expect(requestTo(startsWith("https://omdb.test/"))).andRespond(withServerError());
+		server.expect(requestTo(startsWith("https://omdb.test/"))).andExpect(queryParam("i", "tt0"))
+			.andRespond(withServerError());
 
 		assertThat(client.ratings("tt0")).isEmpty();
 		assertThat(client.ratings("tt0")).isEmpty();

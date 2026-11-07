@@ -24,6 +24,7 @@ import com.example.springsample.member.MemberRepository;
 import com.example.springsample.movie.tmdb.TmdbDtos;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 class ReviewWebTests extends IntegrationTest {
 
@@ -32,6 +33,9 @@ class ReviewWebTests extends IntegrationTest {
 
 	@Autowired
 	private ReviewService reviewService;
+
+	@Autowired
+	private PasswordEncoder passwordEncoder;
 
 	@Test
 	void signsUpAndRedirectsToLogin() throws Exception {
@@ -43,22 +47,42 @@ class ReviewWebTests extends IntegrationTest {
 			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/login?registered"));
 
-		assertThat(memberRepository.findByUsername("carol"))
-			.hasValueSatisfying(member -> assertThat(member.getPassword()).startsWith("{bcrypt}"));
+		assertThat(memberRepository.findByUsername("carol")).hasValueSatisfying(member -> {
+			assertThat(member.getPassword()).startsWith("{bcrypt}").isNotEqualTo("password123");
+			assertThat(passwordEncoder.matches("password123", member.getPassword())).isTrue();
+		});
 	}
 
 	@Test
-	void signupShowsFieldErrors() throws Exception {
-		register("carol");
-
+	void signupRejectsMismatchedPasswordConfirmation() throws Exception {
 		mockMvc.perform(post("/signup").with(csrf())
-				.param("username", "carol")
-				.param("nickname", "캐롤2")
+				.param("username", "dave")
+				.param("nickname", "데이브")
 				.param("password", "password123")
 				.param("passwordConfirm", "different123"))
 			.andExpect(status().isOk())
 			.andExpect(view().name("auth/signup"))
 			.andExpect(model().attributeHasFieldErrors("form", "passwordConfirm"));
+
+		assertThat(memberRepository.findByUsername("dave")).isEmpty();
+	}
+
+	@Test
+	void signupRejectsDuplicateUsername() throws Exception {
+		register("carol");
+		long members = memberRepository.count();
+
+		mockMvc.perform(post("/signup").with(csrf())
+				.param("username", "carol")
+				.param("nickname", "캐롤2")
+				.param("password", "password123")
+				.param("passwordConfirm", "password123"))
+			.andExpect(status().isOk())
+			.andExpect(view().name("auth/signup"))
+			.andExpect(model().attributeHasFieldErrors("form", "username"))
+			.andExpect(model().attributeErrorCount("form", 1));
+
+		assertThat(memberRepository.count()).isEqualTo(members);
 	}
 
 	@Test

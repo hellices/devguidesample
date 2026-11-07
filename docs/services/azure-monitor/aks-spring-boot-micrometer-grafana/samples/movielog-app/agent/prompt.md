@@ -39,7 +39,10 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
 5. build: build_dashboard.py를 고쳐 JSON을 만든다. bin은 max_of($__interval, 1m) 이상으로 한다.
 6. verify: 모든 panel query를 실제로 실행한다. FAIL이나 0행이 하나라도 있으면 원인을 고치고 다시 실행한다.
    - CLI: verify_panels.py
-   - MCP: amgmcp_dashboard_inspect(includeQueries) 결과의 KQL에서 macro를 ago(1h)와 1m으로 바꿔 amgmcp_query_resource_log로 실행
+   - MCP: amgmcp_dashboard_inspect(includeQueries)로 받은 KQL을 아래처럼 바꿔 amgmcp_query_resource_log로 실행
+     - `$__timeFilter(<column>)` → `<column> > ago(1h)` (값이 아니라 조건 전체로 바꿈)
+     - `$__interval` → `1m`
+     - `$role` 등 dashboard 변수 → 실제 값 (예: `"movielog"`)
 7. push: az grafana dashboard create --overwrite true 또는 amgmcp_dashboard_update로 올린다.
 8. look: capture.mjs로 대시보드를 캡처해서 직접 보고 아래를 점검한다.
    - 식별자(subscription ID 등)가 화면에 보이는가

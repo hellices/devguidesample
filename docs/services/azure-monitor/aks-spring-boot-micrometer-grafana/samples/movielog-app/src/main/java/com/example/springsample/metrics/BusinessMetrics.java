@@ -93,7 +93,12 @@ class BusinessMetrics {
 		counter("members.signups", "New member sign-ups", "channel", channel()).increment();
 	}
 
-	/** Registered up front so dashboards and rate() see 0 instead of "no data" before the first event. */
+	/**
+	 * Registers the channel-tagged user-action counters up front so dashboards and rate() see 0 instead of
+	 * "no data" before the first event. Outcome-tagged search and catalog-lookup counters are created on first
+	 * use instead: every registered series is exported every step even at 0, and Application Insights bills
+	 * each of those rows, so pre-registering every outcome would multiply cost for series that may never occur.
+	 */
 	private void registerZeroCounters() {
 		for (Channel channel : new Channel[] { Channel.WEB, Channel.API }) {
 			String value = channel.tagValue();

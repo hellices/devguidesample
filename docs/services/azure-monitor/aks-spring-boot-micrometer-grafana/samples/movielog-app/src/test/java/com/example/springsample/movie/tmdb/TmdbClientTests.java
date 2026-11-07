@@ -2,10 +2,8 @@ package com.example.springsample.movie.tmdb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withResourceNotFound;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -38,7 +36,7 @@ class TmdbClientTests {
 	@Test
 	void searchesWithApiKeyAndKoreanLanguage() {
 		TmdbClient client = client("v3key");
-		server.expect(requestTo(startsWith(BASE + "/search/movie")))
+		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/search/movie"))
 			.andExpect(queryParam("query", "%EA%B8%B0%EC%83%9D%EC%B6%A9"))
 			.andExpect(queryParam("page", "2"))
 			.andExpect(queryParam("language", "ko-KR"))
@@ -101,7 +99,7 @@ class TmdbClientTests {
 	@Test
 	void serverErrorsAndMissingKeyAreReportedAsUnavailable() {
 		TmdbClient client = client("v3key");
-		server.expect(requestTo(startsWith(BASE + "/search/movie"))).andRespond(withServerError());
+		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/search/movie")).andRespond(withServerError());
 
 		assertThatThrownBy(() -> client.search("x", 1)).isInstanceOf(MovieApiUnavailableException.class);
 		server.verify();

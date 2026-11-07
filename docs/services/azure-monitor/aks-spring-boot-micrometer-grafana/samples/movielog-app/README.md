@@ -110,6 +110,11 @@ node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kio
 token을 Grafana origin에만 보내고, 내부 scroll 높이에 맞춰 viewport를 늘리며,
 panel 로딩이 60초를 넘으면 실패로 종료합니다.
 
+Grafana token의 audience는 Microsoft Learn의
+[Managed Grafana data plane 인증 문서](https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api)대로
+`https://dashboard.azure.com`입니다. 실습 Grafana에서 이 token은 `/api/org`에 200을 받았고,
+`https://grafana.azure.com` token은 401로 거부됐습니다.
+
 `--appinsights-id`로 만든 JSON은 resource ID 변수를 숨기므로 저장소에 커밋하지
 않습니다.
 

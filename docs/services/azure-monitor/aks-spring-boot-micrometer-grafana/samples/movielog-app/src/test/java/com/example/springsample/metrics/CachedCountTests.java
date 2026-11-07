@@ -31,6 +31,20 @@ class CachedCountTests {
 	}
 
 	@Test
+	void refreshesExactlyWhenMaxAgeHasPassed() {
+		AtomicLong rows = new AtomicLong(5);
+		MutableClock clock = new MutableClock();
+		var count = new BusinessGauges.CachedCount(rows::get, clock);
+
+		assertThat(count.value()).isEqualTo(5);
+		rows.set(7);
+		clock.now = clock.now.plus(BusinessGauges.MAX_AGE).minusMillis(1);
+		assertThat(count.value()).isEqualTo(5);
+		clock.now = clock.now.plusMillis(1);
+		assertThat(count.value()).isEqualTo(7);
+	}
+
+	@Test
 	void keepsLastValueWhenQueryFails() {
 		MutableClock clock = new MutableClock();
 		AtomicLong calls = new AtomicLong();

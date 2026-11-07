@@ -339,9 +339,10 @@ inventory는 `cloud_RoleName`(`movielog`)도 알려 줍니다. dashboard의 `rol
 
 inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니다. 실습 당시
 `movielog_movie_searches`가 없었던 것은 load generator가 검색 parameter를 `q`가
-아닌 `query`로 보내 400으로 끝났기 때문입니다. 수정된 load generator에서는
-TMDB key가 없어도 검색 시도가 `outcome=disabled`로 기록되는 코드 경로를 탑니다.
-이 수정 뒤의 도착은 실습에서 다시 확인하지 않았습니다.
+아닌 `query`로 보내 400으로 끝났기 때문입니다. 수정된 load generator로 앱을
+로컬에서 실행해 보니 TMDB key가 없어도 검색 시도가
+`movielog.movie.searches{outcome=disabled}`로 기록됐습니다. AKS와 `customMetrics`
+도착은 실습 클러스터를 멈춘 뒤라 다시 확인하지 않았습니다.
 
 ### probe 2: dimension 값 개수로 쓸 수 있는 축을 고릅니다 { #probe-dimensions }
 

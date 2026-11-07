@@ -2,12 +2,11 @@ package com.example.springsample.movie;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -92,6 +91,7 @@ class MovieServiceTests extends IntegrationTest {
 		given(tmdb.details(anyLong())).willReturn(Optional.empty());
 
 		assertThatThrownBy(() -> movieService.getMovie(404)).isInstanceOf(ResourceNotFoundException.class);
+		verify(tmdb).details(404);
 	}
 
 	@Test
@@ -99,7 +99,7 @@ class MovieServiceTests extends IntegrationTest {
 		stubMovie(3, "독립영화", null, null);
 
 		assertThat(movieService.getMovie(3).rottenTomatoes()).isNull();
-		verify(omdb, never()).ratings(any());
+		verifyNoInteractions(omdb);
 	}
 
 	@Test

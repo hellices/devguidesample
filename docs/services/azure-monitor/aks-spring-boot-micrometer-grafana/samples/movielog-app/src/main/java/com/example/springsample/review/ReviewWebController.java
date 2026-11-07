@@ -61,7 +61,7 @@ class ReviewWebController {
 			return "redirect:/reviews/" + existing + "/edit";
 		}
 		model.addAttribute("movie", movieService.getMovie(tmdbId));
-		model.addAttribute("form", new ReviewForm());
+		model.addAttribute("form", ReviewForm.newReview());
 		return "reviews/form";
 	}
 

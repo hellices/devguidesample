@@ -17,7 +17,7 @@ public class ReviewForm {
 	@NotNull(message = "별점을 선택하세요.")
 	@Min(value = Review.MIN_RATING, message = "별점을 선택하세요.")
 	@Max(value = Review.MAX_RATING, message = "별점은 최대 5개입니다.")
-	private Integer rating = 8;
+	private Integer rating;
 
 	@NotBlank(message = "제목을 입력하세요.")
 	@Size(max = Review.TITLE_MAX_LENGTH, message = "제목은 {max}자 이하로 입력하세요.")
@@ -26,6 +26,13 @@ public class ReviewForm {
 	@NotBlank(message = "내용을 입력하세요.")
 	@Size(max = Review.CONTENT_MAX_LENGTH, message = "내용은 {max}자 이하로 입력하세요.")
 	private String content;
+
+	/** The empty form preselects ★4; a submitted form keeps rating null unless the request sends one. */
+	static ReviewForm newReview() {
+		ReviewForm form = new ReviewForm();
+		form.rating = 8;
+		return form;
+	}
 
 	ReviewForm(ReviewDetail review) {
 		this.rating = review.rating();

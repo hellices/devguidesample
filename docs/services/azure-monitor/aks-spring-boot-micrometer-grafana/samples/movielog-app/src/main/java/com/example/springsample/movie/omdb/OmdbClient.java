@@ -66,6 +66,7 @@ public class OmdbClient {
 
 		ExternalRatings toRatings() {
 			Integer rottenTomatoes = (ratings == null) ? null : ratings.stream()
+				.filter(Objects::nonNull)
 				.filter(rating -> "Rotten Tomatoes".equals(rating.source()))
 				.map(rating -> (rating.value() == null) ? null : parseInt(rating.value().replace("%", "")))
 				.filter(Objects::nonNull)

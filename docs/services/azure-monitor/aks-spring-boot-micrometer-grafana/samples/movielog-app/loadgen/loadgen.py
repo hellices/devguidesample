@@ -24,6 +24,7 @@ class Session:
     def __init__(self):
         self.jar = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
+        self.last_url = ""
 
     def xsrf(self):
         return next((c.value for c in self.jar if c.name == "XSRF-TOKEN"), "")
@@ -41,6 +42,8 @@ class Session:
         try:
             with self.opener.open(request, timeout=10) as response:
                 raw = response.read()
+                # Redirects are followed, so this is where the request finally landed.
+                self.last_url = response.geturl()
                 return response.status, raw
         except urllib.error.HTTPError as error:
             return error.code, error.read()
@@ -58,10 +61,16 @@ def user_journey():
     password = "Lab-" + "".join(random.choices(string.ascii_letters + string.digits, k=12))
 
     s.call("GET", "/signup")
-    s.call("POST", "/signup", form={"username": name, "password": password,
-                                    "passwordConfirm": password, "nickname": name[:12]})
+    status, _ = s.call("POST", "/signup", form={"username": name, "password": password,
+                                                "passwordConfirm": password, "nickname": name[:12]})
+    # Success redirects to /login?registered; a failed signup re-renders the form with 200.
+    if status != 200 or "registered" not in s.last_url:
+        raise RuntimeError(f"signup failed (status {status})")
     s.call("GET", "/login")
-    s.call("POST", "/login", form={"username": name, "password": password})
+    status, _ = s.call("POST", "/login", form={"username": name, "password": password})
+    # Success redirects to /reviews; a failed login lands on /login?error, also with 200.
+    if status != 200 or "/login" in s.last_url:
+        raise RuntimeError(f"login failed (status {status})")
 
     for _ in range(random.randint(2, 6)):
         movie = pick_movie()
