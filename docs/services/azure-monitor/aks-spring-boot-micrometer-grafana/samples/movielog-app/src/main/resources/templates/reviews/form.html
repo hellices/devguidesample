@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${reviewId == null} ? '리뷰 쓰기' : '리뷰 수정')}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<h5 th:text="${reviewId == null} ? '리뷰 쓰기' : '리뷰 수정'">리뷰 쓰기</h5>
+
+	<p class="notice primary-container padding round" th:if="${notice != null}" th:text="${notice}">알림</p>
+
+	<div class="movie-banner">
+		<th:block th:replace="~{fragments/layout :: poster(${movie.posterUrl}, ${movie.title}, 'poster-thumb')}"></th:block>
+		<div class="max">
+			<h6 class="small">
+				<span th:text="${movie.title}">영화 제목</span>
+				<span class="secondary-text" th:if="${movie.releaseYear != null}" th:text="|(${movie.releaseYear})|">(2024)</span>
+			</h6>
+			<div class="small-text secondary-text" th:if="${movie.originalTitle != null and movie.originalTitle != movie.title}"
+				th:text="${movie.originalTitle}">원제</div>
+		</div>
+	</div>
+
+	<form th:action="${reviewId == null} ? @{/movies/{id}/reviews(id=${movie.tmdbId})} : @{/reviews/{id}/edit(id=${reviewId})}"
+		th:object="${form}" method="post">
+		<fieldset class="rating-field" th:classappend="${#fields.hasErrors('rating')} ? 'invalid'">
+			<legend>별점</legend>
+			<div class="star-picker-row" th:with="current=${form.rating}">
+				<!-- Ten radios, one per half star; each label shows the left or right half of a star icon. -->
+				<div class="star-picker" role="radiogroup" aria-label="별점 (별 반 개 단위)">
+					<th:block th:each="value : ${#numbers.sequence(1, 10)}">
+						<input type="radio" name="rating" class="star-radio" th:id="|rating-${value}|" th:value="${value}"
+							th:checked="${current == value}" data-rating-input>
+						<label th:for="|rating-${value}|" th:class="${value % 2 == 1} ? 'star-half star-left' : 'star-half star-right'"
+							th:title="|별 ${value / 2.0}개|"><i aria-hidden="true">star</i><span class="sr-only" th:text="|별 ${value / 2.0}개|">별</span></label>
+					</th:block>
+				</div>
+				<span class="rating-text" data-rating-text
+					th:text="${current == null} ? '별을 눌러 평가하세요' : |${#numbers.formatDecimal(current / 2.0, 1, 1)} / 5|">4.0 / 5</span>
+			</div>
+			<output class="error-text" th:if="${#fields.hasErrors('rating')}" th:errors="*{rating}">오류</output>
+		</fieldset>
+
+		<div class="field label border" th:classappend="${#fields.hasErrors('title')} ? 'invalid'">
+			<input type="text" th:field="*{title}" placeholder=" " maxlength="200" required>
+			<label for="title">한 줄 평</label>
+			<output class="invalid" th:if="${#fields.hasErrors('title')}" th:errors="*{title}">오류</output>
+		</div>
+
+		<div class="field label border textarea-tall" th:classappend="${#fields.hasErrors('content')} ? 'invalid'">
+			<textarea th:field="*{content}" placeholder=" " maxlength="10000" required></textarea>
+			<label for="content">리뷰</label>
+			<output class="invalid" th:if="${#fields.hasErrors('content')}" th:errors="*{content}">오류</output>
+		</div>
+
+		<nav class="right-align">
+			<a class="button transparent"
+				th:href="${reviewId == null} ? @{/movies/{id}(id=${movie.tmdbId})} : @{/reviews/{id}(id=${reviewId})}">취소</a>
+			<button>
+				<i>check</i>
+				<span th:text="${reviewId == null} ? '등록' : '저장'">등록</span>
+			</button>
+		</nav>
+	</form>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

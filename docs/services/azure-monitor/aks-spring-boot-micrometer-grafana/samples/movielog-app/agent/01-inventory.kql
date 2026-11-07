@@ -1,0 +1,7 @@
+// Step 1 - inventory: which metric names arrive, from which role, how often.
+customMetrics
+| where timestamp > ago(30m)
+| summarize rows = count(), firstSeen = min(timestamp), lastSeen = max(timestamp),
+            instances = dcount(cloud_RoleInstance)
+    by name, cloud_RoleName
+| order by name asc

@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "movielog-grafana": {
+      "type": "http",
+      "url": "https://<grafana-endpoint>/api/azure-mcp"
+    }
+  }
+}

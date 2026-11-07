@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: movielog
+  namespace: movielog
+  labels:
+    app: movielog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: movielog
+  template:
+    metadata:
+      labels:
+        app: movielog
+      annotations:
+        # Must be on the Pod template. The value is the Instrumentation CR name.
+        instrumentation.opentelemetry.io/inject-java: "movielog"
+    spec:
+      containers:
+        - name: movielog
+          image: "${APP_IMAGE}"
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: aks
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/springsample
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: movielog-db
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: movielog-db
+                  key: password
+            # Declared on the Pod so the injected -javaagent is appended to these flags
+            # instead of silently replacing the image ENV.
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 1536Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: movielog
+  namespace: movielog
+spec:
+  selector:
+    app: movielog
+  # Login sessions live in Pod memory, so keep each client on one Pod.
+  sessionAffinity: ClientIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

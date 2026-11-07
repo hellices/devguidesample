@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: movielog
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: loadgen
+  template:
+    metadata:
+      labels:
+        app: loadgen
+    spec:
+      containers:
+        - name: loadgen
+          image: python:3.13-slim
+          command: ["python", "-u", "/scripts/loadgen.py"]
+          env:
+            - name: TARGET
+              value: http://movielog
+            - name: PAUSE_SECONDS
+              value: "1.0"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: loadgen

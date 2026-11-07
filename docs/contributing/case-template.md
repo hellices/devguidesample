@@ -30,8 +30,10 @@ related_guides: []
 ## 본문 순서
 
 대괄호는 해당 절에서 다룰 내용의 역할입니다.
-[제목 작성 기준](index.md#content-first-headings)에 따라 실제 본문의 핵심을
-담은 제목으로 바꿉니다. 원인이 확정되지 않았다면 제목에서도 가설로 구분합니다.
+[핵심 용어 제목 기준](index.md#content-first-headings)에 따라 문장이 아닌
+핵심 용어 명사구 제목으로 바꿉니다. 원인이 확정되지 않았다면 제목에서도 가설로 구분합니다.
+이 문서가 topic entry라면 [topic entry 구성 기준](index.md#topic-entry-message)에 따라
+첫 절에서 핵심 메시지와 실제 결과를 먼저 보여 주고 세부 절차는 자식 문서로 보냅니다.
 
 ```markdown
 # [발생한 문제와 확인된 대응·결과]
