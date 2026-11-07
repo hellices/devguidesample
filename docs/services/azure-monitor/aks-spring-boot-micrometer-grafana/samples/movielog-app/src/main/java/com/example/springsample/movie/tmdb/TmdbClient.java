@@ -55,10 +55,15 @@ public class TmdbClient {
 	public Optional<TmdbDtos.MovieDetails> details(long tmdbId) {
 		ensureEnabled();
 		try {
-			return Optional.ofNullable(restClient.get()
+			TmdbDtos.MovieDetails details = restClient.get()
 				.uri(template("/movie/{id}"), variables(Map.of("id", tmdbId)))
 				.retrieve()
-				.body(TmdbDtos.MovieDetails.class));
+				.body(TmdbDtos.MovieDetails.class);
+			if (details == null) {
+				// Only a 404 means "no such movie"; an empty success body is an upstream fault.
+				throw new MovieApiUnavailableException("Empty TMDB details response");
+			}
+			return Optional.of(details);
 		}
 		catch (HttpClientErrorException ex) {
 			if (ex.getStatusCode() == HttpStatus.NOT_FOUND) {

@@ -34,7 +34,8 @@ class MovieWebController {
 				model.addAttribute("result", movieService.search(query, 1));
 			}
 			catch (MovieApiUnavailableException ex) {
-				logger.warn("Movie search failed for '{}': {}", query, ex.getMessage());
+				// The query is user input; it is not logged so it cannot forge log lines.
+				logger.warn("Movie search failed: {}", ex.getMessage());
 				model.addAttribute("searchFailed", true);
 			}
 		}

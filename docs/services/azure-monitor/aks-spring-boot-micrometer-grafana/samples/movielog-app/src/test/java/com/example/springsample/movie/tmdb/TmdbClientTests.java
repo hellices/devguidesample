@@ -63,7 +63,7 @@ class TmdbClientTests {
 	@Test
 	void sendsReadAccessTokenAsBearerHeader() {
 		TmdbClient client = client("header.payload.signature");
-		server.expect(requestTo(startsWith(BASE + "/movie/27205")))
+		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/27205"))
 			.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer header.payload.signature"))
 			.andRespond(withSuccess("""
 					{"id":27205,"title":"인셉션","original_title":"Inception","release_date":"2010-07-15",
@@ -80,9 +80,21 @@ class TmdbClientTests {
 	@Test
 	void unknownMovieIsEmpty() {
 		TmdbClient client = client("v3key");
-		server.expect(requestTo(startsWith(BASE + "/movie/1"))).andRespond(withResourceNotFound());
+		// Match the path exactly: startsWith("/movie/1") would also accept "/movie/10".
+		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/1"))
+			.andRespond(withResourceNotFound());
 
 		assertThat(client.details(1)).isEmpty();
+		server.verify();
+	}
+
+	@Test
+	void emptyDetailsBodyIsUnavailableNotMissing() {
+		TmdbClient client = client("v3key");
+		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/2"))
+			.andRespond(withSuccess());
+
+		assertThatThrownBy(() -> client.details(2)).isInstanceOf(MovieApiUnavailableException.class);
 		server.verify();
 	}
 

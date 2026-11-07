@@ -1,6 +1,8 @@
 package com.example.springsample.config;
 
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.startsWith;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -31,6 +33,7 @@ class OpenApiDocsTests {
 			.andExpect(jsonPath("$.paths", hasKey("/api/reviews")))
 			.andExpect(jsonPath("$.paths", hasKey("/api/reviews/{reviewId}/comments")))
 			.andExpect(jsonPath("$.paths", not(hasKey("/reviews"))))
+			.andExpect(jsonPath("$.paths.keys()", everyItem(startsWith("/api/"))))
 			.andExpect(jsonPath("$.paths['/api/movies/{tmdbId}/reviews'].post").exists())
 			.andExpect(jsonPath("$.paths['/api/movies/{tmdbId}/reviews'].post.parameters[?(@.name == 'user')]").isEmpty());
 	}

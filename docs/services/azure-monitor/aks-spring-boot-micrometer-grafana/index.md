@@ -124,8 +124,9 @@ az role assignment create --assignee-object-id "$(az ad signed-in-user show --qu
 ## MovieLog는 커밋된 도메인 이벤트만 movielog.* meter로 기록합니다 { #meters }
 
 MovieLog의 서비스 코드는 Micrometer를 모릅니다. 리뷰 작성 같은 도메인 이벤트를
-발행하면 `BusinessMetrics`가 트랜잭션 커밋 뒤에 meter를 올립니다. 롤백된 작업은
-집계되지 않습니다.
+발행하면 `BusinessMetrics`가 meter를 올립니다. 트랜잭션 안에서 발행된 이벤트는 커밋
+뒤에만 집계되므로 롤백된 작업은 빠집니다. 검색과 카탈로그 조회처럼 외부 API 호출이라
+트랜잭션 밖에서 발행되는 이벤트는 `fallbackExecution = true`로 즉시 집계됩니다.
 
 ```java
 @TransactionalEventListener(fallbackExecution = true)

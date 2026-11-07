@@ -90,6 +90,12 @@ public class Review {
 		if (rating < MIN_RATING || rating > MAX_RATING) {
 			throw new IllegalArgumentException("Rating must be between 1 and 10 half stars: " + rating);
 		}
+		if (title == null || title.isBlank() || title.length() > TITLE_MAX_LENGTH) {
+			throw new IllegalArgumentException("Title must be 1 to " + TITLE_MAX_LENGTH + " characters");
+		}
+		if (content == null || content.isBlank() || content.length() > CONTENT_MAX_LENGTH) {
+			throw new IllegalArgumentException("Content must be 1 to " + CONTENT_MAX_LENGTH + " characters");
+		}
 		this.rating = rating;
 		this.title = title;
 		this.content = content;

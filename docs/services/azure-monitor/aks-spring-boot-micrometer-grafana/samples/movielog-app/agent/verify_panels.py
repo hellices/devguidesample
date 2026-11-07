@@ -34,7 +34,7 @@ def query_panels(panels):
     for panel in panels:
         if panel.get("type") == "row":
             yield from query_panels(panel.get("panels", []))
-        elif panel.get("targets"):
+        elif any(not t.get("hide") for t in panel.get("targets", [])):
             yield panel
 
 
@@ -55,6 +55,8 @@ def main():
     for panel in query_panels(dashboard["panels"]):
         queries = []
         for t in panel["targets"]:
+            if t.get("hide"):
+                continue
             q = json.loads(json.dumps(t))
             q["datasource"] = {"type": "grafana-azure-monitor-datasource", "uid": args.datasource_uid}
             la = q["azureLogAnalytics"]

@@ -14,12 +14,12 @@ if [[ -z "$app_id" ]]; then
     --query appId -o tsv)"
 fi
 
-result="$(az monitor app-insights query --app "$app_id" --offset "${KQL_OFFSET:-1h}" \
-  --analytics-query "$(cat "$query_file")" -o json)"
-
-python3 -c '
+query="$(cat "$query_file")"
+az monitor app-insights query --app "$app_id" --offset "${KQL_OFFSET:-1h}" \
+  --analytics-query "$query" -o json \
+  | python3 -c '
 import json, sys
-table = json.loads(sys.argv[1])["tables"][0]
+table = json.load(sys.stdin)["tables"][0]
 names = [c["name"] for c in table["columns"]]
 
 def cell(value):
@@ -34,4 +34,4 @@ print("  ".join("-" * w for w in widths))
 for r in rows:
     print("  ".join(v.ljust(w) for v, w in zip(r, widths)))
 print(f"({len(rows)} rows)")
-' "$result"
+'

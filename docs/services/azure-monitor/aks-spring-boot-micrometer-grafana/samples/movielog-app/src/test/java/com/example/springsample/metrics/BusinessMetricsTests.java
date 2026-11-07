@@ -175,6 +175,14 @@ class BusinessMetricsTests extends IntegrationTest {
 		assertThat(count("movielog.movie.catalog.lookups", "outcome", "cache_hit")).isEqualTo(cacheHits + 1);
 	}
 
+	@Test
+	void deleteCountersExistBeforeTheFirstDelete() {
+		for (String channel : List.of("web", "api")) {
+			assertThat(registry.find("movielog.reviews.deleted").tags("channel", channel).counter()).isNotNull();
+			assertThat(registry.find("movielog.comments.deleted").tags("channel", channel).counter()).isNotNull();
+		}
+	}
+
 	private double count(String name, String... tags) {
 		Counter counter = registry.find(name).tags(tags).counter();
 		return (counter == null) ? 0 : counter.count();

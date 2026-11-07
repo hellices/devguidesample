@@ -12,6 +12,9 @@ metadata:
   namespace: movielog
 spec:
   replicas: 1
+  # A rolling update would briefly run a second, empty database behind the same Service.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres

@@ -40,6 +40,7 @@ class ReviewWebTests extends IntegrationTest {
 				.param("nickname", "캐롤")
 				.param("password", "password123")
 				.param("passwordConfirm", "password123"))
+			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/login?registered"));
 
 		assertThat(memberRepository.findByUsername("carol"))
@@ -151,6 +152,7 @@ class ReviewWebTests extends IntegrationTest {
 				.param("rating", "9")
 				.param("title", "폼으로 쓴 리뷰")
 				.param("content", "본문"))
+			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrlPattern("/reviews/*"))
 			.andReturn();
 		String reviewUrl = result.getResponse().getRedirectedUrl();
@@ -170,6 +172,7 @@ class ReviewWebTests extends IntegrationTest {
 		Long existing = reviewService.create(1, register("alice"), 6, "첫 리뷰", "내용").id();
 
 		mockMvc.perform(get("/movies/{id}/reviews/new", 1).with(user("alice")))
+			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/reviews/" + existing + "/edit"))
 			.andExpect(flash().attributeExists("notice"));
 	}
@@ -211,7 +214,10 @@ class ReviewWebTests extends IntegrationTest {
 		Long id = reviewService.create(7, register("writer"), 8, "제목", "내용").id();
 
 		mockMvc.perform(post("/reviews/{id}/delete", id).with(user("writer")).with(csrf()))
+			.andExpect(status().is3xxRedirection())
 			.andExpect(redirectedUrl("/movies/7"));
+
+		mockMvc.perform(get("/reviews/{id}", id)).andExpect(status().isNotFound());
 	}
 
 }

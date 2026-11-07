@@ -55,7 +55,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 	@Query("update Review r set r.viewCount = r.viewCount + 1 where r.id = :id")
 	int incrementViewCount(Long id);
 
-	@Modifying(flushAutomatically = true)
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("update Review r set r.commentCount = r.commentCount + :delta where r.id = :id")
 	void adjustCommentCount(Long id, int delta);
 

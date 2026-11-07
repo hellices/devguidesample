@@ -100,6 +100,8 @@ class BusinessMetrics {
 			counter("movie.views", "Movie page views (movie clicks)", "channel", value);
 			counter("review.views", "Review page views", "channel", value);
 			counter("comments.posted", "New comments", "channel", value);
+			counter("reviews.deleted", "Deleted reviews", "channel", value);
+			counter("comments.deleted", "Deleted comments", "channel", value);
 			counter("reviews.posted", "New reviews", "channel", value, "verdict", "fresh");
 			counter("reviews.posted", "New reviews", "channel", value, "verdict", "rotten");
 		}

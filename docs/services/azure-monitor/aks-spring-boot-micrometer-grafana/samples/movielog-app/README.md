@@ -13,7 +13,7 @@
 | `src/main/resources/db/aks-seed.sql` | TMDB API key 없이 영화 상세가 동작하도록 영화 12편을 넣습니다. |
 | `Dockerfile` | jlink + distroless 실행 image입니다. ACR Tasks용 layer marker를 포함합니다. |
 | `agent-init/Dockerfile` | checksum을 고정한 Application Insights Java 3.7.10 init image입니다. |
-| `k8s/00-postgres.yaml` | 실습용 PostgreSQL입니다. 데이터는 `emptyDir`라 Pod 재시작 시 사라집니다. |
+| `k8s/00-postgres.yaml` | 실습용 PostgreSQL입니다. 데이터는 `emptyDir`라 container 재시작에는 유지되고 Pod가 삭제·교체되면 사라집니다. 두 Pod가 겹치지 않게 `Recreate`로 교체합니다. |
 | `k8s/10-instrumentation.yaml` | per-deployment `Instrumentation` CR입니다. |
 | `k8s/20-movielog.yaml` | `inject-java` annotation을 단 앱 Deployment와 Service입니다. |
 | `k8s/21-agent-3.7.10.patch.yaml` | managed agent가 3.7.9 미만일 때 쓰는 3.7.10 init image patch입니다. |
