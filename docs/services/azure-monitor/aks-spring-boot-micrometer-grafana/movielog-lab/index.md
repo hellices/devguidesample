@@ -73,16 +73,15 @@ related_guides:
 [Azure Managed Grafana · Azure Monitor data source] → 대시보드
 ```
 
-실습에서 확인한 핵심은 세 가지입니다.
+이 실습에서만 얻은 결과는 다음과 같습니다. 흐름과 방법론의 요약은
+[주제 소개](../index.md#message)에 있습니다.
 
-1. **관리형 agent가 `3.7.7-aks`이면 Spring Boot 4의 custom meter는 오지 않습니다.**
-   실제 클러스터에서 `movielog_*`가 0건이었고, 3.7.10 init image로 바꾸자
-   도착했습니다.
-2. **대시보드 집계식은 코드가 아니라 probe 결과로 정합니다.** 같은 gauge가 Pod마다
-   같은 DB 값을 보내 sum이면 두 배가 되는 문제를 probe에서 먼저 찾았습니다.
-3. **agent에게는 "그려 줘"가 아니라 probe → build → verify → look 순서를 시킵니다.**
-   verify에서 KQL 예약어 오류를, look에서 subscription ID 노출과 잘못된 경고색을
-   잡았습니다.
+- 관리형 `3.7.7-aks`로는 `movielog_*`가 0건이었고, 3.7.10 init image로 바꾸자
+  12개 지표가 두 Pod에서 도착했습니다([버전 게이트](#version-gate)).
+- 이미 주입된 Deployment에서 custom agent로 바꾸려면 patch를 두 번에 나눠야
+  했습니다([webhook 주입 해제](#webhook-revert)).
+- agent의 probe·verify·look 단계가 gauge 중복 합산, KQL 예약어, 식별자 노출을
+  대시보드 공개 전에 잡았습니다([agent 대시보드 방법론](#agent-method)).
 
 ## 실습 자원: 단일 resource group 구성 { #resources }
 
@@ -297,18 +296,9 @@ kubectl scale deploy/movielog -n movielog --replicas=2
 
 ## agent 대시보드 방법론: probe → build → verify → look { #agent-method }
 
-agent에게는 probe → build → verify → look 순서로 대시보드를 시킵니다.
-
-"Grafana 대시보드 만들어 줘"라고만 시키면 agent는 코드의 meter 이름과 일반적인
-KQL 패턴으로 panel을 추측합니다. 이 실습에서 추측대로 그렸다면 다음 문제가
-그대로 남았습니다.
-
-| 단계 | agent가 하는 일 | 이 실습에서 잡은 문제 |
-|---|---|---|
-| probe | 실제 `customMetrics`를 조회해 이름, dimension, 값 모양을 확인 | 3.7.7-aks에서 `movielog_*` 0건, Pod 간 같은 gauge 값 |
-| build | probe가 정한 집계식으로 dashboard JSON 생성 | 집계식 표가 없으면 gauge를 sum으로 그림 |
-| verify | 모든 panel query를 실제로 실행 | `views` KQL 예약어로 panel 1개 400 오류 |
-| look | 렌더링한 화면을 캡처해 직접 확인 | subscription ID 노출, 정상 값의 빨간색, 읽기 어려운 legend |
+이 절은 probe → build → verify → look 각 단계를 실제 명령과 출력으로 실행합니다.
+단계별 목적과 잡은 문제의 요약은 [주제 소개의 agent 절](../index.md#agent)에
+있습니다.
 
 agent에게 줄 prompt 전체는
 [agent-dashboard-prompt.md](../downloads/agent-dashboard-prompt.md)에 있습니다.
@@ -589,24 +579,41 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
     grep -c "/subscriptions/" movielog-export.json   # 0
     ```
 
-3. **대상 Grafana로 import합니다.** 포털에서는 Grafana의
+3. **대상 Grafana로 import합니다.** 포털에서는 대상 Grafana의
    **Dashboards > New > Import**에서 JSON 파일을 올리거나 붙여 넣고, folder와 UID를
-   확인한 뒤 **Import**를 누릅니다. CLI는 다음과 같습니다.
+   확인한 뒤 **Import**를 누릅니다. CLI는 다음과 같습니다. import는 JSON의 UID를
+   그대로 쓰므로, `--overwrite true`는 대상에 있는 같은 UID의 dashboard를 의도적으로
+   바꿀 때만 붙입니다.
 
     ```bash
-    az grafana dashboard import -g $RG -n <grafana-name> \
-      --definition movielog-export.json --overwrite true
+    az grafana dashboard import -g <target-resource-group> -n <target-grafana-name> \
+      --definition movielog-export.json
     ```
 
-4. **변수를 채웁니다.** import 직후에는 `appinsights`가 비어 있어 panel이 비어
-   보입니다. 변수 막대에 Application Insights resource ID를 넣거나, URL에
-   `?var-appinsights=<URL 인코딩한 resource ID>`를 붙입니다. `role`은
+    Export한 Grafana와 같은 곳에 import하면 원본이 변수 값이 빈 사본으로 바뀝니다.
+    같은 Grafana에서 시험하려면 실습에서처럼 UID와 제목을 먼저 바꿉니다.
+
+    ```bash
+    python3 - <<'EOF'
+    import json
+    d = json.load(open("movielog-export.json"))
+    d["uid"] = "movielog-import-test"
+    d["title"] += " (import test)"
+    json.dump(d, open("movielog-import-test.json", "w"), ensure_ascii=False)
+    EOF
+    az grafana dashboard import -g $RG -n <grafana-name> --definition movielog-import-test.json
+    ```
+
+4. **변수를 채우고 저장합니다.** import 직후에는 `appinsights`가 비어 있어 panel이
+   비어 보입니다. 변수 막대에 Application Insights resource ID를 넣고 dashboard를
+   저장해야 값이 유지됩니다. URL에 `?var-appinsights=<URL 인코딩한 resource ID>`를
+   붙이는 방법은 그 화면에서만 적용되므로 확인용으로 씁니다. `role`은
    `customMetrics`의 `cloud_RoleName`입니다.
 5. **결과를 확인합니다.** `agent/verify_panels.py`로 query를 실행하고
    `agent/capture.mjs`로 화면을 캡처합니다.
 
-실습에서는 저장소의 범용 JSON을 UID만 바꿔 `az grafana dashboard import`로
-가져왔습니다. 결과는 `status: success`, panel 17개(row 3개와 query panel 14개)였고,
+실습에서는 저장소의 범용 JSON을 위 방법으로 UID만 바꿔 같은 Grafana에
+`az grafana dashboard import`로 가져왔습니다. 결과는 `status: success`, panel 17개(row 3개와 query panel 14개)였고,
 `var-appinsights`로 변수를 채우자 원본과 같은 값이 나왔습니다. 확인 뒤 테스트
 dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 기준이며
 실습에서는 CLI로 실행했습니다.

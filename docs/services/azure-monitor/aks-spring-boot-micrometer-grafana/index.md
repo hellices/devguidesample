@@ -107,10 +107,15 @@ instrumentation.opentelemetry.io/inject-java: "movielog"
 ```
 
 재시작한 Pod에 agent가 주입되면 60초마다 `movielog_*` 지표가 도착합니다.
+단, Spring Boot 4 앱은 주입된 agent가 3.7.9 이상이어야 합니다
+([Spring Boot 4 호환성](#spring-boot-4)).
 Micrometer 이름의 점은 underscore로 바뀝니다(`movielog.movie.views` →
 `movielog_movie_views`). 요청, 의존성, JVM 지표도 같은 agent가 함께 수집합니다.
 
 ![customMetrics inventory. JVM 기본 지표와 함께 movielog_comments_posted부터 movielog_reviews_stored까지 12개 비즈니스 지표가 두 Pod에서 도착](images/probe-inventory-agent-3.7.10.png)
+
+위 캡처는 관리형 `3.7.7-aks` 대신 Application Insights Java 3.7.10 init image를
+주입한 상태에서 얻었습니다.
 
 ## agent 대시보드 작성: probe → build → verify → look { #agent }
 
@@ -134,18 +139,21 @@ look 단계의 첫 캡처입니다. query는 모두 성공했지만 화면에서
 
 ### MovieLog 대시보드 prompt 예시 { #prompt-example }
 
-MovieLog 대시보드는 agent가 아래 순서로 지표를 조회하고, 대시보드를 만들고,
-검증하는 방식으로 만들었습니다. 같은 요청을 다시 쓸 수 있게 정리한 prompt입니다.
-VS Code의 GitHub Copilot에 Managed Grafana MCP endpoint(`/api/azure-mcp`)를
-연결했거나 `az`로 로그인한 터미널에서 그대로 붙입니다.
+MovieLog 대시보드는 agent가 지표 조회 → 집계식 결정 → panel 제안 → query 실행 →
+화면 확인 순서로 작업해 만들었습니다. 아래는 그 작업 순서를 다른 환경에서 다시
+시킬 수 있게 줄여 정리한 prompt입니다. 단계별 query와 도구까지 적은 원본 지시문은
+[agent-dashboard-prompt.md](downloads/agent-dashboard-prompt.md)입니다.
+Managed Grafana MCP endpoint(`/api/azure-mcp`)를 연결한 VS Code의 GitHub Copilot이나,
+`az`로 로그인한 터미널에서 실행하는 agent(예: GitHub Copilot CLI)에 붙입니다.
+`<...>`는 자기 환경 값으로 바꿉니다.
 
 ```text
 MovieLog의 비즈니스 지표로 Grafana 대시보드를 만들어 줘.
 코드의 meter 이름을 그대로 믿지 말고, 실제로 들어온 데이터를 먼저 조회해서 결정해.
 
-- 데이터: Application Insights appi-movielog-lab의 customMetrics
+- 데이터: Application Insights <app-insights-name>의 customMetrics
   (cloud_RoleName = movielog, 지표 prefix = movielog_)
-- Grafana: Azure Managed Grafana amg-movielog-lab의 Azure Monitor data source
+- Grafana: Azure Managed Grafana <grafana-name>의 Azure Monitor data source
 
 1. 최근 30분 동안 들어온 movielog_* 지표의 이름, Pod 수, dimension과 값 개수,
    valueCount·value 모양을 조회해서 표로 보여 줘.
@@ -160,10 +168,9 @@ MovieLog의 비즈니스 지표로 Grafana 대시보드를 만들어 줘.
 connection string, subscription ID, resource ID는 출력·파일·캡처에 남기지 마.
 ```
 
-1단계에서 agent가 돌려준 결과가 위 [수집](#collect) 절의 inventory이고, 2단계의
-집계식 표가 Pod마다 같은 값을 보내는 gauge를 sum하지 않게 했습니다. 단계별 도구와
-판단 기준을 더 자세히 적은 지시문은
-[agent-dashboard-prompt.md](downloads/agent-dashboard-prompt.md)에 있습니다.
+1단계가 돌려주는 표의 실제 형태는 실습의 [probe 1~3](movielog-lab/index.md#probe-inventory)
+출력에 있습니다. MovieLog에서는 2단계의 집계식 표 덕분에 Pod마다 같은 값을 보내는
+gauge를 sum하지 않았습니다.
 
 ## 대시보드 반영 방식: 로컬 agent 직접 반영과 JSON import { #publish }
 
