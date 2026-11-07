@@ -5,11 +5,13 @@
 `document_type`은 `case`, `guide`, `lab`, `research` 중 문서의 수명주기에
 맞게 선택하지만 물리 폴더에는 사용하지 않습니다.
 
-문서 제목과 절 제목은 항목 이름이 아니라 **본문의 핵심 내용**을 요약합니다.
-[제목 작성 기준](docs/contributing/index.md#content-first-headings)에 따라
-제목만 읽어도 요지와 논리 흐름이 드러나는지 검토합니다.
+문서 제목과 절 제목은 문장이 아니라 **핵심 용어로 구성한 명사구**로 씁니다.
+서술 어미로 끝나는 문장 대신 대상과 측면을 드러내는 용어를 쓰고, 결론은 절의
+첫 문장에서 밝힙니다.
+[핵심 용어 제목 기준](docs/contributing/index.md#content-first-headings)에 따라
+제목만 읽어도 각 절의 대상과 측면이 드러나는지 검토합니다.
 
-topic entry는 첫 절에서 **주제의 핵심 메시지와 실제 실행 결과**를 먼저
+topic entry는 첫 절 본문에서 **주제의 핵심 메시지와 실제 실행 결과**를 먼저
 보여 주고, 실습 절차는 자식 문서로 링크합니다. 버전 호환 같은 부수 제약은
 하단에 요약해 전담 문서로 연결합니다.
 [topic entry 구성 기준](docs/contributing/index.md#topic-entry-message)을 따릅니다.

@@ -1,5 +1,5 @@
 ---
-title: "MovieLog 실습: AKS 자동 계측으로 Micrometer 지표를 수집하고 agent가 검증한 Grafana 대시보드까지 재현하기"
+title: "MovieLog 실습: AKS 자동 계측 지표 수집과 agent 검증 Grafana 대시보드"
 description: MovieLog(Spring Boot 4.1) 앱을 AKS에 배포해 Micrometer 지표를 Application Insights customMetrics로 수집하고, agent가 probe → build → verify → look 순서로 Azure Managed Grafana 대시보드를 만드는 과정을 명령, 실측값, 캡처와 함께 재현합니다. 관리형 agent 3.7.7-aks에서 3.7.10으로 바꾸는 절차와 비용, 정리 방법을 포함합니다.
 document_type: lab
 services: [azure-monitor, azure-kubernetes-service, azure-managed-grafana]
@@ -7,7 +7,7 @@ technologies: [java, spring-boot, micrometer, kubernetes, grafana]
 tags: [build, operate]
 status: verified
 verification_status: verified
-sources_checked_at: 2026-11-06
+sources_checked_at: 2026-11-07
 official_sources:
   - title: Autoinstrument AKS apps with Azure Monitor Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless
@@ -29,6 +29,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/managed-grafana/grafana-mcp-server
   - title: Dashboards with Grafana in Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/app/grafana-dashboards
+  - title: Create a dashboard in Azure Managed Grafana
+    url: https://learn.microsoft.com/azure/managed-grafana/how-to-create-dashboard
+  - title: Migrate to Azure Managed Grafana
+    url: https://learn.microsoft.com/azure/managed-grafana/how-to-migrate
   - title: Application Insights Java 3.7.10 Azure Monitor registry source
     url: https://github.com/microsoft/ApplicationInsights-Java/blob/3.7.10/agent/instrumentation/micrometer-1.0/src/main/java/io/opentelemetry/javaagent/instrumentation/micrometer/ai/AzureMonitorMeterRegistry.java
   - title: Application Insights Java 3.7.10 Azure Monitor naming convention source
@@ -37,7 +41,7 @@ official_sources:
     url: https://github.com/microsoft/ApplicationInsights-Java/pull/4672
   - title: Application Insights Java 3.7.10
     url: https://github.com/microsoft/ApplicationInsights-Java/releases/tag/3.7.10
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 review_cycle_days: 30
 estimated_time: 90m
 cost: paid
@@ -47,9 +51,9 @@ related_guides:
   - ../../aks-java-micrometer-custom-metrics/index.md
 ---
 
-# MovieLog 실습: AKS 자동 계측으로 Micrometer 지표를 수집하고 agent가 검증한 Grafana 대시보드까지 재현하기
+# MovieLog 실습: AKS 자동 계측 지표 수집과 agent 검증 Grafana 대시보드
 
-## 이 실습은 수집 경로 구성부터 agent 검증 대시보드까지 MovieLog로 재현합니다 { #summary }
+## 실습 범위: 수집 경로부터 agent 검증 대시보드까지 { #summary }
 
 [주제 소개](../index.md)에서 설명한 흐름을 영화 리뷰 앱 MovieLog로 직접
 재현합니다. 아래 명령과 수치, 캡처는 2026-11-06 Korea Central에서 실제로
@@ -80,7 +84,9 @@ related_guides:
    verify에서 KQL 예약어 오류를, look에서 subscription ID 노출과 잘못된 경고색을
    잡았습니다.
 
-## 실습 자원은 한 resource group에 만들고 끝나면 통째로 지웁니다 { #resources }
+## 실습 자원: 단일 resource group 구성 { #resources }
+
+실습 자원은 한 resource group에 만들고 끝나면 통째로 지웁니다.
 
 | 자원 | 실습 구성 | 비고 |
 |---|---|---|
@@ -121,7 +127,7 @@ az role assignment create --assignee-object-id "$(az ad signed-in-user show --qu
   --scope "$(az grafana show -g $RG -n <grafana-name> --query id -o tsv)"
 ```
 
-## MovieLog는 도메인 이벤트를 movielog.* meter로 기록하고 트랜잭션 이벤트는 커밋 뒤에 셉니다 { #meters }
+## MovieLog meter: 도메인 이벤트와 집계 시점 { #meters }
 
 MovieLog의 서비스 코드는 Micrometer를 모릅니다. 리뷰 작성 같은 도메인 이벤트를
 발행하면 `BusinessMetrics`가 meter를 올립니다. 트랜잭션 안에서 발행된 이벤트는 커밋
@@ -163,7 +169,9 @@ TMDB API key 없이 동작하도록 `aks` profile은 영화 12편을 seed로 넣
 seed 영화는 local catalog에서 제공되므로 `catalog.lookups`의 `outcome`은
 `cache_hit`만 나타납니다.
 
-## 앱은 Instrumentation CR과 Pod template annotation으로 배포합니다 { #deploy }
+## 배포: Instrumentation CR과 Pod template annotation { #deploy }
+
+앱은 `Instrumentation` CR과 Pod template annotation으로 배포합니다.
 
 ```bash
 cd docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app  # 저장소 루트 기준
@@ -201,7 +209,9 @@ JVM flag는 Pod의 `JAVA_TOOL_OPTIONS`에 선언합니다. 실습에서 webhook�
 JAVA_TOOL_OPTIONS = -javaagent:/azure-monitor-auto-instrumentation-java/applicationinsights-agent-codeless.jar -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError
 ```
 
-## 관리형 3.7.7-aks에서는 movielog_*가 0건이었고 3.7.10으로 바꾸자 도착했습니다 { #version-gate }
+## agent 버전 게이트: 3.7.7-aks 지표 누락과 3.7.10 전환 { #version-gate }
+
+관리형 `3.7.7-aks`에서는 `movielog_*`가 0건이었고, 3.7.10 init image로 바꾸자 도착했습니다.
 
 배포 직후 주입된 agent를 확인했습니다.
 
@@ -256,7 +266,9 @@ kubectl logs -n movielog -l app=movielog -c movielog --tail=-1 --prefix | grep "
 [pod/movielog-54bb48b5b7-k8jjm/movielog] ... Application Insights Java Agent 3.7.10 started successfully
 ```
 
-### 이미 주입된 Deployment를 한 번에 바꾸면 webhook이 agent 설정을 지웁니다 { #webhook-revert }
+### webhook 주입 해제와 2단계 전환 { #webhook-revert }
+
+이미 주입된 Deployment를 한 번에 바꾸면 webhook이 agent 설정을 지웁니다.
 
 실습 클러스터의 `app-monitoring-webhook`은 Pod가 아니라 **Deployment**의
 CREATE·UPDATE에 동작했습니다. 이미 주입된 Deployment에 annotation `"false"`와
@@ -283,7 +295,9 @@ envsubst < k8s/20-movielog.yaml | kubectl replace -f -
 kubectl scale deploy/movielog -n movielog --replicas=2
 ```
 
-## agent에게는 probe → build → verify → look 순서로 대시보드를 시킵니다 { #agent-method }
+## agent 대시보드 방법론: probe → build → verify → look { #agent-method }
+
+agent에게는 probe → build → verify → look 순서로 대시보드를 시킵니다.
 
 "Grafana 대시보드 만들어 줘"라고만 시키면 agent는 코드의 meter 이름과 일반적인
 KQL 패턴으로 panel을 추측합니다. 이 실습에서 추측대로 그렸다면 다음 문제가
@@ -317,7 +331,9 @@ Grafana macro를 거부하므로 query 안에 `ago(...)`를 직접 씁니다.
 }
 ```
 
-### probe 1: inventory로 지표가 실제로 오는지부터 확인합니다 { #probe-inventory }
+### probe 1: inventory와 지표 도착 여부 { #probe-inventory }
+
+inventory로 지표가 실제로 오는지부터 확인합니다.
 
 ```kusto
 customMetrics
@@ -344,7 +360,9 @@ inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니
 `movielog.movie.searches{outcome=disabled}`로 기록됐습니다. AKS와 `customMetrics`
 도착은 실습 클러스터를 멈춘 뒤라 다시 확인하지 않았습니다.
 
-### probe 2: dimension 값 개수로 쓸 수 있는 축을 고릅니다 { #probe-dimensions }
+### probe 2: dimension 값 개수와 사용 가능한 축 { #probe-dimensions }
+
+dimension 값 개수로 panel에 쓸 수 있는 축을 고릅니다.
 
 ```kusto
 customMetrics
@@ -368,7 +386,9 @@ movielog_*                      application  1               ["spring-sample"]
 값 개수가 계속 늘어나는 dimension이 보이면 대시보드가 아니라 코드를 고칠
 대상입니다.
 
-### probe 3: 값 모양을 보고 metric마다 집계식을 정합니다 { #probe-value-shape }
+### probe 3: 값 모양과 metric별 집계식 { #probe-value-shape }
+
+값 모양을 보고 metric마다 집계식을 정합니다.
 
 ```kusto
 customMetrics
@@ -409,7 +429,9 @@ DistributionSummary·Timer는 모든 간격이 1일 수도 있으므로 `maxValu
 7456.5 / 2124 ≈ 3.5개입니다. 행 단위 `avg(value)`를 쓰면 기록 수가 다른 간격이 같은
 가중치를 받아 왜곡됩니다.
 
-### build: panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다 { #build }
+### build: panel별 질문·집계식과 dashboard JSON { #build }
+
+panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다.
 
 `agent/build_dashboard.py`는 probe 3의 표를 그대로 코드로 옮겼습니다.
 
@@ -436,7 +458,9 @@ customMetrics
 | order by timestamp asc
 ```
 
-### verify: 모든 panel query를 Grafana에서 실행해 0행과 오류를 찾습니다 { #verify }
+### verify: Grafana 전체 panel query 실행 { #verify }
+
+모든 panel query를 Grafana에서 실행해 0행과 오류를 찾습니다.
 
 `verify_panels.py`는 dashboard의 모든 query를 Managed Grafana의
 `/api/ds/query`로 실행합니다. Grafana data plane API는 audience
@@ -467,7 +491,9 @@ OK   새 리뷰     frames=1 rows=1
 실행하자 13개 panel은 지난 데이터로 통과하고 최근 10분만 보는 "metric 수신 상태"
 panel이 FAIL로 나왔습니다. 수집이 멈춘 상태를 잡아낸 결과입니다.
 
-### look: 렌더링한 화면을 캡처해 query로는 안 보이는 문제를 찾습니다 { #look }
+### look: 렌더링 화면 캡처와 시각 점검 { #look }
+
+렌더링한 화면을 캡처해 query로는 안 보이는 문제를 찾습니다.
 
 `capture.mjs`는 같은 Entra token을 Grafana origin 요청에만 bearer header로 붙여
 headless Chromium에서 dashboard를 캡처합니다. redirect는 따라가지 않고 브라우저에
@@ -498,7 +524,98 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 - `댓글 · web`이 0으로 평평합니다. 0으로 미리 등록한 counter이고 합성 사용자는
   API로만 댓글을 씁니다.
 
-## 실습 결과는 수치로 판정합니다 { #result }
+## 대시보드 반영 실습: 로컬 agent 직접 반영과 JSON import { #publish }
+
+같은 dashboard를 로컬 agent가 직접 반영하는 방법과, JSON 파일로 추출해 import하는
+방법을 모두 실행했습니다(2026-11-07). 두 방식의 선택 기준은
+[주제 소개의 반영 방식](../index.md#publish)에 있습니다. 아래 명령은
+`samples/movielog-app` 폴더에서 실행합니다.
+
+### 로컬 agent 직접 반영 { #publish-direct }
+
+CLI로 반영할 때는 Application Insights resource ID를 채운 JSON을 만들어 바로
+올립니다. 이 JSON은 resource ID 변수를 숨기고 값을 채우므로 저장소에 커밋하지
+않습니다.
+
+```bash
+AIID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query id -o tsv)"
+python3 agent/build_dashboard.py --appinsights-id "$AIID" > /tmp/movielog-live.json
+az grafana dashboard create -g $RG -n <grafana-name> \
+  --definition @/tmp/movielog-live.json --overwrite true
+```
+
+Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON을
+만들거나 바꾸고(`dashboard`), 일부만 고칠 때는 JSONPath patch(`dashboardUid` +
+`operations`)를 보냅니다. 실습에서는 probe용 dashboard의 제목을 patch하고
+`amgmcp_dashboard_inspect`(`jsonPath: "$.title"`)로 바뀐 값을 확인한 뒤 되돌렸습니다.
+
+```json
+{
+  "dashboardUid": "movielog-agent-probe",
+  "operations": [
+    { "op": "replace", "path": "$.title", "value": "agent probe - customMetrics inventory (mcp update test)" }
+  ]
+}
+```
+
+### JSON 추출과 Grafana import { #publish-import }
+
+1. **가져갈 JSON을 준비합니다.** 저장소의 `grafana/movielog-dashboard.json`은
+   변수 값이 빈 범용 JSON이며 `python3 agent/build_dashboard.py`로 다시 만들 수
+   있습니다. 이미 검증한 dashboard를 가져가려면 Grafana의 공유 메뉴에서
+   **Export > Save to file**을 쓰거나 CLI로 내보냅니다.
+
+    ```bash
+    az grafana dashboard show -g $RG -n <grafana-name> \
+      --dashboard movielog-business-metrics --query dashboard -o json > movielog-export.json
+    ```
+
+2. **Export한 JSON에서 환경 값을 지웁니다.** 실습 Export에서는 `appinsights`
+   변수에 이 환경의 resource ID가 세 군데 들어 있었습니다. 아래 명령으로 지운 뒤
+   0건이 되는지 확인하고 커밋합니다.
+
+    ```bash
+    python3 - <<'EOF'
+    import json
+    d = json.load(open("movielog-export.json"))
+    for v in d["templating"]["list"]:
+        if v["name"] == "appinsights":
+            v["query"] = ""
+            v["current"] = {"text": "", "value": ""}
+            v["hide"] = 0
+    d.pop("id", None)
+    json.dump(d, open("movielog-export.json", "w"), ensure_ascii=False, indent=2)
+    EOF
+    grep -c "/subscriptions/" movielog-export.json   # 0
+    ```
+
+3. **대상 Grafana로 import합니다.** 포털에서는 Grafana의
+   **Dashboards > New > Import**에서 JSON 파일을 올리거나 붙여 넣고, folder와 UID를
+   확인한 뒤 **Import**를 누릅니다. CLI는 다음과 같습니다.
+
+    ```bash
+    az grafana dashboard import -g $RG -n <grafana-name> \
+      --definition movielog-export.json --overwrite true
+    ```
+
+4. **변수를 채웁니다.** import 직후에는 `appinsights`가 비어 있어 panel이 비어
+   보입니다. 변수 막대에 Application Insights resource ID를 넣거나, URL에
+   `?var-appinsights=<URL 인코딩한 resource ID>`를 붙입니다. `role`은
+   `customMetrics`의 `cloud_RoleName`입니다.
+5. **결과를 확인합니다.** `agent/verify_panels.py`로 query를 실행하고
+   `agent/capture.mjs`로 화면을 캡처합니다.
+
+실습에서는 저장소의 범용 JSON을 UID만 바꿔 `az grafana dashboard import`로
+가져왔습니다. 결과는 `status: success`, panel 17개(row 3개와 query panel 14개)였고,
+`var-appinsights`로 변수를 채우자 원본과 같은 값이 나왔습니다. 확인 뒤 테스트
+dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 기준이며
+실습에서는 CLI로 실행했습니다.
+
+![JSON import 후 변수를 채운 대시보드. 영화 조회 10.1K, 새 리뷰 1.71K, 신규 회원 2.53K, 평균 별점 3.51, fresh 비율 66.2%와 채널별 처리량 panel](../images/json-import-result.png)
+
+## 실습 결과: 판정 기준과 실측값 { #result }
+
+실습 결과는 아래 기준과 실측값으로 판정합니다.
 
 ![MovieLog 비즈니스 지표 대시보드. 영화 조회, 새 리뷰, 신규 회원, 평균 별점, fresh 비율 stat과 채널별 처리량, 누적 현황, Pod별 분포, metric 수신 상태 panel](../images/movielog-dashboard.png)
 
@@ -511,7 +628,9 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 | dashboard query | 14개 모두 데이터 반환 | `verify_panels.py` 14/14 OK |
 | 화면 점검 | 식별자 없음, 경고색 없음 | 수정 후 캡처에서 확인 |
 
-## 비용은 meter × tag 조합 × Pod 수로 늘어납니다 { #cost }
+## 수집 비용: meter × tag 조합 × Pod 수 { #cost }
+
+수집 비용은 meter × tag 조합 × Pod 수에 비례해 늘어납니다.
 
 workspace의 `AppMetrics` table에서 10분(09:50~10:00 UTC) 수집량을 측정했습니다.
 
@@ -544,7 +663,9 @@ meter 수, tag 조합 수가 늘면 비례해 늘어납니다.
 | Grafana API 401 | token audience나 Grafana 역할 누락 | `--resource https://dashboard.azure.com`, Grafana 역할 확인 |
 | 누적 수치가 Pod 수배 | DB 기준 gauge를 Pod 간 sum | Pod 간 `max(value)` |
 
-## 정리하면 resource group 삭제로 모든 실습 자원이 사라집니다 { #cleanup }
+## 정리: resource group 삭제 { #cleanup }
+
+resource group을 삭제하면 모든 실습 자원이 사라집니다.
 
 ```bash
 az group delete -n $RG --yes --no-wait
@@ -559,7 +680,8 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
   만들고 이 문서의 절차를 실행했습니다. 캡처는 모두 이 실습 환경에서 얻었습니다.
 - Microsoft Learn에서 AKS 자동 계측, Java Micrometer 자동 수집과 이름 변환,
   export 간격, custom metric 저장과 비용, Managed Grafana data source 권한,
-  data plane API 인증, MCP endpoint를 원문 전체로 대조했습니다.
+  data plane API 인증, MCP endpoint, dashboard import·export를 원문 전체로
+  대조했습니다.
 - meter 종류별 column 매핑은 Application Insights Java 3.7.10 source로
   확인했습니다.
 - Deployment webhook의 주입 해제 동작, `kubectl apply` 충돌, role assignment
@@ -567,6 +689,9 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
   `kubectl replace` 복귀는 관리형 → custom → 관리형 → custom 순서로 다시 실행해
   확인했습니다.
 - MovieLog test suite는 JDK 25에서 통과했습니다.
+- 대시보드 반영은 2026-11-07 실습 Grafana에서 `az grafana dashboard create`,
+  MCP `amgmcp_dashboard_update` patch와 원복, `az grafana dashboard show` Export,
+  환경 값 제거, `az grafana dashboard import`를 실행해 확인했습니다.
 
 ## 관련 가이드
 
@@ -584,6 +709,8 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
 - [Authenticate to Azure Managed Grafana data plane APIs with Microsoft Entra ID](https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api)
 - [Configure an Azure Managed Grafana remote MCP server](https://learn.microsoft.com/azure/managed-grafana/grafana-mcp-server)
 - [Dashboards with Grafana in Application Insights](https://learn.microsoft.com/azure/azure-monitor/app/grafana-dashboards)
+- [Create a dashboard in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-create-dashboard)
+- [Migrate to Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-migrate)
 - [Application Insights Java 3.7.10 AzureMonitorMeterRegistry source](https://github.com/microsoft/ApplicationInsights-Java/blob/3.7.10/agent/instrumentation/micrometer-1.0/src/main/java/io/opentelemetry/javaagent/instrumentation/micrometer/ai/AzureMonitorMeterRegistry.java)
 - [Application Insights Java 3.7.10 AzureMonitorNamingConvention source](https://github.com/microsoft/ApplicationInsights-Java/blob/3.7.10/agent/instrumentation/micrometer-1.0/src/main/java/io/opentelemetry/javaagent/instrumentation/micrometer/ai/AzureMonitorNamingConvention.java)
 - [Grafana Azure Monitor query editor](https://grafana.com/docs/grafana/latest/datasources/azure-monitor/query-editor/)

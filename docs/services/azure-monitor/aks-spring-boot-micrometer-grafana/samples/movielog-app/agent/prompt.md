@@ -44,6 +44,8 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
      - `$__interval` → `1m`
      - `$role` 등 dashboard 변수 → 실제 값 (예: `"movielog"`)
 7. push: az grafana dashboard create --overwrite true 또는 amgmcp_dashboard_update로 올린다.
+   Grafana에 쓰기 권한이 없으면 JSON 파일만 만들고, 환경 값(resource ID)이 빈 상태인지
+   확인한 뒤 import 방법(Dashboards > Import 또는 az grafana dashboard import)을 안내한다.
 8. look: capture.mjs로 대시보드를 캡처해서 직접 보고 아래를 점검한다.
    - 식별자(subscription ID 등)가 화면에 보이는가
    - 정상 값이 경고색(빨강)으로 보이는가
