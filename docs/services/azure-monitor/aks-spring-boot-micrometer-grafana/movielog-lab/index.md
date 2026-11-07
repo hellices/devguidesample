@@ -56,8 +56,9 @@ related_guides:
 ## 실습 범위: 수집 경로부터 agent 검증 대시보드까지 { #summary }
 
 [주제 소개](../index.md)에서 설명한 흐름을 영화 리뷰 앱 MovieLog로 직접
-재현합니다. 아래 명령과 수치, 캡처는 2026-11-06 Korea Central에서 실제로
-구성해 얻은 결과입니다.
+재현합니다. 아래 명령과 수치, 캡처는 Korea Central에서 실제로 구성해 얻은
+결과입니다. 수집과 대시보드 작성은 2026-11-06에, [대시보드 반영](#publish)은
+2026-11-07에 실행했습니다.
 
 ```text
 [MovieLog, Spring Boot 4.1.2 / Java 25]
@@ -591,7 +592,8 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
     ```
 
     Export한 Grafana와 같은 곳에 import하면 원본이 변수 값이 빈 사본으로 바뀝니다.
-    같은 Grafana에서 시험하려면 실습에서처럼 UID와 제목을 먼저 바꿉니다.
+    같은 Grafana에서 시험하려면 UID와 제목을 먼저 바꿉니다. 입력은 Export해
+    정리한 파일이나 저장소의 범용 JSON 중 어느 것이든 됩니다.
 
     ```bash
     python3 - <<'EOF'
@@ -612,8 +614,11 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
 5. **결과를 확인합니다.** `agent/verify_panels.py`로 query를 실행하고
    `agent/capture.mjs`로 화면을 캡처합니다.
 
-실습에서는 저장소의 범용 JSON을 위 방법으로 UID만 바꿔 같은 Grafana에
-`az grafana dashboard import`로 가져왔습니다. 결과는 `status: success`, panel 17개(row 3개와 query panel 14개)였고,
+실습에서는 두 작업을 따로 실행했습니다. 먼저 live dashboard를 Export하고 2단계
+명령으로 resource ID 3건이 0건이 되는 것을 확인했습니다. import는 저장소의 범용
+JSON(`grafana/movielog-dashboard.json`)을 입력으로 위 명령처럼 UID와 제목을 바꿔
+`--overwrite` 없이 같은 Grafana에 가져왔습니다. 결과는 `status: success`, panel
+17개(row 3개와 query panel 14개)였고,
 `var-appinsights`로 변수를 채우자 원본과 같은 값이 나왔습니다. 확인 뒤 테스트
 dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 기준이며
 실습에서는 CLI로 실행했습니다.
@@ -684,7 +689,8 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
 ## 검증 범위 { #verification }
 
 - 2026-11-06 Korea Central에서 AKS, Application Insights, ACR, Managed Grafana를
-  만들고 이 문서의 절차를 실행했습니다. 캡처는 모두 이 실습 환경에서 얻었습니다.
+  만들고 수집과 대시보드 작성 절차를 실행했고, 2026-11-07에 같은 환경에서
+  대시보드 반영 절차를 실행했습니다. 캡처는 모두 이 실습 환경에서 얻었습니다.
 - Microsoft Learn에서 AKS 자동 계측, Java Micrometer 자동 수집과 이름 변환,
   export 간격, custom metric 저장과 비용, Managed Grafana data source 권한,
   data plane API 인증, MCP endpoint, dashboard import·export를 원문 전체로
@@ -697,8 +703,9 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
   확인했습니다.
 - MovieLog test suite는 JDK 25에서 통과했습니다.
 - 대시보드 반영은 2026-11-07 실습 Grafana에서 `az grafana dashboard create`,
-  MCP `amgmcp_dashboard_update` patch와 원복, `az grafana dashboard show` Export,
-  환경 값 제거, `az grafana dashboard import`를 실행해 확인했습니다.
+  MCP `amgmcp_dashboard_update` patch와 원복, `az grafana dashboard show` Export와
+  환경 값 제거(resource ID 3건 → 0건), 저장소 범용 JSON의 UID·제목을 바꾼
+  `az grafana dashboard import`를 실행해 확인했습니다.
 
 ## 관련 가이드
 
