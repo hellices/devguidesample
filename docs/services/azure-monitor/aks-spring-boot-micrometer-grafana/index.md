@@ -58,7 +58,7 @@ meter 기록, 자동 수집, agent 검증의 세 단계만 연결하면 비즈�
 아래는 영화 리뷰 앱 MovieLog를 AKS에 올려 이 흐름 그대로 만든 대시보드입니다.
 2026-11-07 실제 환경에서 합성 사용자 트래픽으로 캡처했습니다.
 
-![MovieLog 비즈니스 지표 대시보드. 영화 조회·새 리뷰·신규 회원 stat과 sparkline, 평균 별점 gauge, fresh/rotten donut, 채널별 누적 area와 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, Pod별 수신 status history panel](images/movielog-dashboard.png)
+![MovieLog 비즈니스 지표 대시보드. 영화 조회·새 리뷰·신규 회원 stat과 sparkline, 평균 별점 gauge, fresh/rotten donut, 채널별 누적 area와 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, Pod별 누락 metric status history panel](images/movielog-dashboard.png)
 
 ## 앱 코드: 도메인 이벤트 기반 Micrometer meter { #record }
 
@@ -154,7 +154,7 @@ MovieLog의 첫 대시보드도 query panel 14개 중 9개가 시계열이었습
 | 구성 비율은 | donut | 리뷰 판정 비율(fresh / rotten) |
 | 무엇이 많은가, 쏠림은 | bar gauge | 활동별·채널별 합계, Pod별 영화 조회 분포, 외부 조회 결과 |
 | 시간에 따라 어떻게 변하는가 | time series(누적 area, bar, line) | 분당 영화 조회, 분당 새 리뷰, 평균 별점 추이 |
-| 모든 Pod가 계속 보내는가 | status history, table | Pod별 수신 metric 종류 수, metric 수신 상태 |
+| Pod마다 빠진 지표가 없는가 | status history(누락 수, 0이 정상), table | Pod별 누락 metric 수, metric 수신 상태 |
 
 ### MovieLog 대시보드 prompt 예시 { #prompt-example }
 

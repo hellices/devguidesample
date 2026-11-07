@@ -27,6 +27,8 @@ spec:
                 secretKeyRef:
                   name: appinsights
                   key: connection-string
+            # Spelled LOGANALYTICS, as read by the Azure Monitor exporter (MetricDataMapper);
+            # METRICS_TO_LOG_ANALYTICS is not recognized.
             - name: APPLICATIONINSIGHTS_METRICS_TO_LOGANALYTICS_ENABLED
               value: "true"
             - name: POD_NAME

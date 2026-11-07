@@ -10,7 +10,7 @@ The visualization follows the question each panel answers, not a default line ch
 - "is this value healthy"             -> gauge with thresholds that carry domain meaning
 - "what share does each part have"    -> pie (donut) or bar gauge
 - "how does it move over time"        -> time series (stacked area, bars or line)
-- "is every Pod still reporting"      -> status history
+- "is any Pod missing a metric"       -> status history
 
 Usage:
   python build_dashboard.py > ../grafana/movielog-dashboard.json
@@ -224,28 +224,38 @@ def build(appinsights_id):
               "| order by total desc",
             12, 12, 5, "table", defaults={"color": {"mode": "continuous-BlPu"}, "min": 0}, options=bar_gauge())
     lay.newline(5)
-    lay.add("status-history", "Pod별 수신 metric 종류 수",
-            "bin마다 Pod가 보낸 movielog_* metric 종류 수입니다. 칸이 비거나 빨개지면 그 시간에 agent나 allowlist가 지표를 보내지 않았습니다.",
-            "customMetrics\n"
+    lay.add("status-history", "Pod별 누락 metric 수",
+            "bin마다 Pod가 보내지 않은 Counter·Gauge 종류 수입니다. 0이면 초록, 1 이상이면 빨강입니다. "
+            "칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다(교체된 Pod도 종료 뒤 빈 칸). "
+            "DistributionSummary·Timer는 기록이 없는 bin에 행을 보내지 않으므로 기대 목록에서 뺍니다.",
+            "let received = customMetrics\n"
             "| where $__timeFilter(timestamp)\n"
             '| where cloud_RoleName == "$role"\n'
-            '| where name startswith "movielog_"\n'
-            + per_bin("metrics = dcount(name)", "cloud_RoleInstance"),
+            '| where name startswith "movielog_";\n'
+            "// Counters and gauges export every interval; a distribution with no records sends no row.\n"
+            "let steady = received | summarize maxCount = max(valueCount) by name | where maxCount == 1 | project name;\n"
+            "let expected = toscalar(steady | count);\n"
+            "received\n"
+            "| where name in (steady)\n"
+            + COMPLETE + f"| summarize got = dcount(name) by bin(timestamp, {STEP}), cloud_RoleInstance\n"
+            "| project timestamp, cloud_RoleInstance, absent = expected - got\n"
+            "| order by timestamp asc",
             0, 24, 6, "time_series",
-            defaults={"color": {"mode": "thresholds"},
-                      "thresholds": thresholds([{"color": "red", "value": None}, {"color": "green", "value": 1}])},
+            defaults={"color": {"mode": "thresholds"}, "min": 0,
+                      "thresholds": thresholds([{"color": "green", "value": None}, {"color": "red", "value": 1}])},
             options={"showValue": "auto", "rowHeight": 0.8, "colWidth": 0.9, "legend": {**LEGEND, "showLegend": False},
                      "tooltip": {"mode": "single"}},
             label="cloud_RoleInstance")
     lay.newline(6)
-    lay.add("table", "metric 수신 상태 (최근 10분)",
-            "Pod별로 metric이 1분에 한 행씩 오는지와 마지막 수신 시각을 봅니다. 행이 멈추면 agent나 allowlist를 확인합니다.",
+    lay.add("table", "metric 수신 상태 (구간 끝 10분)",
+            "선택 구간 끝 10분 동안 Pod별로 metric이 1분에 한 행씩 오는지와 구간 끝 기준 마지막 수신 후 경과 초를 봅니다. "
+            "구간 끝이 지금이면 현재 수신 상태입니다. 행이 멈추면 agent나 allowlist를 확인합니다.",
             "customMetrics\n"
-            "| where timestamp > ago(10m)\n"
+            "| where timestamp > $__timeTo() - 10m and timestamp <= $__timeTo()\n"
             '| where cloud_RoleName == "$role"\n'
             '| where name startswith "movielog_"\n'
             "| summarize rows = count(), lastSeen = max(timestamp) by name, cloud_RoleInstance\n"
-            "| extend secondsAgo = datetime_diff('second', now(), lastSeen)\n"
+            "| extend secondsAgo = datetime_diff('second', $__timeTo(), lastSeen)\n"
             "| project name, cloud_RoleInstance, rows, secondsAgo\n"
             "| order by name asc, cloud_RoleInstance asc",
             0, 24, 9, "table", options={"showHeader": True, "cellHeight": "sm"})

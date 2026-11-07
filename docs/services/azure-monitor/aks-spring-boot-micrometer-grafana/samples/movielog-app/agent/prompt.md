@@ -42,13 +42,15 @@ MCP의 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 Grafana 
    - 구성 비율은 → pie(donut) 또는 bar gauge
    - 무엇이 가장 많은가, Pod 간 쏠림은 → bar gauge
    - 시간에 따라 어떻게 변하는가 → time series(누적 area, bar, line)
-   - 모든 Pod가 계속 보내는가 → status history 또는 table
+   - Pod마다 빠진 지표가 없는가 → status history(누락 수, 0이 정상) 또는 table.
+     기록이 없는 간격에 행이 없는 DistributionSummary·Timer는 기대 목록에서 뺀다
 5. build: build_dashboard.py를 고쳐 JSON을 만든다. bin은 max_of($__interval, 1m) 이상으로 한다.
 6. verify: 모든 panel query를 실제로 실행한다. FAIL이나 0행이 하나라도 있으면 원인을 고치고 다시 실행한다.
    - CLI: verify_panels.py
    - MCP: amgmcp_dashboard_inspect(includeQueries)로 받은 KQL을 아래처럼 바꿔 amgmcp_query_resource_log로 실행
      - `$__timeFilter(<column>)` → `<column> > ago(1h)` (값이 아니라 조건 전체로 바꿈)
      - `$__interval` → `1m`
+     - `$__timeTo()` → `now()`
      - `$role` 등 dashboard 변수 → 실제 값 (예: `"movielog"`)
 7. push: az grafana dashboard create --overwrite true 또는 amgmcp_dashboard_update로 올린다.
    Grafana에 쓰기 권한이 없으면 JSON 파일만 만들고, 환경 값(resource ID)이 빈 상태인지

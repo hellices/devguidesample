@@ -22,14 +22,16 @@ public class MemberService {
 		if (members.existsByUsername(username)) {
 			throw new DuplicateUsernameException(username);
 		}
+		Long id;
 		try {
-			Long id = members.saveAndFlush(new Member(username, passwordEncoder.encode(rawPassword), nickname)).getId();
-			events.publishEvent(new MemberRegistered(id));
-			return id;
+			id = members.saveAndFlush(new Member(username, passwordEncoder.encode(rawPassword), nickname)).getId();
 		}
 		catch (DataIntegrityViolationException ex) {
 			throw new DuplicateUsernameException(username);
 		}
+		// Outside the try: a listener's own constraint failure must not be reported as a duplicate username.
+		events.publishEvent(new MemberRegistered(id));
+		return id;
 	}
 
 }

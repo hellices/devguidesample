@@ -9,7 +9,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.time.Duration;
-import java.util.Objects;
 
 import com.example.springsample.movie.MovieApiProperties;
 import com.example.springsample.movie.MovieApiUnavailableException;
@@ -17,9 +16,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 class TmdbClientTests {
+
+	private static final String READ_ACCESS_TOKEN = "header.payload.signature";
 
 	private static final String BASE = "https://tmdb.test/3";
 
@@ -61,11 +64,17 @@ class TmdbClientTests {
 
 	@Test
 	void sendsReadAccessTokenAsBearerHeader() {
-		TmdbClient client = client("header.payload.signature");
+		TmdbClient client = client(READ_ACCESS_TOKEN);
 		server.expect(request -> assertThat(request.getURI().getPath()).isEqualTo("/3/movie/27205"))
 			.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer header.payload.signature"))
-			// The read access token goes only in the header, never in the URL.
-			.andExpect(request -> assertThat(Objects.toString(request.getURI().getRawQuery(), "")).doesNotContain("api_key"))
+			// The read access token goes only in the header, never in the URL under any parameter name.
+			.andExpect(request -> {
+				MultiValueMap<String, String> params = UriComponentsBuilder.fromUri(request.getURI()).build().getQueryParams();
+				assertThat(params).doesNotContainKeys("api_key", "access_token");
+				assertThat(params.values()).allSatisfy(values -> assertThat(values)
+					.noneSatisfy(value -> assertThat(value).contains(READ_ACCESS_TOKEN)));
+				assertThat(request.getURI().toString()).doesNotContain(READ_ACCESS_TOKEN);
+			})
 			.andRespond(withSuccess("""
 					{"id":27205,"title":"인셉션","original_title":"Inception","release_date":"2010-07-15",
 					 "poster_path":"/p.jpg","overview":"꿈","runtime":148,"imdb_id":"tt1375666",

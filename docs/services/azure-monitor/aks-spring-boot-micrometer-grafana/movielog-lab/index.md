@@ -319,8 +319,8 @@ agent에게 줄 prompt 전체는
 | CLI toolkit (`samples/movielog-app/agent`) | `kql.sh` + `01~03*.kql` | `az grafana dashboard create`, `verify_panels.py`, `capture.mjs` |
 
 Managed Grafana MCP는 VS Code의 GitHub Copilot에서 Entra OAuth로 연결합니다.
-`amgmcp_query_resource_log`는 시간 범위를 보내지 않고 `$__timeFilter` 같은
-Grafana macro를 거부하므로 query 안에 `ago(...)`를 직접 씁니다.
+`amgmcp_query_resource_log`는 시간 범위를 보내지 않고 `$__timeFilter`, `$__timeTo()` 같은
+Grafana macro를 거부하므로 query 안에 `ago(...)`와 `now()`를 직접 씁니다.
 
 ```json
 {
@@ -445,8 +445,8 @@ panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다
 | 카탈로그 영화, 저장된 리뷰·댓글, 가입 회원 | 누적 규모와 추이는 | bin별 Pod 간 `max(value)`의 마지막 값 | stat + sparkline |
 | Pod별 영화 조회 분포 | 트래픽이 한 Pod에 몰리는가 | `cloud_RoleInstance`별 `sum(value)` | bar gauge |
 | 외부 조회 결과 | 카탈로그·검색이 어떻게 끝나는가 | `outcome`별 `sum(value)` | bar gauge |
-| Pod별 수신 metric 종류 수 | 모든 Pod가 계속 보내는가 | bin별 `dcount(name)` | status history |
-| metric 수신 상태 | 지금 끊기지 않았는가 | 최근 10분 행 수와 마지막 수신 후 경과 초 | table |
+| Pod별 누락 metric 수 | Pod마다 빠진 지표가 없는가 | 매 간격 내보내는 meter 수 − bin별 `dcount(name)` | status history(0 초록, 1 이상 빨강) |
+| metric 수신 상태 | 구간 끝에서 끊기지 않았는가 | 구간 끝 10분 행 수와 구간 끝 기준 마지막 수신 후 경과 초 | table |
 
 ```kusto
 customMetrics
@@ -461,6 +461,13 @@ customMetrics
 stat panel은 같은 bin 시계열을 받아 마지막 값이나 합계로 줄이고, 배경에
 sparkline을 그립니다. 숫자 하나와 추이를 한 칸에 담으므로 같은 지표의 꺾은선
 panel을 따로 둘 필요가 없습니다.
+
+누락 metric 수의 기대 목록에서는 DistributionSummary·Timer를 뺍니다. 실습 40분
+동안 Pod·분 단위로 빠진 metric은 한 번뿐이었고, 기록이 없던 분의
+`movielog_review_rating`이었습니다. 분포 meter는 기록이 없는 간격에 행을 보내지
+않으므로(`valueCount` = 0인 행 0건) 기대 목록에 넣으면 한산한 시간에 빨간 칸이
+생깁니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다.
+교체된 Pod도 종료 뒤에는 빈 칸으로 남습니다.
 
 ### verify: Grafana 전체 panel query 실행 { #verify }
 
@@ -493,7 +500,7 @@ OK   새 리뷰     frames=1 rows=1
 
 `verify_panels.py`는 숫자 field가 모두 null인 행을 데이터로 세지 않고, 접힌 row
 안의 panel도 실행합니다. 0은 정상 값으로 셉니다. 실습 클러스터를 멈춘 뒤 다시
-실행하자 13개 panel은 지난 데이터로 통과하고 최근 10분만 보는 "metric 수신 상태"
+실행하자 13개 panel은 지난 데이터로 통과하고 구간 끝 10분만 보는 "metric 수신 상태"
 panel이 FAIL로 나왔습니다. 수집이 멈춘 상태를 잡아낸 결과입니다.
 
 ### look: 렌더링 화면 캡처와 시각 점검 { #look }
@@ -657,7 +664,7 @@ dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 
 실습 결과는 아래 기준과 실측값으로 판정합니다. 대시보드 캡처는 2026-11-07
 08:45~09:15 UTC 구간입니다.
 
-![MovieLog 비즈니스 지표 대시보드. 영화 조회 12.9K, 새 리뷰 2.30K, 신규 회원 3.24K stat과 sparkline, 평균 별점 3.52 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 수신 status history, metric 수신 상태 table](../images/movielog-dashboard.png)
+![MovieLog 비즈니스 지표 대시보드. 영화 조회 12.9K, 새 리뷰 2.30K, 신규 회원 3.24K stat과 sparkline, 평균 별점 3.52 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 누락 metric status history, metric 수신 상태 table](../images/movielog-dashboard.png)
 
 | 확인 항목 | 기대 | 실측 |
 |---|---|---|

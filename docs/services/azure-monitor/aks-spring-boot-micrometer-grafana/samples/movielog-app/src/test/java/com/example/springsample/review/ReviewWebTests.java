@@ -225,11 +225,15 @@ class ReviewWebTests extends IntegrationTest {
 	@Test
 	void escapesUserContent() throws Exception {
 		stubMovie(1, "영화", "tt1", null);
-		Long id = reviewService.create(1, register("writer"), 8, "<script>alert(1)</script>", "내용").id();
+		// Different payloads so a regression in either field cannot hide behind the other.
+		Long id = reviewService.create(1, register("writer"), 8, "<script>alert('title')</script>",
+				"<img src=x onerror=alert('content')>").id();
 
 		mockMvc.perform(get("/reviews/{id}", id))
-			.andExpect(content().string(not(containsString("<script>alert(1)</script>"))))
-			.andExpect(content().string(containsString("&lt;script&gt;")));
+			.andExpect(content().string(not(containsString("<script>alert('title')</script>"))))
+			.andExpect(content().string(containsString("&lt;script&gt;alert(&#39;title&#39;)&lt;/script&gt;")))
+			.andExpect(content().string(not(containsString("<img src=x onerror=alert('content')>"))))
+			.andExpect(content().string(containsString("&lt;img src=x onerror=alert(&#39;content&#39;)&gt;")));
 	}
 
 	@Test
