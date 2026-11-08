@@ -27,7 +27,7 @@
 				<input type="password" th:field="*{password}" placeholder=" " autocomplete="new-password" maxlength="64" required>
 				<label for="password">비밀번호</label>
 				<output class="invalid" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">오류</output>
-				<output th:unless="${#fields.hasErrors('password')}">8~64자</output>
+				<output th:unless="${#fields.hasErrors('password')}">8~64자, 한글은 24자까지</output>
 			</div>
 			<div class="field label prefix border" th:classappend="${#fields.hasErrors('passwordConfirm')} ? 'invalid'">
 				<i>lock_reset</i>

@@ -68,6 +68,24 @@ class ReviewWebTests extends IntegrationTest {
 	}
 
 	@Test
+	void signupRejectsPasswordLongerThanBcryptLimitInBytes() throws Exception {
+		// 30 Korean characters pass the 8–64 character rule but are 90 UTF-8 bytes, over bcrypt's 72.
+		String password = "가".repeat(30);
+
+		mockMvc.perform(post("/signup").with(csrf())
+				.param("username", "erin")
+				.param("nickname", "에린")
+				.param("password", password)
+				.param("passwordConfirm", password))
+			.andExpect(status().isOk())
+			.andExpect(view().name("auth/signup"))
+			.andExpect(model().attributeHasFieldErrors("form", "password"))
+			.andExpect(model().attributeErrorCount("form", 1));
+
+		assertThat(memberRepository.findByUsername("erin")).isEmpty();
+	}
+
+	@Test
 	void signupRejectsDuplicateUsername() throws Exception {
 		register("carol");
 		long members = memberRepository.count();

@@ -1,5 +1,7 @@
 package com.example.springsample.member;
 
+import java.nio.charset.StandardCharsets;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -11,6 +13,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 @Controller
 @RequiredArgsConstructor
 class AuthController {
+
+	/** BCrypt hashes at most 72 bytes and Spring Security rejects longer input instead of truncating it. */
+	private static final int BCRYPT_MAX_PASSWORD_BYTES = 72;
 
 	private final MemberService memberService;
 
@@ -26,6 +31,11 @@ class AuthController {
 
 	@PostMapping("/signup")
 	String signup(@Valid @ModelAttribute("form") SignupForm form, BindingResult bindingResult) {
+		if (!bindingResult.hasFieldErrors("password")
+				&& form.getPassword().getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_PASSWORD_BYTES) {
+			bindingResult.rejectValue("password", "tooManyBytes",
+					"비밀번호가 너무 깁니다. 영문·숫자는 64자, 한글은 24자까지 쓸 수 있습니다.");
+		}
 		if (!bindingResult.hasFieldErrors("passwordConfirm") && !form.getPasswordConfirm().equals(form.getPassword())) {
 			bindingResult.rejectValue("passwordConfirm", "mismatch", "비밀번호가 일치하지 않습니다.");
 		}
