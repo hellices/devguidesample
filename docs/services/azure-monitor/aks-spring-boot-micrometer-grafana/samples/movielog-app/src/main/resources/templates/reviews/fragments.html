@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- One review in a list. -->
+<li th:fragment="item(review)">
+	<a class="review-poster-link" th:href="@{/movies/{id}(id=${review.movie.tmdbId})}" th:title="${review.movie.title}">
+		<th:block th:replace="~{fragments/layout :: poster(${review.movie.posterUrl}, ${review.movie.title}, 'poster-thumb')}"></th:block>
+	</a>
+	<a class="max review-link" th:href="@{/reviews/{id}(id=${review.id})}">
+		<div class="small-text primary-text review-movie">
+			<span th:text="${review.movie.title}">영화 제목</span>
+			<span th:if="${review.movie.releaseYear != null}" th:text="|(${review.movie.releaseYear})|">(2024)</span>
+		</div>
+		<h6 class="small review-title" th:text="${review.title}">리뷰 제목</h6>
+		<span th:replace="~{fragments/layout :: stars(${review.rating})}"></span>
+		<div class="small-text review-excerpt" th:text="${review.excerpt}">리뷰 내용</div>
+		<div class="small-text secondary-text">
+			<span th:text="${review.authorNickname}">작성자</span>
+			·
+			<time th:datetime="${review.createdAt}" th:text="${review.createdAt}">2026-01-01</time>
+		</div>
+	</a>
+	<span class="review-stat" title="조회수">
+		<i class="small">visibility</i>
+		<span th:text="${review.viewCount}">0</span>
+	</span>
+	<span class="review-stat" title="댓글 수">
+		<i class="small">chat_bubble</i>
+		<span th:text="${review.commentCount}">0</span>
+	</span>
+</li>
+
+<!-- Same markup as "item", filled in by infinite-scroll.js. -->
+<template th:fragment="item-template" id="review-item-template">
+	<li>
+		<a class="review-poster-link">
+			<img class="poster poster-thumb" alt="" loading="lazy">
+			<div class="poster poster-empty poster-thumb" role="img"><i>movie</i></div>
+		</a>
+		<a class="max review-link">
+			<div class="small-text primary-text review-movie"></div>
+			<h6 class="small review-title"></h6>
+			<span class="stars"></span>
+			<div class="small-text review-excerpt"></div>
+			<div class="small-text secondary-text">
+				<span class="review-author"></span>
+				·
+				<time></time>
+			</div>
+		</a>
+		<span class="review-stat" title="조회수">
+			<i class="small">visibility</i>
+			<span class="review-views"></span>
+		</span>
+		<span class="review-stat" title="댓글 수">
+			<i class="small">chat_bubble</i>
+			<span class="review-comments"></span>
+		</span>
+	</li>
+</template>
+
+<!-- Loading indicator, error with retry and end marker used by infinite-scroll.js. -->
+<th:block th:fragment="scroll-status">
+	<div data-sentinel aria-hidden="true" class="scroll-sentinel"></div>
+	<div data-loader class="center-align padding" hidden>
+		<progress class="circle small"></progress>
+	</div>
+	<div data-error class="center-align padding" hidden>
+		<p class="error-text">목록을 불러오지 못했습니다.</p>
+		<button data-retry class="border">
+			<i>refresh</i>
+			<span>다시 시도</span>
+		</button>
+	</div>
+	<p data-end class="center-align secondary-text padding" hidden>마지막입니다.</p>
+</th:block>
+
+</body>
+</html>

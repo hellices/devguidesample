@@ -3,11 +3,12 @@
 ## Public documentation contract
 
 - 상세 기준은 `docs/contributing/index.md`를 단일 설명 문서로 사용한다.
-- 문서 `title`·H1과 본문 절 제목은 해당 내용의 핵심 결론·조치·차이를
-  요약한다. 일반적인 항목명이나 저자의 작성 순서·생각 흐름을 제목으로
-  대신하지 않는다. 제목만 읽어도 문서의 요지가 드러나는지 확인하며,
-  구체적인 기준과 예시는
-  [제목 작성 기준](docs/contributing/index.md#content-first-headings)을 따른다.
+- 문서 `title`·H1과 본문 절 제목은 문장이 아니라 핵심 용어로 구성한 명사구로
+  쓴다. `~합니다`·`~한다` 같은 서술 어미의 완결 문장이나 질문 문장을 쓰지 않고,
+  결론과 주장은 절의 첫 문장에서 밝힌다. 일반적인 항목명이나 저자의 작성
+  순서·생각 흐름을 제목으로 대신하지 않으며, 제목만 읽어도 각 절의 대상과
+  측면이 드러나는지 확인한다. 구체적인 기준과 예시는
+  [핵심 용어 제목 기준](docs/contributing/index.md#content-first-headings)을 따른다.
 - 공개 기술 문서는
   `docs/services/<service>/<topic>[/<child>]/index.md` topic package로
   작성한다.
@@ -17,6 +18,11 @@
 - topic entry는 `<topic>/index.md`이며 `topic_order`를 쓰지 않는다. 연결된
   자식 문서는 `<topic>/<child>/index.md`에 두고 `topic_order`를 1부터
   중복 없이 연속으로 지정한다.
+- topic entry는 첫 절 본문에서 주제의 핵심 메시지를 흐름으로 제시하고 실제 실행
+  결과(캡처·측정값)를 곁에 보여 준다. 실습·벤치마크 절차는 자식 문서에 두고
+  entry에서는 링크로만 안내한다. 버전 호환 같은 부수 제약은 하단에 요약하고
+  전담 문서로 연결한다. 상세 기준은
+  [topic entry 구성 기준](docs/contributing/index.md#topic-entry-message)을 따른다.
 - `document_type`은 `case`, `guide`, `lab`, `research` 중 하나이며
   collection 호환 색인과 수명주기 규칙을 선택한다. 물리 경로에는
   collection 이름을 사용하지 않는다.
