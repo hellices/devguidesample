@@ -19,6 +19,7 @@ trap '"$LAB_ROOT/scripts/vm-query.sh" stop' EXIT
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 max_lag() {
+  "$LAB_ROOT/scripts/vm-query.sh" start
   curl -fsS "http://127.0.0.1:$PORT/api/v1/query" \
     --data-urlencode 'query=max(eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"})' \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'

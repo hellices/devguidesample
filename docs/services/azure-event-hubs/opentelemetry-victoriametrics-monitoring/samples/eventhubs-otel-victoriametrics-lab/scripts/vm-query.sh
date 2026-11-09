@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# Usage: vm-query.sh start|stop. Opens a local port-forward to the private VMSingle service.
+# Usage: vm-query.sh start|stop. Opens (or repairs) a local port-forward to the private VMSingle service.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 source "$(dirname "$0")/lib.sh"
 STATE="$(state_dir)"
 PORT="${VM_LOCAL_PORT:-18428}"
 case "${1:-start}" in
   start)
-    if [[ -f "$STATE/port-forward.pid" ]] && kill -0 "$(<"$STATE/port-forward.pid")" 2>/dev/null; then
+    # Long-lived port-forwards drop with "lost connection to pod"; trust only a live /health.
+    if curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
       exit 0
+    fi
+    if [[ -f "$STATE/port-forward.pid" ]]; then
+      kill "$(<"$STATE/port-forward.pid")" 2>/dev/null || true
+      sleep 1
     fi
     kube port-forward -n eventhubs-observability svc/vmsingle-lab "$PORT:8428" >"$STATE/port-forward.log" 2>&1 &
     echo $! >"$STATE/port-forward.pid"
