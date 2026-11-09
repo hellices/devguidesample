@@ -59,10 +59,11 @@ topic_order: 1
 sample로 재현합니다. 아래 결과와 화면은 2026-11-09 UTC에 실제 구독에서 실행한
 기록이며, 구독 ID·resource 이름의 고유 suffix·IP는 가상 값으로 바꿨습니다.
 
-실행 환경은 두 개입니다. 첫 환경(`ehotel-lab1`)에서 원래 브랜치를 배포하며 오류를
+실행 환경은 세 개입니다. 첫 환경(`ehotel-lab1`)에서 원래 브랜치를 배포하며 오류를
 고쳤고, 수정이 끝난 sample을 새 환경(`ehotel-lab2`)에 `azd up` 한 번으로 다시 배포해
-재현성을 확인했습니다. 시나리오·대시보드 수치는 새 환경 결과이고, fallback 전환과
-VMSingle 보존 확인은 첫 환경에서 실행했습니다.
+재현성을 확인했습니다. PR 리뷰 수정 후에는 세 번째 환경(`ehotel-lab3`)에서 HTTPS 접속,
+재배포, 시나리오 중단, evidence 대기를 다시 확인했습니다. 시나리오·대시보드 수치는 두
+번째 환경 결과이고, fallback 전환과 VMSingle 보존 확인은 첫 환경에서 실행했습니다.
 
 ## 실습 결과물: 배포·시나리오·대시보드·정리 증거
 
@@ -74,7 +75,8 @@ VMSingle 보존 확인은 첫 환경에서 실행했습니다.
 | agent 검증 | `./scripts/collect-evidence.sh` | 28개 query 모두 통과. Azure Monitor와 API remote write 4개 지표 × 25분 일치, Diagnostic Settings 합계 일치 |
 | fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(첫 환경) |
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(첫 환경) |
-| 정리 | `azd down --purge --force` | 두 환경 모두 resource group 삭제 확인, Dedicated cluster 없음 |
+| 리뷰 수정 확인 | 세 번째 환경 `azd up`, `azd deploy` 2회, 시나리오 중단 | 13분 42초 배포, 고정 인증서 HTTPS만 허용, 재배포 중 consumer Pod 유지, 중단 시 producer 0, 대시보드 요청 합계 656 = Azure Monitor 656 |
+| 정리 | `azd down --purge --force` | 세 환경 모두 resource group 삭제 확인, Dedicated cluster 없음 |
 
 ## 사전 조건: 도구·권한·리전
 
@@ -204,12 +206,13 @@ Diagnostic Settings 경로는 값이 있는 분만 도착했지만 합계는 Azu
 원인과 대시보드 규칙은 [topic의 전달 경로 비교](../index.md#delivery)와
 [수집 경로 비교](../index.md#receivers)에 정리했습니다.
 
-첫 환경에서는 Diagnostic Settings를 만든 뒤 약 55분 동안 telemetry Event Hub 수신이
-0건이었고, 새 환경에서는 약 20분 안에 도착했습니다. 두 환경 모두 관리 그룹 정책으로
+첫 환경에서는 Diagnostic Settings를 만든 뒤 약 55분 동안, 세 번째 환경에서는 약 45분
+동안 telemetry Event Hub 수신이 0건이었고, 두 번째 환경에서는 약 20분 안에 도착했습니다. 두 환경 모두 관리 그룹 정책으로
 telemetry namespace의 local 인증이 꺼져 있었으므로 이것이 원인은 아닙니다. Learn은
 diagnostic setting을 만든 뒤 데이터가 흐르기까지 최대 90분이 걸릴 수 있다고
-설명합니다. 첫 환경은 같은 이름의 telemetry namespace를 다른 리전에서 지우고 다시
-만든 이력이 있었지만, 이 차이가 지연과 관련이 있는지는 확인하지 못했습니다.
+설명하며, 세 환경의 관측은 모두 이 범위 안입니다. Diagnostic Settings 경로를 비교하려면
+배포 직후가 아니라 설정 후 충분한 시간이 지난 뒤 시나리오를 실행합니다. 대시보드는 이
+경로를 선택 panel로 두어, 데이터가 없을 때도 다른 검증은 계속 진행합니다.
 
 ## fallback exporter 전환
 

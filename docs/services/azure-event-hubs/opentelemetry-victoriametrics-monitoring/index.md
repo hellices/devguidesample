@@ -99,7 +99,10 @@ scrape 합계가 두 배 안팎인 이유는 [전달 경로 차이](#delivery)�
 `[$__range]`로 조회해 `(from, to]` 창이 되었고 첫 분 bin이 빠지고 끝 bin이 들어갔습니다.
 리뷰에서 이를 찾아 `offset 1s`로 `[from, to)` 창에 맞췄고, 로컬 VictoriaMetrics
 v1.155.0에 같은 형태의 표본을 넣어 두 식의 결과가 각각 `(from, to]`와 `[from, to)` 합계와
-같음을 확인했습니다.
+같음을 확인했습니다. 수정 후 세 번째 새 환경(21:05–21:18 UTC)에서는 대시보드 stat이
+656건으로 Azure Monitor 직접 조회값 656건과 같았습니다.
+
+![수정 후 세 번째 환경의 대시보드 상단. Incoming·Successful requests 656건, Throttled requests 0건](images/request-window-fixed.png)
 
 ## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
@@ -167,6 +170,9 @@ label로 퍼지지 않게 했습니다.
   스트림 내용이 다를 수 있으므로 probe로 받은 이름을 확인한 뒤 panel을 만듭니다.
 - **지연이 더 깁니다.** 마지막 sample의 경과 시간이 API 경로 194–213초, Diagnostic
   Settings 경로 434–513초였습니다.
+- **설정 직후에는 비어 있을 수 있습니다.** Learn은 diagnostic setting을 만든 뒤 데이터가
+  흐르기까지 최대 90분이 걸릴 수 있다고 설명합니다. 세 번 배포한 환경 중 두 곳은 각각
+  약 55분·45분 동안 수신이 없었고, 한 곳은 약 20분 안에 도착했습니다.
 
 결론적으로 Diagnostic Settings 경로는 내보내기 가능한 처리량 지표를 외부 시스템으로
 흘려보내는 보조 경로로 쓰고, CPU·memory·성공·throttle과 dimension별 분석은 Azure
