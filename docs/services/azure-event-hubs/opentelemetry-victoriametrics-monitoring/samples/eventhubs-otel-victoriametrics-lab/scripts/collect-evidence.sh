@@ -24,16 +24,28 @@ fmt = lambda d: d.strftime("%Y-%m-%dT%H:%M:%SZ")
 print(fmt(start), fmt(end), int(start.timestamp() * 1000), int(end.timestamp() * 1000))
 PY
 )
-export GRAFANA_URL="http://$GATEWAY_PUBLIC_IP:3000"
+export GRAFANA_URL="https://$GATEWAY_PUBLIC_IP:3000"
+export GRAFANA_CA_FILE="$STATE/grafana.crt"
+[[ -s "$GRAFANA_CA_FILE" ]] || die "missing pinned Grafana certificate; rerun azd hooks run postprovision"
 export GRAFANA_USER=admin
 GRAFANA_PASSWORD="$(env_value GRAFANA_ADMIN_PASSWORD)"
 export GRAFANA_PASSWORD
+
+PORT="${VM_LOCAL_PORT:-18428}"
+# Azure Monitor API samples arrive about 3 minutes after their bin and Diagnostic Settings
+# about 7–9 minutes; do not verify or capture a window whose last bins are still in flight.
+SETTLE_SECONDS="${EVIDENCE_SETTLE_SECONDS:-540}"
+remaining=$(( TO_MS / 1000 + SETTLE_SECONDS - $(date +%s) ))
+if (( remaining > 0 )); then
+  log "waiting ${remaining}s for the window's last minute bins to arrive"
+  sleep "$remaining"
+fi
 
 "$LAB_ROOT/scripts/vm-query.sh" start
 trap '"$LAB_ROOT/scripts/vm-query.sh" stop' EXIT
 
 log "probe"
-"$PY" "$LAB_ROOT/agent/probe.py" --output "$EVIDENCE/probe.json"
+"$PY" "$LAB_ROOT/agent/probe.py" --vm-url "http://127.0.0.1:$PORT" --output "$EVIDENCE/probe.json"
 log "build and publish"
 "$PY" "$LAB_ROOT/agent/build_dashboard.py" --probe "$EVIDENCE/probe.json" --output "$EVIDENCE/dashboard.json"
 "$PY" "$LAB_ROOT/agent/publish_dashboard.py" "$EVIDENCE/dashboard.json"
@@ -51,14 +63,24 @@ az monitor metrics list --subscription "$AZURE_SUBSCRIPTION_ID" --resource "$NAM
   --aggregation Total --interval PT1M --start-time "$FROM" --end-time "$TO" -o json >"$EVIDENCE/azure-monitor-raw.json"
 # Compare Azure Monitor PT1M bins with the remote write samples (same minute timestamps) and with
 # the scrape path, whose samples are re-stamped at scrape time and repeat each minute value.
-python3 - "$EVIDENCE/azure-monitor-raw.json" "$FROM_MS" "$TO_MS" >"$EVIDENCE/azure-monitor-comparison.json" <<'PY'
+python3 - "$EVIDENCE/azure-monitor-raw.json" "$FROM_MS" "$TO_MS" "$PORT" >"$EVIDENCE/azure-monitor-comparison.json" <<'PY'
 import json, sys, urllib.parse, urllib.request
-raw, start_ms, end_ms = json.load(open(sys.argv[1])), int(sys.argv[2]), int(sys.argv[3])
+from datetime import datetime, timezone
+raw, start_ms, end_ms, port = json.load(open(sys.argv[1])), int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
 start, end = start_ms // 1000, end_ms // 1000
 
 def vm(path, params):
     body = urllib.parse.urlencode(params).encode()
-    return urllib.request.urlopen(f"http://127.0.0.1:18428{path}", body).read().decode()
+    return urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", body).read().decode()
+
+def per_minute(selector):
+    values = {}
+    for line in vm("/api/v1/export", {"match[]": selector, "start": start, "end": end - 1}).splitlines():
+        series = json.loads(line)
+        for value, ts in zip(series["values"], series["timestamps"]):
+            minute = datetime.fromtimestamp(ts / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M")
+            values[minute] = values.get(minute, 0) + value
+    return values
 
 report = {"window": {"from": start, "to": end}, "metrics": {}}
 for metric in raw["value"]:
@@ -68,26 +90,14 @@ for metric in raw["value"]:
         for point in series["data"]:
             minute = point["timeStamp"][:16]
             direct[minute] = direct.get(minute, 0) + (point.get("total") or 0)
-    selector = f'azure_{name.lower()}_total_Count{{source_path="azure_monitor_api",delivery_path="remote_write"}}'
-    remote = {}
-    for line in vm("/api/v1/export", {"match[]": selector, "start": start, "end": end - 1}).splitlines():
-        series = json.loads(line)
-        for value, ts in zip(series["values"], series["timestamps"]):
-            minute = __import__("datetime").datetime.fromtimestamp(ts / 1000, __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M")
-            remote[minute] = remote.get(minute, 0) + value
+    remote = per_minute(f'azure_{name.lower()}_total_Count{{source_path="azure_monitor_api",delivery_path="remote_write"}}')
     totals = {}
     for delivery in ("remote_write", "scrape"):
         q = (f'sum(sum_over_time(azure_{name.lower()}_total_Count'
              f'{{source_path="azure_monitor_api",delivery_path="{delivery}"}}[{end - start}s]))')
         result = json.loads(vm("/api/v1/query", {"query": q, "time": end - 1}))["data"]["result"]
         totals[delivery] = float(result[0]["value"][1]) if result else None
-    diagnostic = {}
-    for line in vm("/api/v1/export", {"match[]": f'{name.lower()}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}',
-                                      "start": start, "end": end - 1}).splitlines():
-        series = json.loads(line)
-        for value, ts in zip(series["values"], series["timestamps"]):
-            minute = __import__("datetime").datetime.fromtimestamp(ts / 1000, __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M")
-            diagnostic[minute] = diagnostic.get(minute, 0) + value
+    diagnostic = per_minute(f'{name.lower()}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}')
     minutes = sorted(direct)
     report["metrics"][name] = {
         "azure_monitor_total": sum(direct.values()),
@@ -99,6 +109,12 @@ for metric in raw["value"]:
         "minutes_matching_diagnostic_eventhub": sum(1 for m in minutes if diagnostic.get(m) == direct[m]),
         "minutes_present_in_diagnostic_eventhub": sum(1 for m in minutes if m in diagnostic),
     }
+report["complete"] = all(
+    m["minutes_matching_remote_write"] == m["minutes"] for m in report["metrics"].values()
+)
 print(json.dumps(report, indent=2))
 PY
 cat "$EVIDENCE/azure-monitor-comparison.json"
+python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["complete"] else 1)' \
+  "$EVIDENCE/azure-monitor-comparison.json" \
+  || die "remote write does not yet match Azure Monitor for every minute; treat this evidence as incomplete"

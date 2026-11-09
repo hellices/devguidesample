@@ -23,6 +23,17 @@ chown 472:0 secrets/grafana_admin_password
 chmod 0400 secrets/grafana_admin_password
 chmod 0755 secrets
 
+# Grafana listens on the public IP for the operator /32 only. Serve it over TLS with a
+# self-signed certificate for that IP; the operator pins this certificate (printed below).
+install -d -m 0755 tls
+if [ ! -s tls/grafana.crt ] || ! openssl x509 -in tls/grafana.crt -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:${GATEWAY_PUBLIC_IP}"; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=eventhubs-lab-grafana" \
+    -addext "subjectAltName=IP:${GATEWAY_PUBLIC_IP}" -keyout tls/grafana.key -out tls/grafana.crt 2>/dev/null
+fi
+chown 472:0 tls/grafana.key tls/grafana.crt
+chmod 0400 tls/grafana.key
+chmod 0444 tls/grafana.crt
+
 az acr login --name "$ACR_NAME" --output none
 docker compose --profile fallback pull --quiet
 docker compose up -d --remove-orphans
@@ -34,9 +45,15 @@ fi
 docker compose restart otel-collector >/dev/null
 
 for _ in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:13133/ >/dev/null && curl -fsS http://127.0.0.1:3000/api/health >/dev/null; then
+  if curl -fsS http://127.0.0.1:13133/ >/dev/null \
+    && curl -fsS --cacert tls/grafana.crt --resolve "${GATEWAY_PUBLIC_IP}:3000:127.0.0.1" \
+      "https://${GATEWAY_PUBLIC_IP}:3000/api/health" >/dev/null; then
     echo "GATEWAY_READY"
     docker compose ps --format '{{.Service}} {{.State}}'
+    # Public certificate only; the private key never leaves the VM.
+    echo "GRAFANA_CERT_BEGIN"
+    cat tls/grafana.crt
+    echo "GRAFANA_CERT_END"
     exit 0
   fi
   sleep 5

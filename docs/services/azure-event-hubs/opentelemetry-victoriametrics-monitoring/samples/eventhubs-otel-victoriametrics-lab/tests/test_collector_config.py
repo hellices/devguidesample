@@ -92,10 +92,15 @@ def test_dedicated_profile_requires_existing_cluster_id():
     metrics = receiver["metrics"]["microsoft.eventhub/clusters"]
     assert metrics["AvailableMemory"] == ["Maximum"]
     assert "NamespaceMemoryUsage" not in metrics
-    assert config["service"]["pipelines"]["metrics/azure_monitor_api-scrape"]["receivers"] == [
-        "azure_monitor/premium",
-        "azure_monitor/dedicated",
-    ]
+    pipelines = config["service"]["pipelines"]
+    assert pipelines["metrics/azure_monitor_api-scrape"]["receivers"] == ["azure_monitor/premium"]
+    for delivery in ("scrape", "remote_write"):
+        dedicated = pipelines[f"metrics/azure_monitor_dedicated-{delivery}"]
+        assert dedicated["receivers"] == ["azure_monitor/dedicated"]
+        assert "filter/dedicated" in dedicated["processors"]
+    condition = config["processors"]["filter/dedicated"]["metric_conditions"][0]
+    assert DEDICATED_ID.lower() in condition
+    assert "azure_monitor_api" not in yaml.safe_dump(pipelines["metrics/azure_monitor_dedicated-scrape"])
 
 
 def test_dedicated_profile_rejects_non_cluster_ids():

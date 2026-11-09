@@ -55,7 +55,7 @@ topic_order: 1
 # Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
 
 이 실습은 [Event Hubs 지표·consumer lag 수집 topic](../index.md)의 구성을
-[`eventhubs-otel-victoriametrics-lab`](../samples/eventhubs-otel-victoriametrics-lab/README.md)
+[`eventhubs-otel-victoriametrics-lab`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab)
 sample로 재현합니다. 아래 결과와 화면은 2026-11-09 UTC에 실제 구독에서 실행한
 기록이며, 구독 ID·resource 이름의 고유 suffix·IP는 가상 값으로 바꿨습니다.
 
@@ -130,7 +130,7 @@ deploy 단계는 `postdeploy` hook만 실행합니다.
 |---|---|
 | `preprovision` | 활성 구독 확인, provider 등록 확인, operator egress `/32`, 배포자 object ID, Grafana 비밀번호와 VM용 SSH 공개키 생성 |
 | provision | VNet(gateway·aks·private-endpoints subnet), ACR, private endpoint 뒤의 Storage·Key Vault, Event Hubs 2개와 Diagnostic Settings, AKS, Gateway VM, 역할 할당 |
-| `postprovision` | ① lab 전용 kubeconfig ② producer·consumer federated credential ③ ACR build와 digest 고정 ④ VictoriaMetrics Operator·VMSingle·VMAgent·VMStaticScrape ⑤ Run Command로 Gateway 번들 적용 ⑥ operator 경로 Grafana health |
+| `postprovision` | ① lab 전용 kubeconfig ② producer·consumer federated credential ③ ACR build와 digest 고정 ④ VictoriaMetrics Operator·VMSingle·VMAgent·VMStaticScrape ⑤ Run Command로 Gateway 번들 적용과 Grafana TLS 인증서 생성, 공개 인증서 회수 ⑥ 고정한 인증서로 operator 경로 Grafana HTTPS health |
 | `postdeploy` | Workload Identity service account와 producer(0 replica)·slow consumer(1 replica) |
 
 ![azd provision과 azd deploy 실행 결과. preprovision 확인, Key Vault·ACR·Storage·VNet·private endpoint·Event Hubs namespace 완료, postprovision 6단계와 GATEWAY_READY, 컨테이너 3개 running, 4분 3초 만의 provision 성공, workload rollout 완료](../images/azd-provision-deploy.png)
@@ -150,7 +150,7 @@ kubectl get vmsingle,vmagent,vmstaticscrape -n eventhubs-observability
 kubectl get pods -n eventhubs-observability
 az vm run-command invoke -g <resource-group> -n <gateway-vm> --command-id RunShellScript \
   --scripts "cd /opt/eventhubs-observability && docker compose ps"
-curl -s http://<gateway-public-ip>:3000/api/health
+curl -s --cacert .azure/<env-name>/grafana.crt https://<gateway-public-ip>:3000/api/health
 ```
 
 ![구성 요소 상태 확인 결과. VMSingle·VMAgent·VMStaticScrape operational, slow consumer·operator·vmagent·vmsingle Pod Running(재시작 0), Gateway의 grafana·lag-exporter·otel-collector 컨테이너 running, Grafana health database ok](../images/component-health.png)
@@ -275,6 +275,19 @@ Pod를 지우고 다시 조회했을 때 17:46–18:12 구간 `IncomingMessages`
 - 같은 resource group의 telemetry namespace를 수집하지 않도록 Premium namespace tag 필터
 - Collector 자체 telemetry(`collector_self`)와 lag exporter의 Python runtime 지표 제거
 - `predown`의 federated credential 정리와 `postdown`의 resource group 삭제 확인
+
+PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
+
+| 지적 | 수정 |
+|---|---|
+| Grafana 관리자 자격 증명이 공개 IP의 HTTP로 전송됨 | Gateway가 public IP용 self-signed 인증서를 만들어 Grafana를 HTTPS로만 제공. postprovision은 공개 인증서만 회수해 `.azure/<env>/grafana.crt`에 두고, `curl --cacert`·Python `ssl`·Playwright(사전 TLS 확인과 SPKI 고정)가 이 인증서로만 접속 |
+| 요청 합계 stat이 첫 분 bin을 빼고 끝 bin을 포함 | `[$__range] offset 1s`로 Azure Monitor 조회와 같은 `[from, to)` 창 사용 |
+| 재배포 때 `kubectl apply`가 실행 중인 consumer를 0으로 되돌림 | apply 전 `spec.replicas`를 기억했다가 복원(최소 1) |
+| evidence 수집이 마지막 분 bin 도착 전에 시작됨 | 창 종료 후 기본 540초 대기, 분 단위 대조가 완전하지 않으면 실패로 보고 |
+| 시나리오가 오류로 끝나면 producer가 계속 전송 | 시작 시 producer를 멈추고, 완료 전 종료하면 trap이 0 replica로 되돌림 |
+| consumer 수신 task가 실패해도 Pod가 Running으로 남음 | 수신 task와 종료 신호 중 먼저 끝나는 쪽을 기다리고 실패를 전파해 Kubernetes가 재시작 |
+| Dedicated profile이 같은 resource group의 다른 cluster까지 수집하고 Premium 지표와 섞임 | `source_path="azure_monitor_dedicated"`로 분리하고 지정한 resource ID만 남기는 filter 추가. otelcol-contrib 0.165.0 `validate`로 구성 확인 |
+| `VM_LOCAL_PORT`를 바꾸면 probe와 대조가 다른 포트를 조회 | 같은 포트를 두 단계에 전달 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

@@ -14,8 +14,16 @@ RECOVERY_TIMEOUT_MINUTES="${RECOVERY_TIMEOUT_MINUTES:-20}"
 EVENTS_PER_SECOND="${EVENTS_PER_SECOND:-200}"
 PROCESSING_DELAY_SECONDS="${PROCESSING_DELAY_SECONDS:-0.03}"
 
+COMPLETED=false
+cleanup() {
+  # An error or Ctrl-C after the load starts must not leave the producer sending.
+  if [[ "$COMPLETED" != "true" ]]; then
+    kube scale -n "$NS" deploy/eventhubs-producer --replicas 0 >/dev/null 2>&1 || true
+  fi
+  "$LAB_ROOT/scripts/vm-query.sh" stop
+}
+trap cleanup EXIT
 "$LAB_ROOT/scripts/vm-query.sh" start
-trap '"$LAB_ROOT/scripts/vm-query.sh" stop' EXIT
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 max_lag() {
@@ -28,6 +36,9 @@ last_log_value() {
   kube logs -n "$NS" "deploy/$1" --tail 200 2>/dev/null | grep -o "$2=[0-9]*" | tail -1 | cut -d= -f2
 }
 
+# A previous interrupted run may have left the producer running; the baseline needs it stopped.
+kube scale -n "$NS" deploy/eventhubs-producer --replicas 0 >/dev/null
+kube wait -n "$NS" --for=delete pod -l app=eventhubs-producer --timeout 120s >/dev/null 2>&1 || true
 kube set env -n "$NS" deploy/eventhubs-slow-consumer PROCESSING_DELAY_SECONDS="$PROCESSING_DELAY_SECONDS" >/dev/null
 kube set env -n "$NS" deploy/eventhubs-producer EVENTS_PER_SECOND="$EVENTS_PER_SECOND" >/dev/null
 kube scale -n "$NS" deploy/eventhubs-slow-consumer --replicas 1 >/dev/null
@@ -87,5 +98,6 @@ cat >"$EVIDENCE/scenario.json" <<JSON
 }
 JSON
 cat "$EVIDENCE/scenario.json"
+COMPLETED=true
 [[ -n "$RECOVERED_AT" ]] || die "max lag did not recover by 80% within ${RECOVERY_TIMEOUT_MINUTES}m"
 log "scenario completed"

@@ -117,6 +117,7 @@ AZURE_TENANT_ID=$AZURE_TENANT_ID
 VMSINGLE_PRIVATE_IP=$VMSINGLE_PRIVATE_IP
 KEY_VAULT_NAME=$KEY_VAULT_NAME
 ACR_NAME=$ACR_NAME
+GATEWAY_PUBLIC_IP=$GATEWAY_PUBLIC_IP
 COMPOSE_PROFILE=$([[ "${ENABLE_FALLBACK_EXPORTER:-false}" == "true" ]] && echo fallback || echo default)
 ENV
 # bsdtar pads -z output to its block size, so compress separately to keep the payload small.
@@ -124,8 +125,11 @@ BUNDLE_B64="$(COPYFILE_DISABLE=1 tar -C "$BUNDLE" -cf - . | gzip -9c | base64 | 
 # Run Command splits unnamed values on '=', which base64 padding contains; always pass name=value.
 gateway_run "$LAB_ROOT/gateway/bootstrap.sh" "BUNDLE_B64=$BUNDLE_B64" >"$STATE/gateway-bootstrap.log"
 grep -q GATEWAY_READY "$STATE/gateway-bootstrap.log" || die "gateway bootstrap failed; see $STATE/gateway-bootstrap.log"
-sed -n '/GATEWAY_READY/,/^\[stderr\]/p' "$STATE/gateway-bootstrap.log" >&2
+sed -n '/GATEWAY_READY/,/GRAFANA_CERT_BEGIN/p' "$STATE/gateway-bootstrap.log" | grep -v GRAFANA_CERT_BEGIN >&2
+sed -n '/GRAFANA_CERT_BEGIN/,/GRAFANA_CERT_END/p' "$STATE/gateway-bootstrap.log" | sed '1d;$d' >"$STATE/grafana.crt"
+grep -q "BEGIN CERTIFICATE" "$STATE/grafana.crt" || die "gateway did not return the Grafana certificate"
 
 log "6/6 operator-facing health checks"
-curl -fsS --max-time 10 "http://$GATEWAY_PUBLIC_IP:3000/api/health" >/dev/null || die "Grafana is not reachable from the operator egress IP"
+curl -fsS --max-time 10 --cacert "$STATE/grafana.crt" "https://$GATEWAY_PUBLIC_IP:3000/api/health" >/dev/null \
+  || die "Grafana is not reachable over pinned HTTPS from the operator egress IP"
 log "postprovision completed."

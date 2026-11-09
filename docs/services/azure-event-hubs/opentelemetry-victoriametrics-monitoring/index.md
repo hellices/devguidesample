@@ -94,6 +94,13 @@ Diagnostic Settings 경로의 합계가 모두 정확히 일치했습니다.
 scrape 합계가 두 배 안팎인 이유는 [전달 경로 차이](#delivery)에서, Diagnostic Settings에
 값이 있는 분만 들어오는 이유는 [수집 경로 차이](#receivers)에서 설명합니다.
 
+캡처의 Incoming requests stat(1,533)은 표의 1,538과 다릅니다. Azure Monitor 표본은
+분 bin 시작 시각을 timestamp로 쓰는데, 캡처 당시 stat은 Grafana 구간 끝에서
+`[$__range]`로 조회해 `(from, to]` 창이 되었고 첫 분 bin이 빠지고 끝 bin이 들어갔습니다.
+리뷰에서 이를 찾아 `offset 1s`로 `[from, to)` 창에 맞췄고, 로컬 VictoriaMetrics
+v1.155.0에 같은 형태의 표본을 넣어 두 식의 결과가 각각 `(from, to]`와 `[from, to)` 합계와
+같음을 확인했습니다.
+
 ## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
 Collector는 receiver 4개를 source로 두고, source마다 scrape용과 remote write용 pipeline

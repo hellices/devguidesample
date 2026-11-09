@@ -1,6 +1,9 @@
 // Usage: node capture.mjs <dashboard-path[?viewPanel=N]> <output.png> [fromMs] [toMs] [width]
-// Reads GRAFANA_URL, GRAFANA_USER, GRAFANA_PASSWORD from the process environment and
-// writes only the PNG. Credentials are typed into the login form and never persisted.
+// Reads GRAFANA_URL (https), GRAFANA_USER, GRAFANA_PASSWORD and GRAFANA_CA_FILE from the
+// environment and writes only the PNG. Credentials are typed into the login form and never persisted.
+import { createHash, X509Certificate } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { connect } from 'node:tls';
 import { chromium } from 'playwright';
 
 const [dashboardPath, output, from = 'now-1h', to = 'now', width = '1600'] = process.argv.slice(2);
@@ -16,7 +19,26 @@ if (!base || !password) {
   process.exit(2);
 }
 
-const browser = await chromium.launch();
+if (!base.startsWith('https://') || !process.env.GRAFANA_CA_FILE) {
+  console.error('GRAFANA_URL must be https and GRAFANA_CA_FILE must pin the gateway certificate');
+  process.exit(2);
+}
+const caPem = readFileSync(process.env.GRAFANA_CA_FILE, 'utf8');
+const { hostname, port } = new URL(base);
+// Prove the server presents the pinned certificate before any credential is sent.
+await new Promise((resolve, reject) => {
+  const socket = connect({ host: hostname, port: Number(port || 443), ca: caPem }, () => {
+    socket.end();
+    resolve();
+  });
+  socket.on('error', reject);
+});
+// Chromium accepts the self-signed certificate only for this public-key hash.
+const spki = createHash('sha256')
+  .update(new X509Certificate(caPem).publicKey.export({ type: 'spki', format: 'der' }))
+  .digest('base64');
+
+const browser = await chromium.launch({ args: [`--ignore-certificate-errors-spki-list=${spki}`] });
 const page = await browser.newPage({ viewport: { width: Number(width), height: 1000 }, deviceScaleFactor: 1 });
 try {
   await page.goto(`${base}/login`);

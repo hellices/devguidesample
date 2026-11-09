@@ -18,6 +18,7 @@ UID = "eventhubs-otel-victoriametrics"
 DS = {"type": "prometheus", "uid": "victoriametrics"}
 API = 'source_path="azure_monitor_api",delivery_path="remote_write"'
 DIAG = 'source_path="diagnostic_eventhub",delivery_path="remote_write"'
+DEDICATED = 'source_path="azure_monitor_dedicated",delivery_path="remote_write"'
 LAG = 'source_path="lag_exporter",delivery_path="remote_write"'
 SELF = 'source_path="collector_self",delivery_path="remote_write"'
 LEARN_METRICS = "https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference"
@@ -154,7 +155,9 @@ def build_dashboard(probe: dict) -> dict:
     ):
         panels.append(layout.panel(
             "stat", title, 5, 6,
-            [{"expr": f"sum(sum_over_time(azure_{metric}_total_Count{{{API}}}[$__range]))",
+            # Azure Monitor stamps each sample with its minute-bin start. Shifting by 1s turns the
+            # (from, to] lookback into [from, to), the window az monitor metrics list uses.
+            [{"expr": f"sum(sum_over_time(azure_{metric}_total_Count{{{API}}}[$__range] offset 1s))",
               "instant": True, "legendFormat": title}],
             description=("0은 series가 존재하고 값이 0이라는 뜻입니다. 데이터가 없으면 'No data'로 표시합니다."
                          if metric == "throttledrequests" else "remote write의 1분 Total을 조회 구간 동안 더한 값"),
@@ -288,8 +291,8 @@ def build_dashboard(probe: dict) -> dict:
             {"expr": f"sum(azure_incomingmessages_total_Count{{{API}}})", "legendFormat": "azure_monitor_api"},
             {"expr": f"sum(incomingmessages_total{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},
         ],
-        description=("Diagnostic Settings는 dimension을 합친 단일 값으로 내보내므로 EntityName별 API 값의 합과 비교합니다. "
-                     "[optional] Diagnostic Settings 경로는 설정 후 데이터가 흐르기까지 시간이 걸릴 수 있습니다."),
+        description=("[optional] Diagnostic Settings 경로는 설정 후 데이터가 흐르기까지 시간이 걸릴 수 있습니다. "
+                     "Diagnostic Settings는 dimension을 합친 단일 값으로 내보내므로 EntityName별 API 값의 합과 비교합니다."),
         fieldConfig=field("locale", None, lineWidth=2, showPoints="always", pointSize=4) | {"overrides": [{
             "matcher": {"id": "byName", "options": "diagnostic_eventhub"},
             "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}},
@@ -344,13 +347,13 @@ def build_dashboard(probe: dict) -> dict:
         panels.append(layout.row("Dedicated cluster (문서 기반 profile, 이 실습에서 runtime 미검증)"))
         panels.append(layout.panel(
             "gauge", "Dedicated CPU", 6, 7,
-            [{"expr": 'max(last_over_time(azure_cpu_maximum_Percent{source_path="azure_monitor_api"}[10m]))',
+            [{"expr": f"max(last_over_time(azure_cpu_maximum_Percent{{{DEDICATED}}}[10m]))",
               "instant": True}],
             fieldConfig=field("percent", usage, decimals=1, min=0, max=100),
         ))
         panels.append(layout.panel(
             "gauge", "Dedicated available memory", 6, 7,
-            [{"expr": 'min(last_over_time(azure_availablememory_maximum_Percent{source_path="azure_monitor_api"}[10m]))',
+            [{"expr": f"min(last_over_time(azure_availablememory_maximum_Percent{{{DEDICATED}}}[10m]))",
               "instant": True}],
             description="가용 메모리 비율입니다. 낮을수록 위험하므로 threshold 방향이 CPU와 반대입니다.",
             fieldConfig=field("percent", thresholds(("red", None), ("orange", 15), ("green", 30)),

@@ -98,7 +98,14 @@ async def run() -> None:
                     track_last_enqueued_event_properties=True,
                 )
             )
-            await stop.wait()
+            stop_task = asyncio.create_task(stop.wait())
+            await asyncio.wait({receive_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+            if receive_task.done():
+                stop_task.cancel()
+                # Surface the failure (or an unexpected return) so Kubernetes restarts the Pod
+                # instead of leaving a Running consumer that no longer receives.
+                receive_task.result()
+                raise RuntimeError("event receive loop ended without a stop signal")
             receive_task.cancel()
             try:
                 await receive_task

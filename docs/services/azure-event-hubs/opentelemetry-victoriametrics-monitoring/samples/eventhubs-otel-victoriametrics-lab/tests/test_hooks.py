@@ -180,3 +180,21 @@ def test_postdown_verifies_the_group_recorded_by_predown(fake_bin):
 
     assert result.returncode == 0, result.stderr
     assert "group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-example" in log.read_text()
+
+
+def test_postdeploy_never_scales_the_running_consumer(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "account show" ]]; then echo 00000000-0000-0000-0000-000000000000; fi')
+    write("azd", 'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
+                 '*) echo value;; esac')
+    write("kubectl", 'if [[ "$*" == *" apply "* ]]; then cat >/dev/null; fi')
+
+    result = _run("azd-deploy.sh", bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert "scale deploy/eventhubs-slow-consumer" not in log.read_text()
+    manifest = (LAB_ROOT / "k8s" / "workloads.yaml").read_text().split("---")
+    consumer = next(doc for doc in manifest if "name: eventhubs-slow-consumer\n  namespace" in doc and "kind: Deployment" in doc)
+    producer = next(doc for doc in manifest if "name: eventhubs-producer\n  namespace" in doc and "kind: Deployment" in doc)
+    assert "replicas:" not in consumer
+    assert "replicas: 0" in producer

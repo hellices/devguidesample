@@ -130,7 +130,8 @@ def render_config(env: Mapping[str, str]) -> dict:
                 "auth": {"authenticator": "azure_auth"},
                 "metrics": {"microsoft.eventhub/clusters": DEDICATED_METRICS},
             }
-            sources["azure_monitor_api"].append("azure_monitor/dedicated")
+            # A separate source keeps Dedicated Incoming/Outgoing series out of the Premium per-PU panels.
+            sources["azure_monitor_dedicated"] = ["azure_monitor/dedicated"]
 
     receivers["azure_event_hub/diagnostic"] = {
         "event_hub": {
@@ -222,6 +223,15 @@ def render_config(env: Mapping[str, str]) -> dict:
         "error_mode": "ignore",
         "metric_conditions": ['not IsMatch(metric.name, "^otelcol_(receiver|exporter)_.*")'],
     }
+    if "azure_monitor_dedicated" in sources:
+        # The receiver scopes by resource group and type only; drop every other cluster in that group.
+        processors["filter/dedicated"] = {
+            "error_mode": "ignore",
+            "metric_conditions": [
+                'ConvertCase(datapoint.attributes["azuremonitor.resource_id"], "lower") != '
+                f'"{dedicated_id.lower()}"'
+            ],
+        }
     for source in sources:
         processors[f"resource/source_{source}"] = _resource_processor("source_path", source)
     for delivery in DELIVERY_EXPORTERS:
@@ -250,6 +260,7 @@ def render_config(env: Mapping[str, str]) -> dict:
                     "memory_limiter",
                     *(["filter/lag"] if source == "lag_exporter" else []),
                     *(["filter/self"] if source == "collector_self" else []),
+                    *(["filter/dedicated"] if source == "azure_monitor_dedicated" else []),
                     f"resource/source_{source}",
                     f"resource/delivery_{delivery}",
                     "batch",

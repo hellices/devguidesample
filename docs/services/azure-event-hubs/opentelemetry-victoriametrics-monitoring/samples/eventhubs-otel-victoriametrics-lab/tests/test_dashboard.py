@@ -72,3 +72,27 @@ def test_panels_do_not_overlap():
         assert not occupied & cells, panel["title"]
         assert pos["x"] + pos["w"] <= 24
         occupied |= cells
+
+
+def test_request_totals_use_the_azure_monitor_window():
+    for panel in _panels(build_dashboard({"processing_units": 1})):
+        for target in panel.get("targets", []):
+            if "sum_over_time(azure_" in target["expr"]:
+                assert "[$__range] offset 1s" in target["expr"]
+
+
+def test_optional_marker_leads_every_description_that_uses_it():
+    for panel in _panels(build_dashboard({"processing_units": 1, "dedicated_enabled": True})):
+        description = panel.get("description", "")
+        if "[optional]" in description:
+            assert description.startswith("[optional]"), panel["title"]
+
+
+def test_dedicated_panels_read_only_the_dedicated_source():
+    dashboard = build_dashboard({"processing_units": 1, "dedicated_enabled": True})
+    for panel in _panels(dashboard):
+        exprs = " ".join(target["expr"] for target in panel.get("targets", []))
+        if panel["title"].startswith("Dedicated"):
+            assert 'source_path="azure_monitor_dedicated"' in exprs
+        else:
+            assert "azure_monitor_dedicated" not in exprs

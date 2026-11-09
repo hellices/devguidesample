@@ -12,13 +12,22 @@ import base64
 import json
 import math
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 
+def _tls_context() -> ssl.SSLContext | None:
+    # GRAFANA_CA_FILE pins the gateway's self-signed certificate; hostname (IP SAN) checks stay on.
+    ca_file = os.environ.get("GRAFANA_CA_FILE")
+    return ssl.create_default_context(cafile=ca_file) if ca_file else None
+
+
 def grafana_request(url: str, user: str, password: str, path: str, body: dict | None = None) -> dict:
+    if not url.startswith("https://") and os.environ.get("GRAFANA_ALLOW_HTTP") != "1":
+        raise SystemExit("refusing to send Grafana credentials over plain HTTP")
     token = base64.b64encode(f"{user}:{password}".encode()).decode()
     request = urllib.request.Request(
         f"{url}{path}",
@@ -26,7 +35,7 @@ def grafana_request(url: str, user: str, password: str, path: str, body: dict | 
         headers={"Authorization": f"Basic {token}", "Content-Type": "application/json"},
         method="POST" if body is not None else "GET",
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.urlopen(request, timeout=60, context=_tls_context()) as response:
         return json.load(response)
 
 
