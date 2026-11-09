@@ -400,3 +400,14 @@ def test_vm_query_cleans_up_a_forward_started_on_a_previous_port(fake_forward):
 def test_evidence_is_kept_per_environment():
     text = (SCRIPTS / "lib.sh").read_text()
     assert 'local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"' in text
+
+
+def test_gateway_restarts_grafana_only_after_renewing_its_certificate():
+    # Grafana's certs_watch_interval is disabled by default, so a renewed certificate is
+    # served only after a restart; `docker compose up -d` keeps the running container.
+    text = (LAB_ROOT / "gateway" / "bootstrap.sh").read_text()
+    renew = text.index("openssl req -x509")
+    assert text.index("CERT_RENEWED=true", renew) < text.index("fi", renew)
+    restart = text.index("docker compose restart grafana")
+    assert text.index('if [ "$CERT_RENEWED" = true ]; then') < restart
+    assert restart > text.index("docker compose up -d")

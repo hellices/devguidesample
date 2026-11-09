@@ -27,11 +27,13 @@ chmod 0755 secrets
 # self-signed certificate for that IP; the operator pins this certificate (printed below).
 install -d -m 0755 tls
 # Regenerate when missing, issued for another IP, or expiring within a day (30-day validity).
+CERT_RENEWED=false
 if [ ! -s tls/grafana.crt ] \
   || ! openssl x509 -in tls/grafana.crt -noout -checkend 86400 >/dev/null 2>&1 \
   || ! openssl x509 -in tls/grafana.crt -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:${GATEWAY_PUBLIC_IP}"; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=eventhubs-lab-grafana" \
     -addext "subjectAltName=IP:${GATEWAY_PUBLIC_IP}" -keyout tls/grafana.key -out tls/grafana.crt 2>/dev/null
+  CERT_RENEWED=true
 fi
 chown 472:0 tls/grafana.key tls/grafana.crt
 chmod 0400 tls/grafana.key
@@ -46,6 +48,10 @@ else
   docker compose --profile fallback rm -sf azure-metrics-exporter >/dev/null 2>&1 || true
 fi
 docker compose restart otel-collector >/dev/null
+# Grafana loads its certificate at startup and `up -d` keeps an unchanged running container.
+if [ "$CERT_RENEWED" = true ]; then
+  docker compose restart grafana >/dev/null
+fi
 
 for _ in $(seq 1 30); do
   if curl -fsS http://127.0.0.1:13133/ >/dev/null \
