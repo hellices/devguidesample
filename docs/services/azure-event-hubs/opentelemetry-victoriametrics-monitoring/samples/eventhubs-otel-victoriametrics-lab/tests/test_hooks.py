@@ -249,3 +249,36 @@ def test_each_environment_gets_its_own_default_port(fake_bin):
         ports.add(int(result.stdout.strip()))
     assert len(ports) == 3
     assert all(18428 <= port < 18928 for port in ports)
+
+
+def test_vm_query_stop_terminates_the_forward_it_started(fake_bin, tmp_path):
+    import socket
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")
+    write("curl", 'exec /usr/bin/curl "$@"')
+    # The fake kubectl becomes a long-running HTTP server on the forwarded local port, like port-forward.
+    write("kubectl", (
+        'for a; do case "$a" in *:8428) p="${a%%:*}";; esac; done; '
+        'exec /usr/bin/python3 -c "import http.server as h,sys\n'
+        'class H(h.BaseHTTPRequestHandler):\n'
+        ' def do_GET(s): s.send_response(200); s.end_headers()\n'
+        ' def log_message(s,*a): pass\n'
+        'h.HTTPServer((\'127.0.0.1\',int(sys.argv[1])),H).serve_forever()" "$p"'
+    ))
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+           "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": str(port)}
+    run = lambda *args: subprocess.run(["bash", str(SCRIPTS / "vm-query.sh"), *args], env=env,
+                                       capture_output=True, text=True, timeout=60)
+
+    assert run("start").returncode == 0
+    assert run("start").returncode == 0  # reuses its own healthy forward
+    assert run("stop").returncode == 0
+    import time
+    time.sleep(1)
+    with socket.socket() as again:
+        # A surviving forward would still accept connections on the port.
+        assert again.connect_ex(("127.0.0.1", port)) != 0

@@ -60,3 +60,25 @@ def test_receive_failure_exits_instead_of_idling(monkeypatch):
 
     with pytest.raises(ConnectionError):
         asyncio.run(asyncio.wait_for(consumer.run(), timeout=5))
+
+
+
+def test_producer_payload_is_exactly_the_requested_size(monkeypatch):
+    modules = {
+        "azure": types.ModuleType("azure"),
+        "azure.eventhub": types.ModuleType("azure.eventhub"),
+        "azure.eventhub.aio": types.ModuleType("azure.eventhub.aio"),
+        "azure.identity": types.ModuleType("azure.identity"),
+        "azure.identity.aio": types.ModuleType("azure.identity.aio"),
+    }
+    modules["azure.eventhub"].EventData = object
+    modules["azure.eventhub.aio"].EventHubProducerClient = _Client
+    modules["azure.identity.aio"].DefaultAzureCredential = _Client
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.syspath_prepend(str(LAB_ROOT / "workloads"))
+    monkeypatch.delitem(sys.modules, "producer", raising=False)
+    import producer
+
+    for size in (128, 1024, 4096):
+        assert len(producer.make_payload(123456, size).encode()) == size

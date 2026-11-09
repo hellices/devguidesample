@@ -180,7 +180,9 @@ slow consumer는 partition마다 event당 30 ms를 쉬며 20 event마다 checkpo
 | 정점의 20% 이하 도달 | 19:55:57 UTC (producer 중지 후 5분 33초) |
 
 producer 로그의 `sent_total`(118,600)은 10초 간격 로그의 마지막 값이므로 전송량은
-Azure Monitor `IncomingMessages`를 기준으로 봅니다. 첫 환경의 같은 시나리오에서도
+Azure Monitor `IncomingMessages`를 기준으로 봅니다. 기록한 실행의 event body는 리뷰에서
+찾은 크기 계산 문제로 설정값 1,024바이트보다 13바이트 큰 1,037바이트였고, 지금 sample은
+정확히 `PAYLOAD_BYTES`로 보냅니다. 첫 환경의 같은 시나리오에서도
 peak 10,860–11,040건, 회복 6분으로 비슷했습니다.
 
 시나리오는 10분 넘게 VMSingle을 조회하므로 `kubectl port-forward`가 `lost connection
@@ -298,6 +300,8 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 모든 환경이 같은 기본 포트를 써 다른 환경의 port-forward를 재사용할 수 있음 | 환경 이름으로 기본 포트를 정하고, 이 환경이 연 port-forward가 아니면 사용하지 않음 |
 | 완료 판정이 반환된 분끼리만 비교 | 요청한 4개 지표와 창의 모든 분이 있어야 완료로 판정하는 비교 모듈과 단위 테스트 |
 | gauge·그래프의 `min`·`max`가 `custom`에 기록됨 | Grafana 표준 field option으로 이동 |
+| `vm-query.sh stop`이 port-forward를 끄지 못함 | `kube` 함수를 background로 실행해 subshell PID가 기록됐음. `kubectl`을 직접 background로 실행해 그 PID를 기록 |
+| producer payload가 설정값보다 13바이트 큼 | 빈 `padding` 필드를 포함해 크기를 계산해 정확히 `PAYLOAD_BYTES`로 맞춤 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

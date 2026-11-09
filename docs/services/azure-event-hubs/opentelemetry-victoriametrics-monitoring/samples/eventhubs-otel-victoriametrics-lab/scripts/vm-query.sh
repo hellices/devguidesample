@@ -31,7 +31,10 @@ case "${1:-start}" in
     elif healthy; then
       die "port $PORT already serves another VictoriaMetrics; set VM_LOCAL_PORT for this environment"
     fi
-    kube port-forward -n eventhubs-observability svc/vmsingle-lab "$PORT:8428" >"$STATE/port-forward.log" 2>&1 &
+    # Start kubectl itself in the background (not the kube function, which would fork a subshell)
+    # so the recorded PID is the forward process that stop must terminate.
+    kubectl --kubeconfig "$STATE/kubeconfig" port-forward -n eventhubs-observability svc/vmsingle-lab \
+      "$PORT:8428" >"$STATE/port-forward.log" 2>&1 &
     echo $! >"$STATE/port-forward.pid"
     printf '%s\n' "$PORT" >"$STATE/port-forward.port"
     for _ in $(seq 1 20); do

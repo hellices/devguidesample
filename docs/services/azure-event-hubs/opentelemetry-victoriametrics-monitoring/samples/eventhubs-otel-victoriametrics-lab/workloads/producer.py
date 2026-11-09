@@ -39,6 +39,8 @@ def make_payload(sequence: int, payload_bytes: int) -> str:
         "sent_at_unix": time.time(),
         "source": "eventhubs-observability-lab",
     }
+    # Measure with an empty padding field so its key and quotes count toward payload_bytes.
+    body["padding"] = ""
     encoded = json.dumps(body, separators=(",", ":"))
     if len(encoded) < payload_bytes:
         body["padding"] = "x" * (payload_bytes - len(encoded))
