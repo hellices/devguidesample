@@ -75,7 +75,12 @@ def fake_bin(tmp_path):
 
 
 def _run(script: str, bin_dir: Path, *args: str) -> subprocess.CompletedProcess:
-    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(bin_dir.parent), "AZURE_ENV_NAME": "unit"}
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "HOME": str(bin_dir.parent),
+        "AZURE_ENV_NAME": "unit",
+        "LAB_STATE_ROOT": str(bin_dir.parent / "state"),
+    }
     return subprocess.run(
         ["bash", str(SCRIPTS / script), *args],
         cwd=bin_dir.parent,
@@ -91,7 +96,7 @@ def test_preprovision_stops_before_mutation_on_subscription_mismatch(fake_bin):
     write("az", 'if [[ "$1 $2" == "account show" ]]; then echo 99999999-0000-0000-0000-000000000000; fi')
     write(
         "azd",
-        'if [[ "$1 $2" == "env get-value" && "$3" == "AZURE_SUBSCRIPTION_ID" ]]; then '
+        'if [[ "$1 $2" == "env get-value" && "${@: -1}" == "AZURE_SUBSCRIPTION_ID" ]]; then '
         "echo 00000000-0000-0000-0000-000000000000; exit 0; fi; exit 1",
     )
     write("python3", "exit 0")
@@ -108,7 +113,7 @@ def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path)
     write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
     write(
         "azd",
-        'case "$3" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
+        'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
         "AZURE_RESOURCE_GROUP) echo rg-example;; *) exit 1;; esac",
     )
 
@@ -126,3 +131,52 @@ def test_cleanup_requires_confirmation(fake_bin):
     write("azd", "exit 1")
 
     assert _run("cleanup-external.sh", bin_dir).returncode != 0
+
+
+def test_hooks_pin_azd_env_to_the_running_environment():
+    for path in SCRIPTS.glob("*.sh"):
+        for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("azd env set", "azd env get-value")) or "$(azd env get-value" in stripped:
+                raise AssertionError(f"{path.name}: use azd_env so -e <env> is honored: {stripped}")
+
+
+def test_preprovision_writes_to_the_requested_environment(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'case "$1 $2" in "account show") '
+          'if [[ "$*" == *user.type* ]]; then echo user; else echo 00000000-0000-0000-0000-000000000000; fi;; '
+          '"provider show") echo Registered;; "ad signed-in-user") echo 33333333-3333-3333-3333-333333333333;; esac')
+    write("azd", 'if [[ "$1 $2" == "env get-value" && "${@: -1}" == "AZURE_SUBSCRIPTION_ID" ]]; then '
+          "echo 00000000-0000-0000-0000-000000000000; exit 0; fi; "
+          'if [[ "$1 $2" == "env get-value" ]]; then exit 1; fi; exit 0')
+    write("curl", "echo 203.0.113.10")
+    write("python3", "exit 0")
+    write("ssh-keygen", 'for a; do last="$a"; done; echo "ssh-ed25519 AAAA test" > "$last.pub"; touch "$last"')
+
+    result = _run("azd-configure.sh", bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    sets = [line for line in log.read_text().splitlines() if line.startswith("azd env set")]
+    assert sets and all(line.startswith("azd env set -e unit ") for line in sets)
+    assert "azd env set -e unit OPERATOR_EGRESS_CIDR 203.0.113.10/32" in log.read_text()
+
+
+def test_postdown_verifies_the_group_recorded_by_predown(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+    write(
+        "azd",
+        'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
+        "AZURE_RESOURCE_GROUP) echo rg-example;; *) exit 1;; esac",
+    )
+    assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+
+    # azd down has cleared provision outputs by the time postdown runs.
+    write(
+        "azd",
+        'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; *) exit 1;; esac',
+    )
+    result = _run("verify-cleanup.sh", bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert "group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-example" in log.read_text()

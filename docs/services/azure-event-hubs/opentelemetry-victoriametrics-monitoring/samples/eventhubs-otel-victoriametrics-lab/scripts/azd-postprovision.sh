@@ -56,7 +56,7 @@ az acr build --subscription "$AZURE_SUBSCRIPTION_ID" --registry "$ACR_NAME" --im
 IMAGE_DIGEST="$(az acr repository show --subscription "$AZURE_SUBSCRIPTION_ID" --name "$ACR_NAME" \
   --image "eventhubs-lab-workloads:$IMAGE_TAG" --query digest -o tsv)"
 WORKLOAD_IMAGE="$ACR_LOGIN_SERVER/eventhubs-lab-workloads@$IMAGE_DIGEST"
-azd env set WORKLOAD_IMAGE "$WORKLOAD_IMAGE"
+azd_env set WORKLOAD_IMAGE "$WORKLOAD_IMAGE"
 
 log "4/6 VictoriaMetrics Operator, VMSingle, VMAgent"
 kube apply -f "$LAB_ROOT/k8s/namespace.yaml"

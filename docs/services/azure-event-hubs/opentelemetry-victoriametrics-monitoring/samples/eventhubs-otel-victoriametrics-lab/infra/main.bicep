@@ -11,8 +11,11 @@ param location string = 'koreacentral'
 @description('Region for both Event Hubs namespaces. Empty uses location. Diagnostic Settings require the sink Event Hub in the same region as the Premium namespace, so both move together.')
 param eventHubsLocation string = ''
 
+// The preprovision hook fills operatorEgressCidr, grafanaAdminPassword and
+// gatewayAdminSshPublicKey. azd up checks required inputs before it runs hooks, so these
+// parameters default to ''. Without the hook, the empty CIDR and SSH key fail ARM validation.
 @description('Single IPv4 CIDR allowed to reach Grafana and the AKS API server.')
-param operatorEgressCidr string
+param operatorEgressCidr string = ''
 
 @description('AKS Kubernetes major.minor or patch version.')
 param kubernetesVersion string = '1.36'
@@ -22,7 +25,7 @@ param existingDedicatedClusterResourceId string = ''
 
 @secure()
 @description('Grafana administrator password stored in Key Vault and never returned as an output.')
-param grafanaAdminPassword string
+param grafanaAdminPassword string = ''
 
 @description('Object ID of the operator running azd; azd supplies AZURE_PRINCIPAL_ID.')
 param deployerPrincipalId string = ''
@@ -36,7 +39,7 @@ param deployerPrincipalId string = ''
 param deployerPrincipalType string = 'User'
 
 @description('Public key used only to satisfy the VM OS profile. No inbound SSH rule is created.')
-param gatewayAdminSshPublicKey string
+param gatewayAdminSshPublicKey string = ''
 
 var token = toLower(uniqueString(subscription().id, environmentName, location))
 var messagingLocation = empty(eventHubsLocation) ? location : eventHubsLocation

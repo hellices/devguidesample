@@ -26,6 +26,7 @@ def test_dashboard_answers_required_questions():
         "Checkpoint presence",
         "Receiver and delivery path comparison",
         "DS Event Hub series",
+        "IncomingMessages: API vs Diagnostic Settings",
         "Exporter send failures",
     ):
         assert title in titles

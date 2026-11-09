@@ -81,6 +81,13 @@ for metric in raw["value"]:
              f'{{source_path="azure_monitor_api",delivery_path="{delivery}"}}[{end - start}s]))')
         result = json.loads(vm("/api/v1/query", {"query": q, "time": end - 1}))["data"]["result"]
         totals[delivery] = float(result[0]["value"][1]) if result else None
+    diagnostic = {}
+    for line in vm("/api/v1/export", {"match[]": f'{name.lower()}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}',
+                                      "start": start, "end": end - 1}).splitlines():
+        series = json.loads(line)
+        for value, ts in zip(series["values"], series["timestamps"]):
+            minute = __import__("datetime").datetime.fromtimestamp(ts / 1000, __import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M")
+            diagnostic[minute] = diagnostic.get(minute, 0) + value
     minutes = sorted(direct)
     report["metrics"][name] = {
         "azure_monitor_total": sum(direct.values()),
@@ -88,6 +95,9 @@ for metric in raw["value"]:
         "minutes": len(minutes),
         "minutes_matching_remote_write": sum(1 for m in minutes if remote.get(m) == direct[m]),
         "minutes_missing_in_remote_write": [m for m in minutes if m not in remote and direct[m]],
+        "diagnostic_eventhub_total": sum(diagnostic.values()) if diagnostic else None,
+        "minutes_matching_diagnostic_eventhub": sum(1 for m in minutes if diagnostic.get(m) == direct[m]),
+        "minutes_present_in_diagnostic_eventhub": sum(1 for m in minutes if m in diagnostic),
     }
 print(json.dumps(report, indent=2))
 PY

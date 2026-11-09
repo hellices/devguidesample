@@ -11,7 +11,7 @@ assert_active_subscription
 
 LOCATION="$(env_value AZURE_LOCATION)"
 if [[ -z "$LOCATION" ]]; then
-  azd env set AZURE_LOCATION koreacentral
+  azd_env set AZURE_LOCATION koreacentral
 fi
 
 for namespace in Microsoft.EventHub Microsoft.ContainerService Microsoft.Compute Microsoft.Insights \
@@ -22,7 +22,7 @@ done
 
 EGRESS_IP="$(curl -4 --fail --silent --show-error --max-time 10 https://api.ipify.org)"
 [[ "$EGRESS_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "could not determine an IPv4 egress address"
-azd env set OPERATOR_EGRESS_CIDR "${EGRESS_IP}/32"
+azd_env set OPERATOR_EGRESS_CIDR "${EGRESS_IP}/32"
 log "Grafana and the AKS API server will accept only the current operator egress /32."
 
 USER_TYPE="$(az account show --query user.type -o tsv)"
@@ -33,16 +33,16 @@ else
   PRINCIPAL_ID="$(az ad sp show --id "$(az account show --query user.name -o tsv)" --query id -o tsv)"
   PRINCIPAL_TYPE=ServicePrincipal
 fi
-azd env set AZURE_PRINCIPAL_ID "$PRINCIPAL_ID"
-azd env set AZURE_PRINCIPAL_TYPE "$PRINCIPAL_TYPE"
+azd_env set AZURE_PRINCIPAL_ID "$PRINCIPAL_ID"
+azd_env set AZURE_PRINCIPAL_TYPE "$PRINCIPAL_TYPE"
 
 if [[ -z "$(env_value GRAFANA_ADMIN_PASSWORD)" ]]; then
-  azd env set GRAFANA_ADMIN_PASSWORD "$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
+  azd_env set GRAFANA_ADMIN_PASSWORD "$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
 fi
 
 KEY_DIR="$(state_dir)"
 if [[ ! -f "$KEY_DIR/gateway_ed25519" ]]; then
   ssh-keygen -q -t ed25519 -N '' -C eventhubs-otel-lab -f "$KEY_DIR/gateway_ed25519"
 fi
-azd env set GATEWAY_ADMIN_SSH_PUBLIC_KEY "$(<"$KEY_DIR/gateway_ed25519.pub")"
+azd_env set GATEWAY_ADMIN_SSH_PUBLIC_KEY "$(<"$KEY_DIR/gateway_ed25519.pub")"
 log "preprovision checks passed."

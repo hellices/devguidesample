@@ -85,12 +85,19 @@ def test_main_bicep_exports_hook_contract():
 def test_main_parameters_map_azd_environment_values():
     parameters = (LAB_ROOT / "infra" / "main.parameters.json").read_text()
 
+    for variable in ("AZURE_ENV_NAME", "AZURE_LOCATION"):
+        assert "${" + variable + "}" in parameters
+    # azd up validates required inputs before preprovision runs, so hook-filled values need
+    # an empty default; main.bicep enforces minimum lengths instead.
     for variable in (
-        "AZURE_ENV_NAME",
-        "AZURE_LOCATION",
         "OPERATOR_EGRESS_CIDR",
         "GRAFANA_ADMIN_PASSWORD",
         "GATEWAY_ADMIN_SSH_PUBLIC_KEY",
-        "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=",
+        "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID",
+        "EVENTHUBS_LOCATION",
     ):
-        assert "${" + variable + "}" in parameters
+        assert "${" + variable + "=}" in parameters
+
+    main = (LAB_ROOT / "infra" / "main.bicep").read_text()
+    for parameter in ("operatorEgressCidr", "grafanaAdminPassword", "gatewayAdminSshPublicKey"):
+        assert f"param {parameter} string = ''" in main

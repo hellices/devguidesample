@@ -5,9 +5,9 @@
     "environmentName": { "value": "${AZURE_ENV_NAME}" },
     "location": { "value": "${AZURE_LOCATION}" },
     "eventHubsLocation": { "value": "${EVENTHUBS_LOCATION=}" },
-    "operatorEgressCidr": { "value": "${OPERATOR_EGRESS_CIDR}" },
-    "grafanaAdminPassword": { "value": "${GRAFANA_ADMIN_PASSWORD}" },
-    "gatewayAdminSshPublicKey": { "value": "${GATEWAY_ADMIN_SSH_PUBLIC_KEY}" },
+    "operatorEgressCidr": { "value": "${OPERATOR_EGRESS_CIDR=}" },
+    "grafanaAdminPassword": { "value": "${GRAFANA_ADMIN_PASSWORD=}" },
+    "gatewayAdminSshPublicKey": { "value": "${GATEWAY_ADMIN_SSH_PUBLIC_KEY=}" },
     "deployerPrincipalId": { "value": "${AZURE_PRINCIPAL_ID=}" },
     "deployerPrincipalType": { "value": "${AZURE_PRINCIPAL_TYPE=User}" },
     "existingDedicatedClusterResourceId": { "value": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}" }

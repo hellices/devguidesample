@@ -14,12 +14,23 @@ require_commands() {
   done
 }
 
+# Pin azd env reads and writes to the environment azd is running the hook for (azd up -e <env>).
+azd_env() {
+  local subcommand="$1"
+  shift
+  if [[ -n "${AZURE_ENV_NAME:-}" ]]; then
+    azd env "$subcommand" -e "$AZURE_ENV_NAME" "$@"
+  else
+    azd env "$subcommand" "$@"
+  fi
+}
+
 env_value() {
   # Prefer the process environment azd injects, then the azd env file.
   local name="$1" value="${!1:-}"
   if [[ -z "$value" ]]; then
     # azd prints its "key not found" error on stdout, so trust only the exit code.
-    value="$(azd env get-value "$name" 2>/dev/null)" || value=""
+    value="$(azd_env get-value "$name" 2>/dev/null)" || value=""
   fi
   printf '%s' "$value"
 }
@@ -35,7 +46,7 @@ load_env() {
 }
 
 state_dir() {
-  local dir="$LAB_ROOT/.azure/$(env_value AZURE_ENV_NAME)"
+  local dir="${LAB_STATE_ROOT:-$LAB_ROOT/.azure}/$(env_value AZURE_ENV_NAME)"
   mkdir -p "$dir"
   chmod 700 "$dir"
   printf '%s' "$dir"

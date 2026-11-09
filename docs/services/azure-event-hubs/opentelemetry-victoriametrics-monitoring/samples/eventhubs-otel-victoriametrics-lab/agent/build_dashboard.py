@@ -17,6 +17,7 @@ from pathlib import Path
 UID = "eventhubs-otel-victoriametrics"
 DS = {"type": "prometheus", "uid": "victoriametrics"}
 API = 'source_path="azure_monitor_api",delivery_path="remote_write"'
+DIAG = 'source_path="diagnostic_eventhub",delivery_path="remote_write"'
 LAG = 'source_path="lag_exporter",delivery_path="remote_write"'
 SELF = 'source_path="collector_self",delivery_path="remote_write"'
 LEARN_METRICS = "https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference"
@@ -34,6 +35,7 @@ PANEL_PLAN = [
     ("모든 partition에 checkpoint가 있나", "eventhubs_checkpoint_present", "min by partition", "table"),
     ("수집·전달 경로별로 데이터가 들어오나", "{source_path,delivery_path}", "count_over_time, tlast_over_time", "table"),
     ("scrape와 remote write의 값 형태가 같은가", "IncomingMessages Total", "by delivery_path", "time series"),
+    ("API와 Diagnostic Settings 값이 같은가", "IncomingMessages Total, NamespaceCpuUsage Maximum", "by source_path", "time series"),
     ("Collector가 데이터를 거부·전송 실패했나", "otelcol_receiver_refused_*, otelcol_exporter_send_failed_*", "increase", "stat"),
 ]
 
@@ -276,6 +278,30 @@ def build_dashboard(probe: dict) -> dict:
           "legendFormat": "{{delivery_path}}"}],
         description="remote write는 Azure Monitor의 분 단위 timestamp를 유지하고, scrape는 수집 시각으로 다시 찍혀 1–3분 늦게 보입니다.",
         fieldConfig=field("locale", None, lineWidth=2, showPoints="always", pointSize=4),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+
+    panels.append(layout.row("Azure Monitor API vs Diagnostic Settings (remote write)"))
+    panels.append(layout.panel(
+        "timeseries", "IncomingMessages: API vs Diagnostic Settings", 12, 8,
+        [
+            {"expr": f"sum(azure_incomingmessages_total_Count{{{API}}})", "legendFormat": "azure_monitor_api"},
+            {"expr": f"sum(incomingmessages_total{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},
+        ],
+        description=("Diagnostic Settings는 dimension을 합친 단일 값으로 내보내므로 EntityName별 API 값의 합과 비교합니다. "
+                     "[optional] Diagnostic Settings 경로는 설정 후 데이터가 흐르기까지 시간이 걸릴 수 있습니다."),
+        fieldConfig=field("locale", None, lineWidth=2, showPoints="always", pointSize=4),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+    panels.append(layout.panel(
+        "timeseries", "NamespaceCpuUsage maximum: API vs Diagnostic Settings", 12, 8,
+        [
+            {"expr": f"max(azure_namespacecpuusage_maximum_Percent{{{API}}})", "legendFormat": "azure_monitor_api"},
+            {"expr": f"max(namespacecpuusage_maximum{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},
+        ],
+        description=("[optional] 지표표의 DS Export 값은 No지만 이 실습에서는 Diagnostic Settings 스트림에도 "
+                     "레코드가 도착했습니다. 두 경로를 겹쳐 그 차이를 확인합니다."),
+        fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, showPoints="always", pointSize=4),
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
     ))
 
