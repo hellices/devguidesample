@@ -6,17 +6,19 @@ source "$(dirname "$0")/lib.sh"
 STATE="$(state_dir)"
 PORT="$(vm_local_port)"
 
-# The recorded PID must still be our kubectl port-forward for this port, not a reused PID.
+# The recorded PID must still be our kubectl port-forward for that port, not a reused PID.
 is_our_forward() {
-  local pid="$1"
-  ps -p "$pid" -o command= 2>/dev/null | grep -q "kubectl.*port-forward.*$PORT:8428"
+  local pid="$1" port="$2"
+  ps -p "$pid" -o command= 2>/dev/null | grep -q "kubectl.*port-forward.*$port:8428"
 }
 
+# Stops the recorded forward on the port it was started with, even if VM_LOCAL_PORT changed since.
 stop_forward() {
-  local pid
+  local pid port
   [[ -f "$STATE/port-forward.pid" ]] || return 0
   pid="$(<"$STATE/port-forward.pid")"
-  if is_our_forward "$pid"; then
+  port="$(cat "$STATE/port-forward.port" 2>/dev/null || printf '%s' "$PORT")"
+  if is_our_forward "$pid" "$port"; then
     kill "$pid" 2>/dev/null || true
     for _ in $(seq 1 50); do
       kill -0 "$pid" 2>/dev/null || break
@@ -30,7 +32,7 @@ stop_forward() {
 owned_forward() {
   [[ -f "$STATE/port-forward.pid" && -f "$STATE/port-forward.port" ]] \
     && [[ "$(<"$STATE/port-forward.port")" == "$PORT" ]] \
-    && is_our_forward "$(<"$STATE/port-forward.pid")"
+    && is_our_forward "$(<"$STATE/port-forward.pid")" "$PORT"
 }
 
 healthy() {
@@ -46,9 +48,9 @@ case "${1:-start}" in
     if owned_forward && healthy; then
       exit 0
     fi
-    if owned_forward; then
-      stop_forward
-    elif healthy; then
+    # Unhealthy, or recorded on a previous port: never leave it running behind a new record.
+    stop_forward
+    if healthy; then
       die "port $PORT already serves another VictoriaMetrics; set VM_LOCAL_PORT for this environment"
     fi
     # Start kubectl itself in the background (not the kube function, which would fork a subshell)

@@ -326,12 +326,30 @@ def test_each_environment_gets_its_own_default_port(fake_bin):
     assert all(18428 <= port < 18928 for port in ports)
 
 
-def test_vm_query_stop_terminates_the_forward_it_started(fake_bin, tmp_path):
+def _free_ports(count: int) -> list[int]:
+    import contextlib
     import socket
 
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
+    with contextlib.ExitStack() as stack:
+        # Hold every socket until all are bound so the ports are distinct.
+        probes = [stack.enter_context(socket.socket()) for _ in range(count)]
+        for probe in probes:
+            probe.bind(("127.0.0.1", 0))
+        return [probe.getsockname()[1] for probe in probes]
+
+
+def _port_closed(port: int) -> bool:
+    import socket
+    import time
+
+    time.sleep(1)
+    with socket.socket() as again:
+        # A surviving forward would still accept connections on the port.
+        return again.connect_ex(("127.0.0.1", port)) != 0
+
+
+@pytest.fixture
+def fake_forward(fake_bin, tmp_path):
     bin_dir, _, write = fake_bin
     write("azd", "exit 1")
     write("curl", 'exec /usr/bin/curl "$@"')
@@ -350,19 +368,33 @@ def test_vm_query_stop_terminates_the_forward_it_started(fake_bin, tmp_path):
         f'/usr/bin/python3 {tmp_path / "server.py"} "$p" & child=$!; '
         "trap 'kill $child' TERM; wait $child"
     ))
-    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
-           "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": str(port)}
-    run = lambda *args: subprocess.run(["bash", str(SCRIPTS / "vm-query.sh"), *args], env=env,
-                                       capture_output=True, text=True, timeout=60)
 
-    assert run("start").returncode == 0
-    assert run("start").returncode == 0  # reuses its own healthy forward
-    assert run("stop").returncode == 0
-    import time
-    time.sleep(1)
-    with socket.socket() as again:
-        # A surviving forward would still accept connections on the port.
-        assert again.connect_ex(("127.0.0.1", port)) != 0
+    def run(action: str, port: int) -> subprocess.CompletedProcess:
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+               "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": str(port)}
+        return subprocess.run(["bash", str(SCRIPTS / "vm-query.sh"), action], env=env,
+                              capture_output=True, text=True, timeout=60)
+
+    return run
+
+
+def test_vm_query_stop_terminates_the_forward_it_started(fake_forward):
+    [port] = _free_ports(1)
+
+    assert fake_forward("start", port).returncode == 0
+    assert fake_forward("start", port).returncode == 0  # reuses its own healthy forward
+    assert fake_forward("stop", port).returncode == 0
+    assert _port_closed(port)
+
+
+def test_vm_query_cleans_up_a_forward_started_on_a_previous_port(fake_forward):
+    old, new = _free_ports(2)
+
+    assert fake_forward("start", old).returncode == 0
+    assert fake_forward("start", new).returncode == 0
+    assert _port_closed(old)
+    assert fake_forward("stop", old).returncode == 0  # stop uses the recorded port, not the current one
+    assert _port_closed(new)
 
 
 def test_evidence_is_kept_per_environment():

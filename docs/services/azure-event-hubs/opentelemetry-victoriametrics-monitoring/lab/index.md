@@ -321,6 +321,7 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | cleanup이 `az` 조회 실패를 "삭제할 것 없음"으로 처리 | 각 조회의 종료 상태를 확인해 실패하면 cleanup도 실패 |
 | `producer_stop`이 producer Pod 종료 전에 기록됨 | Pod 삭제를 확인한 뒤 기록하고, 남아 있으면 실패 |
 | lag exporter·consumer가 checkpoint store의 Storage session을 닫지 않음 | `async with`에 checkpoint store를 포함 |
+| `VM_LOCAL_PORT`를 바꾸면 이전 포트의 port-forward가 남음 | 기록된 포트로 소유권을 확인해 종료하고, 다른 포트로 시작하기 전에 이전 forward를 정리 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 
