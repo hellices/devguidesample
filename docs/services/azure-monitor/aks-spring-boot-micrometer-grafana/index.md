@@ -7,7 +7,7 @@ technologies: [java, spring-boot, micrometer, kubernetes, grafana]
 tags: [build, operate]
 status: current
 verification_status: verified
-sources_checked_at: 2026-11-07
+sources_checked_at: 2026-11-10
 official_sources:
   - title: Autoinstrument AKS apps with Azure Monitor Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless
@@ -15,6 +15,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-monitor/app/java-standalone-config
   - title: Metrics in Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/app/metrics-overview
+  - title: Micrometer Meters
+    url: https://docs.micrometer.io/micrometer/reference/concepts/meters.html
   - title: How to manage data sources in Azure Managed Grafana
     url: https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity
   - title: Configure an Azure Managed Grafana remote MCP server
@@ -27,7 +29,7 @@ official_sources:
     url: https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api
   - title: Fix Spring Boot 4 Micrometer auto-configuration and add actuator metrics smoke coverage
     url: https://github.com/microsoft/ApplicationInsights-Java/pull/4672
-last_verified: 2026-11-07
+last_verified: 2026-11-10
 review_cycle_days: 30
 applies_to:
   - Spring Boot와 Micrometer를 사용하는 Java workload
@@ -46,52 +48,102 @@ meter 기록, 자동 수집, agent 검증의 세 단계만 연결하면 비즈�
 보려고 exporter를 붙이거나, scrape 설정을 만들거나, 대시보드 query를 손으로
 설계할 필요는 없습니다.
 
-1. **앱은 Micrometer meter만 남깁니다.** 도메인 이벤트가 일어날 때 Counter,
-   DistributionSummary, Gauge를 기록합니다.
-2. **AKS 자동 계측이 수집합니다.** Pod에 주입된 Application Insights Java agent가
-   Micrometer 지표를 읽어 `customMetrics`로 보냅니다. 앱에는 exporter도, metrics
-   endpoint도 필요 없습니다.
+1. **앱은 Micrometer API로 지표를 기록합니다.** 도메인 이벤트가 일어날 때
+   Counter, DistributionSummary, Gauge 값을 남깁니다.
+2. **AKS 자동 계측이 수집합니다.** 클러스터의 자동 계측을 켜면 Pod에 주입된
+   Application Insights Java agent가 Micrometer 지표를 읽어 Application Insights
+   `customMetrics`로 보냅니다. 앱에는 exporter도, metrics endpoint도 필요 없습니다.
 3. **agent가 실제 지표를 보며 Grafana 대시보드를 만듭니다.** 코드의 meter 이름을
    추측하지 않고 `customMetrics`를 직접 조회해 집계식을 정하고, 모든 panel
    query를 실행하고, 렌더링한 화면을 캡처해 확인합니다.
 
-아래는 영화 리뷰 앱 MovieLog를 AKS에 올려 이 흐름 그대로 만든 대시보드입니다.
-2026-11-07 실제 환경에서 합성 사용자 트래픽으로 캡처했습니다.
+아래는 Spring Boot로 만든 영화 리뷰 sample 앱 MovieLog의 custom metric을 이 흐름으로
+시각화한 대시보드입니다. 앱 구성과 배포, 대시보드를 만든 과정과 실측값은
+[MovieLog 실습](movielog-lab/index.md)에 있습니다.
 
-![MovieLog 비즈니스 지표 대시보드. 영화 조회·새 리뷰·신규 회원 stat과 sparkline, 평균 별점 gauge, fresh/rotten donut, 채널별 누적 area와 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, Pod별 누락 metric status history panel](images/movielog-dashboard.png)
+![MovieLog 비즈니스 지표 대시보드. 영화 조회 13.0K, 새 리뷰 2.26K, 신규 회원 3.23K stat과 sparkline, 평균 별점 3.50 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 누락 metric status history, metric 수신 상태 table](images/movielog-dashboard.png)
 
-## 앱 코드: 도메인 이벤트 기반 Micrometer meter { #record }
+## 앱 코드: Micrometer API 기반 custom metric { #record }
 
-앱 코드는 도메인 이벤트에서 meter를 올리는 것으로 끝납니다. MovieLog의 서비스
-코드는 Micrometer를 모르고, 리뷰 작성 같은 도메인 이벤트를 발행하면 한 class가
-meter로 바꿉니다.
+앱은 Micrometer API로 비즈니스 이벤트를 custom metric으로 만듭니다. Micrometer는
+Java 애플리케이션의 지표 계측 API입니다. 앱은 `MeterRegistry`에 meter를 등록하고
+값을 기록할 뿐이고, 그 값을 어느 모니터링 백엔드로 보낼지는 registry 구현이나 수집
+agent가 정합니다. Spring Boot에서는 `spring-boot-starter-actuator`가 `MeterRegistry`
+bean을 구성하므로 생성자로 주입받아 바로 씁니다.
+
+meter는 이름과 tag 조합으로 구분되며, 측정하려는 값의 성격에 따라 종류를 고릅니다.
+
+| meter | 기록하는 값 | 어울리는 지표 | MovieLog 예 |
+|---|---|---|---|
+| Counter | 늘어나기만 하는 발생 횟수 | 조회, 가입, 작성 같은 이벤트 수 | `movielog.reviews.posted`, `movielog.movie.views` |
+| Gauge | 읽는 시점의 현재 값 | 저장 건수, queue 길이, pool 사용량 | `movielog.reviews.stored` |
+| DistributionSummary | 기록한 값들의 분포(횟수, 합계, 최댓값) | 별점, payload 크기처럼 시간이 아닌 값 | `movielog.review.rating` |
+| Timer | 소요 시간의 분포와 횟수 | 처리 지연 | MovieLog 비즈니스 지표에서는 쓰지 않음 |
+
+Counter와 DistributionSummary는 이벤트가 일어날 때 코드에서 값을 올립니다.
+MovieLog는 서비스 로직이 발행한 도메인 이벤트를 listener 한 곳에서 받아 기록합니다.
 
 ```java
-@TransactionalEventListener(fallbackExecution = true)
-void reviewCreated(ReviewEvents.Created event) {
-    counter("reviews.posted", "New reviews", "channel", channel(), "verdict",
-            event.fresh() ? "fresh" : "rotten").increment();
-    reviewRating.record(event.rating() / 2.0);
+@Component
+class BusinessMetrics {
+
+    private final MeterRegistry registry;
+    private final DistributionSummary reviewRating;
+
+    BusinessMetrics(MeterRegistry registry) {
+        this.registry = registry;
+        this.reviewRating = DistributionSummary.builder("movielog.review.rating")
+            .baseUnit("stars")
+            .register(registry);
+    }
+
+    @TransactionalEventListener(fallbackExecution = true)
+    void reviewCreated(ReviewEvents.Created event) {
+        // The same name and tags return the already registered counter.
+        Counter.builder("movielog.reviews.posted")
+            .tag("channel", channel())
+            .tag("verdict", event.fresh() ? "fresh" : "rotten")
+            .register(registry)
+            .increment();
+        reviewRating.record(event.rating() / 2.0);
+    }
 }
 ```
 
-- tag 값은 `web`/`api`, `fresh`/`rotten`처럼 고정된 몇 개만 씁니다. 영화 ID나
-  사용자명을 넣지 않습니다.
-- 내보낼 meter를 prefix로 제한합니다. agent가 보내는 지표는 모두 과금 대상
-  `customMetrics` 행이 되기 때문입니다.
+Gauge는 값을 올리지 않고 값을 읽을 함수를 등록합니다. registry가 지표를 내보낼 때마다
+이 함수를 호출합니다.
 
-```properties
-management.metrics.enable.all=false
-management.metrics.enable.movielog=true
+```java
+Gauge.builder("movielog.reviews.stored", reviews, ReviewRepository::count)
+    .register(registry);
 ```
 
-## 수집: Instrumentation CR과 Pod annotation { #collect }
+- tag 값은 `web`/`api`, `fresh`/`rotten`처럼 고정된 몇 개만 씁니다. 영화 ID나
+  사용자명처럼 값이 계속 늘어나는 항목을 tag에 넣으면 series가 끝없이 늘어납니다.
+- 내보낼 meter는 prefix 허용 목록으로 제한합니다. 내보낸 지표는 모두 과금 대상
+  `customMetrics` 행이 됩니다.
+- MovieLog의 meter 목록, 이벤트 처리 시점, AKS profile 설정은 실습의
+  [MovieLog meter 절](movielog-lab/index.md#meters)에 있습니다.
 
-수집에는 `Instrumentation` CR과 annotation만 있으면 됩니다. 클러스터에서
-Application Monitoring을 켜고, namespace에 `Instrumentation` CR을 만든 뒤
-Deployment의 Pod template에 annotation을 하나 답니다. `default`가 아닌 이름의
-CR(per-deployment 방식)은 `autoInstrumentationPlatforms`를 빈 배열로 두고, 언어는
-annotation(`inject-java`)이 정합니다.
+## 수집: AKS 자동 계측과 Application Insights customMetrics { #collect }
+
+AKS의 Application Monitoring 자동 계측을 켜면 앱이 기록한 Micrometer 지표가 코드
+변경 없이 Application Insights로 수집됩니다. 앱에 exporter 라이브러리를 넣거나
+metrics endpoint를 열고 scrape 설정을 만들 필요가 없습니다. 지표는 Application
+Insights의 `customMetrics`에 저장되고, 대시보드는 이를 data source로 조회합니다.
+
+1. 클러스터에서 자동 계측 지원을 켭니다(`az aks update --enable-azure-monitor-app-monitoring`).
+2. namespace에 `Instrumentation` CR을 만들어 지표를 보낼 Application Insights를
+   지정합니다.
+3. Deployment를 재시작하면 AKS가 Pod에 Application Insights Java agent를 주입합니다.
+4. agent는 앱 프로세스 안의 Micrometer registry를 읽어 기본 60초마다
+   `customMetrics`로 보냅니다. 요청, 의존성, JVM 지표도 같은 agent가 함께
+   수집합니다.
+
+namespace의 모든 Deployment를 계측하려면 `default`라는 이름의 CR에 언어를 지정합니다.
+MovieLog처럼 Deployment를 골라 계측하는 per-deployment 방식은 `default`가 아닌
+이름의 CR을 만들고 `autoInstrumentationPlatforms`를 빈 배열로 둡니다. 언어와 사용할
+CR은 Pod template의 annotation(`inject-java`)이 정합니다.
 
 ```yaml
 apiVersion: monitor.azure.com/v1
@@ -109,52 +161,47 @@ spec:
 instrumentation.opentelemetry.io/inject-java: "movielog"
 ```
 
-재시작한 Pod에 agent가 주입되면 60초마다 `movielog_*` 지표가 도착합니다.
-단, Spring Boot 4 앱은 주입된 agent가 3.7.9 이상이어야 합니다
-([Spring Boot 4 호환성](#spring-boot-4)).
-Micrometer 이름의 점은 underscore로 바뀝니다(`movielog.movie.views` →
-`movielog_movie_views`). 요청, 의존성, JVM 지표도 같은 agent가 함께 수집합니다.
+재시작한 Pod에 agent가 주입되면 Micrometer 이름의 점이 underscore로 바뀐
+`movielog_*` 지표가 들어옵니다(`movielog.movie.views` → `movielog_movie_views`).
+지표가 실제로 도착했는지는 실습의 [probe 1](movielog-lab/index.md#probe-inventory)처럼
+`customMetrics`를 조회해 확인합니다. 단, Spring Boot 4 앱은 주입된 agent가 3.7.9
+이상이어야 합니다([Spring Boot 4 호환성](#spring-boot-4)).
 
-![customMetrics inventory. JVM 기본 지표와 함께 movielog_comments_posted부터 movielog_reviews_stored까지 12개 비즈니스 지표가 두 Pod에서 도착](images/probe-inventory-agent-3.7.10.png)
+## agent 대시보드 작성: 실제 지표 조회 기반 panel 설계 { #agent }
 
-위 캡처는 관리형 `3.7.7-aks` 대신 Application Insights Java 3.7.10 init image를
-주입한 상태에서 얻었습니다.
+agent를 쓰면 KQL과 panel 설정을 직접 짜지 않고도 대시보드를 만들 수 있고, agent가
+실제로 수집된 지표를 먼저 확인하게 하면 대시보드가 데이터에 더 정확히 맞습니다.
+코드에는 meter 이름과 종류만 있습니다. Application Insights에 들어온 이름, dimension
+값, 값 모양(`value`, `valueCount`, `valueSum`)은 조회해야 알 수 있습니다. 그래서
+agent에게 "그려 줘" 한 번 대신 조회, 생성, 실행 확인, 화면 확인의 네 단계를 맡깁니다.
 
-## agent 대시보드 작성: probe → build → verify → look { #agent }
-
-agent에게는 "그려 줘"가 아니라 "조회하고, 만들고, 실행하고, 확인해"라고
-시킵니다. 대시보드를 그리라고만 하면 agent는 코드의 meter 이름과 흔한 KQL 패턴으로
-panel을 추측합니다. 실제 데이터를 먼저 보게 하면 추측으로는 놓치는 문제가
-대시보드를 올리기 전에 드러납니다. MovieLog에서는 다음 문제를 잡았습니다.
-
-| agent 단계 | 하는 일 | MovieLog에서 잡은 문제 |
+| agent 단계 | 하는 일 | 정확해지는 부분 |
 |---|---|---|
-| probe | 실제 `customMetrics`의 이름, dimension, 값 모양 조회 | DB 기준 gauge를 Pod마다 같은 값으로 보내 sum이면 2배 |
-| build | probe가 정한 집계식으로 dashboard JSON 생성 | Counter는 `sum`, 분포는 `sum(valueSum)/sum(valueCount)`로 구분 |
-| verify | 모든 panel query를 Grafana에서 실행 | KQL 예약어 `views`로 panel 1개가 400 |
-| look | 렌더링한 화면을 캡처해 직접 확인 | subscription ID 노출, 정상 값의 빨간색, 끝이 급락하는 미완성 bin, 꺾은선 일색의 화면 |
+| probe | 실제 `customMetrics`의 이름, dimension, Pod 수, 값 모양 조회 | metric별 집계식. Counter는 `sum`, 분포는 `sum(valueSum)/sum(valueCount)`, Pod마다 같은 값을 보내는 Gauge는 Pod 간 `max` |
+| build | probe가 정한 집계식과 질문 유형별 시각화로 dashboard JSON 생성 | panel마다 답할 질문과 시각화의 짝 |
+| verify | 모든 panel query를 Grafana에서 실행 | 오류나 0행 panel이 없는 대시보드 |
+| look | 렌더링한 화면을 캡처해 직접 확인 | 색, legend, 미완성 시간 bin, 식별자 노출처럼 query 결과로는 안 보이는 화면 품질 |
 
-look 단계의 첫 캡처입니다. query는 모두 성공했지만 화면에서는 정상 건수가
-경고색으로 보이고 legend가 읽기 어려웠습니다. 수정한 결과가 이 문서 맨 위의
-대시보드입니다.
-
-![수정 전 캡처. 영화 조회 2.17K, 새 리뷰 366, 신규 회원 542가 빨간색으로 표시되고 legend가 perMin api, perMin web으로 표시됨](images/look-step-before-fix.png)
+단계별 query와 출력, 화면을 보고 고친 항목은 실습의
+[agent 대시보드 방법론](movielog-lab/index.md#agent-method)에 있습니다.
 
 ### 질문 유형별 panel 시각화 { #visualization }
 
-panel 시각화는 답할 질문의 유형으로 고릅니다. 지표가 모두 시간 bin으로 들어오기
-때문에 agent에게 따로 말하지 않으면 거의 모든 panel을 꺾은선으로 그립니다.
-MovieLog의 첫 대시보드도 query panel 14개 중 9개가 시계열이었습니다. 그래서 질문
-유형과 시각화의 짝을 prompt에 넣었습니다.
+panel 시각화는 답할 질문의 유형으로 고릅니다. `customMetrics`는 시간 bin으로
+조회되므로 agent에게 따로 말하지 않으면 거의 모든 panel을 꺾은선으로 그립니다.
+질문 유형과 시각화의 짝을 prompt에 넣어 줍니다.
 
-| 질문 유형 | 시각화 | MovieLog panel |
-|---|---|---|
-| 구간 동안 몇 건인가 | stat + sparkline | 영화 조회, 새 리뷰, 신규 회원, 누적 현황 |
-| 값이 정상 범위인가 | gauge(도메인 기준 threshold) | 평균 별점(fresh 기준 3.5개부터 초록) |
-| 구성 비율은 | donut | 리뷰 판정 비율(fresh / rotten) |
-| 무엇이 많은가, 쏠림은 | bar gauge | 활동별·채널별 합계, Pod별 영화 조회 분포, 외부 조회 결과 |
-| 시간에 따라 어떻게 변하는가 | time series(누적 area, bar, line) | 분당 영화 조회, 분당 새 리뷰, 평균 별점 추이 |
-| Pod마다 빠진 지표가 없는가 | status history(누락 수, 0이 정상), table | Pod별 누락 metric 수, metric 수신 상태 |
+| 질문 유형 | 시각화 |
+|---|---|
+| 구간 동안 몇 건인가 | stat + sparkline |
+| 값이 정상 범위인가 | gauge(도메인 기준 threshold) |
+| 구성 비율은 | donut |
+| 무엇이 많은가, 쏠림은 | bar gauge |
+| 시간에 따라 어떻게 변하는가 | time series(누적 area, bar, line) |
+| Pod마다 빠진 지표가 없는가 | status history(누락 수, 0이 정상), table |
+
+MovieLog panel별 질문, 집계식, 시각화는 실습의 [build 절](movielog-lab/index.md#build)에
+있습니다.
 
 ### MovieLog 대시보드 prompt 예시 { #prompt-example }
 
@@ -190,8 +237,7 @@ connection string, subscription ID, resource ID는 출력·파일·캡처에 남
 ```
 
 1단계가 돌려주는 표의 실제 형태는 실습의 [probe 1~3](movielog-lab/index.md#probe-inventory)
-출력에 있습니다. MovieLog에서는 2단계의 집계식 표 덕분에 Pod마다 같은 값을 보내는
-gauge를 sum하지 않았습니다.
+출력에 있습니다.
 
 ## 대시보드 반영 방식: 로컬 agent 직접 반영과 JSON import { #publish }
 
@@ -222,17 +268,18 @@ Grafana를 만들고 MovieLog와 합성 부하를 배포한 뒤, 위 네 단계�
 ## Spring Boot 4 호환성: 관리형 agent 3.7.7-aks 제약 { #spring-boot-4 }
 
 Spring Boot 4에서는 주입된 agent가 3.7.9 이상인지 먼저 확인합니다. Application
-Insights Java agent는 3.7.9부터 Spring Boot 4의 Micrometer 구성을 인식합니다. 2026-11-06 기준 AKS가 주입하는 관리형 agent는 `3.7.7-aks`였고,
-MovieLog에서도 이 상태로는 `movielog_*`가 한 건도 오지 않았습니다.
+Insights Java agent는 3.7.9부터 Spring Boot 4의 Micrometer 구성을 인식합니다.
+2026-11-06 기준 AKS가 주입하는 관리형 agent는 `3.7.7-aks`였습니다.
 
 - 원인과 임시 대응: [AKS Java Micrometer custom metric 누락 임시 대응](../aks-java-micrometer-custom-metrics/index.md)
-- MovieLog에서 3.7.10 init image로 바꾼 절차와 전후 비교: [실습의 버전 확인 절](movielog-lab/index.md#version-gate)
+- MovieLog에서 관리형 agent로는 `movielog_*`가 오지 않던 결과와 3.7.10 init image로 바꾼 절차: [실습의 버전 확인 절](movielog-lab/index.md#version-gate)
 
 ## 공식 참고 자료
 
 - [Autoinstrument AKS apps with Azure Monitor Application Insights](https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless)
 - [Configure Azure Monitor Application Insights for Java](https://learn.microsoft.com/azure/azure-monitor/app/java-standalone-config)
 - [Metrics in Application Insights](https://learn.microsoft.com/azure/azure-monitor/app/metrics-overview)
+- [Micrometer Meters](https://docs.micrometer.io/micrometer/reference/concepts/meters.html)
 - [How to manage data sources in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity)
 - [Configure an Azure Managed Grafana remote MCP server](https://learn.microsoft.com/azure/managed-grafana/grafana-mcp-server)
 - [Create a dashboard in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-create-dashboard)

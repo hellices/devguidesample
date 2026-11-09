@@ -139,6 +139,7 @@ official_source_hosts:
   - generativeui.github.io
   - blog.google
   - openjdk.org
+  - docs.micrometer.io
   - kubernetes.io
   - karpenter.sh
   - keda.sh

@@ -66,7 +66,7 @@ related_guides:
         │  Spring MeterRegistry
         ▼
 [Application Insights Java agent]  ← AKS 자동 계측(webhook)이 Deployment에 주입
-        │  60초마다 export, 이름은 snake_case (movielog.movie.views → movielog_movie_views)
+        │  60초마다 export
         ▼
 [Application Insights customMetrics] ── workspace 기반
         │  KQL
@@ -136,19 +136,13 @@ az role assignment create --assignee-object-id "$(az ad signed-in-user show --qu
 
 ## MovieLog meter: 도메인 이벤트와 집계 시점 { #meters }
 
-MovieLog의 서비스 코드는 Micrometer를 모릅니다. 리뷰 작성 같은 도메인 이벤트를
-발행하면 `BusinessMetrics`가 meter를 올립니다. 트랜잭션 안에서 발행된 이벤트는 커밋
-뒤에만 집계되므로 롤백된 작업은 빠집니다. 검색과 카탈로그 조회처럼 외부 API 호출이라
-트랜잭션 밖에서 발행되는 이벤트는 `fallbackExecution = true`로 즉시 집계됩니다.
-
-```java
-@TransactionalEventListener(fallbackExecution = true)
-void reviewCreated(ReviewEvents.Created event) {
-    counter("reviews.posted", "New reviews", "channel", channel(), "verdict",
-            event.fresh() ? "fresh" : "rotten").increment();
-    reviewRating.record(event.rating() / 2.0);
-}
-```
+MovieLog의 meter 기록은 `BusinessMetrics`와 `BusinessGauges` 두 class에 모여
+있습니다. Micrometer API와 meter 종류, 코드 예시는
+[주제 소개의 앱 코드 절](../index.md#record)에 있습니다. 서비스는 리뷰 작성 같은
+도메인 이벤트를 발행하고, `BusinessMetrics`가 이를 받아 meter를 기록합니다.
+트랜잭션 안에서 발행된 이벤트는 커밋 뒤에만 집계되므로 롤백된 작업은 빠집니다.
+검색과 카탈로그 조회처럼 외부 API 호출이라 트랜잭션 밖에서 발행되는 이벤트는
+`fallbackExecution = true`로 즉시 집계됩니다.
 
 | Micrometer meter | 종류 | tag |
 |---|---|---|
@@ -159,12 +153,10 @@ void reviewCreated(ReviewEvents.Created event) {
 | `movielog.review.rating` | DistributionSummary | 없음 |
 | `movielog.movies.stored`, `movielog.reviews.stored` 등 | Gauge (DB `count(*)`, 1분 cache) | 없음 |
 
-영화 ID, 제목, 사용자명은 tag에 넣지 않습니다. 영화별 조회 수는 DB 컬럼에 둡니다.
+영화별 조회 수는 tag가 아니라 DB 컬럼에 둡니다.
 
-AKS용 `aks` profile은 Actuator HTTP endpoint를 `health`만 열고 `movielog`
-prefix만 내보냅니다. agent는 프로세스 안의 registry를 직접 읽으므로
-`/actuator/prometheus`가 필요 없습니다. 허용 목록 밖의 meter는 만들어지지 않아
-과금 대상 `customMetrics` 행도 생기지 않습니다.
+AKS용 `aks` profile은 Actuator HTTP endpoint를 `health`만 열고, `movielog`
+prefix meter만 만들도록 허용 목록을 둡니다.
 
 ```properties
 management.endpoints.web.exposure.include=health
@@ -201,10 +193,9 @@ kubectl create configmap loadgen -n movielog --from-file=loadgen/loadgen.py
 kubectl apply -f k8s/30-loadgen.yaml
 ```
 
-- `Instrumentation` CR은 `default`가 아닌 이름으로 만들고
-  `autoInstrumentationPlatforms: []`로 둡니다. language는 annotation이 정합니다.
-- annotation `instrumentation.opentelemetry.io/inject-java: "movielog"`은
-  `spec.template.metadata.annotations`에 둡니다.
+- `Instrumentation` CR과 annotation의 구성 방식은
+  [주제 소개의 수집 절](../index.md#collect)에 있습니다. `k8s/10-instrumentation.yaml`과
+  `k8s/20-movielog.yaml`이 per-deployment 방식으로 이를 구현합니다.
 - connection string이 든 렌더링 결과는 저장소에 커밋하지 않습니다.
 - 첫 배포는 replica 1개로 schema를 만든 뒤 2개로 늘립니다.
 
@@ -306,7 +297,7 @@ kubectl scale deploy/movielog -n movielog --replicas=2
 ## agent 대시보드 방법론: probe → build → verify → look { #agent-method }
 
 이 절은 probe → build → verify → look 각 단계를 실제 명령과 출력으로 실행합니다.
-단계별 목적과 잡은 문제의 요약은 [주제 소개의 agent 절](../index.md#agent)에
+단계별 목적은 [주제 소개의 agent 절](../index.md#agent)에
 있습니다.
 
 agent에게 줄 prompt 전체는
@@ -546,7 +537,8 @@ agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다
 | 조회가 많은 Pod가 빨간색 | green-yellow-red 색 구간 | 크기만 나타내는 중립 색 구간 |
 | 30분 캡처에서 stat 영화 조회 12.5K와 Pod별 합계 12.95K가 다름 | 상대 범위(`now-30m`)로 분 경계에서 캡처해 panel마다 다른 1분 구간을 집계 | 같은 KQL 한 번으로 세 합계가 12,804로 같음을 확인하고, 문서용 캡처는 분 단위로 맞춘 절대 범위(`from`·`to` epoch ms)로 다시 찍음 |
 
-수정 뒤 대시보드는 [실습 결과](#result)에 있습니다. 캡처에서 다음도 확인했습니다.
+수정을 마친 대시보드는 [주제 소개](../index.md#message)에, 판정 기준과 실측값은
+[실습 결과](#result)에 있습니다. 캡처에서 다음도 확인했습니다.
 
 - Pod별 영화 조회 분포는 Pod가 바뀔 때마다 달라집니다. 로그인 세션 때문에 Service에
   `sessionAffinity: ClientIP`를 두어 합성 사용자 Pod마다 한 앱 Pod에 고정되기
@@ -672,11 +664,10 @@ dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 
 
 ## 실습 결과: 판정 기준과 실측값 { #result }
 
-실습 결과는 아래 기준과 실측값으로 판정합니다. 대시보드 캡처는 현재 sample 코드로
-빌드한 `movielog:1.0.1` image의 2026-11-07 23:05~23:35 UTC 구간입니다. 화면의 시각은
+실습 결과는 아래 기준과 실측값으로 판정합니다. 수정을 마친 대시보드 캡처는
+[주제 소개](../index.md#message)에 있습니다. 이 캡처는 현재 sample 코드로 빌드한
+`movielog:1.0.1` image의 2026-11-07 23:05~23:35 UTC 구간이며, 화면의 시각은
 브라우저 시간대(KST)로 표시됩니다.
-
-![MovieLog 비즈니스 지표 대시보드. 영화 조회 13.0K, 새 리뷰 2.26K, 신규 회원 3.23K stat과 sparkline, 평균 별점 3.50 gauge, fresh/rotten donut, 채널별 누적 area, 판정별 막대, 활동별 bar gauge, 평균 별점 추이, 누적 현황 stat, Pod별 분포 bar gauge, 외부 조회 결과, Pod별 누락 metric status history, metric 수신 상태 table](../images/movielog-dashboard.png)
 
 | 확인 항목 | 기대 | 실측 |
 |---|---|---|
