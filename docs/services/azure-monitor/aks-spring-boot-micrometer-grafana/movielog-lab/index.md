@@ -81,9 +81,8 @@ related_guides:
   12개 지표가 두 Pod에서 도착했습니다([버전 게이트](#version-gate)).
 - 이미 주입된 Deployment에서 custom agent로 바꾸려면 patch를 두 번에 나눠야
   했습니다([webhook 주입 해제](#webhook-revert)).
-- agent의 probe·verify·look 단계가 gauge 중복 합산, KQL 예약어, 식별자 노출,
-  꺾은선 일색의 화면과 panel 간 합계 불일치를 대시보드 공개 전에 잡았습니다
-  ([agent 대시보드 방법론](#agent-method)).
+- agent 대시보드는 probe → build → verify → look 단계마다 정한 점검 기준을 통과한 뒤
+  반영합니다([agent 대시보드 방법론](#agent-method)).
 
 ## 실습 자원: 단일 resource group 구성 { #resources }
 
@@ -342,14 +341,16 @@ inventory는 `cloud_RoleName`(`movielog`)도 알려 줍니다. dashboard의 `rol
 최근 1시간만 조회합니다. 지난 실습 구간을 다시 probe하려면 `KQL_OFFSET=12h`처럼
 범위를 넓힙니다.
 
-inventory는 코드에 있는 meter가 실제로 발생했는지도 드러냅니다. 2026-11-06
-실습에서 `movielog_movie_searches`가 없었던 것은 load generator가 검색 parameter를
-`q`가 아닌 `query`로 보내 400으로 끝났기 때문입니다. 2026-11-07 같은 클러스터에서
-수정한 load generator ConfigMap을 적용하자 TMDB key 없이도 검색 시도가
-`movielog_movie_searches`(`outcome` = `disabled`)로 두 Pod에서 도착해, 비즈니스 지표가
-13개가 됐습니다. 리뷰 반영으로 추가한 `movielog.comments.deleted`는 실습 클러스터의
-image가 그보다 오래되어 없었습니다. 현재 코드로 image(`movielog:1.0.1`)를 다시 빌드해
-배포하자 14개가 모두 두 Pod에서 도착했습니다.
+inventory의 이름 목록은 코드의 meter 목록과 비교합니다. 코드에는 있는데 inventory에
+없는 meter는 대시보드에 넣기 전에 원인을 확인합니다.
+
+- 그 meter를 만드는 이벤트가 구간 안에 실제로 일어났는지 확인합니다. 처음 사용할 때
+  등록되는 meter는 트래픽이 없으면 행도 없습니다. 실습에서는 load generator가 검색,
+  리뷰, 댓글, 가입을 모두 호출하도록 구성했습니다.
+- 배포된 image가 그 meter를 포함한 코드로 빌드됐는지 확인합니다.
+- 허용 목록(`management.metrics.enable.*`)에 meter prefix가 들어 있는지 확인합니다.
+
+현재 sample 코드와 load generator로는 비즈니스 지표 14개가 모든 Pod에서 도착합니다.
 
 ### probe 2: dimension 값 개수와 사용 가능한 축 { #probe-dimensions }
 
@@ -456,19 +457,23 @@ panel을 따로 둘 필요가 없습니다.
 
 누락 metric 수의 기대 목록은 수신 데이터에서 추론하지 않고 코드 기준으로 고정합니다.
 `BusinessMetrics`가 시작 때 0으로 등록하는 Counter 7개와 DB Gauge 4개가 대상입니다.
-받은 데이터에서 목록을 만들면 모든 Pod에서 빠진 meter는 목록에서도 빠져 0(초록)으로
-보이고, `valueCount`로 Counter를 고르면 간격마다 한 번씩만 기록된 분포 meter가
-섞입니다. 처음 사용할 때 생기는 Counter(검색, 카탈로그 조회)와 DistributionSummary는
-목록에서 뺍니다. 실습 40분 동안 Pod·분 단위로 빠진 metric은 기록이 없던 분의
-`movielog_review_rating` 한 번뿐이었습니다. 분포 meter는 기록이 없는 간격에 행을
-보내지 않으므로(`valueCount` = 0인 행 0건) 목록에 넣으면 한산한 시간에 빨간 칸이
-생깁니다. meter를 추가하거나 등록 방식을 바꾸면 `build_dashboard.py`의
-`STEADY_METRICS`도 함께 고칩니다. 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도
-보내지 않은 것입니다. 교체된 Pod도 종료 뒤에는 빈 칸으로 남습니다.
+
+- 받은 데이터에서 목록을 만들면 모든 Pod에서 빠진 meter는 목록에서도 빠져 0(초록)으로
+  보입니다.
+- `valueCount`로 Counter를 고르면 간격마다 한 번씩만 기록된 분포 meter가 섞입니다.
+- 처음 사용할 때 생기는 Counter(검색, 카탈로그 조회)와 DistributionSummary는 목록에서
+  뺍니다. 분포 meter는 기록이 없는 간격에 행을 보내지 않으므로, 목록에 넣으면 한산한
+  시간에 빨간 칸이 생깁니다.
+- meter를 추가하거나 등록 방식을 바꾸면 `build_dashboard.py`의 `STEADY_METRICS`도 함께
+  고칩니다.
+
+칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다. 교체된 Pod도
+종료 뒤에는 빈 칸으로 남습니다.
 
 ### verify: Grafana 전체 panel query 실행 { #verify }
 
-모든 panel query를 Grafana에서 실행해 0행과 오류를 찾습니다.
+dashboard를 올리기 전에 모든 panel query를 Grafana에서 실행해 오류와 빈 결과가 없는지
+확인합니다.
 
 `verify_panels.py`는 dashboard의 모든 query를 Managed Grafana의
 `/api/ds/query`로 실행합니다. Grafana data plane API는 audience
@@ -481,71 +486,50 @@ export GRAFANA_TOKEN="$(az account get-access-token --resource https://dashboard
 python3 agent/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
 ```
 
-첫 실행에서 한 panel이 실패했습니다.
+통과 기준은 다음과 같습니다. 모든 panel이 `OK`일 때만
+`az grafana dashboard create --overwrite true`로 올립니다.
 
-```text
-FAIL 영화 조회   frames=0 rows=0  HTTP 400 ... Query could not be parsed at 'views'
-OK   새 리뷰     frames=1 rows=1
-...
-1 panel query(ies) returned no data or an error.
-```
-
-`views`는 KQL 예약어입니다. column 이름을 `movieViews`로 바꾼 뒤 14개 query가
-모두 통과했고, 그다음에 `az grafana dashboard create --overwrite true`로
-올렸습니다. 질문 유형별 시각화로 바꾼 뒤의 query 17개도 같은 방법으로 모두
-통과했습니다.
-
-`verify_panels.py`는 숫자 field가 모두 null인 행을 데이터로 세지 않고, 접힌 row
-안의 panel도 실행합니다. 0은 정상 값으로 셉니다. 실습 클러스터를 멈춘 뒤 다시
-실행하자 13개 panel은 지난 데이터로 통과하고 구간 끝 10분만 보는 "metric 수신 상태"
-panel이 FAIL로 나왔습니다. 수집이 멈춘 상태를 잡아낸 결과입니다.
+- 접힌 row 안의 panel까지 모든 query를 실행합니다.
+- HTTP 오류와 0행은 실패입니다. 숫자 field가 모두 null인 행도 데이터가 없는 것으로
+  봅니다. 0은 정상 값입니다.
+- 구간 끝만 보는 panel(예: metric 수신 상태)이 실패하면 query가 아니라 수집이 멈춘
+  것이므로 inventory부터 다시 확인합니다.
+- KQL 예약어(`views`, `first` 등)를 column 이름으로 쓰면 parse 오류(HTTP 400)가 납니다.
+  column 이름은 `movieViews`처럼 예약어가 아닌 이름으로 짓습니다.
 
 ### look: 렌더링 화면 캡처와 시각 점검 { #look }
 
-렌더링한 화면을 캡처해 query로는 안 보이는 문제를 찾습니다.
+query가 모두 성공해도 색, legend, panel 간 합계는 렌더링한 화면에서만 확인할 수
+있습니다. agent에게 대시보드를 캡처해 직접 보고 아래 기준을 점검하게 합니다.
 
 `capture.mjs`는 같은 Entra token을 Grafana origin 요청에만 bearer header로 붙여
-headless Chromium에서 dashboard를 캡처합니다. redirect는 따라가지 않고 브라우저에
-돌려주므로 다른 origin으로 token이 넘어가지 않습니다. 실습 dashboard도
-`js.monitor.azure.com`을 호출했으므로 이 제한이 필요합니다. 대화형 로그인이나
-service account가 필요 없고, Grafana 내부 scroll 높이를 재서 viewport를 늘리므로
-아래쪽 panel까지 한 장에 담깁니다. panel 로딩이 60초 안에 끝나지 않으면
-실패로 종료합니다.
-agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처는
-[주제 소개의 agent 절](../index.md#agent)에 있으며, 다음 문제가 보였습니다.
+headless Chromium에서 dashboard를 캡처합니다.
 
-| 화면에서 본 문제 | 원인 | 수정 |
-|---|---|---|
-| 변수 막대에 Application Insights resource ID, 즉 subscription ID가 보임 | textbox 변수 노출 | 값을 미리 채운 배포용 JSON에서는 변수를 숨김 |
-| 정상 건수가 빨간색 | stat 기본 threshold 80 | stat 색을 고정색으로 지정 |
-| legend가 `perMin api` | 값 column 이름이 series 이름 앞에 붙음 | `displayName`에 dimension label 사용 |
-| 아래쪽 panel이 비어 보임 | Grafana의 내부 scroll과 `fullPage` 캡처 불일치 | 내부 scroll 높이를 재서 viewport를 늘림 |
-| 모든 분당 series가 오른쪽 끝에서 급락 | 아직 채워지는 현재 bin까지 그림 | 시계열 query에 `where timestamp < bin(now(), <bin>)` 추가 |
+- redirect는 따라가지 않고 브라우저에 돌려주므로 다른 origin(예:
+  `js.monitor.azure.com`)으로 token이 넘어가지 않습니다.
+- 대화형 로그인이나 service account가 필요 없습니다.
+- Grafana 내부 scroll 높이를 재서 viewport를 늘리므로 아래쪽 panel까지 한 장에
+  담깁니다. `fullPage` 옵션만으로는 내부 scroll 영역이 잘립니다.
+- panel 로딩이 60초 안에 끝나지 않으면 실패로 종료합니다.
+- panel 간 합계를 비교하거나 문서에 남길 캡처는 분 단위로 맞춘 절대 범위
+  (`from`·`to` epoch ms)로 찍습니다. `now-30m` 같은 상대 범위는 panel마다 조회
+  시각이 달라 1분 bin 하나만큼 합계가 어긋날 수 있습니다.
 
-수정 뒤 대시보드는 query는 맞았지만 query panel 14개 중 9개가 시계열이라 합계·비율·Pod
-분포를 묻는 panel도 꺾은선으로 보였습니다. panel마다 질문 유형에 맞는 시각화를
-고르도록 바꾸고([질문 유형별 panel 시각화](../index.md#visualization)) 다시 look
-단계를 돌리자 다음 문제가 보였습니다.
+캡처에서 점검할 항목과 대시보드 JSON에 미리 넣어 둘 설정은 다음과 같습니다.
+`build_dashboard.py`는 이 설정을 모두 반영합니다.
 
-| 화면에서 본 문제 | 원인 | 수정 |
-|---|---|---|
-| stat의 영화 조회 849와 Pod별 bar gauge 합계 1,279가 다름 | stat만 채워지는 현재 bin을 빼고 donut·bar gauge는 포함 | 모든 panel query에서 현재 bin 제외 |
-| 행 두 개짜리 bar gauge가 panel을 가득 채우고 Pod 이름이 잘림 | bar 높이 자동, 이름은 왼쪽 고정 폭 | 이름을 bar 위에 두고 높이를 32px로 고정(이 높이에 이름도 포함되어 14px이면 이름이 사라짐) |
-| 조회가 많은 Pod가 빨간색 | green-yellow-red 색 구간 | 크기만 나타내는 중립 색 구간 |
-| 30분 캡처에서 stat 영화 조회 12.5K와 Pod별 합계 12.95K가 다름 | 상대 범위(`now-30m`)로 분 경계에서 캡처해 panel마다 다른 1분 구간을 집계 | 같은 KQL 한 번으로 세 합계가 12,804로 같음을 확인하고, 문서용 캡처는 분 단위로 맞춘 절대 범위(`from`·`to` epoch ms)로 다시 찍음 |
+| 점검 항목 | 대시보드 설정 |
+|---|---|
+| subscription ID 같은 식별자가 화면에 보이지 않는가 | Application Insights resource ID 변수는 값을 채운 배포용 JSON에서 숨김 |
+| 정상 값이 경고색으로 보이지 않는가 | 건수 stat은 고정색, 크기만 비교하는 bar gauge는 중립 색 구간. 의미 있는 기준이 있는 값(평균 별점)에만 threshold 색 |
+| legend와 이름이 읽히는가 | `displayName`에 dimension label 사용. bar gauge는 이름을 bar 위에 두고 행 높이를 32px 이상으로 고정 |
+| 시계열 끝이 급락하지 않는가 | 모든 panel query에서 채워지는 중인 현재 bin 제외(`where timestamp < bin(now(), <bin>)`) |
+| 같은 지표의 합계가 panel마다 같은가 | stat, donut, bar gauge 모두 같은 bin 범위와 집계식 사용 |
+| 질문에 맞는 시각화인가 | [질문 유형별 panel 시각화](../index.md#visualization) 기준으로 선택 |
 
-수정을 마친 대시보드는 [주제 소개](../index.md#message)에, 판정 기준과 실측값은
-[실습 결과](#result)에 있습니다. 캡처에서 다음도 확인했습니다.
-
-- Pod별 영화 조회 분포는 Pod가 바뀔 때마다 달라집니다. 로그인 세션 때문에 Service에
-  `sessionAffinity: ClientIP`를 두어 합성 사용자 Pod마다 한 앱 Pod에 고정되기
-  때문입니다. 처음 합성 사용자 3개일 때는 모든 요청이 한 Pod로 갔고, 6개로 늘린 뒤
-  4.32K 대 8.62K로 나뉘었고, image를 바꿔 Pod가 교체된 뒤에는 6.53K 대 6.43K였습니다.
-- 평균 별점 gauge가 3.50으로 보이는데 주황색입니다. 실제 값이 3.4996이라 표시만
-  반올림됐고 fresh 기준 3.5에는 못 미칩니다. 소수 둘째 자리 표시에서는 경계값 근처
-  색이 숫자와 어긋나 보일 수 있으므로 tooltip이나 query로 실제 값을 확인합니다.
-- 활동별·채널별 합계에서 `리뷰 작성 · web`과 `댓글 · web`이 0입니다. 0으로 미리
-  등록한 counter이고 합성 사용자는 API로만 리뷰와 댓글을 씁니다.
+threshold 경계 근처 값은 표시 자릿수 때문에 숫자와 색이 어긋나 보일 수 있습니다(예:
+3.4996이 3.50으로 표시되지만 3.5 기준 미만 색). 경계값은 tooltip이나 query로 실제
+값을 확인합니다.
 
 ## 대시보드 반영 실습: 로컬 agent 직접 반영과 JSON import { #publish }
 
@@ -674,6 +658,12 @@ dashboard는 삭제했습니다. 포털 import 절차는 Microsoft Learn 문서 
 | allowlist | `jvm_*`, `http_server_requests` Micrometer 지표 없음 | 없음. agent 기본 JVM 지표와 `http.server.request.duration`만 별도로 존재 |
 | dashboard query | 17개 모두 데이터 반환 | `verify_panels.py` 17/17 OK |
 | 화면 점검 | 식별자 없음, panel 간 합계 일치, 누락 metric 0 | 영화 조회 12,958 = 채널 6.51K + 6.45K = Pod 6.53K + 6.43K, 두 Pod 모든 bin 누락 0 |
+
+- Pod별 영화 조회 분포는 Pod가 교체될 때마다 달라집니다. 로그인 세션 때문에 Service에
+  `sessionAffinity: ClientIP`를 두어 합성 사용자 Pod마다 한 앱 Pod에 고정되기
+  때문입니다. 합성 사용자를 앱 replica보다 충분히 많이 두어야 분포가 고르게 나옵니다.
+- 활동별·채널별 합계에서 `리뷰 작성 · web`과 `댓글 · web`은 0입니다. 0으로 미리 등록한
+  counter이고, 합성 사용자는 API로만 리뷰와 댓글을 씁니다.
 
 ## 수집 비용: meter × tag 조합 × Pod 수 { #cost }
 

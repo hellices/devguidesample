@@ -217,13 +217,13 @@ agent에게 "그려 줘" 한 번 대신 조회, 생성, 실행 확인, 화면 �
 | verify | 모든 panel query를 Grafana에서 실행 | 오류나 0행 panel이 없는 대시보드 |
 | look | 렌더링한 화면을 캡처해 직접 확인 | 색, legend, 미완성 시간 bin, 식별자 노출처럼 query 결과로는 안 보이는 화면 품질 |
 
-아래는 look 단계의 첫 캡처입니다. query는 모두 성공했지만 화면에서는 정상 건수가
-경고색으로 보이고 legend가 읽기 어려웠습니다. agent가 이 화면을 보고 고친 결과가 이
-문서 맨 위의 대시보드입니다.
+query가 모두 성공해도 화면에서는 아래처럼 정상 건수가 경고색으로 보이거나 legend가
+읽기 어려울 수 있습니다. look 단계는 이런 화면을 반영 전에 걸러 냅니다. 점검 기준을
+통과한 결과가 이 문서 맨 위의 대시보드입니다.
 
 ![수정 전 캡처. 영화 조회 2.17K, 새 리뷰 366, 신규 회원 542가 빨간색으로 표시되고 legend가 perMin api, perMin web으로 표시됨](images/look-step-before-fix.png)
 
-단계별 query와 출력, 화면을 보고 고친 항목은 실습의
+단계별 query와 통과 기준, 화면 점검 항목은 실습의
 [agent 대시보드 방법론](movielog-lab/index.md#agent-method)에 있습니다.
 
 ### 질문 유형별 panel 시각화 { #visualization }
