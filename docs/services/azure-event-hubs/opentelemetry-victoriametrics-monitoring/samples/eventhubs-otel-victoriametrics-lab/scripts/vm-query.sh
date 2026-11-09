@@ -6,10 +6,31 @@ source "$(dirname "$0")/lib.sh"
 STATE="$(state_dir)"
 PORT="$(vm_local_port)"
 
+# The recorded PID must still be our kubectl port-forward for this port, not a reused PID.
+is_our_forward() {
+  local pid="$1"
+  ps -p "$pid" -o command= 2>/dev/null | grep -q "kubectl.*port-forward.*$PORT:8428"
+}
+
+stop_forward() {
+  local pid
+  [[ -f "$STATE/port-forward.pid" ]] || return 0
+  pid="$(<"$STATE/port-forward.pid")"
+  if is_our_forward "$pid"; then
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 50); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.1
+    done
+    kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+  fi
+  rm -f "$STATE/port-forward.pid" "$STATE/port-forward.port"
+}
+
 owned_forward() {
   [[ -f "$STATE/port-forward.pid" && -f "$STATE/port-forward.port" ]] \
     && [[ "$(<"$STATE/port-forward.port")" == "$PORT" ]] \
-    && kill -0 "$(<"$STATE/port-forward.pid")" 2>/dev/null
+    && is_our_forward "$(<"$STATE/port-forward.pid")"
 }
 
 healthy() {
@@ -26,8 +47,7 @@ case "${1:-start}" in
       exit 0
     fi
     if owned_forward; then
-      kill "$(<"$STATE/port-forward.pid")" 2>/dev/null || true
-      sleep 1
+      stop_forward
     elif healthy; then
       die "port $PORT already serves another VictoriaMetrics; set VM_LOCAL_PORT for this environment"
     fi
@@ -44,7 +64,6 @@ case "${1:-start}" in
     die "VMSingle port-forward did not become ready on port $PORT"
     ;;
   stop)
-    [[ -f "$STATE/port-forward.pid" ]] && kill "$(<"$STATE/port-forward.pid")" 2>/dev/null || true
-    rm -f "$STATE/port-forward.pid" "$STATE/port-forward.port"
+    stop_forward
     ;;
 esac

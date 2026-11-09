@@ -26,7 +26,10 @@ chmod 0755 secrets
 # Grafana listens on the public IP for the operator /32 only. Serve it over TLS with a
 # self-signed certificate for that IP; the operator pins this certificate (printed below).
 install -d -m 0755 tls
-if [ ! -s tls/grafana.crt ] || ! openssl x509 -in tls/grafana.crt -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:${GATEWAY_PUBLIC_IP}"; then
+# Regenerate when missing, issued for another IP, or expiring within a day (30-day validity).
+if [ ! -s tls/grafana.crt ] \
+  || ! openssl x509 -in tls/grafana.crt -noout -checkend 86400 >/dev/null 2>&1 \
+  || ! openssl x509 -in tls/grafana.crt -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:${GATEWAY_PUBLIC_IP}"; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=eventhubs-lab-grafana" \
     -addext "subjectAltName=IP:${GATEWAY_PUBLIC_IP}" -keyout tls/grafana.key -out tls/grafana.crt 2>/dev/null
 fi

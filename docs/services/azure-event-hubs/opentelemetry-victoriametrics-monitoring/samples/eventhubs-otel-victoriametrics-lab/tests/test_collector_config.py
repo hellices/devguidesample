@@ -35,8 +35,12 @@ def test_every_source_fans_out_to_both_delivery_paths():
         assert scrape["exporters"] == ["prometheus"]
         assert push["exporters"] == ["prometheusremotewrite"]
         assert f"resource/source_{source}" in scrape["processors"]
+        assert f"resource/source_{source}" in push["processors"]
         assert "resource/delivery_scrape" in scrape["processors"]
         assert "resource/delivery_remote_write" in push["processors"]
+        # Apart from the delivery stamp, both pipelines process data identically.
+        strip = lambda processors: [p for p in processors if not p.startswith("resource/delivery_")]
+        assert strip(scrape["processors"]) == strip(push["processors"])
 
 
 def test_exporters_promote_only_lab_labels():
@@ -113,8 +117,12 @@ def test_fallback_replaces_api_source_only_when_requested():
     pipelines = config["service"]["pipelines"]
 
     assert "azure_monitor/premium" not in config["receivers"]
-    assert "metrics/fallback_exporter-scrape" in pipelines
-    assert "metrics/fallback_exporter-remote_write" in pipelines
+    assert not any(name.startswith("metrics/azure_monitor_api") for name in pipelines)
+    for delivery, exporter in (("scrape", "prometheus"), ("remote_write", "prometheusremotewrite")):
+        pipeline = pipelines[f"metrics/fallback_exporter-{delivery}"]
+        assert pipeline["receivers"] == ["prometheus/fallback"]
+        assert pipeline["exporters"] == [exporter]
+        assert "resource/source_fallback_exporter" in pipeline["processors"]
     scrape = config["receivers"]["prometheus/fallback"]["config"]["scrape_configs"][0]
     assert scrape["metric_relabel_configs"][0]["regex"].endswith("/namespaces/ehp-example")
 

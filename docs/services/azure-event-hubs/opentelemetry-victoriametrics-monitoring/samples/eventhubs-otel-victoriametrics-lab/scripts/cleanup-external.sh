@@ -16,8 +16,9 @@ STATE="$(state_dir)"
 if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] \
   && [[ "$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" == "true" ]]; then
   for identity in $(az identity list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" --query "[].name" -o tsv); do
+    # Only the credentials azd-postprovision.sh creates; anything else in the group is left alone.
     for credential in $(az identity federated-credential list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
-      --identity-name "$identity" --query "[].name" -o tsv); do
+      --identity-name "$identity" --query "[?name=='aks-eventhubs-producer' || name=='aks-eventhubs-slow-consumer'].name" -o tsv); do
       az identity federated-credential delete --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
         --identity-name "$identity" --name "$credential" --yes --output none
       log "deleted federated credential $credential"

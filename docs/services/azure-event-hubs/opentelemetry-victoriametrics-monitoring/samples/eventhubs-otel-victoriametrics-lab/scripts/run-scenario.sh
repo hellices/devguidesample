@@ -80,23 +80,27 @@ sleep 120
 SCENARIO_END="$(now)"
 CONSUMER_PROCESSED="$(last_log_value eventhubs-slow-consumer processed_total)"
 
-cat >"$EVIDENCE/scenario.json" <<JSON
-{
-  "baseline_start": "$BASELINE_START",
-  "load_start": "$LOAD_START",
-  "producer_stop": "$PRODUCER_STOP",
-  "recovered_at": "${RECOVERED_AT:-null}",
-  "scenario_end": "$SCENARIO_END",
-  "target_events_per_second": $EVENTS_PER_SECOND,
-  "processing_delay_seconds": $PROCESSING_DELAY_SECONDS,
-  "producer_sent_total": ${PRODUCER_SENT:-null},
-  "consumer_processed_total_at_peak": ${CONSUMER_PROCESSED_AT_PEAK:-null},
-  "consumer_processed_total": ${CONSUMER_PROCESSED:-null},
-  "max_lag_at_load_start": $LAG_AT_LOAD_START,
-  "peak_max_lag": $PEAK_LAG,
-  "final_max_lag": $FINAL_LAG
-}
-JSON
+# Serialize with Python so absent values become JSON null rather than the string "null".
+python3 - "$EVIDENCE/scenario.json" <<PY
+import json, sys
+def number(value, kind=int):
+    return kind(value) if value not in ("", None) else None
+json.dump({
+    "baseline_start": "$BASELINE_START",
+    "load_start": "$LOAD_START",
+    "producer_stop": "$PRODUCER_STOP",
+    "recovered_at": "$RECOVERED_AT" or None,
+    "scenario_end": "$SCENARIO_END",
+    "target_events_per_second": number("$EVENTS_PER_SECOND"),
+    "processing_delay_seconds": number("$PROCESSING_DELAY_SECONDS", float),
+    "producer_sent_total": number("$PRODUCER_SENT"),
+    "consumer_processed_total_at_peak": number("$CONSUMER_PROCESSED_AT_PEAK"),
+    "consumer_processed_total": number("$CONSUMER_PROCESSED"),
+    "max_lag_at_load_start": number("$LAG_AT_LOAD_START"),
+    "peak_max_lag": number("$PEAK_LAG"),
+    "final_max_lag": number("$FINAL_LAG"),
+}, open(sys.argv[1], "w"), indent=2)
+PY
 cat "$EVIDENCE/scenario.json"
 COMPLETED=true
 [[ -n "$RECOVERED_AT" ]] || die "max lag did not recover by 80% within ${RECOVERY_TIMEOUT_MINUTES}m"

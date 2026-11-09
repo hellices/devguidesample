@@ -43,6 +43,8 @@ fi
 KEY_DIR="$(state_dir)"
 if [[ ! -f "$KEY_DIR/gateway_ed25519" ]]; then
   ssh-keygen -q -t ed25519 -N '' -C eventhubs-otel-lab -f "$KEY_DIR/gateway_ed25519"
+elif [[ ! -s "$KEY_DIR/gateway_ed25519.pub" ]]; then
+  ssh-keygen -y -f "$KEY_DIR/gateway_ed25519" >"$KEY_DIR/gateway_ed25519.pub"
 fi
 azd_env set GATEWAY_ADMIN_SSH_PUBLIC_KEY "$(<"$KEY_DIR/gateway_ed25519.pub")"
 log "preprovision checks passed."

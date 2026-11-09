@@ -31,20 +31,18 @@ def test_sample_manifest_is_runnable_and_referenced_by_both_pages():
 
 
 def test_azure_yaml_declares_lifecycle_hooks_without_local_docker_service():
-    text = (LAB_ROOT / "azure.yaml").read_text()
+    project = yaml.safe_load((LAB_ROOT / "azure.yaml").read_text())
 
-    assert "services:" not in text
-    for hook, script in {
+    assert "services" not in project
+    expected = {
         "preprovision": "./scripts/azd-configure.sh",
         "postprovision": "./scripts/azd-postprovision.sh",
         "postdeploy": "./scripts/azd-deploy.sh",
         "predown": "./scripts/cleanup-external.sh --yes",
-    }.items():
-        assert re.search(
-            rf"^  {hook}:.*?^    run: {re.escape(script)}$",
-            text,
-            re.MULTILINE | re.DOTALL,
-        )
+        "postdown": "./scripts/verify-cleanup.sh",
+    }
+    assert {hook: spec["run"] for hook, spec in project["hooks"].items()} == expected
+    assert all(spec["continueOnError"] is False for spec in project["hooks"].values())
 
 
 def test_main_bicep_never_creates_a_dedicated_cluster():
@@ -78,8 +76,9 @@ def test_main_bicep_exports_hook_contract():
         "VMSINGLE_PRIVATE_IP",
     )
 
+    declared = set(re.findall(r"^output (\w+) ", text, re.MULTILINE))
     for name in names:
-        assert f"output {name} " in text
+        assert name in declared, name
 
 
 def test_main_parameters_map_azd_environment_values():

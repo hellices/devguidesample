@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -38,17 +39,24 @@ def test_storage_and_key_vault_disable_legacy_secret_access():
     assert "grafana-admin-password" in text
 
 
-def test_foundation_assigns_only_expected_built_in_roles():
-    text = FOUNDATION.read_text()
+def _assigned_role_guids(text: str) -> set[str]:
+    """GUIDs actually used by roleAssignments, resolved through their var declarations."""
+    variables = dict(re.findall(r"^var (\w+) = '([0-9a-f-]{36})'", text, re.MULTILINE))
+    used = re.findall(
+        r"roleDefinitionId: subscriptionResourceId\('Microsoft\.Authorization/roleDefinitions', (\w+)\)", text
+    )
+    assert used, "no role assignments found"
+    return {variables[name] for name in used}
 
-    for role_definition_id in (
+
+def test_foundation_assigns_only_expected_built_in_roles():
+    assert _assigned_role_guids(FOUNDATION.read_text()) == {
         "7f951dda-4ed3-4680-a7ca-43fe172d538d",  # AcrPull
         "4633458b-17de-408a-b874-0445c86b69e6",  # Key Vault Secrets User
         "ba92f5b4-2d11-453d-a403-e96b0029c9fe",  # Storage Blob Data Contributor
         "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",  # Storage Blob Data Reader
-    ):
-        assert role_definition_id in text
-    assert "principalType: 'ServicePrincipal'" in text
+    }
+    assert "principalType: 'ServicePrincipal'" in FOUNDATION.read_text()
 
 
 def test_foundation_does_not_expose_secrets():
@@ -132,7 +140,7 @@ def test_messaging_exports_main_module_contract():
         "telemetryNamespaceName",
         "telemetryEventHubName",
     ):
-        assert f"output {name} " in text
+        assert re.search(rf"^output {name} ", text, re.MULTILINE), name
 
 
 COMPUTE = LAB_ROOT / "infra" / "modules" / "compute.bicep"
@@ -143,8 +151,10 @@ def test_compute_enables_workload_identity_and_restricts_public_ports():
 
     assert "oidcIssuerProfile: { enabled: true }" in text
     assert "workloadIdentity: { enabled: true }" in text
-    assert "destinationPortRange: '3000'" in text
-    assert "sourceAddressPrefix: operatorEgressCidr" in text
+    rules = text[text.index("securityRules: ["):text.index("resource gatewayNic")]
+    allow = re.findall(r"access: 'Allow'.*?destinationPortRange: '(\w+)'", rules, re.DOTALL)
+    assert allow == ["3000"]
+    assert re.findall(r"sourceAddressPrefix: (\S+)", rules) == ["operatorEgressCidr"]
     assert "destinationPortRange: '22'" not in text
 
 
@@ -246,3 +256,16 @@ def test_aks_can_manage_internal_lb_and_deployer_gets_cluster_admin():
     assert "4d97b98b-1d4f-4787-a291-c67834d212e7" in text  # Network Contributor
     assert "scope: aksSubnet" in text
     assert "b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b" in text  # AKS RBAC Cluster Admin
+
+
+def test_modules_assign_only_expected_roles():
+    assert _assigned_role_guids(MESSAGING.read_text()) == {
+        "43d0d8ad-25c7-4714-9337-8ba259a9fe05",  # Monitoring Reader
+        "2b629674-e913-4c01-ae53-ef4638d8f975",  # Azure Event Hubs Data Sender
+        "a638d3c7-ab3a-418d-83e6-5f17a39d4fde",  # Azure Event Hubs Data Receiver
+    }
+    assert _assigned_role_guids(COMPUTE.read_text()) == {
+        "7f951dda-4ed3-4680-a7ca-43fe172d538d",  # AcrPull (kubelet)
+        "4d97b98b-1d4f-4787-a291-c67834d212e7",  # Network Contributor (AKS subnet)
+        "b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b",  # Azure Kubernetes Service RBAC Cluster Admin
+    }

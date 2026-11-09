@@ -29,6 +29,11 @@ SAFE_LABEL_VALUES = {
 WINDOW = "30m"
 
 
+def _quote(value: str) -> str:
+    """PromQL/MetricsQL string literal for a label value returned by the server."""
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+
+
 def query(base_url: str, path: str, params: dict[str, str] | list[tuple[str, str]]) -> dict:
     data = urllib.parse.urlencode(params).encode()
     with urllib.request.urlopen(f"{base_url}{path}", data=data, timeout=30) as response:
@@ -59,20 +64,21 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
             entry["label_keys"].add(key)
             if key in SAFE_LABEL_VALUES:
                 entry["values"][key].add(value)
-        path = (labels.get("source_path", "missing"), labels.get("delivery_path", "missing"))
+        # An absent label stays "" so the matcher below (label="") selects exactly those series.
+        path = (labels.get("source_path", ""), labels.get("delivery_path", ""))
         entry["paths"].add(path)
         combos[path].add(name)
 
     path_stats = []
     for source, delivery in sorted(combos):
-        selector = f'{{source_path="{source}",delivery_path="{delivery}"}}'
+        selector = f"{{source_path={_quote(source)},delivery_path={_quote(delivery)}}}"
         count = query(base_url, "/api/v1/query", {"query": f"sum(count_over_time({selector}[{window}]))"})
         newest = query(base_url, "/api/v1/query", {"query": f"max(tlast_over_time({selector}[{window}]))"})
         newest_ts = float(newest["result"][0]["value"][1]) if newest["result"] else None
         path_stats.append(
             {
-                "source_path": source,
-                "delivery_path": delivery,
+                "source_path": source or "(missing)",
+                "delivery_path": delivery or "(missing)",
                 "metric_names": len(combos[(source, delivery)]),
                 "samples_in_window": int(float(count["result"][0]["value"][1])) if count["result"] else 0,
                 "freshness_seconds": round(now - newest_ts, 1) if newest_ts else None,
@@ -86,7 +92,7 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
             name: {
                 "label_keys": sorted(entry["label_keys"]),
                 "safe_label_values": {k: sorted(v) for k, v in sorted(entry["values"].items())},
-                "paths": sorted(["/".join(p) for p in entry["paths"]]),
+                "paths": sorted(["/".join(part or "(missing)" for part in p) for p in entry["paths"]]),
             }
             for name, entry in sorted(inventory.items())
         },

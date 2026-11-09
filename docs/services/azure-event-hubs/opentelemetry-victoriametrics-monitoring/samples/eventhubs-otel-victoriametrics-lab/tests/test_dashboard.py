@@ -107,3 +107,39 @@ def test_min_and_max_are_standard_field_options():
     for panel in _panels(dashboard):
         custom = panel.get("fieldConfig", {}).get("defaults", {}).get("custom", {})
         assert "min" not in custom and "max" not in custom, panel["title"]
+
+
+def test_grafana_client_refuses_redirects_and_plain_http(monkeypatch):
+    import http.server
+    import threading
+    import urllib.error
+
+    import pytest
+    from verify_panels import grafana_request
+
+    class Redirect(http.server.BaseHTTPRequestHandler):
+        seen_authorization = []
+
+        def do_GET(self):
+            Redirect.seen_authorization.append(self.headers.get("Authorization"))
+            self.send_response(302)
+            self.send_header("Location", "http://127.0.0.1:9/steal")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Redirect)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        monkeypatch.delenv("GRAFANA_ALLOW_HTTP", raising=False)
+        with pytest.raises(SystemExit):
+            grafana_request(url, "admin", "secret", "/api/health")
+        assert Redirect.seen_authorization == []
+
+        monkeypatch.setenv("GRAFANA_ALLOW_HTTP", "1")  # test-only switch to reach the local server
+        with pytest.raises(urllib.error.HTTPError, match="refusing redirect"):
+            grafana_request(url, "admin", "secret", "/api/health")
+    finally:
+        server.shutdown()

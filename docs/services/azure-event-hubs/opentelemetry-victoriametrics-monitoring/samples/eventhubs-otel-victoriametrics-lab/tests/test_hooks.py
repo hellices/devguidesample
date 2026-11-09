@@ -46,16 +46,21 @@ def test_azure_cli_calls_pin_the_subscription():
 
 
 def test_no_script_creates_a_dedicated_cluster():
-    text = "\n".join(p.read_text() for p in LAB_ROOT.rglob("*.sh"))
-    assert "eventhubs cluster create" not in text
-    assert "Microsoft.EventHub/clusters" not in text
+    for path in LAB_ROOT.rglob("*.sh"):
+        for line in _joined_commands(path.read_text()):
+            normalized = " ".join(line.split())
+            assert "eventhubs cluster create" not in normalized, f"{path.name}: {line.strip()}"
+            assert "Microsoft.EventHub/clusters" not in normalized, f"{path.name}: {line.strip()}"
 
 
 def test_kubectl_uses_lab_kubeconfig_only():
+    # Every kubectl invocation, including inside $(...) and pipelines, must pin the lab kubeconfig.
     for path in SCRIPTS.glob("*.sh"):
-        for line in path.read_text().splitlines():
-            if re.match(r"\s*kubectl\s", line):
-                assert "--kubeconfig" in line, f"{path.name}: {line.strip()}"
+        for line in _joined_commands(path.read_text()):
+            if line.lstrip().startswith(("#", "require_commands")):
+                continue
+            for match in re.finditer(r"(?:^|[\s;|&(])kubectl\s([^;|&)]*)", line):
+                assert "--kubeconfig" in match.group(1), f"{path.name}: {line.strip()}"
 
 
 @pytest.fixture
@@ -93,7 +98,8 @@ def _run(script: str, bin_dir: Path, *args: str) -> subprocess.CompletedProcess:
 
 def test_preprovision_stops_before_mutation_on_subscription_mismatch(fake_bin):
     bin_dir, log, write = fake_bin
-    write("az", 'if [[ "$1 $2" == "account show" ]]; then echo 99999999-0000-0000-0000-000000000000; fi')
+    # Only the read-only active-subscription lookup may run before the mismatch check.
+    write("az", 'if [[ "$1 $2" == "account show" ]]; then echo 99999999-0000-0000-0000-000000000000; exit 0; fi; exit 97')
     write(
         "azd",
         'if [[ "$1 $2" == "env get-value" && "${@: -1}" == "AZURE_SUBSCRIPTION_ID" ]]; then '
@@ -105,7 +111,9 @@ def test_preprovision_stops_before_mutation_on_subscription_mismatch(fake_bin):
 
     assert result.returncode != 0
     assert "does not match" in result.stderr
-    assert "azd env set" not in log.read_text()
+    calls = log.read_text().splitlines()
+    assert "azd env set" not in "\n".join(calls)
+    assert [c for c in calls if c.startswith("az ")] == ["az account show --query id -o tsv"]
 
 
 def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path):
@@ -260,14 +268,20 @@ def test_vm_query_stop_terminates_the_forward_it_started(fake_bin, tmp_path):
     bin_dir, _, write = fake_bin
     write("azd", "exit 1")
     write("curl", 'exec /usr/bin/curl "$@"')
-    # The fake kubectl becomes a long-running HTTP server on the forwarded local port, like port-forward.
+    # The fake kubectl stays alive as "kubectl ... port-forward ... <port>:8428" (like the real
+    # binary) and serves /health on the forwarded port until it is terminated.
+    server = (
+        "import http.server as h,sys\n"
+        "class H(h.BaseHTTPRequestHandler):\n"
+        " def do_GET(s): s.send_response(200); s.end_headers()\n"
+        " def log_message(s,*a): pass\n"
+        "h.HTTPServer(('127.0.0.1',int(sys.argv[1])),H).serve_forever()"
+    )
+    (tmp_path / "server.py").write_text(server)
     write("kubectl", (
         'for a; do case "$a" in *:8428) p="${a%%:*}";; esac; done; '
-        'exec /usr/bin/python3 -c "import http.server as h,sys\n'
-        'class H(h.BaseHTTPRequestHandler):\n'
-        ' def do_GET(s): s.send_response(200); s.end_headers()\n'
-        ' def log_message(s,*a): pass\n'
-        'h.HTTPServer((\'127.0.0.1\',int(sys.argv[1])),H).serve_forever()" "$p"'
+        f'/usr/bin/python3 {tmp_path / "server.py"} "$p" & child=$!; '
+        "trap 'kill $child' TERM; wait $child"
     ))
     env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
            "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": str(port)}

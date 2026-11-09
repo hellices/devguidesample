@@ -26,6 +26,7 @@ def _raw(names=REQUIRED, drop=None):
 def _fetch(remote_override=None):
     def fetch(path, params):
         if path == "/api/v1/export":
+            assert (params["start"], params["end"]) == (START, END - 1)
             if "diagnostic_eventhub" in params["match[]"]:
                 return ""
             values = [float(10 * i) for i in range(3)]
@@ -33,6 +34,9 @@ def _fetch(remote_override=None):
                 values = remote_override(params["match[]"], values)
             stamps = [(START + 60 * i) * 1000 for i in range(3)]
             return json.dumps({"values": values, "timestamps": stamps})
+        assert path == "/api/v1/query", path
+        assert params["time"] == END - 1
+        assert f"[{END - START}s]" in params["query"]
         return json.dumps({"data": {"result": [{"value": [END, "30"]}]}})
 
     return fetch

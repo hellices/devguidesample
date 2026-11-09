@@ -125,7 +125,7 @@ def build_dashboard(probe: dict) -> dict:
     stat_opts = {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
                  "colorMode": "value", "graphMode": "none", "textMode": "value_and_name"}
 
-    panels.append(layout.row("Premium 용량 상태 (1 PU, Azure Monitor API → remote write)"))
+    panels.append(layout.row(f"Premium 용량 상태 ({pu} PU, Azure Monitor API → remote write)"))
     for title, metric in (("Premium CPU", "namespacecpuusage"), ("Premium Memory", "namespacememoryusage")):
         panels.append(layout.panel(
             "gauge", title, 4, 7,

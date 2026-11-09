@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# postdown: proves the lab resource group is gone and that no Dedicated cluster was ever involved.
+# postdown: proves the lab resource group recorded by predown no longer exists.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 source "$(dirname "$0")/lib.sh"
 

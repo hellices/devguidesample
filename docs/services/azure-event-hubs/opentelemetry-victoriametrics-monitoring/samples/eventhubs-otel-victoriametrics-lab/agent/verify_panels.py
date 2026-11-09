@@ -25,6 +25,13 @@ def _tls_context() -> ssl.SSLContext | None:
     return ssl.create_default_context(cafile=ca_file) if ca_file else None
 
 
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    # urllib would replay the Authorization header to the redirect target; Grafana's API never
+    # needs a redirect, so treat one as an error instead of following it.
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, f"refusing redirect to {newurl}", headers, fp)
+
+
 def grafana_request(url: str, user: str, password: str, path: str, body: dict | None = None) -> dict:
     if not url.startswith("https://") and os.environ.get("GRAFANA_ALLOW_HTTP") != "1":
         raise SystemExit("refusing to send Grafana credentials over plain HTTP")
@@ -35,7 +42,8 @@ def grafana_request(url: str, user: str, password: str, path: str, body: dict | 
         headers={"Authorization": f"Basic {token}", "Content-Type": "application/json"},
         method="POST" if body is not None else "GET",
     )
-    with urllib.request.urlopen(request, timeout=60, context=_tls_context()) as response:
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_tls_context()), _RefuseRedirect)
+    with opener.open(request, timeout=60) as response:
         return json.load(response)
 
 

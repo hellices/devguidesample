@@ -21,9 +21,6 @@ spec:
       memory: 512Mi
     limits:
       memory: 1Gi
-  extraArgs:
-    # Diagnostic Settings and Azure Monitor samples arrive minutes after their timestamp.
-    search.latencyOffset: 30s
   serviceSpec:
     useAsDefault: false
     metadata:

@@ -75,6 +75,11 @@ for _ in $(seq 1 60); do
 done
 [[ "$status" == "operational" ]] || die "VMSingle is not operational (status=$status)"
 [[ "$lb" == "$VMSINGLE_PRIVATE_IP" ]] || die "VMSingle internal load balancer did not receive $VMSINGLE_PRIVATE_IP"
+# The operator creates the VMAgent Deployment asynchronously; wait for it before rollout status.
+for _ in $(seq 1 30); do
+  kube get deploy/vmagent-lab -n "$NS" >/dev/null 2>&1 && break
+  sleep 5
+done
 kube rollout status deploy/vmagent-lab -n "$NS" --timeout 300s
 else
   WORKLOAD_IMAGE="$(env_value WORKLOAD_IMAGE)"

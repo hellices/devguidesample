@@ -304,6 +304,13 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | producer payload가 설정값보다 13바이트 큼 | 빈 `padding` 필드를 포함해 크기를 계산해 정확히 `PAYLOAD_BYTES`로 맞춤 |
 | lag 수집이 실패해도 마지막 lag 값이 남아 정상처럼 보임 | 실패하면 lag gauge를 지우고, 대시보드 `Lag collection` stat이 구간 중 한 번이라도 실패하면 Failed로 표시 |
 | evidence 폴더를 환경끼리 공유해 다른 환경의 시나리오 구간을 쓸 수 있음 | `evidence/<env>/`로 분리 |
+| 브라우저 캡처의 인증서 고정이 예외 허용(SPKI flag)이라 다른 유효 인증서나 다른 origin redirect를 막지 못함 | Chromium은 loopback HTTP 프록시에만 접속하고, 프록시가 고정 인증서만 신뢰하는 Node TLS로 Grafana에 연결. 다른 origin 요청과 redirect는 차단. 로컬 Grafana OSS 13.3.0 HTTPS에서 로그인·캡처 성공, 다른 인증서로는 자격 증명 입력 전 실패 |
+| Python 클라이언트가 redirect를 따라가며 Authorization을 넘길 수 있음 | redirect를 오류로 처리 |
+| 만료된 Grafana 인증서 재사용, `.pub` 누락, VMAgent Deployment 생성 전 rollout 대기 | 만료 하루 전 재발급, 공개키 복구, 생성 대기 후 rollout |
+| cleanup이 resource group의 모든 federated credential을 삭제 | 실습이 만든 두 credential 이름만 삭제 |
+| port-forward 종료를 기다리지 않고, 재사용된 PID를 종료할 수 있음 | 명령줄로 소유권을 확인한 뒤 종료를 기다리고, 필요하면 SIGKILL |
+| 시나리오 결과의 `recovered_at`이 문자열 `"null"` | Python으로 직렬화해 JSON `null` 사용 |
+| 계약 테스트의 false-green(문자열 존재만 확인) | azure.yaml 파싱, 행 시작 output 선언, 역할 할당 GUID 집합 일치, NSG 규칙 집합, 두 pipeline의 processor 동일성, fallback 연결, 명령 줄 이음·command substitution 안의 kubectl, 읽기 전용 사전 확인 검증 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 
@@ -320,9 +327,10 @@ group 이름을 기록합니다. `postdown`은 그 resource group이 사라질 �
 
 | 환경 | 결과 |
 |---|---|
-| 첫 환경 | resource group 삭제와 Key Vault purge 완료(17분 45초). 이때 `postdown`은 provision output이 지워져 실패했고, 위 수정 후 새 환경에서 다시 확인 |
-| 새 환경 | `predown`·삭제·purge·`postdown` 모두 성공(19분 3초) |
-| 구독 전체 | 두 resource group 없음, soft-delete 상태 Key Vault 없음, Event Hubs Dedicated cluster 없음 |
+| 첫 환경 `ehotel-lab1` | resource group 삭제와 Key Vault purge 완료(17분 45초). 이때 `postdown`은 provision output이 지워져 실패했고, 위 수정 후 다음 환경에서 다시 확인 |
+| 두 번째 환경 `ehotel-lab2` | `predown`·삭제·purge·`postdown` 모두 성공(19분 3초) |
+| 세 번째 환경 `ehotel-lab3` | `predown`·삭제·purge·`postdown` 모두 성공(9분 42초) |
+| 구독 전체 | 세 resource group 없음, soft-delete 상태 Key Vault 없음, Event Hubs Dedicated cluster 없음 |
 
 ## 공식 참고 자료
 
