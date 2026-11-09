@@ -690,7 +690,7 @@ git commit -m "feat(eventhubs): add AKS and collector gateway"
 **Interfaces:**
 - `compute_lag(last_enqueued_sequence_number: int | None, checkpoint_sequence_number: int | None) -> LagResult`.
 - Producer and consumer authenticate with `DefaultAzureCredential(managed_identity_client_id=AZURE_CLIENT_ID)`.
-- Exporter exposes `eventhubs_consumer_lag_messages`, `eventhubs_checkpoint_present`, and `eventhubs_last_checkpoint_unixtime` on port 9464.
+- Exporter exposes `eventhubs_consumer_lag_messages`, `eventhubs_checkpoint_present`, `eventhubs_partition_empty`, and `eventhubs_lag_invalid_order` on port 9464. It does not label checkpoint blob age as event lag duration.
 
 - [ ] **Step 1: Write lag unit tests**
 

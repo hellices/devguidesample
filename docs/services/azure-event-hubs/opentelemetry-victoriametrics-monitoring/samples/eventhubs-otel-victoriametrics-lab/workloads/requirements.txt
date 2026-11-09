@@ -1,0 +1,5 @@
+azure-eventhub==5.15.1
+azure-eventhub-checkpointstoreblob-aio==1.2.0
+azure-identity==1.27.0
+azure-storage-blob==12.31.1
+prometheus-client==0.26.0
