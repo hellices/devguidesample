@@ -160,7 +160,10 @@ AKS의 Application Monitoring 자동 계측을 켜면 앱이 기록한 Micromete
 metrics endpoint를 열고 scrape 설정을 만들 필요가 없습니다. 지표는 Application
 Insights의 `customMetrics`에 저장되고, 대시보드는 이를 data source로 조회합니다.
 
-1. 클러스터에서 자동 계측 지원을 켭니다(`az aks update --enable-azure-monitor-app-monitoring`).
+1. 클러스터에서 자동 계측 지원을 켭니다(`az aks update --enable-azure-monitor-app-monitoring`,
+   Azure CLI 2.86.0 이상). 포털의 **Monitor** 설정에서도 켤 수 있으며, 전체 절차는
+   [Autoinstrument AKS apps with Azure Monitor Application Insights](https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless)에
+   있습니다.
 2. namespace에 `Instrumentation` CR을 만들어 지표를 보낼 Application Insights를
    지정합니다.
 3. Deployment를 재시작하면 AKS가 Pod에 Application Insights Java agent를 주입합니다.
