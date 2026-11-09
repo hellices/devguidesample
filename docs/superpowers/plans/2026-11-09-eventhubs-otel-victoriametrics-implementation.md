@@ -470,11 +470,11 @@ output vmSinglePrivateIp string = vmSinglePrivateIp
 - [ ] **Step 4: Build and test GREEN**
 
 ```bash
-az bicep build --file docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/infra/main.bicep
+az bicep build --file docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/infra/modules/foundation.bicep
 /tmp/devguidesample-docs-venv/bin/python -m pytest docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/tests/test_bicep_contract.py -q
 ```
 
-Expected: exit 0 and all tests PASS.
+Expected: foundation module build exits 0 with no diagnostics and all tests PASS. Remove the generated `foundation.json` before committing; the deployable source of truth is Bicep.
 
 - [ ] **Step 5: Commit**
 
