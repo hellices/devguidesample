@@ -592,8 +592,8 @@ COMPUTE = LAB_ROOT / "infra" / "modules" / "compute.bicep"
 
 def test_compute_enables_workload_identity_and_restricts_public_ports():
     text = COMPUTE.read_text()
-    assert "enableOIDCIssuer: true" in text
-    assert "enableWorkloadIdentity: true" in text
+    assert "oidcIssuerProfile: { enabled: true }" in text
+    assert "workloadIdentity: { enabled: true }" in text
     assert "destinationPortRange: '3000'" in text
     assert "sourceAddressPrefix: operatorEgressCidr" in text
     assert "destinationPortRange: '22'" not in text
@@ -652,9 +652,9 @@ Outputs:
 ```bicep
 output aksName string = aks.name
 output aksOidcIssuer string = aks.properties.oidcIssuerProfile.issuerURL
-output gatewayVmName string = vm.name
-output gatewayPublicIp string = publicIp.properties.ipAddress
-output gatewayPrivateIp string = nic.properties.ipConfigurations[0].properties.privateIPAddress
+output gatewayVmName string = gatewayVm.name
+output gatewayPublicIp string = gatewayPublicIp.properties.ipAddress
+output gatewayPrivateIp string = gatewayNic.properties.ipConfigurations[0].properties.privateIPAddress
 ```
 
 - [ ] **Step 4: Verify**
@@ -663,6 +663,8 @@ output gatewayPrivateIp string = nic.properties.ipConfigurations[0].properties.p
 az bicep build --file docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/infra/main.bicep
 /tmp/devguidesample-docs-venv/bin/python -m pytest docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/tests/test_bicep_contract.py -q
 ```
+
+Expected: complete subscription template build exits 0 with no diagnostics and all tests PASS. Remove generated `main.json` and `compute.json` before committing.
 
 - [ ] **Step 5: Commit**
 

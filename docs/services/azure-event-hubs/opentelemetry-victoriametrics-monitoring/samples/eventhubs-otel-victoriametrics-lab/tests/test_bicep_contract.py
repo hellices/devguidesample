@@ -133,3 +133,68 @@ def test_messaging_exports_main_module_contract():
         "telemetryEventHubName",
     ):
         assert f"output {name} " in text
+
+
+COMPUTE = LAB_ROOT / "infra" / "modules" / "compute.bicep"
+
+
+def test_compute_enables_workload_identity_and_restricts_public_ports():
+    text = COMPUTE.read_text()
+
+    assert "oidcIssuerProfile: { enabled: true }" in text
+    assert "workloadIdentity: { enabled: true }" in text
+    assert "destinationPortRange: '3000'" in text
+    assert "sourceAddressPrefix: operatorEgressCidr" in text
+    assert "destinationPortRange: '22'" not in text
+
+
+def test_compute_uses_overlay_network_without_vnet_overlap():
+    text = COMPUTE.read_text()
+
+    assert "networkPlugin: 'azure'" in text
+    assert "networkPluginMode: 'overlay'" in text
+    assert "podCidr: '10.244.0.0/16'" in text
+    assert "serviceCidr: '10.0.0.0/16'" in text
+    assert "dnsServiceIP: '10.0.0.10'" in text
+    assert "vnetSubnetID: aksSubnetId" in text
+
+
+def test_gateway_uses_managed_identity_and_no_embedded_secret():
+    text = COMPUTE.read_text()
+
+    assert "type: 'UserAssigned'" in text
+    assert "gatewayIdentityId" in text
+    assert "adminPassword" not in text
+    assert "disablePasswordAuthentication: true" in text
+    assert "grafana-admin-password" not in text
+
+
+def test_compute_assigns_kubelet_acr_pull():
+    text = COMPUTE.read_text()
+
+    assert "aks.properties.identityProfile.kubeletidentity.objectId" in text
+    assert "7f951dda-4ed3-4680-a7ca-43fe172d538d" in text
+    assert "scope: acr" in text
+
+
+def test_compute_bootstraps_gateway_without_starting_application():
+    text = COMPUTE.read_text()
+
+    assert "docker.io" in text
+    assert "docker-compose-v2" in text
+    assert "InstallAzureCLIDeb" in text
+    assert "/opt/eventhubs-observability" in text
+    assert "docker compose up" not in text
+
+
+def test_compute_exports_main_module_contract():
+    text = COMPUTE.read_text()
+
+    for name in (
+        "aksName",
+        "aksOidcIssuer",
+        "gatewayVmName",
+        "gatewayPublicIp",
+        "gatewayPrivateIp",
+    ):
+        assert f"output {name} " in text

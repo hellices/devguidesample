@@ -71,13 +71,10 @@ module compute 'modules/compute.bicep' = {
     kubernetesVersion: kubernetesVersion
     operatorEgressCidr: operatorEgressCidr
     gatewayAdminSshPublicKey: gatewayAdminSshPublicKey
-    vnetId: foundation.outputs.vnetId
     aksSubnetId: foundation.outputs.aksSubnetId
     gatewaySubnetId: foundation.outputs.gatewaySubnetId
     gatewayIdentityId: foundation.outputs.gatewayIdentityId
-    gatewayClientId: foundation.outputs.gatewayClientId
     acrId: foundation.outputs.acrId
-    keyVaultName: foundation.outputs.keyVaultName
   }
 }
 
