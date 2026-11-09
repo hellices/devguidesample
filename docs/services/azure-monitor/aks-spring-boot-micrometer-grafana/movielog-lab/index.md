@@ -78,7 +78,7 @@ related_guides:
 [주제 소개](../index.md#message)에 있습니다.
 
 - 관리형 `3.7.7-aks`로는 `movielog_*`가 0건이었고, 3.7.10 init image로 바꾸자
-  12개 지표가 두 Pod에서 도착했습니다([버전 게이트](#version-gate)).
+  12개 지표가 두 Pod에서 도착했습니다([agent 버전 확인](#version-gate)).
 - 이미 주입된 Deployment에서 custom agent로 바꾸려면 patch를 두 번에 나눠야
   했습니다([webhook 주입 해제](#webhook-revert)).
 - agent 대시보드는 probe → build → verify → look 단계마다 정한 점검 기준을 통과한 뒤
@@ -206,11 +206,15 @@ JVM flag는 Pod의 `JAVA_TOOL_OPTIONS`에 선언합니다. 실습에서 webhook�
 JAVA_TOOL_OPTIONS = -javaagent:/azure-monitor-auto-instrumentation-java/applicationinsights-agent-codeless.jar -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError
 ```
 
-## agent 버전 게이트: 3.7.7-aks 지표 누락과 3.7.10 전환 { #version-gate }
+## agent 버전 확인과 3.7.10 init image 적용 { #version-gate }
 
-관리형 `3.7.7-aks`에서는 `movielog_*`가 0건이었고, 3.7.10 init image로 바꾸자 도착했습니다.
+Spring Boot 4 앱은 주입된 agent가 3.7.9 이상이어야 Micrometer 지표가 수집됩니다.
+원인과 대응 방식 비교는
+[AKS Java Micrometer custom metric 누락 임시 대응](../../aks-java-micrometer-custom-metrics/index.md)에
+있습니다. 이 절은 실습에서 쓴 방식, 즉 sample의 3.7.10 init image를 `kubectl patch`로
+적용하는 절차만 다룹니다.
 
-배포 직후 주입된 agent를 확인했습니다.
+배포 직후 주입된 agent image를 확인합니다.
 
 ```bash
 POD="$(kubectl get pod -n movielog -l app=movielog -o jsonpath='{.items[0].metadata.name}')"
@@ -222,21 +226,10 @@ kubectl get pod "$POD" -n movielog \
 azure-monitor-auto-instrumentation-java  mcr.microsoft.com/applicationinsights/auto-instrumentation/java:3.7.7-aks
 ```
 
-Application Insights Java 3.7.7은 Spring Boot 3의 Micrometer
-auto-configuration class만 찾습니다. Spring Boot 4에서는 agent registry가
-Spring `MeterRegistry`에 연결되지 않습니다. 이 문제는
-[microsoft/ApplicationInsights-Java#4672](https://github.com/microsoft/ApplicationInsights-Java/pull/4672)에서
-수정되어 3.7.9부터 포함됐습니다. 2026-11-06 기준 MCR의 최신 `-aks` tag는
-`3.7.7-aks`, upstream 최신 GA는 3.7.10이었습니다.
-
-3.7.7-aks로 실행한 구간(18:38~18:41 KST)에는 agent 기본 JVM 지표와
-`http.server.request.duration`만 있고 `movielog_*`는 없습니다.
+tag가 3.7.9 미만이면 아래 절차를 적용합니다. 2026-11-06 실습에서는 `3.7.7-aks`가
+주입됐고, inventory에 agent 기본 지표만 있고 `movielog_*`는 없었습니다.
 
 ![agent 3.7.7-aks 구간의 customMetrics inventory. JVM 기본 지표와 http.server.request.duration만 있고 movielog 지표가 없음](../images/probe-inventory-agent-3.7.7.png)
-
-checksum을 고정한 3.7.10 jar를 ACR init image로 만들어 주입을 바꾸자
-`movielog_*` 12개가 두 Pod에서 모두 도착했습니다. 이때의 inventory 캡처는
-[주제 소개의 수집 절](../index.md#collect)에 있습니다.
 
 ```bash
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 \
@@ -263,28 +256,28 @@ kubectl logs -n movielog -l app=movielog -c movielog --tail=-1 --prefix | grep "
 [pod/movielog-54bb48b5b7-k8jjm/movielog] ... Application Insights Java Agent 3.7.10 started successfully
 ```
 
+모든 Pod에서 3.7.10이 시작되면 `movielog_*`가 도착합니다. 이때의 inventory 캡처는
+[주제 소개의 수집 절](../index.md#collect)에 있습니다.
+
 ### webhook 주입 해제와 2단계 전환 { #webhook-revert }
 
-이미 주입된 Deployment를 한 번에 바꾸면 webhook이 agent 설정을 지웁니다.
+이미 주입된 Deployment는 annotation 해제와 custom agent 설정을 두 번의 patch로
+나눠 적용합니다.
 
-실습 클러스터의 `app-monitoring-webhook`은 Pod가 아니라 **Deployment**의
-CREATE·UPDATE에 동작했습니다. 이미 주입된 Deployment에 annotation `"false"`와
-custom agent 환경 변수를 한 patch로 넣자, webhook이 주입 해제를 하면서
-`APPLICATIONINSIGHTS_*` 변수를 모두 지우고 `JAVA_TOOL_OPTIONS`를 주입 전 값으로
-되돌렸습니다. 새 Pod는 agent 없이 시작했습니다.
+- 실습 클러스터의 `app-monitoring-webhook`은 Pod가 아니라 Deployment의
+  CREATE·UPDATE에 동작했습니다. annotation `"false"`와 custom agent 설정을 한 patch로
+  넣으면 webhook이 주입 해제를 하면서 `APPLICATIONINSIGHTS_*` 변수를 지우고
+  `JAVA_TOOL_OPTIONS`를 주입 전 값으로 되돌려, 새 Pod가 agent 없이 시작합니다.
+- 처음부터 custom agent로 배포한다면 annotation `"false"`와 custom 설정을 함께 둔
+  manifest로 생성해도 됩니다.
+- 관리형 주입으로 돌아갈 때는 `kubectl apply` 대신 `kubectl replace`를 씁니다.
+  patch로 넣은 init container와 volume이 `last-applied` 설정에 없어 남고, webhook이
+  주입하는 volume mount와 겹쳐 `mountPath ... must be unique`로 거부되기 때문입니다.
 
-annotation을 먼저 `"false"`로 바꾸고, 정리된 Deployment에 custom 설정을 두 번째
-patch로 넣으면 유지됩니다. 처음부터 custom agent로 배포한다면 annotation
-`"false"`와 custom 설정을 함께 둔 manifest로 생성해도 됩니다. 이 동작은 공식
-문서에 기술된 계약이 아니라 2026-11-06 실습에서 관측한 결과입니다. 적용 뒤에는
-항상 Pod의 init container image와 agent 시작 로그를 확인합니다.
+이 동작은 공식 문서에 기술된 계약이 아니라 2026-11-06 실습에서 관측한 결과입니다.
+적용 뒤에는 항상 Pod의 init container image와 agent 시작 로그를 확인합니다.
 
-관리형 image가 3.7.9 이상이 되면 관리형 주입으로 돌아갑니다. 이때 `kubectl apply`는
-실패했습니다. patch로 넣은 init container와 volume은 `last-applied` 설정에 없어
-그대로 남고, webhook이 주입하는 volume mount와 경로가 겹쳐
-`mountPath ... must be unique`로 거부됐습니다. 전체 객체를 바꾸는
-`kubectl replace`로 원래 manifest를 적용하자 관리형 `3.7.7-aks` 주입으로
-돌아갔습니다.
+관리형 image가 3.7.9 이상이 되면 다음 명령으로 관리형 주입으로 돌아갑니다.
 
 ```bash
 envsubst < k8s/20-movielog.yaml | kubectl replace -f -
@@ -492,8 +485,9 @@ python3 agent/verify_panels.py grafana/movielog-dashboard.json --appinsights-id 
 - 접힌 row 안의 panel까지 모든 query를 실행합니다.
 - HTTP 오류와 0행은 실패입니다. 숫자 field가 모두 null인 행도 데이터가 없는 것으로
   봅니다. 0은 정상 값입니다.
-- 구간 끝만 보는 panel(예: metric 수신 상태)이 실패하면 query가 아니라 수집이 멈춘
-  것이므로 inventory부터 다시 확인합니다.
+- 구간 끝만 보는 panel(예: metric 수신 상태)이 HTTP 오류 없이 0행을 돌려주면 query보다
+  최근 수집 중단을 먼저 의심하고 inventory를 확인합니다. HTTP 오류라면 다른 panel과
+  같이 query부터 고칩니다.
 - KQL 예약어(`views`, `first` 등)를 column 이름으로 쓰면 parse 오류(HTTP 400)가 납니다.
   column 이름은 `movieViews`처럼 예약어가 아닌 이름으로 짓습니다.
 
@@ -691,7 +685,7 @@ meter 수, tag 조합 수가 늘면 비례해 늘어납니다.
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| request는 보이지만 `movielog_*`가 없음 | 주입된 agent가 3.7.9 미만 | init container image 확인 후 [버전 조건](#version-gate) 적용 |
+| request는 보이지만 `movielog_*`가 없음 | 주입된 agent가 3.7.9 미만 | init container image 확인 후 [agent 버전 확인](#version-gate) 적용 |
 | custom agent patch 뒤 agent가 시작하지 않음 | webhook이 주입 해제하며 `APPLICATIONINSIGHTS_*` 삭제 | annotation `"false"`를 먼저 적용한 뒤 custom patch |
 | 관리형으로 되돌리는 `kubectl apply`가 `mountPath ... must be unique` | patch로 넣은 init container·volume이 남아 webhook 주입과 충돌 | `kubectl replace`로 manifest 전체 교체 |
 | `az acr build`가 `layer does not exist`로 실패 | classic builder에서 빈 layer나 같은 내용의 layer가 연속 | sample Dockerfile처럼 layer마다 다른 marker 파일 추가 |

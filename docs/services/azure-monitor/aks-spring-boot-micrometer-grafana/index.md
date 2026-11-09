@@ -21,8 +21,8 @@ official_sources:
     url: https://docs.micrometer.io/micrometer/reference/concepts/counters.html
   - title: Micrometer Timers
     url: https://docs.micrometer.io/micrometer/reference/concepts/timers.html
-  - title: Micrometer Observation
-    url: https://docs.micrometer.io/micrometer/reference/observation.html
+  - title: Micrometer Observation Components
+    url: https://docs.micrometer.io/micrometer/reference/observation/components.html
   - title: How to manage data sources in Azure Managed Grafana
     url: https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity
   - title: Configure an Azure Managed Grafana remote MCP server
@@ -99,7 +99,7 @@ meter를 만드는 방법도 여러 가지입니다.
 | registry 단축 메서드 | `registry.counter("name", "tag", "value")` | 간단한 meter를 한 줄로 등록 |
 | annotation | 메서드에 `@Counted`, `@Timed` | 호출 횟수와 실행 시간을 메서드 본문 수정 없이 기록. `CountedAspect`·`TimedAspect` 구성 필요 |
 | `MeterBinder` | `bindTo(MeterRegistry)` 구현 | 관련 meter를 한 class에 묶어 등록. MovieLog의 DB Gauge가 쓰는 방식 |
-| Observation API | `Observation.createNotStarted(...).observe(...)` | 한 번 계측해 metric과 trace를 함께 생성 |
+| Observation API | `Observation.createNotStarted("name", observationRegistry).observe(...)` | 한 번 계측해 등록된 handler에 따라 metric과 trace를 생성. metric은 `MeterObservationHandler`, trace는 tracing bridge와 exporter 구성이 별도로 필요 |
 | Spring Boot 자동 등록 | Actuator 의존성 추가 | JVM, HTTP 요청, DB connection pool 지표가 코드 없이 등록 |
 
 Counter와 DistributionSummary는 이벤트가 일어날 때 코드에서 값을 올립니다.
@@ -323,7 +323,7 @@ Insights Java agent는 3.7.9부터 Spring Boot 4의 Micrometer 구성을 인식�
 - [Micrometer Meters](https://docs.micrometer.io/micrometer/reference/concepts/meters.html)
 - [Micrometer Counters](https://docs.micrometer.io/micrometer/reference/concepts/counters.html)
 - [Micrometer Timers](https://docs.micrometer.io/micrometer/reference/concepts/timers.html)
-- [Micrometer Observation](https://docs.micrometer.io/micrometer/reference/observation.html)
+- [Micrometer Observation Components](https://docs.micrometer.io/micrometer/reference/observation/components.html)
 - [How to manage data sources in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity)
 - [Configure an Azure Managed Grafana remote MCP server](https://learn.microsoft.com/azure/managed-grafana/grafana-mcp-server)
 - [Create a dashboard in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-create-dashboard)
