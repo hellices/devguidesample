@@ -17,6 +17,12 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-monitor/app/metrics-overview
   - title: Micrometer Meters
     url: https://docs.micrometer.io/micrometer/reference/concepts/meters.html
+  - title: Micrometer Counters
+    url: https://docs.micrometer.io/micrometer/reference/concepts/counters.html
+  - title: Micrometer Timers
+    url: https://docs.micrometer.io/micrometer/reference/concepts/timers.html
+  - title: Micrometer Observation
+    url: https://docs.micrometer.io/micrometer/reference/observation.html
   - title: How to manage data sources in Azure Managed Grafana
     url: https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity
   - title: Configure an Azure Managed Grafana remote MCP server
@@ -72,13 +78,29 @@ agent가 정합니다. Spring Boot에서는 `spring-boot-starter-actuator`가 `M
 bean을 구성하므로 생성자로 주입받아 바로 씁니다.
 
 meter는 이름과 tag 조합으로 구분되며, 측정하려는 값의 성격에 따라 종류를 고릅니다.
+Micrometer가 제공하는 meter는 다음과 같습니다.
 
 | meter | 기록하는 값 | 어울리는 지표 | MovieLog 예 |
 |---|---|---|---|
 | Counter | 늘어나기만 하는 발생 횟수 | 조회, 가입, 작성 같은 이벤트 수 | `movielog.reviews.posted`, `movielog.movie.views` |
 | Gauge | 읽는 시점의 현재 값 | 저장 건수, queue 길이, pool 사용량 | `movielog.reviews.stored` |
 | DistributionSummary | 기록한 값들의 분포(횟수, 합계, 최댓값) | 별점, payload 크기처럼 시간이 아닌 값 | `movielog.review.rating` |
-| Timer | 소요 시간의 분포와 횟수 | 처리 지연 | MovieLog 비즈니스 지표에서는 쓰지 않음 |
+| Timer | 짧은 작업의 소요 시간 분포와 횟수 | 요청·처리 지연 | 쓰지 않음 |
+| LongTaskTimer | 실행 중인 긴 작업의 수와 경과 시간 | batch, 예약 작업 | 쓰지 않음 |
+| FunctionCounter | 객체가 이미 가진 누적 횟수를 함수로 읽은 값 | cache hit 수 같은 라이브러리 내부 통계 | 쓰지 않음 |
+| FunctionTimer | 객체가 이미 가진 누적 횟수와 총 시간을 함수로 읽은 값 | 라이브러리가 집계한 처리 시간 | 쓰지 않음 |
+| TimeGauge | 시간 단위를 가진 현재 값 | 마지막 처리 후 경과 시간 | 쓰지 않음 |
+
+meter를 만드는 방법도 여러 가지입니다.
+
+| 방법 | 형태 | 쓰임 |
+|---|---|---|
+| Builder API | `Counter.builder("name").tag(...).register(registry)` | 설명·단위·tag를 함께 지정. MovieLog가 쓰는 방식 |
+| registry 단축 메서드 | `registry.counter("name", "tag", "value")` | 간단한 meter를 한 줄로 등록 |
+| annotation | 메서드에 `@Counted`, `@Timed` | 호출 횟수와 실행 시간을 메서드 본문 수정 없이 기록. `CountedAspect`·`TimedAspect` 구성 필요 |
+| `MeterBinder` | `bindTo(MeterRegistry)` 구현 | 관련 meter를 한 class에 묶어 등록. MovieLog의 DB Gauge가 쓰는 방식 |
+| Observation API | `Observation.createNotStarted(...).observe(...)` | 한 번 계측해 metric과 trace를 함께 생성 |
+| Spring Boot 자동 등록 | Actuator 의존성 추가 | JVM, HTTP 요청, DB connection pool 지표가 코드 없이 등록 |
 
 Counter와 DistributionSummary는 이벤트가 일어날 때 코드에서 값을 올립니다.
 MovieLog는 서비스 로직이 발행한 도메인 이벤트를 listener 한 곳에서 받아 기록합니다.
@@ -296,6 +318,9 @@ Insights Java agent는 3.7.9부터 Spring Boot 4의 Micrometer 구성을 인식�
 - [Configure Azure Monitor Application Insights for Java](https://learn.microsoft.com/azure/azure-monitor/app/java-standalone-config)
 - [Metrics in Application Insights](https://learn.microsoft.com/azure/azure-monitor/app/metrics-overview)
 - [Micrometer Meters](https://docs.micrometer.io/micrometer/reference/concepts/meters.html)
+- [Micrometer Counters](https://docs.micrometer.io/micrometer/reference/concepts/counters.html)
+- [Micrometer Timers](https://docs.micrometer.io/micrometer/reference/concepts/timers.html)
+- [Micrometer Observation](https://docs.micrometer.io/micrometer/reference/observation.html)
 - [How to manage data sources in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity)
 - [Configure an Azure Managed Grafana remote MCP server](https://learn.microsoft.com/azure/managed-grafana/grafana-mcp-server)
 - [Create a dashboard in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-create-dashboard)
