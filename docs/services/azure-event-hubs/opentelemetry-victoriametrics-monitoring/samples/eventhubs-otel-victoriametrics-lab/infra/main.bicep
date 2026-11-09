@@ -8,6 +8,9 @@ param environmentName string
 @description('Azure region for the temporary lab resources.')
 param location string = 'koreacentral'
 
+@description('Region for both Event Hubs namespaces. Empty uses location. Diagnostic Settings require the sink Event Hub in the same region as the Premium namespace, so both move together.')
+param eventHubsLocation string = ''
+
 @description('Single IPv4 CIDR allowed to reach Grafana and the AKS API server.')
 param operatorEgressCidr string
 
@@ -21,10 +24,22 @@ param existingDedicatedClusterResourceId string = ''
 @description('Grafana administrator password stored in Key Vault and never returned as an output.')
 param grafanaAdminPassword string
 
+@description('Object ID of the operator running azd; azd supplies AZURE_PRINCIPAL_ID.')
+param deployerPrincipalId string = ''
+
+@description('Principal type of deployerPrincipalId.')
+@allowed([
+  'User'
+  'ServicePrincipal'
+  'Group'
+])
+param deployerPrincipalType string = 'User'
+
 @description('Public key used only to satisfy the VM OS profile. No inbound SSH rule is created.')
 param gatewayAdminSshPublicKey string
 
 var token = toLower(uniqueString(subscription().id, environmentName, location))
+var messagingLocation = empty(eventHubsLocation) ? location : eventHubsLocation
 var tags = {
   'azd-env-name': environmentName
   lab: 'eventhubs-otel-victoriametrics'
@@ -43,7 +58,6 @@ module foundation 'modules/foundation.bicep' = {
     location: location
     token: token
     tags: tags
-    operatorEgressCidr: operatorEgressCidr
     grafanaAdminPassword: grafanaAdminPassword
   }
 }
@@ -52,7 +66,7 @@ module messaging 'modules/messaging.bicep' = {
   name: 'messaging'
   scope: rg
   params: {
-    location: location
+    location: messagingLocation
     token: token
     tags: tags
     gatewayPrincipalId: foundation.outputs.gatewayPrincipalId
@@ -75,6 +89,9 @@ module compute 'modules/compute.bicep' = {
     gatewaySubnetId: foundation.outputs.gatewaySubnetId
     gatewayIdentityId: foundation.outputs.gatewayIdentityId
     acrId: foundation.outputs.acrId
+    vnetName: foundation.outputs.vnetName
+    deployerPrincipalId: deployerPrincipalId
+    deployerPrincipalType: deployerPrincipalType
   }
 }
 
@@ -86,6 +103,7 @@ output GATEWAY_VM_NAME string = compute.outputs.gatewayVmName
 output GATEWAY_PUBLIC_IP string = compute.outputs.gatewayPublicIp
 output GATEWAY_PRIVATE_IP string = compute.outputs.gatewayPrivateIp
 output GATEWAY_CLIENT_ID string = foundation.outputs.gatewayClientId
+output EVENTHUBS_LOCATION string = messagingLocation
 output PREMIUM_NAMESPACE_NAME string = messaging.outputs.premiumNamespaceName
 output WORKLOAD_EVENTHUB_NAME string = messaging.outputs.workloadEventHubName
 output WORKLOAD_CONSUMER_GROUP string = messaging.outputs.workloadConsumerGroup
@@ -95,5 +113,7 @@ output CHECKPOINT_ACCOUNT_NAME string = foundation.outputs.storageName
 output KEY_VAULT_NAME string = foundation.outputs.keyVaultName
 output PRODUCER_CLIENT_ID string = foundation.outputs.producerClientId
 output CONSUMER_CLIENT_ID string = foundation.outputs.consumerClientId
+output AKS_OIDC_ISSUER string = compute.outputs.aksOidcIssuer
+output CHECKPOINT_ACCOUNT_URL string = foundation.outputs.storageBlobEndpoint
 output VMSINGLE_PRIVATE_IP string = foundation.outputs.vmSinglePrivateIp
 output EXISTING_DEDICATED_CLUSTER_RESOURCE_ID string = existingDedicatedClusterResourceId

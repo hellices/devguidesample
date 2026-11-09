@@ -13,6 +13,8 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s %(levelname)s %(message)s",
 )
+# The Event Hubs AMQP stack logs every link state change at INFO.
+logging.getLogger("azure").setLevel(os.getenv("AZURE_LOG_LEVEL", "WARNING"))
 LOGGER = logging.getLogger("eventhubs-slow-consumer")
 
 

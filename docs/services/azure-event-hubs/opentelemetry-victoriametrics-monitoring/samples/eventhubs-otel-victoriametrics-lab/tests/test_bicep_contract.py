@@ -198,3 +198,51 @@ def test_compute_exports_main_module_contract():
         "gatewayPrivateIp",
     ):
         assert f"output {name} " in text
+
+
+MESSAGING = LAB_ROOT / "infra" / "modules" / "messaging.bicep"
+COMPUTE = LAB_ROOT / "infra" / "modules" / "compute.bicep"
+MAIN = LAB_ROOT / "infra" / "main.bicep"
+
+
+def test_key_vault_never_sets_purge_protection_false():
+    # ARM rejects enablePurgeProtection=false; omit it to leave purge protection off.
+    assert "enablePurgeProtection: false" not in FOUNDATION.read_text()
+
+
+def test_data_plane_uses_private_endpoints_only():
+    text = FOUNDATION.read_text()
+
+    assert text.count("publicNetworkAccess: 'Disabled'") == 2
+    assert "privatelink.vaultcore.azure.net" in text
+    assert "privatelink.blob." in text
+    assert "Microsoft.Network/privateEndpoints@" in text
+    assert "virtualNetworkRules" not in text
+
+
+def test_checkpoint_roles_are_container_scoped():
+    text = FOUNDATION.read_text()
+
+    assert "scope: workloadCheckpoints" in text
+    assert "scope: collectorCheckpoints" in text
+    assert "scope: storage\n" not in text
+
+
+def test_event_hubs_region_is_separable_and_zone_redundancy_is_platform_default():
+    main = MAIN.read_text()
+
+    assert "param eventHubsLocation string = ''" in main
+    assert "location: messagingLocation" in main
+    assert "zoneRedundant" not in MESSAGING.read_text()
+
+
+def test_premium_namespace_is_tagged_for_receiver_filter():
+    assert "'otel-metrics-source': 'premium'" in MESSAGING.read_text()
+
+
+def test_aks_can_manage_internal_lb_and_deployer_gets_cluster_admin():
+    text = COMPUTE.read_text()
+
+    assert "4d97b98b-1d4f-4787-a291-c67834d212e7" in text  # Network Contributor
+    assert "scope: aksSubnet" in text
+    assert "b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b" in text  # AKS RBAC Cluster Admin

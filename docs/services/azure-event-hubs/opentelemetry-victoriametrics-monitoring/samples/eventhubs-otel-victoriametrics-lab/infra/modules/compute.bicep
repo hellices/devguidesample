@@ -10,8 +10,19 @@ param aksSubnetId string
 param gatewaySubnetId string
 param gatewayIdentityId string
 param acrId string
+param vnetName string
+@description('Object ID of the operator running azd. Receives cluster-admin through Azure RBAC for Kubernetes.')
+param deployerPrincipalId string = ''
+@allowed([
+  'User'
+  'ServicePrincipal'
+  'Group'
+])
+param deployerPrincipalType string = 'User'
 
 var acrPullRoleDefinitionId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+var networkContributorRoleDefinitionId = '4d97b98b-1d4f-4787-a291-c67834d212e7'
+var aksRbacClusterAdminRoleDefinitionId = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b'
 var gatewayCloudInit = '''
 #cloud-config
 package_update: true
@@ -113,6 +124,36 @@ resource kubeletAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: aks.properties.identityProfile.kubeletidentity.objectId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleDefinitionId)
+  }
+}
+
+resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' existing = {
+  name: vnetName
+}
+
+resource aksSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' existing = {
+  parent: vnet
+  name: last(split(aksSubnetId, '/'))
+}
+
+// BYO subnet: the cluster identity must manage the internal load balancer frontend IP in this subnet.
+resource aksSubnetNetworkContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aksSubnet.id, aks.id, networkContributorRoleDefinitionId)
+  scope: aksSubnet
+  properties: {
+    principalId: aks.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', networkContributorRoleDefinitionId)
+  }
+}
+
+resource deployerClusterAdmin 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deployerPrincipalId)) {
+  name: guid(aks.id, deployerPrincipalId, aksRbacClusterAdminRoleDefinitionId)
+  scope: aks
+  properties: {
+    principalId: deployerPrincipalId
+    principalType: deployerPrincipalType
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', aksRbacClusterAdminRoleDefinitionId)
   }
 }
 

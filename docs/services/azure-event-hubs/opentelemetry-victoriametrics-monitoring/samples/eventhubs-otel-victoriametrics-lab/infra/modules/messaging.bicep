@@ -19,7 +19,10 @@ var eventHubsDataReceiverRoleDefinitionId = 'a638d3c7-ab3a-418d-83e6-5f17a39d4fd
 resource premiumNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
   name: premiumNamespaceName
   location: location
-  tags: tags
+  // azuremonitorreceiver filters on this tag so the Standard telemetry sink in the same RG is not polled.
+  tags: union(tags, {
+    'otel-metrics-source': 'premium'
+  })
   sku: {
     name: 'Premium'
     tier: 'Premium'
@@ -30,7 +33,6 @@ resource premiumNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
     isAutoInflateEnabled: false
     minimumTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
-    zoneRedundant: true
   }
 }
 
@@ -66,7 +68,6 @@ resource telemetryNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
     isAutoInflateEnabled: false
     minimumTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
-    zoneRedundant: true
   }
 }
 

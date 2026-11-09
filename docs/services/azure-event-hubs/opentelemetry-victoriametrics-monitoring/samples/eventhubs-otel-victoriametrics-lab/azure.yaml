@@ -25,3 +25,8 @@ hooks:
     run: ./scripts/cleanup-external.sh --yes
     interactive: true
     continueOnError: false
+  postdown:
+    shell: sh
+    run: ./scripts/verify-cleanup.sh
+    interactive: true
+    continueOnError: false

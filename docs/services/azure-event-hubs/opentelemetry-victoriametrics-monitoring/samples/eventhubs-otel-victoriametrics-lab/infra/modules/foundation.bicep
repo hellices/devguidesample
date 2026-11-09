@@ -2,13 +2,13 @@ param location string
 @minLength(8)
 param token string
 param tags object
-param operatorEgressCidr string
 
 @secure()
 param grafanaAdminPassword string
 
 var gatewaySubnetPrefix = '10.42.1.0/24'
 var aksSubnetPrefix = '10.42.2.0/24'
+var endpointsSubnetPrefix = '10.42.3.0/24'
 var vmSinglePrivateIp = '10.42.2.20'
 var acrPullRoleDefinitionId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var keyVaultSecretsUserRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6'
@@ -33,20 +33,6 @@ resource gatewaySubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = 
   name: 'gateway'
   properties: {
     addressPrefix: gatewaySubnetPrefix
-    serviceEndpoints: [
-      {
-        service: 'Microsoft.KeyVault'
-        locations: [
-          '*'
-        ]
-      }
-      {
-        service: 'Microsoft.Storage'
-        locations: [
-          '*'
-        ]
-      }
-    ]
   }
 }
 
@@ -55,15 +41,21 @@ resource aksSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
   name: 'aks'
   properties: {
     addressPrefix: aksSubnetPrefix
-    serviceEndpoints: [
-      {
-        service: 'Microsoft.Storage'
-        locations: [
-          '*'
-        ]
-      }
-    ]
   }
+  dependsOn: [
+    gatewaySubnet
+  ]
+}
+
+resource endpointsSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
+  parent: vnet
+  name: 'private-endpoints'
+  properties: {
+    addressPrefix: endpointsSubnetPrefix
+  }
+  dependsOn: [
+    aksSubnet
+  ]
 }
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -112,8 +104,13 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     allowSharedKeyAccess: false
     defaultToOAuthAuthentication: true
     minimumTlsVersion: 'TLS1_2'
-    publicNetworkAccess: 'Enabled'
+    // Data-plane access only through the private endpoint. Many governed tenants enforce this with a modify policy anyway.
+    publicNetworkAccess: 'Disabled'
     supportsHttpsTrafficOnly: true
+    networkAcls: {
+      bypass: 'AzureServices'
+      defaultAction: 'Deny'
+    }
   }
 }
 
@@ -161,27 +158,15 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       family: 'A'
       name: 'standard'
     }
-    enablePurgeProtection: false
     enableRbacAuthorization: true
     enabledForDeployment: false
     enabledForDiskEncryption: false
     enabledForTemplateDeployment: true
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: 'Disabled'
     softDeleteRetentionInDays: 7
     networkAcls: {
       bypass: 'AzureServices'
       defaultAction: 'Deny'
-      ipRules: [
-        {
-          value: operatorEgressCidr
-        }
-      ]
-      virtualNetworkRules: [
-        {
-          id: gatewaySubnet.id
-          ignoreMissingVnetServiceEndpoint: false
-        }
-      ]
     }
   }
 }
@@ -197,6 +182,77 @@ resource grafanaPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
     value: grafanaAdminPassword
   }
 }
+
+var privateLinks = [
+  {
+    name: 'vault'
+    zone: 'privatelink.vaultcore.azure.net'
+    groupId: 'vault'
+    targetId: keyVault.id
+  }
+  {
+    name: 'blob'
+    zone: 'privatelink.blob.${environment().suffixes.storage}'
+    groupId: 'blob'
+    targetId: storage.id
+  }
+]
+
+resource privateDnsZones 'Microsoft.Network/privateDnsZones@2024-06-01' = [for link in privateLinks: {
+  name: link.zone
+  location: 'global'
+  tags: tags
+}]
+
+resource privateDnsLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = [for (link, i) in privateLinks: {
+  parent: privateDnsZones[i]
+  name: 'vnet'
+  location: 'global'
+  tags: tags
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: vnet.id
+    }
+  }
+}]
+
+resource privateEndpoints 'Microsoft.Network/privateEndpoints@2024-05-01' = [for link in privateLinks: {
+  name: 'pe-${link.name}-${token}'
+  location: location
+  tags: tags
+  properties: {
+    subnet: {
+      id: endpointsSubnet.id
+    }
+    privateLinkServiceConnections: [
+      {
+        name: link.name
+        properties: {
+          privateLinkServiceId: link.targetId
+          groupIds: [
+            link.groupId
+          ]
+        }
+      }
+    ]
+  }
+}]
+
+resource privateDnsGroups 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = [for (link, i) in privateLinks: {
+  parent: privateEndpoints[i]
+  name: 'default'
+  properties: {
+    privateDnsZoneConfigs: [
+      {
+        name: link.name
+        properties: {
+          privateDnsZoneId: privateDnsZones[i].id
+        }
+      }
+    ]
+  }
+}]
 
 resource gatewayIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-gateway-${token}'
@@ -237,8 +293,8 @@ resource gatewayKeyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@202
 }
 
 resource consumerCheckpointContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, consumerIdentity.id, storageBlobDataContributorRoleDefinitionId)
-  scope: storage
+  name: guid(workloadCheckpoints.id, consumerIdentity.id, storageBlobDataContributorRoleDefinitionId)
+  scope: workloadCheckpoints
   properties: {
     principalId: consumerIdentity.properties.principalId
     principalType: 'ServicePrincipal'
@@ -246,9 +302,10 @@ resource consumerCheckpointContributor 'Microsoft.Authorization/roleAssignments@
   }
 }
 
+// The lag exporter only lists workload checkpoints; it never writes them.
 resource gatewayCheckpointReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storage.id, gatewayIdentity.id, storageBlobDataReaderRoleDefinitionId)
-  scope: storage
+  name: guid(workloadCheckpoints.id, gatewayIdentity.id, storageBlobDataReaderRoleDefinitionId)
+  scope: workloadCheckpoints
   properties: {
     principalId: gatewayIdentity.properties.principalId
     principalType: 'ServicePrincipal'
@@ -256,13 +313,26 @@ resource gatewayCheckpointReader 'Microsoft.Authorization/roleAssignments@2022-0
   }
 }
 
+// azureeventhubreceiver's blob checkpoint store writes ownership and checkpoint blobs.
+resource gatewayCollectorCheckpointContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(collectorCheckpoints.id, gatewayIdentity.id, storageBlobDataContributorRoleDefinitionId)
+  scope: collectorCheckpoints
+  properties: {
+    principalId: gatewayIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleDefinitionId)
+  }
+}
+
 output vnetId string = vnet.id
+output vnetName string = vnet.name
 output gatewaySubnetId string = gatewaySubnet.id
 output aksSubnetId string = aksSubnet.id
 output acrId string = acr.id
 output acrName string = acr.name
 output acrLoginServer string = acr.properties.loginServer
 output storageName string = storage.name
+output storageBlobEndpoint string = storage.properties.primaryEndpoints.blob
 output keyVaultName string = keyVault.name
 output gatewayIdentityId string = gatewayIdentity.id
 output gatewayPrincipalId string = gatewayIdentity.properties.principalId
