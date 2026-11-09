@@ -191,7 +191,7 @@ git commit -m "test(eventhubs): establish observability lab contract"
 
 **Interfaces:**
 - Consumes: `environmentName`, `location`, `operatorEgressCidr`, secure `grafanaAdminPassword`, `gatewayAdminSshPublicKey`, optional `existingDedicatedClusterResourceId`.
-- Produces: stable azd outputs consumed by hooks: `AZURE_RESOURCE_GROUP`, `AKS_CLUSTER_NAME`, `ACR_NAME`, `ACR_LOGIN_SERVER`, `GATEWAY_VM_NAME`, `GATEWAY_PUBLIC_IP`, `GATEWAY_PRIVATE_IP`, `PREMIUM_NAMESPACE_NAME`, `WORKLOAD_EVENTHUB_NAME`, `WORKLOAD_CONSUMER_GROUP`, `TELEMETRY_NAMESPACE_NAME`, `TELEMETRY_EVENTHUB_NAME`, `CHECKPOINT_ACCOUNT_NAME`, `KEY_VAULT_NAME`, `PRODUCER_CLIENT_ID`, `CONSUMER_CLIENT_ID`, `VMSINGLE_PRIVATE_IP`.
+- Produces: stable azd outputs consumed by hooks: `AZURE_RESOURCE_GROUP`, `AKS_CLUSTER_NAME`, `ACR_NAME`, `ACR_LOGIN_SERVER`, `GATEWAY_VM_NAME`, `GATEWAY_PUBLIC_IP`, `GATEWAY_PRIVATE_IP`, `GATEWAY_CLIENT_ID`, `PREMIUM_NAMESPACE_NAME`, `WORKLOAD_EVENTHUB_NAME`, `WORKLOAD_CONSUMER_GROUP`, `TELEMETRY_NAMESPACE_NAME`, `TELEMETRY_EVENTHUB_NAME`, `CHECKPOINT_ACCOUNT_NAME`, `KEY_VAULT_NAME`, `PRODUCER_CLIENT_ID`, `CONSUMER_CLIENT_ID`, `VMSINGLE_PRIVATE_IP`.
 
 - [ ] **Step 1: Add failing azd/Bicep contract tests**
 
@@ -223,7 +223,7 @@ def test_main_bicep_exports_hook_contract():
     names = (
         "AZURE_RESOURCE_GROUP", "AKS_CLUSTER_NAME", "ACR_NAME",
         "ACR_LOGIN_SERVER", "GATEWAY_VM_NAME", "GATEWAY_PUBLIC_IP",
-        "GATEWAY_PRIVATE_IP", "PREMIUM_NAMESPACE_NAME",
+        "GATEWAY_PRIVATE_IP", "GATEWAY_CLIENT_ID", "PREMIUM_NAMESPACE_NAME",
         "WORKLOAD_EVENTHUB_NAME", "WORKLOAD_CONSUMER_GROUP",
         "TELEMETRY_NAMESPACE_NAME", "TELEMETRY_EVENTHUB_NAME",
         "CHECKPOINT_ACCOUNT_NAME", "KEY_VAULT_NAME",
@@ -320,6 +320,7 @@ output ACR_LOGIN_SERVER string = foundation.outputs.acrLoginServer
 output GATEWAY_VM_NAME string = compute.outputs.gatewayVmName
 output GATEWAY_PUBLIC_IP string = compute.outputs.gatewayPublicIp
 output GATEWAY_PRIVATE_IP string = compute.outputs.gatewayPrivateIp
+output GATEWAY_CLIENT_ID string = foundation.outputs.gatewayClientId
 output PREMIUM_NAMESPACE_NAME string = messaging.outputs.premiumNamespaceName
 output WORKLOAD_EVENTHUB_NAME string = messaging.outputs.workloadEventHubName
 output WORKLOAD_CONSUMER_GROUP string = messaging.outputs.workloadConsumerGroup
