@@ -24,6 +24,7 @@ def test_dashboard_answers_required_questions():
         "Consumer lag by partition (stacked)",
         "Peak lag (window)",
         "Checkpoint presence",
+        "Lag collection",
         "Receiver and delivery path comparison",
         "DS Event Hub series",
         "IncomingMessages: API vs Diagnostic Settings",

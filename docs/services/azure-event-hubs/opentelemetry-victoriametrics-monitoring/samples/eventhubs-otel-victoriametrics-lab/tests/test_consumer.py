@@ -82,3 +82,36 @@ def test_producer_payload_is_exactly_the_requested_size(monkeypatch):
 
     for size in (128, 1024, 4096):
         assert len(producer.make_payload(123456, size).encode()) == size
+
+
+
+def test_lag_exporter_failure_clears_stale_lag(monkeypatch):
+    class FakeGauge:
+        def __init__(self, name, *args, **kwargs):
+            self.name, self.value, self.cleared = name, None, False
+
+        def set(self, value):
+            self.value = value
+
+        def clear(self):
+            self.cleared = True
+
+    prometheus = types.ModuleType("prometheus_client")
+    prometheus.Gauge = FakeGauge
+    prometheus.start_http_server = lambda *args, **kwargs: None
+    monkeypatch.setitem(sys.modules, "prometheus_client", prometheus)
+    for name in ("azure", "azure.eventhub", "azure.eventhub.aio", "azure.eventhub.extensions",
+                 "azure.eventhub.extensions.checkpointstoreblobaio", "azure.identity", "azure.identity.aio"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    sys.modules["azure.eventhub.aio"].EventHubConsumerClient = _Client
+    sys.modules["azure.eventhub.extensions.checkpointstoreblobaio"].BlobCheckpointStore = _Client
+    sys.modules["azure.identity.aio"].DefaultAzureCredential = _Client
+    monkeypatch.syspath_prepend(str(LAB_ROOT / "workloads"))
+    monkeypatch.delitem(sys.modules, "lag_exporter", raising=False)
+    import lag_exporter
+
+    lag_exporter.record_failure()
+
+    assert lag_exporter.COLLECTION_SUCCESS.value == 0
+    assert all(g.cleared for g in (lag_exporter.LAG, lag_exporter.CHECKPOINT_PRESENT,
+                                    lag_exporter.PARTITION_EMPTY, lag_exporter.INVALID_ORDER))

@@ -160,7 +160,7 @@ curl -s --cacert .azure/<env-name>/grafana.crt https://<gateway-public-ip>:3000/
 ## lag 상승·회복 시나리오
 
 `run-scenario.sh`는 baseline 5분, 부하 10분, 회복 대기를 실행하고 UTC 경계를
-`evidence/scenario.json`에 기록합니다. producer는 1 KiB event를 초당 200개 보내고,
+`evidence/<env>/scenario.json`에 기록합니다. producer는 1 KiB event를 초당 200개 보내고,
 slow consumer는 partition마다 event당 30 ms를 쉬며 20 event마다 checkpoint합니다.
 최대 lag가 정점의 20% 이하로 내려가지 않으면 실패로 끝납니다.
 
@@ -193,7 +193,7 @@ to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 �
 
 `collect-evidence.sh`는 시나리오 구간을 분 경계에 맞춘 절대 시간으로 다음을 실행합니다.
 
-1. `agent/probe.py`: VictoriaMetrics의 metric inventory를 `evidence/probe.json`에 기록
+1. `agent/probe.py`: VictoriaMetrics의 metric inventory를 `evidence/<env>/probe.json`에 기록
 2. `agent/build_dashboard.py`와 `publish_dashboard.py`: probe 결과로 대시보드를 만들어
    Grafana API로 게시
 3. `agent/verify_panels.py`: 모든 panel query를 `/api/ds/query`로 실행하고 오류·0행·
@@ -302,6 +302,8 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | gauge·그래프의 `min`·`max`가 `custom`에 기록됨 | Grafana 표준 field option으로 이동 |
 | `vm-query.sh stop`이 port-forward를 끄지 못함 | `kube` 함수를 background로 실행해 subshell PID가 기록됐음. `kubectl`을 직접 background로 실행해 그 PID를 기록 |
 | producer payload가 설정값보다 13바이트 큼 | 빈 `padding` 필드를 포함해 크기를 계산해 정확히 `PAYLOAD_BYTES`로 맞춤 |
+| lag 수집이 실패해도 마지막 lag 값이 남아 정상처럼 보임 | 실패하면 lag gauge를 지우고, 대시보드 `Lag collection` stat이 구간 중 한 번이라도 실패하면 Failed로 표시 |
+| evidence 폴더를 환경끼리 공유해 다른 환경의 시나리오 구간을 쓸 수 있음 | `evidence/<env>/`로 분리 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

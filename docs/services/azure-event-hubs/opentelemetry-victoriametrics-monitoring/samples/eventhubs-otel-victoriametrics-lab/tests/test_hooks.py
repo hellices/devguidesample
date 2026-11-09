@@ -282,3 +282,8 @@ def test_vm_query_stop_terminates_the_forward_it_started(fake_bin, tmp_path):
     with socket.socket() as again:
         # A surviving forward would still accept connections on the port.
         assert again.connect_ex(("127.0.0.1", port)) != 0
+
+
+def test_evidence_is_kept_per_environment():
+    text = (SCRIPTS / "lib.sh").read_text()
+    assert 'local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"' in text

@@ -36,7 +36,7 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `scripts/azd-configure.sh` | `preprovision`: 구독·provider 확인, operator egress `/32`, 비밀 생성입니다. |
 | `scripts/azd-postprovision.sh` | `postprovision`: kubeconfig, federated credential, ACR build, VictoriaMetrics, Run Command로 Gateway 번들 적용입니다. `GATEWAY_ONLY=true`이면 Gateway만 다시 적용합니다. |
 | `scripts/azd-deploy.sh` | `postdeploy`: Workload Identity를 쓰는 producer와 slow consumer입니다. |
-| `scripts/run-scenario.sh` | lag 상승·회복 시나리오와 UTC 경계를 `evidence/scenario.json`에 남깁니다. |
+| `scripts/run-scenario.sh` | lag 상승·회복 시나리오와 UTC 경계를 `evidence/<env>/scenario.json`에 남깁니다. |
 | `scripts/collect-evidence.sh` | agent 대시보드 workflow와 Azure Monitor 분 단위 대조입니다. |
 | `scripts/cleanup-external.sh`, `scripts/verify-cleanup.sh` | `predown`, `postdown`입니다. |
 | `gateway/render_collector.py` | 4개 source × 2개 전달 경로 Collector 구성, Dedicated·fallback profile입니다. |

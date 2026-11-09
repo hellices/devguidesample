@@ -220,13 +220,26 @@ def build_dashboard(probe: dict) -> dict:
                  "reduceOptions": {"calcs": [], "fields": "/^Max$/", "values": True}},
     ))
     panels.append(layout.panel(
-        "timeseries", "Consumer lag by partition (stacked)", 9, 8,
+        "timeseries", "Consumer lag by partition (stacked)", 6, 8,
         [{"expr": f"max by (partition) (eventhubs_consumer_lag_messages{{{LAG}}})",
           "legendFormat": "partition {{partition}}"}],
         description="partition별 lag를 쌓아 위쪽 경계가 전체 backlog가 되도록 표시합니다.",
         fieldConfig=field("locale", None, min=0, lineWidth=1, fillOpacity=35,
                           stacking={"mode": "normal", "group": "A"}),
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+    panels.append(layout.panel(
+        "stat", "Lag collection", 3, 8,
+        [{"expr": f"min(min_over_time(eventhubs_lag_collection_success{{{LAG}}}[$__range]))", "instant": True,
+          "legendFormat": "collection"}],
+        description="조회 구간에서 lag exporter의 수집이 한 번이라도 실패했으면 Failed로 표시합니다. 실패하면 lag 값을 지워 오래된 값이 정상처럼 보이지 않게 합니다.",
+        fieldConfig={"defaults": {"unit": "short", "decimals": 0, "noValue": "No data",
+                                  "color": {"mode": "thresholds"},
+                                  "thresholds": thresholds(("red", None), ("green", 1)),
+                                  "mappings": [{"type": "value", "options": {
+                                      "0": {"text": "Failed"}, "1": {"text": "OK"}}}]},
+                     "overrides": []},
+        options=stat_opts | {"textMode": "value"},
     ))
     panels.append(layout.panel(
         "table", "Checkpoint presence", 5, 8,

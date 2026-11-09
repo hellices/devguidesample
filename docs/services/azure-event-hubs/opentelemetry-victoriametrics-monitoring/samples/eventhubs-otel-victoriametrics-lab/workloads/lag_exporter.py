@@ -95,6 +95,13 @@ async def collect_once(
             LAG.labels(*labels).set(result.messages)
 
 
+def record_failure() -> None:
+    """Drop previous values so a failed collection shows as missing data, not a frozen lag."""
+    COLLECTION_SUCCESS.set(0)
+    for gauge in (LAG, CHECKPOINT_PRESENT, PARTITION_EMPTY, INVALID_ORDER):
+        gauge.clear()
+
+
 async def run() -> None:
     namespace = required("EVENT_HUB_NAMESPACE")
     event_hub = required("EVENT_HUB_NAME")
@@ -137,7 +144,7 @@ async def run() -> None:
                 )
                 COLLECTION_SUCCESS.set(1)
             except Exception:
-                COLLECTION_SUCCESS.set(0)
+                record_failure()
                 LOGGER.exception("lag_collection_failed")
             try:
                 await asyncio.wait_for(stop.wait(), timeout=poll_seconds)
