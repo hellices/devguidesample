@@ -240,7 +240,7 @@ def build_dashboard(probe: dict) -> dict:
 
     panels.append(layout.row("수집·전달 경로 비교 (source_path × delivery_path)"))
     panels.append(layout.panel(
-        "table", "Receiver and delivery path comparison", 11, 9,
+        "table", "Receiver and delivery path comparison", 11, 11,
         [
             {"expr": 'count by (source_path, delivery_path) (count_over_time({source_path!=""}[$__range]))',
              "instant": True, "format": "table"},
@@ -263,17 +263,17 @@ def build_dashboard(probe: dict) -> dict:
         ],
     ))
     panels.append(layout.panel(
-        "stat", "DS Event Hub series", 4, 9,
+        "stat", "DS Event Hub series", 4, 11,
         [{"expr": 'count(last_over_time({source_path="diagnostic_eventhub"}[$__range]))', "instant": True,
           "legendFormat": "series"}],
         description=("[optional] Diagnostic Settings가 telemetry Event Hub로 보낸 지표 수. "
                      "series가 없으면 0으로 바꾸지 않고 '수신 없음'으로 표시합니다."),
         fieldConfig={"defaults": {"unit": "short", "decimals": 0, "noValue": "수신 없음",
-                                  "color": {"mode": "fixed", "fixedColor": "orange"}}, "overrides": []},
+                                  "color": {"mode": "fixed", "fixedColor": "text"}}, "overrides": []},
         options=stat_opts | {"textMode": "value"},
     ))
     panels.append(layout.panel(
-        "timeseries", "Same metric, two delivery paths (IncomingMessages)", 9, 9,
+        "timeseries", "Same metric, two delivery paths (IncomingMessages)", 9, 11,
         [{"expr": 'sum by (delivery_path) (azure_incomingmessages_total_Count{source_path="azure_monitor_api"})',
           "legendFormat": "{{delivery_path}}"}],
         description="remote write는 Azure Monitor의 분 단위 timestamp를 유지하고, scrape는 수집 시각으로 다시 찍혀 1–3분 늦게 보입니다.",
@@ -290,7 +290,10 @@ def build_dashboard(probe: dict) -> dict:
         ],
         description=("Diagnostic Settings는 dimension을 합친 단일 값으로 내보내므로 EntityName별 API 값의 합과 비교합니다. "
                      "[optional] Diagnostic Settings 경로는 설정 후 데이터가 흐르기까지 시간이 걸릴 수 있습니다."),
-        fieldConfig=field("locale", None, lineWidth=2, showPoints="always", pointSize=4),
+        fieldConfig=field("locale", None, lineWidth=2, showPoints="always", pointSize=4) | {"overrides": [{
+            "matcher": {"id": "byName", "options": "diagnostic_eventhub"},
+            "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}},
+                           {"id": "custom.lineWidth", "value": 3}]}]},
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
     ))
     panels.append(layout.panel(
@@ -301,7 +304,10 @@ def build_dashboard(probe: dict) -> dict:
         ],
         description=("[optional] 지표표의 DS Export 값은 No지만 이 실습에서는 Diagnostic Settings 스트림에도 "
                      "레코드가 도착했습니다. 두 경로를 겹쳐 그 차이를 확인합니다."),
-        fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, showPoints="always", pointSize=4),
+        fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, showPoints="always", pointSize=4) | {"overrides": [{
+            "matcher": {"id": "byName", "options": "diagnostic_eventhub"},
+            "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}},
+                           {"id": "custom.lineWidth", "value": 3}]}]},
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
     ))
 
