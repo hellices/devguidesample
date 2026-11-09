@@ -96,7 +96,7 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vm-url", default="http://127.0.0.1:18428")
+    parser.add_argument("--vm-url", required=True, help="for example http://127.0.0.1:$(scripts/vm-query.sh port)")
     parser.add_argument("--window", default=WINDOW)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

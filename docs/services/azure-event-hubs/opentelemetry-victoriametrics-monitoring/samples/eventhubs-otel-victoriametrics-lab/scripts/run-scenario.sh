@@ -7,7 +7,7 @@ require_commands kubectl curl python3
 load_env AZURE_ENV_NAME
 NS=eventhubs-observability
 EVIDENCE="$(evidence_dir)"
-PORT="${VM_LOCAL_PORT:-18428}"
+PORT="$(vm_local_port)"
 BASELINE_MINUTES="${BASELINE_MINUTES:-5}"
 LOAD_MINUTES="${LOAD_MINUTES:-10}"
 RECOVERY_TIMEOUT_MINUTES="${RECOVERY_TIMEOUT_MINUTES:-20}"

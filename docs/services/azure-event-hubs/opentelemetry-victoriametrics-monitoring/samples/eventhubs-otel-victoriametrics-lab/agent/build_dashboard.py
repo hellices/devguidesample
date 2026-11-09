@@ -107,6 +107,10 @@ def field(unit: str = "short", steps=None, decimals=None, no_value=None, **custo
         defaults["decimals"] = decimals
     if no_value is not None:
         defaults["noValue"] = no_value
+    # min and max are standard field options; everything else is a visualization-specific option.
+    for key in ("min", "max"):
+        if key in custom:
+            defaults[key] = custom.pop(key)
     if custom:
         defaults["custom"] = custom
     return {"defaults": defaults, "overrides": []}

@@ -197,8 +197,10 @@ to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 �
 3. `agent/verify_panels.py`: 모든 panel query를 `/api/ds/query`로 실행하고 오류·0행·
    NaN이 있는 필수 panel이 있으면 exit 1
 4. `agent/capture.mjs`: Playwright로 로그인해 kiosk 모드 전체 화면을 캡처
-5. 같은 구간의 Azure Monitor PT1M 값을 `az monitor metrics list`로 조회해 remote write
-   sample과 분 단위로 비교
+5. 같은 구간의 Azure Monitor PT1M 값을 `az monitor metrics list`로 조회하고
+   `agent/compare_azure_monitor.py`가 remote write sample과 분 단위로 비교. 요청한 4개
+   지표의 `[from, to)` 모든 분이 Azure Monitor에 있고 remote write 값과 같아야 완료로
+   판정하며, 아니면 불완전한 evidence로 실패
 
 비교 결과 API 경로의 remote write는 `IncomingMessages`, `OutgoingMessages`,
 `IncomingRequests`, `ThrottledRequests` 모두 25분이 일치했고, scrape 합계는 2.0–2.3배였습니다.
@@ -223,12 +225,14 @@ fallback으로 전환했습니다(첫 환경).
 ```bash
 ENABLE_API_RECEIVER=false ENABLE_FALLBACK_EXPORTER=true GATEWAY_ONLY=true azd hooks run postprovision
 # 2–3분 뒤
-curl -s http://127.0.0.1:18428/api/v1/query \
+./scripts/vm-query.sh start
+curl -s "http://127.0.0.1:$(./scripts/vm-query.sh port)/api/v1/query" \
   --data-urlencode 'query=count by (delivery_path) (azurerm_resource_metric{source_path="fallback_exporter"})'
 GATEWAY_ONLY=true azd hooks run postprovision   # 기본 receiver로 복구
 ```
 
-`./scripts/vm-query.sh start`가 VMSingle을 로컬 18428 포트로 연결합니다. fallback
+`./scripts/vm-query.sh start`는 azd 환경마다 다른 로컬 포트(18428–18927, `VM_LOCAL_PORT`로
+지정 가능)로 VMSingle을 연결하고, `port`는 그 번호를 출력합니다. fallback
 exporter는 같은 Managed Identity로 Premium namespace 지표 9개 × 집계 3개, 27개
 series를 scrape와 remote write 양쪽에 저장했습니다. ARM `$filter`는 tag 조건을
 함께 쓸 수 없어 같은 resource group의 telemetry namespace까지 조회되므로, Collector의
@@ -291,6 +295,9 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | consumer 수신 task가 실패해도 Pod가 Running으로 남음 | 수신 task와 종료 신호 중 먼저 끝나는 쪽을 기다리고 실패를 전파해 Kubernetes가 재시작 |
 | Dedicated profile이 같은 resource group의 다른 cluster까지 수집하고 Premium 지표와 섞임 | `source_path="azure_monitor_dedicated"`로 분리하고 지정한 resource ID만 남기는 filter 추가. otelcol-contrib 0.165.0 `validate`로 구성 확인 |
 | `VM_LOCAL_PORT`를 바꾸면 probe와 대조가 다른 포트를 조회 | 같은 포트를 두 단계에 전달 |
+| 모든 환경이 같은 기본 포트를 써 다른 환경의 port-forward를 재사용할 수 있음 | 환경 이름으로 기본 포트를 정하고, 이 환경이 연 port-forward가 아니면 사용하지 않음 |
+| 완료 판정이 반환된 분끼리만 비교 | 요청한 4개 지표와 창의 모든 분이 있어야 완료로 판정하는 비교 모듈과 단위 테스트 |
+| gauge·그래프의 `min`·`max`가 `custom`에 기록됨 | Grafana 표준 field option으로 이동 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

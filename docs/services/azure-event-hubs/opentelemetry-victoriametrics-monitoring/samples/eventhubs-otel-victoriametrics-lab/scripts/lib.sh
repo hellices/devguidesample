@@ -52,6 +52,18 @@ state_dir() {
   printf '%s' "$dir"
 }
 
+# Each azd environment gets its own default local port, so a port-forward left open for one
+# environment is never mistaken for another environment's VMSingle.
+vm_local_port() {
+  if [[ -n "${VM_LOCAL_PORT:-}" ]]; then
+    printf '%s' "$VM_LOCAL_PORT"
+    return
+  fi
+  local checksum
+  checksum="$(printf '%s' "$(env_value AZURE_ENV_NAME)" | cksum | cut -d' ' -f1)"
+  printf '%s' "$(( 18428 + checksum % 500 ))"
+}
+
 evidence_dir() {
   local dir="$LAB_ROOT/evidence"
   mkdir -p "$dir"

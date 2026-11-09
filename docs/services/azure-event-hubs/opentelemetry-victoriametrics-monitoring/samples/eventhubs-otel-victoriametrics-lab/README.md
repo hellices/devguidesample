@@ -43,7 +43,7 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `gateway/compose.yaml`, `gateway/bootstrap.sh` | digest를 고정한 Gateway runtime과 Run Command bootstrap입니다. |
 | `k8s/` | Operator values, VMSingle, VMAgent, VMStaticScrape, workload입니다. |
 | `workloads/` | producer, slow consumer, checkpoint 기반 lag exporter image입니다. |
-| `agent/` | `probe.py`, `build_dashboard.py`, `publish_dashboard.py`, `verify_panels.py`, `capture.mjs`입니다. |
+| `agent/` | `probe.py`, `build_dashboard.py`, `publish_dashboard.py`, `verify_panels.py`, `capture.mjs`, Azure Monitor 분 단위 대조 `compare_azure_monitor.py`입니다. Grafana는 Gateway가 만든 인증서를 고정한 HTTPS로만 접속합니다. |
 | `tests/` | Bicep, hook, Collector 구성, lag 계산, 대시보드의 계약·단위 테스트입니다. |
 
 ## fallback exporter 전환

@@ -198,3 +198,54 @@ def test_postdeploy_never_scales_the_running_consumer(fake_bin):
     producer = next(doc for doc in manifest if "name: eventhubs-producer\n  namespace" in doc and "kind: Deployment" in doc)
     assert "replicas:" not in consumer
     assert "replicas: 0" in producer
+
+
+def test_vm_query_refuses_a_port_served_for_another_environment(fake_bin, tmp_path):
+    import http.server
+    import threading
+
+    class Health(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Health)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    bin_dir, log, write = fake_bin
+    write("azd", "exit 1")
+    write("curl", 'exec /usr/bin/curl "$@"')
+    try:
+        env_port = str(server.server_address[1])
+        result = subprocess.run(
+            ["bash", str(SCRIPTS / "vm-query.sh"), "start"],
+            cwd=tmp_path,
+            env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+                 "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": env_port},
+            capture_output=True, text=True, timeout=30,
+        )
+    finally:
+        server.shutdown()
+
+    assert result.returncode != 0
+    assert "already serves another VictoriaMetrics" in result.stderr
+    assert "port-forward" not in log.read_text()
+
+
+def test_each_environment_gets_its_own_default_port(fake_bin):
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")
+    ports = set()
+    for env_name in ("ehotel-lab1", "ehotel-lab2", "ehotel-lab3"):
+        result = subprocess.run(
+            ["bash", str(SCRIPTS / "vm-query.sh"), "port"],
+            env={"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(bin_dir.parent), "AZURE_ENV_NAME": env_name,
+                 "LAB_STATE_ROOT": str(bin_dir.parent / "state")},
+            capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+        ports.add(int(result.stdout.strip()))
+    assert len(ports) == 3
+    assert all(18428 <= port < 18928 for port in ports)

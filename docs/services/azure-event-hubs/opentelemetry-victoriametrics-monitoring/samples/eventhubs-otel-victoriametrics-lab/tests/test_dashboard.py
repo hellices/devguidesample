@@ -96,3 +96,13 @@ def test_dedicated_panels_read_only_the_dedicated_source():
             assert 'source_path="azure_monitor_dedicated"' in exprs
         else:
             assert "azure_monitor_dedicated" not in exprs
+
+
+def test_min_and_max_are_standard_field_options():
+    dashboard = build_dashboard({"processing_units": 1, "dedicated_enabled": True})
+    cpu = next(p for p in _panels(dashboard) if p["title"] == "Premium CPU")
+    assert cpu["fieldConfig"]["defaults"]["min"] == 0
+    assert cpu["fieldConfig"]["defaults"]["max"] == 100
+    for panel in _panels(dashboard):
+        custom = panel.get("fieldConfig", {}).get("defaults", {}).get("custom", {})
+        assert "min" not in custom and "max" not in custom, panel["title"]
