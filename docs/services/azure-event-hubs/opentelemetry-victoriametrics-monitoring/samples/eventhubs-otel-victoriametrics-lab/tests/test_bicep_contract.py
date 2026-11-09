@@ -82,3 +82,54 @@ def test_foundation_exports_main_module_contract():
 
     for name in names:
         assert f"output {name} " in text
+
+
+MESSAGING = LAB_ROOT / "infra" / "modules" / "messaging.bicep"
+
+
+def test_messaging_creates_premium_and_standard_but_no_dedicated_cluster():
+    text = MESSAGING.read_text()
+
+    assert "name: 'Premium'" in text
+    assert "tier: 'Premium'" in text
+    assert "capacity: 1" in text
+    assert "name: 'Standard'" in text
+    assert "Microsoft.EventHub/clusters@" not in text
+    assert "Microsoft.Insights/diagnosticSettings@2021-05-01-preview" in text
+
+
+def test_messaging_keeps_workload_local_auth_disabled():
+    text = MESSAGING.read_text()
+
+    assert "disableLocalAuth: true" in text
+    assert "eventHubAuthorizationRuleId: telemetryDiagnosticRule.id" in text
+    assert "output connectionString" not in text
+    assert "listKeys(" not in text
+
+
+def test_messaging_roles_are_resource_scoped():
+    text = MESSAGING.read_text()
+
+    assert "scope: premiumNamespace" in text
+    assert "scope: workloadHub" in text
+    assert "scope: telemetryHub" in text
+    for role_definition_id in (
+        "43d0d8ad-25c7-4714-9337-8ba259a9fe05",  # Monitoring Reader
+        "2b629674-e913-4c01-ae53-ef4638d8f975",  # Event Hubs Data Sender
+        "a638d3c7-ab3a-418d-83e6-5f17a39d4fde",  # Event Hubs Data Receiver
+    ):
+        assert role_definition_id in text
+
+
+def test_messaging_exports_main_module_contract():
+    text = MESSAGING.read_text()
+
+    for name in (
+        "premiumNamespaceName",
+        "premiumNamespaceId",
+        "workloadEventHubName",
+        "workloadConsumerGroup",
+        "telemetryNamespaceName",
+        "telemetryEventHubName",
+    ):
+        assert f"output {name} " in text

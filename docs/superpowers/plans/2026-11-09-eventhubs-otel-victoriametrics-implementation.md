@@ -559,9 +559,11 @@ output telemetryEventHubName string = telemetryHub.name
 - [ ] **Step 4: Verify Bicep and contracts**
 
 ```bash
-az bicep build --file docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/infra/main.bicep
+az bicep build --file docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/infra/modules/messaging.bicep
 /tmp/devguidesample-docs-venv/bin/python -m pytest docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/tests/test_bicep_contract.py -q
 ```
+
+Expected: messaging module build exits 0 with no diagnostics and all tests PASS. Remove generated `messaging.json` before committing.
 
 - [ ] **Step 5: Commit**
 
