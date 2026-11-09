@@ -1,0 +1,6 @@
+title: Event Hubs OpenTelemetry VictoriaMetrics lab
+description: Deploys and verifies Event Hubs metrics, consumer lag, dual VictoriaMetrics ingestion paths, and an agent-built Grafana dashboard.
+kind: runnable
+used_by:
+  - index
+  - lab

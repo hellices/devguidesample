@@ -37,6 +37,7 @@ services:
   azure-cosmos-db: Azure Cosmos DB
   azure-database-for-mysql: Azure Database for MySQL
   azure-documentdb: Azure DocumentDB
+  azure-event-hubs: Azure Event Hubs
   azure-functions: Azure Functions
   azure-front-door: Azure Front Door
   azure-hdinsight: Azure HDInsight
@@ -81,6 +82,7 @@ technologies:
   rest-api: REST API
   spring-boot: Spring Boot
   sql-server: SQL Server
+  victoriametrics: VictoriaMetrics
 
 tags:
   design: 설계

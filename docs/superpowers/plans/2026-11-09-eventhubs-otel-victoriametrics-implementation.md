@@ -89,7 +89,10 @@ docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/
 
 **Files:**
 - Modify: `docs-taxonomy.yml:27-82`
+- Create initially as `needs-review`: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/index.md`
+- Create initially as `needs-review`: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/lab/index.md`
 - Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/sample.yml`
+- Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/README.md`
 - Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/tests/test_azd_project.py`
 
 **Interfaces:**
@@ -103,7 +106,7 @@ from pathlib import Path
 import yaml
 
 LAB_ROOT = Path(__file__).parents[1]
-REPO_ROOT = Path(__file__).parents[8]
+REPO_ROOT = Path(__file__).parents[7]
 TAXONOMY = REPO_ROOT / "docs-taxonomy.yml"
 
 
@@ -158,6 +161,8 @@ used_by:
   - lab
 ```
 
+Create the parent guide, lab entry, and sample README in `needs-review` state with the official sources, SKU scope, cost, cleanup requirement, and explicit statement that runtime evidence does not exist yet. The repository metadata validator requires both `used_by` slugs and the sample README to exist as soon as the sample manifest is added.
+
 - [ ] **Step 4: Run the focused and metadata tests**
 
 ```bash
@@ -170,7 +175,7 @@ Expected: focused test PASS; metadata validator remains green for existing publi
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docs-taxonomy.yml docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/sample.yml docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/tests/test_azd_project.py
+git add docs-taxonomy.yml docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring
 git commit -m "test(eventhubs): establish observability lab contract"
 ```
 
@@ -1350,11 +1355,11 @@ Run all focused tests after each fix and commit by concern; never commit `eviden
 ### Task 12: Public guide, lab, real screenshot, and cleanup proof
 
 **Files:**
-- Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/index.md`
-- Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/lab/index.md`
+- Modify: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/index.md`
+- Modify: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/lab/index.md`
 - Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/images/architecture.png`
 - Create from sanitized real evidence: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/images/grafana-dashboard.png`
-- Create: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/README.md`
+- Modify: `docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab/README.md`
 
 **Interfaces:**
 - Public guide leads with the real screenshot and conclusions.
