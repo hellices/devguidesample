@@ -66,4 +66,7 @@ case "${1:-start}" in
   stop)
     stop_forward
     ;;
+  *)
+    die "usage: vm-query.sh start|stop|port"
+    ;;
 esac

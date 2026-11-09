@@ -89,7 +89,8 @@ async def run() -> None:
 
     receive_task = None
     try:
-        async with credential, consumer:
+        # The client does not own the checkpoint store; close its blob session after the client.
+        async with credential, checkpoint_store, consumer:
             receive_task = asyncio.create_task(
                 consumer.receive(
                     on_event=on_event,

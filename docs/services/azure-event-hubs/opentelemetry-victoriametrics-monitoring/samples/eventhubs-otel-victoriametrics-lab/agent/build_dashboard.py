@@ -268,18 +268,24 @@ def build_dashboard(probe: dict) -> dict:
                       ' / count by (source_path, delivery_path) (count_over_time({source_path!=""}[$__range]))'
                       ' / ($__range_s / 60)'),
              "instant": True, "format": "table"},
+            {"expr": 'time() - max by (source_path, delivery_path) (tlast_over_time({source_path!=""}[$__range]))',
+             "instant": True, "format": "table"},
         ],
         description=("같은 receiver 출력을 두 exporter로 fan-out했습니다. scrape 경로는 Collector가 노출한 "
-                     "마지막 값을 scrape마다 다시 저장하므로 series당 분당 sample 수가 scrape 주기를 따릅니다."),
+                     "마지막 값을 scrape마다 다시 저장하므로 series당 분당 sample 수가 scrape 주기를 따릅니다. "
+                     "Last sample age가 커지면 해당 경로의 수집이 구간 중간에 멈춘 것입니다."),
         fieldConfig={"defaults": {"unit": "short", "decimals": 0},
                      "overrides": [{"matcher": {"id": "byName", "options": "Samples/series/min"},
-                                    "properties": [{"id": "decimals", "value": 2}]}]},
+                                    "properties": [{"id": "decimals", "value": 2}]},
+                                   {"matcher": {"id": "byName", "options": "Last sample age"},
+                                    "properties": [{"id": "unit", "value": "s"}]}]},
         transformations=[
             {"id": "merge", "options": {}},
             {"id": "organize", "options": {
                 "excludeByName": {"Time": True},
                 "renameByName": {"source_path": "Source", "delivery_path": "Delivery",
-                                 "Value #A": "Series", "Value #B": "Samples/series/min"}}},
+                                 "Value #A": "Series", "Value #B": "Samples/series/min",
+                                 "Value #C": "Last sample age"}}},
         ],
     ))
     panels.append(layout.panel(
@@ -334,9 +340,10 @@ def build_dashboard(probe: dict) -> dict:
     panels.append(layout.row("Collector 상태"))
     for title, expr, description in (
         ("Receiver refused·failed points",
-         f"sum(increase(otelcol_receiver_refused_metric_points_total{{{SELF}}}[$__range]))"
-         f" + sum(increase(otelcol_receiver_failed_metric_points_total{{{SELF}}}[$__range]))",
-         "receiver가 pipeline에 넘기지 못한 data point 수"),
+         # One selector so a missing refused or failed series cannot empty the whole sum.
+         f'sum(increase({{__name__=~"otelcol_receiver_(refused|failed)_metric_points_total",{SELF}}}[$__range]))'
+         f" or (0 * sum(increase(otelcol_receiver_accepted_metric_points_total{{{SELF}}}[$__range])))",
+         "receiver가 pipeline에 넘기지 못한 data point 수. 수락 counter가 있을 때만 0으로 해석합니다."),
         # The failure counter is created on the first failure. Read 0 only while the matching
         # success counter proves the exporter is reporting; otherwise the panel shows No data.
         ("Exporter send failures",

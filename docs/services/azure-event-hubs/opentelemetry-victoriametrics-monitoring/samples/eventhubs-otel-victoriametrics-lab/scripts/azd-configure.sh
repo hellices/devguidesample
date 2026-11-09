@@ -30,9 +30,16 @@ if [[ "$USER_TYPE" == "user" ]]; then
   PRINCIPAL_ID="$(az ad signed-in-user show --query id -o tsv)"
   PRINCIPAL_TYPE=User
 else
-  PRINCIPAL_ID="$(az ad sp show --id "$(az account show --query user.name -o tsv)" --query id -o tsv)"
+  # A deployment service principal usually has no Microsoft Graph read permission, so take the
+  # object ID from the oid claim of its own ARM token instead of az ad sp show.
+  PRINCIPAL_ID="$(az account get-access-token --query accessToken -o tsv | python3 -c '
+import base64, json, sys
+payload = sys.stdin.read().strip().split(".")[1]
+print(json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))["oid"])')" \
+    || die "could not read the service principal object ID from its access token"
   PRINCIPAL_TYPE=ServicePrincipal
 fi
+[[ "$PRINCIPAL_ID" =~ ^[0-9a-fA-F-]{36}$ ]] || die "could not determine the signed-in principal object ID"
 azd_env set AZURE_PRINCIPAL_ID "$PRINCIPAL_ID"
 azd_env set AZURE_PRINCIPAL_TYPE "$PRINCIPAL_TYPE"
 

@@ -132,7 +132,8 @@ async def run() -> None:
         credential=credential,
     )
 
-    async with credential, client:
+    # Exits in reverse order: client, then the checkpoint store's blob session, then credential.
+    async with credential, checkpoint_store, client:
         while not stop.is_set():
             try:
                 await collect_once(

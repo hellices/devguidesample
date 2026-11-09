@@ -136,7 +136,8 @@ def main() -> None:
     for row in report:
         mark = "PASS" if row["status"] == "pass" else ("WARN" if row["optional"] else "FAIL")
         print(f"{mark} {row['panel']} [{row['refId']}] rows={row.get('rows')} finite={row.get('finite_values')} {row.get('error', '')}")
-    print(f"{len(report) - len(failed)}/{len(report)} queries usable")
+    usable = sum(row["status"] == "pass" for row in report)
+    print(f"{usable}/{len(report)} queries usable ({len(failed)} required failing)")
     sys.exit(1 if failed else 0)
 
 

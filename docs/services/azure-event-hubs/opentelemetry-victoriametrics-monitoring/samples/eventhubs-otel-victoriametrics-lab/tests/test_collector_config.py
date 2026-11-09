@@ -102,14 +102,30 @@ def test_dedicated_profile_requires_existing_cluster_id():
         dedicated = pipelines[f"metrics/azure_monitor_dedicated-{delivery}"]
         assert dedicated["receivers"] == ["azure_monitor/dedicated"]
         assert "filter/dedicated" in dedicated["processors"]
-    condition = config["processors"]["filter/dedicated"]["metric_conditions"][0]
-    assert DEDICATED_ID.lower() in condition
+    # The filter drops a data point when this is true, so it must be exactly "not the chosen cluster".
+    assert config["processors"]["filter/dedicated"]["metric_conditions"] == [
+        f'ConvertCase(datapoint.attributes["azuremonitor.resource_id"], "lower") != "{DEDICATED_ID.lower()}"'
+    ]
     assert "azure_monitor_api" not in yaml.safe_dump(pipelines["metrics/azure_monitor_dedicated-scrape"])
 
 
-def test_dedicated_profile_rejects_non_cluster_ids():
+@pytest.mark.parametrize("resource_id", [
+    "/subscriptions/x",
+    DEDICATED_ID.rsplit("/", 1)[0],
+    DEDICATED_ID.rsplit("/", 1)[0] + "/",
+    DEDICATED_ID + "/eventhubs/hub",
+    DEDICATED_ID.replace("Microsoft.EventHub", "Microsoft.Other"),
+    DEDICATED_ID.replace("/clusters/", "/namespaces/"),
+    DEDICATED_ID.lstrip("/"),
+])
+def test_dedicated_profile_rejects_non_cluster_ids(resource_id):
     with pytest.raises(ValueError):
-        render_config(BASE_ENV | {"EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": "/subscriptions/x"})
+        render_config(BASE_ENV | {"EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": resource_id})
+
+
+def test_dedicated_profile_accepts_case_insensitive_cluster_ids():
+    config = render_config(BASE_ENV | {"EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": DEDICATED_ID.lower()})
+    assert config["receivers"]["azure_monitor/dedicated"]["resource_groups"] == ["rg-existing"]
 
 
 def test_fallback_replaces_api_source_only_when_requested():

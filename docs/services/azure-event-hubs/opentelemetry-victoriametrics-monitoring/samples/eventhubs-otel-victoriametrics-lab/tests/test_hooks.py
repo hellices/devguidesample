@@ -29,20 +29,40 @@ def test_hooks_exist_and_are_executable():
         assert os.access(path, os.X_OK), name
 
 
+AZ_CALL = re.compile(r"(?:^|\$\(|[\s;|&(])az\s+([a-z-]+(?:\s+[a-z-]+)?)")
+COMMAND_END = re.compile(r"\)|;|&&|\|")
+
+
+def _az_calls(line: str) -> list[tuple[str, str]]:
+    """Each az invocation on a line with the text up to its own command boundary."""
+    calls = []
+    for match in AZ_CALL.finditer(line):
+        rest = line[match.end():]
+        end = COMMAND_END.search(rest)
+        calls.append((match.group(1), match.group(0) + (rest[: end.start()] if end else rest)))
+    return calls
+
+
+def test_az_call_segments_do_not_borrow_options_from_the_next_command():
+    calls = _az_calls('az group delete -n "$rg"; az group show -n "$rg" --subscription "$sub"')
+    assert [("--subscription" in segment) for _, segment in calls] == [False, True]
+
+
 def test_azure_cli_calls_pin_the_subscription():
     for path in SCRIPTS.glob("*.sh"):
         for line in _joined_commands(path.read_text()):
-            match = re.search(r"(?:^|\$\(|\s)az\s+([a-z-]+(?:\s+[a-z-]+)?)", line)
-            if not match or line.lstrip().startswith(("#", "require_commands")):
+            if line.lstrip().startswith(("#", "require_commands")):
                 continue
-            command = match.group(1)
-            if command.startswith(("ad ", "account show")) and "--subscription" not in line:
-                # Entra ID lookups and the active-subscription guard are tenant scoped.
-                assert command.startswith(("ad signed-in-user", "ad sp", "account show")), line
-                continue
-            if 'az vm run-command invoke "${args[@]}"' in line:
-                continue
-            assert "--subscription" in line, f"{path.name}: {line.strip()}"
+            for command, segment in _az_calls(line):
+                if command.startswith(("ad ", "account ")) and "--subscription" not in segment:
+                    # Entra ID lookups, the active-subscription guard and token reads are tenant scoped.
+                    assert command.startswith(
+                        ("ad signed-in-user", "account show", "account get-access-token")
+                    ), line
+                    continue
+                if 'az vm run-command invoke "${args[@]}"' in segment:
+                    continue
+                assert "--subscription" in segment, f"{path.name}: {segment.strip()}"
 
 
 def test_no_script_creates_a_dedicated_cluster():
@@ -131,6 +151,53 @@ def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path)
     assert first.returncode == 0, first.stderr
     assert second.returncode == 0, second.stderr
     assert "federated-credential delete" not in log.read_text()
+
+
+AZD_CLEANUP_ENV = (
+    'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
+    "AZURE_RESOURCE_GROUP) echo rg-example;; *) exit 1;; esac"
+)
+
+
+@pytest.mark.parametrize("failing", ["group exists", "identity list", "identity federated-credential"])
+def test_cleanup_fails_when_an_azure_lookup_fails(fake_bin, failing):
+    bin_dir, log, write = fake_bin
+    write("az", (
+        f'if [[ "$*" == "{failing}"* ]]; then echo "auth expired" >&2; exit 1; fi\n'
+        'case "$1 $2" in "group exists") echo true;; "identity list") echo id-lab;; esac'
+    ))
+    write("azd", AZD_CLEANUP_ENV)
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode != 0
+    assert "external state removed" not in result.stderr + result.stdout
+
+
+def test_cleanup_deletes_only_the_lab_credentials(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", (
+        'case "$1 $2 $3" in "group exists"*) echo true;; "identity list"*) echo id-lab;; '
+        '"identity federated-credential list") printf "aks-eventhubs-producer\\naks-eventhubs-slow-consumer\\n";; esac'
+    ))
+    write("azd", AZD_CLEANUP_ENV)
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode == 0, result.stderr
+    deletes = [c for c in log.read_text().splitlines() if "federated-credential delete" in c]
+    assert len(deletes) == 2
+    assert all("--identity-name id-lab" in c for c in deletes)
+
+
+def test_vm_query_rejects_an_unknown_action(fake_bin):
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")
+
+    result = _run("vm-query.sh", bin_dir, "strat")
+
+    assert result.returncode != 0
+    assert "usage" in result.stderr
 
 
 def test_cleanup_requires_confirmation(fake_bin):

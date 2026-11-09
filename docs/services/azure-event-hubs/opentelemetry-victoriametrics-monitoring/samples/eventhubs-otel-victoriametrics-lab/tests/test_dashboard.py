@@ -39,11 +39,22 @@ def test_no_query_hides_missing_series_as_zero():
     assert "or vector(0)" not in text
 
 
+def _azure_total_targets():
+    targets = [
+        target["expr"]
+        for panel in _panels(build_dashboard({"processing_units": 1}))
+        for target in panel.get("targets", [])
+        if "sum_over_time(azure_" in target["expr"]
+    ]
+    # Each request stat must keep its total; an empty match would make the checks vacuous.
+    for metric in ("incomingrequests", "successfulrequests", "throttledrequests"):
+        assert sum(f"azure_{metric}_total" in expr for expr in targets) == 1, metric
+    return targets
+
+
 def test_platform_totals_use_remote_write_only():
-    for panel in _panels(build_dashboard({"processing_units": 1})):
-        for target in panel.get("targets", []):
-            if "sum_over_time(azure_" in target["expr"]:
-                assert 'delivery_path="remote_write"' in target["expr"]
+    for expr in _azure_total_targets():
+        assert 'delivery_path="remote_write"' in expr
 
 
 def test_dedicated_panels_exist_only_with_profile():
@@ -76,10 +87,21 @@ def test_panels_do_not_overlap():
 
 
 def test_request_totals_use_the_azure_monitor_window():
-    for panel in _panels(build_dashboard({"processing_units": 1})):
-        for target in panel.get("targets", []):
-            if "sum_over_time(azure_" in target["expr"]:
-                assert "[$__range] offset 1s" in target["expr"]
+    for expr in _azure_total_targets():
+        assert "[$__range] offset 1s" in expr
+
+
+def test_receiver_failures_survive_a_missing_counter():
+    exprs = [t["expr"] for p in _panels(build_dashboard({"processing_units": 1}))
+             if p.get("title") == "Receiver refused·failed points" for t in p["targets"]]
+    assert len(exprs) == 1
+    assert "(refused|failed)" in exprs[0] and " + " not in exprs[0]
+
+
+def test_path_comparison_shows_last_sample_age():
+    panel = next(p for p in _panels(build_dashboard({"processing_units": 1}))
+                 if p.get("title") == "Receiver and delivery path comparison")
+    assert any("tlast_over_time" in t["expr"] for t in panel["targets"])
 
 
 def test_optional_marker_leads_every_description_that_uses_it():

@@ -13,17 +13,28 @@ STATE="$(state_dir)"
 
 "$LAB_ROOT/scripts/vm-query.sh" stop >/dev/null 2>&1 || true
 
-if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] \
-  && [[ "$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" == "true" ]]; then
-  for identity in $(az identity list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" --query "[].name" -o tsv); do
-    # Only the credentials azd-postprovision.sh creates; anything else in the group is left alone.
-    for credential in $(az identity federated-credential list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
-      --identity-name "$identity" --query "[?name=='aks-eventhubs-producer' || name=='aks-eventhubs-slow-consumer'].name" -o tsv); do
-      az identity federated-credential delete --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
-        --identity-name "$identity" --name "$credential" --yes --output none
-      log "deleted federated credential $credential"
-    done
-  done
+# Every lookup must succeed: a failed az call must fail cleanup, not look like "nothing to delete".
+if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]]; then
+  group_exists="$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" \
+    || die "could not check resource group $AZURE_RESOURCE_GROUP"
+  if [[ "$group_exists" == "true" ]]; then
+    identities="$(az identity list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
+      --query "[].name" -o tsv)" || die "could not list managed identities"
+    while IFS= read -r identity; do
+      [[ -n "$identity" ]] || continue
+      # Only the credentials azd-postprovision.sh creates; anything else in the group is left alone.
+      credentials="$(az identity federated-credential list --subscription "$AZURE_SUBSCRIPTION_ID" \
+        -g "$AZURE_RESOURCE_GROUP" --identity-name "$identity" \
+        --query "[?name=='aks-eventhubs-producer' || name=='aks-eventhubs-slow-consumer'].name" -o tsv)" \
+        || die "could not list federated credentials of $identity"
+      while IFS= read -r credential; do
+        [[ -n "$credential" ]] || continue
+        az identity federated-credential delete --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
+          --identity-name "$identity" --name "$credential" --yes --output none
+        log "deleted federated credential $credential"
+      done <<<"$credentials"
+    done <<<"$identities"
+  fi
 fi
 
 rm -f "$STATE/kubeconfig" "$STATE/gateway-bootstrap.log" "$STATE/port-forward.log"

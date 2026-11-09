@@ -66,16 +66,18 @@ def _resource_processor(key: str, value: str) -> dict:
 
 
 def _dedicated_parts(resource_id: str) -> tuple[str, str]:
-    parts = resource_id.strip("/").split("/")
-    lowered = [part.lower() for part in parts]
-    try:
-        subscription = parts[lowered.index("subscriptions") + 1]
-        resource_group = parts[lowered.index("resourcegroups") + 1]
-    except (ValueError, IndexError) as error:
-        raise ValueError("EXISTING_DEDICATED_CLUSTER_RESOURCE_ID is not a resource ID") from error
-    if "microsoft.eventhub/clusters" not in "/".join(lowered):
+    # Canonical form only: /subscriptions/<s>/resourceGroups/<g>/providers/Microsoft.EventHub/clusters/<name>
+    parts = resource_id.split("/")
+    keywords = [part.lower() for part in parts[1:8:2]]
+    if (
+        len(parts) != 9
+        or parts[0]
+        or keywords != ["subscriptions", "resourcegroups", "providers", "clusters"]
+        or parts[6].lower() != "microsoft.eventhub"
+        or not all(parts[i] for i in (2, 4, 8))
+    ):
         raise ValueError("EXISTING_DEDICATED_CLUSTER_RESOURCE_ID must be a Microsoft.EventHub/clusters ID")
-    return subscription, resource_group
+    return parts[2], parts[4]
 
 
 def render_config(env: Mapping[str, str]) -> dict:

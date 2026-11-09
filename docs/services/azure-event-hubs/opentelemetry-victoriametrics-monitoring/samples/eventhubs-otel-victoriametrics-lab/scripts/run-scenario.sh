@@ -32,13 +32,19 @@ max_lag() {
     --data-urlencode 'query=max(eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"})' \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
 }
+# Scaling to 0 only requests termination; the load ends when the producer pod is gone.
+stop_producer() {
+  kube scale -n "$NS" deploy/eventhubs-producer --replicas 0 >/dev/null
+  # wait exits non-zero when no pod matches (already gone), so verify the result instead.
+  kube wait -n "$NS" --for=delete pod -l app=eventhubs-producer --timeout 120s >/dev/null 2>&1 || true
+  [[ -z "$(kube get pod -n "$NS" -l app=eventhubs-producer -o name)" ]] || die "producer pod is still running"
+}
 last_log_value() {
   kube logs -n "$NS" "deploy/$1" --tail 200 2>/dev/null | grep -o "$2=[0-9]*" | tail -1 | cut -d= -f2
 }
 
 # A previous interrupted run may have left the producer running; the baseline needs it stopped.
-kube scale -n "$NS" deploy/eventhubs-producer --replicas 0 >/dev/null
-kube wait -n "$NS" --for=delete pod -l app=eventhubs-producer --timeout 120s >/dev/null 2>&1 || true
+stop_producer
 kube set env -n "$NS" deploy/eventhubs-slow-consumer PROCESSING_DELAY_SECONDS="$PROCESSING_DELAY_SECONDS" >/dev/null
 kube set env -n "$NS" deploy/eventhubs-producer EVENTS_PER_SECOND="$EVENTS_PER_SECOND" >/dev/null
 kube scale -n "$NS" deploy/eventhubs-slow-consumer --replicas 1 >/dev/null
@@ -58,9 +64,9 @@ PRODUCER_SENT="$(last_log_value eventhubs-producer sent_total)"
 PEAK_LAG="$(max_lag)"
 CONSUMER_PROCESSED_AT_PEAK="$(last_log_value eventhubs-slow-consumer processed_total)"
 
+stop_producer
 PRODUCER_STOP="$(now)"
 log "producer stopped; peak max lag=$PEAK_LAG"
-kube scale -n "$NS" deploy/eventhubs-producer --replicas 0 >/dev/null
 [[ "$PEAK_LAG" -gt "$LAG_AT_LOAD_START" ]] || die "lag did not increase (start=$LAG_AT_LOAD_START peak=$PEAK_LAG)"
 
 TARGET=$((PEAK_LAG / 5))

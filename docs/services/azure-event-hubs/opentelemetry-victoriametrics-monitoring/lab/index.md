@@ -40,6 +40,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-extensibility
 - title: Work with Azure Developer CLI environment variables
   url: https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables
+- title: Access token claims reference
+  url: https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference
 - title: OpenTelemetry Collector Contrib azuremonitorreceiver (v0.165.0)
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver
 - title: VictoriaMetrics Operator VMSingle
@@ -311,6 +313,14 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | port-forward 종료를 기다리지 않고, 재사용된 PID를 종료할 수 있음 | 명령줄로 소유권을 확인한 뒤 종료를 기다리고, 필요하면 SIGKILL |
 | 시나리오 결과의 `recovered_at`이 문자열 `"null"` | Python으로 직렬화해 JSON `null` 사용 |
 | 계약 테스트의 false-green(문자열 존재만 확인) | azure.yaml 파싱, 행 시작 output 선언, 역할 할당 GUID 집합 일치, NSG 규칙 집합, 두 pipeline의 processor 동일성, fallback 연결, 명령 줄 이음·command substitution 안의 kubectl, 읽기 전용 사전 확인 검증 |
+| `Receiver refused·failed points`가 두 counter 중 하나만 있으면 `No data` | 두 metric 이름을 정규식 selector 하나로 합산하고 수락 counter가 있을 때만 0으로 표시. 로컬 VictoriaMetrics v1.155.0에서 이전 식은 빈 결과, 새 식은 실제 값 확인 |
+| 경로 비교 표가 구간 중간에 멈춘 경로를 구분하지 못함 | `tlast_over_time` 기반 `Last sample age` 열 추가 |
+| remote write 대조가 분 단위로 절삭해 몇 초 어긋난 sample도 일치로 판정 | 분 경계에 정확히 찍힌 sample만 대조하고, 어긋난 sample이 있으면 미완료. scrape 값은 total이 아니라 `scrape_repeated_sample_sum`으로 표기 |
+| Dedicated resource ID 검사가 부분 문자열이라 cluster 이름 없는 ID도 통과 | `/subscriptions/…/resourceGroups/…/providers/Microsoft.EventHub/clusters/<name>` 전체 segment를 검사 |
+| service principal 배포에서 `az ad sp show`가 Graph 권한을 요구 | 로그인 주체의 ARM access token `oid` claim에서 object ID를 읽음 |
+| cleanup이 `az` 조회 실패를 "삭제할 것 없음"으로 처리 | 각 조회의 종료 상태를 확인해 실패하면 cleanup도 실패 |
+| `producer_stop`이 producer Pod 종료 전에 기록됨 | Pod 삭제를 확인한 뒤 기록하고, 남아 있으면 실패 |
+| lag exporter·consumer가 checkpoint store의 Storage session을 닫지 않음 | `async with`에 checkpoint store를 포함 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 
@@ -344,5 +354,6 @@ group 이름을 기록합니다. `postdown`은 그 resource group이 사라질 �
 - [Deploy and configure Microsoft Entra Workload ID on an AKS cluster](https://learn.microsoft.com/azure/aks/workload-identity-deploy-cluster)
 - [Customize your Azure Developer CLI workflows using command and event hooks](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-extensibility)
 - [Work with Azure Developer CLI environment variables](https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables)
+- [Access token claims reference](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference)
 - [OpenTelemetry Collector Contrib azuremonitorreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver)
 - [VictoriaMetrics Operator VMSingle](https://docs.victoriametrics.com/operator/resources/vmsingle/)

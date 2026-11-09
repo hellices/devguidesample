@@ -1,8 +1,9 @@
 """Compare Azure Monitor PT1M bins with what VictoriaMetrics stored for the same window.
 
-remote write keeps the Azure Monitor minute-bin timestamp, so each bin must match one remote
-write sample exactly. The scrape path re-stamps and repeats values, so only its window total is
-reported. Diagnostic Settings exports only non-zero minutes, so its presence is counted.
+remote write keeps the Azure Monitor minute-bin timestamp, so each bin must match remote write
+samples stamped exactly on that minute. The scrape path re-stamps and repeats values, so it is
+reported only as a repeated-sample sum, never as a total. Diagnostic Settings exports only
+non-zero minutes, so its presence is counted.
 """
 
 from __future__ import annotations
@@ -23,11 +24,17 @@ def _minute(epoch_seconds: float) -> str:
     return datetime.fromtimestamp(epoch_seconds, timezone.utc).strftime("%Y-%m-%dT%H:%M")
 
 
-def _per_minute(fetch: Fetch, selector: str, start: int, end: int) -> dict[str, float]:
+def _per_minute(
+    fetch: Fetch, selector: str, start: int, end: int, off_bin: list[int] | None = None
+) -> dict[str, float]:
+    """Sum samples per UTC minute; with off_bin, record samples not stamped exactly on a minute."""
     values: dict[str, float] = {}
     for line in fetch("/api/v1/export", {"match[]": selector, "start": start, "end": end - 1}).splitlines():
         series = json.loads(line)
         for value, ts in zip(series["values"], series["timestamps"]):
+            if off_bin is not None and ts % 60000:
+                off_bin.append(ts)
+                continue
             minute = _minute(ts / 1000)
             values[minute] = values.get(minute, 0) + value
     return values
@@ -47,7 +54,10 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
                 if minute in expected:
                     direct[minute] = direct.get(minute, 0) + point["total"]
         api = 'source_path="azure_monitor_api"'
-        remote = _per_minute(fetch, f'azure_{name.lower()}_total_Count{{{api},delivery_path="remote_write"}}', start, end)
+        off_bin: list[int] = []
+        remote = _per_minute(
+            fetch, f'azure_{name.lower()}_total_Count{{{api},delivery_path="remote_write"}}', start, end, off_bin
+        )
         totals = {}
         for delivery in ("remote_write", "scrape"):
             query = f'sum(sum_over_time(azure_{name.lower()}_total_Count{{{api},delivery_path="{delivery}"}}[{end - start}s]))'
@@ -59,7 +69,10 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
         minutes = sorted(direct)
         report["metrics"][name] = {
             "azure_monitor_total": sum(direct.values()),
-            "victoriametrics_total": totals,
+            "remote_write_total": totals["remote_write"],
+            # Each bin is stored once per scrape, so this is a multiple of the real total.
+            "scrape_repeated_sample_sum": totals["scrape"],
+            "remote_write_off_bin_samples": len(off_bin),
             "minutes": len(minutes),
             "minutes_matching_remote_write": sum(1 for m in minutes if remote.get(m) == direct[m]),
             "minutes_missing_in_azure_monitor": [m for m in expected if m not in direct],
@@ -69,11 +82,12 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
             "minutes_present_in_diagnostic_eventhub": sum(1 for m in minutes if m in diagnostic),
         }
     # Complete means every requested metric has every minute of [from, to) in Azure Monitor and
-    # the same value in remote write.
+    # the same value in remote write, stamped exactly on the Azure Monitor minute.
     report["complete"] = bool(expected) and all(
         name in report["metrics"]
         and report["metrics"][name]["minutes"] == len(expected)
         and report["metrics"][name]["minutes_matching_remote_write"] == len(expected)
+        and report["metrics"][name]["remote_write_off_bin_samples"] == 0
         for name in REQUIRED
     )
     return report

@@ -23,7 +23,7 @@ def _raw(names=REQUIRED, drop=None):
     return {"value": value}
 
 
-def _fetch(remote_override=None):
+def _fetch(remote_override=None, stamp_offset_ms=0):
     def fetch(path, params):
         if path == "/api/v1/export":
             assert (params["start"], params["end"]) == (START, END - 1)
@@ -32,7 +32,8 @@ def _fetch(remote_override=None):
             values = [float(10 * i) for i in range(3)]
             if remote_override:
                 values = remote_override(params["match[]"], values)
-            stamps = [(START + 60 * i) * 1000 for i in range(3)]
+            offset = stamp_offset_ms if "remote_write" in params["match[]"] else 0
+            stamps = [(START + 60 * i) * 1000 + offset for i in range(3)]
             return json.dumps({"values": values, "timestamps": stamps})
         assert path == "/api/v1/query", path
         assert params["time"] == END - 1
@@ -69,3 +70,18 @@ def test_incomplete_when_remote_write_differs():
 
     assert report["complete"] is False
     assert report["metrics"]["IncomingRequests"]["minutes_missing_in_remote_write"] == ["2026-11-09T21:27"]
+
+
+def test_incomplete_when_remote_write_is_not_stamped_on_the_azure_minute():
+    report = compare(_raw(), START, END, _fetch(stamp_offset_ms=30_000))
+
+    assert report["complete"] is False
+    assert report["metrics"]["IncomingMessages"]["remote_write_off_bin_samples"] == 3
+    assert report["metrics"]["IncomingMessages"]["minutes_matching_remote_write"] == 0
+
+
+def test_scrape_is_reported_as_a_repeated_sample_sum_not_a_total():
+    metric = compare(_raw(), START, END, _fetch())["metrics"]["IncomingMessages"]
+
+    assert "scrape_repeated_sample_sum" in metric
+    assert metric["remote_write_total"] == 30.0
