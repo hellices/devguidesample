@@ -111,13 +111,19 @@ class BusinessMetrics {
 ```
 
 Gauge는 값을 올리지 않고 값을 읽을 함수를 등록합니다. registry가 지표를 내보낼 때마다
-이 함수를 호출합니다.
+이 함수를 호출하므로, DB 조회처럼 비싼 값은 cache로 감쌉니다. MovieLog는 저장 건수를
+1분에 한 번만 다시 조회합니다.
 
 ```java
-Gauge.builder("movielog.reviews.stored", reviews, ReviewRepository::count)
+// CachedCount re-runs reviews.count() at most once per minute.
+CachedCount reviewCount = new CachedCount(reviews::count, clock);
+Gauge.builder("movielog.reviews.stored", reviewCount, CachedCount::value)
+    .strongReference(true)
     .register(registry);
 ```
 
+- 위 코드는 발췌입니다. MovieLog는 첫 이벤트 전에도 대시보드에 0이 보이도록
+  channel별 Counter를 시작할 때 미리 등록합니다.
 - tag 값은 `web`/`api`, `fresh`/`rotten`처럼 고정된 몇 개만 씁니다. 영화 ID나
   사용자명처럼 값이 계속 늘어나는 항목을 tag에 넣으면 series가 끝없이 늘어납니다.
 - 내보낼 meter는 prefix 허용 목록으로 제한합니다. 내보낸 지표는 모두 과금 대상
@@ -163,9 +169,13 @@ instrumentation.opentelemetry.io/inject-java: "movielog"
 
 재시작한 Pod에 agent가 주입되면 Micrometer 이름의 점이 underscore로 바뀐
 `movielog_*` 지표가 들어옵니다(`movielog.movie.views` → `movielog_movie_views`).
-지표가 실제로 도착했는지는 실습의 [probe 1](movielog-lab/index.md#probe-inventory)처럼
-`customMetrics`를 조회해 확인합니다. 단, Spring Boot 4 앱은 주입된 agent가 3.7.9
-이상이어야 합니다([Spring Boot 4 호환성](#spring-boot-4)).
+지표가 실제로 도착했는지는 `customMetrics`를 조회해 확인합니다. 아래는 MovieLog의
+비즈니스 지표가 agent 기본 JVM 지표와 함께 두 Pod에서 도착한 inventory입니다.
+단, Spring Boot 4 앱은 주입된 agent가 3.7.9 이상이어야 합니다
+([Spring Boot 4 호환성](#spring-boot-4)). 이 캡처는 Application Insights Java 3.7.10
+init image를 주입한 상태에서 얻었습니다.
+
+![customMetrics inventory. JVM 기본 지표와 함께 movielog_comments_posted부터 movielog_reviews_stored까지 12개 비즈니스 지표가 두 Pod에서 도착](images/probe-inventory-agent-3.7.10.png)
 
 ## agent 대시보드 작성: 실제 지표 조회 기반 panel 설계 { #agent }
 
@@ -181,6 +191,12 @@ agent에게 "그려 줘" 한 번 대신 조회, 생성, 실행 확인, 화면 �
 | build | probe가 정한 집계식과 질문 유형별 시각화로 dashboard JSON 생성 | panel마다 답할 질문과 시각화의 짝 |
 | verify | 모든 panel query를 Grafana에서 실행 | 오류나 0행 panel이 없는 대시보드 |
 | look | 렌더링한 화면을 캡처해 직접 확인 | 색, legend, 미완성 시간 bin, 식별자 노출처럼 query 결과로는 안 보이는 화면 품질 |
+
+아래는 look 단계의 첫 캡처입니다. query는 모두 성공했지만 화면에서는 정상 건수가
+경고색으로 보이고 legend가 읽기 어려웠습니다. agent가 이 화면을 보고 고친 결과가 이
+문서 맨 위의 대시보드입니다.
+
+![수정 전 캡처. 영화 조회 2.17K, 새 리뷰 366, 신규 회원 542가 빨간색으로 표시되고 legend가 perMin api, perMin web으로 표시됨](images/look-step-before-fix.png)
 
 단계별 query와 출력, 화면을 보고 고친 항목은 실습의
 [agent 대시보드 방법론](movielog-lab/index.md#agent-method)에 있습니다.

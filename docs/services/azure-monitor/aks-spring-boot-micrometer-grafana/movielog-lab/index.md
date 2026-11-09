@@ -236,9 +236,8 @@ Spring `MeterRegistry`에 연결되지 않습니다. 이 문제는
 ![agent 3.7.7-aks 구간의 customMetrics inventory. JVM 기본 지표와 http.server.request.duration만 있고 movielog 지표가 없음](../images/probe-inventory-agent-3.7.7.png)
 
 checksum을 고정한 3.7.10 jar를 ACR init image로 만들어 주입을 바꾸자
-`movielog_*` 12개가 두 Pod에서 모두 도착했습니다.
-
-![agent 3.7.10 구간의 customMetrics inventory. movielog_comments_posted부터 movielog_reviews_stored까지 12개 지표가 두 instance에서 도착](../images/probe-inventory-agent-3.7.10.png)
+`movielog_*` 12개가 두 Pod에서 모두 도착했습니다. 이때의 inventory 캡처는
+[주제 소개의 수집 절](../index.md#collect)에 있습니다.
 
 ```bash
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 \
@@ -512,10 +511,8 @@ headless Chromium에서 dashboard를 캡처합니다. redirect는 따라가지 �
 service account가 필요 없고, Grafana 내부 scroll 높이를 재서 viewport를 늘리므로
 아래쪽 panel까지 한 장에 담깁니다. panel 로딩이 60초 안에 끝나지 않으면
 실패로 종료합니다.
-agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처에서는 다음 문제가
-보였습니다.
-
-![수정 전 캡처. 영화 조회 2.17K, 새 리뷰 366, 신규 회원 542가 빨간색으로 표시되고 legend가 perMin api, perMin web으로 표시됨](../images/look-step-before-fix.png)
+agent는 이 이미지를 직접 보고 점검합니다. 첫 캡처는
+[주제 소개의 agent 절](../index.md#agent)에 있으며, 다음 문제가 보였습니다.
 
 | 화면에서 본 문제 | 원인 | 수정 |
 |---|---|---|
