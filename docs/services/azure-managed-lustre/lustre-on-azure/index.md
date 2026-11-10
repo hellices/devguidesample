@@ -6,7 +6,7 @@ services: [azure-managed-lustre, azure-kubernetes-service, azure-storage]
 technologies: [lustre, kubernetes]
 tags: [evaluate, design, storage]
 status: current
-verification_status: verified
+verification_status: needs-review
 sources_checked_at: 2026-11-10
 published_at: 2026-11-10
 official_sources:
