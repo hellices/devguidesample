@@ -12,7 +12,18 @@ PLS_NAME="pls-vmsingle-lab"
 MPE_NAME="mpe-vmsingle"
 # Managed Grafana resolves this name to the managed private endpoint; it never leaves Grafana.
 VMSINGLE_DOMAIN="vmsingle.eventhubs-lab.internal"
-REQUEST_MESSAGE="eventhubs-lab ${AZURE_ENV_NAME} managed grafana"
+# The Private Link Service must accept requests from any subscription (Managed Grafana's endpoint lives
+# in a Microsoft-managed one), and a request message is chosen by the requester. A random per-environment
+# nonce, kept only in the local azd environment, makes this environment's request unguessable; reruns
+# reuse it so the existing endpoint keeps matching.
+REQUEST_NONCE="$(env_value MANAGED_GRAFANA_REQUEST_NONCE)"
+if [[ -z "$REQUEST_NONCE" ]]; then
+  require_commands openssl
+  REQUEST_NONCE="$(openssl rand -hex 16)"
+  azd_env set MANAGED_GRAFANA_REQUEST_NONCE "$REQUEST_NONCE" >/dev/null || die "could not record the request nonce"
+fi
+[[ "$REQUEST_NONCE" =~ ^[0-9a-f]{32}$ ]] || die "MANAGED_GRAFANA_REQUEST_NONCE must be 32 lowercase hex characters"
+REQUEST_MESSAGE="eventhubs-lab ${AZURE_ENV_NAME} managed grafana ${REQUEST_NONCE}"
 
 # Pinned: amg 3.x renamed `az grafana mpe` to `az grafana managed-private-endpoint`.
 AMG_EXTENSION_VERSION=3.1.1
@@ -37,8 +48,7 @@ az grafana managed-private-endpoint create --subscription "$AZURE_SUBSCRIPTION_I
   --private-link-resource-id "$PLS_ID" --private-link-resource-region "$PLS_LOCATION" \
   --private-link-service-url "$VMSINGLE_DOMAIN" --request-message "$REQUEST_MESSAGE" -o none \
   || die "could not create managed private endpoint $MPE_NAME"
-# The Private Link Service accepts requests from any subscription (Managed Grafana runs in its own),
-# so approve only the pending connection that carries this environment's request message.
+# Approve only the pending connection that carries this environment's secret request message.
 approved=false
 for _ in $(seq 1 30); do
   pending="$(az network private-link-service show --subscription "$AZURE_SUBSCRIPTION_ID" -g "$NODE_RG" -n "$PLS_NAME" \

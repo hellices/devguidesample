@@ -20,3 +20,6 @@ resource gatewayClusterMonitoringReader 'Microsoft.Authorization/roleAssignments
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringReaderRoleDefinitionId)
   }
 }
+
+// predown deletes exactly this assignment; it lives outside the lab resource group that azd down removes.
+output roleAssignmentId string = gatewayClusterMonitoringReader.id

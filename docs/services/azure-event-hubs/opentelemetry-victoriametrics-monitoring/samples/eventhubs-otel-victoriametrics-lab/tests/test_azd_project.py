@@ -114,6 +114,7 @@ def test_main_bicep_exports_hook_contract():
         "CHECKPOINT_ACCOUNT_URL": "foundation.outputs.storageBlobEndpoint",
         "VMSINGLE_PRIVATE_IP": "foundation.outputs.vmSinglePrivateIp",
         "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": "existingDedicatedClusterResourceId",
+        "EXISTING_CLUSTER_READER_ASSIGNMENT_ID": "existingClusterReader.?outputs.roleAssignmentId ?? ''",
         "EVENTHUBS_SKU": "eventHubsSku",
         "DEDICATED_CLUSTER_RESOURCE_ID": "messaging.outputs.dedicatedClusterId",
         "TELEMETRY_LOGS_EVENTHUB_NAME": "messaging.outputs.telemetryLogsEventHubName",

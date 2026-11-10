@@ -641,9 +641,10 @@ azd provision
 1. `k8s/vmsingle-pls.yaml`: AKS internal load balancer Service에 `azure-pls-create`
    annotation을 붙여 node resource group에 `pls-vmsingle-lab`을 만듭니다.
 2. `az grafana managed-private-endpoint create`로 `mpe-vmsingle`을 만들고 domain
-   `vmsingle.eventhubs-lab.internal`을 지정합니다.
-3. Private Link Service에서 이 환경의 요청 메시지와 일치하는 Pending 연결만 승인하고,
-   Refresh 후 Approved를 확인합니다.
+   `vmsingle.eventhubs-lab.internal`을 지정합니다. 요청 메시지에는 처음 실행할 때 만들어 로컬 azd
+   환경(`MANAGED_GRAFANA_REQUEST_NONCE`)에만 저장하는 임의 nonce를 넣습니다.
+3. Private Link Service는 모든 구독의 요청을 받을 수 있고 요청 메시지는 요청자가 정하므로,
+   이 nonce가 든 Pending 연결만 승인하고 Refresh 후 Approved를 확인합니다.
 4. 배포자에게 Grafana Admin이 없을 때만 할당합니다.
 5. data source `victoriametrics`를 `http://vmsingle.eventhubs-lab.internal:8428`로 만듭니다.
 
@@ -808,6 +809,9 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 정리 확인의 cluster 수가 구독의 다른 cluster까지 셈 | 삭제한 cluster 이름으로 걸러 셈 |
 | `PANEL_PLAN`의 ClusterUtilization 항목이 실제 panel 형태와 다름 | preview 지표가 0이어서 CPU·memory 시계열의 series로 두고, 계획 표를 실제 형태로 수정 |
 | 계약 테스트가 공백 변형·주석 처리·잘못된 대체 값·재시도 구현을 통과시킴 | 공백을 허용하는 정규식, 주석 제거 후 검사, `<redacted>` 값 일치, 첫 수신 오류의 전파, `clear()` 뒤 재게시 감지, Premium pipeline의 cluster filter 부재, health 명령과 실패 분기 뒤의 완료 stamp 확인 |
+| Private Link Service 연결 승인이 예측 가능한 요청 메시지에만 의존 | 환경별 임의 nonce를 요청 메시지에 넣고 그 연결만 승인. nonce는 로컬 azd 환경에만 저장하고 재실행에 재사용 |
+| provision이 output 저장 전에 실패하면 `predown`이 대상 resource group을 몰라 `azd down`이 중단됨 | `AZURE_RESOURCE_GROUP`이 없고 subscription만 있으면 `rg-<env-name>`을 대상으로 사용 |
+| 기존 cluster에 만든 Monitoring Reader 할당이 정리 뒤에도 남음 | 할당 ID를 provision output으로 남기고 `predown`이 그 할당 하나만 삭제 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 
@@ -825,8 +829,12 @@ az keyvault list-deleted --query "[?name=='<key-vault>'] | length(@)"  # 0
 ```
 
 `predown`은 port-forward와 federated credential, lab kubeconfig를 지우고 대상 resource
-group과 subscription을 기록합니다. `postdown`은 그 기록으로 resource group이 사라질 때까지
-확인한 뒤 끝납니다.
+group과 subscription을 기록합니다. provision이 output을 저장하기 전에 실패해
+`AZURE_RESOURCE_GROUP`이 없으면 템플릿의 이름 규칙 `rg-<env-name>`을 대상으로 삼습니다.
+Premium에서 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 기존 cluster를 수집했다면, 그
+cluster에 템플릿이 만든 Gateway의 Monitoring Reader 할당 하나만 지웁니다. 이 할당은 lab
+resource group 밖에 있어 그룹 삭제로 지워지지 않습니다. `postdown`은 기록한 대상으로 resource
+group이 사라질 때까지 확인한 뒤 끝납니다.
 
 ![Dedicated 환경의 azd down --purge 실행 결과. cluster createdAt 08:10:00, 4시간 뒤 12:10:30에 실행, predown이 federated credential 2개 삭제, resource group 삭제와 Key Vault purge 뒤 postdown이 resource group이 더 이상 없음을 확인, 8분 42초 만에 SUCCESS. 이어서 az group exists false, Event Hubs cluster 0개, 삭제 대기 Key Vault 0개](../images/azd-down-cleanup.png)
 

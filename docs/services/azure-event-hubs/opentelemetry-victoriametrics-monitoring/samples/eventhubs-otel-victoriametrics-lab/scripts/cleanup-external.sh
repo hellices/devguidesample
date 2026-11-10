@@ -7,6 +7,14 @@ source "$(dirname "$0")/lib.sh"
 require_commands az azd
 AZURE_SUBSCRIPTION_ID="$(env_value AZURE_SUBSCRIPTION_ID)"
 AZURE_RESOURCE_GROUP="$(env_value AZURE_RESOURCE_GROUP)"
+# A provision that failed before writing outputs still created rg-<env> (main.bicep's naming contract);
+# derive it so azd down can remove that partial, billed deployment instead of stopping here.
+if [[ -z "$AZURE_RESOURCE_GROUP" && -n "$AZURE_SUBSCRIPTION_ID" ]]; then
+  env_name="$(env_value AZURE_ENV_NAME)"
+  [[ -n "$env_name" ]] || die "AZURE_ENV_NAME is empty; cannot derive the resource group"
+  AZURE_RESOURCE_GROUP="rg-$env_name"
+  log "AZURE_RESOURCE_GROUP is not recorded; using $AZURE_RESOURCE_GROUP from the template naming contract"
+fi
 STATE="$(state_dir)"
 # azd down clears provision outputs before postdown runs; keep the target for verify-cleanup.sh.
 # Records from an earlier run never survive: the target is either both values or explicitly none.
@@ -51,6 +59,29 @@ if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]]; then
         --identity-name "$identity" --name "$credential" --yes --output none
       log "deleted federated credential $credential from $identity"
     done
+  fi
+fi
+
+# Premium with EXISTING_DEDICATED_CLUSTER_RESOURCE_ID: the lab granted the gateway Monitoring Reader on a
+# cluster it does not own. Deleting the lab resource group leaves that assignment behind, so remove
+# exactly the assignment the template created (its ID is a provision output) and nothing else there.
+reader_assignment="$(env_value EXISTING_CLUSTER_READER_ASSIGNMENT_ID)"
+if [[ -n "$reader_assignment" ]]; then
+  # ARM may normalize segment casing, so the shape check ignores case.
+  shopt -s nocasematch
+  [[ "$reader_assignment" =~ ^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.EventHub/clusters/[^/]+/providers/Microsoft\.Authorization/roleAssignments/[0-9a-f-]{36}$ ]] \
+    || die "unexpected EXISTING_CLUSTER_READER_ASSIGNMENT_ID: $reader_assignment"
+  shopt -u nocasematch
+  reader_scope="${reader_assignment%/providers/Microsoft.Authorization/roleAssignments/*}"
+  reader_name="${reader_assignment##*/}"
+  reader_subscription="$(cut -d/ -f3 <<<"$reader_assignment")"
+  # Match the assignment GUID (its name) rather than the full ID, whose casing ARM may normalize.
+  reader_count="$(az role assignment list --subscription "$reader_subscription" --scope "$reader_scope" \
+    --query "[?name=='$reader_name'] | length(@)" -o tsv)" || die "could not look up $reader_assignment"
+  if [[ "$reader_count" != "0" ]]; then
+    az role assignment delete --subscription "$reader_subscription" --ids "$reader_assignment" --output none \
+      || die "could not delete $reader_assignment"
+    log "deleted the gateway Monitoring Reader assignment on the existing Dedicated cluster"
   fi
 fi
 

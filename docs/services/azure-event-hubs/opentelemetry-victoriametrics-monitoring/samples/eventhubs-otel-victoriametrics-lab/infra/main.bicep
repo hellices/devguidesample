@@ -172,6 +172,7 @@ output AKS_OIDC_ISSUER string = compute.outputs.aksOidcIssuer
 output CHECKPOINT_ACCOUNT_URL string = foundation.outputs.storageBlobEndpoint
 output VMSINGLE_PRIVATE_IP string = foundation.outputs.vmSinglePrivateIp
 output EXISTING_DEDICATED_CLUSTER_RESOURCE_ID string = existingDedicatedClusterResourceId
+output EXISTING_CLUSTER_READER_ASSIGNMENT_ID string = existingClusterReader.?outputs.roleAssignmentId ?? ''
 output EVENTHUBS_SKU string = eventHubsSku
 output TELEMETRY_LOGS_EVENTHUB_NAME string = messaging.outputs.telemetryLogsEventHubName
 output MANAGED_GRAFANA_NAME string = grafana.?outputs.name ?? ''

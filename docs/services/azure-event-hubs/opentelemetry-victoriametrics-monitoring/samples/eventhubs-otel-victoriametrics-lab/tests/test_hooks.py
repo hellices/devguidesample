@@ -942,6 +942,64 @@ def test_predown_never_leaves_an_earlier_target_for_postdown(fake_bin):
     assert "group exists" not in log.read_text()
 
 
+def test_predown_derives_the_group_when_provision_failed_before_writing_outputs(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$*" == "group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-unit -o tsv" ]]; '
+                'then echo true; exit 0; fi; if [[ "$1 $2" == "identity list" ]]; then exit 0; fi; '
+                'echo "unexpected az call: $*" >&2; exit 97')
+    # Only the subscription is recorded: the outputs (including AZURE_RESOURCE_GROUP) were never saved.
+    write("azd", 'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; *) exit 1;; esac')
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode == 0, result.stderr
+    state = bin_dir.parent / "state" / "unit"
+    assert (state / "down-resource-group").read_text() == "rg-unit\n"
+    assert (state / "down-subscription").read_text() == "00000000-0000-0000-0000-000000000000\n"
+
+
+READER_ID = ("/subscriptions/22222222-2222-2222-2222-222222222222/resourceGroups/rg-existing/providers/"
+             "Microsoft.EventHub/clusters/ehc-existing/providers/Microsoft.Authorization/roleAssignments/"
+             "33333333-3333-3333-3333-333333333333")
+
+
+@pytest.mark.parametrize("present", [True, False])
+def test_predown_removes_only_the_lab_reader_assignment_on_an_existing_cluster(fake_bin, present):
+    bin_dir, log, write = fake_bin
+    scope = READER_ID.split("/providers/Microsoft.Authorization/")[0]
+    write("az", (
+        'args="$*"\n'
+        'case "$args" in\n'
+        '  "group exists "*) echo false;;\n'
+        f'  "role assignment list --subscription 22222222-2222-2222-2222-222222222222 --scope {scope} '
+        f'--query [?name==\'33333333-3333-3333-3333-333333333333\'] | length(@) -o tsv") echo {1 if present else 0};;\n'
+        f'  "role assignment delete --subscription 22222222-2222-2222-2222-222222222222 --ids {READER_ID} --output none") ;;\n'
+        '  *) echo "unexpected az call: $args" >&2; exit 97;;\n'
+        'esac'
+    ))
+    write("azd", AZD_CLEANUP_ENV.replace("*) exit 1;;", f"EXISTING_CLUSTER_READER_ASSIGNMENT_ID) echo {READER_ID};; *) exit 1;;"))
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode == 0, result.stderr
+    deletes = [c for c in log.read_text().splitlines() if "role assignment delete" in c]
+    assert deletes == ([f"az role assignment delete --subscription 22222222-2222-2222-2222-222222222222 --ids {READER_ID} --output none"]
+                       if present else [])
+
+
+def test_predown_refuses_a_reader_assignment_id_of_another_shape(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; exit 0; fi; exit 97')
+    other = "/subscriptions/2/resourceGroups/rg/providers/Microsoft.Authorization/roleAssignments/33333333-3333-3333-3333-333333333333"
+    write("azd", AZD_CLEANUP_ENV.replace("*) exit 1;;", f"EXISTING_CLUSTER_READER_ASSIGNMENT_ID) echo {other};; *) exit 1;;"))
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode != 0
+    assert "unexpected EXISTING_CLUSTER_READER_ASSIGNMENT_ID" in result.stderr
+    assert "role assignment delete" not in log.read_text()
+
+
 def test_predown_refuses_a_half_known_target(fake_bin):
     bin_dir, _, write = fake_bin
     write("az", "exit 0")
@@ -1011,6 +1069,13 @@ def test_managed_grafana_is_wired_only_when_enabled_and_approves_only_its_own_co
     # The Private Link Service is open to every subscription, so only this request may be approved.
     assert "privateLinkServiceConnectionState.status=='Pending' && privateLinkServiceConnectionState.description=='$REQUEST_MESSAGE'" in text
     assert '--request-message "$REQUEST_MESSAGE"' in text
+    # A requester picks its own message, so the message carries a secret per-environment nonce that is
+    # generated once, kept only in the local azd environment, and reused on reruns.
+    assert 'REQUEST_MESSAGE="eventhubs-lab ${AZURE_ENV_NAME} managed grafana ${REQUEST_NONCE}"' in text
+    assert 'REQUEST_NONCE="$(env_value MANAGED_GRAFANA_REQUEST_NONCE)"' in text
+    assert 'REQUEST_NONCE="$(openssl rand -hex 16)"' in text
+    assert 'azd_env set MANAGED_GRAFANA_REQUEST_NONCE "$REQUEST_NONCE"' in text
+    assert text.index('REQUEST_MESSAGE=') < text.index("az grafana managed-private-endpoint create")
     # The data source keeps the Gateway Grafana uid so the agent dashboard works unchanged.
     assert '"uid": "victoriametrics"' in text and 'http://{sys.argv[1]}:8428' in text
     assert 'die "managed private endpoint $MPE_NAME was not approved' in text
