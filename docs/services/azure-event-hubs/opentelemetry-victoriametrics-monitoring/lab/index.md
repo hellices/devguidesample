@@ -56,7 +56,7 @@ topic_order: 1
 
 # Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
 
-이 실습은 [Event Hubs 지표·consumer lag 수집 topic](../index.md)의 구성을
+이 실습은 [Event Hubs 지표 수집 방식 비교 topic](../index.md)의 구성을
 [`eventhubs-otel-victoriametrics-lab`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab)
 sample로 재현합니다. 아래 결과와 화면은 2026-11-09 UTC에 실제 구독에서 실행한
 기록이며, 구독 ID·resource 이름의 고유 suffix·IP는 가상 값으로 바꿨습니다.

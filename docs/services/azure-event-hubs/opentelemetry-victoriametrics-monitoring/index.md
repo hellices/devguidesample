@@ -1,6 +1,6 @@
 ---
-title: "Event Hubs 지표 수집 방식 비교·consumer lag — OpenTelemetry Collector·VictoriaMetrics"
-description: Event Hubs 플랫폼 지표를 외부 VictoriaMetrics로 수집하는 방식(Azure Monitor Metrics API pull, Prometheus exporter, Diagnostic Settings 스트림, Azure 내부 저장)을 장단점과 함께 비교하고, OpenTelemetry Collector로 직접 배포해 Azure Monitor 조회값과 분 단위로 대조한 결과입니다. 내부 event(message) 쪽 신호인 consumer lag, application metrics log, runtime audit log, 분산 추적은 보조 신호로 정리합니다.
+title: "Event Hubs 지표 수집 방식 비교 — OpenTelemetry Collector·VictoriaMetrics"
+description: Event Hubs 플랫폼 지표를 외부 VictoriaMetrics로 수집하는 방식(Azure Monitor Metrics API pull, Prometheus exporter, Diagnostic Settings 스트림, Azure 내부 저장)을 장단점과 함께 비교하고, OpenTelemetry Collector로 직접 배포해 Azure Monitor 조회값과 분 단위로 대조한 결과입니다.
 document_type: guide
 services:
 - azure-event-hubs
@@ -59,33 +59,27 @@ applies_to:
 - VictoriaMetrics Operator 0.75.2, VictoriaMetrics v1.155.0, Grafana OSS 13.3.0
 ---
 
-# Event Hubs 지표 수집 방식 비교·consumer lag — OpenTelemetry Collector·VictoriaMetrics
+# Event Hubs 지표 수집 방식 비교 — OpenTelemetry Collector·VictoriaMetrics
 
-## 모니터링 대상과 수집 방식: Event Hubs 지표 5가지·내부 event 보조 신호 { #message }
+## Event Hubs 지표 수집 방식 5가지와 실측 비교 { #message }
 
-Event Hubs 모니터링 신호는 두 갈래이며, 이 topic의 목표는 첫째인 **Event Hubs 플랫폼
-지표**를 외부 VictoriaMetrics로 수집하는 것입니다. namespace의 CPU·memory·요청·처리량
-같은 지표는 Azure Monitor가 자동으로 수집하므로, 남은 선택은 그 지표를 어떤 방식으로
-꺼내 오느냐입니다. 둘째인 **내부 event(message)** 신호, 즉 consumer가 얼마나 밀렸는지와
-메시지가 어디로 흘렀는지는 플랫폼 지표에 없으므로 별도 방식으로 보완합니다.
+이 topic의 목표는 Event Hubs 플랫폼 지표를 외부 VictoriaMetrics로 수집하는 것입니다.
+namespace의 CPU·memory·요청·처리량 같은 지표는 Azure Monitor가 자동으로 수집하므로,
+남은 선택은 그 지표를 어떤 방식으로 꺼내 오느냐입니다.
 
-| 대상 | 방식 | 데이터 경로 | 이 topic의 검증 |
-|---|---|---|---|
-| Event Hubs 지표 | ① Azure Monitor 직접 조회 | Metrics explorer·지표 경고·Grafana Azure Monitor data source가 Azure Monitor를 바로 조회 | 비교 기준값으로만 사용 |
-| Event Hubs 지표 | ② Metrics API pull — OpenTelemetry `azuremonitorreceiver` | Collector가 Azure Monitor Metrics API 조회 → VictoriaMetrics | 실측, 주 경로 |
-| Event Hubs 지표 | ③ Metrics API pull — `azure-metrics-exporter` | Prometheus exporter가 Metrics API 조회 → Collector scrape → VictoriaMetrics | 실측, 대체 경로(첫 환경) |
-| Event Hubs 지표 | ④ Diagnostic Settings → Event Hub 스트림 | 지표를 telemetry Event Hub로 내보냄 → Collector `azureeventhubreceiver` → VictoriaMetrics | 실측, 보조 경로 |
-| Event Hubs 지표 | ⑤ Diagnostic Settings → Log Analytics·Storage | 지표를 Azure 안의 로그 저장소에 보관 | 문서 기반, 미검증 |
-| 내부 event | checkpoint 기반 consumer lag | lag exporter가 partition 마지막 sequence와 checkpoint를 비교 | 실측 |
-| 내부 event | `ApplicationMetricsLogs`·`RuntimeAuditLogs`·분산 추적 | Diagnostic Settings 로그, SDK가 이벤트에 넣는 추적 ID | 문서 기반, 미검증 |
+| 방식 | 데이터 경로 | 이 topic의 검증 |
+|---|---|---|
+| ① Azure Monitor 직접 조회 | Metrics explorer·지표 경고·Grafana Azure Monitor data source가 Azure Monitor를 바로 조회 | 비교 기준값으로만 사용 |
+| ② Metrics API pull — OpenTelemetry `azuremonitorreceiver` | Collector가 Azure Monitor Metrics API 조회 → VictoriaMetrics | 실측, 주 경로 |
+| ③ Metrics API pull — `azure-metrics-exporter` | Prometheus exporter가 Metrics API 조회 → Collector scrape → VictoriaMetrics | 실측, 대체 경로(첫 환경) |
+| ④ Diagnostic Settings → Event Hub 스트림 | 지표를 telemetry Event Hub로 내보냄 → Collector `azureeventhubreceiver` → VictoriaMetrics | 실측, 보조 경로 |
+| ⑤ Diagnostic Settings → Log Analytics·Storage | 지표를 Azure 안의 로그 저장소에 보관 | 문서 기반, 미검증 |
 
-방식별 장단점은 [Event Hubs 지표 수집 방식](#metrics)에, 내부 event 신호는
-[내부 event(message) 모니터링](#events)에 정리했습니다. 실습에서는 ②·③·④와 checkpoint
-lag를 하나의 OpenTelemetry Collector로 모아 같은 조건에서 비교했습니다.
+방식별 장단점과 선택 기준은 [Event Hubs 지표 수집 방식](#metrics)에 정리했습니다.
+실습에서는 ②·③·④를 하나의 OpenTelemetry Collector로 모아 같은 조건에서 비교했습니다.
 
-1. **Collector가 지표와 lag를 함께 수집합니다.** ②는 Managed Identity로 Metrics API를
-   조회하고, ④는 Diagnostic Settings가 Event Hub로 보낸 지표를 읽습니다. lag exporter는
-   partition별 lag를 계산합니다.
+1. **Collector가 여러 수집 방식을 함께 실행합니다.** ②는 Managed Identity로 Metrics API를
+   조회하고, ④는 Diagnostic Settings가 Event Hub로 보낸 지표를 읽습니다.
 2. **source마다 두 전달 경로로 fan-out합니다.** 같은 receiver 출력을 Prometheus
    exporter(VMAgent가 scrape)와 Prometheus remote write로 동시에 보내고,
    `source_path`·`delivery_path` label로 구분합니다.
@@ -94,8 +88,8 @@ lag를 하나의 OpenTelemetry Collector로 모아 같은 조건에서 비교했
    렌더링한 화면을 캡처해 직접 확인합니다.
 
 아래는 새 환경에서 `azd up` 한 번으로 배포한 뒤, 2026-11-09 19:35–20:00 UTC에 Premium
-1 PU namespace로 producer 200 events/s 부하를 10분 주고 느린 consumer가 회복하는
-과정을 그대로 캡처한 대시보드입니다. 수치와 화면은 모두 실제 배포에서 나왔습니다.
+1 PU namespace로 producer 200 events/s 부하를 10분 준 구간을 캡처한 대시보드입니다.
+수치와 화면은 모두 실제 배포에서 나왔습니다.
 
 ![Event Hubs 관측 대시보드. Premium CPU·Memory gauge와 추이, 요청 1,533건과 throttle 0건 stat, Outgoing Requests 미지원 안내, PU당 분당 message·byte 막대, partition별 peak lag 10,700–10,880건과 누적 lag 영역, checkpoint 존재 표, source_path·delivery_path별 series 수와 분당 sample 수 표, Diagnostic Settings series 178개, scrape와 remote write의 IncomingMessages 시차, API와 Diagnostic Settings의 IncomingMessages·CPU 비교, Collector 실패 0건](images/grafana-dashboard.png)
 
@@ -132,7 +126,7 @@ Azure Monitor는 플랫폼 지표를 별도 설정 없이 수집해 93일 동안
 | 방식 | 장점 | 단점 |
 |---|---|---|
 | ① Azure Monitor 직접 조회 | 수집 인프라가 없음. dimension 필터·분할, 지표 경고를 바로 사용. Grafana Azure Monitor data source로도 조회 | 데이터가 Azure Monitor에 남아 VictoriaMetrics의 다른 지표와 한 저장소·한 query로 다룰 수 없음. 보관 93일 |
-| ② Metrics API pull — `azuremonitorreceiver` | 모든 플랫폼 지표와 dimension 분할을 그대로 수집. 지연이 가장 짧음(실측 194–213초). 원본 분 bin timestamp를 유지해 remote write 합계가 Azure Monitor와 25/25분 일치. namespace 범위 Monitoring Reader로 동작. lag 등 다른 신호와 같은 Collector에서 처리 | 조회 대상이 늘면 Metrics API 호출이 늘어 throttling 위험. 호출을 묶는 `metrics:getBatch`는 구독 범위 Monitoring Reader가 필요(namespace 범위에서 403 실측). dimension 분할 조회는 값이 없는 동안 series가 없어(`ThrottledRequests` 실측) 0이 필요한 지표는 분할을 끄는 설정 필요 |
+| ② Metrics API pull — `azuremonitorreceiver` | 모든 플랫폼 지표와 dimension 분할을 그대로 수집. 지연이 가장 짧음(실측 194–213초). 원본 분 bin timestamp를 유지해 remote write 합계가 Azure Monitor와 25/25분 일치. namespace 범위 Monitoring Reader로 동작. 다른 Prometheus 지표와 같은 Collector에서 처리 | 조회 대상이 늘면 Metrics API 호출이 늘어 throttling 위험. 호출을 묶는 `metrics:getBatch`는 구독 범위 Monitoring Reader가 필요(namespace 범위에서 403 실측). dimension 분할 조회는 값이 없는 동안 series가 없어(`ThrottledRequests` 실측) 0이 필요한 지표는 분할을 끄는 설정 필요 |
 | ③ Metrics API pull — `azure-metrics-exporter` | Prometheus scrape 설정만으로 구성하고 dimension, 리소스 탐색·조회 결과 캐시, Azure API rate limit 지표를 제공. OpenTelemetry receiver를 쓰지 않는 Prometheus 중심 환경의 대안. 실측에서 Premium 지표 27개 series를 두 전달 경로로 저장 | 운영할 컴포넌트가 하나 늘고 ②와 같은 Metrics API 호출·권한 제약을 그대로 가짐. 이 실습은 resource group 범위로 찾은 namespace 중 Premium만 남기려고 namespace 이름 relabel 필터를 따로 둠 |
 | ④ Diagnostic Settings → Event Hub 스트림 | Metrics API를 polling하지 않는 push 방식. 리소스 로그와 같은 스트림으로 외부 시스템에 연동. 실측 합계는 Azure Monitor와 일치 | 내보내기(DS Export) 가능한 지표만 대상이고 dimension을 합친 값만 전달. 0값만 내보내는 동안 export 간격이 늘어나(비활성 1시간 뒤 15분, 7일 뒤 최대 2시간) 값이 있는 분만 도착. 설정 후 최대 90분 지연(실측 20–55분 이상), 평소 지연 434–513초. 원본과 같은 리전의 Event Hub와 telemetry namespace 비용 필요 |
 | ⑤ Diagnostic Settings → Log Analytics·Storage | Log Analytics에서 KQL로 리소스 로그와 결합. Storage는 저렴하게 장기 보관 | ④와 같은 export 제약(내보내기 가능 지표, dimension 평탄화, 설정 지연). 외부 TSDB로 옮기려면 다시 내보내야 함 |
@@ -267,11 +261,12 @@ Premium과 Dedicated는 수집 구조가 같아도 용량 단위와 CPU·memory 
 대시보드는 처리량을 `$pu` 변수로 나눠 PU당 값으로 보여 주며, Dedicated profile에서는
 가용 메모리 gauge의 threshold 방향을 반대로 둡니다.
 
-## 내부 event(message) 모니터링: consumer lag·runtime log·분산 추적 { #events }
+## 선택 항목 — 내부 event(message) 모니터링: consumer lag·runtime log·분산 추적 { #events }
 
-플랫폼 지표는 namespace가 받은·내보낸 양만 보여 주므로, consumer가 처리하지 못하고 쌓인
-양이나 개별 메시지의 흐름은 별도 신호로 봅니다. 이 topic은 checkpoint 기반 consumer lag만
-실측했고, 나머지는 선택지로 정리합니다.
+이 절은 지표 수집과 별개인 선택 항목입니다. 플랫폼 지표는 namespace가 받은·내보낸 양만
+보여 주므로, consumer가 처리하지 못하고 쌓인 양이나 개별 메시지의 흐름이 필요하면 별도
+신호를 더합니다. 이 topic은 checkpoint 기반 consumer lag만 실측했고, 나머지는 선택지로
+정리합니다.
 
 | 신호 | 내용 | 조건·주의 |
 |---|---|---|
