@@ -513,6 +513,9 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 복구 대기 query가 무기한 멈추거나 제한 시간 뒤 관측을 복구로 기록, postdown이 기록된 resource group 대신 현재 환경값을 확인 | query마다 남은 시간 이내의 timeout, 제한 시간 안의 관측만 복구로 기록, predown 기록을 우선하고 다르면 실패 |
 | `DS Event Hub series` stat이 두 전달 경로의 복제본을 함께 셈 | remote write 경로 하나만 셈 |
 | panel 검증이 "Both" query의 range 실행을 빠뜨리거나 JSON이 아닌 응답에서 중단 | 두 flag를 그대로 전달하고, 형식 오류도 `error`로 기록 |
+| 복구 판정이 수집이 멈춘 뒤 남은 마지막 lag 값을 현재 값으로 사용할 수 있음 | 최근 120초 안의 sample만 쓰는 query(`time() - timestamp(...) < 120`)로 바꾸고, 최종 lag도 유효한 값이어야 완료. 로컬 VictoriaMetrics v1.155.0에서 오래된 series만 있으면 빈 결과, 새 series가 있으면 그 값만 반환함을 확인 |
+| postdown이 현재 환경의 subscription으로 기록된 resource group을 조회, 빈 client ID로 identity 조회 | predown이 subscription도 기록하고 다르면 실패, client ID가 없는 identity는 건너뜀 |
+| 캡처 health 요청에 timeout이 없고 없는 `viewPanel`도 통과, Gateway readiness `curl`에 timeout 없음 | 15초 timeout, panel tree에서 `viewPanel` id 확인, `curl --max-time` 지정 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

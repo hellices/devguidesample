@@ -14,6 +14,12 @@ if [[ -f "$STATE/down-resource-group" ]]; then
     || die "predown recorded $recorded but the environment now targets $AZURE_RESOURCE_GROUP"
   AZURE_RESOURCE_GROUP="$recorded"
 fi
+if [[ -f "$STATE/down-subscription" ]]; then
+  recorded_subscription="$(<"$STATE/down-subscription")"
+  [[ -z "$AZURE_SUBSCRIPTION_ID" || "$AZURE_SUBSCRIPTION_ID" == "$recorded_subscription" ]] \
+    || die "predown recorded subscription $recorded_subscription but the environment now uses $AZURE_SUBSCRIPTION_ID"
+  AZURE_SUBSCRIPTION_ID="$recorded_subscription"
+fi
 [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] || die "no resource group recorded to verify"
 
 for attempt in $(seq 1 60); do
@@ -22,7 +28,7 @@ for attempt in $(seq 1 60); do
     || die "could not query resource group $AZURE_RESOURCE_GROUP"
   if [[ "$exists" == "false" ]]; then
     log "resource group $AZURE_RESOURCE_GROUP no longer exists"
-    rm -f "$STATE/down-resource-group"
+    rm -f "$STATE/down-resource-group" "$STATE/down-subscription"
     exit 0
   fi
   if [[ "$attempt" -lt 60 ]]; then sleep 20; fi

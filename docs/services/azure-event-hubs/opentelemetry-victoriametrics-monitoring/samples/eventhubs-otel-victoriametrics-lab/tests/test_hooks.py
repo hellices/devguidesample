@@ -30,7 +30,8 @@ def test_hooks_exist_and_are_executable():
 
 
 AZ_CALL = re.compile(r"(?:^|\$\(|[\s;|&(])az\s+([a-z-]+(?:\s+[a-z-]+)?)")
-COMMAND_END = re.compile(r"\)|;|&&|\|")
+# A lone "&" (background) ends a command too; "&&", "2>&1" and "&>" are not lone ampersands.
+COMMAND_END = re.compile(r"\)|;|&&|\||(?<![&>])&(?![&>])")
 
 
 def _az_calls(line: str) -> list[tuple[str, str]]:
@@ -44,8 +45,12 @@ def _az_calls(line: str) -> list[tuple[str, str]]:
 
 
 def test_az_call_segments_do_not_borrow_options_from_the_next_command():
-    calls = _az_calls('az group delete -n "$rg"; az group show -n "$rg" --subscription "$sub"')
-    assert [("--subscription" in segment) for _, segment in calls] == [False, True]
+    for separator in (";", " &", " &&", " |"):
+        calls = _az_calls(f'az group delete -n "$rg"{separator} az group show -n "$rg" --subscription "$sub"')
+        assert [("--subscription" in segment) for _, segment in calls] == [False, True], separator
+    # Redirections keep the rest of the command in the same segment.
+    [(_, segment)] = _az_calls('az group show -n "$rg" 2>&1 --subscription "$sub"')
+    assert "--subscription" in segment
 
 
 def test_azure_cli_calls_pin_the_subscription():
@@ -164,15 +169,16 @@ AZD_CLEANUP_ENV = (
 # Exactly the lookups and deletes cleanup may make; anything else (for example deleting an
 # identity, or touching an unrelated identity) is rejected with exit 97.
 AZ_CLEANUP = (
-    'args="$*"\n'
+    'args="$*"; SUB=00000000-0000-0000-0000-000000000000\n'
     'case "$args" in\n'
-    '  "group exists --subscription "*" -n rg-example") echo true;;\n'
-    '  "identity list "*"clientId==\'client-producer\'"*) echo id-producer;;\n'
-    '  "identity list "*"clientId==\'client-consumer\'"*) echo id-consumer;;\n'
-    '  "identity federated-credential list "*"--identity-name id-producer "*) echo aks-eventhubs-producer;;\n'
-    '  "identity federated-credential list "*"--identity-name id-consumer "*) echo aks-eventhubs-slow-consumer;;\n'
-    '  "identity federated-credential delete "*"--identity-name id-producer --name aks-eventhubs-producer --yes"*) ;;\n'
-    '  "identity federated-credential delete "*"--identity-name id-consumer --name aks-eventhubs-slow-consumer --yes"*) ;;\n'
+    # Every allowed call is matched in full, including the exact subscription and resource group.
+    '  "group exists --subscription $SUB -n rg-example") echo true;;\n'
+    '  "identity list --subscription $SUB -g rg-example --query [?clientId==\'client-producer\'].name | [0] -o tsv") echo id-producer;;\n'
+    '  "identity list --subscription $SUB -g rg-example --query [?clientId==\'client-consumer\'].name | [0] -o tsv") echo id-consumer;;\n'
+    '  "identity federated-credential list --subscription $SUB -g rg-example --identity-name id-producer --query [?name==\'aks-eventhubs-producer\'].name -o tsv") echo aks-eventhubs-producer;;\n'
+    '  "identity federated-credential list --subscription $SUB -g rg-example --identity-name id-consumer --query [?name==\'aks-eventhubs-slow-consumer\'].name -o tsv") echo aks-eventhubs-slow-consumer;;\n'
+    '  "identity federated-credential delete --subscription $SUB -g rg-example --identity-name id-producer --name aks-eventhubs-producer --yes --output none") ;;\n'
+    '  "identity federated-credential delete --subscription $SUB -g rg-example --identity-name id-consumer --name aks-eventhubs-slow-consumer --yes --output none") ;;\n'
     '  *) echo "unexpected az call: $args" >&2; exit 97;;\n'
     'esac'
 )
@@ -598,6 +604,9 @@ def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, 
     restarts = [i for i, c in enumerate(calls) if c == "docker compose restart grafana"]
     assert bool(restarts) is renewed
     if renewed:
+        # Restart only after the new certificate exists and the containers are up.
+        renewal = next(i for i, c in enumerate(calls) if c.startswith("openssl req"))
+        assert renewal < restarts[0]
         assert restarts[0] > calls.index("docker compose up -d --remove-orphans")
 
 
@@ -707,3 +716,39 @@ def test_vm_query_start_fails_when_its_forward_exits_while_another_listener_answ
 
     assert result.returncode != 0
     assert "exited before becoming ready" in result.stderr
+
+
+def test_cleanup_skips_an_identity_whose_client_id_is_unknown(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", AZ_CLEANUP)
+    # The producer client ID is missing; cleanup must not look up "eventhubs-producer" as a client ID.
+    write("azd", AZD_CLEANUP_ENV.replace("PRODUCER_CLIENT_ID) echo client-producer;; ", ""))
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode == 0, result.stderr
+    deletes = [c for c in log.read_text().splitlines() if "federated-credential delete" in c]
+    assert len(deletes) == 1 and "--identity-name id-consumer" in deletes[0]
+
+
+def test_postdown_checks_the_subscription_predown_recorded(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+    write("azd", AZD_CLEANUP_ENV)
+    assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+
+    write("azd", AZD_CLEANUP_ENV.replace("00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111"))
+    result = _run("verify-cleanup.sh", bin_dir)
+
+    assert result.returncode != 0
+    assert "predown recorded subscription 00000000-0000-0000-0000-000000000000" in result.stderr
+    assert "--subscription 11111111" not in log.read_text()
+
+
+def test_scenario_counts_only_fresh_lag_samples():
+    text = (SCRIPTS / "run-scenario.sh").read_text()
+    # A stopped exporter leaves its last value queryable; only samples newer than 120 s count.
+    assert 'query=max($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)' in text
+    final = text.index('FINAL_LAG="$(max_lag)"')
+    assert final < text.index('SCENARIO_END="$(now)"', final)
+    assert '[[ "$FINAL_LAG" -ge 0 ]] || die' in text

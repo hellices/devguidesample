@@ -117,9 +117,11 @@ def field(unit: str = "short", steps=None, decimals=None, no_value=None, **custo
 
 
 def build_dashboard(probe: dict) -> dict:
-    pu = int(probe.get("processing_units", 1))
-    if pu <= 0:
-        raise ValueError(f"processing_units must be a positive integer, got {pu}")
+    raw_pu = probe.get("processing_units", 1)
+    # Reject 1.5 or True instead of silently truncating them into a different capacity.
+    if isinstance(raw_pu, bool) or not isinstance(raw_pu, int) or raw_pu <= 0:
+        raise ValueError(f"processing_units must be a positive integer, got {raw_pu!r}")
+    pu = raw_pu
     layout = Layout()
     panels: list[dict] = []
     green_only = thresholds(("green", None))

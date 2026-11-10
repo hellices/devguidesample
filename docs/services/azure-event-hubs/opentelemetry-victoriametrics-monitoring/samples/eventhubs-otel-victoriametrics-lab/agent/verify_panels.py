@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import http.client
 import json
 import math
 import os
@@ -118,7 +119,14 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
                     entry.update(rows=rows, finite_values=finite, newest_ms=newest)
                     entry["status"] = "pass" if rows and finite else "empty"
             except urllib.error.HTTPError as error:
-                entry.update(status="error", error=f"HTTP {error.code}: {error.read()[:300]!r}")
+                try:
+                    detail = repr(error.read()[:300])
+                except (OSError, http.client.HTTPException) as read_error:
+                    detail = f"body unreadable: {read_error!r}"
+                entry.update(status="error", error=f"HTTP {error.code}: {detail}")
+            except http.client.HTTPException as error:
+                # A truncated body (IncompleteRead) is not an OSError; record it like transport errors.
+                entry.update(status="error", error=f"incomplete response: {error!r}")
             except (ValueError, KeyError, TypeError) as error:
                 # A non-JSON body (JSONDecodeError is a ValueError) or a response without the
                 # expected results is recorded, never raised, like transport errors below.

@@ -77,8 +77,9 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
             entry["label_keys"].add(key)
             if key in SAFE_LABEL_VALUES:
                 entry["values"][key].add(value)
-        # An absent label stays "" so the matcher below (label="") selects exactly those series.
-        path = (labels.get("source_path", ""), labels.get("delivery_path", ""))
+        # Discovery requires source_path; delivery_path may be absent and then stays "", so the
+        # matcher below (delivery_path="") selects exactly those series.
+        path = (labels["source_path"], labels.get("delivery_path", ""))
         entry["paths"].add(path)
         combos[path].add(name)
 

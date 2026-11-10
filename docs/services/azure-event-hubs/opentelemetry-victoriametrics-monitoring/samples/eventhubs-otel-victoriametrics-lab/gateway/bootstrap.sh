@@ -73,8 +73,9 @@ fallback_ready() {
 }
 
 for _ in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:13133/ >/dev/null \
-    && curl -fsS --cacert tls/grafana.crt --resolve "${GATEWAY_PUBLIC_IP}:3000:127.0.0.1" \
+  # Bounded requests keep the loop (30 tries) finite even if a service accepts but never answers.
+  if curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:13133/ >/dev/null \
+    && curl -fsS --connect-timeout 3 --max-time 5 --cacert tls/grafana.crt --resolve "${GATEWAY_PUBLIC_IP}:3000:127.0.0.1" \
       "https://${GATEWAY_PUBLIC_IP}:3000/api/health" >/dev/null \
     && fallback_ready; then
     echo "GATEWAY_READY"

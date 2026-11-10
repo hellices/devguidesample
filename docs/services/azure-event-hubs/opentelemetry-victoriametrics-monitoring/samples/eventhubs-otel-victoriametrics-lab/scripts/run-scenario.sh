@@ -28,10 +28,13 @@ trap cleanup EXIT
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # Called through $(...), where errexit is off: return on failure so the caller's assignment fails
 # instead of querying a port that may belong to another environment.
+# Only series with a sample in the last 120 s count, so a stopped collector can never look like a
+# recovery; with no fresh series the function prints -1.
+LAG_SERIES='eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"}'
 max_lag() {
   "$LAB_ROOT/scripts/vm-query.sh" start || return 1
   curl -fsS --max-time "${1:-30}" "http://127.0.0.1:$PORT/api/v1/query" \
-    --data-urlencode 'query=max(eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"})' \
+    --data-urlencode "query=max($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
 }
 # Scaling to 0 only requests termination; the load ends when the producer pod is gone.
@@ -91,10 +94,11 @@ while [[ $(date +%s) -lt $deadline ]]; do
 done
 # Keep observing for two Azure Monitor minutes so the recovery tail is visible.
 sleep 120
-# Sample the final values together so they describe the same moment as scenario_end.
-SCENARIO_END="$(now)"
+# Take the final readings first, then close the window, so every stored value lies inside it.
 FINAL_LAG="$(max_lag)"
 CONSUMER_PROCESSED="$(last_log_value eventhubs-slow-consumer processed_total)"
+SCENARIO_END="$(now)"
+[[ "$FINAL_LAG" -ge 0 ]] || die "no fresh lag sample at the end of the scenario"
 
 # Serialize with Python so absent values become JSON null rather than the string "null".
 python3 - "$EVIDENCE/scenario.json" <<PY

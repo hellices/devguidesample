@@ -46,12 +46,19 @@ def test_azure_yaml_declares_lifecycle_hooks_without_local_docker_service():
     assert all(spec["continueOnError"] is False for spec in project["hooks"].values())
 
 
+def _bicep_code(text):
+    """Bicep source without block or line comments, so commented-out declarations never count."""
+    return re.sub(r"(?m)//.*$", "", re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL))
+
+
 def test_main_bicep_never_creates_a_dedicated_cluster():
-    text = (LAB_ROOT / "infra" / "main.bicep").read_text()
+    text = _bicep_code((LAB_ROOT / "infra" / "main.bicep").read_text())
 
     assert "targetScope = 'subscription'" in text
-    assert "param existingDedicatedClusterResourceId string = ''" in text
-    assert "Microsoft.EventHub/clusters@" not in text
+    assert re.search(r"(?m)^param existingDedicatedClusterResourceId string = ''$", text)
+    # main.bicep deploys local modules, so every Bicep file is checked, case-insensitively.
+    for path in (LAB_ROOT / "infra").rglob("*.bicep"):
+        assert "microsoft.eventhub/clusters@" not in path.read_text().lower(), path.name
 
 
 def test_main_bicep_exports_hook_contract():
@@ -86,10 +93,7 @@ def test_main_bicep_exports_hook_contract():
 
 
 def _declared_outputs(text):
-    # Drop block and line comments first, so commented-out outputs never count as declared.
-    code = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    code = re.sub(r"(?m)//.*$", "", code)
-    return dict(re.findall(r"^output (\w+) string = (.+?)\s*$", code, re.MULTILINE))
+    return dict(re.findall(r"^output (\w+) string = (.+?)\s*$", _bicep_code(text), re.MULTILINE))
 
 
 def test_commented_outputs_are_not_declared():
@@ -117,4 +121,4 @@ def test_main_parameters_map_azd_environment_values():
 
     main = (LAB_ROOT / "infra" / "main.bicep").read_text()
     for parameter in ("operatorEgressCidr", "grafanaAdminPassword", "gatewayAdminSshPublicKey"):
-        assert f"param {parameter} string = ''" in main
+        assert re.search(rf"(?m)^param {parameter} string = ''$", _bicep_code(main)), parameter

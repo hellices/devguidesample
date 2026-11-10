@@ -69,10 +69,16 @@ local = `http://127.0.0.1:${proxy.address().port}`;
 
 // Fail before typing credentials if the pinned TLS handshake does not succeed.
 await new Promise((resolve, reject) => {
-  https.get(`${base}/api/health`, { agent }, (response) => {
+  const request = https.get(`${base}/api/health`, { agent }, (response) => {
     response.resume();
     response.statusCode === 200 ? resolve() : reject(new Error(`health returned ${response.statusCode}`));
-  }).on('error', reject);
+  });
+  request.on('error', reject);
+  // A gateway that accepts TLS but never answers must still fail in bounded time.
+  request.setTimeout(15000, () => request.destroy(new Error('Grafana health check timed out')));
+}).catch((error) => {
+  proxy.close();
+  throw error;
 });
 
 async function gotoOk(page, target, options) {
@@ -99,7 +105,16 @@ try {
   if (!uid) throw new Error(`dashboard path must start with /d/<uid>: ${dashboardPath}`);
   const api = await page.request.get(`${local}/api/dashboards/uid/${encodeURIComponent(uid)}`);
   if (!api.ok()) throw new Error(`dashboard ${uid} returned ${api.status()}`);
-  if (!(await api.json()).dashboard?.panels?.length) throw new Error(`dashboard ${uid} has no panels`);
+  const panels = (await api.json()).dashboard?.panels ?? [];
+  if (!panels.length) throw new Error(`dashboard ${uid} has no panels`);
+  // viewPanel must name a real panel (rows included), or Grafana shows a not-found view instead.
+  const viewPanel = new URLSearchParams(dashboardPath.split('?')[1] ?? '').get('viewPanel');
+  if (viewPanel !== null) {
+    const ids = [];
+    const walk = (items) => items.forEach((item) => { ids.push(String(item.id)); walk(item.panels ?? []); });
+    walk(panels);
+    if (!ids.includes(viewPanel)) throw new Error(`dashboard ${uid} has no panel ${viewPanel}`);
+  }
 
   const separator = dashboardPath.includes('?') ? '&' : '?';
   const url = `${local}${dashboardPath}${separator}orgId=1&from=${from}&to=${to}&kiosk`;

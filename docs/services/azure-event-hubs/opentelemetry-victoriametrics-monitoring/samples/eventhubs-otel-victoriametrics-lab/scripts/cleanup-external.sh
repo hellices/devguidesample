@@ -9,7 +9,11 @@ AZURE_SUBSCRIPTION_ID="$(env_value AZURE_SUBSCRIPTION_ID)"
 AZURE_RESOURCE_GROUP="$(env_value AZURE_RESOURCE_GROUP)"
 STATE="$(state_dir)"
 # azd down clears provision outputs before postdown runs; keep the target for verify-cleanup.sh.
-[[ -n "$AZURE_RESOURCE_GROUP" ]] && printf '%s\n' "$AZURE_RESOURCE_GROUP" >"$STATE/down-resource-group"
+if [[ -n "$AZURE_RESOURCE_GROUP" ]]; then
+  # A resource group is identified by subscription and name; record both.
+  printf '%s\n' "$AZURE_RESOURCE_GROUP" >"$STATE/down-resource-group"
+  printf '%s\n' "$AZURE_SUBSCRIPTION_ID" >"$STATE/down-subscription"
+fi
 
 # stop succeeds when no forward is recorded, so any failure here is real.
 "$LAB_ROOT/scripts/vm-query.sh" stop || die "could not stop the VMSingle port-forward"
@@ -21,9 +25,12 @@ if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]]; then
   if [[ "$group_exists" == "true" ]]; then
     # Only the (identity, credential) pairs azd-postprovision.sh federate() creates: the identity is
     # resolved by the producer/consumer client ID output, never by scanning the whole group.
-    for pair in "$(env_value PRODUCER_CLIENT_ID) eventhubs-producer" "$(env_value CONSUMER_CLIENT_ID) eventhubs-slow-consumer"; do
-      read -r client_id service_account <<<"$pair"
-      [[ -n "$client_id" && "$service_account" != "$client_id" ]] || continue
+    for service_account in eventhubs-producer eventhubs-slow-consumer; do
+      case "$service_account" in
+        eventhubs-producer) client_id="$(env_value PRODUCER_CLIENT_ID)" ;;
+        *) client_id="$(env_value CONSUMER_CLIENT_ID)" ;;
+      esac
+      [[ -n "$client_id" ]] || continue
       identity="$(az identity list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
         --query "[?clientId=='$client_id'].name | [0]" -o tsv)" || die "could not look up the $service_account identity"
       [[ -n "$identity" ]] || continue

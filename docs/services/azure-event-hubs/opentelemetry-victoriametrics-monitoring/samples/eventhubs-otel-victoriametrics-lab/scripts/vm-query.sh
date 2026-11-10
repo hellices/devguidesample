@@ -60,10 +60,12 @@ case "${1:-start}" in
     # so the recorded PID is the forward process that stop must terminate.
     kubectl --kubeconfig "$STATE/kubeconfig" port-forward -n eventhubs-observability svc/vmsingle-lab \
       "$PORT:8428" >"$STATE/port-forward.log" 2>&1 &
-    echo $! >"$STATE/port-forward.pid"
+    pid=$!
+    # Until readiness is confirmed, an interrupt must not leave an untracked forward behind.
+    trap 'kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rm -f "$STATE"/port-forward.{pid,port,started}' EXIT
+    echo "$pid" >"$STATE/port-forward.pid"
     printf '%s\n' "$PORT" >"$STATE/port-forward.port"
-    ps -p "$!" -o lstart= >"$STATE/port-forward.started"
-    pid="$(<"$STATE/port-forward.pid")"
+    ps -p "$pid" -o lstart= >"$STATE/port-forward.started"
     for attempt in $(seq 1 20); do
       # A forward that exited (for example, it could not bind) is a failure even if another
       # listener answers on the port.
@@ -73,7 +75,10 @@ case "${1:-start}" in
       fi
       # Right after the fork the child may not have exec'd kubectl yet, so ownership is retried
       # together with health instead of failing on the first look.
-      if owned_forward && healthy; then exit 0; fi
+      if owned_forward && healthy; then
+        trap - EXIT
+        exit 0
+      fi
       if [[ "$attempt" -lt 20 ]]; then sleep 1; fi
     done
     stop_forward

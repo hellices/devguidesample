@@ -1,3 +1,4 @@
+import http.client
 import json
 import re
 import sys
@@ -38,8 +39,11 @@ def test_dashboard_answers_required_questions():
 
 
 def test_no_query_hides_missing_series_as_zero():
-    text = json.dumps(build_dashboard({"processing_units": 1}))
-    assert "or vector(0)" not in text
+    exprs = [t["expr"] for p in _panels(build_dashboard({"processing_units": 1})) for t in p.get("targets", [])]
+    # Any spacing or matching modifier (or on() vector (0)) still turns "no data" into 0.
+    zero_fill = re.compile(r"\bor\b(?:\s+on\s*\([^)]*\))?\s*vector\s*\(\s*0(?:\.0*)?\s*\)")
+    assert not [e for e in exprs if zero_fill.search(e)]
+    assert zero_fill.search("x or on() vector (0)") and zero_fill.search("x or vector(0.0)")
 
 
 def _azure_total_targets():
@@ -50,8 +54,10 @@ def _azure_total_targets():
         if "sum_over_time(azure_" in target["expr"]
     ]
     # Each request stat must keep its total; an empty match would make the checks vacuous.
+    references = [name for expr in targets for name, _ in _azure_selectors(expr)]
     for metric in ("incomingrequests", "successfulrequests", "throttledrequests"):
-        assert sum(f"azure_{metric}_total" in expr for expr in targets) == 1, metric
+        # Exactly one reference per total, so an added duplicate term would double the stat.
+        assert sum(name.startswith(f"azure_{metric}_total") for name in references) == 1, metric
     return targets
 
 
@@ -146,7 +152,7 @@ def test_receiver_failures_survive_a_missing_counter():
     exprs = [t["expr"] for p in _panels(build_dashboard({"processing_units": 1}))
              if p.get("title") == "Receiver refused·failed points" for t in p["targets"]]
     assert len(exprs) == 1
-    assert "(refused|failed)" in exprs[0] and " + " not in exprs[0]
+    assert "(refused|failed)" in exprs[0] and "+" not in exprs[0]
 
 
 def test_path_comparison_shows_last_sample_age():
@@ -221,7 +227,7 @@ def test_grafana_client_refuses_redirects_and_plain_http(monkeypatch):
         server.shutdown()
 
 
-@pytest.mark.parametrize("pu", [0, -1])
+@pytest.mark.parametrize("pu", [0, -1, 1.5, True, "2"])
 def test_processing_units_must_be_positive(pu):
     with pytest.raises(ValueError):
         build_dashboard({"processing_units": pu})
@@ -271,16 +277,18 @@ def test_variables_are_substituted_as_whole_tokens(monkeypatch):
     assert report[0]["status"] == "pass"
 
 
-@pytest.mark.parametrize("failure", ["url", "read_timeout", "reset"])
+@pytest.mark.parametrize("failure", ["url", "read_timeout", "reset", "incomplete"])
 def test_connection_failures_are_reported_not_raised(monkeypatch, failure):
     import urllib.error
 
     error = {"url": urllib.error.URLError("timed out"),
              "read_timeout": TimeoutError("timed out"),
-             "reset": ConnectionResetError("connection reset")}[failure]
+             "reset": ConnectionResetError("connection reset"),
+             "incomplete": http.client.IncompleteRead(b"{", 10)}[failure]
     report, _ = _verify_with(monkeypatch, "up", [], query_error=error)
     assert report[0]["status"] == "error"
-    assert ("timed out" if failure != "reset" else "reset") in report[0]["error"]
+    expected = {"reset": "reset", "incomplete": "IncompleteRead"}.get(failure, "timed out")
+    assert expected in report[0]["error"]
 
 
 @pytest.mark.parametrize("target, expected", [

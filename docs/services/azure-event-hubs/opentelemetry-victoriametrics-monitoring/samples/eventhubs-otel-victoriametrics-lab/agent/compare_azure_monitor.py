@@ -51,6 +51,7 @@ def _per_minute(samples: list[tuple[int, float]], off_bin: list[int] | None = No
 
 def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
     expected = [_minute(ts) for ts in range(start, end, 60)]
+    expected_set = set(expected)
     report: dict = {"window": {"from": start, "to": end}, "expected_minutes": len(expected), "metrics": {}}
     for metric in raw.get("value", []):
         name = metric["name"]["value"]
@@ -60,7 +61,7 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
                 if point.get("total") is None:
                     continue  # a bin Azure Monitor has not filled yet is missing, not zero
                 minute = point["timeStamp"][:16]
-                if minute in expected:
+                if minute in expected_set:
                     direct[minute] = direct.get(minute, 0) + point["total"]
         api = 'source_path="azure_monitor_api"'
         off_bin: list[int] = []

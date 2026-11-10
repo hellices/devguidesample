@@ -252,14 +252,47 @@ def test_key_vault_never_sets_purge_protection_false():
     assert "enablePurgeProtection: false" not in FOUNDATION.read_text()
 
 
-def test_data_plane_uses_private_endpoints_only():
-    text = FOUNDATION.read_text()
+def _code(text: str) -> str:
+    """Bicep source without block or line comments."""
+    return re.sub(r"(?m)//.*$", "", re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL))
 
-    assert text.count("publicNetworkAccess: 'Disabled'") == 2
-    assert "privatelink.vaultcore.azure.net" in text
-    assert "privatelink.blob." in text
-    assert "Microsoft.Network/privateEndpoints@" in text
+
+def _resource_block(text: str, symbol: str) -> str:
+    start = re.search(rf"(?m)^resource {symbol} '", text)
+    assert start, symbol
+    end = re.search(r"(?m)^}", text[start.start():])
+    return text[start.start():start.start() + end.end()]
+
+
+def test_data_plane_uses_private_endpoints_only():
+    text = _code(FOUNDATION.read_text())
+
+    # Each data-plane resource is private on its own, not just "two Disabled somewhere".
+    for symbol in ("storage", "keyVault"):
+        block = _resource_block(text, symbol)
+        assert re.findall(r"publicNetworkAccess:\s*'(\w+)'", block) == ["Disabled"], symbol
     assert "virtualNetworkRules" not in text
+
+    # One endpoint per service: exact target, group and DNS zone, all driven by the same list.
+    links = re.findall(
+        r"\{\s*name: '(\w+)'\s*zone: '([^']+)'\s*groupId: '(\w+)'\s*targetId: (\w+)\.id\s*\}",
+        text[text.index("var privateLinks = ["):text.index("]", text.index("var privateLinks = ["))],
+    )
+    assert links == [
+        ("vault", "privatelink.vaultcore.azure.net", "vault", "keyVault"),
+        ("blob", "privatelink.blob.${environment().suffixes.storage}", "blob", "storage"),
+    ]
+    endpoints = _resource_block(text, "privateEndpoints")
+    assert "[for link in privateLinks:" in endpoints
+    assert "privateLinkServiceId: link.targetId" in endpoints
+    assert re.search(r"groupIds: \[\s*link\.groupId\s*\]", endpoints)
+    assert "[for (link, i) in privateLinks:" in _resource_block(text, "privateDnsGroups")
+    assert "[for link in privateLinks:" in _resource_block(text, "privateDnsZones")
+
+
+def test_private_endpoint_check_sees_a_commented_out_setting():
+    text = "resource storage 'x' = {\n  publicNetworkAccess: 'Enabled' // publicNetworkAccess: 'Disabled'\n}\n"
+    assert re.findall(r"publicNetworkAccess:\s*'(\w+)'", _resource_block(_code(text), "storage")) == ["Enabled"]
 
 
 def _role_assignments(text: str) -> list[tuple[str, str, str]]:
