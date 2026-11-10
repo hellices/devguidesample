@@ -121,8 +121,9 @@ panel 간 합계가 1분 bin만큼 어긋날 수 있습니다. 문서에 쓸 캡
 
 `kql.sh`는 `az monitor app-insights query`의 기본 범위인 최근 1시간만 조회합니다.
 지난 구간을 볼 때는 `KQL_OFFSET=12h $SKILL/kql.sh ...`처럼 늘립니다. `capture.mjs`는
-token을 Grafana origin에만 보내고, 내부 scroll 높이에 맞춰 viewport를 늘리며,
-panel 로딩이 60초를 넘으면 실패로 종료합니다.
+token을 Grafana origin에만 보내고 출력에서 가리며, 내부 scroll 높이에 맞춰 viewport를
+늘립니다. panel 로딩이 60초를 넘거나 query가 실패하거나 화면에 `No data`·`Invalid date`·
+식별자가 보이면 실패로 종료합니다.
 
 Grafana token의 audience는 Microsoft Learn의
 [Managed Grafana data plane 인증 문서](https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api)대로

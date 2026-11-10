@@ -11,12 +11,15 @@ Usage:
   GRAFANA_URL=https://<grafana-endpoint> GRAFANA_TOKEN=$(az account get-access-token \
     --resource https://dashboard.azure.com --query accessToken -o tsv) \
   python verify_panels.py <dashboard.json> --appinsights-id <resource-id> [--role movielog] [--hours 1]
+  python verify_panels.py <dashboard.json> --appinsights-id <resource-id> \
+    --from 2026-11-07T23:05:00Z --to 2026-11-07T23:35:00Z   # a fixed past window
 """
 import argparse
 import json
 import os
 import sys
 import urllib.request
+from datetime import datetime, timezone
 
 
 def frames_summary(result):
@@ -38,6 +41,14 @@ def kql_string(value):
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
+def epoch_ms(value):
+    """Converts an ISO 8601 time (UTC when no offset is given) to the epoch milliseconds Grafana expects."""
+    moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return str(int(moment.timestamp() * 1000))
+
+
 def query_panels(panels):
     """Yields query panels, including those nested in collapsed rows."""
     for panel in panels:
@@ -52,9 +63,17 @@ def main():
     parser.add_argument("dashboard")
     parser.add_argument("--appinsights-id", required=True)
     parser.add_argument("--role", default="movielog")
-    parser.add_argument("--hours", type=int, default=1)
+    parser.add_argument("--hours", type=int, default=1, help="relative range now-<hours>h..now")
+    parser.add_argument("--from", dest="time_from", help="absolute start, ISO 8601 (use with --to)")
+    parser.add_argument("--to", dest="time_to", help="absolute end, ISO 8601 (use with --from)")
     parser.add_argument("--datasource-uid", default="azure-monitor-oob")
     args = parser.parse_args()
+    if (args.time_from is None) != (args.time_to is None):
+        parser.error("--from and --to must be given together")
+    if args.time_from:
+        time_range = {"from": epoch_ms(args.time_from), "to": epoch_ms(args.time_to)}
+    else:
+        time_range = {"from": f"now-{args.hours}h", "to": "now"}
 
     url = os.environ["GRAFANA_URL"].rstrip("/") + "/api/ds/query"
     token = os.environ["GRAFANA_TOKEN"]
@@ -74,7 +93,7 @@ def main():
             q["intervalMs"] = 60000
             q["maxDataPoints"] = 500
             queries.append(q)
-        body = json.dumps({"queries": queries, "from": f"now-{args.hours}h", "to": "now"}).encode()
+        body = json.dumps({"queries": queries, **time_range}).encode()
         request = urllib.request.Request(url, data=body, method="POST", headers={
             "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
         expected = [q["refId"] for q in queries]

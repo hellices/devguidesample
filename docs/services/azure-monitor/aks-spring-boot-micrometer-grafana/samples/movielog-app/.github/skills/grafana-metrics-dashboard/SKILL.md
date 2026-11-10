@@ -33,11 +33,23 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
   `KQL_OFFSET=12h`처럼 늘린다.
 - Grafana data plane API token은
   `az account get-access-token --resource https://dashboard.azure.com`으로 받는다.
+- 지난 구간(예: 클러스터가 정지된 뒤)을 다룰 때
+  - `*.kql`의 `timestamp > ago(30m)`를
+    `timestamp between (datetime(<start>) .. datetime(<end>))`로 바꾸고, `KQL_OFFSET`을
+    구간 시작부터 지금까지보다 길게 준다. `03-value-shape.kql`의 `30`은 구간 길이(분)로 바꾼다.
+  - `verify_panels.py`에는 `--from <start> --to <end>`(ISO 8601 UTC)를 준다.
+  - dashboard JSON의 `time`은 ISO 8601 UTC 문자열(예: `2026-11-07T23:05:00.000Z`)로 저장한다.
+    epoch 문자열을 저장하면 Grafana 화면이 `Invalid date`로 해석한다. 캡처 URL의 `from`·`to`만
+    epoch ms를 쓴다.
+- `capture.mjs`는 Playwright Chromium이 필요하다. 없으면 작업 폴더 밖 임시 디렉터리에서
+  `npm i playwright && npx playwright install chromium-headless-shell`로 준비한다.
 
 ## 규칙
 
 - 읽기 전용 조회와 Grafana dashboard 생성·수정만 한다. 클러스터와 앱 설정은 바꾸지 않는다.
 - connection string, subscription ID, resource ID를 출력·파일·스크린샷에 남기지 않는다.
+  Grafana에 올린 dashboard 안에는 resource ID를 숨긴 변수 값으로만 두고, 저장소나 로컬에
+  남기는 JSON은 그 변수 값을 비운다.
 - 각 단계 결과를 표로 요약하고, 다음 단계 결정의 근거를 한 줄로 적는다.
 
 ## 단계
@@ -55,8 +67,9 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    - DistributionSummary·Timer: `valueCount` > 1, `valueSum`이 합계 →
      `sum(valueSum) / sum(valueCount)`. 기록이 드물면 `valueCount`가 1뿐일 수 있으므로 코드의
      meter 종류로 확인한다.
-   - Gauge: 시점 값. 시간으로 더하지 않는다. Pod마다 같은 값을 보내는 gauge(DB 합계 등)는
-     Pod 간 sum이 아니라 max를 쓴다.
+   - Gauge: 시점 값. 시간으로 더하지 않는다. 여러 Pod가 같은 원천을 보고하는 gauge(DB 합계
+     등)는 Pod 간 sum이 아니라 max를 쓴다. 각 Pod의 cache 갱신 시점이 달라 같은 분에도 값이
+     조금 다를 수 있으므로, 원천이 같은지는 값이 아니라 코드로 판단한다.
 4. **design**: panel마다 "답할 질문 / metric / 집계식 / 시각화"를 표로 먼저 제안하고
    사용자 확인을 받는다. 시각화는 질문 유형으로 고른다.
    - 구간 동안 몇 건인가 → stat(같은 bin의 sparkline 포함)
@@ -81,6 +94,7 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    HTTP 오류나 0행(숫자 field가 모두 null인 행 포함)이 하나라도 있으면 고치고 다시 실행한다.
    0은 정상 값이다.
    - 터미널: `scripts/verify_panels.py <dashboard.json> --appinsights-id <resource-id> --role <role>`
+     (지난 구간은 `--from`·`--to` 추가)
    - MCP: `amgmcp_dashboard_inspect`(includeQueries)로 받은 KQL을 아래처럼 바꿔
      `amgmcp_query_resource_log`로 실행한다.
      - `$__timeFilter(<column>)` → `<column> > ago(1h)` (조건 전체를 바꾼다)
@@ -92,6 +106,8 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    (**Dashboards > Import** 또는 `az grafana dashboard import`)을 안내한다.
 8. **look**: 대시보드를 캡처해서 직접 보고 아래를 점검한다. 하나라도 걸리면 5단계로 돌아간다.
    - 터미널: `GRAFANA_URL=... GRAFANA_TOKEN=... node scripts/capture.mjs "<path-and-query>" out.png`
+     `capture.mjs`는 panel query 실패, `No data`·`Invalid date` 표시, 화면의 subscription·resource
+     식별자를 발견하면 실패로 끝난다. 실패하면 캡처를 보지 않고 원인부터 고친다.
    - panel 간 합계를 비교할 캡처는 분 단위로 맞춘 절대 범위(`from`·`to` epoch ms)로 찍는다.
    - 점검 항목
      - subscription ID 같은 식별자가 화면에 보이는가

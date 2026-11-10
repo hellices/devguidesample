@@ -489,6 +489,9 @@ Grafana Viewer 이상 역할이 필요합니다.
 export GRAFANA_URL="$(az grafana show -g $RG -n "$GRAFANA" --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token --resource https://dashboard.azure.com --query accessToken -o tsv)"
 python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
+# 클러스터를 멈춘 뒤 지난 구간을 검증할 때는 절대 범위를 줍니다.
+python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>" \
+  --from 2026-11-07T23:05:00Z --to 2026-11-07T23:35:00Z
 ```
 
 통과 기준은 다음과 같습니다. 모든 panel이 `OK`일 때만
@@ -516,7 +519,9 @@ headless Chromium에서 dashboard를 캡처합니다.
 - 대화형 로그인이나 service account가 필요 없습니다.
 - Grafana 내부 scroll 높이를 재서 viewport를 늘리므로 아래쪽 panel까지 한 장에
   담깁니다. `fullPage` 옵션만으로는 내부 scroll 영역이 잘립니다.
-- panel 로딩이 60초 안에 끝나지 않으면 실패로 종료합니다.
+- panel 로딩이 60초 안에 끝나지 않거나, panel query가 실패하거나, 화면에 `No data`·
+  `Invalid date`나 subscription·resource 식별자가 보이면 실패로 종료합니다.
+- 오류 메시지는 token과 `authorization` header를 가린 첫 줄만 출력합니다.
 - panel 간 합계를 비교하거나 문서에 남길 캡처는 분 단위로 맞춘 절대 범위
   (`from`·`to` epoch ms)로 찍습니다. `now-30m` 같은 상대 범위는 panel마다 조회
   시각이 달라 1분 bin 하나만큼 합계가 어긋날 수 있습니다.
@@ -732,10 +737,14 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
   대조했습니다.
 - meter 종류별 column 매핑은 Application Insights Java 3.7.10 source로
   확인했습니다.
-- 실 환경의 대시보드 작성은 2026-11-06~07에 현재 skill과 같은 단계·규칙을 담은 prompt를
-  GitHub Copilot에 주어 실행했습니다. 2026-11-10에 이 지침을 `grafana-metrics-dashboard`
-  skill로 옮기면서 조회 query의 meter prefix를 `METRIC_PREFIX`로 바꾸고 스크립트 문법과
-  치환을 로컬에서 확인했습니다. skill 형식으로 실 환경에서 다시 실행하지는 않았습니다.
+- 2026-11-10에 `grafana-metrics-dashboard` skill을 GitHub Copilot CLI 1.0.95로 실 환경에서
+  실행했습니다. 클러스터는 정지 상태였으므로 2026-11-07 23:05~23:35 UTC 구간의 수집
+  데이터와 실습 Managed Grafana를 썼습니다. `grafana/` 폴더 없이 앱 코드와 skill만 둔
+  작업 공간에서도 Copilot이 probe부터 look까지 수행해 17개 panel 대시보드를 올렸습니다.
+  모든 query가 통과했고, 합계가 실습 결과(영화 조회 12,958, 평균 별점 3.50, 누락 metric 0)와
+  같았습니다. 이 실행에서 드러난 `capture.mjs` 오류 출력의 token 노출과 fetch timeout,
+  저장 시간 형식 지침을 고친 뒤, `verify_panels.py --from/--to`와 `capture.mjs`를 같은
+  환경에서 다시 실행해 확인했습니다.
 - Deployment webhook의 주입 해제 동작, `kubectl apply` 충돌, role assignment
   실패는 실습 관측이며 공식 동작 계약이 아닙니다. 문서의 두 단계 전환과
   `kubectl replace` 복귀는 관리형 → custom → 관리형 → custom 순서로 다시 실행해
