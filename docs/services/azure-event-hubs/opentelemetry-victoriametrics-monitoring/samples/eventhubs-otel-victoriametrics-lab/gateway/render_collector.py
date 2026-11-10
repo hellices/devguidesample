@@ -3,7 +3,7 @@
 Every source is fanned out into two pipelines so that the Prometheus scrape path and the
 Prometheus remote write path receive the same receiver output. Each pipeline stamps
 ``source_path`` and ``delivery_path`` resource attributes, and both exporters promote only
-those two attributes to labels.
+those two attributes, plus the ``azure.resource.id`` that Diagnostic Settings records carry, to labels.
 """
 
 from __future__ import annotations
@@ -44,7 +44,9 @@ DELIVERY_EXPORTERS = {
     "remote_write": "prometheusremotewrite",
 }
 
-LABELS = ["source_path", "delivery_path"]
+# Diagnostic Settings records keep their resource only in azure.resource.id; without it a cluster
+# and a namespace streaming to the same hub would write into one series.
+LABELS = ["source_path", "delivery_path", "azure.resource.id"]
 REQUIRED = (
     "AZURE_SUBSCRIPTION_ID",
     "AZURE_RESOURCE_GROUP",

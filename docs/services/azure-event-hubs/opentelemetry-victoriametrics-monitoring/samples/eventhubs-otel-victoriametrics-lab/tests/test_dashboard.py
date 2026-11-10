@@ -313,4 +313,39 @@ def test_malformed_query_responses_are_reported_not_raised(monkeypatch, failure)
 def test_diagnostic_series_stat_counts_one_delivery_path():
     panel = next(p for p in _panels(build_dashboard({"processing_units": 1})) if p.get("title") == "DS Event Hub series")
     [selector] = re.findall(r"\{[^}]*\}", panel["targets"][0]["expr"])
-    assert _matchers(selector) == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}
+    matchers = _matchers(selector)
+    assert matchers.pop("azure_resource_id")[0] == "=~"  # namespace records only, not the cluster's
+    assert matchers == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}
+
+
+def test_dedicated_tier_shows_cluster_capacity_instead_of_premium_namespace():
+    dashboard = build_dashboard({"processing_units": 1, "tier": "dedicated"})
+    titles = [p["title"] for p in _panels(dashboard)]
+
+    assert "Dedicated CPU" in titles and "Dedicated available memory" in titles
+    assert not any(t.startswith("Premium CPU") or t == "Premium Memory" for t in titles)
+    assert "Messages per CU / min" in titles
+    assert titles.count("Dedicated CPU") == 1  # not repeated by the existing-cluster row
+    rows = [p["title"] for p in dashboard["panels"] if p["type"] == "row"]
+    assert rows[0].startswith("Dedicated cluster 용량 상태 (1 CU")
+
+
+def test_premium_tier_with_an_existing_cluster_keeps_both():
+    titles = [p["title"] for p in _panels(build_dashboard(
+        {"processing_units": 1, "tier": "premium", "dedicated_enabled": True}))]
+    assert "Premium CPU" in titles and "Dedicated CPU" in titles
+
+
+def test_unknown_tier_is_rejected():
+    with pytest.raises(ValueError):
+        build_dashboard({"processing_units": 1, "tier": "standard"})
+
+
+def test_dedicated_compares_cluster_cpu_across_api_and_diagnostic_settings():
+    panels = {p["title"]: p for p in _panels(build_dashboard({"processing_units": 1, "tier": "dedicated"}))}
+
+    assert "NamespaceCpuUsage maximum: API vs Diagnostic Settings" not in panels
+    exprs = [t["expr"] for t in panels["Cluster CPU maximum: API vs Diagnostic Settings"]["targets"]]
+    assert "azure_cpu_maximum_Percent" in exprs[0]
+    # Cluster records only; namespace records share the same hub and metric names.
+    assert "cpu_maximum" in exprs[1] and "eventhub/clusters/" in exprs[1]

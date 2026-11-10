@@ -8,7 +8,7 @@ import pytest
 LAB_ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(LAB_ROOT / "agent"))
 
-from compare_azure_monitor import REQUIRED, compare  # noqa: E402
+from compare_azure_monitor import DIAGNOSTIC, LOOKAHEAD_SECONDS, REQUIRED, compare  # noqa: E402
 
 START = int(datetime(2026, 11, 9, 21, 25, tzinfo=timezone.utc).timestamp())
 END = START + 180
@@ -34,30 +34,36 @@ def _raw(names=REQUIRED, drop=None):
     return {"value": value}
 
 
-def _fetch(remote_override=None, stamp_offset_ms=0, names=REQUIRED, extra=None):
+def _fetch(remote_override=None, stamp_offset_ms=0, names=REQUIRED, extra=None, later=None):
     """VictoriaMetrics export stub that answers only the exact selectors compare() must send.
 
     remote_write stores one sample per Azure minute; scrape repeats each bin twice, 30 s apart.
-    extra maps a selector kind to additional (timestamp ms, value) samples.
+    extra maps a selector kind to additional (timestamp ms, value) samples. later maps a metric
+    name to remote write samples stored after the window (the lookahead query).
     """
     exports = {}
     for name in names:
         lower = name.lower()
         for delivery in ("remote_write", "scrape"):
             exports[f'azure_{lower}_total_Count{{{API},delivery_path="{delivery}"}}'] = (name, delivery)
-        exports[f'{lower}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}'] = (name, "diagnostic")
+        exports[f'{lower}_total{{{DIAGNOSTIC}}}'] = (name, "diagnostic")
 
     def fetch(path, params):
         assert path == "/api/v1/export", path  # totals must come from the same filtered samples
-        assert (params["start"], params["end"]) == (START, END)
         name, kind = exports[params["match[]"]]  # KeyError for any unexpected selector
+        if (params["start"], params["end"]) == (END, END + LOOKAHEAD_SECONDS):
+            assert kind == "remote_write", kind  # only remote write proves a skipped bin
+            points = (later or {}).get(name, [])
+            return json.dumps({"values": [v for _, v in points], "timestamps": [t for t, _ in points]})
+        assert (params["start"], params["end"]) == (START, END)
         if kind == "diagnostic":
             return ""
         values = _values(name)
         if kind == "remote_write" and remote_override:
             values = remote_override(params["match[]"], values)
         if kind == "remote_write":
-            points = [((START + 60 * i) * 1000 + stamp_offset_ms, v) for i, v in enumerate(values)]
+            # None marks a minute the receiver skipped, so nothing is stored for it.
+            points = [((START + 60 * i) * 1000 + stamp_offset_ms, v) for i, v in enumerate(values) if v is not None]
         else:
             points = [((START + 60 * i + 30 * r) * 1000, v) for i, v in enumerate(values) for r in (0, 1)]
         points += (extra or {}).get(kind, [])
@@ -93,6 +99,40 @@ def test_incomplete_when_remote_write_differs():
 
     assert report["complete"] is False
     assert report["metrics"]["IncomingRequests"]["minutes_missing_in_remote_write"] == ["2026-11-09T21:27"]
+
+
+def test_a_skipped_bin_followed_by_later_bins_is_a_gap_not_a_failure():
+    def skip_middle(selector, values):
+        return [values[0], None, values[2]] if "throttledrequests" in selector else values
+
+    report = compare(_raw(), START, END, _fetch(skip_middle))
+
+    throttled = report["metrics"]["ThrottledRequests"]
+    assert throttled["remote_write_gaps"] == ["2026-11-09T21:26"]
+    assert throttled["minutes_matching_remote_write"] == 2
+    assert report["remote_write_gaps"] == 1
+    assert report["complete"] is True
+
+
+def test_a_missing_last_bin_is_a_gap_only_when_a_later_bin_was_stored():
+    def late(selector, values):
+        return values[:2] if "incomingrequests" in selector else values
+
+    after = {"IncomingRequests": [(END * 1000, 1.0)]}
+    report = compare(_raw(), START, END, _fetch(late, later=after))
+
+    assert report["metrics"]["IncomingRequests"]["remote_write_gaps"] == ["2026-11-09T21:27"]
+    assert report["complete"] is True
+
+
+def test_a_mismatched_value_is_never_excused_as_a_gap():
+    def wrong(selector, values):
+        return [values[0], values[1] + 1, values[2]] if "incomingmessages" in selector else values
+
+    report = compare(_raw(), START, END, _fetch(wrong))
+
+    assert report["metrics"]["IncomingMessages"]["remote_write_gaps"] == []
+    assert report["complete"] is False
 
 
 def test_incomplete_when_remote_write_is_not_stamped_on_the_azure_minute():

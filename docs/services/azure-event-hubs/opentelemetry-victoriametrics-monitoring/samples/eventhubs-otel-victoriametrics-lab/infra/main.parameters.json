@@ -10,6 +10,7 @@
     "gatewayAdminSshPublicKey": { "value": "${GATEWAY_ADMIN_SSH_PUBLIC_KEY=}" },
     "deployerPrincipalId": { "value": "${AZURE_PRINCIPAL_ID=}" },
     "deployerPrincipalType": { "value": "${AZURE_PRINCIPAL_TYPE=User}" },
-    "existingDedicatedClusterResourceId": { "value": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}" }
+    "existingDedicatedClusterResourceId": { "value": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}" },
+    "eventHubsSku": { "value": "${EVENTHUBS_SKU=Dedicated}" }
   }
 }

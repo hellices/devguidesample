@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-labelledby="archTitle archDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
   <title id="archTitle">Event Hubs OpenTelemetry·VictoriaMetrics 실습 구성</title>
-  <desc id="archDesc">Korea South의 Event Hubs Premium과 Diagnostic Settings, telemetry Standard namespace, Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private endpoint subnet에 Storage Blob과 Key Vault.</desc>
+  <desc id="archDesc">Korea South의 Event Hubs Dedicated cluster(1 CU)와 그 안의 workload namespace, namespace·cluster Diagnostic Settings, telemetry Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private endpoint subnet에 Storage Blob과 Key Vault.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
     <style>
@@ -27,14 +27,14 @@
   <rect class="zone" x="16" y="16" width="860" height="150" rx="10"/>
   <text class="zonelabel" x="32" y="40">Korea South · Event Hubs</text>
   <rect class="azure" x="32" y="54" width="260" height="96" rx="8"/>
-  <text class="title" x="44" y="76">Event Hubs Premium · 1 PU</text>
-  <text class="body" x="44" y="98">workload hub · 4 partitions</text>
-  <text class="body" x="44" y="118">consumer group slow-consumer</text>
+  <text class="title" x="44" y="76">Event Hubs Dedicated · 1 CU</text>
+  <text class="body" x="44" y="98">cluster 안 namespace · workload hub</text>
+  <text class="body" x="44" y="118">4 partitions · slow-consumer group</text>
   <text class="body" x="44" y="138">Entra ID 인증만 허용</text>
   <rect class="azure" x="320" y="54" width="250" height="96" rx="8"/>
   <text class="title" x="332" y="76">Diagnostic Settings</text>
-  <text class="body" x="332" y="98">AllMetrics → telemetry hub</text>
-  <text class="body" x="332" y="118">sink는 원본과 같은 리전</text>
+  <text class="body" x="332" y="98">namespace·cluster AllMetrics</text>
+  <text class="body" x="332" y="118">→ telemetry hub(같은 리전)</text>
   <rect class="azure" x="598" y="54" width="262" height="96" rx="8"/>
   <text class="title" x="610" y="76">Event Hubs Standard · telemetry</text>
   <text class="body" x="610" y="98">platform-metrics hub</text>
@@ -45,11 +45,11 @@
   <!-- Azure Monitor -->
   <rect class="azure" x="900" y="30" width="284" height="74" rx="8"/>
   <text class="title" x="912" y="52">Azure Monitor Metrics API</text>
-  <text class="body" x="912" y="74">PT1M bin · namespace 범위</text>
+  <text class="body" x="912" y="74">PT1M bin · namespace 지표</text>
   <text class="body" x="912" y="92">Monitoring Reader</text>
-  <rect class="muted" x="900" y="114" width="284" height="52" rx="8"/>
-  <text class="title" x="912" y="136" fill="#4A5568">기존 Dedicated cluster</text>
-  <text class="body" x="912" y="156">resource ID 입력 시에만 profile 생성</text>
+  <rect class="azure" x="900" y="114" width="284" height="52" rx="8"/>
+  <text class="title" x="912" y="136">Dedicated cluster 지표</text>
+  <text class="body" x="912" y="156">CPU·AvailableMemory(Role) · 처리량</text>
   <path class="edge" d="M162,54 V24 H1040 V28"/>
   <text class="edgelabel" x="600" y="20">platform metrics (1분 집계)</text>
 
@@ -82,11 +82,12 @@
   <text class="sublabel" x="500" y="240">gateway subnet · Gateway VM · Docker Compose · Managed Identity</text>
   <rect class="otel" x="500" y="250" width="440" height="150" rx="8"/>
   <text class="title" x="512" y="272">OpenTelemetry Collector Contrib 0.165.0</text>
-  <text class="mono" x="512" y="296">azure_monitor/premium   → azure_monitor_api</text>
-  <text class="mono" x="512" y="316">azure_event_hub/diagnostic → diagnostic_eventhub</text>
-  <text class="mono" x="512" y="336">prometheus/lag          → lag_exporter</text>
-  <text class="mono" x="512" y="356">prometheus/self         → collector_self</text>
-  <text class="body" x="512" y="384">source마다 scrape·remote write pipeline으로 fan-out</text>
+  <text class="mono" x="512" y="292">azure_monitor/premium   → azure_monitor_api</text>
+  <text class="mono" x="512" y="310">azure_monitor/dedicated → azure_monitor_dedicated</text>
+  <text class="mono" x="512" y="328">azure_event_hub/diagnostic → diagnostic_eventhub</text>
+  <text class="mono" x="512" y="346">prometheus/lag          → lag_exporter</text>
+  <text class="mono" x="512" y="364">prometheus/self         → collector_self</text>
+  <text class="body" x="512" y="390">source마다 scrape·remote write pipeline으로 fan-out</text>
   <rect class="work" x="956" y="250" width="200" height="70" rx="8"/>
   <text class="title" x="968" y="272">lag exporter</text>
   <text class="body" x="968" y="294">마지막 enqueue sequence −</text>
@@ -105,7 +106,7 @@
   <path class="edge" d="M835,400 V422"/>
   <path class="edge" d="M729,150 V196 H760 V248"/>
   <text class="edgelabel" x="736" y="180">AMQP · MI</text>
-  <path class="edge" d="M1040,104 V176 H900 V248"/>
+  <path class="edge" d="M1040,166 V176 H900 V248"/>
   <text class="edgelabel" x="1046" y="180">metrics API · MI</text>
   <path class="edge" d="M500,466 H480 V368 H462"/>
   <text class="edgelabel" x="466" y="440" transform="rotate(-90 466 440)">scrape</text>
@@ -132,6 +133,5 @@
     <rect class="vm" x="910" y="672" width="14" height="14"/><text class="body" x="930" y="684">VictoriaMetrics</text>
     <rect class="work" x="1040" y="672" width="14" height="14"/><text class="body" x="1060" y="684">lab workload</text>
     <rect class="graf" x="680" y="702" width="14" height="14"/><text class="body" x="700" y="714">Grafana</text>
-    <rect class="muted" x="790" y="702" width="14" height="14"/><text class="body" x="810" y="714">생성하지 않는 profile</text>
   </g>
 </svg>

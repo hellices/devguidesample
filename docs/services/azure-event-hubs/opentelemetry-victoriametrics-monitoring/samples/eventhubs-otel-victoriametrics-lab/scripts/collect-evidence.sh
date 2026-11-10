@@ -47,7 +47,9 @@ trap '"$LAB_ROOT/scripts/vm-query.sh" stop' EXIT
 log "probe"
 "$PY" "$LAB_ROOT/agent/probe.py" --vm-url "http://127.0.0.1:$PORT" --output "$EVIDENCE/probe.json"
 log "build and publish"
-"$PY" "$LAB_ROOT/agent/build_dashboard.py" --probe "$EVIDENCE/probe.json" --output "$EVIDENCE/dashboard.json"
+TIER="$(env_value EVENTHUBS_SKU | tr '[:upper:]' '[:lower:]')"
+"$PY" "$LAB_ROOT/agent/build_dashboard.py" --probe "$EVIDENCE/probe.json" --tier "${TIER:-premium}" \
+  --output "$EVIDENCE/dashboard.json"
 "$PY" "$LAB_ROOT/agent/publish_dashboard.py" "$EVIDENCE/dashboard.json"
 log "verify panels over $FROM .. $TO"
 "$PY" "$LAB_ROOT/agent/verify_panels.py" --from "$FROM_MS" --to "$TO_MS" --output "$EVIDENCE/panel-verification.json"
@@ -70,3 +72,7 @@ az monitor metrics list --subscription "$AZURE_SUBSCRIPTION_ID" --resource "$NAM
   --output "$EVIDENCE/azure-monitor-comparison.json" >/dev/null \
   || die "remote write does not yet match Azure Monitor for every requested metric and minute; evidence is incomplete"
 cat "$EVIDENCE/azure-monitor-comparison.json"
+GAPS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["remote_write_gaps"])' "$EVIDENCE/azure-monitor-comparison.json")"
+if (( GAPS > 0 )); then
+  log "WARNING: $GAPS minute bin(s) were skipped by azuremonitorreceiver and will not arrive; see remote_write_gaps"
+fi

@@ -17,8 +17,12 @@ from pathlib import Path
 UID = "eventhubs-otel-victoriametrics"
 DS = {"type": "prometheus", "uid": "victoriametrics"}
 API = 'source_path="azure_monitor_api",delivery_path="remote_write"'
-DIAG = 'source_path="diagnostic_eventhub",delivery_path="remote_write"'
+# A Dedicated cluster streams to the same hub; keep namespace records only.
+DIAG = ('source_path="diagnostic_eventhub",delivery_path="remote_write",'
+        'azure_resource_id=~"(?i).*/providers/microsoft\\\\.eventhub/namespaces/.*"')
 DEDICATED = 'source_path="azure_monitor_dedicated",delivery_path="remote_write"'
+DIAG_CLUSTER = ('source_path="diagnostic_eventhub",delivery_path="remote_write",'
+                'azure_resource_id=~"(?i).*/providers/microsoft\\\\.eventhub/clusters/.*"')
 LAG = 'source_path="lag_exporter",delivery_path="remote_write"'
 SELF = 'source_path="collector_self",delivery_path="remote_write"'
 LEARN_METRICS = "https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference"
@@ -27,16 +31,19 @@ LEARN_METRICS = "https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs
 PANEL_PLAN = [
     ("Premium replica CPU가 위험 구간인가", "NamespaceCpuUsage Maximum", "max(last_over_time)", "gauge"),
     ("Premium memory가 위험 구간인가", "NamespaceMemoryUsage Maximum", "max(last_over_time)", "gauge"),
+    ("Dedicated cluster CPU가 위험 구간인가", "clusters CPU Maximum (Role)", "max(last_over_time)", "gauge"),
+    ("Dedicated cluster 가용 memory가 부족한가", "clusters AvailableMemory Maximum (Role)", "min(last_over_time)", "gauge"),
+    ("Dedicated cluster 전체 사용률은 얼마인가", "clusters ClusterUtilization Average (preview)", "last_over_time", "gauge"),
     ("CPU·memory가 부하와 함께 어떻게 움직였나", "Namespace*Usage Average/Maximum", "raw", "time series"),
     ("구간 동안 요청·성공·throttle은 몇 건인가", "Incoming/Successful/ThrottledRequests Total", "sum_over_time[$__range]", "stat"),
     ("송신 방향 request 수를 볼 수 있나", "OutgoingRequests 없음", "계산하지 않음", "text"),
-    ("PU당 분당 처리량은 얼마인가", "Incoming/OutgoingMessages·Bytes Total / PU", "sum by minute / $pu", "bars"),
+    ("PU·CU당 분당 처리량은 얼마인가", "Incoming/OutgoingMessages·Bytes Total / capacity", "sum by minute / $capacity", "bars"),
     ("조회 구간에서 가장 크게 밀린 partition은 얼마나 밀렸나", "eventhubs_consumer_lag_messages", "max / max by partition", "stat, bar gauge"),
     ("lag가 언제 쌓이고 언제 회복됐나", "eventhubs_consumer_lag_messages", "max by partition", "time series"),
     ("모든 partition에 checkpoint가 있나", "eventhubs_checkpoint_present", "min by partition", "table"),
     ("수집·전달 경로별로 데이터가 들어오나", "{source_path,delivery_path}", "count_over_time, tlast_over_time", "table"),
     ("scrape와 remote write의 값 형태가 같은가", "IncomingMessages Total", "by delivery_path", "time series"),
-    ("API와 Diagnostic Settings 값이 같은가", "IncomingMessages Total, NamespaceCpuUsage Maximum", "by source_path", "time series"),
+    ("API와 Diagnostic Settings 값이 같은가", "IncomingMessages Total, NamespaceCpuUsage·cluster CPU Maximum", "by source_path", "time series"),
     ("Collector가 데이터를 거부·전송 실패했나", "otelcol_receiver_refused_*, otelcol_exporter_send_failed_*", "increase", "stat"),
 ]
 
@@ -116,12 +123,50 @@ def field(unit: str = "short", steps=None, decimals=None, no_value=None, **custo
     return {"defaults": defaults, "overrides": []}
 
 
+def dedicated_capacity_panels(layout: "Layout", panels: list[dict], usage: dict) -> None:
+    """Cluster CPU, available memory and utilization for a Dedicated cluster (Role dimension)."""
+    panels.append(layout.panel(
+        "gauge", "Dedicated CPU", 4, 7,
+        [{"expr": f"max(last_over_time(azure_cpu_maximum_Percent{{{DEDICATED}}}[10m]))",
+          "instant": True}],
+        description="Role 최댓값의 최신 1분 값. 70%·85%에서 색이 바뀝니다.",
+        fieldConfig=field("percent", usage, decimals=1, min=0, max=100),
+    ))
+    panels.append(layout.panel(
+        "gauge", "Dedicated available memory", 4, 7,
+        [{"expr": f"min(last_over_time(azure_availablememory_maximum_Percent{{{DEDICATED}}}[10m]))",
+          "instant": True}],
+        description="가용 메모리 비율의 Role 최솟값입니다. 낮을수록 위험하므로 threshold 방향이 CPU와 반대입니다.",
+        fieldConfig=field("percent", thresholds(("red", None), ("orange", 15), ("green", 30)),
+                          decimals=1, min=0, max=100),
+    ))
+    panels.append(layout.panel(
+        "timeseries", "Dedicated CPU·available memory by role", 16, 7,
+        [
+            {"expr": f"max by (metadata_role) (azure_cpu_maximum_Percent{{{DEDICATED}}})",
+             "legendFormat": "CPU {{metadata_role}}"},
+            {"expr": f"min by (metadata_role) (azure_availablememory_maximum_Percent{{{DEDICATED}}})",
+             "legendFormat": "available memory {{metadata_role}}"},
+            {"expr": f"max(azure_clusterutilization_average_Percent{{{DEDICATED}}})",
+             "legendFormat": "cluster utilization"},
+        ],
+        description="[optional] ClusterUtilization은 preview 지표라 값이 없을 수 있습니다.",
+        fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, fillOpacity=5, spanNulls=120000),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+
+
 def build_dashboard(probe: dict) -> dict:
     raw_pu = probe.get("processing_units", 1)
     # Reject 1.5 or True instead of silently truncating them into a different capacity.
     if isinstance(raw_pu, bool) or not isinstance(raw_pu, int) or raw_pu <= 0:
         raise ValueError(f"processing_units must be a positive integer, got {raw_pu!r}")
     pu = raw_pu
+    tier = probe.get("tier", "premium")
+    if tier not in ("premium", "dedicated"):
+        raise ValueError(f"tier must be premium or dedicated, got {tier!r}")
+    # Dedicated capacity is counted in CUs on the cluster; Premium in PUs on the namespace.
+    unit = "CU" if tier == "dedicated" else "PU"
     layout = Layout()
     panels: list[dict] = []
     green_only = thresholds(("green", None))
@@ -129,31 +174,35 @@ def build_dashboard(probe: dict) -> dict:
     stat_opts = {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
                  "colorMode": "value", "graphMode": "none", "textMode": "value_and_name"}
 
-    panels.append(layout.row(f"Premium 용량 상태 ({pu} PU, Azure Monitor API → remote write)"))
-    for title, metric in (("Premium CPU", "namespacecpuusage"), ("Premium Memory", "namespacememoryusage")):
+    if tier == "dedicated":
+        panels.append(layout.row(f"Dedicated cluster 용량 상태 ({pu} CU, Azure Monitor API → remote write)"))
+        dedicated_capacity_panels(layout, panels, usage)
+    else:
+        panels.append(layout.row(f"Premium 용량 상태 ({pu} PU, Azure Monitor API → remote write)"))
+        for title, metric in (("Premium CPU", "namespacecpuusage"), ("Premium Memory", "namespacememoryusage")):
+            panels.append(layout.panel(
+                "gauge", title, 4, 7,
+                [{"expr": f"max(last_over_time(azure_{metric}_maximum_Percent{{{API}}}[10m]))",
+                  "instant": True, "legendFormat": "maximum"}],
+                description="Replica 최댓값의 최신 1분 값. 70%·85%에서 색이 바뀝니다.",
+                fieldConfig=field("percent", usage, decimals=1, min=0, max=100),
+                options={"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+                         "showThresholdMarkers": True},
+            ))
         panels.append(layout.panel(
-            "gauge", title, 4, 7,
-            [{"expr": f"max(last_over_time(azure_{metric}_maximum_Percent{{{API}}}[10m]))",
-              "instant": True, "legendFormat": "maximum"}],
-            description="Replica 최댓값의 최신 1분 값. 70%·85%에서 색이 바뀝니다.",
-            fieldConfig=field("percent", usage, decimals=1, min=0, max=100),
-            options={"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
-                     "showThresholdMarkers": True},
+            "timeseries", "Premium CPU·Memory 추이", 16, 7,
+            [
+                {"expr": f"azure_namespacecpuusage_maximum_Percent{{{API}}}", "legendFormat": "CPU max"},
+                {"expr": f"azure_namespacecpuusage_average_Percent{{{API}}}", "legendFormat": "CPU avg"},
+                {"expr": f"azure_namespacememoryusage_maximum_Percent{{{API}}}", "legendFormat": "Memory max"},
+                {"expr": f"azure_namespacememoryusage_average_Percent{{{API}}}", "legendFormat": "Memory avg"},
+            ],
+            fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, fillOpacity=5,
+                              spanNulls=120000) | {"overrides": [{
+                "matcher": {"id": "byRegexp", "options": ".*avg"},
+                "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [6, 4]}}]}]},
+            options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
         ))
-    panels.append(layout.panel(
-        "timeseries", "Premium CPU·Memory 추이", 16, 7,
-        [
-            {"expr": f"azure_namespacecpuusage_maximum_Percent{{{API}}}", "legendFormat": "CPU max"},
-            {"expr": f"azure_namespacecpuusage_average_Percent{{{API}}}", "legendFormat": "CPU avg"},
-            {"expr": f"azure_namespacememoryusage_maximum_Percent{{{API}}}", "legendFormat": "Memory max"},
-            {"expr": f"azure_namespacememoryusage_average_Percent{{{API}}}", "legendFormat": "Memory avg"},
-        ],
-        fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, fillOpacity=5,
-                          spanNulls=120000) | {"overrides": [{
-            "matcher": {"id": "byRegexp", "options": ".*avg"},
-            "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [6, 4]}}]}]},
-        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
-    ))
 
     panels.append(layout.row("요청과 throttle (조회 구간 합계)"))
     for title, metric, steps in (
@@ -183,10 +232,10 @@ def build_dashboard(probe: dict) -> dict:
         )},
     ))
 
-    panels.append(layout.row(f"PU당 처리량 (processing_units = {pu}, 분당 Total)"))
-    for title, metric, unit in (
-        ("Messages per PU / min", "messages", "short"),
-        ("Bytes per PU / min", "bytes", "decbytes"),
+    panels.append(layout.row(f"{unit}당 처리량 (capacity = {pu} {unit}, 분당 Total)"))
+    for title, metric, value_unit in (
+        (f"Messages per {unit} / min", "messages", "short"),
+        (f"Bytes per {unit} / min", "bytes", "decbytes"),
     ):
         suffix = "Count" if metric == "messages" else "Bytes"
         panels.append(layout.panel(
@@ -196,7 +245,7 @@ def build_dashboard(probe: dict) -> dict:
                 {"expr": f"sum(azure_outgoing{metric}_total_{suffix}{{{API}}}) / $pu", "legendFormat": "outgoing"},
             ],
             interval="1m",
-            fieldConfig=field(unit, None, decimals=0, drawStyle="bars", fillOpacity=60,
+            fieldConfig=field(value_unit, None, decimals=0, drawStyle="bars", fillOpacity=60,
                               lineWidth=1, barAlignment=0),
             options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
         ))
@@ -328,14 +377,29 @@ def build_dashboard(probe: dict) -> dict:
                            {"id": "custom.lineWidth", "value": 3}]}]},
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
     ))
+    if tier == "dedicated":
+        cpu_title, cpu_api, cpu_diag = (
+            "Cluster CPU maximum: API vs Diagnostic Settings",
+            f"max(azure_cpu_maximum_Percent{{{DEDICATED}}})",
+            f"max(cpu_maximum{{{DIAG_CLUSTER}}})",
+        )
+        cpu_note = ("[optional] 지표표의 DS Export 값은 No지만 cluster Diagnostic Settings 스트림에도 레코드가 "
+                    "도착했습니다. API는 Role별 값의 최댓값, Diagnostic Settings는 Role을 합친 maximum입니다.")
+    else:
+        cpu_title, cpu_api, cpu_diag = (
+            "NamespaceCpuUsage maximum: API vs Diagnostic Settings",
+            f"max(azure_namespacecpuusage_maximum_Percent{{{API}}})",
+            f"max(namespacecpuusage_maximum{{{DIAG}}})",
+        )
+        cpu_note = ("[optional] 지표표의 DS Export 값은 No지만 이 실습에서는 Diagnostic Settings 스트림에도 "
+                    "레코드가 도착했습니다. 두 경로를 겹쳐 그 차이를 확인합니다.")
     panels.append(layout.panel(
-        "timeseries", "NamespaceCpuUsage maximum: API vs Diagnostic Settings", 12, 8,
+        "timeseries", cpu_title, 12, 8,
         [
-            {"expr": f"max(azure_namespacecpuusage_maximum_Percent{{{API}}})", "legendFormat": "azure_monitor_api"},
-            {"expr": f"max(namespacecpuusage_maximum{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},
+            {"expr": cpu_api, "legendFormat": "azure_monitor_api"},
+            {"expr": cpu_diag, "legendFormat": "diagnostic_eventhub"},
         ],
-        description=("[optional] 지표표의 DS Export 값은 No지만 이 실습에서는 Diagnostic Settings 스트림에도 "
-                     "레코드가 도착했습니다. 두 경로를 겹쳐 그 차이를 확인합니다."),
+        description=cpu_note,
         fieldConfig=field("percent", None, decimals=1, min=0, lineWidth=2, showPoints="always", pointSize=4) | {"overrides": [{
             "matcher": {"id": "byName", "options": "diagnostic_eventhub"},
             "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}},
@@ -373,22 +437,10 @@ def build_dashboard(probe: dict) -> dict:
                  "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}},
     ))
 
-    if probe.get("dedicated_enabled"):
-        panels.append(layout.row("Dedicated cluster (문서 기반 profile, 이 실습에서 runtime 미검증)"))
-        panels.append(layout.panel(
-            "gauge", "Dedicated CPU", 6, 7,
-            [{"expr": f"max(last_over_time(azure_cpu_maximum_Percent{{{DEDICATED}}}[10m]))",
-              "instant": True}],
-            fieldConfig=field("percent", usage, decimals=1, min=0, max=100),
-        ))
-        panels.append(layout.panel(
-            "gauge", "Dedicated available memory", 6, 7,
-            [{"expr": f"min(last_over_time(azure_availablememory_maximum_Percent{{{DEDICATED}}}[10m]))",
-              "instant": True}],
-            description="가용 메모리 비율입니다. 낮을수록 위험하므로 threshold 방향이 CPU와 반대입니다.",
-            fieldConfig=field("percent", thresholds(("red", None), ("orange", 15), ("green", 30)),
-                              decimals=1, min=0, max=100),
-        ))
+    if probe.get("dedicated_enabled") and tier != "dedicated":
+        # A Premium lab that also observes an existing cluster shows it in its own row.
+        panels.append(layout.row("기존 Dedicated cluster (EXISTING_DEDICATED_CLUSTER_RESOURCE_ID)"))
+        dedicated_capacity_panels(layout, panels, usage)
 
     return {
         "uid": UID,
@@ -402,7 +454,7 @@ def build_dashboard(probe: dict) -> dict:
         "time": {"from": "now-1h", "to": "now"},
         "templating": {"list": [
             {"name": "pu", "type": "constant", "query": str(pu), "hide": 2,
-             "label": "Premium processing units"},
+             "label": f"capacity units ({unit})"},
         ]},
         "panels": panels,
     }
@@ -418,13 +470,16 @@ def positive_int(value: str) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe", type=Path, required=True)
-    parser.add_argument("--processing-units", type=positive_int, default=1)
+    parser.add_argument("--processing-units", type=positive_int, default=1,
+                        help="Premium PUs or Dedicated CUs of the workload")
+    parser.add_argument("--tier", choices=("premium", "dedicated"), default="premium")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     probe = json.loads(args.probe.read_text())
     probe.setdefault("processing_units", args.processing_units)
     probe.setdefault("dedicated_enabled", any(
         name.startswith(("azure_cpu_", "azure_availablememory_")) for name in probe.get("metrics", {})))
+    probe.setdefault("tier", args.tier)
     dashboard = build_dashboard(probe)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(dashboard, indent=2, ensure_ascii=False))

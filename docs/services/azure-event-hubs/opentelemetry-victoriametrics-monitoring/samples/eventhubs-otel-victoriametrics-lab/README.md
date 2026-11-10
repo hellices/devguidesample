@@ -1,23 +1,27 @@
 # Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습 sample
 
-[Event Hubs 지표·consumer lag topic](../../index.md)의 `azd` sample입니다. Event Hubs
-Premium namespace, AKS의 VictoriaMetrics, 그리고 OpenTelemetry Collector Contrib·
-consumer lag exporter·Grafana OSS를 실행하는 Gateway VM을 배포합니다. 실제 배포
-기록, 측정값과 배포 중 수정한 오류는 [실습 문서](../../lab/index.md)에 있습니다.
+[Event Hubs 지표 수집 방식 비교 topic](../../index.md)의 `azd` sample입니다. Event Hubs
+Dedicated cluster(1 CU)와 그 안의 workload namespace, AKS의 VictoriaMetrics, 그리고
+OpenTelemetry Collector Contrib·consumer lag exporter·Grafana OSS를 실행하는 Gateway VM을
+배포합니다. 실제 배포 기록, 측정값과 배포 중 수정한 오류는 [실습 문서](../../lab/index.md)에
+있습니다.
 
-이 sample은 Event Hubs Dedicated cluster를 만들지 않습니다.
-`EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`를 지정하면 기존 cluster를 읽는 수집
-profile만 렌더링하며, 이 profile은 runtime 검증을 거치지 않았습니다.
+`EVENTHUBS_SKU`의 기본값은 `Dedicated`입니다. Dedicated cluster는 만든 뒤 4시간 동안
+삭제할 수 없고 그동안 CU 시간 단위로 과금되므로, `azd down`은 cluster 생성 4시간 뒤에
+실행합니다. `azd env set EVENTHUBS_SKU Premium`이면 cluster 대신 Premium 1 PU namespace를
+만들고, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 같은 resource group의 기존 cluster
+지표를 함께 수집할 수 있습니다.
 
 ## 실행 순서
 
 ```bash
 azd env new <env-name> --subscription <subscription-id> --location koreacentral
-azd env set EVENTHUBS_LOCATION koreasouth   # 기본 리전에서 Premium 신규 생성이 제한된 경우만
+azd env set EVENTHUBS_LOCATION koreasouth   # Event Hubs만 다른 리전에 둘 때(cluster 지원 리전 확인)
+# azd env set EVENTHUBS_SKU Premium          # cluster 대신 Premium 1 PU
 azd up                                       # provision + hooks + workload
 ./scripts/run-scenario.sh                    # baseline 5분, 부하 10분, 회복
 ./scripts/collect-evidence.sh                # probe → build → verify → capture
-azd down --purge --force                     # predown·postdown이 resource group 삭제까지 확인
+azd down --purge --force                     # cluster 생성 4시간 뒤. postdown이 resource group 삭제까지 확인
 ```
 
 필요한 도구는 Azure CLI, Azure Developer CLI, `kubectl`, `kubelogin`, Helm,
@@ -31,7 +35,7 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `azure.yaml` | azd project와 lifecycle hook입니다. `services`가 없으므로 `azd deploy`는 `postdeploy`만 실행합니다. |
 | `infra/main.bicep` | 구독 범위 진입점, resource group, hook이 쓰는 output입니다. |
 | `infra/modules/foundation.bicep` | VNet, ACR, private endpoint 뒤의 Storage·Key Vault, identity, container 범위 역할입니다. |
-| `infra/modules/messaging.bicep` | Premium·Standard namespace, Diagnostic Settings, Event Hubs 데이터 역할, Monitoring Reader입니다. |
+| `infra/modules/messaging.bicep` | Dedicated cluster와 그 안의 namespace(또는 Premium namespace), telemetry Standard namespace, namespace·cluster Diagnostic Settings, Event Hubs 데이터 역할, Monitoring Reader입니다. |
 | `infra/modules/compute.bicep` | AKS(Workload Identity, Azure RBAC), internal load balancer용 subnet 역할, Gateway VM입니다. |
 | `scripts/azd-configure.sh` | `preprovision`: 구독·provider 확인, operator egress `/32`, 비밀 생성입니다. |
 | `scripts/azd-postprovision.sh` | `postprovision`: kubeconfig, federated credential, ACR build, VictoriaMetrics, Run Command로 Gateway 번들 적용입니다. `GATEWAY_ONLY=true`이면 Gateway만 다시 적용합니다. |

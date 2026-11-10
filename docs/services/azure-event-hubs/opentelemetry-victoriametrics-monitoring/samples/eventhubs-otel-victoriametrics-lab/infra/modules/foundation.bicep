@@ -6,6 +6,9 @@ param tags object
 @secure()
 param grafanaAdminPassword string
 
+@description('Operator egress /32 that may reach Grafana on the gateway.')
+param operatorEgressCidr string
+
 var gatewaySubnetPrefix = '10.42.1.0/24'
 var aksSubnetPrefix = '10.42.2.0/24'
 var endpointsSubnetPrefix = '10.42.3.0/24'
@@ -28,11 +31,58 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   }
 }
 
+// Every subnet carries a template-owned NSG. Governance automation can attach an empty
+// deny-all NSG to subnets without one, which silently cut the operator path to Grafana.
+resource gatewayNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
+  name: 'nsg-gateway-${token}'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: [
+      {
+        name: 'AllowGrafanaFromOperator'
+        properties: {
+          access: 'Allow'
+          direction: 'Inbound'
+          priority: 100
+          protocol: 'Tcp'
+          sourceAddressPrefix: operatorEgressCidr
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '3000'
+        }
+      }
+    ]
+  }
+}
+
+// Default rules only: VNet traffic (gateway -> VMSingle internal load balancer) stays allowed.
+resource aksNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
+  name: 'nsg-aks-${token}'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: []
+  }
+}
+
+resource endpointsNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
+  name: 'nsg-endpoints-${token}'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: []
+  }
+}
+
 resource gatewaySubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
   parent: vnet
   name: 'gateway'
   properties: {
     addressPrefix: gatewaySubnetPrefix
+    networkSecurityGroup: {
+      id: gatewayNsg.id
+    }
   }
 }
 
@@ -41,6 +91,9 @@ resource aksSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
   name: 'aks'
   properties: {
     addressPrefix: aksSubnetPrefix
+    networkSecurityGroup: {
+      id: aksNsg.id
+    }
   }
   dependsOn: [
     gatewaySubnet
@@ -52,6 +105,9 @@ resource endpointsSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' 
   name: 'private-endpoints'
   properties: {
     addressPrefix: endpointsSubnetPrefix
+    networkSecurityGroup: {
+      id: endpointsNsg.id
+    }
   }
   dependsOn: [
     aksSubnet
@@ -328,6 +384,7 @@ resource gatewayCollectorCheckpointContributor 'Microsoft.Authorization/roleAssi
 output vnetId string = vnet.id
 output vnetName string = vnet.name
 output gatewaySubnetId string = gatewaySubnet.id
+output gatewayNsgId string = gatewayNsg.id
 output aksSubnetId string = aksSubnet.id
 output acrId string = acr.id
 output acrName string = acr.name

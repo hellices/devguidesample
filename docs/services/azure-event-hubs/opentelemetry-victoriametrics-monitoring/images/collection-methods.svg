@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-labelledby="methodsTitle methodsDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
   <title id="methodsTitle">Event Hubs 지표 수집 방식 5가지</title>
-  <desc id="methodsDesc">Event Hubs namespace의 플랫폼 지표는 Azure Monitor에 1분 단위로 쌓인다. ① Azure Monitor 직접 조회, ② Metrics API를 OpenTelemetry azuremonitorreceiver가 60초마다 조회해 VictoriaMetrics로 remote write, ③ Metrics API를 azure-metrics-exporter가 조회하고 Collector가 scrape, ④ Diagnostic Settings가 telemetry Event Hub로 보내고 azureeventhubreceiver가 읽음, ⑤ Diagnostic Settings가 Log Analytics·Storage에 저장.</desc>
+  <desc id="methodsDesc">Event Hubs namespace와 Dedicated cluster의 플랫폼 지표는 Azure Monitor에 1분 단위로 쌓인다. ① Azure Monitor 직접 조회, ② Metrics API를 OpenTelemetry azuremonitorreceiver가 60초마다 조회해 VictoriaMetrics로 remote write, ③ Metrics API를 azure-metrics-exporter가 조회하고 Collector가 scrape, ④ Diagnostic Settings가 telemetry Event Hub로 보내고 azureeventhubreceiver가 읽음, ⑤ Diagnostic Settings가 Log Analytics·Storage에 저장.</desc>
   <defs>
     <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
     <style>

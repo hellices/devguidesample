@@ -51,14 +51,16 @@ def _bicep_code(text):
     return re.sub(r"(?m)//.*$", "", re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL))
 
 
-def test_main_bicep_never_creates_a_dedicated_cluster():
+def test_only_the_messaging_module_creates_a_dedicated_cluster():
     text = _bicep_code((LAB_ROOT / "infra" / "main.bicep").read_text())
 
     assert "targetScope = 'subscription'" in text
     assert re.search(r"(?m)^param existingDedicatedClusterResourceId string = ''$", text)
+    assert re.search(r"(?m)^param eventHubsSku string = 'Dedicated'$", text)
     # main.bicep deploys local modules, so every Bicep file is checked, case-insensitively.
-    for path in (LAB_ROOT / "infra").rglob("*.bicep"):
-        assert "microsoft.eventhub/clusters@" not in path.read_text().lower(), path.name
+    creators = [path.name for path in (LAB_ROOT / "infra").rglob("*.bicep")
+                if "microsoft.eventhub/clusters@" in _bicep_code(path.read_text()).lower()]
+    assert creators == ["messaging.bicep"]
 
 
 def test_main_bicep_exports_hook_contract():
@@ -87,6 +89,8 @@ def test_main_bicep_exports_hook_contract():
         "CHECKPOINT_ACCOUNT_URL": "foundation.outputs.storageBlobEndpoint",
         "VMSINGLE_PRIVATE_IP": "foundation.outputs.vmSinglePrivateIp",
         "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": "existingDedicatedClusterResourceId",
+        "EVENTHUBS_SKU": "eventHubsSku",
+        "DEDICATED_CLUSTER_RESOURCE_ID": "messaging.outputs.dedicatedClusterId",
     }
 
     assert _declared_outputs(text) == expected
@@ -117,6 +121,7 @@ def test_main_parameters_map_azd_environment_values():
         "deployerPrincipalId": "${AZURE_PRINCIPAL_ID=}",
         "deployerPrincipalType": "${AZURE_PRINCIPAL_TYPE=User}",
         "existingDedicatedClusterResourceId": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}",
+        "eventHubsSku": "${EVENTHUBS_SKU=Dedicated}",
     }
 
     main = (LAB_ROOT / "infra" / "main.bicep").read_text()

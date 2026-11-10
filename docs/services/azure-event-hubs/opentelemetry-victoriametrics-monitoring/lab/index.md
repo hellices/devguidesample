@@ -1,6 +1,6 @@
 ---
 title: Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
-description: azd up으로 Event Hubs Premium, AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, fallback exporter 전환, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
+description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
 document_type: lab
 services:
 - azure-event-hubs
@@ -28,6 +28,10 @@ official_sources:
   url: https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-overview
 - title: Create a Dedicated Azure Event Hubs cluster using Azure portal
   url: https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-cluster-create-portal
+- title: Microsoft.EventHub namespaces 2024-01-01 (Bicep reference)
+  url: https://learn.microsoft.com/azure/templates/microsoft.eventhub/2024-01-01/namespaces
+- title: Microsoft.EventHub clusters 2024-01-01 (Bicep reference)
+  url: https://learn.microsoft.com/azure/templates/microsoft.eventhub/2024-01-01/clusters
 - title: Partition load balancing for event processing
   url: https://learn.microsoft.com/azure/event-hubs/event-processor-balance-partition-load
 - title: Azure Monitor Metrics overview
@@ -42,6 +46,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/reliability/reliability-event-hubs
 - title: Azure Key Vault recovery management with soft delete and purge protection
   url: https://learn.microsoft.com/azure/key-vault/general/key-vault-recovery
+- title: How network security groups filter network traffic
+  url: https://learn.microsoft.com/azure/virtual-network/network-security-group-how-it-works
 - title: Use an internal load balancer with Azure Kubernetes Service (AKS)
   url: https://learn.microsoft.com/azure/aks/internal-lb
 - title: Use Microsoft Entra ID authorization for the Kubernetes API in AKS
@@ -66,7 +72,7 @@ official_sources:
   url: https://docs.victoriametrics.com/operator/resources/vmstaticscrape/
 last_verified: 2026-11-10
 review_cycle_days: 60
-estimated_time: 2h
+estimated_time: 4h
 cost: paid
 cleanup_required: true
 topic_order: 1
@@ -76,27 +82,29 @@ topic_order: 1
 
 이 실습은 [Event Hubs 지표 수집 방식 비교 topic](../index.md)의 구성을
 [`eventhubs-otel-victoriametrics-lab`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab)
-sample로 재현합니다. 아래 결과와 화면은 2026-11-09 UTC에 실제 구독에서 실행한
-기록이며, 구독 ID·resource 이름의 고유 suffix·IP는 가상 값으로 바꿨습니다.
+sample로 재현합니다. 아래 결과와 화면은 실제 구독에서 실행한 기록이며, 구독 ID·resource
+이름의 고유 suffix·IP는 가상 값으로 바꿨습니다.
 
-실행 환경은 세 개입니다. 첫 환경(`ehotel-lab1`)에서 원래 브랜치를 배포하며 오류를
-고쳤고, 수정이 끝난 sample을 새 환경(`ehotel-lab2`)에 `azd up` 한 번으로 다시 배포해
-재현성을 확인했습니다. PR 리뷰 수정 후에는 세 번째 환경(`ehotel-lab3`)에서 HTTPS 접속,
-재배포, 시나리오 중단, evidence 대기를 다시 확인했습니다. 시나리오·대시보드 수치는 두
-번째 환경 결과이고, fallback 전환과 VMSingle 보존 확인은 첫 환경에서 실행했습니다.
+기준 실행은 2026-11-10 UTC의 Dedicated 환경(`ehotel-ded`)입니다. Event Hubs Dedicated
+cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, 시나리오·대시보드·지연·
+분 bin 누락 수치는 모두 이 환경 결과입니다. 그 전날 Premium 1 PU 환경 세 개
+(`ehotel-lab1`–`ehotel-lab3`)에서 원래 브랜치의 배포 오류를 고치고 재현성, HTTPS 접속,
+재배포를 확인했으며, fallback 전환과 VMSingle 보존 확인은 첫 Premium 환경에서
+실행했습니다.
 
 ## 실습 결과물: 배포·시나리오·대시보드·정리 증거
 
 | 단계 | 명령 | 확인한 결과 |
 |---|---|---|
-| 배포 | `azd up -e ehotel-lab2` | 새 환경에서 provision, hook 6단계, workload 적용까지 14분 9초, exit 0 |
-| 구성 요소 | `kubectl`, VM Run Command | VMSingle·VMAgent·VMStaticScrape `operational`, Gateway 컨테이너 3개 running |
-| lag 시나리오 | `./scripts/run-scenario.sh` | partition별 peak 10,700–10,880건, producer 중지 5분 33초 뒤 회복 |
-| agent 검증 | `./scripts/collect-evidence.sh` | 28개 query 모두 통과. Azure Monitor와 API remote write 4개 지표 × 25분 일치, Diagnostic Settings 합계 일치 |
-| fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(첫 환경) |
-| 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(첫 환경) |
-| 리뷰 수정 확인 | 세 번째 환경 `azd up`, `azd deploy` 2회, 시나리오 중단 | 13분 42초 배포, 고정 인증서 HTTPS만 허용, 재배포 중 consumer Pod 유지, 중단 시 producer 0, 대시보드 요청 합계 656 = Azure Monitor 656 |
-| 정리 | `azd down --purge --force` | 세 환경 모두 resource group 삭제 확인, Dedicated cluster 없음 |
+| 배포 | `azd up -e ehotel-ded` | Dedicated cluster 1 CU 포함 provision, hook 6단계, workload 적용까지 13분 34초, exit 0 |
+| 재배포 | `azd provision -e ehotel-ded` 2회 | cluster Diagnostic Settings·subnet NSG 추가를 같은 환경에 적용(5분 30초, 3분 37초) |
+| 구성 요소 | `kubectl`, VM Run Command | cluster `Dedicated` 1 CU, namespace `clusterArmId` 연결, VMSingle·VMAgent·VMStaticScrape `operational`, Gateway 컨테이너 3개 running |
+| lag 시나리오 | `./scripts/run-scenario.sh` | partition별 peak 10,800–10,980건, producer 중지 5분 33초 뒤 회복 |
+| agent 검증 | `./scripts/collect-evidence.sh` | 29개 query 모두 통과. Azure Monitor와 API remote write 4개 지표 × 26분 대조, 저장된 분은 모두 일치하고 receiver 누락 2분 보고, Diagnostic Settings 합계 일치 |
+| 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–261초, 83분 동안 지표별 분 bin 누락 0–9개 |
+| fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(Premium 첫 환경) |
+| 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
+| 정리 | `azd down --purge --force` | Premium 세 환경 resource group 삭제 확인. Dedicated 환경은 cluster 생성 4시간 뒤 정리([정리](#cleanup)) |
 
 ## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
@@ -104,7 +112,7 @@ Collector는 receiver 4개를 source로 두고, source마다 scrape용과 remote
 두 개를 만듭니다. 두 pipeline은 같은 receiver instance를 공유하므로 두 전달 경로의 차이가
 서로 다른 Azure API 호출의 차이가 되지 않습니다.
 
-![실습 구성. Korea South의 Event Hubs Premium 1 PU와 Diagnostic Settings, telemetry용 Standard namespace, Azure Monitor Metrics API, 생성하지 않는 Dedicated profile. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private endpoint subnet에 Storage Blob·Key Vault](../images/architecture.svg)
+![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace·cluster Diagnostic Settings, telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private endpoint subnet에 Storage Blob·Key Vault](../images/architecture.svg)
 
 ```yaml
 # gateway/render_collector.py가 만드는 pipeline 일부
@@ -118,10 +126,16 @@ metrics/azure_monitor_api-remote_write:
   exporters: [prometheusremotewrite]
 ```
 
-두 exporter는 `resource_constant_labels.included: [source_path, delivery_path]`로 이
-두 resource attribute만 label로 올립니다. v0.165.0에서 deprecated된
-`resource_to_telemetry_conversion` 대신 이 설정을 사용해 불필요한 resource attribute가
-label로 퍼지지 않게 했습니다.
+Dedicated에서는 cluster 지표를 읽는 `azure_monitor/dedicated` receiver가
+`source_path="azure_monitor_dedicated"`로 같은 형태의 두 pipeline을 더합니다. namespace
+receiver 이름은 `azure_monitor/premium`을 그대로 쓰며, tag로 cluster 안 namespace를 찾습니다.
+
+두 exporter는 `resource_constant_labels.included: [source_path, delivery_path,
+azure.resource.id]`로 이 resource attribute만 label로 올립니다. `azure.resource.id`는
+Diagnostic Settings 레코드에만 있으며, namespace와 cluster가 같은 telemetry hub로 보내는
+같은 이름의 지표(`incomingmessages_total` 등)를 서로 다른 series로 나눕니다. v0.165.0에서
+deprecated된 `resource_to_telemetry_conversion` 대신 이 설정을 사용해 불필요한 resource
+attribute가 label로 퍼지지 않게 했습니다.
 
 ## 사전 조건: 도구·권한·리전
 
@@ -133,7 +147,7 @@ label로 퍼지지 않게 했습니다.
 
 | 주체 | 역할 | 범위 |
 |---|---|---|
-| Gateway VM identity | Monitoring Reader | Premium namespace |
+| Gateway VM identity | Monitoring Reader | workload namespace, Dedicated cluster |
 | Gateway VM identity | Azure Event Hubs Data Receiver | workload hub, telemetry hub |
 | Gateway VM identity | Storage Blob Data Reader / Contributor | `workload-checkpoints` / `collector-checkpoints` container |
 | Gateway VM identity | Key Vault Secrets User, AcrPull | Key Vault, ACR |
@@ -154,27 +168,33 @@ git clone https://github.com/hellices/devguidesample.git
 cd devguidesample/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab
 ```
 
-## 비용·리전: Premium 신규 생성 제한과 `EVENTHUBS_LOCATION`
+## 비용·리전: Dedicated 4시간 최소 과금과 `EVENTHUBS_LOCATION` { #cost }
 
-Event Hubs Premium, AKS(Standard_D4as_v5 노드 1개), Gateway VM(Standard_D2as_v5),
-Standard namespace, private endpoint 2개, Public IP 비용이 발생합니다. 실습이 끝나면
-바로 정리합니다.
+Event Hubs Dedicated cluster(1 CU), AKS(Standard_D4as_v5 노드 1개), Gateway VM
+(Standard_D2as_v5), Standard namespace, private endpoint 2개, Public IP 비용이 발생합니다.
+Dedicated cluster는 CU 단위로 과금되며 만든 뒤 최소 4시간 동안 삭제할 수 없고 그만큼
+과금되므로, 시나리오와 측정을 이 4시간 안에 마치고 바로 정리합니다. 비용을 줄이려면
+`azd env set EVENTHUBS_SKU Premium`으로 cluster 대신 Premium 1 PU namespace를 만듭니다.
 
-기본 리전은 Korea Central입니다. 이 실습의 구독에서는 Korea Central, Japan East,
-Southeast Asia에서 Premium namespace 신규 생성이 `NamespaceCreationIsRestricted`로
-거부되고 Korea South에서는 성공했습니다. 이런 구독에서는 Event Hubs만 다른 리전에
-둡니다.
+기본 리전은 Korea Central이고, Event Hubs만 `EVENTHUBS_LOCATION`으로 다른 리전에 둘 수
+있습니다. 이 실습은 Event Hubs를 Korea South에 두었습니다. 구독에서 cluster를 만들 수
+있는 리전은 `az eventhubs cluster available-region`으로 확인합니다. Premium으로 배포할
+때는 이 구독의 Korea Central, Japan East, Southeast Asia에서 Premium namespace 신규
+생성이 `NamespaceCreationIsRestricted`로 거부되고 Korea South에서는 성공했습니다.
 
 ```bash
-azd env new ehotel-lab --subscription <subscription-id> --location koreacentral
+azd env new ehotel-ded --subscription <subscription-id> --location koreacentral
 azd env set EVENTHUBS_LOCATION koreasouth
+# azd env set EVENTHUBS_SKU Premium   # cluster 대신 Premium 1 PU
 ```
 
-`EVENTHUBS_LOCATION`은 Premium과 telemetry Standard namespace를 함께 옮깁니다.
+`EVENTHUBS_LOCATION`은 cluster와 workload namespace, telemetry Standard namespace를 함께
+옮깁니다.
 Diagnostic Settings의 sink Event Hub는 원본 리소스와 같은 리전이어야 하기 때문입니다.
 Korea South에는 availability zone이 없으므로 템플릿은 `zoneRedundant`를 지정하지
 않습니다. availability zone이 있는 리전에서는 새 namespace에 zone redundancy가 자동으로
-적용됩니다.
+적용됩니다. zone-redundant Dedicated cluster는 3 CU 이상이 필요하고 ARM template로는 만들
+수 없어 지원 요청이 필요하므로, 이 실습의 1 CU cluster는 zone redundancy 없이 만듭니다.
 
 ## 배포: `azd up` 단계와 실행 결과
 
@@ -184,22 +204,25 @@ deploy 단계는 `postdeploy` hook만 실행합니다.
 | hook | 하는 일 |
 |---|---|
 | `preprovision` | 활성 구독 확인, provider 등록 확인, operator egress `/32`, 배포자 object ID, Grafana 비밀번호와 VM용 SSH 공개키 생성 |
-| provision | VNet(gateway·aks·private-endpoints subnet), ACR, private endpoint 뒤의 Storage·Key Vault, Event Hubs 2개와 Diagnostic Settings, AKS, Gateway VM, 역할 할당 |
+| provision | VNet(gateway·aks·private-endpoints subnet과 subnet별 NSG), ACR, private endpoint 뒤의 Storage·Key Vault, Dedicated cluster와 그 안의 workload namespace, telemetry namespace, namespace·cluster Diagnostic Settings, AKS, Gateway VM, 역할 할당 |
 | `postprovision` | ① lab 전용 kubeconfig ② producer·consumer federated credential ③ ACR build와 digest 고정 ④ VictoriaMetrics Operator·VMSingle·VMAgent·VMStaticScrape ⑤ Run Command로 Gateway 번들 적용과 Grafana TLS 인증서 생성, 공개 인증서 회수 ⑥ 고정한 인증서로 operator 경로 Grafana HTTPS health |
 | `postdeploy` | Workload Identity service account와 producer(0 replica)·slow consumer(1 replica) |
 
-![azd provision과 azd deploy 실행 결과. preprovision 확인, Key Vault·ACR·Storage·VNet·private endpoint·Event Hubs namespace 완료, postprovision 6단계와 GATEWAY_READY, 컨테이너 3개 running, 4분 3초 만의 provision 성공, workload rollout 완료](../images/azd-provision-deploy.png)
+![azd up 실행 결과. preprovision 확인, Resource group·VNet·ACR·Key Vault·Storage·private endpoint·Event Hubs namespace 2개·AKS 완료, postprovision 6단계와 GATEWAY_READY, 컨테이너 3개 running, workload rollout, 13분 34초 만의 SUCCESS](../images/azd-provision-deploy.png)
 
-화면은 [배포 중 오류](#errors)를 모두 고친 뒤 새 환경에서 `azd up` 한 번으로 배포한
-결과입니다. 기본 환경이 아닌 `-e ehotel-lab2`로 실행해 hook이 지정한 환경에만 값을
-쓰는지도 함께 확인했습니다. Gateway VM에는 inbound SSH를 열지 않으며, 설정 파일과
-Compose 번들은 VM Run Command로 전달합니다.
+화면은 Dedicated 기본값으로 새 환경 `-e ehotel-ded`에 `azd up` 한 번으로 배포한
+결과입니다. azd 진행 화면은 cluster를 따로 표시하지 않지만, cluster는 08:10:00에
+`Active`로 만들어졌고 22초 뒤 workload namespace가 그 cluster 안에 만들어졌습니다. Gateway
+VM에는 inbound SSH를 열지 않으며, 설정 파일과 Compose 번들은 VM Run Command로
+전달합니다.
 
 ## 구성 요소 상태: VictoriaMetrics·workload·Gateway
 
 배포 직후 각 계층이 실제로 동작하는지 확인합니다.
 
 ```bash
+az resource list -g <resource-group> --query "[?contains(type,'EventHub')]" -o table
+az eventhubs namespace show -g <resource-group> -n <workload-namespace> --query "{sku:sku.name,cluster:clusterArmId}"
 export KUBECONFIG=.azure/<env-name>/kubeconfig
 kubectl get vmsingle,vmagent,vmstaticscrape -n eventhubs-observability
 kubectl get pods -n eventhubs-observability
@@ -208,7 +231,12 @@ az vm run-command invoke -g <resource-group> -n <gateway-vm> --command-id RunShe
 curl -s --cacert .azure/<env-name>/grafana.crt https://<gateway-public-ip>:3000/api/health
 ```
 
-![구성 요소 상태 확인 결과. VMSingle·VMAgent·VMStaticScrape operational, slow consumer·operator·vmagent·vmsingle Pod Running(재시작 0), Gateway의 grafana·lag-exporter·otel-collector 컨테이너 running, Grafana health database ok](../images/component-health.png)
+![구성 요소 상태 확인 결과. Event Hubs cluster Dedicated 1과 Standard sku namespace 2개, workload namespace의 clusterArmId가 cluster를 가리킴, VMSingle·VMAgent·VMStaticScrape operational, slow consumer·operator·vmagent·vmsingle Pod Running(재시작 0), Gateway의 grafana·lag-exporter·otel-collector 컨테이너 running, Grafana health database ok](../images/component-health.png)
+
+템플릿은 workload namespace의 `clusterArmId`(Cluster ARM ID of the Namespace)에 cluster
+ID를 지정합니다. 이렇게 만든 namespace는 ARM에서 sku가 `Standard`로 표시되므로, 템플릿도
+cluster 안 namespace에는 `Standard` sku를 지정하며 `Microsoft.EventHub` 2024-01-01 API로
+배포에 성공했습니다.
 
 ## lag 상승·회복 시나리오 { #lag }
 
@@ -222,33 +250,33 @@ slow consumer는 partition마다 event당 30 ms를 쉬며 20 event마다 checkpo
 ./scripts/collect-evidence.sh
 ```
 
-![lag 시나리오와 agent 검증 실행 결과. baseline·부하·producer 중지 시각, scenario.json, probe의 source·delivery별 series와 freshness, 대시보드 publish·verify·capture 28/28, Azure Monitor 직접 조회와 remote write·scrape·Diagnostic Settings 합계 비교](../images/scenario-and-verification.png)
+![lag 시나리오와 agent 검증 실행 결과. baseline·부하·producer 중지 시각, scenario.json, probe의 source·delivery별 series와 freshness, 대시보드 publish·verify·capture 29/29, Azure Monitor 직접 조회와 remote write·Diagnostic Settings 합계 비교, ThrottledRequests 09:08·09:25 receiver 누락 경고](../images/scenario-and-verification.png)
 
 lag exporter는 partition의 마지막 enqueue sequence에서 consumer가 마지막으로 저장한
 checkpoint sequence를 뺀 값을 15초마다 계산합니다. Event Hubs는 checkpoint를 consumer
 group과 partition 단위로 저장하므로 같은 consumer group의 Blob checkpoint만 읽고,
 checkpoint가 없는 partition은 lag 값을 만들지 않고 존재 여부만 표시합니다.
 
-![partition 4개의 lag를 누적한 Grafana 영역 그래프. 19:40 부하 시작 후 꾸준히 늘어 19:50 무렵 합계 약 43,000건으로 정점을 찍고, producer 중지 후 19:56 무렵 0으로 회복](../images/consumer-lag-rise-recovery.png)
+![partition 4개의 lag를 누적한 Grafana 영역 그래프. 09:06 부하 시작 후 꾸준히 늘어 09:16 합계 43,560건으로 정점을 찍고, producer 중지 후 09:22 무렵 0으로 회복](../images/consumer-lag-rise-recovery.png)
 
 | 단계 | UTC | 관측 |
 |---|---|---|
-| baseline | 19:35:19 | producer 중지, 모든 partition lag 0 |
-| 부하 | 19:40:19–19:50:24 | producer 목표 200 events/s, 1 KiB. Azure Monitor 기준 수신 12,000 msg/min, 처리 7,200–8,400 msg/min |
-| lag 정점 | 19:50 무렵 | partition별 최대 10,700–10,880건(대시보드 구간 최대), 합계 약 43,000건. 스크립트가 producer 중지 순간 읽은 최대 lag는 9,900 |
-| 회복 | 19:55:57 | 최대 lag가 정점의 20% 이하로 감소(producer 중지 후 5분 33초), 이후 0 |
+| baseline | 09:00:43 | producer 중지, 모든 partition lag 0 |
+| 부하 | 09:05:43–09:15:52 | producer 목표 200 events/s, 1 KiB. Azure Monitor 기준 수신 12,000 msg/min, 처리 7,200–8,100 msg/min |
+| lag 정점 | 09:16:00 | partition별 최대 10,800–10,980건, 합계 43,560건. 스크립트가 producer 중지 순간 읽은 최대 lag는 10,280 |
+| 회복 | 09:21:25 | 최대 lag가 정점의 20% 이하로 감소(producer 중지 후 5분 33초), 09:22:15에 0 |
 
-Azure Monitor `IncomingMessages`는 19:35–20:00에 120,200건이었습니다. lag 해상도는
+Azure Monitor `IncomingMessages`는 09:00–09:26에 118,200건이었습니다. lag 해상도는
 consumer의 checkpoint 주기(20 event)와 exporter 조회 주기(15초)에 묶이며, checkpoint blob
 수정 시각을 시간 단위 lag로 해석하지 않습니다. lag exporter는 실제 시각으로 기록되지만
-Azure Monitor의 `IncomingMessages` 분 bin은 19:42–19:52에 값이 나타나 producer 실제 구간보다
-약 1.5–2분 늦은 timestamp로 기록됐습니다([지연 측정](#latency)에서 같은 현상을 확인).
+Azure Monitor의 `IncomingMessages` 분 bin은 09:07–09:17에 값이 나타나 producer 실제 구간보다
+약 1분 늦은 timestamp로 기록됐습니다([지연 측정](#latency)에서 같은 현상을 확인).
 
-producer 로그의 `sent_total`(118,600)은 10초 간격 로그의 마지막 값이므로 전송량은
-Azure Monitor `IncomingMessages`를 기준으로 봅니다. 기록한 실행의 event body는 리뷰에서
-찾은 크기 계산 문제로 설정값 1,024바이트보다 13바이트 큰 1,037바이트였고, 지금 sample은
-정확히 `PAYLOAD_BYTES`로 보냅니다. 첫 환경의 같은 시나리오에서도
-peak 10,860–11,040건, 회복 6분으로 비슷했습니다.
+producer 로그의 `sent_total`(116,400)은 10초 간격 로그의 마지막 값이므로 전송량은
+Azure Monitor `IncomingMessages`를 기준으로 봅니다. 같은 Dedicated 환경의 첫 시나리오
+(08:21–08:44)도 최대 lag 10,320건, 회복 5분 32초로 비슷했고, 이전 Premium 1 PU 환경에서도
+partition별 peak 10,700–11,040건, 회복 5분 33초–6분이었습니다. 이 부하에서는 lag가 consumer
+처리 속도로 정해지므로 tier에 따른 차이가 거의 없습니다.
 
 시나리오는 10분 넘게 VMSingle을 조회하므로 `kubectl port-forward`가 `lost connection
 to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 없으면 port-forward를
@@ -266,8 +294,10 @@ to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 �
 4. `agent/capture.mjs`: Playwright로 로그인해 kiosk 모드 전체 화면을 캡처
 5. 같은 구간의 Azure Monitor PT1M 값을 `az monitor metrics list`로 조회하고
    `agent/compare_azure_monitor.py`가 remote write sample과 분 단위로 비교. 요청한 4개
-   지표의 `[from, to)` 모든 분이 Azure Monitor에 있고 remote write 값과 같아야 완료로
-   판정하며, 아니면 불완전한 evidence로 실패
+   지표의 `[from, to)` 모든 분이 Azure Monitor에 있고 remote write에 저장된 분이 모두 같은
+   값이어야 완료로 판정합니다. remote write에 없는 분은 그 뒤 5분 안에 저장된 bin이 있으면
+   receiver가 놓친 [분 bin 누락](#gaps)으로 보고하고, 뒤 bin도 없으면 아직 도착하지 않은
+   것으로 보고 실패
 
 agent는 대시보드를 만들기 전에 실제 저장된 metric을 조회하고, 만든 뒤에는 query와
 화면을 모두 확인합니다.
@@ -275,34 +305,44 @@ agent는 대시보드를 만들기 전에 실제 저장된 metric을 조회하�
 - **probe**: metric 이름, label key, `source_path × delivery_path` 조합별 series·sample
   수와 freshness를 조회합니다. 식별자가 담긴 label 값은 저장하지 않습니다.
 - **build**: 질문 → 지표 → MetricsQL → 시각화 표에 따라 panel을 만듭니다. 합계는 stat,
-  정상 범위는 gauge, 비교는 table·bar gauge, 추이만 time series로 씁니다.
+  정상 범위는 gauge, 비교는 table·bar gauge, 추이만 time series로 씁니다. `EVENTHUBS_SKU`가
+  Dedicated이면 용량 행을 cluster `CPU`·`AvailableMemory`·`ClusterUtilization`으로 만들고
+  처리량을 CU당 값으로 나누며, API와 Diagnostic Settings 비교도 cluster CPU로 그립니다.
 - **verify**: `Exporter send failures`가 0행이어서, 첫 실패 때 생기는 counter의 특성을
-  반영하도록 고쳤습니다. 최종 실행에서 28개 query가 모두 통과했습니다.
+  반영하도록 고쳤습니다. Dedicated 실행에서 29개 query가 모두 통과했습니다.
 - **look**: 첫 캡처에서는 time series의 모든 선이 같은 색이고, 과거 구간의 "now" lag가 0으로
   보이며, checkpoint 표의 partition 열까지 경고색이 칠해져 있었습니다. series별 palette,
   구간 peak lag, 공통 눈금 bar gauge, 열 단위 색상, 겹치는 비교 선의 점선 구분으로 고쳤습니다.
 
 ![look 단계에서 고치기 전 첫 Grafana 캡처. CPU·memory와 lag 선이 모두 같은 초록색이고 lag 패널이 현재 값 0만 보여 줌](../images/look-step-before-fix.png)
 
-같은 25분 구간의 Azure Monitor 직접 조회와 비교한 결과입니다.
+같은 26분 구간의 Azure Monitor 직접 조회와 비교한 결과입니다.
 
 | 지표 | Azure Monitor | API → remote write | API → scrape | Diagnostic Settings → remote write |
 |---|---:|---:|---:|---:|
-| `IncomingMessages` | 120,200 | 120,200 (25/25분 일치) | 240,400 | 120,200 (값이 있는 11분) |
-| `OutgoingMessages` | 122,400 | 122,400 (25/25분 일치) | 278,100 | 122,400 (값이 있는 17분) |
-| `IncomingRequests` | 1,538 | 1,538 (25/25분 일치) | 3,222 | 1,538 (25분) |
-| `ThrottledRequests` | 0 | 0 (25/25분 일치) | 0 | 없음 |
+| `IncomingMessages` | 118,200 | 118,200 (26/26분 일치) | 236,400 | 118,200 (값이 있는 11분) |
+| `OutgoingMessages` | 118,200 | 118,200 (26/26분 일치) | 233,600 | 118,200 (값이 있는 17분) |
+| `IncomingRequests` | 1,528 | 1,528 (26/26분 일치) | 3,050 | 1,528 (26분) |
+| `ThrottledRequests` | 0 | 0 (24/26분, 09:08·09:25 누락) | 0 | 없음 |
 
 scrape 합계가 두 배 안팎인 이유와 대시보드 규칙은 [topic의 전달 경로](../index.md#delivery)에
 정리했습니다. source·delivery별 분당 sample 수는 다음과 같았습니다.
 
 | source | remote write | scrape |
 |---|---|---|
-| Metrics API 지표 | 1.00 | 2.00 (30초 scrape) |
+| Metrics API namespace 지표 | 0.99 | 2.00 (30초 scrape) |
+| Metrics API cluster 지표 | 0.89 (분 bin 누락 반영) | 2.00 |
 | lag exporter | 4.00 (Collector 15초 수집) | 2.00 |
-| Diagnostic Settings | 0.76 (값이 있는 분만) | 1.92 |
+| Diagnostic Settings | 0.77 (값이 있는 분만) | 1.50 |
 
-캡처 당시 대시보드의 Incoming requests stat은 1,533으로 표의 1,538과 달랐습니다. Azure
+![Dedicated cluster의 Role별 CPU와 가용 memory, ClusterUtilization 추이. CPU는 Backend·Gateway 모두 2–11%, 가용 memory는 Backend 45%·Gateway 41–42%로 일정, ClusterUtilization은 0](../images/dedicated-cpu-memory.png)
+
+분당 12,000건을 받는 동안 cluster `CPU`의 Role 최댓값은 2–11%였고, 정점은 부하 중이 아니라
+consumer가 밀린 이벤트를 따라잡던 09:18–09:24에 나왔습니다. `AvailableMemory`는 부하와
+상관없이 Backend 45%, Gateway 41–42%였고, preview 지표 `ClusterUtilization`은 내내 0이었습니다.
+
+다음 두 항목은 이전 Premium 환경에서 찾아 고친 대시보드 문제입니다. 캡처 당시 대시보드의
+Incoming requests stat은 1,533으로 Azure Monitor의 1,538과 달랐습니다. Azure
 Monitor 표본은 분 bin 시작 시각을 timestamp로 쓰는데, stat이 Grafana 구간 끝에서
 `[$__range]`로 조회해 `(from, to]` 창이 되었고 첫 분 bin이 빠지고 끝 bin이 들어갔습니다.
 `offset 1s`로 `[from, to)` 창에 맞췄고, 로컬 VictoriaMetrics v1.155.0에 같은 형태의 표본을
@@ -313,27 +353,33 @@ DS Event Hub series stat(178)도 두 전달 경로의 복제본을 함께 센 �
 
 ![수정 후 세 번째 환경의 Grafana 대시보드 상단. Incoming·Successful requests 656건, Throttled requests 0건](../images/request-window-fixed.png)
 
-첫 환경에서는 Diagnostic Settings를 만든 뒤 약 55분 동안, 세 번째 환경에서는 약 45분
-동안 telemetry Event Hub 수신이 0건이었고, 두 번째 환경에서는 약 20분 안에 도착했습니다. 두 환경 모두 관리 그룹 정책으로
+Premium 첫 환경에서는 Diagnostic Settings를 만든 뒤 약 55분 동안, 세 번째 환경에서는 약
+45분 동안 telemetry Event Hub 수신이 0건이었고, 두 번째 환경에서는 약 20분 안에
+도착했습니다. Dedicated 환경에서는 namespace 설정 후 약 15분, cluster 설정 후 약 13분 안에
+도착했습니다. Premium의 두 환경 모두 관리 그룹 정책으로
 telemetry namespace의 local 인증이 꺼져 있었으므로 이것이 원인은 아닙니다. Learn은
 diagnostic setting을 만든 뒤 데이터가 흐르기까지 최대 90분이 걸릴 수 있다고
-설명하며, 세 환경의 관측은 모두 이 범위 안입니다. Diagnostic Settings 경로를 비교하려면
+설명하며, 네 환경의 관측은 모두 이 범위 안입니다. Diagnostic Settings 경로를 비교하려면
 배포 직후가 아니라 설정 후 충분한 시간이 지난 뒤 시나리오를 실행합니다. 대시보드는 이
 경로를 선택 panel로 두어, 데이터가 없을 때도 다른 검증은 계속 진행합니다.
 
 ## Metrics API 수집 설정: 지표 목록·dimension·권한 { #receiver-settings }
 
-`azure_monitor/premium` receiver는 대시보드에 필요한 9개 지표(`NamespaceCpuUsage`,
-`NamespaceMemoryUsage`, `IncomingRequests`, `SuccessfulRequests`, `ThrottledRequests`,
-`IncomingMessages`, `OutgoingMessages`, `IncomingBytes`, `OutgoingBytes`)만 수집합니다.
-다른 지표는 `metrics` 목록에 더하면 같은 경로로 수집됩니다.
+`azure_monitor/premium` receiver는 workload namespace에서 대시보드에 필요한 9개
+지표(`NamespaceCpuUsage`, `NamespaceMemoryUsage`, `IncomingRequests`, `SuccessfulRequests`,
+`ThrottledRequests`, `IncomingMessages`, `OutgoingMessages`, `IncomingBytes`,
+`OutgoingBytes`)만 수집합니다. cluster 안 namespace에는 앞의 두 지표가 없으며, receiver는
+지표 정의에 있는 7개만 조회했습니다. `azure_monitor/dedicated` receiver는 cluster에서 `CPU`·
+`AvailableMemory`(Maximum, `Role`), `ClusterUtilization`(Average), `IncomingMessages`·
+`OutgoingMessages`·`IncomingBytes`·`OutgoingBytes`(Total)를 수집합니다. 다른 지표는
+`metrics` 목록에 더하면 같은 경로로 수집됩니다.
 
 - **0값과 데이터 없음.** `ThrottledRequests`를 기본값대로 `EntityName`·`OperationResult`로
   분할 조회하면 throttle이 없는 동안 time series 자체가 오지 않았습니다.
   `dimensions.overrides`로 이 지표만 분할하지 않게 하자 명시적인 0이 저장됐고, 대시보드는
   "throttle 없음"과 "데이터 없음"을 구분합니다.
-- **권한 범위.** namespace 범위 `Monitoring Reader`만으로 리소스 목록 조회와 ARM metrics
-  API는 동작했지만, `use_batch_api: true`의 `metrics:getBatch` 호출은 403이었습니다. Learn은
+- **권한 범위.** namespace·cluster 범위 `Monitoring Reader`만으로 리소스 목록 조회와 ARM
+  metrics API는 동작했지만, `use_batch_api: true`의 `metrics:getBatch` 호출은 403이었습니다. Learn은
   batch API에 조회 대상 구독의 Monitoring Reader가 필요하다고 설명합니다. namespace 하나만
   수집하므로 batch API를 끄고 최소 권한을 유지했습니다.
 - **조회 창.** v0.165.0 receiver는 `collection_interval`(60초)마다 `timespan`과 `interval`을
@@ -341,12 +387,48 @@ diagnostic setting을 만든 뒤 데이터가 흐르기까지 최대 90분이 �
   내보냅니다(`scraper.go`). [지연 측정](#latency)에서 VictoriaMetrics에 저장된 값은 모두
   Azure Monitor의 최종값과 같았습니다.
 
+### 분 bin 누락 { #gaps }
+
+같은 조회 방식 때문에 receiver가 한 번 놓친 분 bin은 다시 채워지지 않습니다. 같은
+매개변수(`timespan=PT1M`, `interval=PT1M`)로 Metrics API를 직접 호출하면 매번 1–2분 전에
+끝난 분 bin 하나만 돌아왔습니다(09:42:10 호출 → 09:40 bin). 그 조회 시점에 Azure Monitor에
+아직 값이 없던 bin은 다음 조회 창에서 벗어나고, receiver는 이미 지난 timestamp를 내보내지
+않습니다.
+
+08:21–09:44 UTC 83분 동안 Azure Monitor의 분 bin과 remote write에 저장된 bin을 지표별로
+비교했습니다. Gateway를 다시 배포한 09:00 전후 bin은 제외했고, dimension 분할로 0값이
+series로 오지 않는 `IncomingMessages`·`OutgoingMessages`는 값이 있는 bin만 셌습니다.
+
+| 리소스 | 지표 | Azure Monitor bin | 누락 |
+|---|---|---:|---|
+| namespace | `IncomingMessages`, `OutgoingMessages` | 23, 34 | 0 |
+| namespace | `IncomingRequests`, `SuccessfulRequests` | 각 83 | 각 1 (09:31) |
+| namespace | `ThrottledRequests`(분할 없이 별도 조회) | 83 | 4 (09:08, 09:25, 09:31, 09:37) |
+| cluster | `CPU`, `AvailableMemory`(Backend) | 각 82 | 각 5 (09:09, 09:16, 09:31, 09:35, 09:37) |
+| cluster | `ClusterUtilization` | 82 | 9 |
+| cluster | `IncomingMessages` | 26 | 1 (09:16) |
+
+- **gauge는 영향이 작습니다.** 대시보드의 CPU·memory gauge는 최근 10분 안의 마지막 값을
+  보므로 한두 분이 비어도 값이 남습니다.
+- **합계는 작게 나올 수 있습니다.** 값이 있는 분이 빠지면 구간 합계가 그만큼 줄어듭니다. 시나리오
+  26분의 `IncomingMessages`·`OutgoingMessages`·`IncomingRequests`는 누락이 없었지만, 정확한
+  합계는 Azure Monitor 직접 조회나 Diagnostic Settings 경로로 확인합니다. Diagnostic Settings
+  경로는 cluster CPU의 Metrics API 경로가 비어 있던 09:09·09:16에도 값을 받았습니다.
+- **evidence는 누락을 숨기지 않습니다.** `collect-evidence.sh`는 누락한 분을
+  `remote_write_gaps`에 남기고 경고를 출력합니다.
+
 ## 지연 측정: Azure Monitor + OpenTelemetry Collector { #latency }
 
-Premium 1 PU와 Standard 1 TU namespace(Korea South)를 따로 만들고, 로컬에서 실행한
-otelcol-contrib 0.165.0과 VictoriaMetrics v1.155.0으로 이벤트 전송부터 저장까지의 시간을
-2026-11-10 07:03–07:38 UTC에 측정했습니다. Collector 설정은 이 sample의 `azure_monitor/premium`과
-같고(`collection_interval: 60s`, `initial_delay: 5s`, `use_batch_api: false`, dimension 분할,
+Dedicated 환경에서는 배포한 Gateway의 Collector와 AKS의 VMSingle을 그대로 거치는 경로를
+2026-11-10 08:24–08:51 UTC에 측정했습니다. workload namespace에 측정용 hub `lat`(partition
+1개)를 따로 만들고 측정자에게 그 namespace의 Azure Event Hubs Data Sender 역할을 준 뒤,
+시나리오 트래픽과 섞이지 않도록 `EntityName eq 'lat'`로 걸러 비교했습니다. VMSingle은
+`kubectl port-forward`로 조회했습니다.
+
+그 전에 Premium 1 PU와 Standard 1 TU namespace(Korea South)를 따로 만들고, 로컬에서 실행한
+otelcol-contrib 0.165.0과 VictoriaMetrics v1.155.0으로 같은 측정을 07:03–07:38 UTC에
+했습니다. 로컬 Collector 설정은 이 sample의 `azure_monitor/premium`과 같고
+(`collection_interval: 60s`, `initial_delay: 5s`, `use_batch_api: false`, dimension 분할,
 `batch` 5초, remote write queue), 인증만 Managed Identity 대신 `azure_auth`의
 `use_default: true`(Azure CLI 로그인)를 썼습니다.
 
@@ -357,27 +439,32 @@ otelcol-contrib 0.165.0과 VictoriaMetrics v1.155.0으로 이벤트 전송부터
 3. 두 저장소의 bin 합계가 누적 전송 수에 처음 도달한 시각에서 전송 시각을 빼 지연으로 봅니다.
    bin timestamp가 이벤트 시각과 어긋나도 합계로 비교하므로 영향을 받지 않습니다.
 
-| 항목 | Premium 1 PU | Standard 1 TU |
-|---|---|---|
-| 전송 | 15분, 2,550건 | 20분, 3,900건 |
-| 이벤트 → Metrics API 조회 가능 | 72–102초 (중앙값 92) | 81–151초 (중앙값 115) |
-| Metrics API → VictoriaMetrics | 130–160초 (중앙값 140) | 120–150초 (중앙값 130) |
-| 이벤트 → VictoriaMetrics 저장 | 230–232초 (중앙값 232) | 221–281초 (중앙값 250) |
-| VictoriaMetrics 도착 시점의 bin 경과 시간 | 177초 | 166초 |
-| 저장 값 | 15개 bin 모두 Azure Monitor 최종값과 같음, 합계 2,550 | 10개 bin 모두 같음, 합계 3,900 |
-| bin timestamp | 이벤트를 보낸 분보다 1분 뒤(07:15:05 전송 → 07:16 bin) | 2분 단위(07:03:05·07:04:05 전송 → 07:05 bin) |
+| 항목 | Dedicated 1 CU (배포한 Gateway) | Premium 1 PU (로컬) | Standard 1 TU (로컬) |
+|---|---|---|---|
+| 전송 | 15분, 2,550건 | 15분, 2,550건 | 20분, 3,900건 |
+| 이벤트 → Metrics API 조회 가능 | 71–101초 (중앙값 81) | 72–102초 (중앙값 92) | 81–151초 (중앙값 115) |
+| Metrics API → VictoriaMetrics | 100–130초 (12회), 전체 100–170초 | 130–160초 (중앙값 140) | 120–150초 (중앙값 130) |
+| 이벤트 → VictoriaMetrics 저장 | 190–261초 (중앙값 201) | 230–232초 (중앙값 232) | 221–281초 (중앙값 250) |
+| VictoriaMetrics 도착 시점의 bin 경과 시간 | 146초(일부 206초) | 177초 | 166초 |
+| 저장 값 | 15개 bin 모두 Azure Monitor 최종값과 같음, 합계 2,550 | 15개 bin 모두 같음, 합계 2,550 | 10개 bin 모두 같음, 합계 3,900 |
+| bin timestamp | 이벤트를 보낸 분보다 1분 뒤(08:25:05 전송 → 08:26 bin) | 1분 뒤(07:15:05 전송 → 07:16 bin) | 2분 단위(07:03:05·07:04:05 전송 → 07:05 bin) |
 
-Premium bin이 1분 뒤 timestamp로 기록되는 현상은 [lag 시나리오](#lag)에서 Azure Monitor 값이
-producer 실제 구간보다 늦게 나타난 것과 같습니다. VictoriaMetrics에 도착한 시점의 bin 경과
-시간(166–177초)에 다음 조회까지의 대기(최대 60초)를 더하면, 실습 대시보드에서 본 마지막 sample
-경과 시간 194–213초와 같은 범위입니다. 로컬 실행이므로 Gateway VM의 네트워크 경로와는 차이가
-있을 수 있고, 10초 간격 조회라 측정값에는 ±10초 오차가 있습니다.
+Dedicated 측정 중 08:28:05–08:29:15에 port-forward가 끊겨 VMSingle 조회가 70초 비었습니다.
+Collector 구간의 12회 값은 이 공백 직후 첫 도달로 잡혀 늦게 기록됐을 수 있는 3회를 뺀
+값입니다. 같은 Dedicated 환경의 cluster `CPU` bin도 VictoriaMetrics 도착 시점 경과 시간이
+146–206초로 namespace 지표와 같았습니다.
+
+bin이 1분 뒤 timestamp로 기록되는 현상은 [lag 시나리오](#lag)에서 Azure Monitor 값이
+producer 실제 구간보다 늦게 나타난 것과 같습니다. 시나리오 뒤 probe에서 Metrics API remote
+write의 마지막 sample 경과 시간은 157–158초로, 도착 시점 bin 경과 시간(146초)과 다음 조회까지의
+대기를 더한 범위입니다. Premium·Standard는 로컬 실행이라 Gateway VM의 네트워크 경로와 차이가
+있을 수 있고, 10초 간격 조회라 모든 측정값에는 ±10초 오차가 있습니다.
 
 ## fallback exporter 전환
 
 `azuremonitorreceiver`가 실패하는 환경을 대비해 `webdevops/azure-metrics-exporter`
 26.10.0을 Compose `fallback` profile로 둡니다. 18:16–18:20 UTC에 API receiver를 끄고
-fallback으로 전환했습니다(첫 환경).
+fallback으로 전환했습니다(2026-11-09 Premium 첫 환경).
 
 ```bash
 ENABLE_API_RECEIVER=false ENABLE_FALLBACK_EXPORTER=true GATEWAY_ONLY=true azd hooks run postprovision
@@ -399,7 +486,7 @@ label 형태(`azurerm_resource_metric{metric,aggregation}`)가 달라 대시보�
 
 ## VMSingle 재시작과 데이터 보존 { #retention }
 
-VMSingle은 10 GiB `managed-csi-premium` PVC와 7일 보존으로 실행합니다. 첫 환경에서
+VMSingle은 10 GiB `managed-csi-premium` PVC와 7일 보존으로 실행합니다. Premium 첫 환경에서
 Pod를 지우고 다시 조회했을 때 17:46–18:12 구간 `IncomingMessages` 합계는 120,000으로
 같았습니다.
 
@@ -409,21 +496,26 @@ Pod를 지우고 다시 조회했을 때 17:46–18:12 구간 `IncomingMessages`
 
 ## Premium PU와 Dedicated CU 수집 profile { #sku }
 
-Premium과 Dedicated는 수집 구조가 같아도 용량 단위와 CPU·memory 지표의 의미가 다릅니다.
-이 실습은 Dedicated cluster를 만들지 않고, `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 기존
-cluster를 지정했을 때만 `source_path="azure_monitor_dedicated"` 수집 profile을 렌더링합니다.
-Dedicated cluster는 만든 뒤 최소 4시간 동안 삭제할 수 없고 그만큼 과금됩니다.
+Premium과 Dedicated는 수집 구조가 같아도 용량 지표가 있는 리소스와 의미가 다릅니다.
+`EVENTHUBS_SKU`가 `Dedicated`(기본값)이면 템플릿이 1 CU cluster와 그 안의 namespace를
+만들고, Collector는 namespace 지표와 cluster 지표를 따로 수집합니다. `Premium`이면 1 PU
+namespace를 만들며, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 같은 resource group의
+기존 cluster를 함께 수집할 수 있습니다.
 
 | 항목 | Premium namespace | Dedicated cluster |
 |---|---|---|
 | 용량 단위 | PU(Processing Unit) | CU(Capacity Unit) |
-| CPU | `NamespaceCpuUsage`, `Replica` | `CPU`, `Role`, Maximum |
-| memory | `NamespaceMemoryUsage`(사용률) | `AvailableMemory`(가용률, 낮을수록 위험) |
-| 종합 사용률 | 없음 | `ClusterUtilization`(preview) |
-| 이 실습 | 1 PU로 runtime 검증 | 문서 기반 profile, runtime 미검증 |
+| CPU | namespace의 `NamespaceCpuUsage`, `Replica` | cluster의 `CPU`, `Role`(Backend·Gateway), Maximum |
+| memory | namespace의 `NamespaceMemoryUsage`(사용률) | cluster의 `AvailableMemory`(가용률, 낮을수록 위험) |
+| 종합 사용률 | 없음 | `ClusterUtilization`(preview, 실측 0) |
+| namespace 지표 | 38개 | cluster 안 namespace는 CPU·memory가 빠진 36개 |
+| 삭제·과금 | 즉시 삭제 가능 | 생성 후 4시간 동안 삭제 불가, 최소 4시간 과금 |
+| 이 실습 | 2026-11-09 1 PU 세 환경에서 runtime 검증 | 2026-11-10 1 CU에서 runtime 검증 |
 
-대시보드는 처리량을 `$pu` 변수로 나눠 PU당 값으로 보여 주며, Dedicated profile에서는 가용
-메모리 gauge의 threshold 방향을 반대로 둡니다.
+대시보드는 처리량을 `$pu` 변수로 나눠 PU 또는 CU당 값으로 보여 주며, Dedicated에서는 가용
+메모리 gauge의 threshold 방향을 반대로 둡니다. Learn은 Dedicated cluster의 `CPU`를 Max
+aggregation과 `Role` 필터로 보고 70%에 가까워지면 확장을 검토하라고 안내하므로, CPU gauge도
+70%·85%에서 색이 바뀝니다.
 
 ## 배포 중 오류와 수정 { #errors }
 
@@ -447,6 +539,18 @@ Dedicated cluster는 만든 뒤 최소 4시간 동안 삭제할 수 없고 그�
 | `azd up -e <env>`의 hook 값이 기본 환경에 기록될 위험 | hook 안의 `azd env set`이 `-e` 없이 기본 환경을 사용 | `azd_env` helper로 `AZURE_ENV_NAME`을 항상 지정 |
 | `postdown`의 `no resource group to verify` | `azd down`이 hook 실행 전에 provision output을 지움 | `predown`이 대상 resource group을 기록하고 `postdown`이 읽음 |
 | 시나리오 중 `curl: (7) Failed to connect … 18428` | 장시간 `kubectl port-forward`의 `lost connection to pod` | `/health`가 실패하면 port-forward를 다시 열고 조회마다 확인 |
+
+Dedicated 기본값으로 바꾼 뒤 실제 배포에서 만난 문제입니다.
+
+![subnet NSG 자동 연결로 Grafana 접속이 막힌 과정과 수정. collect-evidence의 Grafana 게시 timeout, 3000 포트 TCP 실패, gateway subnet에 규칙 없는 vnet-example-gateway-nsg-koreacentral 연결, 09:16 활동 로그의 NSG 생성과 auditIfNotExists, 템플릿 NSG 연결 뒤 azd provision 성공과 grafana 200](../images/subnet-nsg-block.png)
+
+| 증상 | 원인 | 수정 |
+|---|---|---|
+| 배포 1시간 뒤 Grafana 게시가 `urlopen error timed out` | 템플릿 밖의 자동화 주체가 NSG 없는 subnet 세 개에 규칙 없는 NSG를 만들어 연결함. inbound는 subnet NSG를 먼저 평가하고 subnet·NIC NSG가 모두 허용해야 통과하므로 subnet NSG의 기본 `DenyAllInbound`가 3000을 막음 | foundation이 gateway·aks·private-endpoints subnet에 템플릿 NSG를 직접 연결. gateway subnet NSG는 NIC와 같은 operator `/32`만 3000 허용, 나머지 둘은 기본 규칙만 사용. `azd provision` 재실행 후 `grafana 200` |
+| cluster Diagnostic Settings를 켜자 namespace와 cluster 레코드가 같은 series로 섞임 | Diagnostic Settings 레코드의 리소스는 `azure.resource.id` resource attribute에만 있는데 exporter가 이 attribute를 label로 올리지 않음 | `azure.resource.id`를 두 exporter의 label에 포함하고, 대시보드와 Azure Monitor 대조는 `azure_resource_id`로 namespace·cluster 레코드를 나눔 |
+| cluster 안 namespace의 CPU·memory panel이 빈 값 | cluster 안 namespace에는 `NamespaceCpuUsage`·`NamespaceMemoryUsage`가 없음(Metrics API `Failed to find metric configuration`) | `EVENTHUBS_SKU`로 대시보드 tier를 정해 Dedicated에서는 cluster `CPU`·`AvailableMemory` 행과 CU당 처리량을 만듦 |
+| `metadata_Role`로 만든 Role별 그래프가 빈 값 | cluster 지표의 dimension label은 `metadata_role`(소문자)로 저장됨. namespace의 `metadata_EntityName`과 표기가 다름 | 실제 probe 결과대로 `metadata_role` 사용 |
+| `collect-evidence.sh`가 receiver가 놓친 분 때문에 계속 실패 | receiver가 한 번 놓친 분 bin은 다시 오지 않는데 대조가 "아직 도착하지 않음"으로 판정 | 뒤에 저장된 bin이 있는 누락은 `remote_write_gaps`로 보고하고 저장된 값만 엄격히 대조 |
 
 원래 브랜치에 없던 다음 항목도 보강했습니다.
 
@@ -517,9 +621,13 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | postdown이 현재 환경의 subscription으로 기록된 resource group을 조회, 빈 client ID로 identity 조회 | predown이 subscription도 기록하고 다르면 실패, client ID가 없는 identity는 건너뜀 |
 | 캡처 health 요청에 timeout이 없고 없는 `viewPanel`도 통과, Gateway readiness `curl`에 timeout 없음 | 15초 timeout, panel tree에서 `viewPanel` id 확인, `curl --max-time` 지정 |
 
-## 정리: `azd down --purge`와 resource group 삭제 확인
+## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
+
+Dedicated cluster는 만든 뒤 4시간 동안 삭제할 수 없으므로, cluster의 `createdAt`에서 4시간이
+지난 뒤 실행합니다.
 
 ```bash
+az eventhubs cluster show -g <resource-group> -n <cluster> --query createdAt -o tsv
 azd down --purge --force
 az group exists -n <resource-group>          # false
 ```
@@ -543,6 +651,8 @@ group 이름을 기록합니다. `postdown`은 그 resource group이 사라질 �
 - [Azure Event Hubs Premium overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-premium-overview)
 - [Azure Event Hubs Dedicated tier overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-overview)
 - [Create a Dedicated Azure Event Hubs cluster using Azure portal](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-cluster-create-portal)
+- [Microsoft.EventHub namespaces 2024-01-01 (Bicep reference)](https://learn.microsoft.com/azure/templates/microsoft.eventhub/2024-01-01/namespaces)
+- [Microsoft.EventHub clusters 2024-01-01 (Bicep reference)](https://learn.microsoft.com/azure/templates/microsoft.eventhub/2024-01-01/clusters)
 - [Partition load balancing for event processing](https://learn.microsoft.com/azure/event-hubs/event-processor-balance-partition-load)
 - [Azure Monitor Metrics overview](https://learn.microsoft.com/azure/azure-monitor/metrics/data-platform-metrics)
 - [Log data ingestion time in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/logs/data-ingestion-time)
@@ -550,6 +660,7 @@ group 이름을 기록합니다. `postdown`은 그 resource group이 사라질 �
 - [How to migrate from the metrics API to the getBatch API](https://learn.microsoft.com/azure/azure-monitor/metrics/migrate-to-batch-api)
 - [Reliability in Azure Event Hubs](https://learn.microsoft.com/azure/reliability/reliability-event-hubs)
 - [Azure Key Vault recovery management with soft delete and purge protection](https://learn.microsoft.com/azure/key-vault/general/key-vault-recovery)
+- [How network security groups filter network traffic](https://learn.microsoft.com/azure/virtual-network/network-security-group-how-it-works)
 - [Use an internal load balancer with Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/internal-lb)
 - [Use Microsoft Entra ID authorization for the Kubernetes API in AKS](https://learn.microsoft.com/azure/aks/manage-azure-rbac)
 - [Deploy and configure Microsoft Entra Workload ID on an AKS cluster](https://learn.microsoft.com/azure/aks/workload-identity-deploy-cluster)

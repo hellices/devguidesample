@@ -120,15 +120,30 @@ def test_foundation_exports_main_module_contract():
 MESSAGING = LAB_ROOT / "infra" / "modules" / "messaging.bicep"
 
 
-def test_messaging_creates_premium_and_standard_but_no_dedicated_cluster():
-    text = MESSAGING.read_text()
+def test_messaging_creates_the_cluster_only_for_the_dedicated_tier():
+    text = _code(MESSAGING.read_text())
 
-    assert "name: 'Premium'" in text
-    assert "tier: 'Premium'" in text
-    assert "capacity: 1" in text
-    assert "name: 'Standard'" in text
-    assert "Microsoft.EventHub/clusters@" not in text
+    # Exactly one cluster resource, guarded by the tier, 1 CU.
+    assert len(re.findall(r"'Microsoft\.EventHub/clusters@", text)) == 1
+    cluster = _resource_block(text, "dedicatedCluster")
+    assert "= if (dedicated) {" in cluster
+    assert re.search(r"sku: \{\s*name: 'Dedicated'\s*capacity: 1\s*\}", cluster)
+    assert "var dedicated = eventHubsSku == 'Dedicated'" in text
+    # The workload namespace joins the cluster only for Dedicated; otherwise it is Premium 1 PU.
+    namespace = _resource_block(text, "premiumNamespace")
+    assert "dedicated ? {\n    clusterArmId: dedicatedCluster.id\n  } : {}" in namespace
+    assert re.search(r"name: 'Premium'\s*tier: 'Premium'\s*capacity: 1", namespace)
     assert "Microsoft.Insights/diagnosticSettings@2021-05-01-preview" in text
+
+
+def test_cluster_streams_its_metrics_to_the_same_telemetry_hub_only_for_dedicated():
+    text = _code(MESSAGING.read_text())
+
+    cluster_ds = _resource_block(text, "clusterMetricsToTelemetryHub")
+    assert "= if (dedicated) {" in cluster_ds
+    assert "scope: dedicatedCluster" in cluster_ds
+    assert "eventHubName: telemetryHub.name" in cluster_ds
+    assert "category: 'AllMetrics'" in cluster_ds
 
 
 def test_messaging_keeps_workload_local_auth_disabled():
@@ -173,10 +188,14 @@ COMPUTE = LAB_ROOT / "infra" / "modules" / "compute.bicep"
 
 def test_compute_enables_workload_identity_and_restricts_public_ports():
     text = COMPUTE.read_text()
+    foundation = (LAB_ROOT / "infra" / "modules" / "foundation.bicep").read_text()
 
     assert "oidcIssuerProfile: { enabled: true }" in text
     assert "workloadIdentity: { enabled: true }" in text
-    rules = text[text.index("securityRules: ["):text.index("resource gatewayNic")]
+    # The gateway NSG lives with the subnets and is bound to both the gateway subnet and NIC.
+    assert "resource gatewayNsg 'Microsoft.Network/networkSecurityGroups" not in text
+    assert re.search(r"networkSecurityGroup: \{\s*id: gatewayNsgId\s*\}", text)
+    rules = foundation[foundation.index("resource gatewayNsg"):foundation.index("resource aksNsg")]
     # Rules declared as separate child resources would sit outside this inline list.
     for module in (LAB_ROOT / "infra").rglob("*.bicep"):
         assert "networkSecurityGroups/securityRules" not in module.read_text(), module.name
@@ -188,6 +207,18 @@ def test_compute_enables_workload_identity_and_restricts_public_ports():
     assert allow == ["3000"]
     assert re.findall(r"sourceAddressPrefix: (\S+)", rules) == ["operatorEgressCidr"]
     assert "destinationPortRange: '22'" not in text
+    assert "destinationPortRange: '22'" not in foundation
+
+
+def test_every_subnet_carries_a_template_owned_nsg():
+    foundation = _code((LAB_ROOT / "infra" / "modules" / "foundation.bicep").read_text())
+
+    # Governance automation attaches an empty deny-all NSG to subnets without one, which cut the
+    # operator path to Grafana in a real run; owning the NSGs also survives a re-provision.
+    for subnet, nsg in (("gatewaySubnet", "gatewayNsg"), ("aksSubnet", "aksNsg"), ("endpointsSubnet", "endpointsNsg")):
+        assert re.search(rf"networkSecurityGroup: \{{\s*id: {nsg}\.id\s*\}}", _resource_block(foundation, subnet)), subnet
+    for nsg in ("aksNsg", "endpointsNsg"):
+        assert re.search(r"securityRules: \[\]", _resource_block(foundation, nsg)), nsg
 
 
 def test_compute_uses_overlay_network_without_vnet_overlap():
@@ -329,6 +360,7 @@ def test_messaging_and_compute_role_assignments_are_exact():
         ("workloadHub", "eventHubsDataReceiverRoleDefinitionId", "consumerPrincipalId"),
         ("workloadHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
         ("telemetryHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
+        ("dedicatedCluster", "monitoringReaderRoleDefinitionId", "gatewayPrincipalId"),
     ])
     assert sorted(_role_assignments(COMPUTE.read_text())) == sorted([
         ("acr", "acrPullRoleDefinitionId", "aks.properties.identityProfile.kubeletidentity.objectId"),

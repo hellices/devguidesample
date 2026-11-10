@@ -77,6 +77,13 @@ assert_active_subscription() {
   [[ "$active" == "$AZURE_SUBSCRIPTION_ID" ]] || die "active Azure CLI subscription does not match AZURE_SUBSCRIPTION_ID"
 }
 
+# The cluster this lab created (EVENTHUBS_SKU=Dedicated) wins over an existing one to observe.
+dedicated_cluster_id() {
+  local created
+  created="$(env_value DEDICATED_CLUSTER_RESOURCE_ID)"
+  printf '%s' "${created:-$(env_value EXISTING_DEDICATED_CLUSTER_RESOURCE_ID)}"
+}
+
 kube() {
   kubectl --kubeconfig "$(state_dir)/kubeconfig" "$@"
 }

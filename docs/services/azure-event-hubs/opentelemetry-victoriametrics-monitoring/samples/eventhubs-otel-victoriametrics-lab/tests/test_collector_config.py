@@ -59,7 +59,8 @@ def test_exporters_promote_only_lab_labels():
     assert exporters["prometheus"]["endpoint"] == "0.0.0.0:8889"
     assert exporters["prometheusremotewrite"]["endpoint"] == "http://10.42.2.20:8428/api/v1/write"
     for exporter in exporters.values():
-        assert exporter["resource_constant_labels"] == {"included": ["source_path", "delivery_path"]}
+        assert exporter["resource_constant_labels"] == {
+            "included": ["source_path", "delivery_path", "azure.resource.id"]}
         assert "resource_to_telemetry_conversion" not in exporter
 
 

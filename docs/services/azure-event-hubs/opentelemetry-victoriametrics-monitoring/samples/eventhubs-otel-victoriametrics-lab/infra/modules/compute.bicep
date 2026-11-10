@@ -4,6 +4,8 @@ param token string
 param tags object
 param kubernetesVersion string
 param operatorEgressCidr string
+@description('NSG that foundation attaches to the gateway subnet; also bound to the gateway NIC.')
+param gatewayNsgId string
 param gatewayAdminSshPublicKey string
 param adminUsername string = 'azureuser'
 param aksSubnetId string
@@ -171,29 +173,6 @@ resource gatewayPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
   }
 }
 
-resource gatewayNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
-  name: 'nsg-gateway-${token}'
-  location: location
-  tags: tags
-  properties: {
-    securityRules: [
-      {
-        name: 'AllowGrafanaFromOperator'
-        properties: {
-          access: 'Allow'
-          direction: 'Inbound'
-          priority: 100
-          protocol: 'Tcp'
-          sourceAddressPrefix: operatorEgressCidr
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '3000'
-        }
-      }
-    ]
-  }
-}
-
 resource gatewayNic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   name: 'nic-gateway-${token}'
   location: location
@@ -201,7 +180,7 @@ resource gatewayNic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   properties: {
     enableAcceleratedNetworking: false
     networkSecurityGroup: {
-      id: gatewayNsg.id
+      id: gatewayNsgId
     }
     ipConfigurations: [
       {

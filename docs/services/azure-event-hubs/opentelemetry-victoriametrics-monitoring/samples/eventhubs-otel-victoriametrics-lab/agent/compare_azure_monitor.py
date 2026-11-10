@@ -4,6 +4,10 @@ remote write keeps the Azure Monitor minute-bin timestamp, so each bin must matc
 samples stamped exactly on that minute. The scrape path re-stamps and repeats values, so it is
 reported only as a repeated-sample sum, never as a total. Diagnostic Settings exports only
 non-zero minutes, so its presence is counted.
+
+azuremonitorreceiver reads one PT1M bin per collection cycle and never re-reads it, so a bin it
+missed stays missing. A missing minute followed by a later remote write bin is reported as a gap;
+a missing tail with nothing after it may still be in flight and keeps the report incomplete.
 """
 
 from __future__ import annotations
@@ -17,7 +21,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REQUIRED = ("IncomingMessages", "OutgoingMessages", "IncomingRequests", "ThrottledRequests")
+# Namespace records only: a Dedicated cluster streams its own totals to the same hub.
+DIAGNOSTIC = ('source_path="diagnostic_eventhub",delivery_path="remote_write",'
+              'azure_resource_id=~"(?i).*/providers/microsoft\\\\.eventhub/namespaces/.*"')
 Fetch = Callable[[str, dict], str]
+# How far past the window to look for a later bin that proves an earlier one was skipped.
+LOOKAHEAD_SECONDS = 300
 
 
 def _minute(epoch_seconds: float) -> str:
@@ -72,15 +81,22 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
             for delivery in ("remote_write", "scrape")
         }
         remote = _per_minute(stored["remote_write"], off_bin)
+        later = _samples(
+            fetch, f'azure_{name.lower()}_total_Count{{{api},delivery_path="remote_write"}}', end, end + LOOKAHEAD_SECONDS
+        )
+        last_stored = max([ts // 1000 for ts, _ in stored["remote_write"] + later], default=None)
         # Totals come from the same ms-filtered samples, so they share the [start, end) window exactly.
         totals = {
             delivery: sum(value for _, value in samples) if samples else None
             for delivery, samples in stored.items()
         }
         diagnostic = _per_minute(_samples(
-            fetch, f'{name.lower()}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}', start, end
+            fetch, f'{name.lower()}_total{{{DIAGNOSTIC}}}', start, end
         ))
         minutes = sorted(direct)
+        missing = [m for m in minutes if m not in remote]
+        # A missing minute is a permanent receiver gap only if a later bin was stored after it.
+        gaps = [m for m in missing if last_stored is not None and _minute(last_stored) > m]
         report["metrics"][name] = {
             "azure_monitor_total": sum(direct.values()),
             "remote_write_total": totals["remote_write"],
@@ -90,20 +106,24 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
             "minutes": len(minutes),
             "minutes_matching_remote_write": sum(1 for m in minutes if remote.get(m) == direct[m]),
             "minutes_missing_in_azure_monitor": [m for m in expected if m not in direct],
-            "minutes_missing_in_remote_write": [m for m in minutes if m not in remote],
+            "minutes_missing_in_remote_write": missing,
+            "remote_write_gaps": gaps,
             "diagnostic_eventhub_total": sum(diagnostic.values()) if diagnostic else None,
             "minutes_matching_diagnostic_eventhub": sum(1 for m in minutes if diagnostic.get(m) == direct[m]),
             "minutes_present_in_diagnostic_eventhub": sum(1 for m in minutes if m in diagnostic),
         }
-    # Complete means every requested metric has every minute of [from, to) in Azure Monitor and
-    # the same value in remote write, stamped exactly on the Azure Monitor minute.
+    # Complete means every requested metric has every minute of [from, to) in Azure Monitor, and
+    # remote write holds the same value stamped exactly on that minute for every minute except
+    # receiver gaps that a later stored bin proves will never arrive.
     report["complete"] = bool(expected) and all(
         name in report["metrics"]
         and report["metrics"][name]["minutes"] == len(expected)
-        and report["metrics"][name]["minutes_matching_remote_write"] == len(expected)
+        and report["metrics"][name]["minutes_matching_remote_write"]
+        == len(expected) - len(report["metrics"][name]["remote_write_gaps"])
         and report["metrics"][name]["remote_write_off_bin_samples"] == 0
         for name in REQUIRED
     )
+    report["remote_write_gaps"] = sum(len(m.get("remote_write_gaps", [])) for m in report["metrics"].values())
     return report
 
 

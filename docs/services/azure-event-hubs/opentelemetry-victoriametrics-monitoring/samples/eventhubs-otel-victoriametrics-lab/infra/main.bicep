@@ -21,8 +21,15 @@ param operatorEgressCidr string = ''
 @description('AKS Kubernetes major.minor or patch version.')
 param kubernetesVersion string = '1.36'
 
-@description('Optional existing Event Hubs Dedicated cluster resource ID. This template never creates a Dedicated cluster.')
+@description('Optional existing Event Hubs Dedicated cluster to collect metrics from. Ignored when eventHubsSku is Dedicated.')
 param existingDedicatedClusterResourceId string = ''
+
+@description('Workload Event Hubs tier. Dedicated (default) creates a 1 CU cluster that cannot be deleted for four hours; Premium creates a 1 PU namespace.')
+@allowed([
+  'Premium'
+  'Dedicated'
+])
+param eventHubsSku string = 'Dedicated'
 
 @secure()
 @description('Grafana administrator password stored in Key Vault and never returned as an output.')
@@ -63,6 +70,7 @@ module foundation 'modules/foundation.bicep' = {
     token: token
     tags: tags
     grafanaAdminPassword: grafanaAdminPassword
+    operatorEgressCidr: operatorEgressCidr
   }
 }
 
@@ -76,6 +84,7 @@ module messaging 'modules/messaging.bicep' = {
     gatewayPrincipalId: foundation.outputs.gatewayPrincipalId
     producerPrincipalId: foundation.outputs.producerPrincipalId
     consumerPrincipalId: foundation.outputs.consumerPrincipalId
+    eventHubsSku: eventHubsSku
   }
 }
 
@@ -88,6 +97,7 @@ module compute 'modules/compute.bicep' = {
     tags: tags
     kubernetesVersion: kubernetesVersion
     operatorEgressCidr: operatorEgressCidr
+    gatewayNsgId: foundation.outputs.gatewayNsgId
     gatewayAdminSshPublicKey: gatewayAdminSshPublicKey
     aksSubnetId: foundation.outputs.aksSubnetId
     gatewaySubnetId: foundation.outputs.gatewaySubnetId
@@ -121,3 +131,5 @@ output AKS_OIDC_ISSUER string = compute.outputs.aksOidcIssuer
 output CHECKPOINT_ACCOUNT_URL string = foundation.outputs.storageBlobEndpoint
 output VMSINGLE_PRIVATE_IP string = foundation.outputs.vmSinglePrivateIp
 output EXISTING_DEDICATED_CLUSTER_RESOURCE_ID string = existingDedicatedClusterResourceId
+output EVENTHUBS_SKU string = eventHubsSku
+output DEDICATED_CLUSTER_RESOURCE_ID string = messaging.outputs.dedicatedClusterId
