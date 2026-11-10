@@ -322,6 +322,8 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | `producer_stop`이 producer Pod 종료 전에 기록됨 | Pod 삭제를 확인한 뒤 기록하고, 남아 있으면 실패 |
 | lag exporter·consumer가 checkpoint store의 Storage session을 닫지 않음 | `async with`에 checkpoint store를 포함 |
 | `VM_LOCAL_PORT`를 바꾸면 이전 포트의 port-forward가 남음 | 기록된 포트로 소유권을 확인해 종료하고, 다른 포트로 시작하기 전에 이전 forward를 정리 |
+| Python venv나 `node_modules` 설치가 중간에 실패해도 다음 실행이 설치된 것으로 간주 | 설치가 끝난 뒤에만 `requirements.txt`·`package-lock.json` 사본을 stamp로 남기고, stamp가 다르면 다시 설치. 설치 실패는 즉시 오류 |
+| `final_max_lag`를 관찰 꼬리 2분 전에 측정해 `scenario_end`·최종 처리 수와 시점이 다름 | 세 값을 관찰 꼬리 뒤 같은 시점에 기록 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

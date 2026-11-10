@@ -52,7 +52,11 @@ log "build and publish"
 log "verify panels over $FROM .. $TO"
 "$PY" "$LAB_ROOT/agent/verify_panels.py" --from "$FROM_MS" --to "$TO_MS" --output "$EVIDENCE/panel-verification.json"
 log "capture"
-(cd "$LAB_ROOT/agent" && [[ -d node_modules ]] || npm ci --silent && npx playwright install chromium >/dev/null)
+# npm ci recreates node_modules; the stamp marks a completed install of this lockfile.
+(cd "$LAB_ROOT/agent" \
+  && { cmp -s package-lock.json node_modules/.lab-package-lock.json \
+       || { npm ci --silent && cp package-lock.json node_modules/.lab-package-lock.json; }; } \
+  && npx playwright install chromium >/dev/null) || die "could not install the capture dependencies"
 node "$LAB_ROOT/agent/capture.mjs" /d/eventhubs-otel-victoriametrics "$EVIDENCE/grafana-dashboard.png" "$FROM_MS" "$TO_MS"
 
 log "Azure Monitor direct query for the same window"

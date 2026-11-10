@@ -411,3 +411,36 @@ def test_gateway_restarts_grafana_only_after_renewing_its_certificate():
     restart = text.index("docker compose restart grafana")
     assert text.index('if [ "$CERT_RENEWED" = true ]; then') < restart
     assert restart > text.index("docker compose up -d")
+
+
+def test_postprovision_rebuilds_a_venv_whose_install_failed(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    fail = tmp_path / "pip-fails"
+    fail.touch()
+    # Fake `python3 -m venv DIR`: creates DIR/bin/python and a pip that fails while the flag exists.
+    write("python3", (
+        'if [[ "$1 $2" == "-m venv" ]]; then mkdir -p "$3/bin"; printf "#!/bin/sh\\n" >"$3/bin/python"; '
+        f'printf "#!/bin/sh\\n[ -e {fail} ] && exit 1\\nexit 0\\n" >"$3/bin/pip"; chmod +x "$3/bin/"*; fi'
+    ))
+    state = tmp_path / "state"
+    state.mkdir()
+    text = (SCRIPTS / "azd-postprovision.sh").read_text()
+    start = text.index("python_env() {")
+    function = tmp_path / "python_env.sh"
+    function.write_text(text[start:text.index("\n}\n", start) + 3])
+    harness = f'source "{SCRIPTS / "lib.sh"}"; STATE="{state}"; source "{function}"; PY="$(python_env)"; echo "PY=$PY"'
+    run = lambda: subprocess.run(["bash", "-c", harness], env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
+                                 capture_output=True, text=True, timeout=60)
+
+    first = run()
+    assert first.returncode != 0
+    assert "could not install" in first.stderr
+
+    fail.unlink()
+    second = run()
+    assert second.returncode == 0, second.stderr
+    assert (state / "venv" / ".lab-requirements.txt").read_text() == (LAB_ROOT / "agent" / "requirements.txt").read_text()
+    venv_creations = log.read_text().count("python3 -m venv")
+
+    assert run().returncode == 0
+    assert log.read_text().count("python3 -m venv") == venv_creations  # a completed install is reused

@@ -14,10 +14,16 @@ STATE="$(state_dir)"
 NS=eventhubs-observability
 AZURE_TENANT_ID="$(az account show --subscription "$AZURE_SUBSCRIPTION_ID" --query tenantId -o tsv)"
 
+# The stamp is written only after a successful install, so a failed or outdated venv is rebuilt.
+# Command substitution does not inherit errexit, hence the explicit || die.
 python_env() {
-  if [[ ! -x "$STATE/venv/bin/python" ]]; then
-    python3 -m venv "$STATE/venv"
-    "$STATE/venv/bin/pip" install --quiet --requirement "$LAB_ROOT/agent/requirements.txt"
+  local stamp="$STATE/venv/.lab-requirements.txt"
+  if ! cmp -s "$LAB_ROOT/agent/requirements.txt" "$stamp"; then
+    rm -rf "$STATE/venv"
+    python3 -m venv "$STATE/venv" >&2 || die "could not create the agent virtual environment"
+    "$STATE/venv/bin/pip" install --quiet --requirement "$LAB_ROOT/agent/requirements.txt" >&2 \
+      || die "could not install agent/requirements.txt"
+    cp "$LAB_ROOT/agent/requirements.txt" "$stamp"
   fi
   printf '%s' "$STATE/venv/bin/python"
 }
@@ -104,7 +110,8 @@ EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=$(env_value EXISTING_DEDICATED_CLUSTER_RE
 ENABLE_API_RECEIVER=${ENABLE_API_RECEIVER:-true}
 ENABLE_FALLBACK_EXPORTER=${ENABLE_FALLBACK_EXPORTER:-false}
 ENV
-"$(python_env)" "$LAB_ROOT/gateway/render_collector.py" --env-file "$BUNDLE/collector.env" --output "$BUNDLE/collector.yaml"
+PY="$(python_env)"
+"$PY" "$LAB_ROOT/gateway/render_collector.py" --env-file "$BUNDLE/collector.env" --output "$BUNDLE/collector.yaml"
 rm "$BUNDLE/collector.env"
 cat > "$BUNDLE/lag-exporter.env" <<ENV
 AZURE_CLIENT_ID=$GATEWAY_CLIENT_ID

@@ -80,10 +80,11 @@ while [[ $(date +%s) -lt $deadline ]]; do
   fi
   sleep 30
 done
-FINAL_LAG="$(max_lag)"
 # Keep observing for two Azure Monitor minutes so the recovery tail is visible.
 sleep 120
+# Sample the final values together so they describe the same moment as scenario_end.
 SCENARIO_END="$(now)"
+FINAL_LAG="$(max_lag)"
 CONSUMER_PROCESSED="$(last_log_value eventhubs-slow-consumer processed_total)"
 
 # Serialize with Python so absent values become JSON null rather than the string "null".
