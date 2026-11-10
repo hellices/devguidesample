@@ -1,6 +1,6 @@
 // Captures a Managed Grafana dashboard or panel without an interactive login.
 // The Entra access token is attached only to requests for the Grafana origin, is never forwarded
-// across a redirect, and is never stored.
+// across a redirect, is never stored, and is redacted from anything this script prints.
 //
 // GRAFANA_TOKEN=$(az account get-access-token --resource https://dashboard.azure.com \
 //   --query accessToken -o tsv) node capture.mjs "<grafana-url-path-and-query>" out.png [width] [minHeight]
@@ -16,6 +16,14 @@ const base = GRAFANA_URL.replace(/\/$/, "");
 const grafanaOrigin = new URL(base).origin;
 const viewportWidth = Number(width);
 
+// Playwright errors can echo request headers, so nothing is printed without passing through here.
+const redact = (text) =>
+  String(text).split(GRAFANA_TOKEN).join("<redacted>").replace(/(authorization:\s*)\S.*$/gim, "$1<redacted>");
+process.on("unhandledRejection", (error) => {
+  console.error(`capture failed: ${redact(error?.message ?? error).split("\n")[0]}`);
+  process.exit(1);
+});
+
 const PANEL_LOADING = '[aria-label="Panel loading bar"], [data-testid="panel-loading-bar"]';
 const PANEL = "[data-viz-panel-key], .react-grid-item";
 
@@ -27,6 +35,35 @@ async function waitForPanels(page) {
   await page.waitForTimeout(1500);
 }
 
+const routeErrors = [];
+// Route callbacks run outside the page waits; each one is tracked so errors are checked only after it settles.
+const pendingRoutes = new Set();
+
+async function settleRoutes() {
+  while (pendingRoutes.size) {
+    await Promise.allSettled([...pendingRoutes]);
+  }
+}
+
+async function assertNoRouteErrors() {
+  await settleRoutes();
+  if (routeErrors.length) {
+    throw new Error(routeErrors.join("; "));
+  }
+}
+
+async function assertRendered(page) {
+  await assertNoRouteErrors();
+  // An epoch time range saved in the dashboard JSON renders as "Invalid date" and queries from=NaN.
+  const text = await page.locator("body").innerText();
+  if (/\bNo data\b|\bInvalid date\b/.test(text)) {
+    throw new Error("rendered dashboard shows No data or Invalid date");
+  }
+  if (/\/subscriptions\/|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/i.test(text)) {
+    throw new Error("rendered dashboard shows a resource or subscription identifier");
+  }
+  await assertNoRouteErrors();
+}
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext({
@@ -35,19 +72,37 @@ try {
     locale: "ko-KR",
     timezoneId: "Asia/Seoul",
   });
-  await context.route("**/*", async (route) => {
+  await context.route("**/*", (route) => {
+    const job = handleRoute(route);
+    pendingRoutes.add(job);
+    const done = () => pendingRoutes.delete(job);
+    job.then(done, done);
+    return job;
+  });
+
+  async function handleRoute(route) {
     const request = route.request();
     if (new URL(request.url()).origin !== grafanaOrigin) {
       return route.continue();
     }
     // maxRedirects: 0 hands any redirect back to the browser as a new request, which
     // passes through this handler again and gets no token if it leaves the Grafana origin.
-    const response = await route.fetch({
-      headers: { ...request.headers(), authorization: `Bearer ${GRAFANA_TOKEN}` },
-      maxRedirects: 0,
-    });
-    return route.fulfill({ response });
-  });
+    try {
+      const response = await route.fetch({
+        headers: { ...request.headers(), authorization: `Bearer ${GRAFANA_TOKEN}` },
+        maxRedirects: 0,
+        timeout: 120000,
+      });
+      if (new URL(request.url()).pathname === "/api/ds/query" && !response.ok()) {
+        routeErrors.push(`${request.method()} /api/ds/query: HTTP ${response.status()}`);
+      }
+      return route.fulfill({ response });
+    } catch (error) {
+      // Only the error name: the message can contain the request headers.
+      routeErrors.push(`${request.method()} ${new URL(request.url()).pathname}: ${error.name}`);
+      return route.abort("failed");
+    }
+  }
 
   const page = await context.newPage();
   const response = await page.goto(base + path, { waitUntil: "networkidle", timeout: 120000 });
@@ -77,10 +132,14 @@ try {
     await page.setViewportSize({ width: viewportWidth, height: Math.ceil(contentHeight) });
     await waitForPanels(page);
   }
+  // Checked only after the last wait, so panels that loaded lazily after the viewport grew are included.
+  await assertRendered(page);
   await page.screenshot({ path: out });
+  // Queries started during the screenshot (refresh, late rendering) must not slip past the checks.
+  await assertNoRouteErrors();
   console.log(`saved ${out} (${viewportWidth}x${Math.max(Math.ceil(contentHeight), Number(minHeight))})`);
 } catch (error) {
-  console.error(`capture failed: ${error.message}`);
+  console.error(`capture failed: ${redact(error.message).split("\n")[0]}`);
   process.exitCode = 1;
 } finally {
   await browser.close();
