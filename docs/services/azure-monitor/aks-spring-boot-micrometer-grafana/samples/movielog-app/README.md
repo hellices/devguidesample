@@ -18,13 +18,11 @@
 | `k8s/20-movielog.yaml` | `inject-java` annotation을 단 앱 Deployment와 Service입니다. |
 | `k8s/21-agent-3.7.10.patch.yaml` | managed agent가 3.7.9 미만일 때 쓰는 3.7.10 init image patch입니다. |
 | `k8s/30-loadgen.yaml`, `loadgen/loadgen.py` | 가입·조회·리뷰·댓글을 반복하는 합성 사용자 6개입니다. |
-| `.github/skills/grafana-metrics-dashboard/SKILL.md` | GitHub Copilot이 customMetrics 조회 → 집계식 결정 → dashboard 생성 → query 실행 → 화면 확인 순서로 작업하게 하는 skill입니다. |
-| `.github/skills/grafana-metrics-dashboard/scripts/*.kql`, `kql.sh` | skill이 쓰는 inventory, dimensions, value shape 조회입니다. `METRIC_PREFIX`로 meter prefix를 지정합니다. |
+| `.github/skills/grafana-metrics-dashboard/SKILL.md` | GitHub Copilot이 customMetrics 조회 → 집계식 결정 → dashboard 생성 → query 실행 → 화면 확인 순서로 작업하게 하는 skill입니다. 조회 query도 이 파일에 있습니다. |
 | `.github/skills/grafana-metrics-dashboard/scripts/verify_panels.py` | 모든 panel query를 Grafana `/api/ds/query`로 실행해 오류와 빈 panel을 찾습니다. |
 | `.github/skills/grafana-metrics-dashboard/scripts/capture.mjs` | Entra access token으로 Managed Grafana 화면을 headless 캡처합니다. |
 | `.vscode/mcp.json` | VS Code에서 Managed Grafana MCP endpoint를 연결하는 설정 예시입니다. |
-| `grafana/build_dashboard.py` | MovieLog의 panel별 집계식과 시각화로 dashboard JSON을 만듭니다. |
-| `grafana/movielog-dashboard.json` | import용 dashboard입니다. |
+| `grafana/movielog-dashboard.json` | 실습에서 만든 MovieLog dashboard입니다. resource ID 변수 값이 비어 있어 import용으로 씁니다. |
 
 ## 로컬 test
 
@@ -89,30 +87,23 @@ skill은 VS Code의 GitHub Copilot과 GitHub Copilot CLI가 `.github/skills/`에
 이 폴더를 workspace로 열거나 skill 폴더를 자기 저장소의 `.github/skills/`에 복사한 뒤,
 요청합니다. VS Code chat에서는 `/grafana-metrics-dashboard <요청>` slash command로,
 Copilot CLI에서는 "Use the /grafana-metrics-dashboard skill. <요청>"처럼 prompt 안에 skill
-이름을 넣어 지정합니다. 요청이 skill 설명과 맞으면 이름 없이도 불러올 수 있습니다. Managed Grafana MCP를 쓰려면 `.vscode/mcp.json`의
-`<grafana-endpoint>`를 바꿉니다.
+이름을 넣어 지정합니다. 요청이 skill 설명과 맞으면 이름 없이도 불러올 수 있습니다.
+Managed Grafana MCP를 쓰려면 `.vscode/mcp.json`의 `<grafana-endpoint>`를 바꿉니다.
 
-skill의 터미널 도구를 직접 실행할 때는 다음과 같습니다.
+skill의 두 스크립트를 직접 실행할 때는 다음과 같습니다. 조회 query는 SKILL.md에 있고,
+Grafana에 직접 반영하는 명령은 상위 문서의 실습에 있습니다.
 
 ```bash
 SKILL=.github/skills/grafana-metrics-dashboard/scripts
-export APPINSIGHTS_APP_ID="$(az monitor app-insights component show -g "$RG" -a "$AI" --query appId -o tsv)"
-export METRIC_PREFIX=movielog_
-$SKILL/kql.sh $SKILL/01-inventory.kql
-$SKILL/kql.sh $SKILL/02-dimensions.kql
-$SKILL/kql.sh $SKILL/03-value-shape.kql
-
 AIID="$(az monitor app-insights component show -g "$RG" -a "$AI" --query id -o tsv)"
 export GRAFANA_URL="$(az grafana show -g "$RG" -n "$GRAFANA" --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token \
   --resource https://dashboard.azure.com --query accessToken -o tsv)"
 
-python3 grafana/build_dashboard.py > grafana/movielog-dashboard.json
+# 모든 panel query 실행. 지난 구간은 --from/--to(ISO 8601 UTC)를 줍니다.
 python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "$AIID"
-python3 grafana/build_dashboard.py --appinsights-id "$AIID" > /tmp/live.json
-az grafana dashboard create -g "$RG" -n "$GRAFANA" --definition @/tmp/live.json --overwrite true
-rm /tmp/live.json
 
+# 화면 캡처
 npm i playwright && npx playwright install chromium-headless-shell
 node $SKILL/capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
 ```
@@ -121,8 +112,7 @@ node $SKILL/capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=
 panel 간 합계가 1분 bin만큼 어긋날 수 있습니다. 문서에 쓸 캡처는 분 단위로 맞춘
 절대 범위(`from=<epoch ms>&to=<epoch ms>`)로 찍습니다.
 
-`kql.sh`는 `az monitor app-insights query`의 기본 범위인 최근 1시간만 조회합니다.
-지난 구간을 볼 때는 `KQL_OFFSET=12h $SKILL/kql.sh ...`처럼 늘립니다. `capture.mjs`는
+`capture.mjs`는
 token을 Grafana origin에만 보내고 출력에서 가리며, 내부 scroll 높이에 맞춰 viewport를
 늘립니다. panel 로딩이 60초를 넘거나 query가 실패하거나 화면에 `No data`·`Invalid date`·
 식별자가 보이면 실패로 종료합니다.

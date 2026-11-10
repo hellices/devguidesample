@@ -311,21 +311,25 @@ Copilot은 둘 중 사용할 수 있는 도구로 작업합니다. 두 경로 �
 | 도구 경로 | probe | 반영·확인 |
 |---|---|---|
 | Managed Grafana MCP (`https://<grafana-endpoint>/api/azure-mcp`) | `amgmcp_query_resource_log` | `amgmcp_dashboard_update`, `amgmcp_dashboard_inspect` |
-| skill의 터미널 도구(`.github/skills/grafana-metrics-dashboard/scripts`) | `kql.sh` + `01~03*.kql` | `az grafana dashboard create`, `verify_panels.py`, `capture.mjs` |
+| 터미널(`az` 로그인) | `az monitor app-insights query` | `az grafana dashboard create`, skill의 `scripts/verify_panels.py`, `scripts/capture.mjs` |
+
+skill에 들어 있는 스크립트는 Copilot이 매번 새로 짜기 어려운 두 가지뿐입니다.
+`verify_panels.py`는 Grafana macro와 변수를 풀어 모든 panel query를 실행하고,
+`capture.mjs`는 Entra token으로 Grafana 화면을 캡처합니다. 조회 query는 SKILL.md에
+들어 있고 Copilot이 시간 조건만 바꿔 실행합니다.
 
 Managed Grafana MCP는 VS Code의 GitHub Copilot에서 Entra OAuth로 연결합니다. sample의
 `.vscode/mcp.json`에서 `<grafana-endpoint>`만 바꿉니다.
 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 `$__timeFilter`, `$__timeTo()` 같은
 Grafana macro를 거부하므로 query 안에 `ago(...)`와 `now()`를 직접 씁니다.
 
-아래 명령은 `samples/movielog-app` 폴더에서 Copilot이 실행하는 것과 같은 터미널 도구를
-직접 실행하는 형태입니다.
+아래 명령은 `samples/movielog-app` 폴더에서 Copilot이 터미널로 실행하는 것과 같은 형태입니다.
+probe query는 각 절의 KQL을 `--analytics-query`에 넣습니다.
 
 ```bash
 SKILL=.github/skills/grafana-metrics-dashboard/scripts
-export APPINSIGHTS_APP_ID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query appId -o tsv)"
-export METRIC_PREFIX=movielog_
-$SKILL/kql.sh $SKILL/01-inventory.kql
+APP_ID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query appId -o tsv)"
+az monitor app-insights query --app "$APP_ID" --offset 1h --analytics-query '<KQL>' -o table
 ```
 
 ### probe 1: inventory와 지표 도착 여부 { #probe-inventory }
@@ -346,9 +350,9 @@ allowlist를 먼저 확인합니다. 실습의 3.7.7-aks 구간이 이 경우였
 inventory는 `cloud_RoleName`(`movielog`)도 알려 줍니다. dashboard의 `role` 변수에
 이 값을 씁니다.
 
-`kql.sh`가 쓰는 `az monitor app-insights query`는 query의 시간 조건과 별개로 기본
-최근 1시간만 조회합니다. 지난 실습 구간을 다시 probe하려면 `KQL_OFFSET=12h`처럼
-범위를 넓힙니다.
+`az monitor app-insights query`는 query의 시간 조건과 별개로 `--offset`(기본 1시간) 안만
+조회합니다. 지난 실습 구간을 다시 probe하려면 `--offset 3d`처럼 범위를 넓히고 query의
+`ago(30m)`를 `between (datetime(<start>) .. datetime(<end>))`로 바꿉니다.
 
 inventory의 이름 목록은 코드의 meter 목록과 비교합니다. 코드에는 있는데 inventory에
 없는 meter는 대시보드에 넣기 전에 원인을 확인합니다.
@@ -434,7 +438,8 @@ DistributionSummary·Timer는 모든 간격이 1일 수도 있으므로 `maxValu
 
 panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다.
 
-MovieLog 대시보드는 `grafana/build_dashboard.py`가 아래 표의 집계식과 시각화로 만듭니다.
+MovieLog 대시보드(`grafana/movielog-dashboard.json`)의 panel별 집계식과 시각화는 다음과
+같습니다.
 
 | panel | 질문 | 집계식 | 시각화 |
 |---|---|---|---|
@@ -473,8 +478,8 @@ panel을 따로 둘 필요가 없습니다.
 - 처음 사용할 때 생기는 Counter(검색, 카탈로그 조회)와 DistributionSummary는 목록에서
   뺍니다. 분포 meter는 기록이 없는 간격에 행을 보내지 않으므로, 목록에 넣으면 한산한
   시간에 빨간 칸이 생깁니다.
-- meter를 추가하거나 등록 방식을 바꾸면 `build_dashboard.py`의 `STEADY_METRICS`도 함께
-  고칩니다.
+- meter를 추가하거나 등록 방식을 바꾸면 "Pod별 누락 metric 수" panel query의 기대 목록
+  (`let steady = dynamic([...])`)도 함께 고칩니다.
 
 칸이 비어 있으면 그 Pod가 그 bin에 아무 지표도 보내지 않은 것입니다. 교체된 Pod도
 종료 뒤에는 빈 칸으로 남습니다.
@@ -531,7 +536,7 @@ headless Chromium에서 dashboard를 캡처합니다.
   시각이 달라 1분 bin 하나만큼 합계가 어긋날 수 있습니다.
 
 캡처에서 점검할 항목과 대시보드 JSON에 미리 넣어 둘 설정은 다음과 같습니다.
-`build_dashboard.py`는 이 설정을 모두 반영합니다.
+`grafana/movielog-dashboard.json`은 이 설정을 모두 반영합니다.
 
 | 점검 항목 | 대시보드 설정 |
 |---|---|
@@ -561,7 +566,14 @@ CLI로 반영할 때는 Application Insights resource ID를 채운 JSON을 만�
 
 ```bash
 AIID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query id -o tsv)"
-python3 grafana/build_dashboard.py --appinsights-id "$AIID" > /tmp/movielog-live.json
+python3 - "$AIID" > /tmp/movielog-live.json <<'EOF'
+import json, sys
+d = json.load(open("grafana/movielog-dashboard.json", encoding="utf-8"))
+for v in d["templating"]["list"]:
+    if v["name"] == "appinsights":
+        v.update(query=sys.argv[1], current={"text": sys.argv[1], "value": sys.argv[1]}, hide=2)
+json.dump(d, sys.stdout, ensure_ascii=False)
+EOF
 az grafana dashboard create -g $RG -n "$GRAFANA" \
   --definition @/tmp/movielog-live.json --overwrite true
 rm /tmp/movielog-live.json
@@ -584,8 +596,7 @@ Managed Grafana MCP를 쓰면 Copilot이 `amgmcp_dashboard_update`로 전체 JSO
 ### JSON 추출과 Grafana import { #publish-import }
 
 1. **가져갈 JSON을 준비합니다.** 저장소의 [`grafana/movielog-dashboard.json`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/grafana/movielog-dashboard.json)은
-   변수 값이 빈 범용 JSON이며 `python3 grafana/build_dashboard.py`로 다시 만들 수
-   있습니다. 이미 검증한 dashboard를 가져가려면 Grafana의 공유 메뉴에서
+   변수 값이 빈 범용 JSON입니다. 이미 검증한 dashboard를 가져가려면 Grafana의 공유 메뉴에서
    **Export > Save to file**을 쓰거나 CLI로 내보냅니다.
 
     ```bash

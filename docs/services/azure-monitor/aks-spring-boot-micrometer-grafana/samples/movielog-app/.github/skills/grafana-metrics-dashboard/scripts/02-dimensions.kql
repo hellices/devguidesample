@@ -1,9 +1,0 @@
-// Step 2 - dimensions: which customDimensions keys and values each metric carries.
-// Unbounded value counts here mean a cardinality problem to fix in code, not in the dashboard.
-customMetrics
-| where timestamp > ago(30m)
-| where name startswith "{{METRIC_PREFIX}}"
-| mv-expand dim = bag_keys(customDimensions) to typeof(string)
-| extend value = tostring(customDimensions[dim])
-| summarize distinctValues = dcount(value), sampleValues = make_set(value, 8) by name, dim
-| order by name asc, dim asc
