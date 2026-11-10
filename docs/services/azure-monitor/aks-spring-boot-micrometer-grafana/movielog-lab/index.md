@@ -531,8 +531,11 @@ headless Chromium에서 dashboard를 캡처합니다.
 - 대화형 로그인이나 service account가 필요 없습니다.
 - Grafana 내부 scroll 높이를 재서 viewport를 늘리므로 아래쪽 panel까지 한 장에
   담깁니다. `fullPage` 옵션만으로는 내부 scroll 영역이 잘립니다.
-- panel 로딩이 60초 안에 끝나지 않거나, panel query가 실패하거나, 화면에 `No data`·
-  `Invalid date`나 subscription·resource 식별자가 보이면 실패로 종료합니다.
+- panel 로딩이 60초 안에 끝나지 않거나, 렌더링된 panel의 query가 실패하거나, 화면에
+  `No data`·`Invalid date`나 subscription·resource 식별자가 보이면 실패로 종료합니다.
+- 검사 범위는 브라우저가 렌더링한 panel뿐입니다. 접힌 row 안의 panel은 브라우저가 query를
+  실행하지 않으므로, 접힌 row를 포함한 전체 query 검증은 [verify](#verify) 단계의
+  `verify_panels.py`가 맡습니다.
 - 오류 메시지는 token과 `authorization` header를 가린 첫 줄만 출력합니다.
 - panel 간 합계를 비교하거나 문서에 남길 캡처는 분 단위로 맞춘 절대 범위
   (`from`·`to` epoch ms)로 찍습니다. `now-30m` 같은 상대 범위는 panel마다 조회

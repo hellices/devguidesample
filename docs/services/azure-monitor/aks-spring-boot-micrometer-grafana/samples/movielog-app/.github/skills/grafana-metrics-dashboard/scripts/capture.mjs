@@ -135,6 +135,8 @@ try {
   // Checked only after the last wait, so panels that loaded lazily after the viewport grew are included.
   await assertRendered(page);
   await page.screenshot({ path: out });
+  // Queries started during the screenshot (refresh, late rendering) must not slip past the checks.
+  await assertNoRouteErrors();
   console.log(`saved ${out} (${viewportWidth}x${Math.max(Math.ceil(contentHeight), Number(minHeight))})`);
 } catch (error) {
   console.error(`capture failed: ${redact(error.message).split("\n")[0]}`);

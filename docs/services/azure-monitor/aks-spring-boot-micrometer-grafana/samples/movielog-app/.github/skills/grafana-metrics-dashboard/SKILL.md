@@ -124,9 +124,11 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
      `amgmcp_query_resource_log`로 실행한다.
      - 시간 범위는 dashboard JSON의 `time`을 따른다. 절대 범위(`from`·`to`가 ISO 시각)면
        `$__timeFilter(<column>)` → `<column> between (datetime(<from>) .. datetime(<to>))`,
-       `$__timeTo()` → `datetime(<to>)`로 바꾼다. 상대 범위(`now-1h` 등)면
-       `$__timeFilter(<column>)` → `<column> > ago(1h)`, `$__timeTo()` → `now()`로 바꾼다.
-       어느 쪽이든 조건 전체를 바꾼다.
+       `$__timeTo()` → `datetime(<to>)`로 바꾼다. `from`이 `now-<n><unit>`이고 `to`가 `now`인
+       상대 범위면 같은 기간으로 `$__timeFilter(<column>)` → `<column> > ago(<n><unit>)`,
+       `$__timeTo()` → `now()`로 바꾼다(예: `now-6h` → `ago(6h)`). 그 밖의 상대 표현(`to`가
+       `now`가 아니거나 `now/d` 같은 반올림)은 임의로 바꾸지 말고, `verify_panels.py`로
+       검증하거나 사용자에게 절대 범위를 받는다. 어느 쪽이든 조건 전체를 바꾼다.
      - `$__interval` → `1m`
      - `${role:singlequote}` 같은 변수 → 따옴표를 포함한 실제 값(예: `'movielog'`)
 7. **push**: 값을 채운 임시 JSON으로
