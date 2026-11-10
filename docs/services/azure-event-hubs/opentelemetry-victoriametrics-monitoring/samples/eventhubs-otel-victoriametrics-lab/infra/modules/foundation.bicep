@@ -12,7 +12,9 @@ param operatorEgressCidr string
 var gatewaySubnetPrefix = '10.42.1.0/24'
 var aksSubnetPrefix = '10.42.2.0/24'
 var endpointsSubnetPrefix = '10.42.3.0/24'
-var vmSinglePrivateIp = '10.42.2.20'
+// Static frontend for the VMSingle internal load balancer. Azure hands out dynamic subnet IPs from the
+// low end (nodes, upgrade surge nodes, the Private Link Service load balancer), so take the top one.
+var vmSinglePrivateIp = '10.42.2.250'
 var acrPullRoleDefinitionId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var keyVaultSecretsUserRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6'
 var storageBlobDataContributorRoleDefinitionId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'

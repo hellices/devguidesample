@@ -3,10 +3,12 @@
 // `attempts` is refused rather than captured partially.
 export async function settleViewport({ measure, resize, initialHeight, attempts = 12 }) {
   let viewport = initialHeight;
-  for (let i = 0; i < attempts; i += 1) {
+  for (let i = 0; i <= attempts; i += 1) {
     const content = await measure();
     // A full-height layout reports the viewport itself, so "fits" rather than "unchanged" is the test.
     if (content <= viewport) return viewport;
+    // The last pass only re-measures after the final resize; it never grows the viewport again.
+    if (i === attempts) break;
     viewport = content;
     await resize(viewport);
   }

@@ -63,7 +63,7 @@ def test_exporters_promote_only_lab_labels():
     exporters = render_config(BASE_ENV)["exporters"]
 
     assert exporters["prometheus"]["endpoint"] == "0.0.0.0:8889"
-    assert exporters["prometheusremotewrite"]["endpoint"] == "http://10.42.2.20:8428/api/v1/write"
+    assert exporters["prometheusremotewrite"]["endpoint"] == "http://10.42.2.250:8428/api/v1/write"
     for exporter in exporters.values():
         assert exporter["resource_constant_labels"] == {
             "included": ["source_path", "delivery_path", "azure.resource.id"]}
@@ -118,6 +118,8 @@ def test_dedicated_profile_requires_existing_cluster_id():
     _assert_fans_out(pipelines, "azure_monitor_dedicated", ["azure_monitor/dedicated"])
     for delivery in ("scrape", "remote_write"):
         assert "filter/dedicated" in pipelines[f"metrics/azure_monitor_dedicated-{delivery}"]["processors"]
+        # The cluster filter would drop every namespace data point if it leaked into the Premium path.
+        assert "filter/dedicated" not in pipelines[f"metrics/azure_monitor_api-{delivery}"]["processors"]
     # The filter drops a data point when this is true, so it must be exactly "not the chosen cluster".
     assert config["processors"]["filter/dedicated"]["metric_conditions"] == [
         f'ConvertCase(datapoint.attributes["azuremonitor.resource_id"], "lower") != "{DEDICATED_ID.lower()}"'

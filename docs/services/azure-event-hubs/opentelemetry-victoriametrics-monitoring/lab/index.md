@@ -780,7 +780,7 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 캡처 health 요청에 timeout이 없고 없는 `viewPanel`도 통과, Gateway readiness `curl`에 timeout 없음 | 15초 timeout, panel tree에서 `viewPanel` id 확인, `curl --max-time` 지정 |
 | lag가 큰 partition의 series가 사라지면 나머지 partition만으로 회복 판정 | 최근 120초 lag series 수가 `eventhubs_checkpoint_present` partition 수와 같을 때만 최댓값 사용. 실제 VictoriaMetrics에서 두 수가 다르면 빈 결과임을 확인 |
 | 부하 구간에 producer rollout 대기가 포함되고, peak lag가 부하 끝 한 번의 조회 값 | rollout 완료 뒤 `load_start` 기록, producer 중지 뒤 `max_over_time`으로 부하 구간 최댓값을 읽음 |
-| `APP_DIR`가 `/`나 다른 애플리케이션 디렉터리여도 내용을 지움 | 두 단계 이상의 절대 경로만 허용하고, 비어 있지 않으면 bundle marker·`compose.yaml`·`tls`·`secrets`가 있어야 교체 |
+| `APP_DIR`가 `/`나 다른 애플리케이션 디렉터리여도 내용을 지움 | 두 단계 이상의 절대 경로만 허용하고, 비어 있지 않으면 bundle marker가 있어야 교체(`tls/`·`secrets/` 같은 흔한 이름만으로는 허용하지 않음) |
 | 기본 배포도 fallback exporter 이미지를 pull | `COMPOSE_PROFILE=fallback`일 때만 fallback profile로 pull |
 | Run Command에 `HOME`이 없어 Azure CLI가 bundle 디렉터리에 `None/.cache`를 만듦 | bootstrap에서 `HOME`을 `/root`로 지정. 실제 VM에서 `None` 디렉터리가 더 생기지 않음을 확인 |
 | predown 기록이 없어도 현재 환경 값으로 resource group 삭제를 확인 | postdown은 predown이 남긴 resource group·subscription 기록을 필수로 요구 |
@@ -800,6 +800,14 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | producer가 rollout 완료 전에 보낸 이벤트로 생긴 lag가 peak 계산에서 빠질 수 있음 | scale 요청 시각을 `load_requested`로 기록하고 그때부터의 최댓값을 peak로 읽음. 부하 끝의 consumer 처리 수는 `consumer_processed_total_at_load_end`로 이름을 바꿈 |
 | `GRAFANA_URL`에 경로가 있으면 캡처 proxy가 로그인 요청을 같은 호스트의 루트로 보냄 | 경로·query·fragment가 없는 root HTTPS URL만 허용 |
 | probe가 허용 label key의 값이면 형식과 관계없이 출력 | 짧은 일반 token 값만 남기고 경로·hostname·GUID 형태는 `<redacted>`로 바꿈 |
+| probe의 경로 통계가 `source_path`·`delivery_path` 원본 값을 그대로 기록 | 경로 통계와 지표별 경로에도 같은 `<redacted>` 규칙 적용 |
+| 마지막 viewport 확장 뒤 다시 측정하지 않아, 그때 맞춰진 대시보드도 캡처 거부 | 마지막 확장 뒤 한 번 더 측정하고, 그래도 넘칠 때만 거부 |
+| 대시보드 문서는 200인데 panel query가 실패해도 캡처 | `/api/ds/query` 응답의 HTTP 상태와 query별 `error`를 모아 하나라도 실패하면 캡처하지 않음(`agent/query-failure.mjs`와 단위 테스트) |
+| VMSingle 고정 IP `10.42.2.20`이 node·Private Link Service 등 동적 할당과 겹칠 수 있음 | subnet 끝 쪽 `10.42.2.250`으로 이동 |
+| `sample.yml`의 `used_by: index`를 뒷받침하는 링크가 topic entry에 없음 | topic entry에 sample 링크를 추가하고, 두 페이지의 링크를 테스트로 확인 |
+| 정리 확인의 cluster 수가 구독의 다른 cluster까지 셈 | 삭제한 cluster 이름으로 걸러 셈 |
+| `PANEL_PLAN`의 ClusterUtilization 항목이 실제 panel 형태와 다름 | preview 지표가 0이어서 CPU·memory 시계열의 series로 두고, 계획 표를 실제 형태로 수정 |
+| 계약 테스트가 공백 변형·주석 처리·잘못된 대체 값·재시도 구현을 통과시킴 | 공백을 허용하는 정규식, 주석 제거 후 검사, `<redacted>` 값 일치, 첫 수신 오류의 전파, `clear()` 뒤 재게시 감지, Premium pipeline의 cluster filter 부재, health 명령과 실패 분기 뒤의 완료 stamp 확인 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 
@@ -812,7 +820,7 @@ Dedicated cluster는 만든 뒤 4시간 동안 삭제할 수 없으므로, clust
 az eventhubs cluster show -g <resource-group> -n <cluster> --query createdAt -o tsv
 azd down -e <env-name> --purge --force
 az group exists -n <resource-group>                                   # false
-az eventhubs cluster list --query "length(@)"                          # 0
+az eventhubs cluster list --query "[?name=='<cluster>'] | length(@)"  # 0(구독의 다른 cluster는 세지 않음)
 az keyvault list-deleted --query "[?name=='<key-vault>'] | length(@)"  # 0
 ```
 

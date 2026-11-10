@@ -20,9 +20,16 @@ class _Client:
 
 
 class _FailingConsumer(_Client):
+    calls = 0
+
     async def receive(self, **kwargs):
+        # Fail once, then idle: a consumer that swallowed the first failure and retried would hang
+        # here instead of surfacing that first error.
+        type(self).calls += 1
         await asyncio.sleep(0)
-        raise ConnectionError("link detached")
+        if type(self).calls == 1:
+            raise ConnectionError("link detached (first receive)")
+        await asyncio.Event().wait()
 
 
 def _load_consumer(monkeypatch, consumer_cls):
@@ -56,10 +63,12 @@ def test_receive_failure_exits_instead_of_idling(monkeypatch):
         "CHECKPOINT_CONTAINER": "workload-checkpoints",
     }.items():
         monkeypatch.setenv(name, value)
+    monkeypatch.setattr(_FailingConsumer, "calls", 0)
     consumer = _load_consumer(monkeypatch, _FailingConsumer)
 
-    with pytest.raises(ConnectionError):
+    with pytest.raises(ConnectionError, match="first receive"):
         asyncio.run(asyncio.wait_for(consumer.run(), timeout=5))
+    assert _FailingConsumer.calls == 1
 
 
 
@@ -91,7 +100,8 @@ def _load_lag_exporter(monkeypatch):
             self.name, self.value, self.cleared = name, None, False
 
         def set(self, value):
-            self.value = value
+            # Publishing again after clear() leaves a live (stale) series, so it undoes the clear.
+            self.value, self.cleared = value, False
 
         def clear(self):
             self.cleared = True

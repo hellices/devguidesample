@@ -544,6 +544,16 @@ def _bootstrap_tools(write, docker="exit 0"):
     ))
 
 
+BUNDLE_MARKER = ".eventhubs-observability-bundle"
+
+
+def _previous_bundle(app):
+    """An APP_DIR that an earlier bootstrap installed (it always leaves the bundle marker)."""
+    app.mkdir(parents=True, exist_ok=True)
+    (app / BUNDLE_MARKER).touch()
+    return app
+
+
 def _run_bootstrap(bin_dir, tmp_path, app, profile="default"):
     import base64
 
@@ -556,7 +566,7 @@ def _run_bootstrap(bin_dir, tmp_path, app, profile="default"):
 def test_gateway_bundle_replaces_stale_files_but_keeps_runtime_state(fake_bin, tmp_path):
     bin_dir, _, write = fake_bin
     _bootstrap_tools(write)
-    app = tmp_path / "app"
+    app = _previous_bundle(tmp_path / "app")
     (app / "grafana" / "provisioning").mkdir(parents=True)
     (app / "grafana" / "provisioning" / "removed.yaml").write_text("old")
     (app / "old-compose.override.yaml").write_text("old")
@@ -577,8 +587,8 @@ def test_gateway_bundle_restores_the_previous_bundle_when_the_copy_fails(fake_bi
     bin_dir, _, write = fake_bin
     _bootstrap_tools(write)
     write("cp", "exit 1")  # e.g. the disk filled up while copying the new bundle
-    app = tmp_path / "app"
-    (app / "tls").mkdir(parents=True)
+    app = _previous_bundle(tmp_path / "app")
+    (app / "tls").mkdir()
     (app / "compose.yaml").write_text("previous")
     (app / ".env").write_text("previous")
 
@@ -595,14 +605,15 @@ def test_gateway_keeps_the_grafana_secret_when_key_vault_fails(fake_bin, tmp_pat
     bin_dir, _, write = fake_bin
     _bootstrap_tools(write)
     write("az", 'if [[ "$1 $2" == "keyvault secret" ]]; then echo "throttled" >&2; exit 1; fi')
-    app = tmp_path / "app"
-    (app / "secrets").mkdir(parents=True)
+    app = _previous_bundle(tmp_path / "app")
+    (app / "secrets").mkdir()
     (app / "secrets" / "grafana_admin_password").write_text("current")
     (app / "compose.yaml").write_text("previous")
 
     result = _run_bootstrap(bin_dir, tmp_path, app)
 
     assert result.returncode != 0
+    assert "not a gateway bundle directory" not in result.stderr  # failed at Key Vault, not the guard
     assert (app / "secrets" / "grafana_admin_password").read_text() == "current"
     assert not list((app / "secrets").glob(".grafana_admin_password.*"))
 
@@ -613,14 +624,19 @@ def test_gateway_bootstrap_sets_home_for_run_command():
     assert text.index('export HOME="${HOME:-/root}"') < text.index("az login")
 
 
-@pytest.mark.parametrize("app_dir", ["/", "/opt", "unrelated"])
+@pytest.mark.parametrize("app_dir", ["/", "/opt", "unrelated", "unrelated-with-tls"])
 def test_gateway_bundle_refuses_a_directory_it_does_not_own(fake_bin, tmp_path, app_dir):
     bin_dir, _, write = fake_bin
     _bootstrap_tools(write)
-    if app_dir == "unrelated":
+    if app_dir.startswith("unrelated"):
         app = tmp_path / "other-app"
         app.mkdir()
         (app / "data.db").write_text("keep")
+        # Common runtime directory names alone do not prove the directory is this bundle's.
+        if app_dir == "unrelated-with-tls":
+            (app / "tls").mkdir()
+            (app / "secrets").mkdir()
+            (app / "compose.yaml").write_text("other")
         app_dir = str(app)
 
     result = _run_bootstrap(bin_dir, tmp_path, app_dir)
@@ -697,7 +713,7 @@ def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, 
     ))
     buffer = _gateway_bundle()
     if existing:
-        (app / "tls").mkdir(parents=True)
+        (_previous_bundle(app) / "tls").mkdir()
         ip = "1.2.3.4 expiring" if existing == "expiring" else existing
         (app / "tls" / "grafana.crt").write_text(f"cert {ip} pub=k1")
         if key:
@@ -901,7 +917,11 @@ def test_gateway_only_requires_a_completed_full_postprovision():
     # A new full run invalidates the stamp first and writes it only after the last health check.
     assert text.index('rm -f "$COMPLETED_STAMP"', full) < text.index('log "1/6', full)
     health = text.index('log "6/6 operator-facing health checks"')
-    assert text.index('touch "$COMPLETED_STAMP"') > health
+    # The stamp follows the health check command itself (and its failure branch), not just its log line.
+    check = text.index('"https://$GATEWAY_PUBLIC_IP:3000/api/health"', health)
+    failure = text.index('|| die "Grafana is not reachable', check)
+    assert text.index('touch "$COMPLETED_STAMP"') > failure
+    assert text.count('touch "$COMPLETED_STAMP"') == 1
     assert '[[ -f "$COMPLETED_STAMP" && -n "$WORKLOAD_IMAGE" ]] || die' in text
 
 

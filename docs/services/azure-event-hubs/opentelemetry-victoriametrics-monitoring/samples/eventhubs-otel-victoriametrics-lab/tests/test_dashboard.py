@@ -365,11 +365,15 @@ SETTLE_CASES = {
     "full_height": "let v = 1000; const measure = async () => v;",
     # lazy panels appear once, then the content fits the grown viewport
     "grows_then_fits": "let v = 1000; const sizes = [2400, 2400]; const measure = async () => sizes.shift() ?? v;",
+    # content fits only after the last allowed resize; that final size must be re-measured, not refused
+    "fits_after_last_resize": ("let v = 1000; let n = 0; "
+                               "const measure = async () => (++n <= 12 ? 1000 + n * 100 : 2200);"),
 }
 
 
 @pytest.mark.parametrize("case, expected", [
     ("grows_forever", "rejected"), ("full_height", "1000"), ("grows_then_fits", "2400"),
+    ("fits_after_last_resize", "2200"),
 ])
 def test_capture_waits_until_the_dashboard_fits_and_refuses_one_that_never_does(case, expected):
     import shutil
@@ -391,9 +395,42 @@ def test_capture_waits_until_the_dashboard_fits_and_refuses_one_that_never_does(
 
 
 def test_capture_uses_the_settle_helper():
-    text = (LAB_ROOT / "agent" / "capture.mjs").read_text()
-    assert "import { settleViewport } from './settle.mjs';" in text
-    assert "const height = await settleViewport({" in text
+    # Strip comments so a commented-out call cannot satisfy the check.
+    text = re.sub(r"/\*.*?\*/|//[^\n]*", "", (LAB_ROOT / "agent" / "capture.mjs").read_text(), flags=re.S)
+    assert re.search(r"^import \{ settleViewport \} from '\./settle\.mjs';$", text, re.M)
+    assert re.search(r"^\s*const height = await settleViewport\(\{", text, re.M)
+    # Panel query failures are checked before, not after, the screenshot.
+    assert re.search(r"^import \{ queryFailure \} from '\./query-failure\.mjs';$", text, re.M)
+    assert text.index("queryFailures.length") < text.index("page.screenshot(")
+
+
+QUERY_CASES = {
+    "ok": ("true", "200", '{"results": {"A": {"frames": []}}}', "null"),
+    "http_error": ("false", "500", "{}", "HTTP 500"),
+    "partial_error": ("true", "207", '{"results": {"A": {}, "B": {"error": "bad_data"}}}', "B: bad_data"),
+    "not_json": ("true", "200", None, "response is not JSON"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(QUERY_CASES))
+def test_capture_rejects_failed_panel_queries(case):
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    ok, status, body, expected = QUERY_CASES[case]
+    json_impl = "() => Promise.reject(new Error('html'))" if body is None else f"async () => ({body})"
+    module = (LAB_ROOT / "agent" / "query-failure.mjs").as_uri()
+    script = (
+        f"import {{ queryFailure }} from '{module}';\n"
+        f"const response = {{ ok: () => {ok}, status: () => {status}, json: {json_impl} }};\n"
+        "queryFailure(response).then((v) => console.log(String(v)));\n"
+    )
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30)
+
+    assert result.stdout.strip() == expected, result.stderr
 
 
 def test_hidden_targets_are_not_queried(monkeypatch):

@@ -12,7 +12,7 @@ export HOME="${HOME:-/root}"
 APP_DIR="${APP_DIR:-/opt/eventhubs-observability}"
 # Every top-level entry of APP_DIR is replaced below, so it must be a dedicated directory: a
 # canonical path at least two levels deep (never / or /opt), and if it already holds files they
-# must be this bundle's (marker, compose.yaml or the tls/secrets runtime state).
+# must carry this bundle's marker. Common names such as tls/ or secrets/ alone prove nothing.
 BUNDLE_MARKER=.eventhubs-observability-bundle
 while [ "${APP_DIR%/}" != "$APP_DIR" ]; do APP_DIR="${APP_DIR%/}"; done
 case "$APP_DIR/" in
@@ -22,8 +22,7 @@ case "$APP_DIR" in
   /*/?*) ;;
   *) echo "GATEWAY_STEP_FAILED unsafe APP_DIR ${APP_DIR:-/}" >&2; exit 1 ;;
 esac
-if [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR")" ] && [ ! -e "$APP_DIR/$BUNDLE_MARKER" ] \
-  && [ ! -e "$APP_DIR/compose.yaml" ] && [ ! -d "$APP_DIR/tls" ] && [ ! -d "$APP_DIR/secrets" ]; then
+if [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR")" ] && [ ! -e "$APP_DIR/$BUNDLE_MARKER" ]; then
   echo "GATEWAY_STEP_FAILED APP_DIR $APP_DIR is not a gateway bundle directory" >&2
   exit 1
 fi

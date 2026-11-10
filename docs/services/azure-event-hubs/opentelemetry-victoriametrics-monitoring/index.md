@@ -227,7 +227,9 @@ namespace 지표표는 38개이지만 cluster 안 namespace의 지표 정의는 
 
 [Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습](lab/index.md)에 이 비교를 재현한
 배포 구성, Collector 설정, lag 시나리오, agent 대시보드 검증, 지연·누락 측정 방법, 배포 중 만난
-오류와 정리 과정을 실제 실행 결과와 함께 정리했습니다. Dedicated cluster는 만든 뒤 4시간
+오류와 정리 과정을 실제 실행 결과와 함께 정리했습니다. 실행 코드는
+[`eventhubs-otel-victoriametrics-lab`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab)
+sample에 있습니다. Dedicated cluster는 만든 뒤 4시간
 동안 삭제할 수 없어 최소 4시간의 CU 비용과 AKS·VM 비용이 발생합니다. `EVENTHUBS_SKU=Premium`
 으로 Premium 1 PU 구성도 배포할 수 있습니다. `MANAGED_GRAFANA=Enabled`를 선택하면 같은
 대시보드를 managed private endpoint로 VictoriaMetrics에 연결한 Azure Managed Grafana에서도

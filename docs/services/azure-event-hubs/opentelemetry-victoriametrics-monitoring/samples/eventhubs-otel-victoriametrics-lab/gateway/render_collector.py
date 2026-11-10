@@ -144,7 +144,7 @@ def render_config(env: Mapping[str, str]) -> dict:
     if fallback_enabled and not env.get("PREMIUM_NAMESPACE_NAME"):
         # Without it the relabel keep rule would admit every namespace in the resource group.
         raise ValueError("ENABLE_FALLBACK_EXPORTER requires PREMIUM_NAMESPACE_NAME")
-    vmsingle_url = env.get("VMSINGLE_URL", "http://10.42.2.20:8428").rstrip("/")
+    vmsingle_url = env.get("VMSINGLE_URL", "http://10.42.2.250:8428").rstrip("/")
     dedicated_id = env.get("EXISTING_DEDICATED_CLUSTER_RESOURCE_ID", "").strip()
 
     extensions = {

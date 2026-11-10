@@ -29,6 +29,12 @@ def test_sample_manifest_is_runnable_and_referenced_by_both_pages():
         "kind": "runnable",
         "used_by": ["index", "lab"],
     }
+    # used_by is a claim about the pages; each page must actually point at this sample.
+    sample_url = ("https://github.com/hellices/devguidesample/tree/main/docs/services/azure-event-hubs/"
+                  "opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab")
+    topic = LAB_ROOT.parents[1]
+    for page in (topic / "index.md", topic / "lab" / "index.md"):
+        assert f"]({sample_url})" in page.read_text(), page
 
 
 def test_azure_yaml_declares_lifecycle_hooks_without_local_docker_service():

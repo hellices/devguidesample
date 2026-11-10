@@ -102,8 +102,8 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
         newest_ts = float(newest["result"][0]["value"][1]) if newest["result"] else None
         path_stats.append(
             {
-                "source_path": source or "(missing)",
-                "delivery_path": delivery or "(missing)",
+                "source_path": _safe_value(source) if source else "(missing)",
+                "delivery_path": _safe_value(delivery) if delivery else "(missing)",
                 "metric_names": len(combos[(source, delivery)]),
                 "samples_in_window": int(float(count["result"][0]["value"][1])) if count["result"] else 0,
                 "freshness_seconds": round(now - newest_ts, 1) if newest_ts is not None else None,
@@ -117,7 +117,8 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
             name: {
                 "label_keys": sorted(entry["label_keys"]),
                 "safe_label_values": {k: sorted(v) for k, v in sorted(entry["values"].items())},
-                "paths": sorted(["/".join(part or "(missing)" for part in p) for p in entry["paths"]]),
+                "paths": sorted(["/".join(_safe_value(part) if part else "(missing)" for part in p)
+                                 for p in entry["paths"]]),
             }
             for name, entry in sorted(inventory.items())
         },

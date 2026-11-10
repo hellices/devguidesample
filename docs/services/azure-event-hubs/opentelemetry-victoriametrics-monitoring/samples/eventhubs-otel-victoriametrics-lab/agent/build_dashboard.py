@@ -35,7 +35,8 @@ PANEL_PLAN = [
     ("Premium memory가 위험 구간인가", "NamespaceMemoryUsage Maximum", "max(last_over_time)", "gauge"),
     ("Dedicated cluster CPU가 위험 구간인가", "clusters CPU Maximum (Role)", "max(last_over_time)", "gauge"),
     ("Dedicated cluster 가용 memory가 부족한가", "clusters AvailableMemory Maximum (Role)", "min(last_over_time)", "gauge"),
-    ("Dedicated cluster 전체 사용률은 얼마인가", "clusters ClusterUtilization Average (preview)", "last_over_time", "gauge"),
+    # Preview metric that stayed 0 in the lab, so it is a series next to CPU·memory rather than its own gauge.
+    ("Dedicated cluster 전체 사용률은 얼마인가", "clusters ClusterUtilization Average (preview)", "raw", "time series"),
     ("CPU·memory가 부하와 함께 어떻게 움직였나", "Namespace*Usage Average/Maximum", "raw", "time series"),
     ("구간 동안 요청·성공·throttle은 몇 건인가", "Incoming/Successful/ThrottledRequests Total", "sum_over_time[$__range]", "stat"),
     ("송신 방향 request 수를 볼 수 있나", "OutgoingRequests 없음", "계산하지 않음", "text"),

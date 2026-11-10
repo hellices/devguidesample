@@ -27,7 +27,7 @@ def test_foundation_uses_fixed_non_overlapping_subnets():
     assert "10.42.0.0/16" in text
     assert "10.42.1.0/24" in text
     assert "10.42.2.0/24" in text
-    assert "10.42.2.20" in text
+    assert "10.42.2.250" in text
 
 
 def test_storage_and_key_vault_disable_legacy_secret_access():
@@ -297,7 +297,8 @@ def test_compute_bootstraps_gateway_without_starting_application():
     assert "docker-compose-v2" in text
     assert "InstallAzureCLIDeb" in text
     assert "/opt/eventhubs-observability" in text
-    assert "docker compose up" not in text
+    # Any whitespace between the words runs the same command.
+    assert not re.search(r"\bdocker\s+compose\s+up\b", text)
 
 
 def test_compute_exports_main_module_contract():
@@ -320,7 +321,7 @@ MAIN = LAB_ROOT / "infra" / "main.bicep"
 
 def test_key_vault_never_sets_purge_protection_false():
     # ARM rejects enablePurgeProtection=false; omit it to leave purge protection off.
-    assert "enablePurgeProtection: false" not in FOUNDATION.read_text()
+    assert not re.search(r"\benablePurgeProtection\s*:\s*false\b", _code(FOUNDATION.read_text()))
 
 
 def _code(text: str) -> str:
@@ -368,6 +369,8 @@ def test_private_endpoint_check_sees_a_commented_out_setting():
 
 def _role_assignments(text: str) -> list[tuple[str, str, str]]:
     """(scope, role variable, principal) of every roleAssignments resource block."""
+    # Commented-out assignments are not deployed, so only code counts.
+    text = _code(text)
     # Indented declarations are still declarations; every occurrence of the type must be parsed.
     blocks = re.split(r"(?m)^\s*resource \w+ 'Microsoft\.Authorization/roleAssignments@", text)[1:]
     assert len(blocks) == text.count("'Microsoft.Authorization/roleAssignments@"), "unparsed roleAssignments"

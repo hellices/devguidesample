@@ -61,4 +61,4 @@ def test_window_must_be_a_supported_positive_duration(window):
 def test_allowlisted_values_are_copied_only_when_they_are_plain_tokens(value, kept):
     from probe import _safe_value
 
-    assert (_safe_value(value) == value) is kept
+    assert _safe_value(value) == (value if kept else "<redacted>")

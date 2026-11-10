@@ -10,6 +10,7 @@ import https from 'node:https';
 import tls from 'node:tls';
 import { chromium } from 'playwright';
 import { grafanaBase } from './grafana-url.mjs';
+import { queryFailure } from './query-failure.mjs';
 import { settleViewport } from './settle.mjs';
 
 const [dashboardPath, output, from = 'now-1h', to = 'now', width = '1600'] = process.argv.slice(2);
@@ -106,6 +107,13 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: Number(width), height: 1000 }, deviceScaleFactor: 1 });
 // Only the loopback proxy origin is reachable from the page.
 await page.route('**/*', (route) => (new URL(route.request().url()).origin === local ? route.continue() : route.abort()));
+// A dashboard document can load with 200 while its panel queries fail; collect those failures so a
+// partly broken dashboard is never saved as evidence.
+const queryChecks = [];
+page.on('response', (response) => {
+  if (new URL(response.url()).pathname !== '/api/ds/query') return;
+  queryChecks.push(queryFailure(response));
+});
 try {
   if (!token) {
     await gotoOk(page, `${local}/login`);
@@ -158,6 +166,8 @@ try {
     { timeout: 60000 },
   );
   await page.waitForTimeout(2000);
+  const queryFailures = (await Promise.all(queryChecks)).filter(Boolean);
+  if (queryFailures.length) throw new Error(`panel queries failed; not capturing: ${queryFailures.join(' | ')}`);
   await page.screenshot({ path: output, fullPage: true });
   console.log(`captured ${output} (${height}px)`);
 } finally {
