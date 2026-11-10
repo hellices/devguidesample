@@ -38,7 +38,7 @@
   <text x="708" y="352" text-anchor="middle" font-size="12" fill="#115e59">파일 데이터를 stripe 단위 object로 분산</text>
   <text x="708" y="372" text-anchor="middle" font-size="12" fill="#115e59">backend: ldiskfs 또는 ZFS + RAID</text>
 
-  <line x1="256" y1="160" x2="556" y2="58" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+  <line x1="256" y1="160" x2="556" y2="58" stroke="#334155" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
   <text x="268" y="104" font-size="12" fill="#334155">① mount: 구성 조회</text>
   <line x1="256" y1="212" x2="556" y2="158" stroke="#334155" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
   <text x="330" y="168" font-size="12" fill="#334155">② open: layout(EA)·lock</text>

@@ -231,7 +231,7 @@ HCI) VM이 VPN·ExpressRoute를 거쳐 AMLFS를 직접 mount하는 절차나 지
    이 초기 업로드에는 VPN·ExpressRoute가 필요하지 않습니다.
 2. 생성 시 Blob 컨테이너와 통합한 AMLFS에서 import job으로 namespace를 가져옵니다.
 
-같은 문서는 NFS·SMB 같은 POSIX 프로토콜이 장거리 지연에서 처리량이 크게 떨어진다는
+같은 문서는 NFS·SMB 같은 기존 네트워크 파일 공유 프로토콜이 장거리 지연에서 처리량이 크게 떨어진다는
 점을 Blob 중계 방식의 근거로 듭니다. 이를 바탕으로 하면 Azure Local 클러스터와 AMLFS를
 함께 쓸 때 **Blob을 경계로 데이터셋을 주고받고, 고성능 I/O가 필요한 계산은 AMLFS와 같은
 영역의 Azure 컴퓨트에서 실행**하는 구성이 현실적인 선택지입니다. Azure Local과 AMLFS의
