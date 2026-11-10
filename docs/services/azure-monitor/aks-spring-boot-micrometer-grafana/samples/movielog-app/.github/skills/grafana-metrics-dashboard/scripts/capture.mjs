@@ -36,11 +36,24 @@ async function waitForPanels(page) {
 }
 
 const routeErrors = [];
+// Route callbacks run outside the page waits; each one is tracked so errors are checked only after it settles.
+const pendingRoutes = new Set();
 
-async function assertRendered(page) {
+async function settleRoutes() {
+  while (pendingRoutes.size) {
+    await Promise.allSettled([...pendingRoutes]);
+  }
+}
+
+async function assertNoRouteErrors() {
+  await settleRoutes();
   if (routeErrors.length) {
     throw new Error(routeErrors.join("; "));
   }
+}
+
+async function assertRendered(page) {
+  await assertNoRouteErrors();
   // An epoch time range saved in the dashboard JSON renders as "Invalid date" and queries from=NaN.
   const text = await page.locator("body").innerText();
   if (/\bNo data\b|\bInvalid date\b/.test(text)) {
@@ -49,6 +62,7 @@ async function assertRendered(page) {
   if (/\/subscriptions\/|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/i.test(text)) {
     throw new Error("rendered dashboard shows a resource or subscription identifier");
   }
+  await assertNoRouteErrors();
 }
 const browser = await chromium.launch();
 try {
@@ -58,7 +72,15 @@ try {
     locale: "ko-KR",
     timezoneId: "Asia/Seoul",
   });
-  await context.route("**/*", async (route) => {
+  await context.route("**/*", (route) => {
+    const job = handleRoute(route);
+    pendingRoutes.add(job);
+    const done = () => pendingRoutes.delete(job);
+    job.then(done, done);
+    return job;
+  });
+
+  async function handleRoute(route) {
     const request = route.request();
     if (new URL(request.url()).origin !== grafanaOrigin) {
       return route.continue();
@@ -80,7 +102,7 @@ try {
       routeErrors.push(`${request.method()} ${new URL(request.url()).pathname}: ${error.name}`);
       return route.abort("failed");
     }
-  });
+  }
 
   const page = await context.newPage();
   const response = await page.goto(base + path, { waitUntil: "networkidle", timeout: 120000 });

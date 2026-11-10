@@ -45,8 +45,14 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
   - dashboard JSON의 `time`은 ISO 8601 UTC 문자열(예: `2026-11-07T23:05:00.000Z`)로 저장한다.
     epoch 문자열을 저장하면 Grafana 화면이 `Invalid date`로 해석한다. 캡처 URL의 `from`·`to`만
     epoch ms를 쓴다.
-- `capture.mjs`는 Playwright Chromium이 필요하다. 없으면 작업 폴더 밖 임시 디렉터리에서
-  `npm i playwright && npx playwright install chromium-headless-shell`로 준비한다.
+- `capture.mjs`는 Playwright Chromium이 필요하다. Node는 스크립트 파일 위치에서 패키지를
+  찾으므로, 작업 폴더 밖 임시 디렉터리에 Playwright를 설치하고 `capture.mjs`를 그 디렉터리에
+  복사해 실행한다.
+
+  ```bash
+  CAP="$(mktemp -d)" && cp scripts/capture.mjs "$CAP/" && cd "$CAP"
+  npm i playwright && npx playwright install chromium-headless-shell
+  ```
 
 ## 규칙
 
@@ -116,8 +122,12 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
      (지난 구간은 `--from`·`--to` 추가)
    - MCP: `amgmcp_dashboard_inspect`(includeQueries)로 받은 KQL을 아래처럼 바꿔
      `amgmcp_query_resource_log`로 실행한다.
-     - `$__timeFilter(<column>)` → `<column> > ago(1h)` (조건 전체를 바꾼다)
-     - `$__interval` → `1m`, `$__timeTo()` → `now()`
+     - 시간 범위는 dashboard JSON의 `time`을 따른다. 절대 범위(`from`·`to`가 ISO 시각)면
+       `$__timeFilter(<column>)` → `<column> between (datetime(<from>) .. datetime(<to>))`,
+       `$__timeTo()` → `datetime(<to>)`로 바꾼다. 상대 범위(`now-1h` 등)면
+       `$__timeFilter(<column>)` → `<column> > ago(1h)`, `$__timeTo()` → `now()`로 바꾼다.
+       어느 쪽이든 조건 전체를 바꾼다.
+     - `$__interval` → `1m`
      - `${role:singlequote}` 같은 변수 → 따옴표를 포함한 실제 값(예: `'movielog'`)
 7. **push**: 값을 채운 임시 JSON으로
    `az grafana dashboard create -g <grafana-resource-group> -n <grafana-name> --definition @<temp-dashboard.json> --overwrite true`를
@@ -136,7 +146,7 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    - JSON만 만든 경우에는 사용자에게 import 후 dashboard URL을 요청하고 그 URL로 진행한다.
      URL을 받지 못하거나 렌더링 도구가 없으면 다른 dashboard로 대신 검증하지 말고,
      report에 "렌더링 미검증"으로 남긴 채 완료라고 하지 않는다.
-   - 터미널: `GRAFANA_URL=... GRAFANA_TOKEN=... node scripts/capture.mjs "<path-and-query>" out.png`
+   - 터미널(위 임시 디렉터리에서): `GRAFANA_URL=... GRAFANA_TOKEN=... node capture.mjs "<path-and-query>" out.png`
      `capture.mjs`는 panel query 실패, `No data`·`Invalid date` 표시, 화면의 subscription·resource
      식별자를 발견하면 실패로 끝난다. 실패하면 캡처를 보지 않고 원인부터 고친다.
    - panel 간 합계를 비교할 캡처는 분 단위로 맞춘 절대 범위(`from`·`to` epoch ms)로 찍는다.

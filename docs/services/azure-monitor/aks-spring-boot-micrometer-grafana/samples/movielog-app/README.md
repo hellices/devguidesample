@@ -103,9 +103,10 @@ export GRAFANA_TOKEN="$(az account get-access-token \
 # 모든 panel query 실행. 지난 구간은 --from/--to(ISO 8601 UTC)를 줍니다.
 python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "$AIID"
 
-# 화면 캡처
-npm i playwright && npx playwright install chromium-headless-shell
-node $SKILL/capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
+# 화면 캡처: Node는 스크립트 위치에서 패키지를 찾으므로 Playwright와 같은 임시 폴더에 복사해 실행합니다.
+OUT="$PWD/dashboard.png"; CAP="$(mktemp -d)" && cp $SKILL/capture.mjs "$CAP/"
+(cd "$CAP" && npm i playwright && npx playwright install chromium-headless-shell \
+  && node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" "$OUT")
 ```
 
 `now-30m` 같은 상대 범위는 panel마다 query 시각이 조금씩 달라 분 경계에서는
