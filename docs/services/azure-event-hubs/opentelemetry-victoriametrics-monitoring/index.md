@@ -34,6 +34,10 @@ official_sources:
   url: https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-cluster-create-portal
 - title: Diagnostic settings in Azure Monitor
   url: https://learn.microsoft.com/azure/azure-monitor/platform/diagnostic-settings
+- title: Azure Monitor Metrics overview
+  url: https://learn.microsoft.com/azure/azure-monitor/metrics/data-platform-metrics
+- title: Log data ingestion time in Azure Monitor
+  url: https://learn.microsoft.com/azure/azure-monitor/logs/data-ingestion-time
 - title: Partition load balancing for event processing
   url: https://learn.microsoft.com/azure/event-hubs/event-processor-balance-partition-load
 - title: How to migrate from the metrics API to the getBatch API
@@ -127,8 +131,8 @@ Azure Monitor는 플랫폼 지표를 별도 설정 없이 수집해 93일 동안
 
 | 방식 | 장점 | 단점 |
 |---|---|---|
-| ① Azure Monitor 직접 조회 | 수집 인프라가 없음. dimension 필터·분할, 지표 경고를 바로 사용. Grafana Azure Monitor data source로도 조회 | 데이터가 Azure Monitor에 남아 VictoriaMetrics의 다른 지표와 한 저장소·한 query로 다룰 수 없음. 보관 93일 |
-| ② Metrics API pull — `azuremonitorreceiver` | 모든 플랫폼 지표와 dimension 분할을 그대로 수집. 지연이 가장 짧음(실측 194–213초). 원본 분 bin timestamp를 유지해 remote write 합계가 Azure Monitor와 25/25분 일치. namespace 범위 Monitoring Reader로 동작. 다른 Prometheus 지표와 같은 Collector에서 처리 | 조회 대상이 늘면 Metrics API 호출이 늘어 throttling 위험. 호출을 묶는 `metrics:getBatch`는 구독 범위 Monitoring Reader가 필요(namespace 범위에서 403 실측). dimension 분할 조회는 값이 없는 동안 series가 없어(`ThrottledRequests` 실측) 0이 필요한 지표는 분할을 끄는 설정 필요 |
+| ① Azure Monitor 직접 조회 | 수집 인프라가 없음. dimension 필터·분할, 지표 경고를 바로 사용. Grafana Azure Monitor data source로도 조회. Collector를 거치지 않아 수집 주기만큼의 지연이 없음 | 데이터가 Azure Monitor에 남아 VictoriaMetrics의 다른 지표와 한 저장소·한 query로 다룰 수 없음. 보관 93일. 1분 bin 지연은 ②~⑤와 같음 |
+| ② Metrics API pull — `azuremonitorreceiver` | 모든 플랫폼 지표와 dimension 분할을 그대로 수집. 외부 수집 방식 중 지연이 가장 짧음(실측 194–213초, [지연 구성](#latency) 참고). 원본 분 bin timestamp를 유지해 remote write 합계가 Azure Monitor와 25/25분 일치. namespace 범위 Monitoring Reader로 동작. 다른 Prometheus 지표와 같은 Collector에서 처리 | 조회 대상이 늘면 Metrics API 호출이 늘어 throttling 위험. 호출을 묶는 `metrics:getBatch`는 구독 범위 Monitoring Reader가 필요(namespace 범위에서 403 실측). dimension 분할 조회는 값이 없는 동안 series가 없어(`ThrottledRequests` 실측) 0이 필요한 지표는 분할을 끄는 설정 필요 |
 | ③ Metrics API pull — `azure-metrics-exporter` | Prometheus scrape 설정만으로 구성하고 dimension, 리소스 탐색·조회 결과 캐시, Azure API rate limit 지표를 제공. OpenTelemetry receiver를 쓰지 않는 Prometheus 중심 환경의 대안. 실측에서 Premium 지표 27개 series를 두 전달 경로로 저장 | 운영할 컴포넌트가 하나 늘고 ②와 같은 Metrics API 호출·권한 제약을 그대로 가짐. 이 실습은 resource group 범위로 찾은 namespace 중 Premium만 남기려고 namespace 이름 relabel 필터를 따로 둠 |
 | ④ Diagnostic Settings → Event Hub 스트림 | Metrics API를 polling하지 않는 push 방식. 리소스 로그와 같은 스트림으로 외부 시스템에 연동. 실측 합계는 Azure Monitor와 일치 | 내보내기(DS Export) 가능한 지표만 대상이고 dimension을 합친 값만 전달. 0값만 내보내는 동안 export 간격이 늘어나(비활성 1시간 뒤 15분, 7일 뒤 최대 2시간) 값이 있는 분만 도착. 설정 후 최대 90분 지연(실측 20–55분 이상), 평소 지연 434–513초. 원본과 같은 리전의 Event Hub와 telemetry namespace 비용 필요 |
 | ⑤ Diagnostic Settings → Log Analytics·Storage | Log Analytics에서 KQL로 리소스 로그와 결합. Storage는 저렴하게 장기 보관 | ④와 같은 export 제약(내보내기 가능 지표, dimension 평탄화, 설정 지연). 외부 TSDB로 옮기려면 다시 내보내야 함 |
@@ -143,6 +147,38 @@ Azure Monitor는 플랫폼 지표를 별도 설정 없이 수집해 93일 동안
   `GATEWAY_ONLY=true`로 Gateway만 다시 구성해 ③으로 전환하고, `source_path="fallback_exporter"`로 ②와 구분합니다.
 - **④·⑤는 처리량 지표를 로그 파이프라인과 함께 보내야 할 때만** 씁니다. 0값 구간과
   dimension이 사라지므로 경보나 용량 판단의 기준으로 삼지 않습니다.
+
+### 지연 구성: Azure Monitor 1분 bin·수집 주기·export { #latency }
+
+①~⑤는 모두 Azure Monitor가 만든 플랫폼 지표를 원본으로 하므로 초 단위 신호가 아니며,
+외부로 가져오면 분 단위 지연이 쌓입니다. 지연은 다음 구간으로 나뉩니다.
+
+| 구간 | 지연 | 근거 |
+|---|---|---|
+| Azure Monitor 집계 | 1분 단위로 집계하고 bin 시작 시각을 timestamp로 씀. bin이 끝나야 값이 확정되고, metrics database에는 1분 안에 반영 | Learn |
+| ②·③ 수집 주기 | Collector `collection_interval`과 exporter scrape 주기 60초만큼 추가로 기다릴 수 있음 | 이 실습 설정 |
+| ④·⑤ export | metrics database 반영 뒤 export에 약 3분 추가. 0값만 내보내는 동안 back-off, 설정 직후 최대 90분 | Learn |
+| ③과 scrape 전달 경로 | VMAgent scrape 주기(30초)만큼 추가 | 이 실습 설정 |
+
+실측에서 probe 시점의 마지막 sample 경과 시간은 다음과 같았습니다. sample timestamp가 bin
+시작 시각이므로, 끝난 bin 기준 실제 지연은 이 값에서 약 60초를 뺀 값입니다.
+
+| 경로 | 마지막 sample 경과 시간 | 끝난 bin 기준 |
+|---|---:|---:|
+| ② Metrics API → remote write | 194–213초 | 약 2분 15초–2분 30초 |
+| ④ Diagnostic Settings → remote write | 434–513초 | 약 6–7분 30초 |
+| 참고: checkpoint lag exporter → remote write | 38초 | Event Hubs를 15초마다 직접 조회 |
+
+이 지연이 운영에 주는 의미는 다음과 같습니다.
+
+- **용량·추세·분 단위 경보에는 충분합니다.** CPU·memory·throttle을 몇 분 단위로 판단하는
+  용도에는 ②가 Azure Monitor 직접 조회와 같은 값을 2–3분 늦게 제공합니다.
+- **`collection_interval`을 줄여도 근본 지연은 남습니다.** bin이 1분이므로 수집 대기만
+  줄고, Metrics API 호출이 늘어 throttling 위험만 커집니다.
+- **초 단위 감지가 필요하면 Event Hubs나 client에서 직접 얻는 신호를 함께 씁니다.** 아래
+  [추가 절](#events)의 checkpoint 기반 lag는 같은 환경에서 38초 안에 반영됐습니다.
+- **scrape 경로의 freshness로 판단하지 않습니다.** scrape는 Collector가 들고 있는 마지막
+  값을 다시 찍으므로 37–48초로 보이지만, 원본은 3분 이상 전 bin입니다([전달 경로](#delivery)).
 
 ### 이 topic의 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
@@ -171,20 +207,31 @@ label로 퍼지지 않게 했습니다.
 
 ### Metrics API와 Diagnostic Settings 경로의 실측 차이 { #receivers }
 
-두 경로는 같은 플랫폼 지표를 다른 방식으로 전달하며, 지표 이름·dimension·0값 처리·
-지연이 모두 다릅니다. Microsoft Learn의 `Microsoft.EventHub/namespaces` 지표표는
-지표마다 Diagnostic Settings 내보내기(DS Export) 가능 여부를 정해 둡니다.
+두 경로는 같은 플랫폼 지표를 다른 방식으로 전달하며, 볼 수 있는 지표·dimension·0값 처리·
+지연이 다릅니다. Azure Monitor(portal Metrics explorer·Metrics API)는 Learn
+`Microsoft.EventHub/namespaces` 지표표의 38개 지표를 모두 dimension과 함께 조회할 수 있지만,
+Diagnostic Settings는 지표표의 DS Export 값이 `Yes`인 지표만 내보낸다고 되어 있습니다. 실제
+스트림은 이 값과 일부 달랐으므로 아래 표는 두 기준을 함께 적었습니다. DS 실측은 두 번째
+환경(Premium 1 PU, 2026-11-09 19:35–20:00 UTC)에서 telemetry Event Hub로 받은 지표 이름입니다.
 
-| 지표 | DS Export | API 경로 series | Diagnostic Settings 경로 실측 |
-|---|---|---|---|
-| `NamespaceCpuUsage` | No | `azure_namespacecpuusage_{average,maximum}_Percent` | `namespacecpuusage_*` 레코드 도착 |
-| `NamespaceMemoryUsage` | No | `azure_namespacememoryusage_{average,maximum}_Percent` | `namespacememoryusage_*` 레코드 도착 |
-| `IncomingRequests` | Yes | `azure_incomingrequests_total_Count` | `incomingrequests_*` |
-| `SuccessfulRequests` | No | `azure_successfulrequests_total_Count` | 없음(레거시 `SUCCREQ`만 도착) |
-| `ThrottledRequests` | No | `azure_throttledrequests_total_Count` | 없음 |
-| `IncomingMessages`·`OutgoingMessages` | Yes | `azure_{incoming,outgoing}messages_total_Count` | `{incoming,outgoing}messages_*` |
-| `IncomingBytes`·`OutgoingBytes` | Yes | `azure_{incoming,outgoing}bytes_total_Bytes` | `{incoming,outgoing}bytes_*` |
-| Outgoing Requests | — | 없음 | 없음. 지표표에 없는 지표이므로 추정하지 않음 |
+Azure Monitor 열은 모든 지표를 조회할 수 있다는 전제에서 분할 가능한 dimension만 적었습니다.
+
+| 지표(REST API 이름) | Azure Monitor dimension | Diagnostic Settings: DS Export(Learn) → 실측 |
+|---|---|---|
+| `SuccessfulRequests`, `ThrottledRequests`, `ServerErrors`, `UserErrors`, `QuotaExceededErrors` | `EntityName`, `OperationResult` | **Azure Monitor에서만.** No → 없음. 성공 수는 레거시 `SUCCREQ`로만 도착 |
+| `CaptureBacklog`, `CapturedBytes`, `CapturedMessages`, `ReplicationLagCount` | `EntityName` | **Azure Monitor에서만.** No → 없음(Capture·geo-replication 미사용) |
+| `NamespaceCpuUsage`, `NamespaceMemoryUsage` | `Replica` | **문서와 달리 도착.** No → 도착. replica를 합친 값이라 API maximum과 다름 |
+| `ActiveConnections`, `ConnectionsOpened`, `ConnectionsClosed`, `Size` | `ActiveConnections`는 없음, 나머지는 `EntityName` | **문서와 달리 도착.** No → 도착. dimension 없음 |
+| `IncomingRequests`, `IncomingMessages`, `OutgoingMessages`, `IncomingBytes`, `OutgoingBytes` | `EntityName` | **양쪽, DS는 dimension 없음.** Yes → 도착. 값이 있는 분만 전달, 합계는 Azure Monitor와 일치 |
+| `INREQS`, `SUCCREQ`, `INMSGS`, `OUTMSGS`, `EHINMSGS`, `EHOUTMSGS`, `EHINBYTES`, `EHOUTBYTES`, `EHINMBS`, `EHOUTMBS` | 없음(지표표에 Deprecated로 표시) | **양쪽(레거시 namespace 지표).** Yes → 도착 |
+| `FAILREQ`, `INTERR`, `MISCERR`, `SVRBSY` | 없음(Deprecated) | **DS 대상, 실측 없음.** Yes → 없음(오류가 없어 0값만 있던 것으로 추정) |
+| `EHABL`, `EHAMBS`, `EHAMSGS`, `ReplicationLagDuration` | `ReplicationLagDuration`만 `EntityName` | **DS 대상, 실측 없음.** Yes → 없음(Capture·geo-replication 미사용) |
+
+이 실습의 Metrics API 경로는 위 지표 중 대시보드에 필요한 9개(`NamespaceCpuUsage`,
+`NamespaceMemoryUsage`, `IncomingRequests`, `SuccessfulRequests`, `ThrottledRequests`,
+`IncomingMessages`, `OutgoingMessages`, `IncomingBytes`, `OutgoingBytes`)만 수집하도록
+설정했습니다. 나머지는 receiver의 지표 목록에 더하면 같은 경로로 수집할 수 있습니다.
+Outgoing Requests는 지표표에 없는 지표라 어느 경로에서도 볼 수 없습니다.
 
 실측에서 확인한 차이는 다음과 같습니다.
 
@@ -204,10 +251,10 @@ label로 퍼지지 않게 했습니다.
   `IncomingMessages`는 25분 중 부하가 있던 11분만 도착했습니다. Learn은 리소스가 0값만
   내보내면 export 주기를 늘린다고 설명합니다. 대시보드는 이 경로의 빈 구간을 0으로
   채우지 않습니다.
-- **지표 이름이 지표표와 다릅니다.** `INREQS`, `SUCCREQ`, `INMSGS`, `EHINMSGS`,
-  `EHOUTBYTES`, `Size`, `ActiveConnections` 같은 이름이 함께 들어오고,
-  `SuccessfulRequests`·`ThrottledRequests`는 없었습니다. 지표표의 DS Export 값과 실제
-  스트림 내용이 다를 수 있으므로 probe로 받은 이름을 확인한 뒤 panel을 만듭니다.
+- **DS Export 값과 실제 스트림이 다릅니다.** DS Export가 `No`인 CPU·memory·연결·`Size`가
+  도착했고, 지표표에서 Deprecated로 표시된 레거시 이름(`INREQS`, `SUCCREQ`, `EHINMSGS` 등)이
+  함께 들어왔습니다. 반대로 성공·throttle·오류 지표는 오지 않았습니다. 지표표만 보고 panel을
+  만들지 않고 probe로 받은 이름을 확인한 뒤 만듭니다.
 - **지연이 더 깁니다.** 마지막 sample의 경과 시간이 API 경로 194–213초, Diagnostic
   Settings 경로 434–513초였습니다.
 - **설정 직후에는 비어 있을 수 있습니다.** Learn은 diagnostic setting을 만든 뒤 데이터가
@@ -359,6 +406,8 @@ lag 시나리오, agent 검증, fallback exporter 전환, `azd down --purge`까�
 - [Azure Event Hubs Dedicated tier overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-overview)
 - [Create a Dedicated Azure Event Hubs cluster using Azure portal](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-cluster-create-portal)
 - [Diagnostic settings in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/platform/diagnostic-settings)
+- [Azure Monitor Metrics overview](https://learn.microsoft.com/azure/azure-monitor/metrics/data-platform-metrics)
+- [Log data ingestion time in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/logs/data-ingestion-time)
 - [Partition load balancing for event processing](https://learn.microsoft.com/azure/event-hubs/event-processor-balance-partition-load)
 - [How to migrate from the metrics API to the getBatch API](https://learn.microsoft.com/azure/azure-monitor/metrics/migrate-to-batch-api)
 - [Monitor Azure Functions and Event Hubs](https://learn.microsoft.com/azure/architecture/serverless/event-hubs-functions/observability)
