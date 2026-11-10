@@ -19,6 +19,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-managed-lustre/connect-clients
   - title: Plan your Lustre client installation
     url: https://learn.microsoft.com/azure/azure-managed-lustre/client-install-plan
+  - title: Use Secure Boot with Azure Managed Lustre file system
+    url: https://learn.microsoft.com/azure/azure-managed-lustre/client-secure-boot
   - title: Install Lustre client software
     url: https://learn.microsoft.com/azure/azure-managed-lustre/client-install
   - title: Upgrade Lustre client software to the current version
@@ -105,8 +107,8 @@ arm64 패키지는 Ubuntu 24.04만 제공합니다.
 
 | 설치 방식 | 특성 | 선택 기준 |
 |---|---|---|
-| prebuilt kmod | 패키지 이름이 실행 중인 커널 버전에 묶임. Secure Boot용으로 사전 서명되어 Trusted Launch VM에서 추가 설정 없이 동작 | 커널을 고정 운영하고 Secure Boot를 쓰는 노드 |
-| DKMS | 커널 업그레이드 시 모듈을 자동 재빌드. 서명되지 않아 Secure Boot 비활성 또는 MOK 등록 필요 | 커널이 자주 바뀌는 개발·테스트 노드 |
+| prebuilt kmod | 패키지 이름이 실행 중인 커널 버전에 묶임. Azure Services Linux Kmod PCA 인증서로 사전 서명되어 Trusted Launch VM에서는 추가 설정 없이 동작. Confidential VM은 이 인증서를 Secure Boot UEFI key에 직접 추가해야 함 | 커널을 고정 운영하고 Secure Boot를 쓰는 노드 |
+| DKMS | 커널 업그레이드 시 모듈을 자동 재빌드. 서명되지 않아 Secure Boot 비활성 또는 MOK 등록 필요. Azure Linux 3는 기본 `lockdown=integrity`가 서명 없는 모듈을 막으므로 Secure Boot를 꺼도 부족하며 MOK 등록 필요 | 커널이 자주 바뀌는 개발·테스트 노드 |
 
 ```bash
 # Ubuntu 24.04 kmod 예시: 실행 중인 커널과 같은 버전의 패키지를 고정 설치

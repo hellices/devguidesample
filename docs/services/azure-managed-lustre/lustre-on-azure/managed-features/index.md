@@ -159,8 +159,11 @@ Blob 통합은 **Lustre HSM을 서비스가 대신 구성한 기능**입니다. 
   계정의 데이터·로그 컨테이너 2개, 컨테이너 익명 접근 비공개.
 - 계층 네임스페이스와 평면 네임스페이스 계정을 모두 지원하지만, auto-import는 계층
   네임스페이스 계정에서 쓸 수 없습니다.
-- POSIX 소유자·그룹·권한은 blob metadata로, 디렉터리는 `hdi_isfolder` 빈 blob으로
-  보존됩니다.
+- POSIX 속성을 읽는 위치는 네임스페이스에 따라 다릅니다. 계층 네임스페이스 계정은 blob
+  header에서, 평면 네임스페이스 계정은 blob metadata와 metadata를 담는 별도 빈 파일에서
+  읽습니다. export 문서는 소유자·그룹·권한을 blob metadata로, 디렉터리 속성을
+  `hdi_isfolder` 빈 blob으로 저장한다고 설명하며, 네임스페이스별 export 차이는 따로
+  밝히지 않습니다.
 
 ## 보안: 저장 암호화·CMK·root squash·VNet 격리 { #security }
 
