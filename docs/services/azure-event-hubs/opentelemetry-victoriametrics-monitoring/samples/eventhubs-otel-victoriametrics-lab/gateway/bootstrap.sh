@@ -4,7 +4,7 @@
 set -euo pipefail
 trap 'echo "GATEWAY_STEP_FAILED line $LINENO" >&2' ERR
 BUNDLE_B64="${BUNDLE_B64:?BUNDLE_B64 parameter is required}"
-APP_DIR=/opt/eventhubs-observability
+APP_DIR="${APP_DIR:-/opt/eventhubs-observability}"
 
 cloud-init status --wait >/dev/null || true
 command -v docker >/dev/null
@@ -30,7 +30,8 @@ install -d -m 0755 tls
 CERT_RENEWED=false
 if [ ! -s tls/grafana.crt ] \
   || ! openssl x509 -in tls/grafana.crt -noout -checkend 86400 >/dev/null 2>&1 \
-  || ! openssl x509 -in tls/grafana.crt -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:${GATEWAY_PUBLIC_IP}"; then
+  || ! openssl x509 -in tls/grafana.crt -noout -ext subjectAltName 2>/dev/null \
+    | tr ',' '\n' | sed 's/^ *//' | grep -qxF "IP Address:${GATEWAY_PUBLIC_IP}"; then
   openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=eventhubs-lab-grafana" \
     -addext "subjectAltName=IP:${GATEWAY_PUBLIC_IP}" -keyout tls/grafana.key -out tls/grafana.crt 2>/dev/null
   CERT_RENEWED=true

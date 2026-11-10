@@ -13,7 +13,10 @@ fi
 [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] || die "no resource group recorded to verify"
 
 for _ in $(seq 1 60); do
-  if [[ "$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" == "false" ]]; then
+  # A failed lookup is an error, not "still exists".
+  exists="$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" \
+    || die "could not query resource group $AZURE_RESOURCE_GROUP"
+  if [[ "$exists" == "false" ]]; then
     log "resource group $AZURE_RESOURCE_GROUP no longer exists"
     rm -f "$STATE/down-resource-group"
     exit 0

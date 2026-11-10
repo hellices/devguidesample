@@ -115,3 +115,20 @@ def test_lag_exporter_failure_clears_stale_lag(monkeypatch):
     assert lag_exporter.COLLECTION_SUCCESS.value == 0
     assert all(g.cleared for g in (lag_exporter.LAG, lag_exporter.CHECKPOINT_PRESENT,
                                     lag_exporter.PARTITION_EMPTY, lag_exporter.INVALID_ORDER))
+
+
+@pytest.mark.parametrize("delay", ["inf", "nan", "-1"])
+def test_consumer_rejects_a_non_finite_or_negative_delay(monkeypatch, delay):
+    for name, value in {
+        "EVENT_HUB_NAMESPACE": "ehp-example.servicebus.windows.net",
+        "EVENT_HUB_NAME": "workload",
+        "EVENT_HUB_CONSUMER_GROUP": "slow-consumer",
+        "CHECKPOINT_STORAGE_URL": "https://stexample.blob.core.windows.net",
+        "CHECKPOINT_CONTAINER": "workload-checkpoints",
+        "PROCESSING_DELAY_SECONDS": delay,
+    }.items():
+        monkeypatch.setenv(name, value)
+    consumer = _load_consumer(monkeypatch, _FailingConsumer)
+
+    with pytest.raises(ValueError):
+        asyncio.run(asyncio.wait_for(consumer.run(), timeout=5))

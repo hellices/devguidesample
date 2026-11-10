@@ -9,6 +9,7 @@ those two attributes to labels.
 from __future__ import annotations
 
 import argparse
+import re
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -87,6 +88,9 @@ def render_config(env: Mapping[str, str]) -> dict:
 
     api_enabled = _flag(env, "ENABLE_API_RECEIVER", True)
     fallback_enabled = _flag(env, "ENABLE_FALLBACK_EXPORTER", False)
+    if fallback_enabled and not env.get("PREMIUM_NAMESPACE_NAME"):
+        # Without it the relabel keep rule would admit every namespace in the resource group.
+        raise ValueError("ENABLE_FALLBACK_EXPORTER requires PREMIUM_NAMESPACE_NAME")
     vmsingle_url = env.get("VMSINGLE_URL", "http://10.42.2.20:8428").rstrip("/")
     dedicated_id = env.get("EXISTING_DEDICATED_CLUSTER_RESOURCE_ID", "").strip()
 
@@ -198,10 +202,12 @@ def render_config(env: Mapping[str, str]) -> dict:
                         },
                         "static_configs": [{"targets": ["azure-metrics-exporter:8080"]}],
                         # The ARM filter cannot combine a tag condition, so keep only the Premium namespace here.
+                        # Prometheus anchors relabel regexes, and a literal "$" would be read as collector
+                        # env expansion, so the escaped name is matched exactly without one.
                         "metric_relabel_configs": [
                             {
                                 "source_labels": ["resourceID"],
-                                "regex": f"(?i).*/namespaces/{env.get('PREMIUM_NAMESPACE_NAME', '.+')}",
+                                "regex": f"(?i).*/namespaces/{re.escape(env['PREMIUM_NAMESPACE_NAME'])}",
                                 "action": "keep",
                             }
                         ],

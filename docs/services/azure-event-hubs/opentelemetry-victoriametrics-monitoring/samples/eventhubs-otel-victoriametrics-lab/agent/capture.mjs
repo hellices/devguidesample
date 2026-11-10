@@ -65,12 +65,18 @@ await new Promise((resolve, reject) => {
   }).on('error', reject);
 });
 
+async function gotoOk(page, target, options) {
+  const response = await page.goto(target, options);
+  if (!response || !response.ok()) throw new Error(`GET ${target} returned ${response ? response.status() : 'no response'}`);
+  return response;
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: Number(width), height: 1000 }, deviceScaleFactor: 1 });
 // Only the loopback proxy origin is reachable from the page.
 await page.route('**/*', (route) => (new URL(route.request().url()).origin === local ? route.continue() : route.abort()));
 try {
-  await page.goto(`${local}/login`);
+  await gotoOk(page, `${local}/login`);
   if (new URL(page.url()).origin !== local) throw new Error(`unexpected login origin ${page.url()}`);
   await page.getByTestId('data-testid Username input field').fill(user);
   await page.getByTestId('data-testid Password input field').fill(password);
@@ -79,7 +85,8 @@ try {
 
   const separator = dashboardPath.includes('?') ? '&' : '?';
   const url = `${local}${dashboardPath}${separator}orgId=1&from=${from}&to=${to}&kiosk`;
-  await page.goto(url, { waitUntil: 'networkidle' });
+  // A missing dashboard or server error renders a page without loading bars; never capture it.
+  await gotoOk(page, url, { waitUntil: 'networkidle' });
 
   // Grafana lazily renders panels inside its own scroll container; grow the viewport until stable.
   let height = 0;

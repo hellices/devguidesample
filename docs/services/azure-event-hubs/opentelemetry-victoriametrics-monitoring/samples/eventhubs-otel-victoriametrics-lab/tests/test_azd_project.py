@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import re
 
@@ -55,47 +56,53 @@ def test_main_bicep_never_creates_a_dedicated_cluster():
 
 def test_main_bicep_exports_hook_contract():
     text = (LAB_ROOT / "infra" / "main.bicep").read_text()
-    names = (
-        "AZURE_RESOURCE_GROUP",
-        "AKS_CLUSTER_NAME",
-        "ACR_NAME",
-        "ACR_LOGIN_SERVER",
-        "GATEWAY_VM_NAME",
-        "GATEWAY_PUBLIC_IP",
-        "GATEWAY_PRIVATE_IP",
-        "GATEWAY_CLIENT_ID",
-        "PREMIUM_NAMESPACE_NAME",
-        "WORKLOAD_EVENTHUB_NAME",
-        "WORKLOAD_CONSUMER_GROUP",
-        "TELEMETRY_NAMESPACE_NAME",
-        "TELEMETRY_EVENTHUB_NAME",
-        "CHECKPOINT_ACCOUNT_NAME",
-        "KEY_VAULT_NAME",
-        "PRODUCER_CLIENT_ID",
-        "CONSUMER_CLIENT_ID",
-        "VMSINGLE_PRIVATE_IP",
-    )
+    # Each hook input must come from the right resource, not merely be declared.
+    expected = {
+        "AZURE_RESOURCE_GROUP": "rg.name",
+        "AKS_CLUSTER_NAME": "compute.outputs.aksName",
+        "ACR_NAME": "foundation.outputs.acrName",
+        "ACR_LOGIN_SERVER": "foundation.outputs.acrLoginServer",
+        "GATEWAY_VM_NAME": "compute.outputs.gatewayVmName",
+        "GATEWAY_PUBLIC_IP": "compute.outputs.gatewayPublicIp",
+        "GATEWAY_PRIVATE_IP": "compute.outputs.gatewayPrivateIp",
+        "GATEWAY_CLIENT_ID": "foundation.outputs.gatewayClientId",
+        "EVENTHUBS_LOCATION": "messagingLocation",
+        "PREMIUM_NAMESPACE_NAME": "messaging.outputs.premiumNamespaceName",
+        "WORKLOAD_EVENTHUB_NAME": "messaging.outputs.workloadEventHubName",
+        "WORKLOAD_CONSUMER_GROUP": "messaging.outputs.workloadConsumerGroup",
+        "TELEMETRY_NAMESPACE_NAME": "messaging.outputs.telemetryNamespaceName",
+        "TELEMETRY_EVENTHUB_NAME": "messaging.outputs.telemetryEventHubName",
+        "CHECKPOINT_ACCOUNT_NAME": "foundation.outputs.storageName",
+        "KEY_VAULT_NAME": "foundation.outputs.keyVaultName",
+        "PRODUCER_CLIENT_ID": "foundation.outputs.producerClientId",
+        "CONSUMER_CLIENT_ID": "foundation.outputs.consumerClientId",
+        "AKS_OIDC_ISSUER": "compute.outputs.aksOidcIssuer",
+        "CHECKPOINT_ACCOUNT_URL": "foundation.outputs.storageBlobEndpoint",
+        "VMSINGLE_PRIVATE_IP": "foundation.outputs.vmSinglePrivateIp",
+        "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": "existingDedicatedClusterResourceId",
+    }
 
-    declared = set(re.findall(r"^output (\w+) ", text, re.MULTILINE))
-    for name in names:
-        assert name in declared, name
+    declared = dict(re.findall(r"^output (\w+) string = (.+?)\s*$", text, re.MULTILINE))
+    assert declared == expected
 
 
 def test_main_parameters_map_azd_environment_values():
-    parameters = (LAB_ROOT / "infra" / "main.parameters.json").read_text()
+    document = json.loads((LAB_ROOT / "infra" / "main.parameters.json").read_text())
+    values = {name: entry["value"] for name, entry in document["parameters"].items()}
 
-    for variable in ("AZURE_ENV_NAME", "AZURE_LOCATION"):
-        assert "${" + variable + "}" in parameters
     # azd up validates required inputs before preprovision runs, so hook-filled values need
     # an empty default; main.bicep enforces minimum lengths instead.
-    for variable in (
-        "OPERATOR_EGRESS_CIDR",
-        "GRAFANA_ADMIN_PASSWORD",
-        "GATEWAY_ADMIN_SSH_PUBLIC_KEY",
-        "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID",
-        "EVENTHUBS_LOCATION",
-    ):
-        assert "${" + variable + "=}" in parameters
+    assert values == {
+        "environmentName": "${AZURE_ENV_NAME}",
+        "location": "${AZURE_LOCATION}",
+        "eventHubsLocation": "${EVENTHUBS_LOCATION=}",
+        "operatorEgressCidr": "${OPERATOR_EGRESS_CIDR=}",
+        "grafanaAdminPassword": "${GRAFANA_ADMIN_PASSWORD=}",
+        "gatewayAdminSshPublicKey": "${GATEWAY_ADMIN_SSH_PUBLIC_KEY=}",
+        "deployerPrincipalId": "${AZURE_PRINCIPAL_ID=}",
+        "deployerPrincipalType": "${AZURE_PRINCIPAL_TYPE=User}",
+        "existingDedicatedClusterResourceId": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}",
+    }
 
     main = (LAB_ROOT / "infra" / "main.bicep").read_text()
     for parameter in ("operatorEgressCidr", "grafanaAdminPassword", "gatewayAdminSshPublicKey"):

@@ -188,6 +188,8 @@ def test_cleanup_deletes_only_the_lab_credentials(fake_bin):
     deletes = [c for c in log.read_text().splitlines() if "federated-credential delete" in c]
     assert len(deletes) == 2
     assert all("--identity-name id-lab" in c for c in deletes)
+    names = [c.split("--name ", 1)[1].split()[0] for c in deletes]
+    assert sorted(names) == ["aks-eventhubs-producer", "aks-eventhubs-slow-consumer"]
 
 
 def test_vm_query_rejects_an_unknown_action(fake_bin):
@@ -402,15 +404,56 @@ def test_evidence_is_kept_per_environment():
     assert 'local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"' in text
 
 
-def test_gateway_restarts_grafana_only_after_renewing_its_certificate():
-    # Grafana's certs_watch_interval is disabled by default, so a renewed certificate is
-    # served only after a restart; `docker compose up -d` keeps the running container.
-    text = (LAB_ROOT / "gateway" / "bootstrap.sh").read_text()
-    renew = text.index("openssl req -x509")
-    assert text.index("CERT_RENEWED=true", renew) < text.index("fi", renew)
-    restart = text.index("docker compose restart grafana")
-    assert text.index('if [ "$CERT_RENEWED" = true ]; then') < restart
-    assert restart > text.index("docker compose up -d")
+@pytest.mark.parametrize("existing, renewed", [
+    (None, True),                 # first bootstrap
+    ("1.2.3.4", False),           # valid certificate for this IP is reused
+    ("1.2.3.40", True),           # "1.2.3.4" must not match a SAN for 1.2.3.40
+    ("expiring", True),           # expires within a day
+])
+def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, tmp_path, existing, renewed):
+    import base64
+    import io
+    import tarfile
+
+    bin_dir, log, write = fake_bin
+    app = tmp_path / "app"
+    for name in ("cloud-init", "docker", "chown", "curl"):
+        write(name, "exit 0")
+    write("az", 'if [[ "$1 $2" == "keyvault secret" ]]; then echo pw; fi')
+    # Fake openssl: the SAN/expiry answers come from the existing certificate's marker content.
+    write("openssl", (
+        'case "$*" in\n'
+        '  req*) echo "cert 1.2.3.4" >tls/grafana.crt; echo key >tls/grafana.key;;\n'
+        '  *-checkend*) grep -q expiring tls/grafana.crt && exit 1; exit 0;;\n'
+        '  *subjectAltName*) printf "X509v3 Subject Alternative Name: \\n    IP Address:%s\\n" '
+        '"$(grep -o "[0-9][0-9.]*" tls/grafana.crt | head -1)";;\n'
+        'esac'
+    ))
+    env_file = ("GATEWAY_CLIENT_ID=c\nKEY_VAULT_NAME=kv\nACR_NAME=acr\n"
+                "GATEWAY_PUBLIC_IP=1.2.3.4\nCOMPOSE_PROFILE=default\n").encode()
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as bundle:
+        info = tarfile.TarInfo("./.env")
+        info.size = len(env_file)
+        bundle.addfile(info, io.BytesIO(env_file))
+    if existing:
+        (app / "tls").mkdir(parents=True)
+        (app / "tls" / "grafana.crt").write_text("cert 1.2.3.4 expiring" if existing == "expiring" else f"cert {existing}")
+        (app / "tls" / "grafana.key").write_text("key")
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "APP_DIR": str(app),
+           "BUNDLE_B64": base64.b64encode(buffer.getvalue()).decode()}
+
+    result = subprocess.run(["bash", str(LAB_ROOT / "gateway" / "bootstrap.sh")], env=env,
+                            capture_output=True, text=True, timeout=60)
+
+    assert result.returncode == 0, result.stderr
+    assert "GATEWAY_READY" in result.stdout
+    calls = log.read_text().splitlines()
+    assert any(c.startswith("openssl req") for c in calls) is renewed
+    restarts = [i for i, c in enumerate(calls) if c == "docker compose restart grafana"]
+    assert bool(restarts) is renewed
+    if renewed:
+        assert restarts[0] > calls.index("docker compose up -d --remove-orphans")
 
 
 def test_postprovision_rebuilds_a_venv_whose_install_failed(fake_bin, tmp_path):
@@ -444,3 +487,48 @@ def test_postprovision_rebuilds_a_venv_whose_install_failed(fake_bin, tmp_path):
 
     assert run().returncode == 0
     assert log.read_text().count("python3 -m venv") == venv_creations  # a completed install is reused
+
+
+@pytest.mark.parametrize("recorded_port, started", [
+    ("234", "same"),          # "234:8428" must not match the argument "1234:8428"
+    ("1234", "Mon Jan  1 00:00:00 2001"),  # same command, but a different process generation
+])
+def test_vm_query_never_signals_a_process_it_did_not_start(fake_bin, tmp_path, recorded_port, started):
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")
+    other = tmp_path / "kubectl"
+    # No exec: the bash process keeps the kubectl-like command line that vm-query.sh inspects.
+    other.write_text("#!/usr/bin/env bash\nsleep 30 & child=$!\ntrap 'kill $child; exit 0' TERM\nwait $child\n")
+    other.chmod(0o755)
+    process = subprocess.Popen(["bash", str(other), "--kubeconfig", "k", "port-forward", "svc/x", "1234:8428"])
+    try:
+        state = tmp_path / "state" / "unit"
+        state.mkdir(parents=True)
+        lstart = subprocess.run(["ps", "-p", str(process.pid), "-o", "lstart="],
+                                capture_output=True, text=True).stdout
+        (state / "port-forward.pid").write_text(f"{process.pid}\n")
+        (state / "port-forward.port").write_text(f"{recorded_port}\n")
+        (state / "port-forward.started").write_text(lstart if started == "same" else started + "\n")
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+               "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": recorded_port}
+
+        result = subprocess.run(["bash", str(SCRIPTS / "vm-query.sh"), "stop"], env=env,
+                                capture_output=True, text=True, timeout=60)
+
+        assert result.returncode == 0, result.stderr
+        assert process.poll() is None, "an unrelated process was signalled"
+        assert not (state / "port-forward.pid").exists()
+    finally:
+        process.terminate()
+        process.wait()
+
+
+def test_verify_cleanup_fails_fast_when_the_lookup_fails(fake_bin):
+    bin_dir, _, write = fake_bin
+    write("az", 'echo "AADSTS700082: token expired" >&2; exit 1')
+    write("azd", AZD_CLEANUP_ENV)
+
+    result = _run("verify-cleanup.sh", bin_dir)
+
+    assert result.returncode != 0
+    assert "could not query resource group" in result.stderr

@@ -15,10 +15,16 @@ def compute_lag(
 ) -> LagResult:
     """Return consumer backlog without inventing a value for a missing checkpoint."""
     if last_enqueued_sequence_number is None or last_enqueued_sequence_number < 0:
+        # An empty partition with a checkpoint past its last sequence number is still inverted.
         return LagResult(
             messages=0,
             checkpoint_present=checkpoint_sequence_number is not None,
             partition_empty=True,
+            invalid_order=(
+                checkpoint_sequence_number is not None
+                and last_enqueued_sequence_number is not None
+                and checkpoint_sequence_number > last_enqueued_sequence_number
+            ),
         )
 
     if checkpoint_sequence_number is None:

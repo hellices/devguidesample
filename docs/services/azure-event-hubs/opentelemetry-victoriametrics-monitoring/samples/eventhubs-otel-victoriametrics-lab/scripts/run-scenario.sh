@@ -67,7 +67,9 @@ CONSUMER_PROCESSED_AT_PEAK="$(last_log_value eventhubs-slow-consumer processed_t
 stop_producer
 PRODUCER_STOP="$(now)"
 log "producer stopped; peak max lag=$PEAK_LAG"
-[[ "$PEAK_LAG" -gt "$LAG_AT_LOAD_START" ]] || die "lag did not increase (start=$LAG_AT_LOAD_START peak=$PEAK_LAG)"
+# max_lag prints -1 when no series exists; both readings must be real before comparing.
+[[ "$LAG_AT_LOAD_START" -ge 0 && "$PEAK_LAG" -gt 0 && "$PEAK_LAG" -gt "$LAG_AT_LOAD_START" ]] \
+  || die "lag did not increase (start=$LAG_AT_LOAD_START peak=$PEAK_LAG)"
 
 TARGET=$((PEAK_LAG / 5))
 RECOVERED_AT=""

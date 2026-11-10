@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 import signal
 import time
@@ -39,7 +40,7 @@ async def run() -> None:
     container_name = required("CHECKPOINT_CONTAINER")
     delay_seconds = float(os.getenv("PROCESSING_DELAY_SECONDS", "0.1"))
     checkpoint_every = int(os.getenv("CHECKPOINT_EVERY", "20"))
-    if delay_seconds < 0 or checkpoint_every < 1:
+    if not math.isfinite(delay_seconds) or delay_seconds < 0 or checkpoint_every < 1:
         raise ValueError("processing delay must be non-negative and checkpoint interval positive")
 
     stop = asyncio.Event()

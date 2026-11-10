@@ -6,10 +6,13 @@ source "$(dirname "$0")/lib.sh"
 STATE="$(state_dir)"
 PORT="$(vm_local_port)"
 
-# The recorded PID must still be our kubectl port-forward for that port, not a reused PID.
+# The recorded PID must still be the same process (start time) and our kubectl port-forward
+# with exactly "<port>:8428" as an argument, not a reused PID.
 is_our_forward() {
   local pid="$1" port="$2"
-  ps -p "$pid" -o command= 2>/dev/null | grep -q "kubectl.*port-forward.*$port:8428"
+  [[ -f "$STATE/port-forward.started" ]] \
+    && [[ "$(ps -p "$pid" -o lstart= 2>/dev/null)" == "$(<"$STATE/port-forward.started")" ]] \
+    && ps -p "$pid" -o command= 2>/dev/null | grep -qE "(^|/)kubectl .*port-forward .*(^| )$port:8428( |$)"
 }
 
 # Stops the recorded forward on the port it was started with, even if VM_LOCAL_PORT changed since.
@@ -26,7 +29,7 @@ stop_forward() {
     done
     kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
   fi
-  rm -f "$STATE/port-forward.pid" "$STATE/port-forward.port"
+  rm -f "$STATE/port-forward.pid" "$STATE/port-forward.port" "$STATE/port-forward.started"
 }
 
 owned_forward() {
@@ -59,9 +62,10 @@ case "${1:-start}" in
       "$PORT:8428" >"$STATE/port-forward.log" 2>&1 &
     echo $! >"$STATE/port-forward.pid"
     printf '%s\n' "$PORT" >"$STATE/port-forward.port"
-    for _ in $(seq 1 20); do
+    ps -p "$!" -o lstart= >"$STATE/port-forward.started"
+    for attempt in $(seq 1 20); do
       healthy && exit 0
-      sleep 1
+      if [[ "$attempt" -lt 20 ]]; then sleep 1; fi
     done
     die "VMSingle port-forward did not become ready on port $PORT"
     ;;

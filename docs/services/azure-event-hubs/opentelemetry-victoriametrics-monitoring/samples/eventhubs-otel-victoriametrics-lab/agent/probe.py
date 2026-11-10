@@ -72,8 +72,11 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
     path_stats = []
     for source, delivery in sorted(combos):
         selector = f"{{source_path={_quote(source)},delivery_path={_quote(delivery)}}}"
-        count = query(base_url, "/api/v1/query", {"query": f"sum(count_over_time({selector}[{window}]))"})
-        newest = query(base_url, "/api/v1/query", {"query": f"max(tlast_over_time({selector}[{window}]))"})
+        # Evaluate at the same snapshot time as the series lookup so freshness is never negative.
+        count = query(base_url, "/api/v1/query",
+                      {"query": f"sum(count_over_time({selector}[{window}]))", "time": str(now)})
+        newest = query(base_url, "/api/v1/query",
+                       {"query": f"max(tlast_over_time({selector}[{window}]))", "time": str(now)})
         newest_ts = float(newest["result"][0]["value"][1]) if newest["result"] else None
         path_stats.append(
             {
@@ -81,7 +84,7 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
                 "delivery_path": delivery or "(missing)",
                 "metric_names": len(combos[(source, delivery)]),
                 "samples_in_window": int(float(count["result"][0]["value"][1])) if count["result"] else 0,
-                "freshness_seconds": round(now - newest_ts, 1) if newest_ts else None,
+                "freshness_seconds": round(now - newest_ts, 1) if newest_ts is not None else None,
             }
         )
 

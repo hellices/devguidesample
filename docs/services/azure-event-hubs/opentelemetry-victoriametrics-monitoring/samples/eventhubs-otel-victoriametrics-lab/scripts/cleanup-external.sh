@@ -11,7 +11,8 @@ STATE="$(state_dir)"
 # azd down clears provision outputs before postdown runs; keep the target for verify-cleanup.sh.
 [[ -n "$AZURE_RESOURCE_GROUP" ]] && printf '%s\n' "$AZURE_RESOURCE_GROUP" >"$STATE/down-resource-group"
 
-"$LAB_ROOT/scripts/vm-query.sh" stop >/dev/null 2>&1 || true
+# stop succeeds when no forward is recorded, so any failure here is real.
+"$LAB_ROOT/scripts/vm-query.sh" stop || die "could not stop the VMSingle port-forward"
 
 # Every lookup must succeed: a failed az call must fail cleanup, not look like "nothing to delete".
 if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]]; then

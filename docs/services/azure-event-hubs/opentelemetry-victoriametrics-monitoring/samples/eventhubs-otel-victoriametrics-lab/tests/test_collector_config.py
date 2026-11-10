@@ -1,3 +1,4 @@
+import re
 import sys
 from pathlib import Path
 
@@ -140,7 +141,21 @@ def test_fallback_replaces_api_source_only_when_requested():
         assert pipeline["exporters"] == [exporter]
         assert "resource/source_fallback_exporter" in pipeline["processors"]
     scrape = config["receivers"]["prometheus/fallback"]["config"]["scrape_configs"][0]
-    assert scrape["metric_relabel_configs"][0]["regex"].endswith("/namespaces/ehp-example")
+    # Prometheus anchors relabel regexes: emulate that to prove only this namespace is kept.
+    regex = scrape["metric_relabel_configs"][0]["regex"]
+    assert regex.startswith("(?i)")
+    keep = re.compile(f"^(?:{regex[4:]})$", re.IGNORECASE)
+    prefix = "/subscriptions/s/resourceGroups/g/providers/Microsoft.EventHub/namespaces/"
+    assert keep.match(prefix + "ehp-example") and keep.match(prefix.lower() + "EHP-EXAMPLE")
+    assert not keep.match(prefix + "ehp-example-copy")
+    assert not keep.match(prefix + "ehpXexample")
+    assert "$" not in scrape["metric_relabel_configs"][0]["regex"]
+
+
+def test_fallback_requires_the_premium_namespace_name():
+    env = {k: v for k, v in BASE_ENV.items() if k != "PREMIUM_NAMESPACE_NAME"}
+    with pytest.raises(ValueError, match="PREMIUM_NAMESPACE_NAME"):
+        render_config(env | {"ENABLE_FALLBACK_EXPORTER": "true"})
 
 
 def test_missing_settings_fail_closed():

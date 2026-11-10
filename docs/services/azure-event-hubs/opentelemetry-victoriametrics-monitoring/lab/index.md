@@ -103,6 +103,14 @@ AKS internal load balancer에 대해 Learn은 VNet 범위 Network Contributor �
 `join`·`read` 권한을 요구합니다. 이 실습은 Network Contributor를 AKS subnet 범위로만
 할당했고 고정 IP의 internal load balancer가 정상 생성됐습니다.
 
+이후 명령은 모두 sample 디렉터리에서 실행합니다. `azd`는 이 디렉터리의 `azure.yaml`을
+읽고, `./scripts/...` 경로도 이 디렉터리를 기준으로 합니다.
+
+```bash
+git clone https://github.com/hellices/devguidesample.git
+cd devguidesample/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab
+```
+
 ## 비용·리전: Premium 신규 생성 제한과 `EVENTHUBS_LOCATION`
 
 Event Hubs Premium, AKS(Standard_D4as_v5 노드 1개), Gateway VM(Standard_D2as_v5),
@@ -324,6 +332,13 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | `VM_LOCAL_PORT`를 바꾸면 이전 포트의 port-forward가 남음 | 기록된 포트로 소유권을 확인해 종료하고, 다른 포트로 시작하기 전에 이전 forward를 정리 |
 | Python venv나 `node_modules` 설치가 중간에 실패해도 다음 실행이 설치된 것으로 간주 | 설치가 끝난 뒤에만 `requirements.txt`·`package-lock.json` 사본을 stamp로 남기고, stamp가 다르면 다시 설치. 설치 실패는 즉시 오류 |
 | `final_max_lag`를 관찰 꼬리 2분 전에 측정해 `scenario_end`·최종 처리 수와 시점이 다름 | 세 값을 관찰 꼬리 뒤 같은 시점에 기록 |
+| Grafana 인증서 SAN을 부분 문자열로 비교(`1.2.3.4`가 `1.2.3.40`에 일치) | SAN 항목을 나눠 `IP Address:<ip>`와 정확히 비교. 실제 OpenSSL 3 출력으로 확인 |
+| fallback exporter가 namespace 이름 없이 resource group의 모든 namespace를 수용 | fallback에는 `PREMIUM_NAMESPACE_NAME`을 필수로 하고 escape한 이름과 정확히 일치하는 것만 유지 |
+| 저장된 PID가 다른 프로세스로 재사용되거나 포트 번호가 부분 일치(`234`와 `1234`)해도 소유로 판단 | 시작 시각(`ps -o lstart`)을 함께 기록해 비교하고, `<port>:8428`을 독립 인자로 비교 |
+| 조회 실패를 cleanup 성공·"아직 존재"로 해석 | `vm-query.sh stop`과 `postdown`의 `az group exists` 실패를 즉시 오류로 처리 |
+| lag series가 없을 때(-1) 상승 검사 통과, PU 0·음수, 무한대 처리 지연, 빈 partition의 역전 checkpoint | 유효한 측정값과 양의 peak를 요구, PU는 양의 정수만 허용, 유한한 지연만 허용, 빈 partition에서도 역전 표시 |
+| 캡처가 404·500 응답 페이지를 저장하고 probe의 시각이 조회마다 다름 | 응답 상태가 성공이 아니면 캡처 실패, probe의 모든 조회를 같은 snapshot 시각으로 평가 |
+| 계약 테스트가 이름·문자열 존재만 확인 | output 이름→Bicep 식, 매개변수 파일 전체 매핑, 지원하지 않는 역할 정의 형식 거부, NSG 복수형 속성 거부, 대조 stub의 정확한 selector, 모든 Azure selector의 matcher, bootstrap 실제 실행(인증서 갱신 시에만 Grafana 재시작) 검증 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

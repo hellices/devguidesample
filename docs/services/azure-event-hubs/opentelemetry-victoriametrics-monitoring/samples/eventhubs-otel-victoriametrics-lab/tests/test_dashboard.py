@@ -1,6 +1,9 @@
 import json
+import re
 import sys
 from pathlib import Path
+
+import pytest
 
 LAB_ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(LAB_ROOT / "agent"))
@@ -52,9 +55,28 @@ def _azure_total_targets():
     return targets
 
 
+AZURE_REFERENCE = re.compile(r"\b(azure_\w+)(\{[^}]*\})?")
+
+
+def _azure_selectors(expr):
+    """Matchers of every azure_* metric reference; a bare name (no selector) yields ""."""
+    return [(name, matchers or "") for name, matchers in AZURE_REFERENCE.findall(expr)]
+
+
 def test_platform_totals_use_remote_write_only():
     for expr in _azure_total_targets():
-        assert 'delivery_path="remote_write"' in expr
+        selectors = _azure_selectors(expr)
+        assert selectors
+        for name, matchers in selectors:
+            # Every reference, not just one of them, must be the API source over remote write.
+            assert 'source_path="azure_monitor_api"' in matchers, (name, expr)
+            assert 'delivery_path="remote_write"' in matchers, (name, expr)
+
+
+def test_selector_check_catches_an_added_unfiltered_branch():
+    expr = ('sum(sum_over_time(azure_x_total_Count{source_path="azure_monitor_api",delivery_path="remote_write"}'
+            '[$__range] offset 1s)) or sum_over_time(azure_x_total_Count[$__range])')
+    assert ("azure_x_total_Count", "") in _azure_selectors(expr)
 
 
 def test_dedicated_panels_exist_only_with_profile():
@@ -116,7 +138,10 @@ def test_dedicated_panels_read_only_the_dedicated_source():
     for panel in _panels(dashboard):
         exprs = " ".join(target["expr"] for target in panel.get("targets", []))
         if panel["title"].startswith("Dedicated"):
-            assert 'source_path="azure_monitor_dedicated"' in exprs
+            selectors = _azure_selectors(exprs)
+            assert selectors
+            for name, matchers in selectors:
+                assert 'source_path="azure_monitor_dedicated"' in matchers, (name, exprs)
         else:
             assert "azure_monitor_dedicated" not in exprs
 
@@ -165,3 +190,14 @@ def test_grafana_client_refuses_redirects_and_plain_http(monkeypatch):
             grafana_request(url, "admin", "secret", "/api/health")
     finally:
         server.shutdown()
+
+
+@pytest.mark.parametrize("pu", [0, -1])
+def test_processing_units_must_be_positive(pu):
+    with pytest.raises(ValueError):
+        build_dashboard({"processing_units": pu})
+
+
+def test_panel_plan_describes_the_window_peak_it_shows():
+    lag_rows = [row for row in PANEL_PLAN if row[1] == "eventhubs_consumer_lag_messages"]
+    assert lag_rows and all("지금" not in row[0] for row in lag_rows)

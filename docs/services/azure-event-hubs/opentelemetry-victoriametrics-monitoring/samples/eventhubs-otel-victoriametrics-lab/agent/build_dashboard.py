@@ -31,7 +31,7 @@ PANEL_PLAN = [
     ("구간 동안 요청·성공·throttle은 몇 건인가", "Incoming/Successful/ThrottledRequests Total", "sum_over_time[$__range]", "stat"),
     ("송신 방향 request 수를 볼 수 있나", "OutgoingRequests 없음", "계산하지 않음", "text"),
     ("PU당 분당 처리량은 얼마인가", "Incoming/OutgoingMessages·Bytes Total / PU", "sum by minute / $pu", "bars"),
-    ("지금 가장 밀린 partition은 얼마나 밀렸나", "eventhubs_consumer_lag_messages", "max / max by partition", "stat, bar gauge"),
+    ("조회 구간에서 가장 크게 밀린 partition은 얼마나 밀렸나", "eventhubs_consumer_lag_messages", "max / max by partition", "stat, bar gauge"),
     ("lag가 언제 쌓이고 언제 회복됐나", "eventhubs_consumer_lag_messages", "max by partition", "time series"),
     ("모든 partition에 checkpoint가 있나", "eventhubs_checkpoint_present", "min by partition", "table"),
     ("수집·전달 경로별로 데이터가 들어오나", "{source_path,delivery_path}", "count_over_time, tlast_over_time", "table"),
@@ -118,6 +118,8 @@ def field(unit: str = "short", steps=None, decimals=None, no_value=None, **custo
 
 def build_dashboard(probe: dict) -> dict:
     pu = int(probe.get("processing_units", 1))
+    if pu <= 0:
+        raise ValueError(f"processing_units must be a positive integer, got {pu}")
     layout = Layout()
     panels: list[dict] = []
     green_only = thresholds(("green", None))
@@ -402,10 +404,17 @@ def build_dashboard(probe: dict) -> dict:
     }
 
 
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return number
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe", type=Path, required=True)
-    parser.add_argument("--processing-units", type=int, default=1)
+    parser.add_argument("--processing-units", type=positive_int, default=1)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     probe = json.loads(args.probe.read_text())

@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+import pytest
+
 
 LAB_ROOT = Path(__file__).parents[1]
 FOUNDATION = LAB_ROOT / "infra" / "modules" / "foundation.bicep"
@@ -40,13 +42,36 @@ def test_storage_and_key_vault_disable_legacy_secret_access():
 
 
 def _assigned_role_guids(text: str) -> set[str]:
-    """GUIDs actually used by roleAssignments, resolved through their var declarations."""
+    """GUIDs actually used by roleAssignments, resolved through their var declarations.
+
+    Every roleAssignments resource and every roleDefinitionId must use the one supported form,
+    so an assignment written differently (for example a literal GUID) fails instead of hiding.
+    """
     variables = dict(re.findall(r"^var (\w+) = '([0-9a-f-]{36})'", text, re.MULTILINE))
-    used = re.findall(
-        r"roleDefinitionId: subscriptionResourceId\('Microsoft\.Authorization/roleDefinitions', (\w+)\)", text
-    )
+    assignments = re.findall(r"'Microsoft\.Authorization/roleAssignments@", text)
+    definitions = re.findall(r"roleDefinitionId:\s*(.+)", text)
+    supported = re.compile(r"subscriptionResourceId\('Microsoft\.Authorization/roleDefinitions', (\w+)\)")
+    used = []
+    for definition in definitions:
+        match = supported.fullmatch(definition.strip())
+        assert match, f"unsupported roleDefinitionId expression: {definition.strip()}"
+        used.append(match.group(1))
     assert used, "no role assignments found"
+    assert len(used) == len(assignments), "every roleAssignments resource must declare one roleDefinitionId"
     return {variables[name] for name in used}
+
+
+def test_role_parser_rejects_other_role_definition_forms():
+    owner = (
+        "var acr = '7f951dda-4ed3-4680-a7ca-43fe172d538d'\n"
+        "resource a 'Microsoft.Authorization/roleAssignments@2022-04-01' = {\n"
+        "    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acr)\n}\n"
+        "resource b 'Microsoft.Authorization/roleAssignments@2022-04-01' = {\n"
+        "    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', "
+        "'8e3af657-a8ff-443c-a75c-2fe8c4bcb635')\n}\n"
+    )
+    with pytest.raises(AssertionError, match="unsupported roleDefinitionId"):
+        _assigned_role_guids(owner)
 
 
 def test_foundation_assigns_only_expected_built_in_roles():
@@ -152,6 +177,10 @@ def test_compute_enables_workload_identity_and_restricts_public_ports():
     assert "oidcIssuerProfile: { enabled: true }" in text
     assert "workloadIdentity: { enabled: true }" in text
     rules = text[text.index("securityRules: ["):text.index("resource gatewayNic")]
+    # Plural forms could open more ports or sources without matching the singular checks below.
+    for plural in ("destinationPortRanges", "sourceAddressPrefixes"):
+        assert plural not in rules, plural
+    assert rules.count("access: 'Allow'") == 1
     allow = re.findall(r"access: 'Allow'.*?destinationPortRange: '(\w+)'", rules, re.DOTALL)
     assert allow == ["3000"]
     assert re.findall(r"sourceAddressPrefix: (\S+)", rules) == ["operatorEgressCidr"]

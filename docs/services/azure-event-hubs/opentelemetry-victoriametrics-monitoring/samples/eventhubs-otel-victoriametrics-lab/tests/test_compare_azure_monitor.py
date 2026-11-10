@@ -3,6 +3,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 LAB_ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(LAB_ROOT / "agent"))
 
@@ -12,33 +14,53 @@ START = int(datetime(2026, 11, 9, 21, 25, tzinfo=timezone.utc).timestamp())
 END = START + 180
 
 
+API = 'source_path="azure_monitor_api"'
+
+
+def _values(name):
+    # Distinct per metric, so reading another metric's series cannot accidentally match.
+    offset = REQUIRED.index(name) if name in REQUIRED else 0
+    return [float(10 * i + offset) for i in range(3)]
+
+
 def _raw(names=REQUIRED, drop=None):
     value = []
     for name in names:
         data = [
-            {"timeStamp": f"2026-11-09T21:{25 + i}:00Z", "total": None if drop == (name, i) else float(10 * i)}
-            for i in range(3)
+            {"timeStamp": f"2026-11-09T21:{25 + i}:00Z", "total": None if drop == (name, i) else total}
+            for i, total in enumerate(_values(name))
         ]
         value.append({"name": {"value": name}, "timeseries": [{"data": data}]})
     return {"value": value}
 
 
-def _fetch(remote_override=None, stamp_offset_ms=0):
+def _fetch(remote_override=None, stamp_offset_ms=0, names=REQUIRED):
+    """VictoriaMetrics stub that answers only the exact selectors and queries compare() must send."""
+    exports, queries = {}, {}
+    for name in names:
+        lower = name.lower()
+        exports[f'azure_{lower}_total_Count{{{API},delivery_path="remote_write"}}'] = (name, "remote_write")
+        exports[f'{lower}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}'] = (name, "diagnostic")
+        for delivery in ("remote_write", "scrape"):
+            query = (f'sum(sum_over_time(azure_{lower}_total_Count{{{API},delivery_path="{delivery}"}}'
+                     f'[{END - START}s]))')
+            queries[query] = sum(_values(name)) * (1 if delivery == "remote_write" else 2)
+
     def fetch(path, params):
         if path == "/api/v1/export":
             assert (params["start"], params["end"]) == (START, END - 1)
-            if "diagnostic_eventhub" in params["match[]"]:
+            name, kind = exports[params["match[]"]]  # KeyError for any unexpected selector
+            if kind == "diagnostic":
                 return ""
-            values = [float(10 * i) for i in range(3)]
+            values = _values(name)
             if remote_override:
                 values = remote_override(params["match[]"], values)
-            offset = stamp_offset_ms if "remote_write" in params["match[]"] else 0
-            stamps = [(START + 60 * i) * 1000 + offset for i in range(3)]
+            stamps = [(START + 60 * i) * 1000 + stamp_offset_ms for i in range(len(values))]
             return json.dumps({"values": values, "timestamps": stamps})
         assert path == "/api/v1/query", path
         assert params["time"] == END - 1
-        assert f"[{END - START}s]" in params["query"]
-        return json.dumps({"data": {"result": [{"value": [END, "30"]}]}})
+        total = queries[params["query"]]  # KeyError for any unexpected query
+        return json.dumps({"data": {"result": [{"value": [END, str(total)]}]}})
 
     return fetch
 
@@ -83,5 +105,10 @@ def test_incomplete_when_remote_write_is_not_stamped_on_the_azure_minute():
 def test_scrape_is_reported_as_a_repeated_sample_sum_not_a_total():
     metric = compare(_raw(), START, END, _fetch())["metrics"]["IncomingMessages"]
 
-    assert "scrape_repeated_sample_sum" in metric
     assert metric["remote_write_total"] == 30.0
+    assert metric["scrape_repeated_sample_sum"] == 60.0
+
+
+def test_stub_rejects_a_selector_compare_does_not_own():
+    with pytest.raises(KeyError):
+        _fetch()("/api/v1/export", {"match[]": "azure_other_total_Count{}", "start": START, "end": END - 1})
