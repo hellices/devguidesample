@@ -560,6 +560,7 @@ AIID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --que
 python3 grafana/build_dashboard.py --appinsights-id "$AIID" > /tmp/movielog-live.json
 az grafana dashboard create -g $RG -n "$GRAFANA" \
   --definition @/tmp/movielog-live.json --overwrite true
+rm /tmp/movielog-live.json
 ```
 
 Managed Grafana MCP를 쓰면 Copilot이 `amgmcp_dashboard_update`로 전체 JSON을

@@ -33,6 +33,8 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
   `KQL_OFFSET=12h`처럼 늘린다.
 - Grafana data plane API token은
   `az account get-access-token --resource https://dashboard.azure.com`으로 받는다.
+  Azure Managed Grafana의 data plane audience는 `https://dashboard.azure.com`이며,
+  `https://grafana.azure.com`으로 받은 token은 401로 거부된다.
 - 지난 구간(예: 클러스터가 정지된 뒤)을 다룰 때
   - `*.kql`의 `timestamp > ago(30m)`를
     `timestamp between (datetime(<start>) .. datetime(<end>))`로 바꾸고, `KQL_OFFSET`을
@@ -47,9 +49,11 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
 ## 규칙
 
 - 읽기 전용 조회와 Grafana dashboard 생성·수정만 한다. 클러스터와 앱 설정은 바꾸지 않는다.
-- connection string, subscription ID, resource ID를 출력·파일·스크린샷에 남기지 않는다.
-  Grafana에 올린 dashboard 안에는 resource ID를 숨긴 변수 값으로만 두고, 저장소나 로컬에
-  남기는 JSON은 그 변수 값을 비운다.
+- connection string, subscription ID, resource ID를 출력·보고·스크린샷과 작업 폴더의 파일에
+  남기지 않는다. 예외는 Grafana에 저장되는 dashboard 정의 하나다. 그 안에서만 resource ID를
+  숨긴 변수 값으로 둔다.
+- 작업 폴더나 저장소에 남기는 dashboard JSON은 resource ID 변수 값을 비운다. 값을 채운
+  JSON이 반영에 필요하면 작업 폴더 밖 임시 파일로만 만들고, 반영 직후 지운다.
 - 각 단계 결과를 표로 요약하고, 다음 단계 결정의 근거를 한 줄로 적는다.
 
 ## 단계
@@ -85,7 +89,8 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    - 모든 panel query에서 채워지는 중인 현재 bin을 뺀다
      (`| where timestamp < bin(now(), <bin>)`).
    - Application Insights resource ID와 `cloud_RoleName`은 dashboard 변수로 둔다.
-     resource ID 값을 채운 JSON에서는 그 변수를 숨긴다.
+     작업 폴더에는 resource ID 변수 값이 빈 JSON만 저장한다. Grafana에 직접 반영할 때만
+     값을 채우고 그 변수를 숨긴 사본을 임시 파일로 만든다(규칙 참고).
    - 건수 stat은 고정색, 크기만 비교하는 bar gauge는 중립 색 구간을 쓴다. threshold 색은
      도메인 기준이 있는 값에만 쓴다.
    - legend는 `displayName`에 dimension label을 쓴다. KQL 예약어(`views`, `first` 등)를
@@ -100,9 +105,11 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
      - `$__timeFilter(<column>)` → `<column> > ago(1h)` (조건 전체를 바꾼다)
      - `$__interval` → `1m`, `$__timeTo()` → `now()`
      - `${role:singlequote}` 같은 변수 → 따옴표를 포함한 실제 값(예: `'movielog'`)
-7. **push**: `az grafana dashboard create -g <grafana-resource-group> -n <grafana-name> --overwrite true`
-   또는 `amgmcp_dashboard_update`로 올린다. Grafana 쓰기 권한이 없거나 사용자가 파일만
-   원하면 resource ID 변수 값이 빈 JSON을 만들고 import 방법
+7. **push**: 값을 채운 임시 JSON으로
+   `az grafana dashboard create -g <grafana-resource-group> -n <grafana-name> --definition @<temp-dashboard.json> --overwrite true`를
+   실행하고 임시 파일을 지운다. MCP는 `amgmcp_dashboard_update`로 올린다.
+   Grafana 쓰기 권한이 없거나 사용자가 파일만 원하면 resource ID 변수 값이 빈 JSON을 만들고
+   import 방법
    (**Dashboards > Import** 또는 `az grafana dashboard import`)을 안내한다.
 8. **look**: 대시보드를 캡처해서 직접 보고 아래를 점검한다. 하나라도 걸리면 5단계로 돌아간다.
    - 터미널: `GRAFANA_URL=... GRAFANA_TOKEN=... node scripts/capture.mjs "<path-and-query>" out.png`

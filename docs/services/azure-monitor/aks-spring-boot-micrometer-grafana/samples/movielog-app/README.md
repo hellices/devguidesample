@@ -110,6 +110,7 @@ python3 grafana/build_dashboard.py > grafana/movielog-dashboard.json
 python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "$AIID"
 python3 grafana/build_dashboard.py --appinsights-id "$AIID" > /tmp/live.json
 az grafana dashboard create -g "$RG" -n "$GRAFANA" --definition @/tmp/live.json --overwrite true
+rm /tmp/live.json
 
 npm i playwright && npx playwright install chromium-headless-shell
 node $SKILL/capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
