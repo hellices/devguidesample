@@ -18,7 +18,7 @@
 | `k8s/20-movielog.yaml` | `inject-java` annotation을 단 앱 Deployment와 Service입니다. |
 | `k8s/21-agent-3.7.10.patch.yaml` | managed agent가 3.7.9 미만일 때 쓰는 3.7.10 init image patch입니다. |
 | `k8s/30-loadgen.yaml`, `loadgen/loadgen.py` | 가입·조회·리뷰·댓글을 반복하는 합성 사용자 6개입니다. |
-| `.github/skills/grafana-metrics-dashboard/SKILL.md` | GitHub Copilot이 customMetrics 조회 → 집계식 결정 → dashboard 생성 → query 실행 → 화면 확인 순서로 작업하게 하는 skill입니다. 조회 query도 이 파일에 있습니다. |
+| `.github/skills/grafana-metrics-dashboard/SKILL.md` | GitHub Copilot이 customMetrics 조회 → 집계식 결정 → dashboard 생성 → query 실행 → 화면 확인 순서로 작업하게 하는 skill입니다. |
 | `.github/skills/grafana-metrics-dashboard/scripts/verify_panels.py` | 모든 panel query를 Grafana `/api/ds/query`로 실행해 오류와 빈 panel을 찾습니다. |
 | `.github/skills/grafana-metrics-dashboard/scripts/capture.mjs` | Entra access token으로 Managed Grafana 화면을 headless 캡처합니다. |
 | `.vscode/mcp.json` | VS Code에서 Managed Grafana MCP endpoint를 연결하는 설정 예시입니다. |
@@ -90,8 +90,8 @@ Copilot CLI에서는 "Use the /grafana-metrics-dashboard skill. <요청>"처럼 
 이름을 넣어 지정합니다. 요청이 skill 설명과 맞으면 이름 없이도 불러올 수 있습니다.
 Managed Grafana MCP를 쓰려면 `.vscode/mcp.json`의 `<grafana-endpoint>`를 바꿉니다.
 
-skill의 두 스크립트를 직접 실행할 때는 다음과 같습니다. 조회 query는 SKILL.md에 있고,
-Grafana에 직접 반영하는 명령은 상위 문서의 실습에 있습니다.
+skill의 두 스크립트를 직접 실행할 때는 다음과 같습니다. probe KQL 예시와 Grafana에 직접
+반영하는 명령은 상위 문서의 실습에 있습니다.
 
 ```bash
 SKILL=.github/skills/grafana-metrics-dashboard/scripts

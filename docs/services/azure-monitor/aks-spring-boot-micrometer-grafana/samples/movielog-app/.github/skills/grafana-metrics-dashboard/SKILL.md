@@ -39,9 +39,8 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
   Azure Managed Grafana의 data plane audience는 `https://dashboard.azure.com`이며,
   `https://grafana.azure.com`으로 받은 token은 401로 거부된다.
 - 지난 구간(예: 클러스터가 정지된 뒤)을 다룰 때
-  - 1~3단계 query의 `<time-filter>`를
-    `timestamp between (datetime(<start>) .. datetime(<end>))`로, `<window-minutes>`를 구간
-    길이(분)로 쓴다. 최근 데이터면 `timestamp > ago(30m)`와 `30`이다.
+  - 1~3단계 조회는 `timestamp between (datetime(<start>) .. datetime(<end>))`로 구간을 정한다.
+    최근 데이터면 `timestamp > ago(30m)`을 쓴다.
   - `verify_panels.py`에는 `--from <start> --to <end>`(ISO 8601 UTC)를 준다.
   - dashboard JSON의 `time`은 ISO 8601 UTC 문자열(예: `2026-11-07T23:05:00.000Z`)로 저장한다.
     epoch 문자열을 저장하면 Grafana 화면이 `Invalid date`로 해석한다. 캡처 URL의 `from`·`to`만
@@ -61,48 +60,21 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
 
 ## 단계
 
-1. **inventory**: 어떤 지표가 어느 role에서 얼마나 자주 오는지 조회한다.
-
-   ```kusto
-   customMetrics
-   | where <time-filter>
-   | summarize rows = count(), firstSeen = min(timestamp), lastSeen = max(timestamp),
-               instances = dcount(cloud_RoleInstance)
-       by name, cloud_RoleName
-   | order by name asc
-   ```
+1. **inventory**: `customMetrics`를 `name`, `cloud_RoleName`별로 묶어 행 수, 처음·마지막
+   수신 시각, instance 수(`dcount(cloud_RoleInstance)`)를 조회한다.
 
    - prefix 지표가 없으면 멈추고 사용자에게 알린다. 주입된 Application Insights Java agent
      버전(Spring Boot 4는 3.7.9 이상 필요), annotation, meter 허용 목록을 확인하라고 안내한다.
    - 코드의 meter 목록과 비교해 빠진 meter가 있으면 그 이벤트가 구간 안에 일어났는지,
      배포된 image가 그 코드를 포함하는지 확인한다.
-2. **dimensions**: dimension key와 값 개수를 조회한다. 값 개수가 계속 늘어나는 dimension은
-   대시보드에 쓰지 말고 코드 수정 대상으로 보고한다.
+2. **dimensions**: prefix 지표의 `customDimensions` key별 값 개수와 예시 값을 조회한다
+   (`bag_keys`로 key를 펼친다). 값이 하나뿐인 공통 tag는 panel 분할에 쓰지 않는다. 값
+   개수가 계속 늘어나는 dimension은 대시보드에 쓰지 말고 코드 수정 대상으로 보고한다.
 
-   ```kusto
-   customMetrics
-   | where <time-filter>
-   | where name startswith "<prefix>"
-   | mv-expand dim = bag_keys(customDimensions) to typeof(string)
-   | extend value = tostring(customDimensions[dim])
-   | summarize distinctValues = dcount(value), sampleValues = make_set(value, 8) by name, dim
-   | order by name asc, dim asc
-   ```
-
-3. **value shape**: metric별 행 주기, `valueCount`, 값 범위를 보고 집계식을 표로 정한다.
-
-   ```kusto
-   customMetrics
-   | where <time-filter>
-   | where name startswith "<prefix>"
-   | where isnotempty(cloud_RoleInstance)
-   | summarize rows = count(), instances = dcount(cloud_RoleInstance),
-               maxValueCount = max(valueCount), minValue = min(value), maxValue = max(value),
-               sumValueSum = sum(valueSum), sumValueCount = sum(valueCount)
-       by name
-   | extend rowsPerInstancePerMin = round(rows * 1.0 / instances / <window-minutes>, 2)
-   | order by name asc
-   ```
+3. **value shape**: metric별로 Pod·분당 행 수, `max(valueCount)`, `value` 범위,
+   `sum(valueSum)`, `sum(valueCount)`를 조회해 집계식을 표로 정한다. Application Insights
+   Java agent는 Micrometer meter를 export 간격(기본 60초)마다 한 행으로 보내며, meter 종류는
+   다음 모양으로 구분한다.
 
    - Counter: 모든 행이 `valueCount` = 1이고 `value`가 간격의 증가량 → `sum(value)`
    - DistributionSummary·Timer: `valueCount` > 1, `valueSum`이 합계 →

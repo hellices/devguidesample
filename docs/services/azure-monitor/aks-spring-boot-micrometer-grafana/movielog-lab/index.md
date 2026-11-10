@@ -313,10 +313,13 @@ Copilot은 둘 중 사용할 수 있는 도구로 작업합니다. 두 경로 �
 | Managed Grafana MCP (`https://<grafana-endpoint>/api/azure-mcp`) | `amgmcp_query_resource_log` | `amgmcp_dashboard_update`, `amgmcp_dashboard_inspect` |
 | 터미널(`az` 로그인) | `az monitor app-insights query` | `az grafana dashboard create`, skill의 `scripts/verify_panels.py`, `scripts/capture.mjs` |
 
-skill에 들어 있는 스크립트는 Copilot이 매번 새로 짜기 어려운 두 가지뿐입니다.
-`verify_panels.py`는 Grafana macro와 변수를 풀어 모든 panel query를 실행하고,
-`capture.mjs`는 Entra token으로 Grafana 화면을 캡처합니다. 조회 query는 SKILL.md에
-들어 있고 Copilot이 시간 조건만 바꿔 실행합니다.
+skill에는 무엇을 조회하고 어떻게 판단할지만 적혀 있고, 조회 KQL은 Copilot이 짭니다.
+스크립트는 두 가지만 들어 있습니다.
+
+- `verify_panels.py`: Grafana macro와 변수를 풀어 모든 panel query를 실행합니다. 올리기 전의
+  JSON도 검사하고, 브라우저가 실행하지 않는 접힌 row 안의 panel도 검사합니다.
+- `capture.mjs`: Entra token으로 이미 올린 dashboard 화면을 캡처하고, 화면에 보이는 오류와
+  식별자를 검사합니다.
 
 Managed Grafana MCP는 VS Code의 GitHub Copilot에서 Entra OAuth로 연결합니다. sample의
 `.vscode/mcp.json`에서 `<grafana-endpoint>`만 바꿉니다.
@@ -324,7 +327,7 @@ Managed Grafana MCP는 VS Code의 GitHub Copilot에서 Entra OAuth로 연결합�
 Grafana macro를 거부하므로 query 안에 `ago(...)`와 `now()`를 직접 씁니다.
 
 아래 명령은 `samples/movielog-app` 폴더에서 Copilot이 터미널로 실행하는 것과 같은 형태입니다.
-probe query는 각 절의 KQL을 `--analytics-query`에 넣습니다.
+각 probe 절의 KQL은 실습에서 쓴 예시이며 `--analytics-query`에 넣습니다.
 
 ```bash
 SKILL=.github/skills/grafana-metrics-dashboard/scripts
@@ -760,7 +763,10 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
   모든 query가 통과했고, 합계가 실습 결과(영화 조회 12,958, 평균 별점 3.50, 누락 metric 0)와
   같았습니다. 이 실행에서 드러난 `capture.mjs` 오류 출력의 token 노출과 fetch timeout,
   저장 시간 형식 지침을 고친 뒤, `verify_panels.py --from/--to`와 `capture.mjs`를 같은
-  환경에서 다시 실행해 확인했습니다.
+  환경에서 다시 실행해 확인했습니다. 이어서 skill에서 조회 KQL 예시를 빼고 판단 기준만 남긴
+  상태로 다시 실행했고, Copilot이 직접 짠 조회로 같은 집계식과 합계에 도달했습니다.
+- 같은 날 일부러 고장 낸 dashboard로 두 스크립트를 비교했습니다. KQL 예약어 문법 오류는
+  둘 다 잡았고, 접힌 row 안의 빈 panel은 `verify_panels.py`만 잡았습니다.
 - Deployment webhook의 주입 해제 동작, `kubectl apply` 충돌, role assignment
   실패는 실습 관측이며 공식 동작 계약이 아닙니다. 문서의 두 단계 전환과
   `kubectl replace` 복귀는 관리형 → custom → 관리형 → custom 순서로 다시 실행해

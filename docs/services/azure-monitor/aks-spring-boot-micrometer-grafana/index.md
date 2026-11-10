@@ -288,8 +288,8 @@ skill 지침에는 다음이 들어 있습니다.
 | 시각화 규칙 | [질문 유형별 panel 시각화](#visualization) 표 |
 | 통과 기준 | 모든 panel query 실행과 화면 점검 항목 |
 | 보안 규칙 | 읽기 전용 조회와 dashboard 생성·수정만 허용, connection string·subscription ID·resource ID를 출력·파일·캡처에 남기지 않음 |
-| 조회 query | inventory, dimension, 값 모양을 확인하는 KQL 3개 |
-| 보조 스크립트 | Copilot이 매번 새로 짜기 어려운 두 가지만 포함. panel query 일괄 실행(`verify_panels.py`), Entra token 기반 화면 캡처(`capture.mjs`) |
+| 조회 항목 | inventory, dimension, 값 모양에서 볼 column과 판단 기준. KQL은 Copilot이 짬 |
+| 보조 스크립트 | panel query 일괄 실행(`verify_panels.py`), Entra token 기반 화면 캡처(`capture.mjs`) |
 
 ## 대시보드 반영 방식: 로컬 Copilot 직접 반영과 JSON import { #publish }
 
