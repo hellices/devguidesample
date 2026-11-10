@@ -43,6 +43,7 @@ services:
   azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
   azure-managed-grafana: Azure Managed Grafana
+  azure-managed-lustre: Azure Managed Lustre
   azure-managed-redis: Azure Managed Redis
   azure-monitor: Azure Monitor
   azure-openai: Azure OpenAI
@@ -65,6 +66,7 @@ technologies:
   karpenter: Karpenter
   keda: KEDA
   kubernetes: Kubernetes
+  lustre: Lustre
   mcp: Model Context Protocol
   micrometer: Micrometer
   mongodb: MongoDB
@@ -152,3 +154,6 @@ official_source_hosts:
   - py.sdk.modelcontextprotocol.io
   - prices.azure.com
   - www.rfc-editor.org
+  - www.lustre.org
+  - wiki.lustre.org
+  - doc.lustre.org
