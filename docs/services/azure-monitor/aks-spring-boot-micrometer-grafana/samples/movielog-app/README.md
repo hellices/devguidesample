@@ -87,8 +87,9 @@ Pod가 동시에 같은 table을 만들려고 경쟁하지 않게 하기 위해�
 
 skill은 VS Code의 GitHub Copilot과 GitHub Copilot CLI가 `.github/skills/`에서 찾습니다.
 이 폴더를 workspace로 열거나 skill 폴더를 자기 저장소의 `.github/skills/`에 복사한 뒤,
-Copilot chat에서 `/grafana-metrics-dashboard`를 실행하거나 "customMetrics로 Grafana
-대시보드를 만들어 줘"처럼 요청합니다. Managed Grafana MCP를 쓰려면 `.vscode/mcp.json`의
+요청합니다. VS Code chat에서는 `/grafana-metrics-dashboard <요청>` slash command로,
+Copilot CLI에서는 "Use the /grafana-metrics-dashboard skill. <요청>"처럼 prompt 안에 skill
+이름을 넣어 지정합니다. 요청이 skill 설명과 맞으면 이름 없이도 불러올 수 있습니다. Managed Grafana MCP를 쓰려면 `.vscode/mcp.json`의
 `<grafana-endpoint>`를 바꿉니다.
 
 skill의 터미널 도구를 직접 실행할 때는 다음과 같습니다.

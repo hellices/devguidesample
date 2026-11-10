@@ -264,11 +264,18 @@ skill은 VS Code의 GitHub Copilot과 GitHub Copilot CLI가 저장소의 `.githu
 2. Copilot이 Grafana에 접근할 경로를 준비합니다. VS Code에서는 Managed Grafana MCP
    endpoint(`https://<grafana-endpoint>/api/azure-mcp`)를 연결하고, 터미널에서는 `az`로
    로그인합니다.
-3. Copilot chat에서 skill 이름과 환경을 넣어 요청합니다. `<...>`는 자기 환경 값으로
-   바꿉니다.
+3. Copilot chat에서 skill 이름과 환경을 넣어 요청합니다. VS Code chat에서는 skill이
+   slash command로도 나타나므로 `/grafana-metrics-dashboard` 뒤에 요청을 씁니다. Copilot CLI는
+   prompt 안에 `/<skill-name>`을 넣어 skill을 지정합니다. 두 환경 모두 요청이 skill 설명과
+   맞으면 skill 이름 없이도 Copilot이 불러올 수 있습니다. `<...>`는 자기 환경 값으로 바꿉니다.
 
 ```text
+# VS Code chat
 /grafana-metrics-dashboard Application Insights <app-insights-resource-group>/<app-insights-name>의
+movielog_ 지표로 Azure Managed Grafana <grafana-resource-group>/<grafana-name>에 대시보드를 만들어 줘.
+
+# Copilot CLI
+Use the /grafana-metrics-dashboard skill. Application Insights <app-insights-resource-group>/<app-insights-name>의
 movielog_ 지표로 Azure Managed Grafana <grafana-resource-group>/<grafana-name>에 대시보드를 만들어 줘.
 ```
 

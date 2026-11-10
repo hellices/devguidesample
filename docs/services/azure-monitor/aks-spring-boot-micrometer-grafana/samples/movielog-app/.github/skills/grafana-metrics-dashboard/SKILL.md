@@ -15,7 +15,8 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
 - Azure Managed Grafana: `<resource-group>/<name>`, Azure Monitor data source uid
   (두 resource group은 다를 수 있다. `az grafana` 명령에는 항상 Grafana의 resource group을 쓴다)
 - `cloud_RoleName`과 meter prefix(예: `movielog_`). 모르면 1단계 inventory로 찾는다.
-- Grafana에 직접 반영할지, JSON 파일만 만들지
+- Grafana에 직접 반영할지, JSON 파일만 만들지. JSON만 만들면 사용자가 import한 뒤 그
+  dashboard URL을 받아야 look 단계를 할 수 있다.
 
 ## 도구
 
@@ -111,7 +112,13 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    Grafana 쓰기 권한이 없거나 사용자가 파일만 원하면 resource ID 변수 값이 빈 JSON을 만들고
    import 방법
    (**Dashboards > Import** 또는 `az grafana dashboard import`)을 안내한다.
-8. **look**: 대시보드를 캡처해서 직접 보고 아래를 점검한다. 하나라도 걸리면 5단계로 돌아간다.
+8. **look**: 7단계에서 올린(또는 사용자가 import한) 그 dashboard를 캡처해서 직접 보고 아래를
+   점검한다. 하나라도 걸리면 5단계로 돌아간다.
+   - 렌더링은 Grafana MCP로 확인할 수 없다. `az`로 로그인한 터미널에서 `capture.mjs`를 쓰거나,
+     Grafana에 로그인한 브라우저 도구로 dashboard를 열어 캡처한다.
+   - JSON만 만든 경우에는 사용자에게 import 후 dashboard URL을 요청하고 그 URL로 진행한다.
+     URL을 받지 못하거나 렌더링 도구가 없으면 다른 dashboard로 대신 검증하지 말고,
+     report에 "렌더링 미검증"으로 남긴 채 완료라고 하지 않는다.
    - 터미널: `GRAFANA_URL=... GRAFANA_TOKEN=... node scripts/capture.mjs "<path-and-query>" out.png`
      `capture.mjs`는 panel query 실패, `No data`·`Invalid date` 표시, 화면의 subscription·resource
      식별자를 발견하면 실패로 끝난다. 실패하면 캡처를 보지 않고 원인부터 고친다.

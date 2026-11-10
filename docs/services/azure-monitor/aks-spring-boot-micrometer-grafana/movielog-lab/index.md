@@ -297,9 +297,13 @@ kubectl scale deploy/movielog -n movielog --replicas=2
 [SKILL.md](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard/SKILL.md)입니다.
 
 ```text
-/grafana-metrics-dashboard Application Insights rg-movielog-lab/appi-movielog-lab의
+Use the /grafana-metrics-dashboard skill. Application Insights rg-movielog-lab/appi-movielog-lab의
 movielog_ 지표로 Grafana <grafana-name>에 대시보드를 만들어 줘.
 ```
+
+위 형태는 Copilot CLI 문서가 안내하는 skill 지정 방식이며, 실습의 Copilot CLI 테스트에서
+이 형태를 썼습니다. VS Code chat에서는 `/grafana-metrics-dashboard`로 시작하는 slash command로
+실행합니다.
 
 Copilot은 둘 중 사용할 수 있는 도구로 작업합니다. 두 경로 모두 실습에서 동작을
 확인했습니다.
