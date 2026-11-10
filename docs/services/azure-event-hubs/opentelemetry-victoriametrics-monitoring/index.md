@@ -1,6 +1,6 @@
 ---
-title: "Event Hubs 지표·consumer lag · OpenTelemetry Collector · VictoriaMetrics 대시보드"
-description: Event Hubs Premium의 Azure Monitor 지표와 checkpoint 기반 consumer lag를 OpenTelemetry Collector Contrib로 수집해 VictoriaMetrics에 scrape와 remote write로 저장하고, agent가 실제 데이터로 Grafana 대시보드를 만들고 검증한 결과입니다. Azure Monitor API와 Diagnostic Settings 두 수집 경로, scrape와 remote write 두 전달 경로를 Azure Monitor 직접 조회와 분 단위로 대조해 차이를 정리합니다.
+title: "Event Hubs 지표 수집 방식 비교·consumer lag — OpenTelemetry Collector·VictoriaMetrics"
+description: Event Hubs 플랫폼 지표를 외부 VictoriaMetrics로 수집하는 방식(Azure Monitor Metrics API pull, Prometheus exporter, Diagnostic Settings 스트림, Azure 내부 저장)을 장단점과 함께 비교하고, OpenTelemetry Collector로 직접 배포해 Azure Monitor 조회값과 분 단위로 대조한 결과입니다. 내부 event(message) 쪽 신호인 consumer lag, application metrics log, runtime audit log, 분산 추적은 보조 신호로 정리합니다.
 document_type: guide
 services:
 - azure-event-hubs
@@ -18,10 +18,12 @@ tags:
 - evaluate
 status: current
 verification_status: verified
-sources_checked_at: 2026-11-09
-last_verified: 2026-11-09
+sources_checked_at: 2026-11-10
+last_verified: 2026-11-10
 review_cycle_days: 60
 official_sources:
+- title: Monitor Azure Event Hubs
+  url: https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs
 - title: Azure Event Hubs monitoring data reference
   url: https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference
 - title: Azure Event Hubs Premium overview
@@ -36,6 +38,8 @@ official_sources:
   url: https://learn.microsoft.com/azure/event-hubs/event-processor-balance-partition-load
 - title: How to migrate from the metrics API to the getBatch API
   url: https://learn.microsoft.com/azure/azure-monitor/metrics/migrate-to-batch-api
+- title: Monitor Azure Functions and Event Hubs
+  url: https://learn.microsoft.com/azure/architecture/serverless/event-hubs-functions/observability
 - title: Azure Policy built-in definitions for Azure Event Hubs
   url: https://learn.microsoft.com/azure/event-hubs/policy-reference
 - title: OpenTelemetry Collector Contrib azuremonitorreceiver (v0.165.0)
@@ -44,6 +48,8 @@ official_sources:
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azureeventhubreceiver
 - title: OpenTelemetry Collector Contrib prometheusremotewriteexporter (v0.165.0)
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/exporter/prometheusremotewriteexporter
+- title: webdevops azure-metrics-exporter
+  url: https://github.com/webdevops/azure-metrics-exporter
 - title: VictoriaMetrics Operator VMStaticScrape
   url: https://docs.victoriametrics.com/operator/resources/vmstaticscrape/
 applies_to:
@@ -53,21 +59,33 @@ applies_to:
 - VictoriaMetrics Operator 0.75.2, VictoriaMetrics v1.155.0, Grafana OSS 13.3.0
 ---
 
-# Event Hubs 지표·consumer lag · OpenTelemetry Collector · VictoriaMetrics 대시보드
+# Event Hubs 지표 수집 방식 비교·consumer lag — OpenTelemetry Collector·VictoriaMetrics
 
-## 핵심 흐름: Azure Monitor 지표·checkpoint lag → Collector fan-out → VictoriaMetrics → agent 대시보드 { #message }
+## 모니터링 대상과 수집 방식: Event Hubs 지표 5가지·내부 event 보조 신호 { #message }
 
-Event Hubs를 운영할 때 필요한 두 신호는 출처가 다릅니다. namespace의 CPU·memory·
-요청·처리량은 Azure Monitor 플랫폼 지표이고, consumer가 얼마나 밀렸는지는 Event Hubs
-partition 속성과 consumer checkpoint를 비교해야 알 수 있습니다. 이 topic은 두 신호를
-하나의 OpenTelemetry Collector로 모아 VictoriaMetrics에 저장하고, agent가 실제
-데이터를 확인하며 Grafana 대시보드를 완성하는 흐름을 Azure에 직접 배포해 검증한
-결과입니다.
+Event Hubs 모니터링 신호는 두 갈래이며, 이 topic의 목표는 첫째인 **Event Hubs 플랫폼
+지표**를 외부 VictoriaMetrics로 수집하는 것입니다. namespace의 CPU·memory·요청·처리량
+같은 지표는 Azure Monitor가 자동으로 수집하므로, 남은 선택은 그 지표를 어떤 방식으로
+꺼내 오느냐입니다. 둘째인 **내부 event(message)** 신호, 즉 consumer가 얼마나 밀렸는지와
+메시지가 어디로 흘렀는지는 플랫폼 지표에 없으므로 별도 방식으로 보완합니다.
 
-1. **Collector가 지표와 lag를 함께 수집합니다.** `azuremonitorreceiver`는 Managed
-   Identity로 Azure Monitor API를 조회하고, `azureeventhubreceiver`는 Diagnostic
-   Settings가 Event Hub로 보낸 지표를 읽습니다. lag exporter는 마지막 enqueue
-   sequence와 checkpoint sequence의 차이를 partition별로 계산합니다.
+| 대상 | 방식 | 데이터 경로 | 이 topic의 검증 |
+|---|---|---|---|
+| Event Hubs 지표 | ① Azure Monitor 직접 조회 | Metrics explorer·지표 경고·Grafana Azure Monitor data source가 Azure Monitor를 바로 조회 | 비교 기준값으로만 사용 |
+| Event Hubs 지표 | ② Metrics API pull — OpenTelemetry `azuremonitorreceiver` | Collector가 Azure Monitor Metrics API 조회 → VictoriaMetrics | 실측, 주 경로 |
+| Event Hubs 지표 | ③ Metrics API pull — `azure-metrics-exporter` | Prometheus exporter가 Metrics API 조회 → Collector scrape → VictoriaMetrics | 실측, 대체 경로(첫 환경) |
+| Event Hubs 지표 | ④ Diagnostic Settings → Event Hub 스트림 | 지표를 telemetry Event Hub로 내보냄 → Collector `azureeventhubreceiver` → VictoriaMetrics | 실측, 보조 경로 |
+| Event Hubs 지표 | ⑤ Diagnostic Settings → Log Analytics·Storage | 지표를 Azure 안의 로그 저장소에 보관 | 문서 기반, 미검증 |
+| 내부 event | checkpoint 기반 consumer lag | lag exporter가 partition 마지막 sequence와 checkpoint를 비교 | 실측 |
+| 내부 event | `ApplicationMetricsLogs`·`RuntimeAuditLogs`·분산 추적 | Diagnostic Settings 로그, SDK가 이벤트에 넣는 추적 ID | 문서 기반, 미검증 |
+
+방식별 장단점은 [Event Hubs 지표 수집 방식](#metrics)에, 내부 event 신호는
+[내부 event(message) 모니터링](#events)에 정리했습니다. 실습에서는 ②·③·④와 checkpoint
+lag를 하나의 OpenTelemetry Collector로 모아 같은 조건에서 비교했습니다.
+
+1. **Collector가 지표와 lag를 함께 수집합니다.** ②는 Managed Identity로 Metrics API를
+   조회하고, ④는 Diagnostic Settings가 Event Hub로 보낸 지표를 읽습니다. lag exporter는
+   partition별 lag를 계산합니다.
 2. **source마다 두 전달 경로로 fan-out합니다.** 같은 receiver 출력을 Prometheus
    exporter(VMAgent가 scrape)와 Prometheus remote write로 동시에 보내고,
    `source_path`·`delivery_path` label로 구분합니다.
@@ -91,8 +109,8 @@ Diagnostic Settings 경로의 합계가 모두 정확히 일치했습니다.
 | `IncomingRequests` | 1,538 | 1,538 (25/25분 일치) | 3,222 | 1,538 (25분) |
 | `ThrottledRequests` | 0 | 0 (25/25분 일치) | 0 | 없음 |
 
-scrape 합계가 두 배 안팎인 이유는 [전달 경로 차이](#delivery)에서, Diagnostic Settings에
-값이 있는 분만 들어오는 이유는 [수집 경로 차이](#receivers)에서 설명합니다.
+scrape 합계가 두 배 안팎인 이유는 [전달 경로](#delivery)에서, Diagnostic Settings에
+값이 있는 분만 들어오는 이유는 [수집 경로 실측 차이](#receivers)에서 설명합니다.
 
 캡처의 Incoming requests stat(1,533)은 표의 1,538과 다릅니다. Azure Monitor 표본은
 분 bin 시작 시각을 timestamp로 쓰는데, 캡처 당시 stat은 Grafana 구간 끝에서
@@ -104,7 +122,33 @@ v1.155.0에 같은 형태의 표본을 넣어 두 식의 결과가 각각 `(from
 
 ![수정 후 세 번째 환경의 대시보드 상단. Incoming·Successful requests 656건, Throttled requests 0건](images/request-window-fixed.png)
 
-## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
+## Event Hubs 지표 수집 방식: 장단점과 선택 기준 { #metrics }
+
+외부 저장소로 지표를 모으는 기본 경로는 ② Metrics API pull이며, ④ Diagnostic Settings
+스트림은 내보내기 가능한 처리량 지표를 다른 로그와 함께 흘려보낼 때의 보조 경로입니다.
+Azure Monitor는 플랫폼 지표를 별도 설정 없이 수집해 93일 동안 보관하므로, 어느 방식이든
+원본은 같고 꺼내는 방식만 다릅니다.
+
+| 방식 | 장점 | 단점 |
+|---|---|---|
+| ① Azure Monitor 직접 조회 | 수집 인프라가 없음. dimension 필터·분할, 지표 경고를 바로 사용. Grafana Azure Monitor data source로도 조회 | 데이터가 Azure Monitor에 남아 VictoriaMetrics의 다른 지표와 한 저장소·한 query로 다룰 수 없음. 보관 93일 |
+| ② Metrics API pull — `azuremonitorreceiver` | 모든 플랫폼 지표와 dimension 분할을 그대로 수집. 지연이 가장 짧음(실측 194–213초). 원본 분 bin timestamp를 유지해 remote write 합계가 Azure Monitor와 25/25분 일치. namespace 범위 Monitoring Reader로 동작. lag 등 다른 신호와 같은 Collector에서 처리 | 조회 대상이 늘면 Metrics API 호출이 늘어 throttling 위험. 호출을 묶는 `metrics:getBatch`는 구독 범위 Monitoring Reader가 필요(namespace 범위에서 403 실측). dimension 분할 조회는 값이 없는 동안 series가 없어(`ThrottledRequests` 실측) 0이 필요한 지표는 분할을 끄는 설정 필요 |
+| ③ Metrics API pull — `azure-metrics-exporter` | Prometheus scrape 설정만으로 구성하고 dimension, 리소스 탐색·조회 결과 캐시, Azure API rate limit 지표를 제공. OpenTelemetry receiver를 쓰지 않는 Prometheus 중심 환경의 대안. 실측에서 Premium 지표 27개 series를 두 전달 경로로 저장 | 운영할 컴포넌트가 하나 늘고 ②와 같은 Metrics API 호출·권한 제약을 그대로 가짐. 이 실습은 resource group 범위로 찾은 namespace 중 Premium만 남기려고 namespace 이름 relabel 필터를 따로 둠 |
+| ④ Diagnostic Settings → Event Hub 스트림 | Metrics API를 polling하지 않는 push 방식. 리소스 로그와 같은 스트림으로 외부 시스템에 연동. 실측 합계는 Azure Monitor와 일치 | 내보내기(DS Export) 가능한 지표만 대상이고 dimension을 합친 값만 전달. 0값만 내보내는 동안 export 간격이 늘어나(비활성 1시간 뒤 15분, 7일 뒤 최대 2시간) 값이 있는 분만 도착. 설정 후 최대 90분 지연(실측 20–55분 이상), 평소 지연 434–513초. 원본과 같은 리전의 Event Hub와 telemetry namespace 비용 필요 |
+| ⑤ Diagnostic Settings → Log Analytics·Storage | Log Analytics에서 KQL로 리소스 로그와 결합. Storage는 저렴하게 장기 보관 | ④와 같은 export 제약(내보내기 가능 지표, dimension 평탄화, 설정 지연). 외부 TSDB로 옮기려면 다시 내보내야 함 |
+
+선택 기준은 다음과 같습니다.
+
+- **외부 TSDB가 목표이고 CPU·memory·성공·throttle과 dimension별 분석이 필요하면 ②**를
+  씁니다. 수집 대상 namespace가 많아 호출량이 문제되면 구독 범위 권한을 받아 batch API로
+  묶습니다.
+- **이미 Prometheus exporter 중심으로 운영하면 ③**으로 같은 Metrics API 데이터를 받습니다.
+  이 실습은 `ENABLE_API_RECEIVER=false`, `ENABLE_FALLBACK_EXPORTER=true`,
+  `GATEWAY_ONLY=true`로 Gateway만 다시 구성해 ③으로 전환하고, `source_path="fallback_exporter"`로 ②와 구분합니다.
+- **④·⑤는 처리량 지표를 로그 파이프라인과 함께 보내야 할 때만** 씁니다. 0값 구간과
+  dimension이 사라지므로 경보나 용량 판단의 기준으로 삼지 않습니다.
+
+### 이 topic의 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
 Collector는 receiver 4개를 source로 두고, source마다 scrape용과 remote write용 pipeline
 두 개를 만듭니다. 두 pipeline은 같은 receiver instance를 공유하므로 비교 결과가 서로
@@ -129,7 +173,7 @@ metrics/azure_monitor_api-remote_write:
 `resource_to_telemetry_conversion` 대신 이 설정을 사용해 불필요한 resource attribute가
 label로 퍼지지 않게 했습니다.
 
-## Azure Monitor API와 Diagnostic Settings 경로의 차이 { #receivers }
+### Metrics API와 Diagnostic Settings 경로의 실측 차이 { #receivers }
 
 두 경로는 같은 플랫폼 지표를 다른 방식으로 전달하며, 지표 이름·dimension·0값 처리·
 지연이 모두 다릅니다. Microsoft Learn의 `Microsoft.EventHub/namespaces` 지표표는
@@ -178,7 +222,7 @@ label로 퍼지지 않게 했습니다.
 흘려보내는 보조 경로로 쓰고, CPU·memory·성공·throttle과 dimension별 분석은 Azure
 Monitor API 경로를 기준으로 삼습니다.
 
-## scrape·remote write의 timestamp·sample 밀도 차이 { #delivery }
+### 전달 경로: scrape와 remote write의 장단점 { #delivery }
 
 같은 receiver 출력이라도 전달 경로에 따라 저장되는 timestamp와 sample 수가 다릅니다.
 remote write는 원본 timestamp를 그대로 쓰고, scrape는 Collector가 노출한 마지막 값을
@@ -194,6 +238,8 @@ VMAgent가 가져간 시각으로 다시 기록합니다.
 | Diagnostic Settings series당 분당 sample | 0.76 (값이 있는 분만) | 1.92 |
 | API 지표 마지막 sample 경과 시간(probe 시점) | 194–213초 | 37–48초 |
 | 25분 합계의 Azure Monitor 대비 | 1.0배 | 2.0–2.3배 |
+| 장점 | 원본 timestamp가 남아 구간 합계가 Azure Monitor와 일치하고, 마지막 sample 시각이 실제 원본 지연을 보여 줌. API 지표는 분당 sample 1개라 저장량이 적음 | VMAgent·Prometheus의 표준 pull 모델 그대로 쓸 수 있고, scrape target 상태로 Collector 생존을 함께 확인 |
+| 단점 | Collector가 VictoriaMetrics write endpoint에 직접 써야 함 | 같은 분 bin 값이 scrape마다 반복 저장되어 합계가 부풀고, freshness가 원본 지연을 숨김 |
 
 이 결과에서 대시보드 규칙 두 가지를 정했습니다.
 
@@ -203,10 +249,45 @@ VMAgent가 가져간 시각으로 다시 기록합니다.
   Azure Monitor 값은 3분 이상 전 bin입니다. 지연 경보에는 remote write 경로의 마지막
   sample timestamp를 사용합니다.
 
-## checkpoint 기반 consumer lag 상승·회복 { #lag }
+### Premium PU와 Dedicated CU의 지표 의미 차이 { #sku }
 
-consumer lag는 partition의 마지막 enqueue sequence에서 consumer가 마지막으로 저장한
-checkpoint sequence를 뺀 값입니다. Event Hubs는 checkpoint를 consumer group과
+Premium과 Dedicated는 수집 구조가 같아도 용량 단위와 CPU·memory 지표의 의미가
+다릅니다. 이 실습은 Dedicated cluster를 만들지 않고, 기존 cluster resource ID를
+입력했을 때만 수집 profile을 렌더링합니다. Dedicated cluster는 만든 뒤 최소 4시간
+동안 삭제할 수 없고 그만큼 과금됩니다.
+
+| 항목 | Premium namespace | Dedicated cluster |
+|---|---|---|
+| 용량 단위 | PU(Processing Unit) | CU(Capacity Unit) |
+| CPU | `NamespaceCpuUsage`, `Replica` | `CPU`, `Role`, Maximum |
+| memory | `NamespaceMemoryUsage`(사용률) | `AvailableMemory`(가용률, 낮을수록 위험) |
+| 종합 사용률 | 없음 | `ClusterUtilization`(preview) |
+| 이 실습 | 1 PU로 runtime 검증 | 문서 기반 profile, runtime 미검증 |
+
+대시보드는 처리량을 `$pu` 변수로 나눠 PU당 값으로 보여 주며, Dedicated profile에서는
+가용 메모리 gauge의 threshold 방향을 반대로 둡니다.
+
+## 내부 event(message) 모니터링: consumer lag·runtime log·분산 추적 { #events }
+
+플랫폼 지표는 namespace가 받은·내보낸 양만 보여 주므로, consumer가 처리하지 못하고 쌓인
+양이나 개별 메시지의 흐름은 별도 신호로 봅니다. 이 topic은 checkpoint 기반 consumer lag만
+실측했고, 나머지는 선택지로 정리합니다.
+
+| 신호 | 내용 | 조건·주의 |
+|---|---|---|
+| checkpoint 기반 lag (이 topic) | partition 마지막 enqueue sequence − consumer group checkpoint sequence | 재시작하면 다시 처리할 양을 보여 줌. 해상도는 checkpoint 주기에 묶임 |
+| `ApplicationMetricsLogs`의 `ConsumerLag` | Diagnostic Settings 로그. partition·consumer group별 lag와 연결·처리량 runtime 지표 | Premium·Dedicated만 지원. AMQP는 checkpoint가 아니라 receiver에 마지막으로 전달된 sequence와의 차이이며, 다 따라잡아 받을 것이 없으면 레코드가 없음(0이 아님). Kafka는 commit offset 기준으로 1분마다 평가 |
+| `RuntimeAuditLogs` | publish·consume 같은 data plane 접근을 client별로 집계한 감사 로그 | Premium·Dedicated만 지원. 어떤 client가 보내고 읽었는지 확인할 때 사용 |
+| 분산 추적 | 이벤트 속성의 W3C Trace Context 형식 `Diagnostic-Id`로 producer와 consumer 처리를 연결. Learn은 Azure Functions와 Application Insights 조합의 예를 설명 | 추적 backend와 producer·consumer 양쪽 instrumentation 필요. 개별 메시지 경로 확인용이며 backlog 크기는 보여 주지 않음 |
+
+backlog 경보에는 checkpoint 기반 lag가 적합합니다. `ApplicationMetricsLogs`의 AMQP lag는
+receiver가 읽은 위치라 checkpoint를 늦게 저장하는 consumer의 재처리량을 반영하지 않고,
+레코드가 없는 상태를 0으로 해석할 수 없습니다.
+
+### checkpoint 기반 consumer lag: 실측 상승·회복 { #lag }
+
+이 topic의 lag exporter는 partition의 마지막 enqueue sequence에서 consumer가 마지막으로
+저장한 checkpoint sequence를 뺀 값을 15초마다 계산합니다. Event Hubs는 checkpoint를 consumer group과
 partition 단위로 저장하므로 lag exporter는 같은 consumer group의 Blob checkpoint만
 읽습니다. checkpoint가 없는 partition은 lag 값을 만들지 않고 존재 여부만 표시합니다.
 
@@ -226,24 +307,6 @@ lag exporter는 실제 시각으로 기록되지만 Azure Monitor의 `IncomingMe
 19:42–19:52에 값이 나타나, producer 실제 구간보다 약 1.5–2분 늦게 기록됐습니다. 디버깅용
 첫 환경에서도 같은 차이가 있었습니다. 두 신호를 같은 그래프에서 비교할 때는 이 차이를
 감안합니다.
-
-## Premium PU와 Dedicated CU의 지표 의미 차이 { #sku }
-
-Premium과 Dedicated는 수집 구조가 같아도 용량 단위와 CPU·memory 지표의 의미가
-다릅니다. 이 실습은 Dedicated cluster를 만들지 않고, 기존 cluster resource ID를
-입력했을 때만 수집 profile을 렌더링합니다. Dedicated cluster는 만든 뒤 최소 4시간
-동안 삭제할 수 없고 그만큼 과금됩니다.
-
-| 항목 | Premium namespace | Dedicated cluster |
-|---|---|---|
-| 용량 단위 | PU(Processing Unit) | CU(Capacity Unit) |
-| CPU | `NamespaceCpuUsage`, `Replica` | `CPU`, `Role`, Maximum |
-| memory | `NamespaceMemoryUsage`(사용률) | `AvailableMemory`(가용률, 낮을수록 위험) |
-| 종합 사용률 | 없음 | `ClusterUtilization`(preview) |
-| 이 실습 | 1 PU로 runtime 검증 | 문서 기반 profile, runtime 미검증 |
-
-대시보드는 처리량을 `$pu` 변수로 나눠 PU당 값으로 보여 주며, Dedicated profile에서는
-가용 메모리 gauge의 threshold 방향을 반대로 둡니다.
 
 ## agent 대시보드: probe·build·verify·look { #agent }
 
@@ -293,6 +356,7 @@ lag 시나리오, agent 검증, fallback exporter 전환, `azd down --purge`까�
 
 ## 공식 참고 자료
 
+- [Monitor Azure Event Hubs](https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs)
 - [Azure Event Hubs monitoring data reference](https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference)
 - [Azure Event Hubs Premium overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-premium-overview)
 - [Azure Event Hubs Dedicated tier overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-overview)
@@ -300,8 +364,10 @@ lag 시나리오, agent 검증, fallback exporter 전환, `azd down --purge`까�
 - [Diagnostic settings in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/platform/diagnostic-settings)
 - [Partition load balancing for event processing](https://learn.microsoft.com/azure/event-hubs/event-processor-balance-partition-load)
 - [How to migrate from the metrics API to the getBatch API](https://learn.microsoft.com/azure/azure-monitor/metrics/migrate-to-batch-api)
+- [Monitor Azure Functions and Event Hubs](https://learn.microsoft.com/azure/architecture/serverless/event-hubs-functions/observability)
 - [Azure Policy built-in definitions for Azure Event Hubs](https://learn.microsoft.com/azure/event-hubs/policy-reference)
 - [OpenTelemetry Collector Contrib azuremonitorreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver)
 - [OpenTelemetry Collector Contrib azureeventhubreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azureeventhubreceiver)
 - [OpenTelemetry Collector Contrib prometheusremotewriteexporter v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/exporter/prometheusremotewriteexporter)
+- [webdevops azure-metrics-exporter](https://github.com/webdevops/azure-metrics-exporter)
 - [VictoriaMetrics Operator VMStaticScrape](https://docs.victoriametrics.com/operator/resources/vmstaticscrape/)
