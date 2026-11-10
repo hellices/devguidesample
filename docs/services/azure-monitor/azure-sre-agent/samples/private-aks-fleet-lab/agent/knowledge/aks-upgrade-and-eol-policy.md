@@ -10,15 +10,19 @@
 | **P1 (Planned / 계획 업그레이드 대상)** | • 현재 마이너 버전이 `1.35.x`인 클러스터<br>• 또는 컨트롤 플레인 버전(`1.37.0`)과 노드풀 버전(`1.36.4`)이 불일치(Version Skew)하는 클러스터 | • `1.35`: 2027-03-31 (LTS: 2028-03-31) | `1.36.4` 또는 노드풀 `1.37.0` 동기화 | 계획 조치 (1개월 이내)<br>차기 정기 점검 윈도우에 업그레이드 또는 노드풀 버전 동기화 수행 |
 | **P2 (Pre-check / 사전 호환성 점검 및 카나리 대상)** | • 현재 컨트롤 플레인과 노드풀이 모두 안정 버전인 `1.36.x`(`1.36.4`)로 일치하는 클러스터 | • `1.36`: 2027-06-30<br>• `1.37`: 2027-10-31 | `1.37.0` | 사전 점검 대상 (분기 내)<br>차기 `1.37.0` 전환을 대비하여 7대 사전 점검 체크리스트를 수행하고 카나리 검증 진행 |
 
-## 2. Private AKS 업그레이드 7대 사전 점검 체크리스트 (총점 100점)
+## 2. Private AKS 업그레이드 9대 사전 점검 체크리스트 (`PASS` / `FAIL` 기준)
 
-1. **노드 서브넷 여유 IP 점검 (20점)**: 서브넷 사용률 `80%` 미만 `PASS`, `80~90%` `WARN`(-10점), `90%` 초과 `BLOCK`(-20점).
-2. **PodDisruptionBudget (PDB) 데드락 점검 (20점)**: `ALLOWED DISRUPTIONS == 0`인 PDB 존재 시 Drain 대기 발생으로 `BLOCK`(-20점).
-3. **단일 레플리카(`replicas: 1`) 워크로드 점검 (15점)**: 사용자 네임스페이스 내 단일 레플리카 Deployment 존재 시 `WARN`(-15점) 및 최소 2개 증설 권고.
-4. **기존 비정상 파드 존재 여부 (20점)**: `ImagePullBackOff`, `CrashLoopBackOff`, `Pending` 파드 존재 시 `BLOCK`(-25점) 및 선행 복구 안내.
-5. **Deprecated / Breaking 변경사항 점검 (10점)**: `1.37` 업그레이드 시 조건부 LocalDNS 활성화(UDP/TCP 53 확인) 및 `ama-metrics` `ServiceMonitor`/`PodMonitor` 네임스페이스 Secret 권한 점검.
-6. **컨트롤 플레인 ↔ 노드풀 버전 일치 및 상태 (10점)**: 버전 일치 및 `provisioningState == Succeeded` 확인.
-7. **구독 지역 vCPU 쿼터 여유분 (5점)**: Surge VM 생성을 위한 여유 vCPU 확인.
+하나라도 `FAIL`이 있으면 전체 판정(`overallStatus` / `verdict`)을 `FAIL`로 표기하고 선행 조치를 안내한다.
+
+1. **`1_pod_ha` — 애플리케이션 Pod 고가용성 구성 (`PASS` / `FAIL`)**: 컨트롤러(`ownerReferences`)가 없는 Naked Pod 존재 여부, 단일 레플리카(`replicas: 1`) 또는 모든 레플리카가 단일 노드(`nodeName`)에 편중 배치된 워크로드, 비정상 파드 존재 여부 점검 (`kube-system` 등 시스템 네임스페이스 및 `DaemonSet`/`Job` 제외).
+2. **`2_local_storage` — `hostPath` / `emptyDir` 및 Local Storage PV 존재 여부 (`PASS` / `FAIL`)**: 비-DaemonSet 파드의 `volumes[].hostPath`·`emptyDir` 사용 여부 및 클러스터 내 `spec.local` / `spec.hostPath` PV 존재 여부 점검.
+3. **`3_scheduling_constraints` — Pod 스케줄링 제약 조건 (`PASS` / `FAIL`)**: `nodeSelector`, `requiredDuringSchedulingIgnoredDuringExecution` NodeAffinity 등으로 인해 노드 드레인 시 이동 가능한 대체 노드가 부족한 파드 점검.
+4. **`4_pdb_disruptions` — PDB 설정 확인 (`PASS` / `FAIL`)**: `status.disruptionsAllowed == 0`인 `PodDisruptionBudget` 존재 여부 점검.
+5. **`5_api_deprecation` — Kubernetes API Deprecation 확인 (`PASS` / `FAIL`)**: 타깃 K8s 버전에서 제거된 `apiVersion`(`last-applied-configuration` 어노테이션, Helm Secret, 또는 `apiserver_requested_deprecated_apis` 메트릭) 존재 여부 점검.
+6. **`6_graceful_shutdown` — Graceful Shutdown 설정 여부 (`PASS` / `FAIL`)**: 컨테이너(K8s 1.29+ 네이티브 사이드카 포함)의 `livenessProbe`, `readinessProbe`, `lifecycle.preStop`(`exec`/`httpGet`/`sleep`) 설정 여부 점검.
+7. **`7_subnet_ips` — 노드풀 서브넷 가용 IP 확인 (`PASS` / `FAIL`)**: CNI 모드(Overlay vs Node Subnet) 및 `maxSurge` 기준 필요 IP 대비 서브넷 잔여 IP 충족 여부(`90%` 이하 사용) 점검.
+8. **`8_uami_permissions` — AKS Identity(UAMI) 권한 확인 (`PASS` / `FAIL`)**: 클러스터 Control Plane UAMI가 사용 중인 VNet/Subnet(및 UDR)에 `Network Contributor` 권한을 보유하고 있는지 점검.
+9. **`9_mdc_law_reference` — AKS MDC / Monitoring의 Log Analytics Workspace ID 확인 (`PASS` / `FAIL`)**: `securityProfile.defender.logAnalyticsWorkspaceResourceId` 등이 이미 삭제된(`404 ResourceNotFound`) 워크스페이스를 참조하고 있지 않은지 점검.
 
 ## 3. 파드 장애 유형별 권장 복구 가이드 기준
 

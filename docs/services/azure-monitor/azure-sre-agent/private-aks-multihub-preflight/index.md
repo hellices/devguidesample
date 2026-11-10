@@ -1,6 +1,6 @@
 ---
 title: 멀티 허브 방화벽 뒤의 Private AKS 버전 업그레이드 사전 점검과 파드 장애 진단하기
-description: 공용 엔드포인트가 꺼진 Private AKS 클러스터 10개가 3개 허브 VNet과 NVA 방화벽 뒤에 분리된 환경에서, VNet 통합 Azure SRE Agent가 Private Endpoint 정책과 사설 DNS·UDR 경유 경로를 통해 컨트롤 플레인(ARM)과 데이터 플레인(TCP 443)을 함께 조회하고, 7대 업그레이드 사전 점검 점수와 파드 장애 원인을 30~60초 안에 판정하는 과정을 배포부터 정리까지 재현합니다.
+description: 공용 엔드포인트가 꺼진 Private AKS 플릿이 다중 허브 방화벽 뒤에 분리된 환경에서, VNet 통합 Azure SRE Agent가 컨트롤 플레인(ARM)과 데이터 플레인(TCP 443)을 함께 조회하여 월 단위(4개월) 및 LTS 지원 플랜 기준 EOS 대상을 판별하고, 9대 업그레이드 사전 점검·고객 안내문 파일 다운로드·승인 기반 파드 장애 복구까지 수행하는 과정을 재현합니다.
 document_type: lab
 services:
   - azure-monitor
@@ -29,10 +29,16 @@ official_sources:
     url: https://learn.microsoft.com/azure/sre-agent/python-code-execution
   - title: Agent permissions in Azure SRE Agent
     url: https://learn.microsoft.com/azure/sre-agent/permissions
+  - title: Tool access policies in Azure SRE Agent
+    url: https://learn.microsoft.com/azure/sre-agent/tool-access-policies
   - title: Skills in Azure SRE Agent
     url: https://learn.microsoft.com/azure/sre-agent/skills
+  - title: Custom agents in Azure SRE Agent
+    url: https://learn.microsoft.com/azure/sre-agent/sub-agents
   - title: Agent hooks in Azure SRE Agent
     url: https://learn.microsoft.com/azure/sre-agent/agent-hooks
+  - title: Live reports in Azure SRE Agent (preview)
+    url: https://learn.microsoft.com/azure/sre-agent/live-reports
   - title: Deploy with infrastructure as code in Azure SRE Agent
     url: https://learn.microsoft.com/azure/sre-agent/deploy-iac
   - title: Create a private Azure Kubernetes Service (AKS) cluster
@@ -57,307 +63,291 @@ topic_order: 12
 
 # 멀티 허브 방화벽 뒤의 Private AKS 버전 업그레이드 사전 점검과 파드 장애 진단하기
 
-엔터프라이즈 환경에서 여러 허브-스포크 VNet과 중앙 방화벽(NVA 또는 Azure Firewall) 뒤에
-배치된 Private AKS 플릿을 운영할 때는 두 가지 질문이 반복됩니다. 첫째, **외부 공용
-API 서버가 닫힌 Private AKS의 파드·이벤트·PDB 상태를 VNet 통합 Azure SRE Agent가
-방화벽을 거쳐 직접 읽을 수 있는가**, 둘째, **버전 조회부터 릴리스 노트 대조·업그레이드
-사전 점수 산정·파드 장애 진단까지 실제 대화에서 수십 초 안에 끝낼 수 있는가**입니다.
+엔터프라이즈 환경에서 다중 허브 VNet(또는 Azure Virtual WAN Secured Hub)과 중앙 방화벽 뒤에
+배치된 Private AKS 플릿을 운영할 때는 세 가지 질문이 반복됩니다. 첫째, **외부 공용 API 서버가
+닫힌 Private AKS의 파드·이벤트·PDB 상태를 VNet 통합 Azure SRE Agent가 방화벽을 거쳐 직접
+읽을 수 있는가**, 둘째, **Standard 지원 플랜과 장기 지원(LTS) 플랜이 혼재된 플릿에서 월 단위
+기준으로 실제 업그레이드 대상만 정확히 추려내고 9대 사전 점검을 수십 초 안에 끝낼 수 있는가**,
+셋째, **점검 결과를 기반으로 고객 안내문 마크다운 파일을 즉시 다운로드하고 승인 게이트를 거쳐
+파드 장애까지 복구할 수 있는가**입니다.
 
-이 실습은 SRE Agent 전용 VNet(`10.200.0.0/16`)과 3개 허브 VNet(`10.210.0.0/16`,
-`10.220.0.0/16`, `10.230.0.0/16`), 각 허브의 Linux NVA 방화벽 VM 3대, 그리고
-Private AKS 클러스터 10대(`aks-ktc-priv-01` ~ `10`)를 구성해 위 두 질문을
-실증합니다.
+이 실습은 SRE Agent 전용 VNet(`10.42.0.0/16`)과 다중 허브 방화벽 경로, 그리고 서로 다른
+Kubernetes 버전과 지원 플랜(`KubernetesOfficial` Standard 대 `AKSLongTermSupport` Premium)을
+가진 Private AKS 클러스터(`aks-priv-01` ~ `03`)를 구성해 위 세 가지 질문을 실증합니다.
 
-2026-10-31 Korea Central에서 실제로 배포해 검증한 결과는 다음과 같습니다.
+2026-10-31 Korea Central 및 East US 2 환경에서 실제로 배포해 검증한 결과는 다음과 같습니다.
 
-- 3개 허브의 AKS API 서버 서브넷(`snet-aks-pe`)에서 `privateEndpointNetworkPolicies: Enabled`를
-  켜고 에이전트 서브넷(`10.200.1.0/27`)의 UDR Next Hop을 각 허브 방화벽 사설 IP(`10.210.1.4`,
-  `10.220.1.4`, `10.230.1.4`)로 지정하자, 에이전트 컨테이너에서 3개 허브의 Private AKS
-  API 서버(`10.210.2.4:443`, `10.220.2.4:443`, `10.230.2.4:443`)로의 요청이 모두 방화벽
-  `FORWARD` 체인을 통과해 왕복 **3.2~3.8ms**에 응답했습니다.
-- 컨트롤 플레인(ARM Resource Graph)만으로는 10개 클러스터의 현재 버전과 프로비저닝 상태만
-  보이고, 실제 업그레이드를 가로막는 `PodDisruptionBudget`(` disruptionsAllowed: 0`),
-  `CrashLoopBackOff`, `ImagePullBackOff`, `Pending` 파드는 데이터 플레인(`kubectl`)을
-  조인해야만 드러났습니다.
-- 에이전트 채팅 응답 지연을 유발하던 N+1 CLI/kubectl 호출과 Python 도구 출력 앞부분 잘림(Head-Truncation)을
-  집계형 Python 도구(`evaluate_aks_upgrade_preflight`, `verify_multihub_firewall_route`)와
-  단계 분리형 스킬(`private-aks-upgrade-preflight`)로 개선해, 대화 턴당 소요 시간을 기존
-  **218~565초(3.6~9.4분)**에서 **21.2~96.4초(평균 85% 단축)**로 줄였습니다.
-- `PreToolUse` 훅(`pre_kubectl_mutation_guard`)을 연결해 진단 중 `kubectl delete`·`drain`·`cordon`이나
-  `az aks upgrade` 같은 변경 명령이 실행되기 전에 도구가 차단(exit code `2`)하는 것을 확인했습니다.
+- 에이전트 위임 서브넷(`10.42.4.0/24`)의 UDR Next Hop을 허브 방화벽으로 지정하고 DNS Private
+  Resolver(`10.232.2.4`)에 각 Private AKS의 `*.privatelink.eastus2.azmk8s.io` 사설 DNS 영역을
+  연결하자, 에이전트 샌드박스에서 다중 허브 방화벽을 경유해 Private AKS API 서버(`:443`)까지
+  단일 홉으로 도달했습니다.
+- `check-aks-eos-release-calendar` 도구가 Microsoft Learn 공식 릴리스 캘린더와 실시간 ARM 인벤토리를
+  대조해 향후 4개월(월 단위 말일 기준, `2026-11` 기준 `2027-03-31`까지) 이내 EOS가 도래하는
+  `aks-priv-02`(`1.35.9`, Standard, `2027-03-31` 만료)만 업그레이드 대상으로 정확히 선별하고,
+  LTS 플랜이 적용된 `aks-priv-03`(`1.34.12`, LTS 만료 `2027-11-30`, 잔여 12개월)과 `aks-priv-01`(`1.36.4`,
+  Standard 만료 `2027-06-30`, 잔여 7개월)은 대상에서 제외했습니다.
+- `evaluate-aks-upgrade-preflight` 도구가 컨트롤 플레인(ARM)과 데이터 플레인(Kubernetes REST API)을
+  결합해 **9대 업그레이드 사전 점검**(서브넷 잔여 IP, UAMI 권한, 비정상·단일 파드, 로컬 스토리지,
+  스케줄링 제약, PDB 드레인 차단, 지원 중단 API, Graceful Shutdown, Defender 삭제된 워크스페이스 참조)을
+  단일 호출로 평가하고, `ensure_ascii=False` 직렬화로 한글 유니코드 6배 팽창(`\uXXXX`)과 앞부분
+  잘림(Head-Truncation)을 방지했습니다.
+- 에이전트가 작업 디렉터리(`./aks-upgrade-notice.md`)에 생성한 5개 섹션 고객 안내문은 채팅 화면의
+  `[📥 aks-upgrade-notice.md 파일 다운로드](/api/files/aks-upgrade-notice.md)` 링크를 통해 브라우저에서
+  원클릭으로 내려받을 수 있으며, **고급 사용 권한(`Allow` / `Ask` / `Deny`)** 승인 후 파드 장애와
+  단일 레플리카 결함을 즉시 복구하고 해당 항목만 부분 재검증(`check_items="3,7,8"`)해 `PASS` 전환을
+  확인했습니다.
 
-## 멀티 허브 방화벽과 사설 DNS를 통과해 10개 Private AKS에 도달한다
+## 멀티 허브 방화벽과 사설 DNS를 통과해 Private AKS 데이터 플레인에 도달한다
 
-![멀티 허브 NVA 방화벽과 Private DNS Zone을 거쳐 3개 허브의 Private AKS 클러스터 10대를 점검하는 아키텍처](images/multihub-aks-architecture.svg)
+![멀티 허브 방화벽과 Private DNS Zone을 거쳐 3개 허브의 Private AKS 클러스터를 점검하는 아키텍처](images/multihub-aks-architecture.svg)
 
 Azure SRE Agent를 **Azure VNet 모드**로 배포하면 에이전트의 추론 엔진과 Python·CLI 실행
-샌드박스는 `Microsoft.App/environments`로 위임된 전용 서브넷(`10.200.1.0/27`) 안에서
-실행됩니다. 다른 허브 VNet에 있는 Private AKS API 서버로 패킷이 흘러가고 방화벽 감사 로그에
-기록되려면 네 가지 네트워크 조건이 동시에 맞아야 합니다.
+샌드박스는 `Microsoft.App/environments`로 위임된 전용 서브넷(`10.42.4.0/24`) 안에서 실행됩니다.
+다른 허브 VNet에 있는 Private AKS API 서버로 패킷이 흘러가고 방화벽 감사 로그에 기록되려면
+네 가지 네트워크·권한 조건이 동시에 맞아야 합니다.
 
-1. **VNet 피어링과 사설 DNS 영역 연결:** 각 Private AKS가 만든
-   `*.privatelink.koreacentral.azmk8s.io` 사설 DNS 영역에 SRE Agent VNet의 Virtual Network
-   Link를 추가하고, SRE Agent 네트워크 제어에서 **Use VNet private DNS**를 켭니다.
-2. **`*.azmk8s.io` 기본 우회(Bypass) 제거:** SRE Agent VNet 통합의 기본 우회 목록에
-   `*.azmk8s.io`가 남아 있으면 요청이 사용자 VNet과 방화벽을 건너뛰고 플랫폼 경로로
-   빠집니다. 방화벽 경유를 강제하려면 우회 목록에서 `*.azmk8s.io`를 제거합니다.
-3. **Private Endpoint 서브넷 정책 활성화:** Azure는 기본적으로 Private Endpoint로 향하는
-   트래픽에 출발지 UDR과 NSG를 건너뜁니다. 타깃 AKS의 `snet-aks-pe` 서브넷에서
-   `privateEndpointNetworkPolicies: Enabled`를 설정해야 에이전트 서브넷의 UDR(`VirtualAppliance` →
-   각 허브 방화벽 IP)이 실제로 적용됩니다.
+1. **사설 DNS 영역 연결과 DNS Private Resolver 지정:** 각 Private AKS가 생성한
+   `*.privatelink.<region>.azmk8s.io` 사설 DNS 영역에 DNS VNet과 SRE Agent VNet의 Virtual
+   Network Link를 추가하고, SRE Agent 네트워크 제어에서 **Use VNet private DNS**를 켭니다.
+2. **`*.azmk8s.io` 기본 우회(Bypass) 제거:** SRE Agent VNet 통합의 `allowedHosts` 목록에
+   `*.azmk8s.io`가 남아 있으면 요청이 사용자 VNet과 방화벽을 건너뛰고 공용 플랫폼 경로로
+   빠집니다. 사설 라우팅을 강제하려면 `allowedHosts`에서 `*.azmk8s.io`를 제거합니다.
+3. **Private Endpoint 서브넷 정책 활성화:** Private Endpoint가 배치된 서브넷에서
+   `privateEndpointNetworkPolicies: Enabled`를 설정해야 출발지 UDR(`VirtualAppliance` →
+   허브 방화벽 사설 IP)이 건너뛰어지지 않고 방화벽 체인을 통과합니다.
 4. **컨트롤 플레인과 데이터 플레인 RBAC 분리 부여:** 에이전트 관리 ID에 ARM 범위의 `Reader`,
    `Azure Kubernetes Service Cluster User Role`뿐 아니라 Kubernetes 데이터 플레인(`dataActions`)을
-   허용하는 `Azure Kubernetes Service RBAC Reader`를 함께 부여해야 `kubectl get pods,events,pdb`가
-   `403 Forbidden` 없이 실행됩니다.
+   허용하는 `Azure Kubernetes Service RBAC Reader`(진단용) 및 승인 후 복구용 역할(`Contributor`,
+   `Azure Kubernetes Service RBAC Cluster Admin`)을 부여해야 `403 Forbidden` 없이 조회와 복구가
+   실행됩니다.
 
-포털의 **Agent canvas**에서도 에이전트가 멀티 허브 리소스 그룹과 AKS 플릿, 전용 지식 문서,
-스킬 및 Python 도구에 연결된 구성을 한눈에 확인할 수 있습니다.
+포털의 **하위 에이전트 작성기(Subagent builder)** 에서도 전담 에이전트(`aks_upgrade_specialist`)에
+지침, 스킬(`aks-eol-notice-and-history-workflow`), MCP 도구(`mslearn-mcp`, `azure-arg-mcp`) 및
+Python 도구가 결합된 구성을 확인할 수 있습니다.
 
-![SRE Agent 포털의 Agent canvas 화면. 리소스 그룹, 지식 베이스, 스킬, 사용자 지정 도구의 연결 구조를 보여 준다](images/agent-canvas-topology.png)
+![SRE Agent 포털의 하위 에이전트 편집기 화면. aks_upgrade_specialist에 지침, 스킬, MCP 커넥터와 Python 도구가 연결되어 있다](images/agent-canvas-topology.png)
 
-네트워크 우회 제거, UDR 라우팅, 서브넷 정책과 RBAC 역할의 세부 설정은 샘플의
+네트워크 우회 제거, UDR 라우팅, Grafana 대시보드 및 포털 UI Step 00~14 상세 설정 절차는 샘플의
 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/private-aks-fleet-lab/CONFIGURATION.md)에 정리했습니다.
 
 ## 컨트롤 플레인 조회와 데이터 플레인 조회는 보는 범위가 다르다
 
 ![컨트롤 플레인(ARM API)과 데이터 플레인(Private Endpoint TCP 443)이 각각 조회하는 정보 비교](images/controlplane-vs-dataplane-flow.svg)
 
-Private AKS 운영에서 가장 흔한 착오는 `az aks show`가 `Succeeded`를 반환하면 클러스터와
-워크로드도 정상이라고 판단하는 것입니다. 두 경로가 실제로 볼 수 있는 범위는 다음과 같이
+Private AKS 운영에서 가장 흔한 착오는 `az aks show`가 `Succeeded`를 반환하면 클러스터도
+즉시 업그레이드할 수 있다고 판단하는 것입니다. 두 경로가 실제로 볼 수 있는 범위는 다음과 같이
 나뉩니다.
 
-| 구분 | 컨트롤 플레인 (ARM / Resource Graph) | 데이터 플레인 (Private Endpoint / `kubectl`) |
+| 구분 | 컨트롤 플레인 (ARM / Resource Graph) | 데이터 플레인 (Private Endpoint / K8s REST API · `kubectl`) |
 | --- | --- | --- |
-| **통신 경로** | `management.azure.com` (공인/플랫폼 경로) | `*.privatelink.<region>.azmk8s.io:443` (VNet · NVA 방화벽 · Private Endpoint) |
-| **조회 가능 정보** | 클러스터·노드풀 버전, VM SKU, `maxSurge`, `provisioningState`, 업그레이드 가능 버전 | 네임스페이스별 파드 상태(`CrashLoopBackOff`, `Pending`), `PodDisruptionBudget`, `Warning` 이벤트, 컨테이너 재시작 사유 |
-| **확인 불가능 정보** | 파드 기동 실패, 이미지 풀 오류, PDB 드레인 차단(`disruptionsAllowed: 0`) | Azure 리소스 수준 할당량, 구독 범위 업그레이드 카탈로그 |
+| **통신 경로** | `management.azure.com` (공인/플랫폼 경로) | `*.privatelink.<region>.azmk8s.io:443` (VNet · 허브 방화벽 · Private Endpoint) |
+| **조회 가능 정보** | 클러스터·노드풀 버전, 지원 플랜(`SupportPlan`), 서브넷 잔여 IP, UAMI 권한, Defender 삭제된 LAW 연결 여부 | 비정상 파드(`CrashLoopBackOff`, `ImagePullBackOff`), 단일 파드(Single Replica), `emptyDir`/`local` PV, `nodeSelector` 불일치, PDB(`disruptionsAllowed: 0`), `preStop`/Probe 누락 |
+| **확인 불가능 정보** | 파드 기동 실패, 이미지 풀 오류, PDB 드레인 차단, 로컬 볼륨 유실 위험 | Azure 서브넷 IP 고갈 여부, 구독 범위 업그레이드 카탈로그, UAMI 역할 할당 |
 | **필요 RBAC** | `Reader` (`actions`) | `Azure Kubernetes Service Cluster User Role` + `Azure Kubernetes Service RBAC Reader` (`dataActions`) |
 
-따라서 업그레이드 사전 점검과 장애 진단은 반드시 두 평면의 데이터를 한 번에 결합해야 합니다.
+따라서 안전한 업그레이드 사전 점검은 반드시 두 평면의 데이터를 한 번에 결합해야 합니다.
 
-## 집계형 Python 도구와 단계 분리형 스킬로 대화 응답 시간을 30~60초로 단축한다
+## 6대 네이티브 기능을 결합해 조회 지연·유니코드 잘림·파일 다운로드 한계를 해결한다
 
-![업그레이드 사전 점검 파이프라인과 7대 감점 항목 채점 구조](images/upgrade-preflight-pipeline.svg)
+![업그레이드 사전 점검 파이프라인과 9대 항목 평가 구조](images/upgrade-preflight-pipeline.svg)
 
-에이전트가 채팅 한 턴에서 10개 클러스터에 대해 `az aks get-upgrades`와 `kubectl get`을
-개별 호출(N+1 패턴)하거나, 한 프롬프트에서 버전 표·릴리스 노트·사전 점수·파드 진단을 모두
-요구하면 응답 시간이 4~10분까지 늘어납니다. 또한 SRE Agent의 Python 도구 실행기는 표준 출력이
-약 1.5~2KB를 넘으면 **앞부분을 잘라내므로(`...[truncated]...`)**, 도구 출력 상단에 있던 첫 번째
-클러스터 요약이 잘려 나가면 에이전트가 부족한 정보를 메우려고 느린 CLI 재조회를 반복합니다.
+모든 작업을 단일 Python 스크립트나 반복적인 `kubectl` 호출로만 처리하면 턴당 4~10분이 걸리고,
+SRE Agent Python 실행기의 `json.dumps(result)` 기본 직렬화(`ensure_ascii=True`) 때문에 한글
+1글자가 `\uXXXX` 6글자로 팽창해 4,095자 버퍼 제한에서 앞부분이 잘려 나갑니다. 또한 `/tmp/`에
+저장한 마크다운 파일은 채팅 UI에서 내려받을 수 없습니다.
 
-이 실습은 두 가지 Python 도구와 하나의 스킬, 하나의 `PreToolUse` 훅으로 이 병목을 제거합니다.
+이 실습은 SRE Agent의 6대 네이티브 기능을 역할별로 분담해 이 문제들을 해결합니다.
 
-| 구성 요소 | 종류 | 역할과 지연 단축 원리 |
+| 구성 요소 | 종류 | 역할과 핵심 설계 원리 |
 | --- | --- | --- |
-| `verify_multihub_firewall_route` | Python 도구 (`PythonFunctionTool`) | 3개 허브 Private AKS API 서버로 TCP 443 프로브를 보내고 NVA 방화벽의 `iptables FORWARD` 패킷 카운터 증가분(`delta > 0`)을 한 번에 검증 |
-| `evaluate_aks_upgrade_preflight` | Python 도구 (`PythonFunctionTool`) | 7대 사전 점검 항목(버전 갭, 프로비저닝 상태, 잔여 용량/서지, 비정상 파드, PDB 차단, `Warning` 이벤트, 만료 임박도)을 채점해 **900자 이하 압축 JSON**으로 반환 |
-| `private-aks-upgrade-preflight` | 스킬 (`Skill`) | 질문을 Step 1(버전·수명주기 표), Step 2(릴리스 노트·지원 종료 영향), Step 3(7대 사전 점검 점수), 파드 장애 진단으로 분리하고 도구 출력 재조회를 금지 |
-| `pre_kubectl_mutation_guard` | 훅 (`PreToolUse`) | `Bash`·`AzureCli` 호출 전 명령 문자열을 검사해 `kubectl delete/drain/cordon/apply` 및 `az aks upgrade/scale/delete`를 즉시 차단(exit code `2`) |
+| `SRE-AKS-Management` & `azure-arg-mcp` | Grafana 대시보드 & Live Report (`npx @azure/mcp`) | 12개 표준 컬럼(`mgmtName`, `ServiceCode`, `ServiceName`, `ServiceGrade`, `SupportPlan`, `PricingTier` 등) ARG 인벤토리를 **0 AAU**로 실시간 렌더링 |
+| `check-aks-eos-release-calendar` | 핵심 Python 도구 #1 (`PythonFunctionTool`) | MS Learn 공식 릴리스 캘린더를 스크래핑하고 **월 단위(`cal_diff <= months_ahead`)** 및 지원 플랜(`Standard`는 Standard EOL, `LTS`는 LTS EOL) 기준으로 업그레이드 대상만 정확히 필터링 |
+| `evaluate-aks-upgrade-preflight` | 핵심 Python 도구 #2 (`PythonFunctionTool`) | ARM API와 Private AKS K8s REST API를 결합해 **9대 사전 점검**을 수행. `check_items="ALL"` 전체 점검과 복구 후 특정 항목(`"1,4,9"`, `"3,7,8"`) 부분 재검증을 모두 지원하며 `ensure_ascii=False`로 900자 이하 출력 보장 |
+| `mslearn-mcp` | 원격 MCP 커넥터 (`https://learn.microsoft.com/api/mcp`) | 타깃 마이너 버전(`1.35 → 1.36`)의 공식 릴리스 노트와 주요 변경 사항을 실시간 조회 |
+| `aks-eol-notice-and-history-workflow` + 지식 문서 3종 | 스킬(`Skill`) + 지식 메모리(`Memory`) | 단순 조회 3건 이하는 내장 `RunKubectlReadCommand`, 다중 값 4건 이상은 Python REST API로 분기하고, `./aks-upgrade-notice.md`(`os.getcwd()`)에 5개 섹션 고객 안내문을 저장해 `/api/files/aks-upgrade-notice.md` 원클릭 다운로드 링크 제공 |
+| `Tools > Advanced permissions` & `pre_kubectl_mutation_guard` | 고급 사용 권한(`Allow`/`Ask`/`Deny`) + `PreToolUse` 훅 | 조회 명령은 자동 실행(`Allow`), 파드 이미지·레플리카·워크스페이스 복구는 관리자 1-Click 승인(`Ask`), 클러스터·노드·네임스페이스 삭제는 원천 차단(`Deny`) |
 
-포털의 **빌드 + 설정 > 도구 > 사용자 지정 도구**와 **기술(Skills)** 화면에서 등록된 도구와
-스킬을 확인할 수 있습니다.
+포털의 **도구 > 고급 사용 권한(Advanced permissions)** 과 **기술 작성기(Skill builder)** 화면에서
+거버넌스 규칙과 스킬 절차를 확인할 수 있습니다.
 
-![SRE Agent 포털의 사용자 지정 도구 화면. evaluate_aks_upgrade_preflight와 verify_multihub_firewall_route 등 Python 도구가 활성화되어 있다](images/agent-custom-tools.png)
+![SRE Agent 포털의 고급 사용 권한 화면. Allow, Ask, Deny 규칙으로 읽기 자동 실행과 복구 승인 및 파괴적 명령 차단이 구성되어 있다](images/agent-custom-tools.png)
 
-![SRE Agent 포털의 기술 편집기 화면. private-aks-upgrade-preflight 기술에 버전 조회, 릴리스 노트 대조, 7대 사전 점검 절차와 가드레일이 정의되어 있다](images/agent-skill-builder.png)
+![SRE Agent 포털의 기술 작성기 화면. aks-eol-notice-and-history-workflow 스킬에 EOS 조회, 9대 사전 점검, 고객 안내문 생성 및 파일 다운로드 절차가 정의되어 있다](images/agent-skill-builder.png)
 
-### 최적화 전후 실측 응답 시간 비교 (Korea Central, 2026-10-31)
+### 내장 `RunKubectlReadCommand` 상속과 작업 디렉터리(`./`) 파일 다운로드 원리
 
-| 점검 단계 | 최적화 전 (N+1 개별 호출 · 단일 장문 프롬프트) | 최적화 후 (집계형 Python 도구 · 단계 분리) | 단축률 |
-| --- | --- | --- | --- |
-| **Step 1: 10개 클러스터 버전·EOL 요약 표** | 218.5 ~ 246.2초 (23 메시지) | **24.6초** (7 메시지) | **-89%** |
-| **Step 2: 타깃 버전(1.37) 주요 변경점·영향 대조** | 156.2초 (13 메시지) | **21.2초** (5 메시지) | **-86%** |
-| **Step 3: 7대 항목 업그레이드 사전 점수(`0~100`)** | 249.6 ~ 389.9초 (27~34 메시지) | **96.4초** (13 메시지, 3개 허브 실조회 포함) | **-62% ~ -75%** |
-| **파드 장애 및 PDB 드레인 차단 원인 진단** | 565.3초 (31 메시지) | **31.1초** (7 메시지) | **-94%** |
+- **서브에이전트의 코어 런타임 도구 상속:** 포털 UI의 `Choose tools` 팝업은 `stableOnly=true`
+  도구만 표시하므로, 코어 런타임 도구인 `RunKubectlReadCommand`, `RunKubectlWriteCommand`,
+  `RunInTerminal`은 목록에 나타나지 않습니다. 서브에이전트 `Form` 탭에서 `Tools`를 비워 두어
+  글로벌 설정을 자동 상속받거나 `YAML` 탭에서 명시적으로 지정하면 정상 호출됩니다.
+- **`/api/files/` 원클릭 다운로드:** 에이전트의 터미널과 도구는 스레드 전용 폴더인
+  `tmp/ThreadFiles/<threadId>`(`os.getcwd()`)에서 실행됩니다. 파일을 `/tmp/`가 아닌 현재 작업
+  디렉터리(`./aks-upgrade-notice.md`)에 저장하고 채팅 응답에
+  `[📥 aks-upgrade-notice.md 파일 다운로드](/api/files/aks-upgrade-notice.md)` 링크를 출력하면,
+  웹 포털 프런트엔드가 자동으로 `<threadId>`와 Bearer 토큰을 주입해 즉시 파일을 내려받습니다.
 
 ## 구독 권한과 로컬 CLI 도구를 준비한다
 
-- Azure SRE Agent를 배포할 수 있는 구독(Korea Central 지원).
-- 리소스 그룹, VNet 피어링, 사설 DNS 영역 연결, 역할 할당을 만들 수 있는 권한(`Owner` 또는
+- Azure SRE Agent를 배포할 수 있는 구독(Korea Central 및 East US 2 지원).
+- 리소스 그룹, VNet·방화벽 라우팅, 사설 DNS 영역 연결, 역할 할당을 만들 수 있는 권한(`Owner` 또는
   `Contributor` + `User Access Administrator`).
 - 로컬 환경의 Azure CLI(`az`), `kubectl`, `jq`, `curl`, `python3`(3.11 이상).
-- 데이터 평면 API(`https://azuresre.dev`) 토큰을 `az account get-access-token`으로 발급받을 수
-  있어야 합니다.
+- 데이터 평면 API(`https://azuresre.ai` 또는 `https://azuresre.dev`) 토큰을
+  `az account get-access-token`으로 발급받을 수 있어야 합니다.
 
-## 시간 단위로 과금되는 AKS 노드·방화벽 VM과 에이전트 사용량을 확인한다
+## 시간 단위로 과금되는 AKS 노드·방화벽과 에이전트 사용량을 확인한다
 
 | 리소스 | 구성 수량 | 과금 특성 |
 | --- | --- | --- |
-| Private AKS 클러스터 10대 (`Standard_B2s` 시스템 노드) | 10개 클러스터 | VM 실행 시간 및 디스크 시간 단위 과금(무료 컨트롤 플레인 티어 사용 시) |
-| 허브 NVA 방화벽 Linux VM 3대 (`Standard_B2s`) | 3대 (`fw-ktc-hub-01` ~ `03`) | VM 실행 시간 단위 과금 |
-| VNet 피어링 및 Private Endpoint | 3개 허브 피어링 + AKS API PE | 처리된 트래픽(GB) 및 Private Endpoint 시간 단위 과금 |
-| Azure SRE Agent | 1개 에이전트 | Azure Agent Unit(AAU) 사용량 과금 |
+| Private AKS 클러스터 3대 (`Standard` 2대, `Premium` LTS 1대) | 3개 클러스터 (`aks-priv-01` ~ `03`) | 컨트롤 플레인 티어(Standard / Premium LTS) 및 VM 노드(`Standard_D2s_v7`) 시간 단위 과금 |
+| 다중 허브 방화벽 및 DNS Private Resolver | 허브 방화벽 + DNS Resolver | 시간 단위 및 처리 트래픽(GB) 단위 과금 |
+| Azure Portal 공유 대시보드 (`SRE-AKS-Management`) 및 Live Report | 대시보드 1개 + Live Report 1개 | ARG 인벤토리 조회는 **0 AAU** (추가 과금 없음) |
+| Azure SRE Agent | 1개 에이전트 (`sre-aks-fleet-agent`) | 채팅·자동화 실행 시 Azure Agent Unit(AAU) 사용량 과금 |
 
 실습을 마치면 비용이 계속 발생하지 않도록 반드시 [리소스 정리](#lab-cleanup)를 실행합니다.
 
 ## deploy.sh로 멀티 허브 인프라와 에이전트 도구를 배포하고 결함을 주입한다
 
-실행 가능한 전체 코드와 Bicep 템플릿, 도구·스킬·훅 정의는
+실행 가능한 전체 코드와 Bicep 템플릿, 도구·스킬·지식 문서·Grafana 대시보드 정의는
 [samples/private-aks-fleet-lab](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/private-aks-fleet-lab)에
-있습니다.
+있습니다. 포털 UI에서 Step 00부터 Step 14까지 직접 클릭하며 구성하는 상세 가이드는
+[CONFIGURATION.md](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/private-aks-fleet-lab/CONFIGURATION.md)를
+참조합니다.
 
 ```bash
 cd docs/services/azure-monitor/azure-sre-agent/samples/private-aks-fleet-lab
 
-# 1. 단위 테스트 실행 (압축 출력 길이, 7대 점수 판정, PreToolUse 훅 차단 검증)
+# 1. 단위 테스트 실행 (월 단위 EOS/LTS 판정, 9대 사전 점검 압축 출력, PreToolUse 훅 차단 검증)
 python3 -m unittest discover -s tests -v
 
 # 2. 멀티 허브 VNet·방화벽·Private AKS 인프라 배포 및 에이전트 도구·스킬·훅 등록
-./scripts/deploy.sh rg-ktc-private-aks-fleet koreacentral
+./scripts/deploy.sh rg-private-aks-fleet koreacentral eastus2
 
 # 3. 이미 배포된 에이전트에 도구·스킬·지식 문서만 다시 반영할 때
 ./scripts/apply-agent-config.sh
 ```
 
-배포가 끝나면 허브 1~3의 대조군 클러스터에 세 가지 대표 장애 시나리오를 심습니다.
+배포가 끝나면 대상 클러스터에 사전 점검 결함 시나리오를 심습니다.
 
 ```bash
 ./scripts/seed-faults.sh seed
 ```
 
-`seed-faults.sh`가 주입하는 시나리오는 다음과 같습니다.
+구성된 3대 Private AKS 클러스터와 주입된 시나리오는 다음과 같습니다.
 
-- **`aks-ktc-priv-01` (Hub 1, Kubernetes `1.34.2`):** `payment-prod` 네임스페이스에
-  존재하지 않는 이미지 태그를 참조하는 `payment-gateway`(`ImagePullBackOff`)와 기동 직후
-  종료되는 `ledger-sync-worker`(`CrashLoopBackOff`)를 배포하고, `minAvailable: 2`로
-  고정된 `payment-gateway-pdb`(`disruptionsAllowed: 0`)를 생성해 노드 드레인이 막히도록
-  만듭니다.
-- **`aks-ktc-priv-04` (Hub 2, Kubernetes `1.35.4`):** 노드당 CPU 요청량을 초과하는
-  `batch-scorer` 파드를 배포해 `FailedScheduling`(`0/1 nodes are available: Insufficient cpu`)으로
-  `Pending` 상태가 지속되게 합니다.
-- **`aks-ktc-priv-08` (Hub 3, Kubernetes `1.36.3`):** 모든 워크로드(`Healthy`)와
-  `disruptionsAllowed: 1` 이상의 정상 PDB만 유지해 즉시 업그레이드 가능한 정상 대조군으로
-  둡니다.
+- **`aks-priv-01` (`ENT_Workloads_Prod`, Kubernetes `1.36.4`, `Standard`):**
+  Standard 지원 종료일이 `2027-06-30`(기준월 `2026-11` 대비 잔여 7개월)으로 향후 4개월 이내
+  EOS 대상이 아닌 정상 운영 대조군입니다.
+- **`aks-priv-02` (`ENT_Workloads_Prod_PII`, Kubernetes `1.35.9`, `Standard`):**
+  Standard 지원 종료일이 `2027-03-31`(잔여 4개월, `D-4개월`)로 향후 4개월 이내 EOS 업그레이드
+  대상입니다. 서브넷이 `/27`(여유 IP 부족)로 설정되어 있고, 삭제된 유령 Log Analytics 워크스페이스
+  (`law-sre-deleted-ghost`)가 Defender 프로필에 연결되어 있으며, `prod` 네임스페이스에
+  `CrashLoopBackOff`(`order-processor`), `ImagePullBackOff`(`payment-webhook`), 단일 레플리카
+  (`inventory-api`, `replicas=1`, PDB 미설정) 결함이 주입되어 있습니다.
+- **`aks-priv-03` (`ENT_Workloads_NonProd`, Kubernetes `1.34.12`, `Premium` / `AKSLongTermSupport`):**
+  버전 숫자는 `1.34.12`로 가장 낮지만 **LTS(장기 지원)** 플랜이 활성화되어 있어 실제 지원 종료일이
+  `2027-11-30`(잔여 12개월)이므로 4개월 EOS 대상에서 제외됩니다.
 
-## 4개의 단계별 프롬프트로 버전 조회·릴리스 노트·사전 점수·파드 진단을 수행한다
+## 단계별 프롬프트로 EOS 판별·9대 사전 점검·안내문 다운로드·승인 기반 복구를 수행한다
 
-### Step 1: 10개 클러스터의 현재 버전·업그레이드 경로·GA 지원 종료일 표 조회
+### Step 1: 월 단위(4개월) 및 지원 플랜(Standard 대 LTS) 기준 EOS 대상 클러스터 식별
 
-채팅창을 열고 첫 번째 프롬프트로 전체 플릿의 버전 매트릭스와 지원 종료일(EOL)을 요청합니다.
-
-```text
-private-aks-upgrade-preflight 스킬의 Step 1만 수행해줘.
-rg-ktc-private-aks-fleet 리소스 그룹의 10개 Private AKS 클러스터(aks-ktc-priv-01 ~ 10)에 대해
-현재 컨트롤 플레인/노드풀 버전, 사용 가능한 업그레이드 버전, GA 지원 종료일(EOL)과
-지원 종료 임박 여부를 마크다운 표 하나로 요약해줘.
-```
-
-![SRE Agent 채팅 Step 1 화면. 10개 Private AKS 클러스터의 허브 위치, 현재 버전, 업그레이드 가능 버전, GA 지원 종료일과 상태를 한 표로 보여 준다](images/chat-step1-version-matrix.png)
-
-에이전트는 개별 클러스터에 `az aks show`를 10번 호출하는 대신 단일 배치 조회와 지식 문서
-(`aks-upgrade-and-eol-policy.md`)를 결합해 **24.6초** 만에 10개 클러스터의 현황을 정리합니다.
-특히 `1.34.2`를 실행 중인 `aks-ktc-priv-01 ~ 03`은 GA 지원 종료(2026년 11월)가 임박해
-순차 업그레이드(`1.34 → 1.35 → 1.36`)가 시급하다고 분류합니다.
-
-### Step 2: 타깃 버전(1.36 / 1.37) 주요 변경점과 클러스터 영향도 대조
-
-두 번째 프롬프트로 업그레이드 시 주의해야 할 브레이킹 체인지와 운영 영향을 확인합니다.
+채팅창을 열고 첫 번째 프롬프트로 `/agent aks_upgrade_specialist`를 호출해 향후 4개월(월 단위
+말일 기준) 이내 지원 종료 예정인 클러스터를 식별합니다.
 
 ```text
-private-aks-upgrade-preflight 스킬의 Step 2를 수행해줘.
-현재 1.34~1.36 클러스터들을 1.36 및 1.37로 업그레이드할 때 반드시 확인해야 할
-AKS 주요 변경 사항(LocalDNS 조건부 활성화, Managed Prometheus 시크릿 접근 범위 변경,
-지원 종료 후 플랫폼 자동 업그레이드 정책)과 우리 멀티 허브 Private AKS 환경에 미치는 영향을 표로 정리해줘.
+/agent aks_upgrade_specialist check-aks-eos-release-calendar 도구를 months_ahead=4로 실행하여
+향후 4개월(월 단위 말일 기준) 이내 지원 종료 예정인 Private AKS 클러스터 현황과
+SupportPlan(Standard vs LTS)별 판정 결과를 표로 정리해 줘.
 ```
 
-![SRE Agent 채팅 Step 2 화면. Kubernetes 1.36 및 1.37 업그레이드 시 확인해야 할 LocalDNS, Prometheus, 순차 마이너 업그레이드 규칙과 영향도를 정리해 보여 준다](images/chat-step2-release-notes.png)
+![SRE Agent 채팅 Step 1 화면. check-aks-eos-release-calendar 도구가 3대 Private AKS 클러스터의 버전, 지원 플랜, 만료일, 잔여 개월 수를 비교해 aks-priv-02만 업그레이드 대상으로 선별한다](images/chat-step1-version-matrix.png)
 
-에이전트는 외부 문서를 끝없이 검색하지 않고 검증된 지식 베이스를 바탕으로 **21.2초** 만에
-세 가지 핵심 변경점을 짚어냅니다.
+에이전트는 `check-aks-eos-release-calendar` 도구를 실행해 일(day) 단위가 아닌 **월 단위(`cal_diff <= 4`)** 로
+만료 시점을 계산합니다. 그 결과 버전 숫자가 낮은 `aks-priv-03`(`1.34.12`)은 `LTS (Premium)` 만료일
+(`2027-11-30`, 잔여 12개월)을 적용해 제외하고, Standard 만료일(`2027-03-31`, 잔여 4개월)이 도래하는
+`aks-priv-02`(`1.35.9 → 1.36`) 1대만 업그레이드 대상으로 정확히 추려냅니다.
 
-1. **Kubernetes 1.37 표준 노드풀의 조건부 LocalDNS 활성화:** 명시적 LocalDNS 프로필이 없는
-   표준 노드풀은 1.37부터 조건부로 LocalDNS가 켜지며, `PreferUDP`로 질의 후 실패 시
-   **TCP 53**으로 폴백하므로 멀티 허브 방화벽과 사용자 지정 DNS에서 UDP 53뿐 아니라
-   **TCP 53**도 함께 열려 있어야 합니다.
-2. **Managed Prometheus(`ama-metrics`) Secret 접근 범위 축소:** 1.37부터 `PodMonitor`와
-   `ServiceMonitor`가 다른 네임스페이스의 Secret을 직접 읽지 못하므로 모니터링 인증 시크릿을
-   동일 네임스페이스로 배치해야 합니다.
-3. **마이너 버전 건너뛰기 불가 및 지원 종료 후 자동 업그레이드:** AKS는 마이너 버전을 한 번에
-   두 단계 이상 건너뛸 수 없으며(`1.34 → 1.36` 직행 불가), 2027년 6월 1일부터는 지원 종료 후
-   60일 유예 기간이 지나면 플랫폼이 자동으로 업그레이드를 시작합니다.
+### Step 2: 타깃 버전(1.36) 릴리스 노트 조회와 9대 업그레이드 사전 점검 실행
 
-### Step 3: 3개 허브 대표 클러스터의 7대 항목 업그레이드 사전 점수(0~100점) 산정
-
-세 번째 프롬프트로 컨트롤 플레인과 데이터 플레인을 결합한 정량 사전 점검을 실행합니다.
+두 번째 프롬프트로 EOS 대상인 `aks-priv-02`에 대해 `mslearn-mcp`로 Kubernetes `1.36` 주요 변경사항을
+조회하고, `evaluate-aks-upgrade-preflight` 도구로 9대 사전 점검을 수행한 뒤 고객 안내문(`aks-upgrade-notice.md`)과
+다운로드 링크를 생성합니다.
 
 ```text
-private-aks-upgrade-preflight 스킬의 Step 3을 수행해줘.
-verify_multihub_firewall_route 와 evaluate_aks_upgrade_preflight 도구를 호출해서
-3개 허브 대표 클러스터(aks-ktc-priv-01, aks-ktc-priv-04, aks-ktc-priv-08)의
-방화벽 경유 연결 상태와 7대 항목 업그레이드 사전 점수(100점 만점), 감점 사유,
-최종 판정(GO / CAUTION / NO-GO)을 표로 보고해줘.
+위에서 도출된 EOS 대상 클러스터(aks-priv-02, 1.35.9 -> 1.36)에 대해 mslearn-mcp로
+Kubernetes 1.36 릴리스 노트 주요 변경사항을 확인하고, evaluate-aks-upgrade-preflight 도구
+(cluster_filter="aks-priv-02", target_version="1.36", check_items="ALL")로 9대 사전 점검을
+수행한 뒤, aks-eol-notice-and-history-workflow 스킬 양식에 맞춰 고객 안내문(aks-upgrade-notice.md)과
+다운로드 링크를 생성해 줘.
 ```
 
-![SRE Agent 채팅 Step 3 화면. 3개 허브 클러스터의 7대 항목 사전 점수와 NO-GO, CAUTION, GO 판정 및 감점 근거를 보여 준다](images/chat-step3-preflight-score.png)
+![SRE Agent 채팅 Step 2 화면. mslearn-mcp와 evaluate-aks-upgrade-preflight 도구를 호출해 1.36 주요 변경사항과 aks-priv-02의 9대 사전 점검 결과를 분석한다](images/chat-step2-release-notes.png)
 
-에이전트는 `verify_multihub_firewall_route`로 3개 허브 방화벽의 `FORWARD` 패킷 증가를
-확인한 뒤, `evaluate_aks_upgrade_preflight`가 반환한 압축 JSON으로 다음 판정을 제시합니다.
+에이전트는 컨트롤 플레인과 데이터 플레인을 한 번에 스캔해 `aks-priv-02`의 9대 사전 점검 항목 중
+다음 4개 항목에서 `FAIL`(`WARN`)을 검출합니다.
 
-| 클러스터 (허브 / 현재 → 타깃) | 사전 점수 | 판정 | 주요 감점 사유 및 조치 권고 |
-| --- | --- | --- | --- |
-| `aks-ktc-priv-01` (Hub 1 / `1.34.2 → 1.35.4`) | **45 / 100** | **NO-GO** | 비정상 파드 2개(`-20`), `payment-gateway-pdb`의 `disruptionsAllowed: 0`(`-20`), `Warning` 이벤트 다발(`-10`), `1.34` 지원 종료 임박(`-5`). PDB와 파드 결함 해소 전 업그레이드 금지 |
-| `aks-ktc-priv-04` (Hub 2 / `1.35.4 → 1.36.3`) | **72 / 100** | **CAUTION** | `batch-scorer` CPU 부족 `Pending` 파드 1개(`-10`), 단일 노드풀 `maxSurge: 1` 여유분 주의(`-8`), `FailedScheduling` 이벤트(`-10`). 임시 파드 정리 또는 노드풀 여유 확보 후 진행 |
-| `aks-ktc-priv-08` (Hub 3 / `1.36.3 → 1.37.2`) | **95 / 100** | **GO** | 비정상 파드 0건, PDB 드레인 차단 0건, 방화벽 경유 RTT `3.6ms`. 1.37 LocalDNS용 TCP 53 허용만 유지하면 즉시 업그레이드 가능 |
+| 점검 번호 및 항목 | 판정 | 검출된 상세 원인 (`aks-priv-02`) |
+| --- | --- | --- |
+| **#1 서브넷 잔여 IP (`maxSurge`)** | **FAIL** | `/27` 서브넷(가용 27 IP)으로 노드풀 업그레이드 서지 노드 생성 시 `SubnetIsFull` 위험 |
+| **#3 비정상·단일 파드** | **FAIL** | `prod/order-processor`(`CrashLoopBackOff`), `prod/payment-webhook`(`ImagePullBackOff`), `prod/inventory-api`(`replicas=1`) 검출 |
+| **#6 PDB 드레인 차단 및 미설정** | **FAIL** | `prod/inventory-api` 단일 레플리카 워크로드에 PDB 미설정 |
+| **#9 삭제된 Log Analytics 워크스페이스 연결** | **FAIL** | Defender 프로필이 삭제된 `law-sre-deleted-ghost` 워크스페이스를 참조하여 `WorkspaceResourceNotFound` 발생 위험 |
 
-### Step 4: `NO-GO` 판정 클러스터의 파드 장애 및 드레인 차단 원인 심층 진단
+### Step 3: 5개 섹션 고객 안내문 생성 및 원클릭 마크다운 파일 다운로드
 
-마지막 프롬프트로 `NO-GO` 판정을 받은 `aks-ktc-priv-01`의 구체적인 워크로드 장애 원인을
-조회합니다.
+동일한 응답 하단에서 에이전트는 지식 베이스 템플릿(`aks-eol-notice-template-and-history.md`)에 맞춰
+작성한 5개 섹션 고객 안내문(섹션 5는 실제 업그레이드 대상인 `aks-priv-02`만 포함하며, 서브섹션 5-1에
+9대 사전 점검 상세 표 수록)을 출력하고 `./aks-upgrade-notice.md` 파일 다운로드 링크를 제공합니다.
+
+![SRE Agent 채팅 Step 3 화면. 9대 사전 점검 상세 표가 포함된 고객 안내문과 aks-upgrade-notice.md 원클릭 다운로드 링크를 보여 준다](images/chat-step3-preflight-score.png)
+
+채팅 화면의 `[📥 aks-upgrade-notice.md 파일 다운로드](/api/files/aks-upgrade-notice.md)` 링크를 클릭하면
+세션 작업 디렉터리에 생성된 마크다운 원본 파일이 로컬 PC로 즉시 다운로드됩니다.
+
+### Step 4: 비정상 파드 심층 진단과 승인 기반 즉시 복구 및 부분 재검증
+
+마지막 프롬프트로 `aks-priv-02`에서 검출된 비정상 파드(`CrashLoopBackOff`, `ImagePullBackOff`)와
+단일 레플리카 결함의 원인을 진단하고, 복구 후 점검 항목 `#3, #7, #8`만 빠르게 부분 재검증합니다.
 
 ```text
-aks-ktc-priv-01 클러스터가 왜 NO-GO 판정을 받았는지 데이터 플레인(파드 상태, 최근 이벤트,
-PDB 설정)을 진단해서 근본 원인과 복구 명령 예시를 정리해줘. 클러스터 변경 명령은 실행하지 마.
+사전 점검에서 발견된 aks-priv-02 클러스터의 비정상 파드(CrashLoopBackOff / ImagePullBackOff) 및
+단일 레플리카 원인을 상세 진단하고, 복구 조치를 실행해 정상 Running 상태로 만든 뒤
+evaluate-aks-upgrade-preflight(cluster_filter="aks-priv-02", check_items="3,7,8")로 재검증해 줘.
 ```
 
-![SRE Agent 채팅 파드 장애 진단 화면. payment-gateway의 ImagePullBackOff, ledger-sync-worker의 CrashLoopBackOff, payment-gateway-pdb의 드레인 차단 원인을 진단해 보여 준다](images/chat-pod-diagnostics.png)
+![SRE Agent 채팅 파드 진단 및 복구 화면. 비정상 파드 원인을 진단하고 복구 후 점검 항목 3, 7, 8번이 PASS로 전환된 결과를 보여 준다](images/chat-pod-diagnostics.png)
 
-에이전트는 **31.1초** 만에 세 가지 원인의 인과 관계를 분리해 설명합니다.
+에이전트는 `order-processor`의 비정상 종료 명령(`exit 1`), `payment-webhook`의 존재하지 않는 이미지 태그
+(`nginx:nonexistent-tag-999`), `inventory-api`의 단일 레플리카(`replicas=1`)를 정상 이미지(`nginx:1.25-alpine`)와
+다중 레플리카(`replicas=2`)로 복구한 뒤, `evaluate-aks-upgrade-preflight(check_items="3,7,8")`를 호출해
+워크로드 관련 점검 항목이 모두 `PASS`로 전환된 것을 확인합니다.
 
-1. **`payment-gateway` (`ImagePullBackOff`):** 존재하지 않는 이미지 태그(`v9.9.9-missing-tag`)를
-   지정해 새 레플리카가 기동하지 못하고 `Available` 파드가 1개로 줄어들었습니다.
-2. **`payment-gateway-pdb` (`disruptionsAllowed: 0`):** `minAvailable: 2`로 설정되어 있는데
-   현재 정상 파드가 1개뿐이어서 Kubernetes Eviction API가 모든 노드 드레인을 거부합니다.
-   이 상태에서 AKS 노드풀 업그레이드를 시작하면 `NodeDrainError`로 업그레이드가 멈춥니다.
-3. **`ledger-sync-worker` (`CrashLoopBackOff`, Exit Code `1`):** 필수 시크릿 키 누락으로
-   컨테이너가 기동 직후 종료를 반복(`BackOff` 이벤트 누적)하고 있습니다.
-
-## 방화벽 패킷 카운터·사전 점수·변경 차단 훅이 모두 작동하면 통과한다
+## EOS 필터링·9대 사전 점검·파일 다운로드·권한 가드레일이 모두 작동하면 통과한다
 
 | 검증 항목 | 통과 기준 |
 | --- | --- |
-| 멀티 허브 방화벽 경유 | `verify_multihub_firewall_route` 결과에서 3개 허브 모두 `tcp_443_reachable: true` 및 `firewall_forward_Select_delta > 0` |
-| Private Endpoint 정책 | 3개 허브의 `snet-aks-pe` 서브넷 `privateEndpointNetworkPolicies`가 `Enabled` |
-| 출력 크기 안전성 | `evaluate_aks_upgrade_preflight` 출력이 단일 클러스터 `900자` 이하, 3개 허브 합산 `1,500자` 이하로 앞부분 잘림이 발생하지 않음 |
-| 정량 판정 정확도 | `aks-ktc-priv-01` = `NO-GO`(45점), `aks-ktc-priv-04` = `CAUTION`(72점), `aks-ktc-priv-08` = `GO`(95점) |
-| 응답 지연 목표 | Step 1·2·파드 진단 각 `60초` 이내, Step 3 멀티 허브 통합 채점 `100초` 이내 완료 |
-| 운영 안전(`PreToolUse`) | `kubectl delete/drain` 또는 `az aks upgrade` 명령 시 `pre_kubectl_mutation_guard`가 실행 전에 차단 |
-
-로컬에서 서브넷 정책과 방화벽 라우팅 테이블을 직접 확인하려면 다음 명령을 실행합니다.
-
-```bash
-az network vnet subnet show -g rg-ktc-private-aks-fleet \
-  --vnet-name vnet-ktc-hub-01 -n snet-aks-pe \
-  --query privateEndpointNetworkPolicies -o tsv   # Enabled
-
-az network route-table route list -g rg-ktc-private-aks-fleet \
-  --route-table-name rt-sre-agent-multihub -o table
-```
+| 월 단위 EOS 및 LTS 필터링 | `check-aks-eos-release-calendar(months_ahead=4)` 실행 시 `aks-priv-02`(`1.35.9` Standard)만 대상으로 선정되고 `aks-priv-03`(`1.34.12` LTS)과 `aks-priv-01`(`1.36.4` Standard)은 제외됨 |
+| 9대 사전 점검 및 부분 재검증 | `evaluate-aks-upgrade-preflight`가 `check_items="ALL"` 및 `"3,7,8"` 부분 재검증을 모두 900자 이하(`ensure_ascii=False`)로 반환 |
+| 마크다운 파일 원클릭 다운로드 | `./aks-upgrade-notice.md` 저장 후 `/api/files/<threadId>/aks-upgrade-notice.md`가 HTTP `200`으로 다운로드됨 |
+| 워크로드 복구 후 `PASS` 전환 | `prod` 네임스페이스의 파드가 모두 `Running`으로 복구되고 `#3` 점검 항목이 `PASS`로 전환됨 |
+| 권한 거버넌스(`Allow`/`Ask`/`Deny`) | 조회는 자동 실행되고, 복구 명령은 승인 게이트를 거치며, 파괴적 삭제 명령은 차단됨 |
 
 ## 결함 워크로드와 리소스 그룹을 삭제해 실습을 정리한다 { #lab-cleanup }
 
-주입한 결함 파드와 PDB만 먼저 지우고 클러스터를 유지하려면 `seed-faults.sh clean`을,
-전체 멀티 허브 인프라를 삭제하려면 `cleanup.sh`를 실행합니다.
+주입한 결함 워크로드만 정상 상태로 되돌리려면 `seed-faults.sh reset`을, 전체 실습 리소스 그룹을
+삭제하려면 `cleanup.sh`를 실행합니다.
 
 ```bash
-# 주입한 결함 네임스페이스(payment-prod, batch-scoring)만 제거할 때
-./scripts/seed-faults.sh clean
+# 주입한 결함 워크로드를 정상 상태로 복원할 때
+./scripts/seed-faults.sh reset
 
 # 전체 실습 리소스 그룹을 삭제할 때
-./scripts/cleanup.sh rg-ktc-private-aks-fleet
+./scripts/cleanup.sh rg-private-aks-fleet
 ```
 
-`az group exists -n rg-ktc-private-aks-fleet`가 `false`를 반환하면 모든 과금 리소스 정리가
-완료된 것입니다.
+`az group exists -n rg-private-aks-fleet`가 `false`를 반환하면 모든 과금 리소스 정리가 완료된
+것입니다.
 
 ## 공식 참고 자료
 
@@ -370,19 +360,22 @@ az network route-table route list -g rg-ktc-private-aks-fleet \
   방화벽 환경에서 허용해야 하는 필수 플랫폼·관찰 가능성 FQDN 및 포트
 - [Python tools in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/python-code-execution):
   관리 ID 인증과 샌드박스 실행 제한
-- [Agent permissions in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/permissions):
-  관리형 역할과 리소스 범위 권한 모델
-- [Skills in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/skills) 및
+- [Agent permissions in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/permissions) 및
+  [Tool access policies in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/tool-access-policies):
+  관리형 역할과 `Allow` / `Ask` / `Deny` 도구 접근 정책 구성
+- [Skills in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/skills),
+  [Custom agents in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/sub-agents) 및
   [Agent hooks in Azure SRE Agent](https://learn.microsoft.com/azure/sre-agent/agent-hooks):
-  스킬 지침 구성과 `PreToolUse` 차단 훅(exit code `2`) 동작
+  스킬 지침 구성, 서브에이전트 도구 바인딩, `PreToolUse` 차단 훅 동작
+- [Live reports in Azure SRE Agent (preview)](https://learn.microsoft.com/azure/sre-agent/live-reports):
+  에이전트 포털 내 실시간 Live Report 대시보드 구성
 - [Create a private Azure Kubernetes Service (AKS) cluster](https://learn.microsoft.com/azure/aks/private-clusters):
   Private AKS의 Private Endpoint 및 `privatelink.<region>.azmk8s.io` 사설 DNS 구조
 - [Supported Kubernetes versions in Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/supported-kubernetes-versions):
-  Kubernetes 1.34~1.37 출시·GA 지원 종료 일정 및 1.37 주요 변경 사항(조건부 LocalDNS, Managed
-  Prometheus 시크릿 접근 범위, 지원 종료 후 플랫폼 자동 업그레이드)
+  Kubernetes 마이너 버전별 Standard 및 Long Term Support(LTS) 지원 수명 주기와 릴리스 캘린더
 - [Upgrade an Azure Kubernetes Service (AKS) cluster](https://learn.microsoft.com/azure/aks/upgrade-aks-cluster) 및
   [Roll out node pool upgrades in Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/upgrade-aks-node-pools-rolling):
-  순차 마이너 버전 업그레이드 규칙, `maxSurge`, 노드 코든·드레인과 PDB 상호작용
+  순차 마이너 버전 업그레이드 규칙, `maxSurge` 서브넷 IP 요구 사항, PDB 드레인 동작
 - [Azure virtual network traffic routing](https://learn.microsoft.com/azure/virtual-network/virtual-networks-udr-overview) 및
   [Azure Private Endpoint DNS configuration](https://learn.microsoft.com/azure/private-link/private-endpoint-dns):
-  `VirtualAppliance` 사용자 정의 경로(UDR)와 Private Endpoint 네트워크 정책 동작
+  UDR(`VirtualAppliance`) 경로 지정과 사설 DNS 영역 해석 구조

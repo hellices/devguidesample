@@ -15,7 +15,8 @@ description: Fast 30-60s Private AKS version upgrade target identification, rele
 1. `mslearn-mcp_microsoft_docs_search`를 **1회** 호출해 목표 버전 릴리즈 노트를 검색하고, 필요 시 상위 문서 1건만 `microsoft_docs_fetch`로 읽는다 (추가 반복 검색 금지).
 2. 버전 간 주요 변경사항(1.37 LocalDNS 조건부 활성화 및 UDP/TCP 53 요구사항, `ama-metrics` 네임스페이스 Secret 권한 등), Deprecated API, 노드풀 Surge/Drain/PDB 영향도를 한국어 표로 정리한다.
 
-### 3. 업그레이드 7대 사전 점검 요청 시 (클러스터당 `kubectl` 1회 복합 호출)
+### 3. 업그레이드 9대 사전 점검(`PASS` / `FAIL`) 요청 시 (클러스터당 `kubectl` 1회 복합 호출)
 1. `verify-multihub-firewall-udr-route`를 대상 클러스터들에 병렬로 1회씩 호출한다.
-2. `RunKubectlReadCommand`는 클러스터마다 `get pods`, `get deploy`, `get pdb`를 나누어 부르지 말고, 반드시 **`kubectl get pods,deploy,pdb -n <ns>` 단일 복합 명령으로 클러스터당 1회만** 호출한다.
-3. 확인된 수치(`unhealthy_pod_count`, `single_replica_deployments`, `blocking_pdb_count`)를 `evaluate-aks-upgrade-preflight`에 전달해 점수(0~100점)와 `READY` / `CONDITIONAL` / `BLOCKED` 판정 및 조치 CLI를 표로 출력한다.
+2. 데이터 플레인(1~6번 항목)은 `RunKubectlReadCommand`로 `get pods`, `get deploy`, `get pdb`, `get pv`를 나누어 부르지 말고, 반드시 **`kubectl get pods,deploy,pdb,pv -A -o json` (또는 대상 네임스페이스 복합 조회) + `kubectl get --raw /metrics | grep apiserver_requested_deprecated_apis` 단일 배치로** 클러스터당 1회만 호출한다.
+3. 컨트롤 플레인(7~9번 항목)은 `az aks show` + `az network vnet subnet show` + UAMI `az role assignment list` + MDC `az resource show --ids <lawId>` 결과를 확인한다.
+4. 확인된 1~9번 항목 값을 `evaluate-aks-upgrade-preflight`에 전달해 항목별 `PASS` / `FAIL` 결과(`checks`)와 전체 판정(`overallStatus`: `PASS` / `FAIL`) 및 조치 CLI를 표로 출력한다.

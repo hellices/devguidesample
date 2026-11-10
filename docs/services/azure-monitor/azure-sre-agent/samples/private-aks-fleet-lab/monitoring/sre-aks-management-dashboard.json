@@ -1,0 +1,784 @@
+{
+  "__elements": {},
+  "__inputs": [],
+  "__requires": [
+    {
+      "id": "grafana",
+      "name": "Grafana",
+      "type": "grafana",
+      "version": "12.3.1"
+    },
+    {
+      "id": "grafana-azure-monitor-datasource",
+      "name": "Azure Monitor",
+      "type": "datasource",
+      "version": "12.3.1"
+    },
+    {
+      "id": "stat",
+      "name": "Stat",
+      "type": "panel",
+      "version": ""
+    },
+    {
+      "id": "table",
+      "name": "Table",
+      "type": "panel",
+      "version": ""
+    }
+  ],
+  "editable": true,
+  "id": null,
+  "uid": "sre-aks-mgmt",
+  "title": "SRE-AKS-Management",
+  "tags": [
+    "enterprise",
+    "aks",
+    "sre",
+    "inventory"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 3,
+  "refresh": "5m",
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "am_ds",
+        "options": [],
+        "query": "grafana-azure-monitor-datasource",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 1,
+      "title": "관리 대상 — Management Group 기준 관리대상 클러스터 분류",
+      "description": "*제외대상 구독 네이밍 참고: 샌드박스(sbox), PoC(poc), RnD(rnd), SRE(sre)",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 15
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod')\n| extend envType = case(mgmtName contains 'NonProd', '개발', mgmtName contains 'Stg', '스테이지', mgmtName contains 'Shared', '쉐어드인프라', '운영')\n| summarize ['클러스터수']=count() by ['관리그룹']=mgmtName, ['환경분류']=envType\n| extend ['관리여부']='O'\n| project ['관리그룹'], ['환경분류'], ['관리여부'], ['클러스터수']\n| order by ['관리그룹'] asc",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "AKS Cluster 전체 수량 (Prd/Dev/Stg/Shared)",
+      "type": "stat",
+      "gridPos": {
+        "x": 5,
+        "y": 1,
+        "w": 6,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod')\n| summarize Total=count(),\n            Prd=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd')),\n            Dev=countif(mgmtName contains 'NonProd'),\n            Stg=countif(mgmtName contains 'Stg'),\n            Shared=countif(mgmtName contains 'Shared')",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "(PRD) 서비스 등급별 수량",
+      "type": "stat",
+      "gridPos": {
+        "x": 5,
+        "y": 4,
+        "w": 6,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod'),\n         ServiceGrade = coalesce(tostring(tags['ServiceGrade']), 'C')\n| summarize Total=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd')),\n            S_Grade=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd') and ServiceGrade=='S'),\n            A_Grade=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd') and ServiceGrade=='A'),\n            B_Grade=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd') and ServiceGrade=='B'),\n            C_Grade=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd') and ServiceGrade=='C')",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "(DEV) 서비스 등급별 수량",
+      "type": "stat",
+      "gridPos": {
+        "x": 5,
+        "y": 7,
+        "w": 6,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod'),\n         ServiceGrade = coalesce(tostring(tags['ServiceGrade']), '')\n| summarize Total=countif(mgmtName contains 'NonProd'),\n            S_Grade=countif(mgmtName contains 'NonProd' and ServiceGrade=='S'),\n            A_Grade=countif(mgmtName contains 'NonProd' and ServiceGrade=='A'),\n            B_Grade=countif(mgmtName contains 'NonProd' and ServiceGrade=='B'),\n            C_Grade=countif(mgmtName contains 'NonProd' and ServiceGrade=='C'),\n            No_Grade_Tag=countif(mgmtName contains 'NonProd' and isempty(ServiceGrade))",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "(STG) 서비스 등급별 수량",
+      "type": "stat",
+      "gridPos": {
+        "x": 5,
+        "y": 10,
+        "w": 6,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod'),\n         ServiceGrade = coalesce(tostring(tags['ServiceGrade']), '')\n| summarize Total=countif(mgmtName contains 'Stg'),\n            S_Grade=countif(mgmtName contains 'Stg' and ServiceGrade=='S'),\n            A_Grade=countif(mgmtName contains 'Stg' and ServiceGrade=='A'),\n            B_Grade=countif(mgmtName contains 'Stg' and ServiceGrade=='B'),\n            C_Grade=countif(mgmtName contains 'Stg' and ServiceGrade=='C'),\n            No_Grade_Tag=countif(mgmtName contains 'Stg' and isempty(ServiceGrade))",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "(Shared) 서비스 등급별 수량",
+      "type": "stat",
+      "gridPos": {
+        "x": 5,
+        "y": 13,
+        "w": 6,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod'),\n         ServiceGrade = coalesce(tostring(tags['ServiceGrade']), '')\n| summarize Total=countif(mgmtName contains 'Shared'),\n            S_Grade=countif(mgmtName contains 'Shared' and ServiceGrade=='S'),\n            A_Grade=countif(mgmtName contains 'Shared' and ServiceGrade=='A'),\n            B_Grade=countif(mgmtName contains 'Shared' and ServiceGrade=='B'),\n            C_Grade=countif(mgmtName contains 'Shared' and ServiceGrade=='C'),\n            No_Grade_Tag=countif(mgmtName contains 'Shared' and isempty(ServiceGrade))",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "title": "일반 AKS 클러스터 버전 현황 (Standard)",
+      "type": "table",
+      "gridPos": {
+        "x": 11,
+        "y": 1,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend K8sVersion = tostring(properties.currentKubernetesVersion),\n         SupportPlan = coalesce(tostring(tags['SupportPlan']), tostring(properties.supportPlan), 'KubernetesOfficial'),\n         mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod')\n| where SupportPlan =~ 'KubernetesOfficial'\n| summarize Total=count(),\n            Prd=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd')),\n            Dev=countif(mgmtName contains 'NonProd'),\n            Stg=countif(mgmtName contains 'Stg'),\n            Shared=countif(mgmtName contains 'Shared')\n            by K8sVersion, SupportPlan\n| order by K8sVersion asc",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "LTS AKS 클러스터 버전 현황 (Premium)",
+      "type": "table",
+      "gridPos": {
+        "x": 11,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend K8sVersion = tostring(properties.currentKubernetesVersion),\n         SupportPlan = coalesce(tostring(tags['SupportPlan']), tostring(properties.supportPlan), 'KubernetesOfficial'),\n         mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod')\n| where SupportPlan =~ 'AKSLongTermSupport'\n| summarize Total=count(),\n            Prd=countif(mgmtName contains 'Prod' and not(mgmtName contains 'NonProd')),\n            Dev=countif(mgmtName contains 'NonProd'),\n            Stg=countif(mgmtName contains 'Stg'),\n            Shared=countif(mgmtName contains 'Shared')\n            by K8sVersion, SupportPlan\n| order by K8sVersion asc",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "AKS 사용중 단위서비스 목록",
+      "type": "table",
+      "gridPos": {
+        "x": 19,
+        "y": 1,
+        "w": 5,
+        "h": 15
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend ServiceName = coalesce(tostring(tags['ServiceName']), tostring(tags['service']), name)\n| distinct ServiceName\n| order by ServiceName asc",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "AKS 클러스터 인벤토리",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 10,
+      "title": "ResourceGroup",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 4,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| summarize ResourceGroup=dcount(resourceGroup)",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "title": "Cluster",
+      "type": "stat",
+      "gridPos": {
+        "x": 4,
+        "y": 17,
+        "w": 4,
+        "h": 3
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| summarize Cluster=count()",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ],
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/.*/",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value_and_name",
+        "wideLayout": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "title": "AKS Cluster Inventory",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 15,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| extend mgmtName = coalesce(tostring(tags['mgmtName']), 'ENT_Workloads_Prod'),\n         Subscription = subscriptionId,\n         Cluster = name,\n         k8sVersion = tostring(properties.currentKubernetesVersion),\n         SupportPlan = coalesce(tostring(tags['SupportPlan']), tostring(properties.supportPlan), 'KubernetesOfficial'),\n         PricingTier = coalesce(tostring(tags['PricingTier']), tostring(sku.tier), 'Standard'),\n         ServiceName = coalesce(tostring(tags['ServiceName']), tostring(tags['service']), 'COMM(커머스플랫폼)'),\n         ServiceCode = coalesce(tostring(tags['ServiceCode']), 'ag001101'),\n         ServiceOpenDate = coalesce(tostring(tags['ServiceOpenDate']), '20250101'),\n         ServiceGrade = coalesce(tostring(tags['ServiceGrade']), 'A'),\n         APIServerAccess = iff(tobool(properties.apiServerAccessProfile.enablePrivateCluster), 'Private', 'Public'),\n         NetworkPlugin = tostring(properties.networkProfile.networkPlugin)\n| project mgmtName, Subscription, Cluster, k8sVersion, SupportPlan, PricingTier, ServiceName, ServiceCode, ServiceOpenDate, ServiceGrade, APIServerAccess, NetworkPlugin\n| order by k8sVersion asc, Cluster asc",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "AKS Cluster Inventory (Include Nodepool)",
+      "type": "table",
+      "gridPos": {
+        "x": 15,
+        "y": 20,
+        "w": 9,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${am_ds}"
+      },
+      "targets": [
+        {
+          "azureMonitor": {
+            "allowedTimeGrainsMs": [],
+            "timeGrain": "auto"
+          },
+          "azureResourceGraph": {
+            "query": "resources\n| where type =~ \"microsoft.containerservice/managedclusters\"\n| mv-expand pool = properties.agentPoolProfiles\n| extend ServiceGrade = coalesce(tostring(tags['ServiceGrade']), 'A'),\n         APIServerAccess = iff(tobool(properties.apiServerAccessProfile.enablePrivateCluster), 'Private', 'Public'),\n         NodePool = tostring(pool.name),\n         Mode = tostring(pool.mode),\n         NetworkPlugin = tostring(properties.networkProfile.networkPlugin),\n         Cluster = name,\n         k8sVersion = tostring(pool.currentOrchestratorVersion)\n| project Cluster, k8sVersion, ServiceGrade, APIServerAccess, NodePool, Mode, NetworkPlugin\n| order by k8sVersion asc, Cluster asc, NodePool asc",
+            "scope": "directory"
+          },
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${am_ds}"
+          },
+          "queryType": "Azure Resource Graph",
+          "refId": "A",
+          "subscriptions": []
+        }
+      ]
+    }
+  ]
+}
