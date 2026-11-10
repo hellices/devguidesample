@@ -104,7 +104,7 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 | 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–201초, 83분 동안 지표별 분 bin 누락 0–9개 |
 | fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(Premium 첫 환경) |
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
-| 정리 | `azd down --purge --force` | Premium 세 환경 resource group 삭제 확인. Dedicated 환경은 cluster 생성 4시간 뒤 정리([정리](#cleanup)) |
+| 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 환경 모두 resource group 삭제 확인 |
 
 ## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
@@ -646,26 +646,34 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 
 Dedicated cluster는 만든 뒤 4시간 동안 삭제할 수 없으므로, cluster의 `createdAt`에서 4시간이
-지난 뒤 실행합니다.
+지난 뒤 실행합니다. 그 전에 실행하면 cluster 삭제가 거부되고 resource group이 남으므로,
+4시간이 지난 뒤 같은 명령을 다시 실행합니다. `postdown`이 resource group이 사라졌음을 확인해야
+명령이 성공으로 끝납니다.
 
 ```bash
 az eventhubs cluster show -g <resource-group> -n <cluster> --query createdAt -o tsv
-azd down --purge --force
-az group exists -n <resource-group>          # false
+azd down -e <env-name> --purge --force
+az group exists -n <resource-group>                                   # false
+az eventhubs cluster list --query "length(@)"                          # 0
+az keyvault list-deleted --query "[?name=='<key-vault>'] | length(@)"  # 0
 ```
 
 `predown`은 port-forward와 federated credential, lab kubeconfig를 지우고 대상 resource
-group 이름을 기록합니다. `postdown`은 그 resource group이 사라질 때까지 확인한 뒤
-끝납니다.
+group과 subscription을 기록합니다. `postdown`은 그 기록으로 resource group이 사라질 때까지
+확인한 뒤 끝납니다.
 
-![azd down --purge 실행 결과. predown이 federated credential 2개를 삭제하고, resource group 삭제와 Key Vault purge 완료 뒤 postdown이 resource group이 더 이상 없음을 확인, 19분 3초 만에 SUCCESS. 이어서 az group exists false, 삭제된 Key Vault와 Event Hubs Dedicated cluster 목록이 비어 있음](../images/azd-down-cleanup.png)
+![Dedicated 환경의 azd down --purge 실행 결과. cluster createdAt 08:10:00, 4시간 뒤 12:10:30에 실행, predown이 federated credential 2개 삭제, resource group 삭제와 Key Vault purge 뒤 postdown이 resource group이 더 이상 없음을 확인, 8분 42초 만에 SUCCESS. 이어서 az group exists false, Event Hubs cluster 0개, 삭제 대기 Key Vault 0개](../images/azd-down-cleanup.png)
+
+azd는 같은 resource group을 대소문자만 다른 이름으로 두 번 표시했지만, 두 줄 모두 같은 그룹이며
+`postdown` 확인과 이후 조회에서 남은 리소스는 없었습니다.
 
 | 환경 | 결과 |
 |---|---|
 | 첫 환경 `ehotel-lab1` | resource group 삭제와 Key Vault purge 완료(17분 45초). 이때 `postdown`은 provision output이 지워져 실패했고, 위 수정 후 다음 환경에서 다시 확인 |
 | 두 번째 환경 `ehotel-lab2` | `predown`·삭제·purge·`postdown` 모두 성공(19분 3초) |
 | 세 번째 환경 `ehotel-lab3` | `predown`·삭제·purge·`postdown` 모두 성공(9분 42초) |
-| 구독 전체 | 세 resource group 없음, soft-delete 상태 Key Vault 없음, Event Hubs Dedicated cluster 없음 |
+| Dedicated 환경 `ehotel-ded` | cluster 생성(08:10:00) 4시간 뒤 12:10:30에 실행, `predown`·cluster 포함 resource group 삭제·purge·`postdown` 모두 성공(8분 42초) |
+| 구독 전체 | 네 resource group 없음, 이 실습의 Key Vault가 삭제 대기 목록에 없음, Event Hubs cluster 0개 |
 
 ## 공식 참고 자료
 
