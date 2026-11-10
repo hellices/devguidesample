@@ -109,8 +109,10 @@ client는 파일의 위치 정보만 MDS에서 받고, 실제 데이터는 OSS�
 1. mount 시 client는 MGS에서 파일 시스템 구성을 받습니다.
 2. 파일을 열면 MDT object의 확장 속성인 **layout EA**를 가져옵니다. layout은 파일이
    어느 OST object에 어떤 크기로 나뉘어 있는지 알려 줍니다.
-3. client는 layout을 이용해 해당 OSS들과 직접 병렬 I/O를 수행합니다. 파일이 열린
-   뒤에는 MDS가 I/O에 관여하지 않습니다.
+3. client는 layout을 이용해 이미 할당된 OST object가 있는 OSS들과 직접 병렬 I/O를
+   수행합니다. 이 OST 데이터 경로에는 파일이 열린 뒤 MDS가 관여하지 않습니다. 단,
+   DoM 파일의 MDT 구간 데이터 I/O는 MDS·MDT가 처리하고, PFL 파일이 할당된 구간을
+   넘어 커지면 MDS가 layout을 잠그고 새 OST object를 추가 할당합니다.
 
 전체 대역폭은 OSS 네트워크 대역폭 합과 OST 디스크 대역폭 합 중 작은 값으로
 결정됩니다. 그래서 OSS·OST를 더하면 용량과 대역폭이 함께 늘어납니다.
@@ -182,9 +184,10 @@ failover를 설정해 포맷한 ldiskfs target에는 multi-mount protection(MMP)
 - Lustre는 파일 시스템 계층의 failover만 제공합니다. 노드 감시, 장애 감지, fencing은
   Pacemaker·Corosync 같은 **외부 HA 소프트웨어**가 맡아야 합니다.
 - fencing이 실패해 두 노드가 같은 저장 장치를 쓰면 데이터가 심각하게 손상될 수 있습니다.
-- Lustre 자체는 **데이터 이중화를 제공하지 않고** backend 저장 장치의 이중화에만
-  의존합니다. 공식 매뉴얼은 OST에 RAID 5 또는 가급적 RAID 6, MDT에 RAID 1 또는 RAID
-  10을 권합니다. OST failover는 디스크 장애로 인한 손상을 막지 못합니다.
+- 기본 데이터 보호는 **backend 저장 장치의 이중화**에 의존하며, 파일별로 선택하는
+  FLR(아래)이 유일한 예외입니다. 공식 매뉴얼은 backend로 OST에 RAID 5 또는 가급적
+  RAID 6, MDT에 RAID 1 또는 RAID 10을 권합니다. OST failover는 디스크 장애로 인한
+  손상을 막지 못합니다.
 - 2.11에 도입된 **FLR(File Level Redundancy)** 은 파일별로 선택해 여러 OST에 mirror를
   두는 내장 데이터 이중화 기능이며(MDT 이중화는 아님), 첫 단계 구현은 쓰기 시 주 mirror만 갱신하고 나머지를
   stale로 표시한 뒤 나중에 동기화하는 delayed write 방식입니다.

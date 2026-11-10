@@ -26,8 +26,8 @@
   <rect x="560" y="110" width="296" height="96" rx="10" fill="#fff7ed" stroke="#ea580c"/>
   <text x="708" y="138" text-anchor="middle" font-size="15" font-weight="700" fill="#7c2d12">MDS + MDT (DNE로 여러 개)</text>
   <text x="708" y="160" text-anchor="middle" font-size="12" fill="#9a3412">namespace·권한·file layout</text>
-  <text x="708" y="178" text-anchor="middle" font-size="12" fill="#9a3412">OST object 할당, open 후 I/O 비관여</text>
-  <text x="708" y="196" text-anchor="middle" font-size="12" fill="#9a3412">작은 파일은 DoM으로 MDT에 저장 가능</text>
+  <text x="708" y="178" text-anchor="middle" font-size="12" fill="#9a3412">OST object 할당(PFL 확장 포함)</text>
+  <text x="708" y="196" text-anchor="middle" font-size="12" fill="#9a3412">DoM: 작은 파일 데이터 I/O를 MDT에서 처리</text>
 
   <rect x="560" y="240" width="296" height="160" rx="10" fill="#f0fdfa" stroke="#0d9488"/>
   <text x="708" y="266" text-anchor="middle" font-size="15" font-weight="700" fill="#134e4a">OSS + OST (수십–수천 개)</text>

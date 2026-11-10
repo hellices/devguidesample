@@ -6,7 +6,7 @@ services: [azure-managed-lustre, azure-storage]
 technologies: [lustre]
 tags: [evaluate, storage]
 status: current
-verification_status: verified
+verification_status: needs-review
 sources_checked_at: 2026-11-10
 published_at: 2026-11-10
 topic_order: 2
@@ -49,6 +49,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-managed-lustre/expand-file-system-portal
   - title: Use multiple clusters for regional failover recovery
     url: https://learn.microsoft.com/azure/azure-managed-lustre/amlfs-region-recovery
+  - title: Optimize file and directory layouts in Azure Managed Lustre
+    url: https://learn.microsoft.com/azure/azure-managed-lustre/optimize-file-layouts
   - title: Optimize Azure Managed Lustre performance
     url: https://learn.microsoft.com/azure/azure-managed-lustre/optimize-performance
   - title: Azure Managed Lustre MLPerf Storage v3.0 results
@@ -103,10 +105,11 @@ tier의 공칭 밀도는 tier 이름보다 조금 높은 20.8·41.7 MB/s per TiB
 | 500 | 4 TiB | 128 TiB | 1,024 TiB | 1,024 TiB |
 
 - 기본 최대를 넘는 용량은 지원 요청으로 구독을 활성화해야 합니다.
-- MDT는 용량 증분마다가 아니라 tier별 임계값(20 tier 5,120 TiB, 40 tier 2,560 TiB,
-  125·250·500 tier 1,024 TiB)을 넘을 때마다 하나씩 자동 추가됩니다. **Blob 통합 파일
-  시스템은 두 번째 MDS를 넘어 확장되지 않아** 20·40·125·250 tier의 최대 용량이 낮아지며,
-  500 tier는 두 경우 모두 1,024 TiB입니다.
+- MDT는 용량 증분마다가 아니라 tier별 용량 간격(20 tier 5,120 TiB, 40 tier 2,560 TiB,
+  125·250·500 tier 1,024 TiB)마다 하나씩 자동 추가됩니다. 표의 Blob 통합 최대치는 이
+  간격을 각 tier 증분의 배수로 내림한 값이며, 문서는 **Blob 통합 파일 시스템이 두 번째
+  metadata server(MDS)를 넘어 확장할 수 없다**고 설명합니다. 그 결과 20·40·125·250 tier는
+  Blob 통합 시 최대 용량이 낮아지고, 500 tier는 두 경우 모두 1,024 TiB입니다.
 - Microsoft가 공개한 MLPerf Storage v3.0 결과에서 tier 125·4,096 TiB 구성은 학습
   읽기 379.1 GiB/s, checkpoint 쓰기 642.2 GiB/s를 기록했습니다. 16개 시뮬레이션
   가속기 구성에서는 다섯 tier 모두 공칭 대역폭 밀도의 95.6–97.3%를 보였습니다.
@@ -204,6 +207,9 @@ mount하는 절차입니다. 따라서 AMLFS를 원본 저장소가 아니라 **
 - auto-import·auto-export는 preview 표시가 없지만 GA라고 명시된 문구도 찾지 못했습니다.
 - Resource Manager 템플릿 문서는 SKU 표에 20 tier를 포함하지만 허용 SKU 이름 목록에는
   빠져 있어 문서 내부가 일치하지 않습니다.
+- Learn은 MDT 추가 간격(MDT 단위)과 Blob 통합 한도(MDS 단위)를 다른 단위로 설명하며,
+  정확한 용량 경계에서 몇 개의 MDS·MDT가 배치되는지는 명시하지 않습니다. 배포 후 MDT
+  수는 mount한 client에서 `lfs df -h`로 확인합니다.
 - MLPerf 수치는 Microsoft가 공개한 시험 구성의 결과이며 이 문서에서 재측정하지
   않았습니다.
 

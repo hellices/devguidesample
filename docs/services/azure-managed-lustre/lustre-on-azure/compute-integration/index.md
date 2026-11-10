@@ -6,7 +6,7 @@ services: [azure-managed-lustre, azure-kubernetes-service]
 technologies: [lustre, kubernetes]
 tags: [design, networking, storage]
 status: current
-verification_status: verified
+verification_status: needs-review
 sources_checked_at: 2026-11-10
 published_at: 2026-11-10
 topic_order: 3
@@ -146,7 +146,7 @@ AMLFS를 `ReadWriteMany` 볼륨으로 사용합니다. driver는 AKS와 AMLFS �
 | 지원 범위(v0.6.0) | Kubernetes 1.29 이상, `Ubuntu2204`·`Ubuntu2404`·`AzureLinux3` 노드 풀. Windows 노드 풀 미지원 |
 | 설치 | MCR의 Helm OCI chart(권장) 또는 버전 고정 스크립트. `az aks ... --enable-azure-managed-lustre` 관리형 확장 설치는 **preview** |
 | 정적 프로비저닝 | 기존 AMLFS의 MGS IP를 StorageClass `mgs-ip-address`에 지정, provisioner `azurelustre.csi.azure.com` |
-| 동적 프로비저닝(v0.3.0+) | PVC마다 새 AMLFS를 생성. `sku-name`, `zone`, `vnet-name`, `subnet-name`, 유지 관리 시간 등을 StorageClass 파라미터로 지정 |
+| 동적 프로비저닝(v0.3.0+) | PVC마다 새 AMLFS를 생성. StorageClass 파라미터로 `sku-name`, `zone`, `location`, `resource-group-name`, `vnet-resource-group`, `vnet-name`, `subnet-name`, `maintenance-day-of-week`, `maintenance-time-of-day-utc`를 지정. 리소스 그룹·네트워크 값은 기본값(AKS 리소스 그룹·subnet)에 맡기지 않고 명시 |
 | 권한 | 동적 프로비저닝은 CSI controller가 쓰는 identity에 subnet 읽기·join, subnet 요건 검증, AMLFS 읽기·생성·수정·삭제 권한 필요 |
 | 네트워크 | AKS 전용 VNet + peering 또는 AMLFS VNet 안의 별도 subnet. Azure CNI Overlay 권장. 노드는 MCR·`packages.microsoft.com`에 접근해야 함 |
 
