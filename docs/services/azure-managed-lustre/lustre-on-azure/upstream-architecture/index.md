@@ -114,8 +114,10 @@ client는 파일의 위치 정보를 MDS에서 받고, OST에 있는 데이터�
    DoM 파일의 MDT 구간 데이터 I/O는 MDS·MDT가 처리하고, PFL 파일이 할당된 구간을
    넘어 커지면 MDS가 layout을 잠그고 새 OST object를 추가 할당합니다.
 
-전체 대역폭은 OSS 네트워크 대역폭 합과 OST 디스크 대역폭 합 중 작은 값으로
-결정됩니다. 그래서 OSS·OST를 더하면 용량과 대역폭이 함께 늘어납니다.
+매뉴얼은 server 측 합산 대역폭을 OSS 네트워크 대역폭 합과 OST 디스크 대역폭 합 중
+작은 값으로 설명합니다. 그래서 OSS·OST를 더하면 server 측 용량과 대역폭 상한이 함께
+늘어납니다. 실제 처리량은 client NIC, 중간 fabric·routing, I/O 패턴 같은 다른 병목에도
+제한됩니다.
 
 ## LNet: tcp·o2ib 네트워크 추상화와 routing { #lnet }
 

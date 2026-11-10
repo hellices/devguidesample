@@ -174,7 +174,7 @@ UID·GID 모델과 VNet 격리를 따릅니다.
 | root squash | Lustre nodemap 기반, REST API `rootSquashSettings`로 `RootOnly`·`All`·`None`(기본) 지정 |
 | 네트워크 | 고객 VNet에 배치, IPv4 전용, Lustre 포트 TCP 988·1019–1023 |
 | 전송 중 암호화 | 지원 VM 계열에서 VNet encryption(DTLS 1.2)으로 client 트래픽 암호화. `AllowUnencrypted` 모드만 지원해 AMLFS가 암호화를 강제하지 않으며, 배포 후 켜면 유지 관리 이벤트와 클러스터 재부팅 뒤 적용 |
-| 데이터 상주 | 배포 리전 밖에 고객 데이터를 저장하지 않음 |
+| 데이터 상주 | AMLFS 서비스는 배포 리전 밖에 고객 데이터를 저장하지 않음. Blob으로 export한 데이터의 복제 범위는 고객이 고른 저장소 계정의 중복성(LRS·ZRS·GRS 등)을 따름 |
 
 Azure 보안 기준선은 데이터 평면 Entra ID 인증·Azure RBAC, Customer Lockbox, 서비스
 기본 백업을 지원하지 않는다고 표시합니다. 다만 이 기준선은 MCSB v1.0 기반이라

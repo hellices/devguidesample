@@ -76,7 +76,7 @@ AMLFS를 선택하면 서버 운영 책임이 Microsoft로 넘어가고, 사용�
 |---|---|---|
 | MGS·MDS·OSS 서버 | 설치·커널·backend(ldiskfs/ZFS) 직접 관리 | 서비스가 고객 subnet에 배치·관리 |
 | HA·디스크 보호 | 공유 스토리지 failover, 외부 HA, RAID 직접 설계 | 고객 구성 없음, Premium SSD LRS |
-| 성능 단위 | OSS·OST 수로 설계 | 20·40·125·250·500 MB/s per TiB tier |
+| 성능 단위 | OSS·OST 수로 설계 | 40·125·250·500 MB/s per TiB tier. 20 tier(AMLFS 20)는 2025-11 public preview로 발표되었고 문서 간 가용성 표기가 달라 배포 전 확인 필요([관리형 기능](managed-features/index.md#amlfs-20)) |
 | HSM | coordinator·copytool·백엔드 구성 | Blob 컨테이너 지정(생성 시에만) |
 | 네트워크 | tcp·o2ib(RDMA) 선택, LNet routing | VNet subnet, client는 `@tcp` mount |
 | 이중화·DR | FLR, 복제 설계 | 단일 영역. Blob(ZRS·GRS) export와 보조 리전 재생성 |

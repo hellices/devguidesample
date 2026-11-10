@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 470" role="img" aria-labelledby="t d" font-family="-apple-system, 'Segoe UI', 'Noto Sans KR', sans-serif">
   <title id="t">Lustre 구성 요소와 I/O 경로</title>
-  <desc id="d">Client가 MGS에서 구성을, MDS에서 layout을 받은 뒤 OSS의 여러 OST와 직접 데이터를 주고받는 구조. 모든 통신은 LNet 위에서 이루어진다.</desc>
+  <desc id="d">Client가 MGS에서 구성을, MDS에서 layout을 받은 뒤 OST에 있는 데이터는 OSS와 직접 주고받는 구조. DoM으로 MDT에 둔 작은 파일 데이터는 MDS·MDT가 처리하고, PFL 확장 시 MDS가 OST object를 추가 할당한다. 모든 통신은 LNet 위에서 이루어진다.</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
     <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0f766e"/></marker>
