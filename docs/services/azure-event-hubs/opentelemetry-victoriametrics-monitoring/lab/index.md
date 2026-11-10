@@ -642,6 +642,10 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | Key Vault 조회가 일시 실패하면 Grafana 비밀번호 파일이 빈 파일로 남음 | 임시 파일에 받아 성공했을 때만 교체 |
 | peak lag 조회 구간이 부하 시작보다 60초 앞섬 | 부하 시작 시각부터의 구간만 조회 |
 | `ps` 출력 폭 때문에 port-forward 소유권 확인이 실패할 수 있음 | `ps -ww`로 전체 명령줄 확인 |
+| Run Command 전송이 성공하면 원격 bootstrap이 실패해도 성공으로 볼 수 있음 | bootstrap이 마지막 줄에 `GATEWAY_EXIT_CODE=<code>`를 남기고 postprovision은 `GATEWAY_EXIT_CODE=0`과 `GATEWAY_READY`를 함께 요구 |
+| producer가 rollout 완료 전에 보낸 이벤트로 생긴 lag가 peak 계산에서 빠질 수 있음 | scale 요청 시각을 `load_requested`로 기록하고 그때부터의 최댓값을 peak로 읽음. 부하 끝의 consumer 처리 수는 `consumer_processed_total_at_load_end`로 이름을 바꿈 |
+| `GRAFANA_URL`에 경로가 있으면 캡처 proxy가 로그인 요청을 같은 호스트의 루트로 보냄 | 경로·query·fragment가 없는 root HTTPS URL만 허용 |
+| probe가 허용 label key의 값이면 형식과 관계없이 출력 | 짧은 일반 token 값만 남기고 경로·hostname·GUID 형태는 `<redacted>`로 바꿈 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 

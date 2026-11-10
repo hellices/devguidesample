@@ -7,6 +7,7 @@ import http from 'node:http';
 import https from 'node:https';
 import tls from 'node:tls';
 import { chromium } from 'playwright';
+import { grafanaBase } from './grafana-url.mjs';
 import { settleViewport } from './settle.mjs';
 
 const [dashboardPath, output, from = 'now-1h', to = 'now', width = '1600'] = process.argv.slice(2);
@@ -14,15 +15,17 @@ if (!dashboardPath || !output) {
   console.error('usage: node capture.mjs <dashboard-path> <output.png> [from] [to]');
   process.exit(2);
 }
-const base = process.env.GRAFANA_URL?.replace(/\/$/, '');
 const user = process.env.GRAFANA_USER ?? 'admin';
 const password = process.env.GRAFANA_PASSWORD;
-if (!base || !password) {
-  console.error('GRAFANA_URL and GRAFANA_PASSWORD are required');
+let base;
+try {
+  base = grafanaBase(process.env.GRAFANA_URL, process.env.GRAFANA_CA_FILE);
+} catch (error) {
+  console.error(error.message);
   process.exit(2);
 }
-if (!base.startsWith('https://') || !process.env.GRAFANA_CA_FILE) {
-  console.error('GRAFANA_URL must be https and GRAFANA_CA_FILE must pin the gateway certificate');
+if (!password) {
+  console.error('GRAFANA_PASSWORD is required');
   process.exit(2);
 }
 

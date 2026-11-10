@@ -1,8 +1,8 @@
 """Probe VictoriaMetrics for the metric inventory the dashboard agent will build on.
 
 The output keeps metric names, label keys, safe label values, sample counts and
-freshness only. Resource IDs, hostnames and subscription identifiers never leave
-this script because only allowlisted label values are copied.
+freshness only. Only values of allowlisted keys are copied, and only when the value
+itself is a short plain token; anything else (paths, hostnames, GUIDs) is redacted.
 """
 
 from __future__ import annotations
@@ -23,11 +23,19 @@ SAFE_LABEL_VALUES = {
     "metadata_Replica",
     "metadata_EntityName",
     "metadata_Role",
+    "metadata_role",
     "aggregation",
     "metric",
     "unit",
 }
 WINDOW = "30m"
+SAFE_VALUE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _safe_value(value: str) -> str:
+    """The value when it is a short plain token, otherwise a redaction marker."""
+    return value if SAFE_VALUE.match(value) and not GUID.match(value) else "<redacted>"
 
 
 def _quote(value: str) -> str:
@@ -76,7 +84,7 @@ def build_inventory(base_url: str, window: str = WINDOW) -> dict:
                 continue
             entry["label_keys"].add(key)
             if key in SAFE_LABEL_VALUES:
-                entry["values"][key].add(value)
+                entry["values"][key].add(_safe_value(value))
         # Discovery requires source_path; delivery_path may be absent and then stays "", so the
         # matcher below (delivery_path="") selects exactly those series.
         path = (labels["source_path"], labels.get("delivery_path", ""))

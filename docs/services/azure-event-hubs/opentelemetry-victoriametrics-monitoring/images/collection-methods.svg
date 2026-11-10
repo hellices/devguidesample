@@ -86,7 +86,7 @@
   <text class="t" x="526" y="367">Event Hub</text>
   <rect class="otel" x="680" y="330" width="270" height="44" rx="8"/>
   <text class="t" x="694" y="350">OTel azureeventhubreceiver</text>
-  <text class="s" x="694" y="367">push 수신 · remote write</text>
+  <text class="s" x="694" y="367">Event Hub 소비 · remote write</text>
   <path class="e" d="M450,352 H475"/>
   <path class="e" d="M652,352 H678"/>
   <path class="e" d="M950,352 H965 V330 H978"/>

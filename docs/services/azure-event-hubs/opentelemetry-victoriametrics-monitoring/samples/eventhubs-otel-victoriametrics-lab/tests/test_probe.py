@@ -51,3 +51,14 @@ def test_path_queries_use_the_series_snapshot_time(monkeypatch, window, start):
 def test_window_must_be_a_supported_positive_duration(window):
     with pytest.raises(ValueError):
         probe.window_seconds(window)
+
+
+@pytest.mark.parametrize("value, kept", [
+    ("workload", True), ("Backend", True), ("remote_write", True),
+    ("ns.servicebus.windows.net", False), ("/subscriptions/s/resourceGroups/g", False),
+    ("00000000-0000-0000-0000-000000000000", False), ("x" * 65, False),
+])
+def test_allowlisted_values_are_copied_only_when_they_are_plain_tokens(value, kept):
+    from probe import _safe_value
+
+    assert (_safe_value(value) == value) is kept

@@ -316,12 +316,13 @@ def test_malformed_query_responses_are_reported_not_raised(monkeypatch, failure)
 
 def test_diagnostic_series_stat_counts_one_delivery_path():
     panel = next(p for p in _panels(build_dashboard({"processing_units": 1})) if p.get("title") == "DS Event Hub series")
-    selectors = [s for t in panel["targets"] for s in re.findall(r"\{[^}]*\}", t["expr"])]
-    assert selectors and len(selectors) == len(panel["targets"])  # every target is one filtered selector
-    for selector in selectors:
-        matchers = _matchers(selector)
-        assert matchers.pop("azure_resource_id")[0] == "=~"  # namespace records only, not the cluster's
-        assert matchers == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}
+    from build_dashboard import DIAG
+
+    # Exactly the one counting expression over the filtered selector; nothing can be added to it.
+    assert [t["expr"] for t in panel["targets"]] == [f"count(last_over_time({{{DIAG}}}[$__range]))"]
+    matchers = _matchers("{" + DIAG + "}")
+    assert matchers.pop("azure_resource_id")[0] == "=~"  # namespace records only, not the cluster's
+    assert matchers == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}
 
 
 def test_dedicated_tier_shows_cluster_capacity_instead_of_premium_namespace():
@@ -400,3 +401,23 @@ def test_hidden_targets_are_not_queried(monkeypatch):
     report, sent = _verify_with(monkeypatch, "broken(", [], target_extra={"hide": True})
 
     assert sent == [] and report == []
+
+
+@pytest.mark.parametrize("url, ok", [
+    ("https://203.0.113.10:3000", True), ("https://203.0.113.10:3000/", True),
+    ("https://203.0.113.10:3000/grafana", False), ("https://203.0.113.10:3000/?x=1", False),
+    ("http://203.0.113.10:3000", False),
+])
+def test_capture_accepts_only_a_root_https_grafana_url(url, ok):
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    module = (LAB_ROOT / "agent" / "grafana-url.mjs").as_uri()
+    script = (f"import {{ grafanaBase }} from '{module}';\n"
+              f"try {{ grafanaBase({json.dumps(url)}, 'ca.crt'); console.log('ok'); }} catch {{ console.log('rejected'); }}\n")
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30)
+
+    assert result.stdout.strip() == ("ok" if ok else "rejected"), result.stderr

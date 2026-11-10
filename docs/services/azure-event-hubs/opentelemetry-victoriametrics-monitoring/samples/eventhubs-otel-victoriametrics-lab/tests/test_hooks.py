@@ -885,10 +885,11 @@ def test_scenario_load_window_and_peak_cover_the_running_producer():
 
     rollout = text.index("kube rollout status -n \"$NS\" deploy/eventhubs-producer")
     assert rollout < text.index('LOAD_START="$(now)"') < text.index("sleep $((LOAD_MINUTES * 60))")
-    # The peak is the maximum over the whole load, read after the producer stopped.
+    # The peak is the maximum since the producer was requested, read after the producer stopped.
+    assert text.index('LOAD_REQUESTED_EPOCH="$(date +%s)"') < text.index("kube scale -n \"$NS\" deploy/eventhubs-producer --replicas 1")
     stop = text.index("stop_producer\nPRODUCER_STOP=")
     assert stop < text.index('PEAK_LAG="$(peak_lag)"')
-    assert "max_over_time($LAG_SERIES[" in text
+    assert "max(max_over_time($LAG_SERIES[$(( $(date +%s) - LOAD_REQUESTED_EPOCH ))s]))" in text
 
 
 def test_gateway_only_requires_a_completed_full_postprovision():
@@ -963,3 +964,18 @@ def test_gateway_run_pins_the_subscription(fake_bin, tmp_path):
     [call] = [line for line in log.read_text().splitlines() if line.startswith("az vm run-command invoke")]
     assert " --subscription 00000000-0000-0000-0000-000000000000 " in f"{call} "
     assert " --resource-group rg-example " in call and " --parameters BUNDLE_B64=abc" in call
+
+
+@pytest.mark.parametrize("vault, code", [("pw", "0"), (None, "1")])
+def test_gateway_bootstrap_ends_with_its_exit_code(fake_bin, tmp_path, vault, code):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write)
+    if vault is None:
+        write("az", 'if [[ "$1 $2" == "keyvault secret" ]]; then exit 1; fi')
+
+    result = _run_bootstrap(bin_dir, tmp_path, tmp_path / "app")
+
+    # Run Command returns output only, so postprovision trusts this line, not the transport status.
+    assert result.stdout.rstrip().splitlines()[-1] == f"GATEWAY_EXIT_CODE={code}"
+    text = (SCRIPTS / "azd-postprovision.sh").read_text()
+    assert 'grep -qx "GATEWAY_EXIT_CODE=0" "$STATE/gateway-bootstrap.log"' in text

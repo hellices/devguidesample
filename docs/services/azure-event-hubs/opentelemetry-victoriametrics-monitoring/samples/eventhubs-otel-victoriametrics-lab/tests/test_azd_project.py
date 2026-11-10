@@ -74,7 +74,12 @@ def test_a_premium_lab_grants_the_gateway_read_access_to_an_existing_cluster():
     assert "scope: resourceGroup(existingClusterIdParts[2], existingClusterIdParts[4])" in text
     assert "gatewayPrincipalId: foundation.outputs.gatewayPrincipalId" in text
     assert "'Microsoft.EventHub/clusters@2024-01-01' existing" in module
-    assert "scope: cluster" in module and "43d0d8ad-25c7-4714-9337-8ba259a9fe05" in module
+    assert "var monitoringReaderRoleDefinitionId = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'" in module
+    # Scope, role and principal must belong to the same (only) role assignment block.
+    [block] = re.findall(r"(?ms)^resource \w+ 'Microsoft\.Authorization/roleAssignments@[^']+' = \{.*?^\}", module)
+    assert re.search(r"^\s*scope: cluster\s*$", block, re.MULTILINE)
+    assert re.search(r"^\s*principalId: gatewayPrincipalId\s*$", block, re.MULTILINE)
+    assert "roleDefinitions', monitoringReaderRoleDefinitionId)" in block
 
 
 def test_main_bicep_exports_hook_contract():

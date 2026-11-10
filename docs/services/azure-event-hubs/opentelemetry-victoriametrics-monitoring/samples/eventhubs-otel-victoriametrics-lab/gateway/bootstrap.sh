@@ -3,6 +3,9 @@
 # BUNDLE_B64 arrives as a named Run Command parameter (environment variable) holding a base64 tar.gz.
 set -euo pipefail
 trap 'echo "GATEWAY_STEP_FAILED line $LINENO" >&2' ERR
+# Run Command reports only the output, not the script's exit status; the last line carries it.
+BUNDLE_DIR=""
+trap 'rc=$?; [ -n "$BUNDLE_DIR" ] && rm -rf "$BUNDLE_DIR"; echo "GATEWAY_EXIT_CODE=$rc"' EXIT
 BUNDLE_B64="${BUNDLE_B64:?BUNDLE_B64 parameter is required}"
 # Run Command starts without HOME; Azure CLI would then write its cache under ./None in APP_DIR.
 export HOME="${HOME:-/root}"
@@ -33,7 +36,6 @@ install -d -m 0755 "$APP_DIR"
 # Unpack into a fresh directory first, then replace every bundle-managed file so files removed
 # from a newer bundle do not linger. Only runtime state (secrets/, tls/) survives a rerun.
 BUNDLE_DIR="$(mktemp -d)"
-trap 'rm -rf "$BUNDLE_DIR"' EXIT
 echo "$BUNDLE_B64" | base64 -d | tar -xz -C "$BUNDLE_DIR"
 [ -s "$BUNDLE_DIR/.env" ] && [ -s "$BUNDLE_DIR/compose.yaml" ] || { echo "GATEWAY_STEP_FAILED bundle" >&2; exit 1; }
 # Move the previous bundle aside on the same filesystem and put it back if the copy fails, so a

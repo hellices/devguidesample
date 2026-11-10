@@ -186,7 +186,9 @@ def test_cluster_streams_its_metrics_to_the_same_telemetry_hub_only_for_dedicate
 def test_messaging_keeps_workload_local_auth_disabled():
     text = MESSAGING.read_text()
 
-    assert "disableLocalAuth: true" in text
+    # Declared once, active (not commented out), on the workload namespace itself.
+    namespace = _resource_block(_code(text), "premiumNamespace")
+    assert re.findall(r"^\s*disableLocalAuth:\s*(\S+)\s*$", namespace, re.MULTILINE) == ["true"]
     assert "eventHubAuthorizationRuleId: telemetryDiagnosticRule.id" in text
     assert "output connectionString" not in text
     assert "listKeys(" not in text

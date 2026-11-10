@@ -139,7 +139,9 @@ ENV
 BUNDLE_B64="$(COPYFILE_DISABLE=1 tar -C "$BUNDLE" -cf - . | gzip -9c | base64 | tr -d '\n')"
 # Run Command splits unnamed values on '=', which base64 padding contains; always pass name=value.
 gateway_run "$LAB_ROOT/gateway/bootstrap.sh" "BUNDLE_B64=$BUNDLE_B64" >"$STATE/gateway-bootstrap.log"
-grep -q GATEWAY_READY "$STATE/gateway-bootstrap.log" || die "gateway bootstrap failed; see $STATE/gateway-bootstrap.log"
+# Run Command succeeds even when the remote script fails; its own exit code line is the verdict.
+grep -qx "GATEWAY_EXIT_CODE=0" "$STATE/gateway-bootstrap.log" && grep -q GATEWAY_READY "$STATE/gateway-bootstrap.log" \
+  || die "gateway bootstrap failed; see $STATE/gateway-bootstrap.log"
 sed -n '/GATEWAY_READY/,/GRAFANA_CERT_BEGIN/p' "$STATE/gateway-bootstrap.log" | grep -v GRAFANA_CERT_BEGIN >&2
 sed -n '/GRAFANA_CERT_BEGIN/,/GRAFANA_CERT_END/p' "$STATE/gateway-bootstrap.log" | sed '1d;$d' >"$STATE/grafana.crt"
 grep -q "BEGIN CERTIFICATE" "$STATE/grafana.crt" || die "gateway did not return the Grafana certificate"

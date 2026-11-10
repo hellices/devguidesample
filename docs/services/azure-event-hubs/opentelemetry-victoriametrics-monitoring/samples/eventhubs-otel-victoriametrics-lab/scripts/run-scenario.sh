@@ -44,9 +44,10 @@ vm_scalar() {
 max_lag() {
   vm_scalar "${1:-30}" "max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"
 }
-# The largest lag stored since the load started; lag keeps rising until the producer stops.
+# The largest lag stored since the producer was scaled up (it may send before its rollout is
+# reported complete); lag keeps rising until the producer stops.
 peak_lag() {
-  vm_scalar 30 "max(max_over_time($LAG_SERIES[$(( $(date +%s) - LOAD_START_EPOCH ))s]))"
+  vm_scalar 30 "max(max_over_time($LAG_SERIES[$(( $(date +%s) - LOAD_REQUESTED_EPOCH ))s]))"
 }
 # Scaling to 0 only requests termination; the load ends when the producer pod is gone.
 stop_producer() {
@@ -74,15 +75,18 @@ log "baseline ${BASELINE_MINUTES}m (producer stopped)"
 sleep $((BASELINE_MINUTES * 60))
 
 log "load ${LOAD_MINUTES}m at target ${EVENTS_PER_SECOND} events/s, consumer delay ${PROCESSING_DELAY_SECONDS}s/event/partition"
+# load_requested is the earliest moment the producer can send; load_start is when its rollout is
+# complete. The timed load runs from load_start, and the peak covers everything since the request.
+LOAD_REQUESTED="$(now)"
+LOAD_REQUESTED_EPOCH="$(date +%s)"
 kube scale -n "$NS" deploy/eventhubs-producer --replicas 1 >/dev/null
 kube rollout status -n "$NS" deploy/eventhubs-producer --timeout 300s >/dev/null
-# The load window starts once the producer runs, so it never includes the rollout wait.
 LOAD_START="$(now)"
 LOAD_START_EPOCH="$(date +%s)"
 LAG_AT_LOAD_START="$(max_lag)"
 sleep $((LOAD_MINUTES * 60))
 PRODUCER_SENT="$(last_log_value eventhubs-producer sent_total)"
-CONSUMER_PROCESSED_AT_PEAK="$(last_log_value eventhubs-slow-consumer processed_total)"
+CONSUMER_PROCESSED_AT_LOAD_END="$(last_log_value eventhubs-slow-consumer processed_total)"
 
 stop_producer
 PRODUCER_STOP="$(now)"
@@ -122,6 +126,7 @@ def number(value, kind=int):
     return kind(value) if value not in ("", None) else None
 json.dump({
     "baseline_start": "$BASELINE_START",
+    "load_requested": "$LOAD_REQUESTED",
     "load_start": "$LOAD_START",
     "producer_stop": "$PRODUCER_STOP",
     "recovered_at": "$RECOVERED_AT" or None,
@@ -129,7 +134,7 @@ json.dump({
     "target_events_per_second": number("$EVENTS_PER_SECOND"),
     "processing_delay_seconds": number("$PROCESSING_DELAY_SECONDS", float),
     "producer_sent_total": number("$PRODUCER_SENT"),
-    "consumer_processed_total_at_peak": number("$CONSUMER_PROCESSED_AT_PEAK"),
+    "consumer_processed_total_at_load_end": number("$CONSUMER_PROCESSED_AT_LOAD_END"),
     "consumer_processed_total": number("$CONSUMER_PROCESSED"),
     "max_lag_at_load_start": number("$LAG_AT_LOAD_START"),
     "peak_max_lag": number("$PEAK_LAG"),
