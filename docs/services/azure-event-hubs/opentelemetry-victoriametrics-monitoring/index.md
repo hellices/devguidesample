@@ -263,12 +263,36 @@ Premium과 Dedicated는 수집 구조가 같아도 용량 단위와 CPU·memory 
 대시보드는 처리량을 `$pu` 변수로 나눠 PU당 값으로 보여 주며, Dedicated profile에서는
 가용 메모리 gauge의 threshold 방향을 반대로 둡니다.
 
-## 선택 항목 — 내부 event(message) 모니터링: consumer lag·runtime log·분산 추적 { #events }
+## agent 대시보드: probe·build·verify·look { #agent }
 
-이 절은 지표 수집과 별개인 선택 항목입니다. 플랫폼 지표는 namespace가 받은·내보낸 양만
-보여 주므로, consumer가 처리하지 못하고 쌓인 양이나 개별 메시지의 흐름이 필요하면 별도
-신호를 더합니다. 이 topic은 checkpoint 기반 consumer lag만 실측했고, 나머지는 선택지로
-정리합니다.
+agent는 대시보드를 만들기 전에 실제 저장된 metric을 조회하고, 만든 뒤에는 query와
+화면을 모두 확인합니다.
+
+1. **probe**: VictoriaMetrics에서 metric 이름, label key, `source_path × delivery_path`
+   조합별 series·sample 수와 freshness를 조회합니다. 식별자가 담긴 label 값은 저장하지
+   않습니다.
+2. **build**: 질문 → 지표 → MetricsQL → 시각화 표에 따라 panel을 만듭니다. 합계는
+   stat, 정상 범위는 gauge, 비교는 table·bar gauge, 추이만 time series로 씁니다.
+3. **verify**: 모든 panel query를 Grafana `/api/ds/query`로 실행해 오류·0행·NaN을
+   찾습니다. `Exporter send failures`가 0행이어서 첫 실패 때 생기는 counter의 특성을
+   반영하도록 고쳤습니다. 최종 실행에서 28개 query가 모두 통과했습니다.
+4. **look**: Playwright로 렌더링한 전체 화면을 직접 봅니다. 첫 캡처에서는 time series의
+   모든 선이 같은 색이고, 과거 구간의 "now" lag가 0으로 보이며, checkpoint 표의
+   partition 열까지 경고색이 칠해져 있었습니다.
+
+![look 단계에서 고치기 전 첫 캡처. CPU·memory와 lag 선이 모두 같은 초록색이고 lag 패널이 현재 값 0만 보여 줌](images/look-step-before-fix.png)
+
+look 단계에서 찾은 문제는 series별 palette, 구간 peak lag, 공통 눈금 bar gauge,
+열 단위 색상, 겹치는 비교 선의 점선 구분으로 고쳐 맨 위 최종 화면에 반영했습니다.
+
+![IncomingMessages를 Azure Monitor API(초록 실선)와 Diagnostic Settings(노랑 점선)로 받은 그래프. 두 선이 19:42–19:52에 겹치고 Diagnostic Settings는 값이 있는 분만 존재](images/api-vs-diagnostic-settings.png)
+
+## 추가: 내부 event(message) 모니터링 — consumer lag·runtime log·분산 추적 { #events }
+
+여기부터는 지표 수집에 더해 볼 수 있는 추가 내용입니다. 플랫폼 지표는 namespace가
+받은·내보낸 양만 보여 주므로, consumer가 처리하지 못하고 쌓인 양이나 개별 메시지의 흐름이
+필요하면 별도 신호를 더합니다. 이 topic은 checkpoint 기반 consumer lag만 실측했고, 나머지는
+선택지로 정리합니다.
 
 | 신호 | 내용 | 조건·주의 |
 |---|---|---|
@@ -304,30 +328,6 @@ lag exporter는 실제 시각으로 기록되지만 Azure Monitor의 `IncomingMe
 19:42–19:52에 값이 나타나, producer 실제 구간보다 약 1.5–2분 늦게 기록됐습니다. 디버깅용
 첫 환경에서도 같은 차이가 있었습니다. 두 신호를 같은 그래프에서 비교할 때는 이 차이를
 감안합니다.
-
-## agent 대시보드: probe·build·verify·look { #agent }
-
-agent는 대시보드를 만들기 전에 실제 저장된 metric을 조회하고, 만든 뒤에는 query와
-화면을 모두 확인합니다.
-
-1. **probe**: VictoriaMetrics에서 metric 이름, label key, `source_path × delivery_path`
-   조합별 series·sample 수와 freshness를 조회합니다. 식별자가 담긴 label 값은 저장하지
-   않습니다.
-2. **build**: 질문 → 지표 → MetricsQL → 시각화 표에 따라 panel을 만듭니다. 합계는
-   stat, 정상 범위는 gauge, 비교는 table·bar gauge, 추이만 time series로 씁니다.
-3. **verify**: 모든 panel query를 Grafana `/api/ds/query`로 실행해 오류·0행·NaN을
-   찾습니다. `Exporter send failures`가 0행이어서 첫 실패 때 생기는 counter의 특성을
-   반영하도록 고쳤습니다. 최종 실행에서 28개 query가 모두 통과했습니다.
-4. **look**: Playwright로 렌더링한 전체 화면을 직접 봅니다. 첫 캡처에서는 time series의
-   모든 선이 같은 색이고, 과거 구간의 "now" lag가 0으로 보이며, checkpoint 표의
-   partition 열까지 경고색이 칠해져 있었습니다.
-
-![look 단계에서 고치기 전 첫 캡처. CPU·memory와 lag 선이 모두 같은 초록색이고 lag 패널이 현재 값 0만 보여 줌](images/look-step-before-fix.png)
-
-look 단계에서 찾은 문제는 series별 palette, 구간 peak lag, 공통 눈금 bar gauge,
-열 단위 색상, 겹치는 비교 선의 점선 구분으로 고쳐 맨 위 최종 화면에 반영했습니다.
-
-![IncomingMessages를 Azure Monitor API(초록 실선)와 Diagnostic Settings(노랑 점선)로 받은 그래프. 두 선이 19:42–19:52에 겹치고 Diagnostic Settings는 값이 있는 분만 존재](images/api-vs-diagnostic-settings.png)
 
 ## 배포 제약: 리전 제한·조직 정책·권한 범위 { #constraints }
 
