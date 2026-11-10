@@ -101,8 +101,6 @@ LABELS = ["source_path", "delivery_path", "azure.resource.id"]
 REQUIRED = (
     "AZURE_SUBSCRIPTION_ID",
     "AZURE_RESOURCE_GROUP",
-    "TELEMETRY_NAMESPACE",
-    "TELEMETRY_EVENTHUB_NAME",
     "CHECKPOINT_ACCOUNT_URL",
     "GATEWAY_CLIENT_ID",
 )
@@ -192,22 +190,28 @@ def render_config(env: Mapping[str, str]) -> dict:
             # A separate source keeps Dedicated Incoming/Outgoing series out of the Premium per-PU panels.
             sources["azure_monitor_dedicated"] = ["azure_monitor/dedicated"]
 
-    receivers["azure_event_hub/diagnostic"] = {
-        "event_hub": {
-            "name": env["TELEMETRY_EVENTHUB_NAME"],
-            "namespace": env["TELEMETRY_NAMESPACE"],
-        },
-        "auth": "azure_auth",
-        "group": env.get("TELEMETRY_CONSUMER_GROUP", "otel-collector"),
-        "format": "azure",
-        "blob_checkpoint_store": {
-            "storage_account_url": env["CHECKPOINT_ACCOUNT_URL"].rstrip("/"),
-            "container_name": env.get("COLLECTOR_CHECKPOINT_CONTAINER", "collector-checkpoints"),
-        },
-    }
-    sources["diagnostic_eventhub"] = ["azure_event_hub/diagnostic"]
-
+    # Both Diagnostic Settings hubs are optional and live in the telemetry namespace.
+    metrics_hub = env.get("TELEMETRY_EVENTHUB_NAME", "").strip()
     logs_hub = env.get("TELEMETRY_LOGS_EVENTHUB_NAME", "").strip()
+    if (metrics_hub or logs_hub) and not env.get("TELEMETRY_NAMESPACE", "").strip():
+        raise ValueError("TELEMETRY_NAMESPACE is required when a Diagnostic Settings hub is set")
+
+    if metrics_hub:
+        receivers["azure_event_hub/diagnostic"] = {
+            "event_hub": {
+                "name": metrics_hub,
+                "namespace": env["TELEMETRY_NAMESPACE"],
+            },
+            "auth": "azure_auth",
+            "group": env.get("TELEMETRY_CONSUMER_GROUP", "otel-collector"),
+            "format": "azure",
+            "blob_checkpoint_store": {
+                "storage_account_url": env["CHECKPOINT_ACCOUNT_URL"].rstrip("/"),
+                "container_name": env.get("COLLECTOR_CHECKPOINT_CONTAINER", "collector-checkpoints"),
+            },
+        }
+        sources["diagnostic_eventhub"] = ["azure_event_hub/diagnostic"]
+
     connectors: dict[str, dict] = {}
     log_pipelines: dict[str, dict] = {}
     if logs_hub:

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 846" width="1200" height="846" role="img" aria-labelledby="archTitle archDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
   <title id="archTitle">Event Hubs OpenTelemetry·VictoriaMetrics 실습 구성</title>
-  <desc id="archDesc">Korea South의 Event Hubs Dedicated cluster(1 CU)와 그 안의 workload namespace, namespace·cluster 지표 Diagnostic Settings와 namespace 리소스 로그 Diagnostic Settings, platform-metrics·runtime-logs hub가 있는 telemetry Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private-endpoints subnet에 Storage Blob과 Key Vault의 private endpoint. 선택 항목인 Azure Managed Grafana는 managed private endpoint와 Private Link Service로 VMSingle을 조회.</desc>
+  <desc id="archDesc">Korea South의 Event Hubs Dedicated cluster(1 CU)와 그 안의 workload namespace, namespace 리소스 로그 Diagnostic Settings와 기본으로 꺼진 namespace·cluster 지표 Diagnostic Settings, runtime-logs hub와 선택 항목 platform-metrics hub가 있는 telemetry Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private-endpoints subnet에 Storage Blob과 Key Vault의 private endpoint. 선택 항목인 Azure Managed Grafana는 managed private endpoint와 Private Link Service로 VMSingle을 조회.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
     <style>
@@ -33,12 +33,12 @@
   <text class="body" x="44" y="138">Entra ID 인증만 허용</text>
   <rect class="azure" x="320" y="54" width="250" height="96" rx="8"/>
   <text class="title" x="332" y="76">Diagnostic Settings</text>
-  <text class="body" x="332" y="98">AllMetrics(namespace·cluster)</text>
+  <text class="body" x="332" y="98">AllMetrics(선택 · 기본 꺼짐)</text>
   <text class="body" x="332" y="118">리소스 로그 2종(namespace)</text>
   <text class="body" x="332" y="138">→ telemetry hub(같은 리전)</text>
   <rect class="azure" x="598" y="54" width="262" height="96" rx="8"/>
   <text class="title" x="610" y="76">Event Hubs Standard · telemetry</text>
-  <text class="body" x="610" y="98">platform-metrics hub(지표)</text>
+  <text class="body" x="610" y="98">platform-metrics hub(선택)</text>
   <text class="body" x="610" y="118">runtime-logs hub(로그)</text>
   <text class="body" x="610" y="138">consumer group otel-collector</text>
   <path class="edge" d="M292,102 H318"/>
@@ -86,7 +86,7 @@
   <text class="title" x="512" y="272">OpenTelemetry Collector Contrib 0.165.0</text>
   <text class="mono" x="512" y="292">azure_monitor/premium   → azure_monitor_api</text>
   <text class="mono" x="512" y="310">azure_monitor/dedicated → azure_monitor_dedicated</text>
-  <text class="mono" x="512" y="328">azure_event_hub/diagnostic → diagnostic_eventhub</text>
+  <text class="mono" x="512" y="328">azure_event_hub/diagnostic → diagnostic_eventhub (선택)</text>
   <text class="mono" x="512" y="346">azure_event_hub/runtime_logs → diagnostic_logs</text>
   <text class="mono" x="512" y="364">prometheus/lag          → lag_exporter</text>
   <text class="mono" x="512" y="382">prometheus/self         → collector_self</text>

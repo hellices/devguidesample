@@ -20,6 +20,7 @@ azd env new <env-name> --subscription <subscription-id> --location koreacentral
 azd env set EVENTHUBS_LOCATION koreasouth   # Event Hubs만 다른 리전에 둘 때(cluster 지원 리전 확인)
 # azd env set EVENTHUBS_SKU Premium          # cluster 대신 Premium 1 PU
 # azd env set EVENTHUBS_LOGS Disabled        # 리소스 로그 → 지표 경로 끄기(기본 Enabled)
+# azd env set EVENTHUBS_DIAGNOSTIC_METRICS Enabled  # 비교용 지표 Diagnostic Settings 켜기(기본 Disabled)
 # azd env set MANAGED_GRAFANA Enabled        # Azure Managed Grafana(Standard)와 managed private endpoint 추가
 azd up                                       # provision + hooks + workload
 ./scripts/run-scenario.sh                    # baseline 5분, 부하 10분, 회복
@@ -38,7 +39,7 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `azure.yaml` | azd project와 lifecycle hook입니다. `services`가 없으므로 `azd deploy`는 `postdeploy`만 실행합니다. |
 | `infra/main.bicep` | 구독 범위 진입점, resource group, hook이 쓰는 output입니다. |
 | `infra/modules/foundation.bicep` | VNet, ACR, private endpoint 뒤의 Storage·Key Vault, identity, container 범위 역할입니다. |
-| `infra/modules/messaging.bicep` | Dedicated cluster와 그 안의 namespace(또는 Premium namespace), telemetry Standard namespace, namespace·cluster Diagnostic Settings, `EVENTHUBS_LOGS=Enabled`일 때 리소스 로그 hub `runtime-logs`와 로그 Diagnostic Settings, Event Hubs 데이터 역할, Monitoring Reader입니다. |
+| `infra/modules/messaging.bicep` | Dedicated cluster와 그 안의 namespace(또는 Premium namespace), Diagnostic Settings sink인 telemetry Standard namespace(로그나 지표 설정을 켤 때만), `EVENTHUBS_LOGS=Enabled`일 때 리소스 로그 hub `runtime-logs`와 로그 Diagnostic Settings, `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`일 때 namespace·cluster 지표 Diagnostic Settings, Event Hubs 데이터 역할, Monitoring Reader입니다. |
 | `infra/modules/grafana.bicep` | `MANAGED_GRAFANA=Enabled`일 때 Azure Managed Grafana(Standard) workspace입니다. |
 | `infra/modules/compute.bicep` | AKS(Workload Identity, Azure RBAC), internal load balancer용 subnet 역할, Gateway VM입니다. |
 | `scripts/azd-configure.sh` | `preprovision`: 구독·provider 확인, operator egress `/32`, 비밀 생성입니다. |
@@ -48,7 +49,7 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `scripts/collect-evidence.sh` | agent 대시보드 workflow와 Azure Monitor 분 단위 대조입니다. Managed Grafana가 있으면 Microsoft Entra token으로 같은 대시보드를 게시·검증·캡처합니다. |
 | `scripts/managed-grafana.sh` | `postprovision`이 호출합니다. VMSingle Private Link Service, managed private endpoint 생성·승인, Grafana Admin, VictoriaMetrics data source입니다. |
 | `scripts/cleanup-external.sh`, `scripts/verify-cleanup.sh` | `predown`, `postdown`입니다. |
-| `gateway/render_collector.py` | 4개 source × 2개 전달 경로 Collector 구성, 리소스 로그를 지표로 바꾸는 `diagnostic_logs` source, Dedicated·fallback profile입니다. |
+| `gateway/render_collector.py` | source별 scrape·remote write 두 전달 경로 Collector 구성(Metrics API, 리소스 로그 `diagnostic_logs`, lag, 자체 지표, 선택 항목 `diagnostic_eventhub`), Dedicated·fallback profile입니다. |
 | `gateway/compose.yaml`, `gateway/bootstrap.sh` | digest를 고정한 Gateway runtime과 Run Command bootstrap입니다. |
 | `k8s/` | Operator values, VMSingle, VMAgent, VMStaticScrape, Managed Grafana용 Private Link Service Service(`vmsingle-pls.yaml`), workload입니다. |
 | `workloads/` | producer, slow consumer, checkpoint 기반 lag exporter image입니다. |

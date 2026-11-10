@@ -13,6 +13,7 @@
     "existingDedicatedClusterResourceId": { "value": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}" },
     "eventHubsSku": { "value": "${EVENTHUBS_SKU=Dedicated}" },
     "eventHubsLogs": { "value": "${EVENTHUBS_LOGS=Enabled}" },
+    "eventHubsDiagnosticMetrics": { "value": "${EVENTHUBS_DIAGNOSTIC_METRICS=Disabled}" },
     "managedGrafana": { "value": "${MANAGED_GRAFANA=Disabled}" }
   }
 }

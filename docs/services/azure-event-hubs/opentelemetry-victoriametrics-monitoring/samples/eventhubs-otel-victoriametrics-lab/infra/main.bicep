@@ -38,6 +38,13 @@ param eventHubsSku string = 'Dedicated'
 ])
 param eventHubsLogs string = 'Enabled'
 
+@description('Enabled also streams AllMetrics of the namespace and cluster through Diagnostic Settings, only to compare with the Metrics API path.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param eventHubsDiagnosticMetrics string = 'Disabled'
+
 @description('Enabled adds an Azure Managed Grafana (Standard) that reads VMSingle through a managed private endpoint.')
 @allowed([
   'Enabled'
@@ -100,6 +107,7 @@ module messaging 'modules/messaging.bicep' = {
     consumerPrincipalId: foundation.outputs.consumerPrincipalId
     eventHubsSku: eventHubsSku
     eventHubsLogs: eventHubsLogs
+    eventHubsDiagnosticMetrics: eventHubsDiagnosticMetrics
   }
 }
 

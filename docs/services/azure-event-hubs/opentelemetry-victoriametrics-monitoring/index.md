@@ -86,16 +86,22 @@ remote write 경로는 ②·④ 모두 합계가 일치했습니다. 다만 ②�
 
 ## 방식별 주요 차이: 지표 범위·dimension·지연·운영 { #metrics }
 
-외부 TSDB로 지표를 모을 때 기본은 ② Metrics API pull이고, ④·⑤ Diagnostic Settings는
-처리량 지표를 로그 파이프라인과 함께 보내야 할 때의 보조 경로입니다. 다섯 방식 모두 원본은
-Azure Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 생깁니다.
+외부 TSDB로 지표를 모을 때는 ② Metrics API pull 하나로 충분하고, ④ Diagnostic Settings의
+지표 스트림(`AllMetrics`)은 필요하지 않습니다. ④가 보내는 지표는 모두 ②로도 받을 수 있으며,
+④는 3–4분 더 늦고 dimension을 합쳐 보내며 값이 있는 분만 보냅니다. 두 번째 Dedicated
+환경에서는 namespace 설정이 만든 뒤 약 2시간이 지나서야 레코드를 보냈고, 그 뒤에도
+`IncomingMessages`가 오지 않았습니다. Diagnostic Settings가 필요한 경우는 Metrics API에 없는
+[리소스 로그](#events)를 받을 때뿐이므로, sample은 지표 스트림을 기본으로 끄고
+(`EVENTHUBS_DIAGNOSTIC_METRICS=Disabled`) 리소스 로그만 Diagnostic Settings로 받습니다. 아래
+④의 실측값은 비교를 위해 지표 스트림을 켠 환경의 결과입니다. 다섯 방식 모두 원본은 Azure
+Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 생깁니다.
 
 | 방식 | 지표 범위·dimension | 지연(실측) | 운영·권한 | 맞는 용도 |
 |---|---|---|---|---|
 | ① Azure Monitor 직접 조회 | 모든 지표, dimension 분할 | 약 1분 20초(Metrics API 조회 가능 71–101초) | 추가 구성 없음 | portal 확인, Azure Monitor 경보 |
 | ② Metrics API — `azuremonitorreceiver` | 모든 지표, dimension 분할 | 약 3분 20초(이벤트 → VictoriaMetrics 190–201초) | Collector 운영, 대상 namespace·cluster의 Monitoring Reader. 늦게 게시된 분 bin은 다시 읽지 않아 누락 가능. 다수 리소스는 batch API(구독 범위 권한)로 호출 수 절감 | 외부 TSDB의 기본 경로 |
 | ③ Metrics API — `azure-metrics-exporter` | 모든 지표, dimension 분할 | 측정 안 함(②와 같은 Metrics API 조회에 scrape 주기 추가) | exporter 컨테이너 추가, ②와 같은 권한·호출 제약 | Prometheus exporter 중심 환경 |
-| ④ Diagnostic Settings → Event Hub | 지표표와 다른 일부 지표, dimension 합산, 값이 있는 분만 | ②보다 3–4분 더 늦음, 설정 직후 최대 90분 | telemetry Event Hub(같은 리전)와 receiver checkpoint | 로그와 같은 스트림으로 외부 연동 |
+| ④ Diagnostic Settings → Event Hub | 지표표와 다른 일부 지표, dimension 합산, 값이 있는 분만 | ②보다 3–4분 더 늦음, 설정 후 13분–약 2시간 동안 비어 있음 | telemetry Event Hub(같은 리전)와 receiver checkpoint | 지표 수집에는 불필요. 이미 다른 용도로 지표를 Event Hub에 내보내고 있을 때만 재사용 |
 | ⑤ Diagnostic Settings → Log Analytics·Storage | ④와 같음 | ④와 비슷 | workspace·storage 비용 | KQL 분석, 장기 보관 |
 
 - **CPU·memory·성공·throttle과 dimension별 분석이 필요하면 ②**를 씁니다. 이 지표는
@@ -106,7 +112,9 @@ Azure Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 �
   `CPU` 최댓값이 70%에 가까워지면 CU 확장을 검토하라고 안내합니다.
 - **②는 분 bin을 한 번만 읽습니다.** 그 조회 시점에 Azure Monitor에 없던 bin은 다시 채워지지
   않습니다. 83분 동안 namespace 지표는 0–4개(최대 5%), cluster 지표는 1–9개(최대 11%)가
-  빠졌습니다. 정확한 구간 합계가 필요하면 Azure Monitor 직접 조회나 ④로 확인합니다.
+  빠졌습니다. 정확한 구간 합계가 필요하면 Azure Monitor에서 그 구간을 직접 조회합니다. ④가 이
+  분을 채운 경우도 있었지만, 이것만으로 지연이 길고 시작 시점을 알 수 없는 두 번째 경로를 둘
+  이유는 되지 않습니다.
 - **Prometheus exporter 중심으로 운영하면 ③**이 같은 데이터를 줍니다. 이전 Premium 환경에서
   ②를 끄고 ③으로 전환해 Premium 지표 9개 × 집계 3개, 27개 series를 받았습니다.
 - **④·⑤는 경보나 용량 판단의 기준으로 삼지 않습니다.** 0값 구간이 비고 지연이 길며,

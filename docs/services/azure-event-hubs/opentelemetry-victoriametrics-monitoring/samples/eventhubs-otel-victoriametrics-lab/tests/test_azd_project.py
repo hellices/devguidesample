@@ -152,6 +152,7 @@ def test_main_parameters_map_azd_environment_values():
         "existingDedicatedClusterResourceId": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}",
         "eventHubsSku": "${EVENTHUBS_SKU=Dedicated}",
         "eventHubsLogs": "${EVENTHUBS_LOGS=Enabled}",
+        "eventHubsDiagnosticMetrics": "${EVENTHUBS_DIAGNOSTIC_METRICS=Disabled}",
         "managedGrafana": "${MANAGED_GRAFANA=Disabled}",
     }
 

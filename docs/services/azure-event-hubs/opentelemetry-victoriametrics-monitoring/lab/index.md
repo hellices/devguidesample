@@ -128,13 +128,16 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 | Managed Grafana | `MANAGED_GRAFANA=Enabled`, `azd provision` | Private Link Service·managed private endpoint 승인·data source까지 hook 1분 30초. 같은 대시보드 37개 query 중 35개 통과, Gateway Grafana와 같은 결과(`ehotel-ded2`) |
 | 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 두 환경 모두 resource group 삭제 확인 |
 
-## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
+## 수집 구조: source별 2개 전달 경로 { #architecture }
 
-Collector는 receiver 4개를 source로 두고, source마다 scrape용과 remote write용 pipeline
-두 개를 만듭니다. 두 pipeline은 같은 receiver instance를 공유하므로 두 전달 경로의 차이가
-서로 다른 Azure API 호출의 차이가 되지 않습니다.
+Collector는 receiver를 source로 두고, source마다 scrape용과 remote write용 pipeline 두 개를
+만듭니다. 두 pipeline은 같은 receiver instance를 공유하므로 두 전달 경로의 차이가 서로 다른
+Azure API 호출의 차이가 되지 않습니다. 기본 배포의 source는 Metrics API(namespace·cluster),
+리소스 로그, lag exporter, Collector 자체 지표입니다. 지표용 Diagnostic Settings 경로
+(`diagnostic_eventhub`)는 `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`일 때만 생깁니다. 아래 실측의
+Diagnostic Settings 비교는 이 경로를 켰던 `ehotel-ded`·`ehotel-ded2` 결과입니다.
 
-![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace·cluster 지표와 namespace 리소스 로그 2종을 보내는 Diagnostic Settings, platform-metrics·runtime-logs hub가 있는 telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 receiver 5개의 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private-endpoints subnet에 Storage Blob·Key Vault의 private endpoint. 선택 항목인 Azure Managed Grafana는 managed private endpoint와 Private Link Service로 VMSingle을 조회](../images/architecture.svg)
+![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace 리소스 로그 2종과 선택 항목인 namespace·cluster 지표를 보내는 Diagnostic Settings, runtime-logs hub와 선택 항목인 platform-metrics hub가 있는 telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 Metrics API·리소스 로그·lag·자체 지표 receiver와 선택 항목인 지표 Diagnostic Settings receiver를 둔 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private-endpoints subnet에 Storage Blob·Key Vault의 private endpoint. 선택 항목인 Azure Managed Grafana는 managed private endpoint와 Private Link Service로 VMSingle을 조회](../images/architecture.svg)
 
 ```yaml
 # gateway/render_collector.py가 만드는 pipeline 일부
@@ -156,7 +159,7 @@ receiver 이름은 `azure_monitor/premium`을 그대로 쓰며, tag로 cluster �
 
 두 exporter는 `resource_constant_labels.included: [source_path, delivery_path,
 azure.resource.id]`로 이 resource attribute만 label로 올립니다. `azure.resource.id`는
-Diagnostic Settings 레코드에만 있으며, namespace와 cluster가 같은 telemetry hub로 보내는
+지표용 Diagnostic Settings 레코드에만 있으며, 이 경로를 켰을 때 namespace와 cluster가 같은 telemetry hub로 보내는
 같은 이름의 지표(`incomingmessages_total` 등)를 서로 다른 series로 나눕니다. v0.165.0에서
 deprecated된 `resource_to_telemetry_conversion` 대신 이 설정을 사용해 불필요한 resource
 attribute가 label로 퍼지지 않게 했습니다.
@@ -228,7 +231,7 @@ deploy 단계는 `postdeploy` hook만 실행합니다.
 | hook | 하는 일 |
 |---|---|
 | `preprovision` | 활성 구독 확인, provider 등록 확인, operator egress `/32`, 배포자 object ID, Grafana 비밀번호와 VM용 SSH 공개키 생성 |
-| provision | VNet(gateway·aks·private-endpoints subnet과 subnet별 NSG), ACR, private endpoint 뒤의 Storage·Key Vault, Dedicated cluster와 그 안의 workload namespace, telemetry namespace, namespace·cluster Diagnostic Settings, AKS, Gateway VM, 역할 할당 |
+| provision | VNet(gateway·aks·private-endpoints subnet과 subnet별 NSG), ACR, private endpoint 뒤의 Storage·Key Vault, Dedicated cluster와 그 안의 workload namespace, telemetry namespace와 리소스 로그 Diagnostic Settings(지표용 설정은 `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`일 때만), AKS, Gateway VM, 역할 할당. `MANAGED_GRAFANA=Enabled`이면 Managed Grafana workspace |
 | `postprovision` | ① lab 전용 kubeconfig ② producer·consumer federated credential ③ ACR build와 digest 고정 ④ VictoriaMetrics Operator·VMSingle·VMAgent·VMStaticScrape ⑤ Run Command로 Gateway 번들 적용과 Grafana TLS 인증서 생성, 공개 인증서 회수 ⑥ 고정한 인증서로 operator 경로 Grafana HTTPS health |
 | `postdeploy` | Workload Identity service account와 producer(0 replica)·slow consumer(1 replica) |
 
@@ -382,12 +385,16 @@ DS Event Hub series stat(178)도 두 전달 경로의 복제본을 함께 센 �
 Premium 첫 환경에서는 Diagnostic Settings를 만든 뒤 약 55분 동안, 세 번째 환경에서는 약
 45분 동안 telemetry Event Hub 수신이 0건이었고, 두 번째 환경에서는 약 20분 안에
 도착했습니다. Dedicated 환경에서는 namespace 설정 후 약 15분, cluster 설정 후 약 13분 안에
-도착했습니다. Premium의 두 환경 모두 관리 그룹 정책으로
+도착했습니다. 두 번째 Dedicated 환경(`ehotel-ded2`)에서는 cluster 설정이 5분 안에 보냈지만
+namespace 설정은 약 2시간(15:49 UTC 무렵)이 지나서야 보냈고, 그 뒤에도 `IncomingMessages`가
+없었습니다. Premium의 두 환경 모두 관리 그룹 정책으로
 telemetry namespace의 local 인증이 꺼져 있었으므로 이것이 원인은 아닙니다. Learn은
 diagnostic setting을 만든 뒤 데이터가 흐르기까지 최대 90분이 걸릴 수 있다고
-설명하며, 네 환경의 관측은 모두 이 범위 안입니다. Diagnostic Settings 경로를 비교하려면
-배포 직후가 아니라 설정 후 충분한 시간이 지난 뒤 시나리오를 실행합니다. 대시보드는 이
-경로를 선택 panel로 두어, 데이터가 없을 때도 다른 검증은 계속 진행합니다.
+설명하며, `ehotel-ded2`의 namespace 설정은 이 안내보다 늦었습니다. 이렇게 시작 시점을 알 수
+없고 같은 지표를 ②로 더 빨리 받을 수 있으므로, sample은 지표용 Diagnostic Settings를 기본으로
+만들지 않습니다. 비교하려면 `azd env set EVENTHUBS_DIAGNOSTIC_METRICS Enabled`로 켜고, 설정 후
+충분한 시간이 지난 뒤 시나리오를 실행합니다. 대시보드는 이 경로를 선택 panel로 두어, 데이터가
+없을 때도 다른 검증은 계속 진행합니다.
 
 ## Metrics API 수집 설정: 지표 목록·dimension·권한 { #receiver-settings }
 
@@ -548,11 +555,11 @@ aggregation과 `Role` 필터로 보고 70%에 가까워지면 확장을 검토�
 ## Event Hubs 리소스 로그 지표화: ApplicationMetricsLogs·RuntimeAuditLogs { #resource-logs }
 
 `EVENTHUBS_LOGS=Enabled`(기본값)이면 Event Hubs가 보내는 client 관점 리소스 로그도
-Collector Contrib로 받아 지표로 바꿉니다. 지표용 Diagnostic Settings와 별도로
-workload namespace에 `runtime-logs-to-eventhub` 설정(ApplicationMetricsLogs·
+Collector Contrib로 받아 지표로 바꿉니다. 기본 배포에서 Diagnostic Settings가 필요한 경로는
+이것 하나입니다. workload namespace에 `runtime-logs-to-eventhub` 설정(ApplicationMetricsLogs·
 RuntimeAuditLogs)을 만들고, telemetry namespace의 전용 hub `runtime-logs`(partition 2개,
 consumer group `otel-collector`)로 보냅니다. receiver는 hub마다 하나의 decoding 방식만 쓰므로
-지표 hub와 로그 hub를 나눴습니다. Learn은 두 로그 범주를 Premium·Dedicated에서만 제공하고,
+지표용 설정을 켤 때도 지표 hub와 로그 hub를 나눕니다. Learn은 두 로그 범주를 Premium·Dedicated에서만 제공하고,
 `Count`를 1분 동안 집계한 값으로 정의합니다.
 
 ```yaml
@@ -621,7 +628,8 @@ service:
 
 로그 경로를 빼려면 `azd env set EVENTHUBS_LOGS Disabled` 후 `azd provision`을 실행합니다.
 로그 hub와 설정이 빠지고, Collector에는 로그 receiver가 생성되지 않으며, 대시보드 패널은
-수신 없음으로 남습니다.
+수신 없음으로 남습니다. 지표용 Diagnostic Settings도 꺼져 있으면(기본값) telemetry
+namespace 자체를 만들지 않습니다.
 
 ## Azure Managed Grafana: managed private endpoint로 VMSingle 조회 { #managed-grafana }
 

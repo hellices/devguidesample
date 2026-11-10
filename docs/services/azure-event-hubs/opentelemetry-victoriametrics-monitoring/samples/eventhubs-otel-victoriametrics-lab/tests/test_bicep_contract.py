@@ -147,9 +147,10 @@ def test_messaging_creates_the_cluster_only_for_the_dedicated_tier():
     assert re.search(r"name: 'Premium'\s*tier: 'Premium'\s*capacity: 1", namespace)
     assert "Microsoft.Insights/diagnosticSettings@2021-05-01-preview" in text
     # Everything scoped to the cluster exists only when the cluster does.
-    for symbol in ("gatewayClusterMonitoringReader", "clusterMetricsToTelemetryHub"):
-        block = _resource_block(text, symbol)
-        assert "= if (dedicated) {" in block and "scope: dedicatedCluster" in block, symbol
+    reader = _resource_block(text, "gatewayClusterMonitoringReader")
+    assert "= if (dedicated) {" in reader and "scope: dedicatedCluster" in reader
+    cluster_ds = _resource_block(text, "clusterMetricsToTelemetryHub")
+    assert "= if (dedicated && diagnosticMetricsEnabled) {" in cluster_ds and "scope: dedicatedCluster" in cluster_ds
 
 
 # Built-in role definition IDs (Azure built-in roles reference); a swapped GUID grants the wrong role.
@@ -178,10 +179,28 @@ def test_cluster_streams_its_metrics_to_the_same_telemetry_hub_only_for_dedicate
     text = _code(MESSAGING.read_text())
 
     cluster_ds = _resource_block(text, "clusterMetricsToTelemetryHub")
-    assert "= if (dedicated) {" in cluster_ds
+    assert "= if (dedicated && diagnosticMetricsEnabled) {" in cluster_ds
     assert "scope: dedicatedCluster" in cluster_ds
     assert "eventHubName: telemetryHub.name" in cluster_ds
     assert "category: 'AllMetrics'" in cluster_ds
+
+
+def test_metric_diagnostic_settings_are_opt_in_and_the_sink_exists_only_when_used():
+    text = _code(MESSAGING.read_text())
+
+    # The Metrics API already returns every AllMetrics value sooner and with dimensions.
+    assert "param eventHubsDiagnosticMetrics string = 'Disabled'" in text
+    assert "var telemetryEnabled = logsEnabled || diagnosticMetricsEnabled" in text
+    for symbol in ("telemetryHub", "telemetryCollectorConsumer", "premiumMetricsToTelemetryHub",
+                   "gatewayTelemetryReceiver"):
+        assert "= if (diagnosticMetricsEnabled) {" in _resource_block(text, symbol), symbol
+    for symbol in ("telemetryNamespace", "telemetryDiagnosticRule"):
+        assert "= if (telemetryEnabled) {" in _resource_block(text, symbol), symbol
+    assert "output telemetryNamespaceName string = telemetryEnabled ? telemetryNamespace.name : ''" in text
+    assert "output telemetryEventHubName string = diagnosticMetricsEnabled ? telemetryHub.name : ''" in text
+    main = _code(MAIN.read_text())
+    assert "param eventHubsDiagnosticMetrics string = 'Disabled'" in main
+    assert "eventHubsDiagnosticMetrics: eventHubsDiagnosticMetrics" in main
 
 
 def test_messaging_keeps_workload_local_auth_disabled():

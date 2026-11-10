@@ -97,6 +97,29 @@ def test_diagnostic_receiver_uses_blob_checkpoint_without_connection_string():
     }
 
 
+def test_without_diagnostic_settings_hubs_only_the_api_lag_and_self_sources_remain():
+    # Default deployment: no metric Diagnostic Settings and logs off means no telemetry namespace.
+    env = {k: v for k, v in BASE_ENV.items() if not k.startswith("TELEMETRY_")}
+    config = render_config(env | {"TELEMETRY_NAMESPACE": "", "TELEMETRY_EVENTHUB_NAME": ""})
+
+    assert not [r for r in config["receivers"] if r.startswith("azure_event_hub/")]
+    sources = {name.split("/")[1].rsplit("-", 1)[0] for name in config["service"]["pipelines"]}
+    assert sources == {"azure_monitor_api", "lag_exporter", "collector_self"}
+
+
+def test_logs_alone_still_read_the_telemetry_namespace():
+    env = BASE_ENV | {"TELEMETRY_EVENTHUB_NAME": "", "TELEMETRY_LOGS_EVENTHUB_NAME": "runtime-logs"}
+    receivers = render_config(env)["receivers"]
+
+    assert "azure_event_hub/diagnostic" not in receivers
+    assert receivers["azure_event_hub/runtime_logs"]["event_hub"]["namespace"] == "eht-example.servicebus.windows.net"
+
+
+def test_a_diagnostic_hub_without_its_namespace_is_rejected():
+    with pytest.raises(ValueError, match="TELEMETRY_NAMESPACE"):
+        render_config(BASE_ENV | {"TELEMETRY_NAMESPACE": ""})
+
+
 def test_dedicated_profile_is_absent_by_default():
     serialized = yaml.safe_dump(render_config(BASE_ENV))
 

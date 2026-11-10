@@ -16,6 +16,12 @@ param eventHubsSku string = 'Premium'
   'Disabled'
 ])
 param eventHubsLogs string = 'Enabled'
+@description('Also stream AllMetrics of the namespace (and cluster) to a telemetry hub. Off by default: the Metrics API already returns every one of these metrics sooner and with dimensions; enable only to compare the paths.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param eventHubsDiagnosticMetrics string = 'Disabled'
 
 var premiumNamespaceName = 'ehp-${token}'
 var telemetryNamespaceName = 'eht-${token}'
@@ -25,6 +31,9 @@ var telemetryEventHubName = 'platform-metrics'
 var telemetryConsumerGroup = 'otel-collector'
 var telemetryLogsEventHubName = 'runtime-logs'
 var logsEnabled = eventHubsLogs == 'Enabled'
+var diagnosticMetricsEnabled = eventHubsDiagnosticMetrics == 'Enabled'
+// The telemetry namespace exists only as a Diagnostic Settings sink.
+var telemetryEnabled = logsEnabled || diagnosticMetricsEnabled
 var dedicated = eventHubsSku == 'Dedicated'
 var monitoringReaderRoleDefinitionId = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
 var eventHubsDataSenderRoleDefinitionId = '2b629674-e913-4c01-ae53-ef4638d8f975'
@@ -89,7 +98,7 @@ resource workloadSlowConsumer 'Microsoft.EventHub/namespaces/eventhubs/consumerg
   }
 }
 
-resource telemetryNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
+resource telemetryNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = if (telemetryEnabled) {
   name: telemetryNamespaceName
   location: location
   tags: tags
@@ -106,7 +115,7 @@ resource telemetryNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
   }
 }
 
-resource telemetryHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
+resource telemetryHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = if (diagnosticMetricsEnabled) {
   parent: telemetryNamespace
   name: telemetryEventHubName
   properties: {
@@ -116,7 +125,7 @@ resource telemetryHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
   }
 }
 
-resource telemetryCollectorConsumer 'Microsoft.EventHub/namespaces/eventhubs/consumergroups@2024-01-01' = {
+resource telemetryCollectorConsumer 'Microsoft.EventHub/namespaces/eventhubs/consumergroups@2024-01-01' = if (diagnosticMetricsEnabled) {
   parent: telemetryHub
   name: telemetryConsumerGroup
   properties: {
@@ -143,7 +152,7 @@ resource telemetryLogsCollectorConsumer 'Microsoft.EventHub/namespaces/eventhubs
   }
 }
 
-resource telemetryDiagnosticRule 'Microsoft.EventHub/namespaces/authorizationRules@2024-01-01' = {
+resource telemetryDiagnosticRule 'Microsoft.EventHub/namespaces/authorizationRules@2024-01-01' = if (telemetryEnabled) {
   parent: telemetryNamespace
   name: 'diagnostics-send'
   properties: {
@@ -155,7 +164,7 @@ resource telemetryDiagnosticRule 'Microsoft.EventHub/namespaces/authorizationRul
   }
 }
 
-resource premiumMetricsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+resource premiumMetricsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (diagnosticMetricsEnabled) {
   name: 'platform-metrics-to-eventhub'
   scope: premiumNamespace
   properties: {
@@ -195,7 +204,7 @@ resource premiumLogsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@2021-0
 }
 
 // The cluster has its own metric set (CPU, AvailableMemory by Role); stream it next to the namespace's.
-resource clusterMetricsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (dedicated) {
+resource clusterMetricsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (dedicated && diagnosticMetricsEnabled) {
   name: 'platform-metrics-to-eventhub'
   scope: dedicatedCluster
   properties: {
@@ -264,7 +273,7 @@ resource gatewayWorkloadReceiver 'Microsoft.Authorization/roleAssignments@2022-0
   }
 }
 
-resource gatewayTelemetryReceiver 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource gatewayTelemetryReceiver 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (diagnosticMetricsEnabled) {
   name: guid(telemetryHub.id, gatewayPrincipalId, eventHubsDataReceiverRoleDefinitionId)
   scope: telemetryHub
   properties: {
@@ -288,7 +297,7 @@ output premiumNamespaceName string = premiumNamespace.name
 output premiumNamespaceId string = premiumNamespace.id
 output workloadEventHubName string = workloadHub.name
 output workloadConsumerGroup string = workloadSlowConsumer.name
-output telemetryNamespaceName string = telemetryNamespace.name
-output telemetryEventHubName string = telemetryHub.name
+output telemetryNamespaceName string = telemetryEnabled ? telemetryNamespace.name : ''
+output telemetryEventHubName string = diagnosticMetricsEnabled ? telemetryHub.name : ''
 output telemetryLogsEventHubName string = logsEnabled ? telemetryLogsHub.name : ''
 output dedicatedClusterId string = dedicated ? dedicatedCluster.id : ''
