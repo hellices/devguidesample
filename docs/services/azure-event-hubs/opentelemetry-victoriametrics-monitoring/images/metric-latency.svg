@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1220 364" width="1220" height="364" role="img" aria-labelledby="latTitle latDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
+  <title id="latTitle">Azure Monitor와 OpenTelemetry Collector 경유 지표 지연 실측</title>
+  <desc id="latDesc">이벤트를 보낸 시각을 0초로 할 때, Premium 1 PU에서는 Azure Monitor Metrics API에서 72–102초(중앙값 92초), OpenTelemetry Collector를 거쳐 VictoriaMetrics에서 230–232초 뒤 조회됨. Standard 1 TU는 2분 bin으로 Metrics API 81–151초, VictoriaMetrics 221–281초. Collector 구간은 130–160초.</desc>
+  <rect width="1220" height="364" fill="#FFFFFF"/>
+  <text x="24" y="34" font-size="15" font-weight="600" fill="#1A202C">이벤트 전송 → 조회 가능까지 걸린 시간(초) · 2026-11-10 측정, 10초 간격 polling</text>
+  <line x1="300.0" y1="60" x2="300.0" y2="288" stroke="#E2E8F0"/>
+  <text x="300.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">0</text>
+  <line x1="378.0" y1="60" x2="378.0" y2="288" stroke="#E2E8F0"/>
+  <text x="378.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">30</text>
+  <line x1="456.0" y1="60" x2="456.0" y2="288" stroke="#E2E8F0"/>
+  <text x="456.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">60</text>
+  <line x1="534.0" y1="60" x2="534.0" y2="288" stroke="#E2E8F0"/>
+  <text x="534.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">90</text>
+  <line x1="612.0" y1="60" x2="612.0" y2="288" stroke="#E2E8F0"/>
+  <text x="612.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">120</text>
+  <line x1="690.0" y1="60" x2="690.0" y2="288" stroke="#E2E8F0"/>
+  <text x="690.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">150</text>
+  <line x1="768.0" y1="60" x2="768.0" y2="288" stroke="#E2E8F0"/>
+  <text x="768.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">180</text>
+  <line x1="846.0" y1="60" x2="846.0" y2="288" stroke="#E2E8F0"/>
+  <text x="846.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">210</text>
+  <line x1="924.0" y1="60" x2="924.0" y2="288" stroke="#E2E8F0"/>
+  <text x="924.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">240</text>
+  <line x1="1002.0" y1="60" x2="1002.0" y2="288" stroke="#E2E8F0"/>
+  <text x="1002.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">270</text>
+  <line x1="1080.0" y1="60" x2="1080.0" y2="288" stroke="#E2E8F0"/>
+  <text x="1080.0" y="308" text-anchor="middle" fill="#4A5568" font-size="12">300</text>
+  <line x1="300.0" y1="288" x2="1080.0" y2="288" stroke="#718096"/>
+  <text x="690.0" y="328" text-anchor="middle" fill="#4A5568" font-size="12">이벤트 전송 후 경과 시간(초)</text>
+  <line x1="300.0" y1="56" x2="300.0" y2="288" stroke="#DD6B20" stroke-width="2"/>
+  <text x="306.0" y="70" fill="#DD6B20" font-size="12">이벤트 전송</text>
+  <path d="M539.2,78 V70 H903.2 V78" fill="none" stroke="#DD8A12" stroke-width="1.5"/>
+  <text x="721.2" y="64" text-anchor="middle" fill="#B7791F" font-size="12">Premium Collector 구간 130–160초 (60초 수집 주기 · 최근 1분 창 조회)</text>
+  <text x="24" y="106" font-weight="600" fill="#1A202C">Premium 1 PU</text>
+  <text x="288" y="106" text-anchor="end" fill="#2D3748">Metrics API 조회 가능</text>
+  <rect x="487.20000000000005" y="92" width="78.0" height="20" rx="4" fill="#3182CE" fill-opacity="0.85"/>
+  <line x1="539.2" y1="89" x2="539.2" y2="115" stroke="#1A202C" stroke-width="2"/>
+  <text x="575.2" y="107" fill="#1A202C">72–102초 (중앙값 92)</text>
+  <text x="288" y="150" text-anchor="end" fill="#2D3748">VictoriaMetrics 저장(remote write)</text>
+  <rect x="898.0" y="136" width="5.2" height="20" rx="4" fill="#38A169" fill-opacity="0.85"/>
+  <line x1="903.2" y1="133" x2="903.2" y2="159" stroke="#1A202C" stroke-width="2"/>
+  <text x="913.2" y="151" fill="#1A202C">230–232초 (중앙값 232)</text>
+  <text x="24" y="208" font-weight="600" fill="#1A202C">Standard 1 TU</text>
+  <text x="288" y="208" text-anchor="end" fill="#2D3748">Metrics API 조회 가능</text>
+  <rect x="510.6" y="194" width="182.0" height="20" rx="4" fill="#3182CE" fill-opacity="0.85"/>
+  <line x1="599.0" y1="191" x2="599.0" y2="217" stroke="#1A202C" stroke-width="2"/>
+  <text x="702.6" y="209" fill="#1A202C">81–151초 (중앙값 115)</text>
+  <text x="288" y="252" text-anchor="end" fill="#2D3748">VictoriaMetrics 저장(remote write)</text>
+  <rect x="874.6" y="238" width="156.0" height="20" rx="4" fill="#38A169" fill-opacity="0.85"/>
+  <line x1="950.0" y1="235" x2="950.0" y2="261" stroke="#1A202C" stroke-width="2"/>
+  <text x="1040.6" y="253" fill="#1A202C">221–281초 (중앙값 250)</text>
+  <text x="24" y="354" fill="#4A5568" font-size="12">Premium bin은 이벤트가 속한 분보다 1분 뒤 timestamp로, Standard는 2분 단위 bin으로 기록됨. 막대는 최소–최대, 검은 선은 중앙값. 측정 resolution ±10초.</text>
+</svg>

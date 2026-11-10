@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-labelledby="methodsTitle methodsDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
+  <title id="methodsTitle">Event Hubs 지표 수집 방식 5가지</title>
+  <desc id="methodsDesc">Event Hubs namespace의 플랫폼 지표는 Azure Monitor에 1분 단위로 쌓인다. ① Azure Monitor 직접 조회, ② Metrics API를 OpenTelemetry azuremonitorreceiver가 60초마다 조회해 VictoriaMetrics로 remote write, ③ Metrics API를 azure-metrics-exporter가 조회하고 Collector가 scrape, ④ Diagnostic Settings가 telemetry Event Hub로 보내고 azureeventhubreceiver가 읽음, ⑤ Diagnostic Settings가 Log Analytics·Storage에 저장.</desc>
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
+    <style>
+      .t { font-weight: 600; font-size: 14px; fill: #1A202C; }
+      .b { fill: #2D3748; }
+      .s { font-size: 12px; fill: #4A5568; }
+      .azure { fill: #EBF4FF; stroke: #3182CE; }
+      .otel { fill: #FFF7E6; stroke: #DD8A12; }
+      .vm { fill: #EDF7EE; stroke: #38A169; }
+      .ds { fill: #F3EEFF; stroke: #805AD5; }
+      .e { stroke: #4A5568; stroke-width: 1.6; fill: none; marker-end: url(#m); }
+      .badge { fill: #2B6CB0; }
+      .badgetext { fill: #FFFFFF; font-weight: 700; font-size: 13px; }
+    </style>
+  </defs>
+  <rect width="1200" height="470" fill="#FFFFFF"/>
+
+  <!-- source -->
+  <rect class="azure" x="20" y="170" width="170" height="110" rx="10"/>
+  <text class="t" x="34" y="200">Event Hubs</text>
+  <text class="t" x="34" y="220">namespace</text>
+  <text class="s" x="34" y="246">Premium · Standard</text>
+  <text class="s" x="34" y="264">· Dedicated cluster</text>
+
+  <!-- Azure Monitor -->
+  <rect class="azure" x="240" y="30" width="210" height="250" rx="10"/>
+  <text class="t" x="256" y="58">Azure Monitor</text>
+  <text class="t" x="256" y="78">플랫폼 지표</text>
+  <text class="b" x="256" y="106">자동 수집 · 설정 없음</text>
+  <text class="b" x="256" y="126">1분 집계(PT1M)</text>
+  <text class="b" x="256" y="146">93일 보관</text>
+  <text class="b" x="256" y="166">dimension 분할 가능</text>
+  <path class="e" d="M190,225 H238"/>
+
+  <!-- Diagnostic Settings -->
+  <rect class="ds" x="240" y="320" width="210" height="130" rx="10"/>
+  <text class="t" x="256" y="348">Diagnostic Settings</text>
+  <text class="b" x="256" y="374">AllMetrics export</text>
+  <text class="b" x="256" y="394">dimension 합산</text>
+  <text class="b" x="256" y="414">값이 있는 분만</text>
+  <path class="e" d="M105,280 V385 H238"/>
+
+  <!-- ① direct -->
+  <circle class="badge" cx="490" cy="62" r="13"/><text class="badgetext" x="485" y="67">1</text>
+  <rect class="azure" x="512" y="40" width="668" height="44" rx="8"/>
+  <text class="t" x="526" y="67">Azure Monitor 안에서 조회</text>
+  <text class="b" x="760" y="67">Metrics explorer · 지표 경고 · Grafana Azure Monitor data source</text>
+  <path class="e" d="M450,62 H475"/>
+
+  <!-- ② Metrics API + otel -->
+  <circle class="badge" cx="490" cy="132" r="13"/><text class="badgetext" x="485" y="137">2</text>
+  <rect class="azure" x="512" y="110" width="140" height="44" rx="8"/>
+  <text class="t" x="526" y="137">Metrics API</text>
+  <rect class="otel" x="680" y="110" width="270" height="44" rx="8"/>
+  <text class="t" x="694" y="130">OTel azuremonitorreceiver</text>
+  <text class="s" x="694" y="147">60초마다 pull · remote write</text>
+  <path class="e" d="M450,132 H475"/>
+  <path class="e" d="M652,132 H678"/>
+  <path class="e" d="M950,132 H978"/>
+
+  <!-- ③ exporter -->
+  <circle class="badge" cx="490" cy="202" r="13"/><text class="badgetext" x="485" y="207">3</text>
+  <rect class="azure" x="512" y="180" width="140" height="44" rx="8"/>
+  <text class="t" x="526" y="207">Metrics API</text>
+  <rect class="otel" x="680" y="180" width="270" height="44" rx="8"/>
+  <text class="t" x="694" y="200">azure-metrics-exporter</text>
+  <text class="s" x="694" y="217">Prometheus exporter → Collector scrape</text>
+  <path class="e" d="M450,202 H475"/>
+  <path class="e" d="M652,202 H678"/>
+  <path class="e" d="M950,202 H978"/>
+
+  <!-- VictoriaMetrics -->
+  <rect class="vm" x="980" y="110" width="200" height="240" rx="10"/>
+  <text class="t" x="996" y="140">VictoriaMetrics</text>
+  <text class="b" x="996" y="166">Grafana 대시보드</text>
+  <text class="b" x="996" y="186">다른 Prometheus 지표와</text>
+  <text class="b" x="996" y="206">한 저장소·한 query</text>
+
+  <!-- ④ DS → Event Hub -->
+  <circle class="badge" cx="490" cy="352" r="13"/><text class="badgetext" x="485" y="357">4</text>
+  <rect class="ds" x="512" y="330" width="140" height="44" rx="8"/>
+  <text class="t" x="526" y="350">telemetry</text>
+  <text class="t" x="526" y="367">Event Hub</text>
+  <rect class="otel" x="680" y="330" width="270" height="44" rx="8"/>
+  <text class="t" x="694" y="350">OTel azureeventhubreceiver</text>
+  <text class="s" x="694" y="367">push 수신 · remote write</text>
+  <path class="e" d="M450,352 H475"/>
+  <path class="e" d="M652,352 H678"/>
+  <path class="e" d="M950,352 H965 V330 H978"/>
+
+  <!-- ⑤ DS → Log Analytics / Storage -->
+  <circle class="badge" cx="490" cy="422" r="13"/><text class="badgetext" x="485" y="427">5</text>
+  <rect class="ds" x="512" y="400" width="668" height="44" rx="8"/>
+  <text class="t" x="526" y="427">Log Analytics · Storage</text>
+  <text class="b" x="760" y="427">Azure 안에 저장 · KQL 분석 · 장기 보관</text>
+  <path class="e" d="M450,422 H475"/>
+</svg>
