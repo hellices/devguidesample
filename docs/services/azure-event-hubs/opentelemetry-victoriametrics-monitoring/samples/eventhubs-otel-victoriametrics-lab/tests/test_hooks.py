@@ -963,27 +963,33 @@ READER_ID = ("/subscriptions/22222222-2222-2222-2222-222222222222/resourceGroups
              "33333333-3333-3333-3333-333333333333")
 
 
-@pytest.mark.parametrize("present", [True, False])
-def test_predown_removes_only_the_lab_reader_assignment_on_an_existing_cluster(fake_bin, present):
+# ARM may return the provider segments in lower case; the scope must still be the cluster.
+READER_ID_LOWER = READER_ID.replace("/providers/Microsoft.EventHub/", "/providers/microsoft.eventhub/").replace(
+    "/providers/Microsoft.Authorization/roleAssignments/", "/providers/microsoft.authorization/roleassignments/")
+
+
+@pytest.mark.parametrize("present, reader_id", [(True, READER_ID), (False, READER_ID), (True, READER_ID_LOWER)])
+def test_predown_removes_only_the_lab_reader_assignment_on_an_existing_cluster(fake_bin, present, reader_id):
     bin_dir, log, write = fake_bin
-    scope = READER_ID.split("/providers/Microsoft.Authorization/")[0]
+    scope = re.split(r"(?i)/providers/microsoft\.authorization/", reader_id)[0]
+    assert scope.lower().endswith("/clusters/ehc-existing")
     write("az", (
         'args="$*"\n'
         'case "$args" in\n'
         '  "group exists "*) echo false;;\n'
         f'  "role assignment list --subscription 22222222-2222-2222-2222-222222222222 --scope {scope} '
         f'--query [?name==\'33333333-3333-3333-3333-333333333333\'] | length(@) -o tsv") echo {1 if present else 0};;\n'
-        f'  "role assignment delete --subscription 22222222-2222-2222-2222-222222222222 --ids {READER_ID} --output none") ;;\n'
+        f'  "role assignment delete --subscription 22222222-2222-2222-2222-222222222222 --ids {reader_id} --output none") ;;\n'
         '  *) echo "unexpected az call: $args" >&2; exit 97;;\n'
         'esac'
     ))
-    write("azd", AZD_CLEANUP_ENV.replace("*) exit 1;;", f"EXISTING_CLUSTER_READER_ASSIGNMENT_ID) echo {READER_ID};; *) exit 1;;"))
+    write("azd", AZD_CLEANUP_ENV.replace("*) exit 1;;", f"EXISTING_CLUSTER_READER_ASSIGNMENT_ID) echo {reader_id};; *) exit 1;;"))
 
     result = _run("cleanup-external.sh", bin_dir, "--yes")
 
     assert result.returncode == 0, result.stderr
     deletes = [c for c in log.read_text().splitlines() if "role assignment delete" in c]
-    assert deletes == ([f"az role assignment delete --subscription 22222222-2222-2222-2222-222222222222 --ids {READER_ID} --output none"]
+    assert deletes == ([f"az role assignment delete --subscription 22222222-2222-2222-2222-222222222222 --ids {reader_id} --output none"]
                        if present else [])
 
 

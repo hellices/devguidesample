@@ -67,14 +67,15 @@ fi
 # exactly the assignment the template created (its ID is a provision output) and nothing else there.
 reader_assignment="$(env_value EXISTING_CLUSTER_READER_ASSIGNMENT_ID)"
 if [[ -n "$reader_assignment" ]]; then
-  # ARM may normalize segment casing, so the shape check ignores case.
+  # ARM may normalize segment casing, so the shape check ignores case and the parts used below come
+  # from its capture groups rather than from case-sensitive string trimming.
   shopt -s nocasematch
-  [[ "$reader_assignment" =~ ^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.EventHub/clusters/[^/]+/providers/Microsoft\.Authorization/roleAssignments/[0-9a-f-]{36}$ ]] \
+  [[ "$reader_assignment" =~ ^(/subscriptions/([^/]+)/resourceGroups/[^/]+/providers/Microsoft\.EventHub/clusters/[^/]+)/providers/Microsoft\.Authorization/roleAssignments/([0-9a-f-]{36})$ ]] \
     || die "unexpected EXISTING_CLUSTER_READER_ASSIGNMENT_ID: $reader_assignment"
   shopt -u nocasematch
-  reader_scope="${reader_assignment%/providers/Microsoft.Authorization/roleAssignments/*}"
-  reader_name="${reader_assignment##*/}"
-  reader_subscription="$(cut -d/ -f3 <<<"$reader_assignment")"
+  reader_scope="${BASH_REMATCH[1]}"
+  reader_subscription="${BASH_REMATCH[2]}"
+  reader_name="${BASH_REMATCH[3]}"
   # Match the assignment GUID (its name) rather than the full ID, whose casing ARM may normalize.
   reader_count="$(az role assignment list --subscription "$reader_subscription" --scope "$reader_scope" \
     --query "[?name=='$reader_name'] | length(@)" -o tsv)" || die "could not look up $reader_assignment"
