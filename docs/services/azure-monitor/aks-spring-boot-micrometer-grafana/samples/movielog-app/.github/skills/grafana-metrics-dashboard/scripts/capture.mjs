@@ -36,6 +36,20 @@ async function waitForPanels(page) {
 }
 
 const routeErrors = [];
+
+async function assertRendered(page) {
+  if (routeErrors.length) {
+    throw new Error(routeErrors.join("; "));
+  }
+  // An epoch time range saved in the dashboard JSON renders as "Invalid date" and queries from=NaN.
+  const text = await page.locator("body").innerText();
+  if (/\bNo data\b|\bInvalid date\b/.test(text)) {
+    throw new Error("rendered dashboard shows No data or Invalid date");
+  }
+  if (/\/subscriptions\/|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/i.test(text)) {
+    throw new Error("rendered dashboard shows a resource or subscription identifier");
+  }
+}
 const browser = await chromium.launch();
 try {
   const context = await browser.newContext({
@@ -82,17 +96,6 @@ try {
   if ((await page.locator(PANEL).count()) === 0) {
     throw new Error(`no panels rendered for ${path}`);
   }
-  if (routeErrors.length) {
-    throw new Error(routeErrors.join("; "));
-  }
-  // An epoch time range saved in the dashboard JSON renders as "Invalid date" and queries from=NaN.
-  const text = await page.locator("body").innerText();
-  if (/\bNo data\b|\bInvalid date\b/.test(text)) {
-    throw new Error("rendered dashboard shows No data or Invalid date");
-  }
-  if (/\/subscriptions\/|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/i.test(text)) {
-    throw new Error("rendered dashboard shows a resource or subscription identifier");
-  }
 
   // Grafana scrolls inside its own container, so grow the viewport to that container's content
   // height; the newly visible panels then load lazily and are awaited again.
@@ -107,6 +110,8 @@ try {
     await page.setViewportSize({ width: viewportWidth, height: Math.ceil(contentHeight) });
     await waitForPanels(page);
   }
+  // Checked only after the last wait, so panels that loaded lazily after the viewport grew are included.
+  await assertRendered(page);
   await page.screenshot({ path: out });
   console.log(`saved ${out} (${viewportWidth}x${Math.max(Math.ceil(contentHeight), Number(minHeight))})`);
 } catch (error) {

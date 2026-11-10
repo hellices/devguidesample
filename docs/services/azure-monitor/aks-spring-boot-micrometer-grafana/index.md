@@ -259,10 +259,8 @@ MovieLog panel별 질문, 집계식, 시각화는 실습의 [build 절](movielog
 skill은 VS Code의 GitHub Copilot과 GitHub Copilot CLI가 저장소의 `.github/skills/`에서
 찾고, 요청 내용이 skill 설명과 맞으면 Copilot이 지침을 불러와 따릅니다.
 
-1. sample의 `.github/skills/grafana-metrics-dashboard/` 폴더를 자기 저장소의
-   `.github/skills/`에 복사합니다. 지침 전문은
-   [grafana-metrics-dashboard-skill.md](downloads/grafana-metrics-dashboard-skill.md)에
-   있습니다.
+1. sample의 [`.github/skills/grafana-metrics-dashboard/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard) 폴더를 자기 저장소의
+   `.github/skills/`에 복사합니다. 지침 전문은 [SKILL.md](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard/SKILL.md)에 있습니다.
 2. Copilot이 Grafana에 접근할 경로를 준비합니다. VS Code에서는 Managed Grafana MCP
    endpoint(`https://<grafana-endpoint>/api/azure-mcp`)를 연결하고, 터미널에서는 `az`로
    로그인합니다.

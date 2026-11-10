@@ -7,5 +7,3 @@ used_by:
 publish:
   - source: grafana/movielog-dashboard.json
     target: downloads/movielog-dashboard.json
-  - source: .github/skills/grafana-metrics-dashboard/SKILL.md
-    target: downloads/grafana-metrics-dashboard-skill.md
