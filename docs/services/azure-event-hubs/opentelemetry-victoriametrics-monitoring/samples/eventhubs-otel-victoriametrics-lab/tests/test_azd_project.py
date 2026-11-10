@@ -110,6 +110,9 @@ def test_main_bicep_exports_hook_contract():
         "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": "existingDedicatedClusterResourceId",
         "EVENTHUBS_SKU": "eventHubsSku",
         "DEDICATED_CLUSTER_RESOURCE_ID": "messaging.outputs.dedicatedClusterId",
+        "TELEMETRY_LOGS_EVENTHUB_NAME": "messaging.outputs.telemetryLogsEventHubName",
+        "MANAGED_GRAFANA_NAME": "grafana.?outputs.name ?? ''",
+        "MANAGED_GRAFANA_ENDPOINT": "grafana.?outputs.endpoint ?? ''",
     }
 
     assert _declared_outputs(text) == expected
@@ -141,8 +144,32 @@ def test_main_parameters_map_azd_environment_values():
         "deployerPrincipalType": "${AZURE_PRINCIPAL_TYPE=User}",
         "existingDedicatedClusterResourceId": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}",
         "eventHubsSku": "${EVENTHUBS_SKU=Dedicated}",
+        "eventHubsLogs": "${EVENTHUBS_LOGS=Enabled}",
+        "managedGrafana": "${MANAGED_GRAFANA=Disabled}",
     }
 
     main = (LAB_ROOT / "infra" / "main.bicep").read_text()
     for parameter in ("operatorEgressCidr", "grafanaAdminPassword", "gatewayAdminSshPublicKey"):
         assert re.search(rf"(?m)^param {parameter} string = ''$", _bicep_code(main)), parameter
+
+
+def test_managed_grafana_is_optional_standard_and_reachable_only_privately():
+    main = _bicep_code((LAB_ROOT / "infra" / "main.bicep").read_text())
+    module = _bicep_code((LAB_ROOT / "infra" / "modules" / "grafana.bicep").read_text())
+    foundation = _bicep_code((LAB_ROOT / "infra" / "modules" / "foundation.bicep").read_text())
+
+    assert "param managedGrafana string = 'Disabled'" in main
+    assert "module grafana 'modules/grafana.bicep' = if (managedGrafana == 'Enabled')" in main
+    # Managed private endpoints need Standard; API keys stay off.
+    assert re.search(r"sku: \{\s*name: 'Standard'\s*\}", module)
+    assert "apiKey: 'Disabled'" in module
+    # Creating the workspace already grants the caller Grafana Admin; a Bicep duplicate fails, so the
+    # hook grants it only when missing.
+    assert "roleAssignments" not in module
+    hook = (LAB_ROOT / "scripts" / "managed-grafana.sh").read_text()
+    assert '--role "Grafana Admin"' in hook and 'if [[ "$assigned" == "0" ]]; then' in hook
+    # The Private Link Service on the AKS internal load balancer needs this subnet policy off.
+    assert "privateLinkServiceNetworkPolicies: 'Disabled'" in foundation
+    pls = (LAB_ROOT / "k8s" / "vmsingle-pls.yaml").read_text()
+    assert 'service.beta.kubernetes.io/azure-load-balancer-internal: "true"' in pls
+    assert 'service.beta.kubernetes.io/azure-pls-create: "true"' in pls

@@ -11,6 +11,8 @@
     "deployerPrincipalId": { "value": "${AZURE_PRINCIPAL_ID=}" },
     "deployerPrincipalType": { "value": "${AZURE_PRINCIPAL_TYPE=User}" },
     "existingDedicatedClusterResourceId": { "value": "${EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=}" },
-    "eventHubsSku": { "value": "${EVENTHUBS_SKU=Dedicated}" }
+    "eventHubsSku": { "value": "${EVENTHUBS_SKU=Dedicated}" },
+    "eventHubsLogs": { "value": "${EVENTHUBS_LOGS=Enabled}" },
+    "managedGrafana": { "value": "${MANAGED_GRAFANA=Disabled}" }
   }
 }

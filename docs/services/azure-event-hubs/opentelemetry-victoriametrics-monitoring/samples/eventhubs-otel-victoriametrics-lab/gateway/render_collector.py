@@ -39,6 +39,57 @@ DEDICATED_METRICS = {
     "OutgoingBytes": ["Total"],
 }
 
+# Event Hubs resource log categories turned into metrics (Premium and Dedicated namespaces only).
+LOG_CATEGORIES = ["ApplicationMetricsLogs", "RuntimeAuditLogs"]
+
+# signal_to_metrics stamps every point with the time it processed the log batch, not the log time,
+# so the arrival delay is recorded as its own gauge.
+LOG_METRICS = [
+    {
+        "name": "eventhubs_log_consumer_lag",
+        "description": "ApplicationMetricsLogs ConsumerLag (AMQP: last enqueued minus last delivered sequence)",
+        "include_resource_attributes": [{"key": "cloud.provider"}],
+        "attributes": [{"key": "messaging.destination.name"}, {"key": "messaging.destination.partition.id"}],
+        "conditions": ['log.attributes["azure.operation.name"] == "ConsumerLag"'],
+        "gauge": {"value": 'log.attributes["messaging.message.count"]'},
+    },
+    {
+        "name": "eventhubs_log_application_count",
+        "description": "ApplicationMetricsLogs Count per operation other than ConsumerLag (unit depends on the operation)",
+        "include_resource_attributes": [{"key": "cloud.provider"}],
+        "attributes": [{"key": "messaging.destination.name", "default_value": "namespace"},
+                       {"key": "azure.operation.name"}],
+        "conditions": ['log.attributes["azure.category"] == "ApplicationMetricsLogs" and '
+                       'log.attributes["azure.operation.name"] != "ConsumerLag"'],
+        "sum": {"value": 'log.attributes["messaging.message.count"]', "monotonic": True},
+    },
+    {
+        "name": "eventhubs_log_runtime_operations",
+        "description": "RuntimeAuditLogs Count of data plane operations",
+        "include_resource_attributes": [{"key": "cloud.provider"}],
+        "attributes": [{"key": "azure.operation.name"}, {"key": "azure.auth.type", "default_value": "unknown"},
+                       {"key": "network.protocol.name", "default_value": "unknown"},
+                       {"key": "network.connection.type", "default_value": "unknown"},
+                       {"key": "error.type", "default_value": "none"}],
+        "conditions": ['log.attributes["azure.category"] == "RuntimeAuditLogs"'],
+        "sum": {"value": 'log.attributes["messaging.message.count"]', "monotonic": True},
+    },
+    {
+        "name": "eventhubs_log_records",
+        "description": "Resource log records received per category",
+        "include_resource_attributes": [{"key": "cloud.provider"}],
+        "attributes": [{"key": "azure.category"}],
+        "sum": {"value": "1", "monotonic": True},
+    },
+    {
+        "name": "eventhubs_log_arrival_delay_seconds",
+        "description": "Seconds from the log record time to Collector processing, last record per batch",
+        "include_resource_attributes": [{"key": "cloud.provider"}],
+        "attributes": [{"key": "azure.category"}],
+        "gauge": {"value": "Double(UnixMilli(Now()) - UnixMilli(log.time)) / 1000.0"},
+    },
+]
+
 DELIVERY_EXPORTERS = {
     "scrape": "prometheus",
     "remote_write": "prometheusremotewrite",
@@ -156,6 +207,30 @@ def render_config(env: Mapping[str, str]) -> dict:
     }
     sources["diagnostic_eventhub"] = ["azure_event_hub/diagnostic"]
 
+    logs_hub = env.get("TELEMETRY_LOGS_EVENTHUB_NAME", "").strip()
+    connectors: dict[str, dict] = {}
+    log_pipelines: dict[str, dict] = {}
+    if logs_hub:
+        # azure_encoding decodes the messaging (Event Hubs) log family into attributes, including Count.
+        extensions["azure_encoding"] = {"logs": {"include_categories": LOG_CATEGORIES}}
+        receivers["azure_event_hub/runtime_logs"] = {
+            "event_hub": {"name": logs_hub, "namespace": env["TELEMETRY_NAMESPACE"]},
+            "auth": "azure_auth",
+            "group": env.get("TELEMETRY_CONSUMER_GROUP", "otel-collector"),
+            "encoding": "azure_encoding",
+            "blob_checkpoint_store": {
+                "storage_account_url": env["CHECKPOINT_ACCOUNT_URL"].rstrip("/"),
+                "container_name": env.get("COLLECTOR_CHECKPOINT_CONTAINER", "collector-checkpoints"),
+            },
+        }
+        connectors["signal_to_metrics/runtime_logs"] = {"error_mode": "ignore", "logs": LOG_METRICS}
+        log_pipelines["logs/runtime_logs"] = {
+            "receivers": ["azure_event_hub/runtime_logs"],
+            "processors": ["memory_limiter", "transform/runtime_logs"],
+            "exporters": ["signal_to_metrics/runtime_logs"],
+        }
+        sources["diagnostic_logs"] = ["signal_to_metrics/runtime_logs"]
+
     receivers["prometheus/lag"] = {
         "config": {
             "scrape_configs": [
@@ -242,6 +317,18 @@ def render_config(env: Mapping[str, str]) -> dict:
                 f'"{dedicated_id.lower()}"'
             ],
         }
+    if "diagnostic_logs" in sources:
+        # The event hub name is a resource attribute; copy it to the record so it becomes a label
+        # without promoting service.name, which the Prometheus exporters would turn into job.
+        processors["transform/runtime_logs"] = {
+            "error_mode": "ignore",
+            "log_statements": [
+                'set(log.attributes["messaging.destination.name"], resource.attributes["service.name"]) '
+                'where resource.attributes["service.name"] != nil',
+            ],
+        }
+        # signal_to_metrics emits per-batch deltas; Prometheus series need running totals.
+        processors["delta_to_cumulative"] = {"max_stale": "30m"}
     for source in sources:
         processors[f"resource/source_{source}"] = _resource_processor("source_path", source)
     for delivery in DELIVERY_EXPORTERS:
@@ -271,6 +358,7 @@ def render_config(env: Mapping[str, str]) -> dict:
                     *(["filter/lag"] if source == "lag_exporter" else []),
                     *(["filter/self"] if source == "collector_self" else []),
                     *(["filter/dedicated"] if source == "azure_monitor_dedicated" else []),
+                    *(["delta_to_cumulative"] if source == "diagnostic_logs" else []),
                     f"resource/source_{source}",
                     f"resource/delivery_{delivery}",
                     "batch",
@@ -278,7 +366,8 @@ def render_config(env: Mapping[str, str]) -> dict:
                 "exporters": [exporter],
             }
 
-    return {
+    pipelines.update(log_pipelines)
+    config = {
         "extensions": extensions,
         "receivers": receivers,
         "processors": processors,
@@ -297,6 +386,10 @@ def render_config(env: Mapping[str, str]) -> dict:
             "pipelines": pipelines,
         },
     }
+    if connectors:
+        config["connectors"] = connectors
+        config["service"]["extensions"].append("azure_encoding")
+    return config
 
 
 def read_env_file(path: Path) -> dict[str, str]:

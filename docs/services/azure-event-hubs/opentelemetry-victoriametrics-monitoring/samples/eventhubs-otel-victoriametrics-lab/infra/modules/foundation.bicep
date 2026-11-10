@@ -91,6 +91,8 @@ resource aksSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = {
   name: 'aks'
   properties: {
     addressPrefix: aksSubnetPrefix
+    // The optional Managed Grafana path puts a Private Link Service on the AKS internal load balancer.
+    privateLinkServiceNetworkPolicies: 'Disabled'
     networkSecurityGroup: {
       id: aksNsg.id
     }

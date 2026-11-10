@@ -212,14 +212,15 @@ namespace 지표표는 38개이지만 cluster 안 namespace의 지표 정의는 
 
 여기부터는 지표 수집에 더해 볼 수 있는 추가 내용입니다. 플랫폼 지표는 namespace가
 받은·내보낸 양만 보여 주므로, consumer가 처리하지 못하고 쌓인 양이나 개별 메시지의 흐름이
-필요하면 별도 신호를 더합니다. 이 topic은 checkpoint 기반 consumer lag만 실측했고([실습의
-lag 시나리오](lab/index.md#lag)), 나머지는 선택지로 정리합니다.
+필요하면 별도 신호를 더합니다. 이 topic은 checkpoint 기반 consumer lag와 리소스 로그 두
+범주를 실측했고([실습의 lag 시나리오](lab/index.md#lag),
+[리소스 로그 지표화](lab/index.md#resource-logs)), 분산 추적은 선택지로 정리합니다.
 
 | 신호 | 내용 | 조건·주의 |
 |---|---|---|
 | checkpoint 기반 lag (이 topic) | partition 마지막 enqueue sequence − consumer group checkpoint sequence | 재시작하면 다시 처리할 양. 15초마다 Event Hubs를 직접 조회해 플랫폼 지표보다 빠름(마지막 sample 경과 약 33초) |
-| `ApplicationMetricsLogs`의 `ConsumerLag` | Diagnostic Settings 로그. partition·consumer group별 lag와 연결·처리량 runtime 지표 | Premium·Dedicated만 지원. AMQP는 receiver에 마지막으로 전달된 sequence와의 차이이며, 받을 것이 없으면 레코드가 없음(0이 아님). Kafka는 commit offset 기준으로 1분마다 평가 |
-| `RuntimeAuditLogs` | publish·consume 같은 data plane 접근을 client별로 집계한 감사 로그 | Premium·Dedicated만 지원 |
+| `ApplicationMetricsLogs`의 `ConsumerLag` (이 topic) | Diagnostic Settings 로그. partition·consumer group별 lag와 연결·처리량 runtime 지표. Collector Contrib가 지표로 바꿔 VictoriaMetrics에 저장 | Premium·Dedicated만 지원. AMQP는 receiver에 마지막으로 전달된 sequence와의 차이이며, 받을 것이 없으면 레코드가 없음(0이 아님). Kafka는 commit offset 기준으로 1분마다 평가. 실측 도착 지연 약 100초로 checkpoint lag보다 1–2분 늦음 |
+| `RuntimeAuditLogs` (이 topic) | publish·consume 같은 data plane 접근을 client별로 1분 집계한 감사 로그. operation·인증 방식·network별 분당 횟수로 저장 | Premium·Dedicated만 지원 |
 | 분산 추적 | 이벤트 속성의 W3C Trace Context 형식 `Diagnostic-Id`로 producer와 consumer 처리를 연결 | 추적 backend와 양쪽 instrumentation 필요. backlog 크기는 보여 주지 않음 |
 
 ## 실습 { #lab }
@@ -228,7 +229,9 @@ lag 시나리오](lab/index.md#lag)), 나머지는 선택지로 정리합니다.
 배포 구성, Collector 설정, lag 시나리오, agent 대시보드 검증, 지연·누락 측정 방법, 배포 중 만난
 오류와 정리 과정을 실제 실행 결과와 함께 정리했습니다. Dedicated cluster는 만든 뒤 4시간
 동안 삭제할 수 없어 최소 4시간의 CU 비용과 AKS·VM 비용이 발생합니다. `EVENTHUBS_SKU=Premium`
-으로 Premium 1 PU 구성도 배포할 수 있습니다.
+으로 Premium 1 PU 구성도 배포할 수 있습니다. `MANAGED_GRAFANA=Enabled`를 선택하면 같은
+대시보드를 managed private endpoint로 VictoriaMetrics에 연결한 Azure Managed Grafana에서도
+볼 수 있습니다([실습](lab/index.md#managed-grafana)).
 
 ## 공식 참고 자료
 

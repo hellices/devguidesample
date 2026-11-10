@@ -1,6 +1,8 @@
 // Usage: node capture.mjs <dashboard-path[?viewPanel=N]> <output.png> [fromMs] [toMs] [width]
 // Reads GRAFANA_URL (https), GRAFANA_USER, GRAFANA_PASSWORD and GRAFANA_CA_FILE from the
 // environment and writes only the PNG. Credentials are typed into the login form and never persisted.
+// With GRAFANA_TOKEN (Azure Managed Grafana) the loopback proxy adds the Microsoft Entra token to
+// every upstream request instead, and the endpoint's public certificate is verified normally.
 import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
@@ -17,15 +19,16 @@ if (!dashboardPath || !output) {
 }
 const user = process.env.GRAFANA_USER ?? 'admin';
 const password = process.env.GRAFANA_PASSWORD;
+const token = process.env.GRAFANA_TOKEN;
 let base;
 try {
-  base = grafanaBase(process.env.GRAFANA_URL, process.env.GRAFANA_CA_FILE);
+  base = grafanaBase(process.env.GRAFANA_URL, process.env.GRAFANA_CA_FILE, { token: Boolean(token) });
 } catch (error) {
   console.error(error.message);
   process.exit(2);
 }
-if (!password) {
-  console.error('GRAFANA_PASSWORD is required');
+if (!password && !token) {
+  console.error('GRAFANA_PASSWORD or GRAFANA_TOKEN is required');
   process.exit(2);
 }
 
@@ -34,17 +37,23 @@ if (!password) {
 // roots) and also requires the presented leaf to be that exact certificate, so neither a public
 // certificate nor another certificate chained to it can receive credentials.
 const target = new URL(base);
-const caPem = readFileSync(process.env.GRAFANA_CA_FILE, 'utf8');
-const pinnedFingerprint = new X509Certificate(caPem).fingerprint256;
-const agent = new https.Agent({
-  ca: caPem,
-  keepAlive: true,
-  checkServerIdentity: (host, cert) => tls.checkServerIdentity(host, cert)
-    ?? (cert.fingerprint256 === pinnedFingerprint ? undefined : new Error('Grafana presented a certificate other than the pinned one')),
-});
+let agent;
+if (token) {
+  agent = new https.Agent({ keepAlive: true });
+} else {
+  const caPem = readFileSync(process.env.GRAFANA_CA_FILE, 'utf8');
+  const pinnedFingerprint = new X509Certificate(caPem).fingerprint256;
+  agent = new https.Agent({
+    ca: caPem,
+    keepAlive: true,
+    checkServerIdentity: (host, cert) => tls.checkServerIdentity(host, cert)
+      ?? (cert.fingerprint256 === pinnedFingerprint ? undefined : new Error('Grafana presented a certificate other than the pinned one')),
+  });
+}
 let local;
 const proxy = http.createServer((req, res) => {
   const headers = { ...req.headers, host: target.host };
+  if (token) headers.authorization = `Bearer ${token}`;
   for (const name of ['origin', 'referer']) {
     if (headers[name]) headers[name] = headers[name].replace(local, target.origin);
   }
@@ -73,7 +82,9 @@ local = `http://127.0.0.1:${proxy.address().port}`;
 
 // Fail before typing credentials if the pinned TLS handshake does not succeed.
 await new Promise((resolve, reject) => {
-  const request = https.get(`${base}/api/health`, { agent }, (response) => {
+  // Managed Grafana answers /api/health only to an authenticated caller.
+  const options = { agent, headers: token ? { authorization: `Bearer ${token}` } : {} };
+  const request = https.get(`${base}/api/health`, options, (response) => {
     response.resume();
     response.statusCode === 200 ? resolve() : reject(new Error(`health returned ${response.statusCode}`));
   });
@@ -96,12 +107,14 @@ const page = await browser.newPage({ viewport: { width: Number(width), height: 1
 // Only the loopback proxy origin is reachable from the page.
 await page.route('**/*', (route) => (new URL(route.request().url()).origin === local ? route.continue() : route.abort()));
 try {
-  await gotoOk(page, `${local}/login`);
-  if (new URL(page.url()).origin !== local) throw new Error(`unexpected login origin ${page.url()}`);
-  await page.getByTestId('data-testid Username input field').fill(user);
-  await page.getByTestId('data-testid Password input field').fill(password);
-  await page.getByTestId('data-testid Login button').click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+  if (!token) {
+    await gotoOk(page, `${local}/login`);
+    if (new URL(page.url()).origin !== local) throw new Error(`unexpected login origin ${page.url()}`);
+    await page.getByTestId('data-testid Username input field').fill(user);
+    await page.getByTestId('data-testid Password input field').fill(password);
+    await page.getByTestId('data-testid Login button').click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+  }
 
   // Grafana answers a missing dashboard route with 200 and an in-app error page, so confirm the
   // dashboard and its panels through the API (same session) before rendering it.
@@ -129,7 +142,10 @@ try {
     initialHeight: 1000,
     measure: () => page.evaluate(() => {
       const scroller = document.querySelector('[data-testid="data-testid dashboard-scrollbar"], .scrollbar-view, main') ?? document.body;
-      return Math.max(scroller.scrollHeight, document.body.scrollHeight);
+      // Grafana 12 (Managed Grafana) lays panels out in a grid taller than any scroll container.
+      const grids = [...document.querySelectorAll('.react-grid-layout')]
+        .map((grid) => Math.ceil(grid.getBoundingClientRect().bottom + window.scrollY));
+      return Math.max(scroller.scrollHeight, document.body.scrollHeight, ...grids);
     }),
     resize: async (height) => {
       await page.setViewportSize({ width: Number(width), height });

@@ -1,0 +1,25 @@
+# Applied only with MANAGED_GRAFANA=Enabled. A second internal LoadBalancer Service for the same
+# VMSingle pods; the AKS cloud provider puts a Private Link Service on its frontend so Azure Managed
+# Grafana can reach VMSingle through a managed private endpoint. Connections need explicit approval.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmsingle-pls
+  namespace: eventhubs-observability
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    service.beta.kubernetes.io/azure-pls-create: "true"
+    service.beta.kubernetes.io/azure-pls-name: __PLS_NAME__
+    service.beta.kubernetes.io/azure-pls-proxy-protocol: "false"
+    service.beta.kubernetes.io/azure-pls-visibility: "*"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: vmsingle
+    app.kubernetes.io/instance: lab
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8428
+      # VMSingle listens on 8429; the operator Service also maps 8428 to it as an alias.
+      targetPort: 8429

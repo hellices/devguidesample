@@ -24,6 +24,8 @@ DEDICATED = 'source_path="azure_monitor_dedicated",delivery_path="remote_write"'
 DIAG_CLUSTER = ('source_path="diagnostic_eventhub",delivery_path="remote_write",'
                 'azure_resource_id=~"(?i).*/providers/microsoft\\\\.eventhub/clusters/.*"')
 LAG = 'source_path="lag_exporter",delivery_path="remote_write"'
+LOGS = 'source_path="diagnostic_logs",delivery_path="remote_write"'
+LOGS_OFF = "로그 꺼짐·수신 없음"
 SELF = 'source_path="collector_self",delivery_path="remote_write"'
 LEARN_METRICS = "https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference"
 
@@ -44,6 +46,11 @@ PANEL_PLAN = [
     ("수집·전달 경로별로 데이터가 들어오나", "{source_path,delivery_path}", "count_over_time, tlast_over_time", "table"),
     ("scrape와 remote write의 값 형태가 같은가", "IncomingMessages Total", "by delivery_path", "time series"),
     ("API와 Diagnostic Settings 값이 같은가", "IncomingMessages Total, NamespaceCpuUsage·cluster CPU Maximum", "by source_path", "time series"),
+    ("리소스 로그가 들어오나 (켰을 때와 껐을 때의 차이)", "eventhubs_log_records", "increase[$__range]", "stat"),
+    ("Event Hubs가 본 delivery lag는 checkpoint lag와 어떻게 다른가", "ApplicationMetricsLogs ConsumerLag", "max", "time series"),
+    ("어떤 data plane 작업이 얼마나 일어났나", "RuntimeAuditLogs Count", "increase by operation", "bars"),
+    ("어떤 인증·protocol·network로 접근했나", "RuntimeAuditLogs Count", "increase[$__range] by auth, protocol", "table"),
+    ("리소스 로그는 얼마나 늦게 도착하나", "log time → Collector 처리 시각", "max by category", "time series"),
     ("Collector가 데이터를 거부·전송 실패했나", "otelcol_receiver_refused_*, otelcol_exporter_send_failed_*", "increase", "stat"),
 ]
 
@@ -363,16 +370,23 @@ def build_dashboard(probe: dict) -> dict:
     ))
 
     panels.append(layout.row("Azure Monitor API vs Diagnostic Settings (remote write)"))
+    incoming_targets = [
+        {"expr": f"sum(azure_incomingmessages_total_Count{{{API}}})", "legendFormat": "azure_monitor_api"},
+        {"expr": f"sum(incomingmessages_total{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},
+    ]
+    incoming_note = ("[optional] Diagnostic Settings 경로는 설정 후 데이터가 흐르기까지 시간이 걸릴 수 있습니다. "
+                     "Diagnostic Settings는 dimension을 합친 단일 값으로 내보내므로 EntityName별 API 값의 합과 비교합니다.")
+    if tier == "dedicated":
+        incoming_targets.append({"expr": f"sum(incomingmessages_total{{{DIAG_CLUSTER}}})",
+                                 "legendFormat": "diagnostic_eventhub (cluster)"})
+        incoming_note += (" Dedicated에서는 cluster 설정의 같은 지표도 함께 그립니다. lab cluster에는 "
+                          "부하 namespace 하나만 있으므로 namespace 값과 같아야 합니다.")
     panels.append(layout.panel(
         "timeseries", "IncomingMessages: API vs Diagnostic Settings", 12, 8,
-        [
-            {"expr": f"sum(azure_incomingmessages_total_Count{{{API}}})", "legendFormat": "azure_monitor_api"},
-            {"expr": f"sum(incomingmessages_total{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},
-        ],
-        description=("[optional] Diagnostic Settings 경로는 설정 후 데이터가 흐르기까지 시간이 걸릴 수 있습니다. "
-                     "Diagnostic Settings는 dimension을 합친 단일 값으로 내보내므로 EntityName별 API 값의 합과 비교합니다."),
+        incoming_targets,
+        description=incoming_note,
         fieldConfig=field("locale", None, lineWidth=2, showPoints="always", pointSize=4) | {"overrides": [{
-            "matcher": {"id": "byName", "options": "diagnostic_eventhub"},
+            "matcher": {"id": "byRegexp", "options": "diagnostic_eventhub.*"},
             "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}},
                            {"id": "custom.lineWidth", "value": 3}]}]},
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
@@ -404,6 +418,68 @@ def build_dashboard(probe: dict) -> dict:
             "matcher": {"id": "byName", "options": "diagnostic_eventhub"},
             "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 6]}},
                            {"id": "custom.lineWidth", "value": 3}]}]},
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+
+    panels.append(layout.row("Event Hubs 리소스 로그 → 지표 (ApplicationMetricsLogs·RuntimeAuditLogs, EVENTHUBS_LOGS=Enabled)"))
+    off_note = (f"[optional] EVENTHUBS_LOGS=Disabled이거나 Diagnostic Settings 로그가 아직 도착하지 않으면 '{LOGS_OFF}'로 "
+                "표시됩니다. 로그를 지표로 바꾼 값은 Collector가 처리한 시각으로 기록됩니다.")
+    panels.append(layout.panel(
+        "stat", "Resource log records", 4, 8,
+        [{"expr": f"sum(increase(eventhubs_log_records_total{{{LOGS}}}[$__range]))", "instant": True,
+          "legendFormat": "records"}],
+        description=off_note + " 조회 구간에 받은 ApplicationMetricsLogs·RuntimeAuditLogs 레코드 수입니다.",
+        fieldConfig={"defaults": {"unit": "locale", "decimals": 0, "noValue": LOGS_OFF,
+                                  "color": {"mode": "fixed", "fixedColor": "text"}}, "overrides": []},
+        options=stat_opts | {"textMode": "value"},
+    ))
+    panels.append(layout.panel(
+        "timeseries", "Consumer lag: checkpoint vs ApplicationMetricsLogs", 10, 8,
+        [
+            {"expr": f"max(eventhubs_consumer_lag_messages{{{LAG}}})", "legendFormat": "checkpoint lag (lag exporter)"},
+            {"expr": f"max(eventhubs_log_consumer_lag{{{LOGS}}})", "legendFormat": "ConsumerLag log (delivery lag)"},
+        ],
+        description=off_note + (" checkpoint lag는 마지막 enqueue sequence − 저장된 checkpoint, ConsumerLag 로그는 "
+                                "AMQP receiver에 마지막으로 전달한 sequence와의 차이입니다. 받을 event가 없으면 로그가 없습니다."),
+        fieldConfig=field("locale", None, min=0, lineWidth=2, showPoints="always", pointSize=3, no_value=LOGS_OFF),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+    panels.append(layout.panel(
+        "timeseries", "Runtime audit operations / min", 10, 8,
+        [{"expr": f"sum by (azure_operation_name) (increase(eventhubs_log_runtime_operations_total{{{LOGS}}}[1m]))",
+          "legendFormat": "{{azure_operation_name}}"}],
+        description=off_note + " RuntimeAuditLogs의 1분 집계 Count를 작업별로 더한 값입니다.",
+        fieldConfig=field("locale", None, decimals=0, drawStyle="bars", fillOpacity=60, stacking={"mode": "normal"},
+                          no_value=LOGS_OFF),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+    panels.append(layout.panel(
+        "table", "Data plane access by auth · protocol · network", 9, 8,
+        [{"expr": ("sum by (azure_operation_name, azure_auth_type, network_protocol_name, network_connection_type, "
+                   f"error_type) (increase(eventhubs_log_runtime_operations_total{{{LOGS}}}[$__range]))"),
+          "instant": True, "format": "table"}],
+        description=off_note + " client IP와 인증 ID는 label로 만들지 않습니다.",
+        transformations=[{"id": "organize", "options": {
+            "excludeByName": {"Time": True},
+            "renameByName": {"azure_operation_name": "Operation", "azure_auth_type": "Auth",
+                             "network_protocol_name": "Protocol", "network_connection_type": "Network",
+                             "error_type": "Error", "Value": "Count"}}}],
+        fieldConfig={"defaults": {"unit": "locale", "decimals": 0, "noValue": LOGS_OFF}, "overrides": []},
+    ))
+    panels.append(layout.panel(
+        "timeseries", "ApplicationMetricsLogs count / min", 8, 8,
+        [{"expr": f"sum by (azure_operation_name) (increase(eventhubs_log_application_count_total{{{LOGS}}}[1m]))",
+          "legendFormat": "{{azure_operation_name}}"}],
+        description=off_note + " ConsumerLag를 뺀 작업별 Count입니다. 단위는 작업마다 다릅니다(message, byte, 호출 수).",
+        fieldConfig=field("short", None, decimals=0, lineWidth=1, no_value=LOGS_OFF),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+    panels.append(layout.panel(
+        "timeseries", "Resource log arrival delay", 7, 8,
+        [{"expr": f"max by (azure_category) (eventhubs_log_arrival_delay_seconds{{{LOGS}}})",
+          "legendFormat": "{{azure_category}}"}],
+        description=off_note + " 레코드 시각부터 Collector가 처리할 때까지의 초입니다.",
+        fieldConfig=field("s", None, decimals=0, min=0, lineWidth=2, showPoints="always", pointSize=3, no_value=LOGS_OFF),
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
     ))
 

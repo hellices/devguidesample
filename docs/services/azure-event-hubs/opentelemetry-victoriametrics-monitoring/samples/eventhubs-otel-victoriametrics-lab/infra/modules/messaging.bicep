@@ -10,6 +10,12 @@ param consumerPrincipalId string
   'Dedicated'
 ])
 param eventHubsSku string = 'Premium'
+@description('Stream the workload namespace ApplicationMetricsLogs and RuntimeAuditLogs (Premium and Dedicated only) to a telemetry hub.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param eventHubsLogs string = 'Enabled'
 
 var premiumNamespaceName = 'ehp-${token}'
 var telemetryNamespaceName = 'eht-${token}'
@@ -17,6 +23,8 @@ var workloadEventHubName = 'workload'
 var workloadConsumerGroup = 'slow-consumer'
 var telemetryEventHubName = 'platform-metrics'
 var telemetryConsumerGroup = 'otel-collector'
+var telemetryLogsEventHubName = 'runtime-logs'
+var logsEnabled = eventHubsLogs == 'Enabled'
 var dedicated = eventHubsSku == 'Dedicated'
 var monitoringReaderRoleDefinitionId = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
 var eventHubsDataSenderRoleDefinitionId = '2b629674-e913-4c01-ae53-ef4638d8f975'
@@ -116,6 +124,25 @@ resource telemetryCollectorConsumer 'Microsoft.EventHub/namespaces/eventhubs/con
   }
 }
 
+// Logs get their own hub: the metrics receiver would otherwise parse log records as metrics.
+resource telemetryLogsHub 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = if (logsEnabled) {
+  parent: telemetryNamespace
+  name: telemetryLogsEventHubName
+  properties: {
+    messageRetentionInDays: 1
+    partitionCount: 2
+    status: 'Active'
+  }
+}
+
+resource telemetryLogsCollectorConsumer 'Microsoft.EventHub/namespaces/eventhubs/consumergroups@2024-01-01' = if (logsEnabled) {
+  parent: telemetryLogsHub
+  name: telemetryConsumerGroup
+  properties: {
+    userMetadata: 'OpenTelemetry Collector Event Hubs resource log consumer.'
+  }
+}
+
 resource telemetryDiagnosticRule 'Microsoft.EventHub/namespaces/authorizationRules@2024-01-01' = {
   parent: telemetryNamespace
   name: 'diagnostics-send'
@@ -142,6 +169,26 @@ resource premiumMetricsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@202
           days: 0
           enabled: false
         }
+      }
+    ]
+  }
+}
+
+// Data plane logs: ConsumerLag and other runtime values per partition, and aggregated access audit.
+resource premiumLogsToTelemetryHub 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (logsEnabled) {
+  name: 'runtime-logs-to-eventhub'
+  scope: premiumNamespace
+  properties: {
+    eventHubAuthorizationRuleId: telemetryDiagnosticRule.id
+    eventHubName: telemetryLogsHub.name
+    logs: [
+      {
+        category: 'ApplicationMetricsLogs'
+        enabled: true
+      }
+      {
+        category: 'RuntimeAuditLogs'
+        enabled: true
       }
     ]
   }
@@ -227,10 +274,21 @@ resource gatewayTelemetryReceiver 'Microsoft.Authorization/roleAssignments@2022-
   }
 }
 
+resource gatewayTelemetryLogsReceiver 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (logsEnabled) {
+  name: guid(telemetryLogsHub.id, gatewayPrincipalId, eventHubsDataReceiverRoleDefinitionId)
+  scope: telemetryLogsHub
+  properties: {
+    principalId: gatewayPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', eventHubsDataReceiverRoleDefinitionId)
+  }
+}
+
 output premiumNamespaceName string = premiumNamespace.name
 output premiumNamespaceId string = premiumNamespace.id
 output workloadEventHubName string = workloadHub.name
 output workloadConsumerGroup string = workloadSlowConsumer.name
 output telemetryNamespaceName string = telemetryNamespace.name
 output telemetryEventHubName string = telemetryHub.name
+output telemetryLogsEventHubName string = logsEnabled ? telemetryLogsHub.name : ''
 output dedicatedClusterId string = dedicated ? dedicatedCluster.id : ''

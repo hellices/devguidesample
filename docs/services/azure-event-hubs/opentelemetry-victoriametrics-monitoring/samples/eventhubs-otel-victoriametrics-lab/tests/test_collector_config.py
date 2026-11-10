@@ -196,3 +196,34 @@ def test_lag_pipelines_drop_python_runtime_metrics():
     assert config["processors"]["filter/self"]["metric_conditions"] == [
         'not IsMatch(metric.name, "^otelcol_(receiver|exporter)_.*")'
     ]
+
+
+def test_resource_logs_become_metrics_only_when_a_logs_hub_is_set():
+    assert "connectors" not in render_config(BASE_ENV)
+    config = render_config(BASE_ENV | {"TELEMETRY_LOGS_EVENTHUB_NAME": "runtime-logs"})
+
+    receiver = config["receivers"]["azure_event_hub/runtime_logs"]
+    assert receiver["event_hub"]["name"] == "runtime-logs"
+    # The messaging log family needs the encoding extension; format and encoding are exclusive.
+    assert receiver["encoding"] == "azure_encoding" and "format" not in receiver
+    assert config["extensions"]["azure_encoding"] == {
+        "logs": {"include_categories": ["ApplicationMetricsLogs", "RuntimeAuditLogs"]}}
+    assert "azure_encoding" in config["service"]["extensions"]
+    pipelines = config["service"]["pipelines"]
+    assert pipelines["logs/runtime_logs"] == {
+        "receivers": ["azure_event_hub/runtime_logs"],
+        "processors": ["memory_limiter", "transform/runtime_logs"],
+        "exporters": ["signal_to_metrics/runtime_logs"],
+    }
+    _assert_fans_out(pipelines, "diagnostic_logs", ["signal_to_metrics/runtime_logs"])
+    for delivery in ("scrape", "remote_write"):
+        assert "delta_to_cumulative" in pipelines[f"metrics/diagnostic_logs-{delivery}"]["processors"]
+    metrics = {m["name"]: m for m in config["connectors"]["signal_to_metrics/runtime_logs"]["logs"]}
+    assert set(metrics) == {"eventhubs_log_consumer_lag", "eventhubs_log_application_count",
+                            "eventhubs_log_runtime_operations", "eventhubs_log_records",
+                            "eventhubs_log_arrival_delay_seconds"}
+    # Identifiers such as client IP or auth ID never become labels.
+    keys = {a.get("key") for m in metrics.values() for a in m.get("attributes", [])}
+    assert not keys & {"client.address", "azure.auth.id"}
+    # Only a harmless resource attribute is kept, so service.name never turns into the job label.
+    assert all(m["include_resource_attributes"] == [{"key": "cloud.provider"}] for m in metrics.values())

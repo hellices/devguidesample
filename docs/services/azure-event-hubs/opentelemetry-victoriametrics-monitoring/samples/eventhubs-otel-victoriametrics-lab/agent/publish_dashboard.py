@@ -1,4 +1,4 @@
-"""Publish a dashboard JSON to Grafana with the admin credentials from the environment."""
+"""Publish a dashboard JSON to Grafana with GRAFANA_TOKEN (Managed Grafana) or the admin password."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def main() -> None:
     result = grafana_request(
         os.environ["GRAFANA_URL"].rstrip("/"),
         os.environ.get("GRAFANA_USER", "admin"),
-        os.environ["GRAFANA_PASSWORD"],
+        os.environ.get("GRAFANA_PASSWORD", ""),
         "/api/dashboards/db",
         {"dashboard": json.loads(args.dashboard.read_text()), "overwrite": True,
          "message": "agent build"},

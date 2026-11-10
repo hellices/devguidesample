@@ -23,7 +23,7 @@ def _joined_commands(text: str) -> list[str]:
 
 
 def test_hooks_exist_and_are_executable():
-    for name in (*HOOKS, "run-scenario.sh", "vm-query.sh"):
+    for name in (*HOOKS, "run-scenario.sh", "vm-query.sh", "managed-grafana.sh"):
         path = SCRIPTS / name
         assert path.is_file(), name
         assert os.access(path, os.X_OK), name
@@ -85,6 +85,8 @@ def test_azure_cli_calls_pin_the_subscription():
             if line.lstrip().startswith(("#", "require_commands")):
                 continue
             for command, segment in _az_calls(line):
+                if command.startswith("extension ") and "--subscription" not in segment:
+                    continue  # installs a local CLI extension; no Azure resource is touched
                 if command.startswith(("ad ", "account ")) and "--subscription" not in segment:
                     # Entra ID lookups, the active-subscription guard and token reads are tenant scoped.
                     assert command.startswith(
@@ -979,3 +981,16 @@ def test_gateway_bootstrap_ends_with_its_exit_code(fake_bin, tmp_path, vault, co
     assert result.stdout.rstrip().splitlines()[-1] == f"GATEWAY_EXIT_CODE={code}"
     text = (SCRIPTS / "azd-postprovision.sh").read_text()
     assert 'grep -qx "GATEWAY_EXIT_CODE=0" "$STATE/gateway-bootstrap.log"' in text
+
+
+def test_managed_grafana_is_wired_only_when_enabled_and_approves_only_its_own_connection():
+    post = (SCRIPTS / "azd-postprovision.sh").read_text()
+    text = (SCRIPTS / "managed-grafana.sh").read_text()
+
+    assert 'if [[ -n "$(env_value MANAGED_GRAFANA_NAME)" ]]; then\n  "$LAB_ROOT/scripts/managed-grafana.sh"' in post
+    # The Private Link Service is open to every subscription, so only this request may be approved.
+    assert "privateLinkServiceConnectionState.status=='Pending' && privateLinkServiceConnectionState.description=='$REQUEST_MESSAGE'" in text
+    assert '--request-message "$REQUEST_MESSAGE"' in text
+    # The data source keeps the Gateway Grafana uid so the agent dashboard works unchanged.
+    assert '"uid": "victoriametrics"' in text and 'http://{sys.argv[1]}:8428' in text
+    assert 'die "managed private endpoint $MPE_NAME was not approved' in text

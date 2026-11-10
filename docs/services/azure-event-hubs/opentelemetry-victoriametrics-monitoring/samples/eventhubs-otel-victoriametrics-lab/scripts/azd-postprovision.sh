@@ -90,6 +90,9 @@ for _ in $(seq 1 30); do
   sleep 5
 done
 kube rollout status deploy/vmagent-lab -n "$NS" --timeout 300s
+if [[ -n "$(env_value MANAGED_GRAFANA_NAME)" ]]; then
+  "$LAB_ROOT/scripts/managed-grafana.sh" || die "could not connect Managed Grafana to VMSingle"
+fi
 else
   WORKLOAD_IMAGE="$(env_value WORKLOAD_IMAGE)"
   [[ -f "$COMPLETED_STAMP" && -n "$WORKLOAD_IMAGE" ]] || die "GATEWAY_ONLY requires a previous full postprovision run"
@@ -106,6 +109,7 @@ AZURE_RESOURCE_GROUP=$AZURE_RESOURCE_GROUP
 PREMIUM_NAMESPACE_NAME=$PREMIUM_NAMESPACE_NAME
 TELEMETRY_NAMESPACE=$TELEMETRY_NAMESPACE_NAME.servicebus.windows.net
 TELEMETRY_EVENTHUB_NAME=$TELEMETRY_EVENTHUB_NAME
+TELEMETRY_LOGS_EVENTHUB_NAME=$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)
 CHECKPOINT_ACCOUNT_URL=$CHECKPOINT_ACCOUNT_URL
 GATEWAY_CLIENT_ID=$GATEWAY_CLIENT_ID
 VMSINGLE_URL=http://$VMSINGLE_PRIVATE_IP:8428

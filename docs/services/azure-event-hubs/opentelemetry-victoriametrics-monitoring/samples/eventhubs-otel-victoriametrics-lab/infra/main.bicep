@@ -31,6 +31,20 @@ param existingDedicatedClusterResourceId string = ''
 ])
 param eventHubsSku string = 'Dedicated'
 
+@description('Enabled streams ApplicationMetricsLogs and RuntimeAuditLogs of the workload namespace to the telemetry namespace.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param eventHubsLogs string = 'Enabled'
+
+@description('Enabled adds an Azure Managed Grafana (Standard) that reads VMSingle through a managed private endpoint.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param managedGrafana string = 'Disabled'
+
 @secure()
 @description('Grafana administrator password stored in Key Vault and never returned as an output.')
 param grafanaAdminPassword string = ''
@@ -85,6 +99,7 @@ module messaging 'modules/messaging.bicep' = {
     producerPrincipalId: foundation.outputs.producerPrincipalId
     consumerPrincipalId: foundation.outputs.consumerPrincipalId
     eventHubsSku: eventHubsSku
+    eventHubsLogs: eventHubsLogs
   }
 }
 
@@ -106,6 +121,16 @@ module compute 'modules/compute.bicep' = {
     vnetName: foundation.outputs.vnetName
     deployerPrincipalId: deployerPrincipalId
     deployerPrincipalType: deployerPrincipalType
+  }
+}
+
+module grafana 'modules/grafana.bicep' = if (managedGrafana == 'Enabled') {
+  name: 'grafana'
+  scope: rg
+  params: {
+    location: location
+    token: token
+    tags: tags
   }
 }
 
@@ -148,4 +173,7 @@ output CHECKPOINT_ACCOUNT_URL string = foundation.outputs.storageBlobEndpoint
 output VMSINGLE_PRIVATE_IP string = foundation.outputs.vmSinglePrivateIp
 output EXISTING_DEDICATED_CLUSTER_RESOURCE_ID string = existingDedicatedClusterResourceId
 output EVENTHUBS_SKU string = eventHubsSku
+output TELEMETRY_LOGS_EVENTHUB_NAME string = messaging.outputs.telemetryLogsEventHubName
+output MANAGED_GRAFANA_NAME string = grafana.?outputs.name ?? ''
+output MANAGED_GRAFANA_ENDPOINT string = grafana.?outputs.endpoint ?? ''
 output DEDICATED_CLUSTER_RESOURCE_ID string = messaging.outputs.dedicatedClusterId

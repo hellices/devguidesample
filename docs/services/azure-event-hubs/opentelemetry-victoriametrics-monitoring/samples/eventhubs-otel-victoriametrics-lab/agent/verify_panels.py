@@ -37,11 +37,17 @@ class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
 def grafana_request(url: str, user: str, password: str, path: str, body: dict | None = None) -> dict:
     if not url.startswith("https://") and os.environ.get("GRAFANA_ALLOW_HTTP") != "1":
         raise SystemExit("refusing to send Grafana credentials over plain HTTP")
-    token = base64.b64encode(f"{user}:{password}".encode()).decode()
+    # Azure Managed Grafana takes a Microsoft Entra access token (audience https://dashboard.azure.com);
+    # the Gateway Grafana takes the admin password.
+    bearer = os.environ.get("GRAFANA_TOKEN")
+    if bearer:
+        authorization = f"Bearer {bearer}"
+    else:
+        authorization = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
     request = urllib.request.Request(
         f"{url}{path}",
         data=json.dumps(body).encode() if body is not None else None,
-        headers={"Authorization": f"Basic {token}", "Content-Type": "application/json"},
+        headers={"Authorization": authorization, "Content-Type": "application/json"},
         method="POST" if body is not None else "GET",
     )
     opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_tls_context()), _RefuseRedirect)
@@ -152,7 +158,7 @@ def main() -> None:
     report = verify(
         os.environ["GRAFANA_URL"].rstrip("/"),
         os.environ.get("GRAFANA_USER", "admin"),
-        os.environ["GRAFANA_PASSWORD"],
+        os.environ.get("GRAFANA_PASSWORD", ""),
         args.uid,
         args.time_from,
         args.time_to,

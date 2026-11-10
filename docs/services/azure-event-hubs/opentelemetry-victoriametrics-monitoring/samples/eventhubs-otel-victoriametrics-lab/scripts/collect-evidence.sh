@@ -61,6 +61,23 @@ log "capture"
   && npx playwright install chromium >/dev/null) || die "could not install the capture dependencies"
 node "$LAB_ROOT/agent/capture.mjs" /d/eventhubs-otel-victoriametrics "$EVIDENCE/grafana-dashboard.png" "$FROM_MS" "$TO_MS"
 
+MANAGED_ENDPOINT="$(env_value MANAGED_GRAFANA_ENDPOINT)"
+if [[ -n "$MANAGED_ENDPOINT" ]]; then
+  log "Managed Grafana: publish, verify and capture the same dashboard"
+  # Managed Grafana takes a Microsoft Entra token for its own audience; the deployer has Grafana Admin.
+  MANAGED_TOKEN="$(az account get-access-token --resource https://dashboard.azure.com --query accessToken -o tsv)" \
+    || die "could not get a Microsoft Entra token for Managed Grafana"
+  (
+    export GRAFANA_URL="$MANAGED_ENDPOINT" GRAFANA_TOKEN="$MANAGED_TOKEN"
+    unset GRAFANA_CA_FILE GRAFANA_PASSWORD
+    "$PY" "$LAB_ROOT/agent/publish_dashboard.py" "$EVIDENCE/dashboard.json"
+    "$PY" "$LAB_ROOT/agent/verify_panels.py" --from "$FROM_MS" --to "$TO_MS" \
+      --output "$EVIDENCE/panel-verification-managed.json"
+    node "$LAB_ROOT/agent/capture.mjs" /d/eventhubs-otel-victoriametrics "$EVIDENCE/grafana-dashboard-managed.png" \
+      "$FROM_MS" "$TO_MS"
+  ) || die "Managed Grafana could not show the dashboard"
+fi
+
 log "Azure Monitor direct query for the same window"
 NAMESPACE_ID="$(az eventhubs namespace show --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
   -n "$PREMIUM_NAMESPACE_NAME" --query id -o tsv)"

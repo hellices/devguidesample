@@ -1,6 +1,6 @@
 ---
 title: Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
-description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
+description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, Event Hubs 리소스 로그의 지표화, Azure Managed Grafana 연결, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
 document_type: lab
 services:
 - azure-event-hubs
@@ -22,6 +22,8 @@ sources_checked_at: 2026-11-10
 official_sources:
 - title: Azure Event Hubs monitoring data reference
   url: https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference
+- title: Monitor Azure Event Hubs
+  url: https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs
 - title: Azure Event Hubs Premium overview
   url: https://learn.microsoft.com/azure/event-hubs/event-hubs-premium-overview
 - title: Azure Event Hubs Dedicated tier overview
@@ -60,12 +62,28 @@ official_sources:
   url: https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables
 - title: Access token claims reference
   url: https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference
+- title: Connect to a data source privately (Azure Managed Grafana)
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-connect-to-data-source-privately
+- title: 'Tutorial: connect to a self-hosted Prometheus service on an AKS cluster using a managed private endpoint'
+  url: https://learn.microsoft.com/azure/managed-grafana/tutorial-mpe-oss-prometheus
+- title: Authenticate to Azure Managed Grafana data plane APIs with Microsoft Entra ID
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api
+- title: Grant users and identities access to Azure Managed Grafana
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-manage-access-permissions-users-identities
+- title: Disable network policies for Private Link service source IP
+  url: https://learn.microsoft.com/azure/private-link/disable-private-link-service-network-policy
 - title: OpenTelemetry Collector Contrib azuremonitorreceiver (v0.165.0)
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver
 - title: OpenTelemetry Collector Contrib azureeventhubreceiver (v0.165.0)
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azureeventhubreceiver
 - title: OpenTelemetry Collector Contrib prometheusremotewriteexporter (v0.165.0)
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/exporter/prometheusremotewriteexporter
+- title: OpenTelemetry Collector Contrib azureencodingextension (v0.165.0)
+  url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/extension/encoding/azureencodingextension
+- title: OpenTelemetry Collector Contrib signaltometricsconnector (v0.165.0)
+  url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/connector/signaltometricsconnector
+- title: OpenTelemetry Collector Contrib deltatocumulativeprocessor (v0.165.0)
+  url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/processor/deltatocumulativeprocessor
 - title: VictoriaMetrics Operator VMSingle
   url: https://docs.victoriametrics.com/operator/resources/vmsingle/
 - title: VictoriaMetrics Operator VMStaticScrape
@@ -90,7 +108,9 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 분 bin 누락 수치는 모두 이 환경 결과입니다. 그 전날 Premium 1 PU 환경 세 개
 (`ehotel-lab1`–`ehotel-lab3`)에서 원래 브랜치의 배포 오류를 고치고 재현성, HTTPS 접속,
 재배포를 확인했으며, fallback 전환과 VMSingle 보존 확인은 첫 Premium 환경에서
-실행했습니다.
+실행했습니다. 같은 날 13:46 UTC부터는 두 번째 Dedicated 환경(`ehotel-ded2`)에서
+[Event Hubs 리소스 로그의 지표화](#resource-logs)와 선택 항목인
+[Azure Managed Grafana](#managed-grafana)를 추가로 검증했습니다.
 
 ## 실습 결과물: 배포·시나리오·대시보드·정리 증거
 
@@ -104,7 +124,9 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 | 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–201초, 83분 동안 지표별 분 bin 누락 0–9개 |
 | fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(Premium 첫 환경) |
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
-| 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 환경 모두 resource group 삭제 확인 |
+| 리소스 로그 | `EVENTHUBS_LOGS=Enabled`(기본값), 시나리오 두 번 | 로그를 끈 구간은 로그 패널 6개 모두 수신 없음, 켠 구간은 26분 동안 레코드 1,469건과 6개 패널 통과(`ehotel-ded2`) |
+| Managed Grafana | `MANAGED_GRAFANA=Enabled`, `azd provision` | Private Link Service·managed private endpoint 승인·data source까지 hook 1분 30초. 같은 대시보드 37개 query 중 35개 통과, Gateway Grafana와 같은 결과(`ehotel-ded2`) |
+| 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 두 환경 모두 resource group 삭제 확인 |
 
 ## 수집 구조: 4개 source × 2개 전달 경로 { #architecture }
 
@@ -112,7 +134,7 @@ Collector는 receiver 4개를 source로 두고, source마다 scrape용과 remote
 두 개를 만듭니다. 두 pipeline은 같은 receiver instance를 공유하므로 두 전달 경로의 차이가
 서로 다른 Azure API 호출의 차이가 되지 않습니다.
 
-![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace·cluster Diagnostic Settings, telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private-endpoints subnet에 Storage Blob·Key Vault의 private endpoint](../images/architecture.svg)
+![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace·cluster 지표와 namespace 리소스 로그 2종을 보내는 Diagnostic Settings, platform-metrics·runtime-logs hub가 있는 telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 receiver 5개의 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private-endpoints subnet에 Storage Blob·Key Vault의 private endpoint. 선택 항목인 Azure Managed Grafana는 managed private endpoint와 Private Link Service로 VMSingle을 조회](../images/architecture.svg)
 
 ```yaml
 # gateway/render_collector.py가 만드는 pipeline 일부
@@ -129,6 +151,8 @@ metrics/azure_monitor_api-remote_write:
 Dedicated에서는 cluster 지표를 읽는 `azure_monitor/dedicated` receiver가
 `source_path="azure_monitor_dedicated"`로 같은 형태의 두 pipeline을 더합니다. namespace
 receiver 이름은 `azure_monitor/premium`을 그대로 쓰며, tag로 cluster 안 namespace를 찾습니다.
+`EVENTHUBS_LOGS=Enabled`(기본값)이면 리소스 로그를 지표로 바꾼 `diagnostic_logs` source도
+같은 두 pipeline을 더합니다([리소스 로그 지표화](#resource-logs)).
 
 두 exporter는 `resource_constant_labels.included: [source_path, delivery_path,
 azure.resource.id]`로 이 resource attribute만 label로 올립니다. `azure.resource.id`는
@@ -521,6 +545,120 @@ namespace를 만들며, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 기�
 aggregation과 `Role` 필터로 보고 70%에 가까워지면 확장을 검토하라고 안내하므로, CPU gauge도
 70%·85%에서 색이 바뀝니다.
 
+## Event Hubs 리소스 로그 지표화: ApplicationMetricsLogs·RuntimeAuditLogs { #resource-logs }
+
+`EVENTHUBS_LOGS=Enabled`(기본값)이면 Event Hubs가 보내는 client 관점 리소스 로그도
+Collector Contrib로 받아 지표로 바꿉니다. 지표용 Diagnostic Settings와 별도로
+workload namespace에 `runtime-logs-to-eventhub` 설정(ApplicationMetricsLogs·
+RuntimeAuditLogs)을 만들고, telemetry namespace의 전용 hub `runtime-logs`(partition 2개,
+consumer group `otel-collector`)로 보냅니다. receiver는 hub마다 하나의 decoding 방식만 쓰므로
+지표 hub와 로그 hub를 나눴습니다. Learn은 두 로그 범주를 Premium·Dedicated에서만 제공하고,
+`Count`를 1분 동안 집계한 값으로 정의합니다.
+
+```yaml
+# gateway/render_collector.py가 만드는 logs 경로 일부
+extensions:
+  azure_encoding:
+    logs: {include_categories: [ApplicationMetricsLogs, RuntimeAuditLogs]}
+receivers:
+  azure_event_hub/runtime_logs:
+    encoding: azure_encoding   # Event Hubs 로그 필드를 OTel attribute로 매핑
+connectors:
+  signal_to_metrics/runtime_logs:
+    logs: [eventhubs_log_consumer_lag, eventhubs_log_runtime_operations, ...]
+service:
+  pipelines:
+    logs/runtime_logs:
+      receivers: [azure_event_hub/runtime_logs]
+      processors: [memory_limiter, transform/runtime_logs]
+      exporters: [signal_to_metrics/runtime_logs]
+    metrics/diagnostic_logs-remote_write:
+      receivers: [signal_to_metrics/runtime_logs]
+      processors: [memory_limiter, delta_to_cumulative, resource/source_diagnostic_logs, resource/delivery_remote_write, batch]
+      exporters: [prometheusremotewrite]
+```
+
+`receiver`의 일반 `format: azure`는 Event Hubs 전용 필드(`ActivityName`, `Count`,
+`PartitionId`, `AuthType` 등)를 버리므로 `azure_encoding` extension의 messaging log 매핑을
+씁니다. `signal_to_metrics` connector는 log batch마다 delta를 내보내므로
+`delta_to_cumulative`로 누적 counter로 바꾼 뒤 다른 source와 같은 두 전달 경로로 보냅니다.
+
+| 지표 | 원본 로그 | label |
+|---|---|---|
+| `eventhubs_log_consumer_lag` | ApplicationMetricsLogs `ConsumerLag`의 `Count` | hub, partition |
+| `eventhubs_log_application_count_total` | ConsumerLag 이외 ApplicationMetricsLogs 항목의 `Count` | hub, operation |
+| `eventhubs_log_runtime_operations_total` | RuntimeAuditLogs의 `Count` | operation, 인증 방식, protocol, network, error |
+| `eventhubs_log_records_total` | 받은 레코드 수 | category |
+| `eventhubs_log_arrival_delay_seconds` | 레코드 시각부터 Collector 처리까지 걸린 시간 | category |
+
+같은 부하 시나리오를 로그를 끈 구간(13:59–14:22 UTC)과 켠 구간(14:34–14:57 UTC)에서 한
+번씩 실행했습니다. 끈 구간에는 lag exporter의 checkpoint lag만 있고 로그 패널은 모두
+`로그 꺼짐·수신 없음`이었습니다.
+
+![로그를 끈 구간의 리소스 로그 행. Resource log records·Runtime audit operations·Data plane access·ApplicationMetricsLogs count·arrival delay 패널이 모두 로그 꺼짐·수신 없음이고, consumer lag 패널에는 14:05–14:20의 checkpoint lag 선만 있음](../images/resource-logs-off.png)
+
+켠 구간에는 26분 동안 레코드 1,469건이 들어왔고 6개 패널이 모두 값을 보였습니다.
+
+![로그를 켠 구간의 리소스 로그 행. 레코드 1,469건, checkpoint lag(초록)와 ConsumerLag 로그(노랑)가 비슷한 모양으로 1–2분 차이를 두고 오르내림, 분당 runtime audit operation 막대, AAD·Unknown 인증의 Authorization·GetRuntimeInfo·ReceiveMessage·SendMessage·ConnectionOpen·ConnectionClose 표, ApplicationMetricsLogs 분당 값, 1–2분의 도착 지연](../images/resource-logs-on.png)
+
+| 항목 | 실측 |
+|---|---|
+| 첫 레코드 도착 | 로그 Diagnostic Settings를 만든 뒤 약 27분 |
+| 도착 지연 | 레코드 시각부터 Collector 처리까지 중앙값 약 100초, 범위 46–108초 |
+| ConsumerLag 로그 | 정점 10,300건으로 lag exporter의 checkpoint lag 정점 10,820건과 비슷한 모양, 1–2분 늦게 따라감 |
+| RuntimeAuditLogs(26분 합계) | ConnectionOpen 914, SendMessage 602, ReceiveMessage 503, GetRuntimeInfo 471, ConnectionClose 464, Authorization 462. 인증은 AAD 또는 Unknown, network는 모두 Public, 실패 0 |
+
+로그로 만든 지표는 다음 한계가 있어 lag exporter와 Metrics API를 대신하지 않고 보조
+지표로 둡니다.
+
+- `signal_to_metrics`는 sample을 처리 시각으로 기록하므로 그래프가 도착 지연만큼 늦게
+  그려집니다. 그래서 도착 지연을 별도 gauge로 기록합니다.
+- AMQP의 `ConsumerLag`는 Learn 정의상 checkpoint가 아니라 마지막으로 전달한 이벤트 기준의
+  delivery lag입니다. 따라잡아 받을 이벤트가 없는 receiver는 레코드를 남기지 않으므로 레코드가
+  없다고 lag가 0인 것은 아닙니다.
+- v0.165.0의 `azure_encoding`은 consumer group(`ChildEntityName`)을 attribute로 남기지 않아
+  consumer group별로 나눌 수 없습니다. 이 실습은 consumer group이 하나라 영향이 없었습니다.
+
+로그 경로를 빼려면 `azd env set EVENTHUBS_LOGS Disabled` 후 `azd provision`을 실행합니다.
+로그 hub와 설정이 빠지고, Collector에는 로그 receiver가 생성되지 않으며, 대시보드 패널은
+수신 없음으로 남습니다.
+
+## Azure Managed Grafana: managed private endpoint로 VMSingle 조회 { #managed-grafana }
+
+`MANAGED_GRAFANA=Enabled`이면 Gateway Grafana와 별도로 Azure Managed Grafana(Standard)
+workspace를 만들고, 공개 endpoint 없는 VMSingle을 managed private endpoint로 연결합니다.
+기본값은 `Disabled`입니다. Learn은 managed private endpoint에 Standard tier를 요구하며,
+연결은 Pending으로 만들어져 Private Link Service 소유자가 승인한 뒤 workspace에서 Refresh해야
+Approved가 됩니다.
+
+```bash
+azd env set MANAGED_GRAFANA Enabled
+azd provision
+```
+
+`postprovision`의 `scripts/managed-grafana.sh`가 다음 순서로 실행합니다.
+
+1. `k8s/vmsingle-pls.yaml`: AKS internal load balancer Service에 `azure-pls-create`
+   annotation을 붙여 node resource group에 `pls-vmsingle-lab`을 만듭니다.
+2. `az grafana managed-private-endpoint create`로 `mpe-vmsingle`을 만들고 domain
+   `vmsingle.eventhubs-lab.internal`을 지정합니다.
+3. Private Link Service에서 이 환경의 요청 메시지와 일치하는 Pending 연결만 승인하고,
+   Refresh 후 Approved를 확인합니다.
+4. 배포자에게 Grafana Admin이 없을 때만 할당합니다.
+5. data source `victoriametrics`를 `http://vmsingle.eventhubs-lab.internal:8428`로 만듭니다.
+
+`ehotel-ded2`에서 이 단계는 16:29:00–16:30:30 UTC의 1분 30초가 걸렸고, managed private
+endpoint는 `Succeeded`·`Approved`, Private Link Service 연결은 `Approved`였습니다.
+`collect-evidence.sh`는 `MANAGED_GRAFANA_ENDPOINT`가 있으면 `https://dashboard.azure.com`
+audience의 Microsoft Entra token으로 같은 대시보드를 게시하고 검증·캡처합니다. 로그를 켠
+구간에서 37개 query 중 35개가 통과해 Gateway Grafana와 결과가 같았고, 빈 두 개는 아래의
+namespace Diagnostic Settings 지연 때문입니다.
+
+![Azure Managed Grafana에 게시한 같은 대시보드 상단. 14:34–15:00 UTC 구간의 Dedicated CPU 3.7%·가용 memory 42.0%, 요청 1,548건·throttle 0건, CU당 분당 message·byte 막대, partition별 peak lag 10,660–10,820과 누적 lag 영역, lag 수집 OK](../images/managed-grafana-dashboard.png)
+
+웹 UI는 Microsoft Entra ID로 로그인합니다. 다른 사용자에게 보여 주려면 workspace에 Grafana
+Viewer 역할을 할당합니다.
+
 ## 배포 중 오류와 수정 { #errors }
 
 원래 브랜치의 구성으로 실제 구독에 배포하며 만난 오류입니다. 모두 sample에 반영했고,
@@ -555,6 +693,22 @@ Dedicated 기본값으로 바꾼 뒤 실제 배포에서 만난 문제입니다.
 | cluster 안 namespace의 CPU·memory panel이 빈 값 | cluster 안 namespace에는 `NamespaceCpuUsage`·`NamespaceMemoryUsage`가 없음(Metrics API `Failed to find metric configuration`) | `EVENTHUBS_SKU`로 대시보드 tier를 정해 Dedicated에서는 cluster `CPU`·`AvailableMemory` 행과 CU당 처리량을 만듦 |
 | `metadata_Role`로 만든 Role별 그래프가 빈 값 | cluster 지표의 dimension label은 `metadata_role`(소문자)로 저장됨. namespace의 `metadata_EntityName`과 표기가 다름 | 실제 probe 결과대로 `metadata_role` 사용 |
 | `collect-evidence.sh`가 receiver가 놓친 분 때문에 계속 실패 | receiver가 한 번 놓친 분 bin은 다시 오지 않는데 대조가 "아직 도착하지 않음"으로 판정 | 뒤에 저장된 bin이 있는 누락은 `remote_write_gaps`로 보고하고 저장된 값만 엄격히 대조 |
+
+리소스 로그와 Managed Grafana를 추가한 두 번째 Dedicated 환경(`ehotel-ded2`)에서 만난
+문제입니다.
+
+| 증상 | 원인 | 수정 |
+|---|---|---|
+| 로그 레코드가 receiver를 거치면 `ActivityName`·`Count`·`PartitionId`가 사라짐 | receiver의 `format: azure`는 공통 필드만 매핑 | `encoding: azure_encoding`으로 Event Hubs 로그 필드를 attribute로 매핑. 로컬 otelcol-contrib 0.165.0과 임시 hub에서 실제 레코드로 5개 지표 확인 |
+| `signal_to_metrics` 합계가 batch마다 처음부터 다시 셈 | connector가 batch별 delta를 내보냄 | `delta_to_cumulative`(이전 이름 `deltatocumulative`는 deprecated) |
+| OTTL 경로에 context가 없다는 안내 | v0.165.0은 `log.` prefix를 요구 | 모든 경로를 `log.attributes[...]`, `log.time`으로 지정 |
+| 로그를 켠 구간에 namespace Diagnostic Settings 지표 패널이 비어 있음 | 이 환경의 namespace 지표 설정은 만든 뒤 약 2시간(15:49 UTC 무렵)부터 레코드를 보냈고, cluster 설정은 5분 안에 보냄. 그 뒤에도 namespace 레코드에는 `IncomingMessages`·`EHINMSGS`가 없었음 | 대시보드에 cluster 설정의 같은 지표를 함께 그림. lab cluster의 namespace는 하나라 같은 값 |
+| 15:06 UTC에 AKS가 멈추고 15:49 UTC에 Gateway VM이 할당 해제됨 | 템플릿 밖 자동화 주체의 야간 중지(00:05·00:50 KST). VMSingle 15:06–15:18, Collector 15:49–16:22 수집 공백 | `az aks start`, `az vm start`로 재시작. Collector는 checkpoint부터 telemetry hub를 다시 읽어 공백 구간 일부를 채움 |
+| Bicep의 Grafana Admin 할당이 이미 있다는 오류로 실패 | workspace를 만든 주체에게 Grafana Admin이 자동 할당됨(ARM 배포에서도 관찰) | 템플릿에서 할당을 빼고 hook이 없을 때만 할당 |
+| `az grafana mpe` 명령이 없음 | `amg` extension 3.x에서 `managed-private-endpoint`로 이름이 바뀜 | extension 3.1.1 고정, 새 명령 이름 사용 |
+| Private Link Service는 Approved인데 data source 연결 실패 | VMSingle container는 8429에서 listen하고 operator Service가 8428을 alias로 노출 | PLS Service의 `targetPort: 8429` |
+| Private Link Service가 만들어지지 않음 | subnet의 private link service network policy가 켜져 있음 | aks subnet에 `privateLinkServiceNetworkPolicies: 'Disabled'` |
+| Managed Grafana 캡처가 401·첫 화면 높이만 저장 | `/api/health`도 인증이 필요하고, Grafana 12.4는 `.react-grid-layout`으로 높이를 계산 | health 요청에 bearer token, 높이 측정에 grid 하단 포함 |
 
 원래 브랜치에 없던 다음 항목도 보강했습니다.
 
@@ -677,11 +831,13 @@ azd는 같은 resource group을 대소문자만 다른 이름으로 두 번 표�
 | 두 번째 환경 `ehotel-lab2` | `predown`·삭제·purge·`postdown` 모두 성공(19분 3초) |
 | 세 번째 환경 `ehotel-lab3` | `predown`·삭제·purge·`postdown` 모두 성공(9분 42초) |
 | Dedicated 환경 `ehotel-ded` | cluster 생성(08:10:00) 4시간 뒤 12:10:30에 실행, `predown`·cluster 포함 resource group 삭제·purge·`postdown` 모두 성공(8분 42초) |
-| 구독 전체 | 네 resource group 없음, 이 실습의 Key Vault가 삭제 대기 목록에 없음, Event Hubs cluster 0개 |
+| 두 번째 Dedicated 환경 `ehotel-ded2` | cluster 생성(13:49:43) 3시간 55분 뒤인 17:44:58에 실행. 18:00에도 cluster가 삭제 중인 resource group에 남아 있었고, Managed Grafana·Private Link Service를 포함한 삭제·purge·`postdown`이 18:03:22에 성공(18분 3초). 4시간 전에 실행하면 거부될 수 있으므로 4시간 뒤 실행을 권장 |
+| 구독 전체 | 다섯 resource group 없음, 이 실습의 Key Vault가 삭제 대기 목록에 없음, Event Hubs cluster 0개, Managed Grafana workspace 없음 |
 
 ## 공식 참고 자료
 
 - [Azure Event Hubs monitoring data reference](https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference)
+- [Monitor Azure Event Hubs](https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs)
 - [Azure Event Hubs Premium overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-premium-overview)
 - [Azure Event Hubs Dedicated tier overview](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-overview)
 - [Create a Dedicated Azure Event Hubs cluster using Azure portal](https://learn.microsoft.com/azure/event-hubs/event-hubs-dedicated-cluster-create-portal)
@@ -701,8 +857,16 @@ azd는 같은 resource group을 대소문자만 다른 이름으로 두 번 표�
 - [Customize your Azure Developer CLI workflows using command and event hooks](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-extensibility)
 - [Work with Azure Developer CLI environment variables](https://learn.microsoft.com/azure/developer/azure-developer-cli/manage-environment-variables)
 - [Access token claims reference](https://learn.microsoft.com/entra/identity-platform/access-token-claims-reference)
+- [Connect to a data source privately (Azure Managed Grafana)](https://learn.microsoft.com/azure/managed-grafana/how-to-connect-to-data-source-privately)
+- [Tutorial: connect to a self-hosted Prometheus service on an AKS cluster using a managed private endpoint](https://learn.microsoft.com/azure/managed-grafana/tutorial-mpe-oss-prometheus)
+- [Authenticate to Azure Managed Grafana data plane APIs with Microsoft Entra ID](https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api)
+- [Grant users and identities access to Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-manage-access-permissions-users-identities)
+- [Disable network policies for Private Link service source IP](https://learn.microsoft.com/azure/private-link/disable-private-link-service-network-policy)
 - [OpenTelemetry Collector Contrib azuremonitorreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver)
 - [OpenTelemetry Collector Contrib azureeventhubreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azureeventhubreceiver)
 - [OpenTelemetry Collector Contrib prometheusremotewriteexporter v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/exporter/prometheusremotewriteexporter)
+- [OpenTelemetry Collector Contrib azureencodingextension v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/extension/encoding/azureencodingextension)
+- [OpenTelemetry Collector Contrib signaltometricsconnector v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/connector/signaltometricsconnector)
+- [OpenTelemetry Collector Contrib deltatocumulativeprocessor v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/processor/deltatocumulativeprocessor)
 - [VictoriaMetrics Operator VMSingle](https://docs.victoriametrics.com/operator/resources/vmsingle/)
 - [VictoriaMetrics Operator VMStaticScrape](https://docs.victoriametrics.com/operator/resources/vmstaticscrape/)

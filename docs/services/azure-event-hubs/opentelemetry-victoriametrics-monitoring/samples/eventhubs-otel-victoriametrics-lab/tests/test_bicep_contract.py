@@ -163,6 +163,7 @@ ROLE_GUIDS = {
     "eventHubsDataReceiverRoleDefinitionId": "a638d3c7-ab3a-418d-83e6-5f17a39d4fde",
     "networkContributorRoleDefinitionId": "4d97b98b-1d4f-4787-a291-c67834d212e7",
     "aksRbacClusterAdminRoleDefinitionId": "b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b",
+    "grafanaAdminRoleDefinitionId": "22926164-76b3-42b3-bc55-97df8dab3e41",
 }
 
 
@@ -402,6 +403,7 @@ def test_messaging_and_compute_role_assignments_are_exact():
         ("workloadHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
         ("telemetryHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
         ("dedicatedCluster", "monitoringReaderRoleDefinitionId", "gatewayPrincipalId"),
+        ("telemetryLogsHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
     ])
     assert sorted(_role_assignments(COMPUTE.read_text())) == sorted([
         ("acr", "acrPullRoleDefinitionId", "aks.properties.identityProfile.kubeletidentity.objectId"),
@@ -482,3 +484,17 @@ def test_role_assignment_parser_sees_indented_declarations():
         "      principalId: gatewayPrincipalId\n    }\n  }\n"
     )
     assert [scope for scope, _, _ in _role_assignments(text)] == ["hub", "resourceGroupScope"]
+
+
+def test_resource_logs_go_to_their_own_hub_only_when_enabled():
+    text = _code(MESSAGING.read_text())
+
+    assert "var logsEnabled = eventHubsLogs == 'Enabled'" in text
+    for symbol in ("telemetryLogsHub", "telemetryLogsCollectorConsumer", "premiumLogsToTelemetryHub",
+                   "gatewayTelemetryLogsReceiver"):
+        assert "= if (logsEnabled) {" in _resource_block(text, symbol), symbol
+    logs_ds = _resource_block(text, "premiumLogsToTelemetryHub")
+    # A separate hub: the metrics receiver must never see log records.
+    assert "eventHubName: telemetryLogsHub.name" in logs_ds and "scope: premiumNamespace" in logs_ds
+    assert re.findall(r"category: '(\w+)'", logs_ds) == ["ApplicationMetricsLogs", "RuntimeAuditLogs"]
+    assert "telemetryLogsHub" not in _resource_block(text, "premiumMetricsToTelemetryHub")
