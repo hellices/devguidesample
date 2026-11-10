@@ -19,22 +19,23 @@ if [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]]; then
   group_exists="$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" \
     || die "could not check resource group $AZURE_RESOURCE_GROUP"
   if [[ "$group_exists" == "true" ]]; then
-    identities="$(az identity list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
-      --query "[].name" -o tsv)" || die "could not list managed identities"
-    while IFS= read -r identity; do
+    # Only the (identity, credential) pairs azd-postprovision.sh federate() creates: the identity is
+    # resolved by the producer/consumer client ID output, never by scanning the whole group.
+    for pair in "$(env_value PRODUCER_CLIENT_ID) eventhubs-producer" "$(env_value CONSUMER_CLIENT_ID) eventhubs-slow-consumer"; do
+      read -r client_id service_account <<<"$pair"
+      [[ -n "$client_id" && "$service_account" != "$client_id" ]] || continue
+      identity="$(az identity list --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
+        --query "[?clientId=='$client_id'].name | [0]" -o tsv)" || die "could not look up the $service_account identity"
       [[ -n "$identity" ]] || continue
-      # Only the credentials azd-postprovision.sh creates; anything else in the group is left alone.
-      credentials="$(az identity federated-credential list --subscription "$AZURE_SUBSCRIPTION_ID" \
-        -g "$AZURE_RESOURCE_GROUP" --identity-name "$identity" \
-        --query "[?name=='aks-eventhubs-producer' || name=='aks-eventhubs-slow-consumer'].name" -o tsv)" \
+      credential="aks-$service_account"
+      present="$(az identity federated-credential list --subscription "$AZURE_SUBSCRIPTION_ID" \
+        -g "$AZURE_RESOURCE_GROUP" --identity-name "$identity" --query "[?name=='$credential'].name" -o tsv)" \
         || die "could not list federated credentials of $identity"
-      while IFS= read -r credential; do
-        [[ -n "$credential" ]] || continue
-        az identity federated-credential delete --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
-          --identity-name "$identity" --name "$credential" --yes --output none
-        log "deleted federated credential $credential"
-      done <<<"$credentials"
-    done <<<"$identities"
+      [[ "$present" == "$credential" ]] || continue
+      az identity federated-credential delete --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" \
+        --identity-name "$identity" --name "$credential" --yes --output none
+      log "deleted federated credential $credential from $identity"
+    done
   fi
 fi
 

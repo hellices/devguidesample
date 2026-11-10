@@ -54,7 +54,12 @@ def test_equal_checkpoint_and_last_sequence_has_zero_lag():
 
 
 def test_empty_partition_with_a_checkpoint_past_its_end_is_marked_invalid():
-    result = compute_lag(-1, 0)
-    assert result.partition_empty is True
-    assert result.invalid_order is True
-    assert compute_lag(-1, None).invalid_order is False
+    assert compute_lag(-1, 0) == LagResult(
+        messages=0, checkpoint_present=True, partition_empty=True, invalid_order=True
+    )
+    assert compute_lag(-1, -1) == LagResult(
+        messages=0, checkpoint_present=True, partition_empty=True, invalid_order=False
+    )
+    assert compute_lag(-1, None) == LagResult(
+        messages=0, checkpoint_present=False, partition_empty=True, invalid_order=False
+    )

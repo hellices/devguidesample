@@ -12,6 +12,7 @@ import base64
 import json
 import math
 import os
+import re
 import ssl
 import sys
 import urllib.error
@@ -72,6 +73,9 @@ def inspect_frames(result: dict) -> tuple[int, int, int | None]:
     return rows, finite, newest
 
 
+VARIABLE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+
+
 def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to: str) -> list[dict]:
     dashboard = grafana_request(url, user, password, f"/api/dashboards/uid/{uid}")["dashboard"]
     variables = {
@@ -84,9 +88,11 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
             continue
         optional = str(panel.get("description", "")).startswith("[optional]")
         for target in panel.get("targets", []):
-            expr = target.get("expr", "")
-            for name, value in variables.items():
-                expr = expr.replace(f"${name}", str(value)).replace(f"${{{name}}}", str(value))
+            # One pass over whole $name / ${name} tokens, so $cluster never rewrites $cluster_name.
+            expr = VARIABLE.sub(
+                lambda match: str(variables.get(match.group(1) or match.group(2), match.group(0))),
+                target.get("expr", ""),
+            )
             query = {
                 "refId": target.get("refId", "A"),
                 "datasource": {"type": "prometheus", "uid": "victoriametrics"},
@@ -111,6 +117,9 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
                     entry["status"] = "pass" if rows and finite else "empty"
             except urllib.error.HTTPError as error:
                 entry.update(status="error", error=f"HTTP {error.code}: {error.read()[:300]!r}")
+            except urllib.error.URLError as error:
+                # Connection, DNS, TLS or timeout failures are recorded; optional panels still never fail the run.
+                entry.update(status="error", error=f"request failed: {error.reason}")
             report.append(entry)
     return report
 

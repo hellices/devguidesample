@@ -34,33 +34,34 @@ def _raw(names=REQUIRED, drop=None):
     return {"value": value}
 
 
-def _fetch(remote_override=None, stamp_offset_ms=0, names=REQUIRED):
-    """VictoriaMetrics stub that answers only the exact selectors and queries compare() must send."""
-    exports, queries = {}, {}
+def _fetch(remote_override=None, stamp_offset_ms=0, names=REQUIRED, extra=None):
+    """VictoriaMetrics export stub that answers only the exact selectors compare() must send.
+
+    remote_write stores one sample per Azure minute; scrape repeats each bin twice, 30 s apart.
+    extra maps a selector kind to additional (timestamp ms, value) samples.
+    """
+    exports = {}
     for name in names:
         lower = name.lower()
-        exports[f'azure_{lower}_total_Count{{{API},delivery_path="remote_write"}}'] = (name, "remote_write")
-        exports[f'{lower}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}'] = (name, "diagnostic")
         for delivery in ("remote_write", "scrape"):
-            query = (f'sum(sum_over_time(azure_{lower}_total_Count{{{API},delivery_path="{delivery}"}}'
-                     f'[{END - START}s]))')
-            queries[query] = sum(_values(name)) * (1 if delivery == "remote_write" else 2)
+            exports[f'azure_{lower}_total_Count{{{API},delivery_path="{delivery}"}}'] = (name, delivery)
+        exports[f'{lower}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}'] = (name, "diagnostic")
 
     def fetch(path, params):
-        if path == "/api/v1/export":
-            assert (params["start"], params["end"]) == (START, END - 1)
-            name, kind = exports[params["match[]"]]  # KeyError for any unexpected selector
-            if kind == "diagnostic":
-                return ""
-            values = _values(name)
-            if remote_override:
-                values = remote_override(params["match[]"], values)
-            stamps = [(START + 60 * i) * 1000 + stamp_offset_ms for i in range(len(values))]
-            return json.dumps({"values": values, "timestamps": stamps})
-        assert path == "/api/v1/query", path
-        assert params["time"] == END - 1
-        total = queries[params["query"]]  # KeyError for any unexpected query
-        return json.dumps({"data": {"result": [{"value": [END, str(total)]}]}})
+        assert path == "/api/v1/export", path  # totals must come from the same filtered samples
+        assert (params["start"], params["end"]) == (START, END)
+        name, kind = exports[params["match[]"]]  # KeyError for any unexpected selector
+        if kind == "diagnostic":
+            return ""
+        values = _values(name)
+        if kind == "remote_write" and remote_override:
+            values = remote_override(params["match[]"], values)
+        if kind == "remote_write":
+            points = [((START + 60 * i) * 1000 + stamp_offset_ms, v) for i, v in enumerate(values)]
+        else:
+            points = [((START + 60 * i + 30 * r) * 1000, v) for i, v in enumerate(values) for r in (0, 1)]
+        points += (extra or {}).get(kind, [])
+        return json.dumps({"values": [v for _, v in points], "timestamps": [t for t, _ in points]})
 
     return fetch
 
@@ -111,4 +112,13 @@ def test_scrape_is_reported_as_a_repeated_sample_sum_not_a_total():
 
 def test_stub_rejects_a_selector_compare_does_not_own():
     with pytest.raises(KeyError):
-        _fetch()("/api/v1/export", {"match[]": "azure_other_total_Count{}", "start": START, "end": END - 1})
+        _fetch()("/api/v1/export", {"match[]": "azure_other_total_Count{}", "start": START, "end": END})
+
+
+def test_window_is_half_open_in_milliseconds():
+    # The server returns samples just outside [START, END); compare must drop them itself.
+    edges = {"remote_write": [(START * 1000 - 1, 1000.0), (END * 1000, 1000.0), (END * 1000 - 1, 7.0)]}
+    metric = compare(_raw(), START, END, _fetch(extra=edges))["metrics"]["IncomingMessages"]
+
+    assert metric["remote_write_total"] == 30.0 + 7.0  # the last-millisecond sample is inside
+    assert metric["remote_write_off_bin_samples"] == 1

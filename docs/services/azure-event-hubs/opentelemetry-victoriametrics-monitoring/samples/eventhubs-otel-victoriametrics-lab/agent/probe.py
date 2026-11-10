@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -43,9 +44,21 @@ def query(base_url: str, path: str, params: dict[str, str] | list[tuple[str, str
     return body["data"]
 
 
+DURATION = re.compile(r"(\d+)([smhd])")
+UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def window_seconds(window: str) -> int:
+    match = DURATION.fullmatch(window)
+    if not match or int(match.group(1)) <= 0:
+        raise ValueError(f"window must be a positive duration such as 30m, 6h or 1d: {window!r}")
+    return int(match.group(1)) * UNIT_SECONDS[match.group(2)]
+
+
 def build_inventory(base_url: str, window: str = WINDOW) -> dict:
     now = int(time.time())
-    start = now - 6 * 3600
+    # Discover series over at least the aggregation window so no path inside it is missed.
+    start = now - max(6 * 3600, window_seconds(window))
     series = query(
         base_url,
         "/api/v1/series",

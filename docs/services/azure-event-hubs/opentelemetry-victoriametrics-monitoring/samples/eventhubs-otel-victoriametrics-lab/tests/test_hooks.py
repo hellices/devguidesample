@@ -155,17 +155,30 @@ def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path)
 
 AZD_CLEANUP_ENV = (
     'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
-    "AZURE_RESOURCE_GROUP) echo rg-example;; *) exit 1;; esac"
+    "AZURE_RESOURCE_GROUP) echo rg-example;; PRODUCER_CLIENT_ID) echo client-producer;; "
+    "CONSUMER_CLIENT_ID) echo client-consumer;; *) exit 1;; esac"
+)
+# Exactly the lookups and deletes cleanup may make; anything else (for example deleting an
+# identity, or touching an unrelated identity) is rejected with exit 97.
+AZ_CLEANUP = (
+    'args="$*"\n'
+    'case "$args" in\n'
+    '  "group exists --subscription "*" -n rg-example") echo true;;\n'
+    '  "identity list "*"clientId==\'client-producer\'"*) echo id-producer;;\n'
+    '  "identity list "*"clientId==\'client-consumer\'"*) echo id-consumer;;\n'
+    '  "identity federated-credential list "*"--identity-name id-producer "*) echo aks-eventhubs-producer;;\n'
+    '  "identity federated-credential list "*"--identity-name id-consumer "*) echo aks-eventhubs-slow-consumer;;\n'
+    '  "identity federated-credential delete "*"--identity-name id-producer --name aks-eventhubs-producer --yes"*) ;;\n'
+    '  "identity federated-credential delete "*"--identity-name id-consumer --name aks-eventhubs-slow-consumer --yes"*) ;;\n'
+    '  *) echo "unexpected az call: $args" >&2; exit 97;;\n'
+    'esac'
 )
 
 
-@pytest.mark.parametrize("failing", ["group exists", "identity list", "identity federated-credential"])
+@pytest.mark.parametrize("failing", ["group exists", "identity list", "identity federated-credential list"])
 def test_cleanup_fails_when_an_azure_lookup_fails(fake_bin, failing):
     bin_dir, log, write = fake_bin
-    write("az", (
-        f'if [[ "$*" == "{failing}"* ]]; then echo "auth expired" >&2; exit 1; fi\n'
-        'case "$1 $2" in "group exists") echo true;; "identity list") echo id-lab;; esac'
-    ))
+    write("az", f'if [[ "$*" == "{failing}"* ]]; then echo "auth expired" >&2; exit 1; fi\n' + AZ_CLEANUP)
     write("azd", AZD_CLEANUP_ENV)
 
     result = _run("cleanup-external.sh", bin_dir, "--yes")
@@ -176,30 +189,18 @@ def test_cleanup_fails_when_an_azure_lookup_fails(fake_bin, failing):
 
 def test_cleanup_deletes_only_the_lab_credentials(fake_bin):
     bin_dir, log, write = fake_bin
-    write("az", (
-        'case "$1 $2 $3" in "group exists"*) echo true;; "identity list"*) echo id-lab;; '
-        '"identity federated-credential list") printf "aks-eventhubs-producer\\naks-eventhubs-slow-consumer\\n";; esac'
-    ))
+    write("az", AZ_CLEANUP)
     write("azd", AZD_CLEANUP_ENV)
 
     result = _run("cleanup-external.sh", bin_dir, "--yes")
 
     assert result.returncode == 0, result.stderr
-    deletes = [c for c in log.read_text().splitlines() if "federated-credential delete" in c]
-    assert len(deletes) == 2
-    assert all("--identity-name id-lab" in c for c in deletes)
-    names = [c.split("--name ", 1)[1].split()[0] for c in deletes]
-    assert sorted(names) == ["aks-eventhubs-producer", "aks-eventhubs-slow-consumer"]
-
-
-def test_vm_query_rejects_an_unknown_action(fake_bin):
-    bin_dir, _, write = fake_bin
-    write("azd", "exit 1")
-
-    result = _run("vm-query.sh", bin_dir, "strat")
-
-    assert result.returncode != 0
-    assert "usage" in result.stderr
+    mutations = [c for c in log.read_text().splitlines()
+                 if c.startswith("az ") and not any(k in c for k in (" exists ", " list "))]
+    assert len(mutations) == 2, mutations
+    pairs = sorted((c.split("--identity-name ", 1)[1].split()[0], c.split("--name ", 1)[1].split()[0])
+                   for c in mutations)
+    assert pairs == [("id-consumer", "aks-eventhubs-slow-consumer"), ("id-producer", "aks-eventhubs-producer")]
 
 
 def test_cleanup_requires_confirmation(fake_bin):
@@ -404,13 +405,15 @@ def test_evidence_is_kept_per_environment():
     assert 'local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"' in text
 
 
-@pytest.mark.parametrize("existing, renewed", [
-    (None, True),                 # first bootstrap
-    ("1.2.3.4", False),           # valid certificate for this IP is reused
-    ("1.2.3.40", True),           # "1.2.3.4" must not match a SAN for 1.2.3.40
-    ("expiring", True),           # expires within a day
+@pytest.mark.parametrize("existing, key, renewed", [
+    (None, None, True),                 # first bootstrap
+    ("1.2.3.4", "k1", False),           # valid certificate and matching key are reused
+    ("1.2.3.40", "k1", True),           # "1.2.3.4" must not match a SAN for 1.2.3.40
+    ("expiring", "k1", True),           # expires within a day
+    ("1.2.3.4", None, True),            # key file missing
+    ("1.2.3.4", "k2", True),            # key belongs to another certificate
 ])
-def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, tmp_path, existing, renewed):
+def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, tmp_path, existing, key, renewed):
     import base64
     import io
     import tarfile
@@ -420,10 +423,13 @@ def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, 
     for name in ("cloud-init", "docker", "chown", "curl"):
         write(name, "exit 0")
     write("az", 'if [[ "$1 $2" == "keyvault secret" ]]; then echo pw; fi')
-    # Fake openssl: the SAN/expiry answers come from the existing certificate's marker content.
+    # Fake openssl: SAN, expiry and public key answers come from marker content in the files;
+    # a certificate carries "pub=<key>" and matches the key file holding that same name.
     write("openssl", (
         'case "$*" in\n'
-        '  req*) echo "cert 1.2.3.4" >tls/grafana.crt; echo key >tls/grafana.key;;\n'
+        '  req*) echo "cert 1.2.3.4 pub=k1" >tls/grafana.crt; echo k1 >tls/grafana.key;;\n'
+        '  "x509 -in tls/grafana.crt -noout -pubkey") grep -o "pub=[a-z0-9]*" tls/grafana.crt | cut -d= -f2;;\n'
+        '  "pkey -in tls/grafana.key -pubout") [ -s tls/grafana.key ] && cat tls/grafana.key || exit 1;;\n'
         '  *-checkend*) grep -q expiring tls/grafana.crt && exit 1; exit 0;;\n'
         '  *subjectAltName*) printf "X509v3 Subject Alternative Name: \\n    IP Address:%s\\n" '
         '"$(grep -o "[0-9][0-9.]*" tls/grafana.crt | head -1)";;\n'
@@ -438,8 +444,10 @@ def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, 
         bundle.addfile(info, io.BytesIO(env_file))
     if existing:
         (app / "tls").mkdir(parents=True)
-        (app / "tls" / "grafana.crt").write_text("cert 1.2.3.4 expiring" if existing == "expiring" else f"cert {existing}")
-        (app / "tls" / "grafana.key").write_text("key")
+        ip = "1.2.3.4 expiring" if existing == "expiring" else existing
+        (app / "tls" / "grafana.crt").write_text(f"cert {ip} pub=k1")
+        if key:
+            (app / "tls" / "grafana.key").write_text(key)
     env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "APP_DIR": str(app),
            "BUNDLE_B64": base64.b64encode(buffer.getvalue()).decode()}
 
@@ -532,3 +540,33 @@ def test_verify_cleanup_fails_fast_when_the_lookup_fails(fake_bin):
 
     assert result.returncode != 0
     assert "could not query resource group" in result.stderr
+
+
+def test_vm_query_start_fails_when_its_forward_exits_while_another_listener_answers(fake_bin, tmp_path):
+    [port] = _free_ports(1)
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")
+    write("curl", 'exec /usr/bin/curl "$@"')
+    server = tmp_path / "other.py"
+    server.write_text(
+        "import http.server as h,sys\n"
+        "class H(h.BaseHTTPRequestHandler):\n"
+        " def do_GET(s): s.send_response(200); s.end_headers()\n"
+        " def log_message(s,*a): pass\n"
+        "h.HTTPServer(('127.0.0.1',int(sys.argv[1])),H).serve_forever()"
+    )
+    pid_file = tmp_path / "other.pid"
+    # The fake kubectl loses the race: another environment's listener takes the port, and the
+    # forward itself exits (as kubectl does when it cannot bind).
+    write("kubectl", f'/usr/bin/python3 {server} {port} & echo $! > {pid_file}; exit 1')
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+           "LAB_STATE_ROOT": str(tmp_path / "state"), "VM_LOCAL_PORT": str(port)}
+    try:
+        result = subprocess.run(["bash", str(SCRIPTS / "vm-query.sh"), "start"], env=env,
+                                capture_output=True, text=True, timeout=60)
+    finally:
+        if pid_file.exists():
+            subprocess.run(["kill", pid_file.read_text().strip()])
+
+    assert result.returncode != 0
+    assert "exited before becoming ready" in result.stderr

@@ -161,7 +161,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableRbacAuthorization: true
     enabledForDeployment: false
     enabledForDiskEncryption: false
-    enabledForTemplateDeployment: true
+    // No template reads secrets through a Key Vault reference; the gateway reads them with its identity.
+    enabledForTemplateDeployment: false
     publicNetworkAccess: 'Disabled'
     softDeleteRetentionInDays: 7
     networkAcls: {

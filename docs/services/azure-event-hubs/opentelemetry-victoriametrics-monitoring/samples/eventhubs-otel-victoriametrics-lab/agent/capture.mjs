@@ -1,9 +1,11 @@
 // Usage: node capture.mjs <dashboard-path[?viewPanel=N]> <output.png> [fromMs] [toMs] [width]
 // Reads GRAFANA_URL (https), GRAFANA_USER, GRAFANA_PASSWORD and GRAFANA_CA_FILE from the
 // environment and writes only the PNG. Credentials are typed into the login form and never persisted.
+import { X509Certificate } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
+import tls from 'node:tls';
 import { chromium } from 'playwright';
 
 const [dashboardPath, output, from = 'now-1h', to = 'now', width = '1600'] = process.argv.slice(2);
@@ -24,10 +26,18 @@ if (!base.startsWith('https://') || !process.env.GRAFANA_CA_FILE) {
 }
 
 // Chromium never talks to Grafana directly. It talks plain HTTP to a loopback proxy, and the
-// proxy reaches Grafana over TLS that trusts only the pinned gateway certificate (ca replaces the
-// default roots), so no other certificate - including a valid public one - can receive credentials.
+// proxy reaches Grafana over TLS that trusts only the gateway certificate (ca replaces the default
+// roots) and also requires the presented leaf to be that exact certificate, so neither a public
+// certificate nor another certificate chained to it can receive credentials.
 const target = new URL(base);
-const agent = new https.Agent({ ca: readFileSync(process.env.GRAFANA_CA_FILE, 'utf8'), keepAlive: true });
+const caPem = readFileSync(process.env.GRAFANA_CA_FILE, 'utf8');
+const pinnedFingerprint = new X509Certificate(caPem).fingerprint256;
+const agent = new https.Agent({
+  ca: caPem,
+  keepAlive: true,
+  checkServerIdentity: (host, cert) => tls.checkServerIdentity(host, cert)
+    ?? (cert.fingerprint256 === pinnedFingerprint ? undefined : new Error('Grafana presented a certificate other than the pinned one')),
+});
 let local;
 const proxy = http.createServer((req, res) => {
   const headers = { ...req.headers, host: target.host };
@@ -83,9 +93,17 @@ try {
   await page.getByTestId('data-testid Login button').click();
   await page.waitForURL((url) => !url.pathname.startsWith('/login'));
 
+  // Grafana answers a missing dashboard route with 200 and an in-app error page, so confirm the
+  // dashboard and its panels through the API (same session) before rendering it.
+  const uid = /^\/d(?:-solo)?\/([^/?#]+)/.exec(dashboardPath)?.[1];
+  if (!uid) throw new Error(`dashboard path must start with /d/<uid>: ${dashboardPath}`);
+  const api = await page.request.get(`${local}/api/dashboards/uid/${encodeURIComponent(uid)}`);
+  if (!api.ok()) throw new Error(`dashboard ${uid} returned ${api.status()}`);
+  if (!(await api.json()).dashboard?.panels?.length) throw new Error(`dashboard ${uid} has no panels`);
+
   const separator = dashboardPath.includes('?') ? '&' : '?';
   const url = `${local}${dashboardPath}${separator}orgId=1&from=${from}&to=${to}&kiosk`;
-  // A missing dashboard or server error renders a page without loading bars; never capture it.
+  // A server error renders a page without loading bars; never capture it.
   await gotoOk(page, url, { waitUntil: 'networkidle' });
 
   // Grafana lazily renders panels inside its own scroll container; grow the viewport until stable.

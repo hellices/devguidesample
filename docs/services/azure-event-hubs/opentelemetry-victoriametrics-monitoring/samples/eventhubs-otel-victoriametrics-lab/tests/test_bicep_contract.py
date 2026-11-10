@@ -259,12 +259,45 @@ def test_data_plane_uses_private_endpoints_only():
     assert "virtualNetworkRules" not in text
 
 
-def test_checkpoint_roles_are_container_scoped():
-    text = FOUNDATION.read_text()
+def _role_assignments(text: str) -> list[tuple[str, str, str]]:
+    """(scope, role variable, principal) of every roleAssignments resource block."""
+    blocks = re.split(r"(?m)^resource \w+ 'Microsoft\.Authorization/roleAssignments@", text)[1:]
+    assignments = []
+    for block in blocks:
+        block = block.split("\n}\n", 1)[0]
+        scope = re.search(r"^\s*scope:\s*(\w+)\s*$", block, re.MULTILINE)
+        role = re.search(r"roleDefinitions', (\w+)\)", block)
+        principal = re.search(r"principalId:\s*(\w+)Identity\.properties\.principalId", block)
+        assert scope and role and principal, block
+        assignments.append((scope.group(1), role.group(1), principal.group(1)))
+    return assignments
 
-    assert "scope: workloadCheckpoints" in text
-    assert "scope: collectorCheckpoints" in text
-    assert "scope: storage\n" not in text
+
+def test_foundation_role_assignments_are_exact():
+    # Exact (scope, role, principal) list: a duplicate GUID at a wider scope cannot hide in a set.
+    assert sorted(_role_assignments(FOUNDATION.read_text())) == sorted([
+        ("acr", "acrPullRoleDefinitionId", "gateway"),
+        ("keyVault", "keyVaultSecretsUserRoleDefinitionId", "gateway"),
+        ("workloadCheckpoints", "storageBlobDataContributorRoleDefinitionId", "consumer"),
+        ("workloadCheckpoints", "storageBlobDataReaderRoleDefinitionId", "gateway"),
+        ("collectorCheckpoints", "storageBlobDataContributorRoleDefinitionId", "gateway"),
+    ])
+
+
+def test_checkpoint_roles_are_container_scoped():
+    scopes = {scope for scope, role, _ in _role_assignments(FOUNDATION.read_text()) if "storageBlob" in role}
+    assert scopes == {"workloadCheckpoints", "collectorCheckpoints"}
+
+
+def test_role_assignment_parser_sees_a_widened_scope():
+    widened = (
+        "resource x 'Microsoft.Authorization/roleAssignments@2022-04-01' = {\n"
+        "  scope: storage   \n"
+        "  properties: {\n"
+        "    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', r)\n"
+        "    principalId: gatewayIdentity.properties.principalId\n  }\n}\n"
+    )
+    assert _role_assignments(widened) == [("storage", "r", "gateway")]
 
 
 def test_event_hubs_region_is_separable_and_zone_redundancy_is_platform_default():

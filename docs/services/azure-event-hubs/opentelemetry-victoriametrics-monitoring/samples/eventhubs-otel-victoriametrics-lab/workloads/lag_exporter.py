@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 import signal
 
@@ -110,7 +111,7 @@ async def run() -> None:
     container_name = required("CHECKPOINT_CONTAINER")
     poll_seconds = float(os.getenv("LAG_POLL_SECONDS", "15"))
     port = int(os.getenv("METRICS_PORT", "9464"))
-    if poll_seconds <= 0:
+    if not math.isfinite(poll_seconds) or poll_seconds <= 0:
         raise ValueError("LAG_POLL_SECONDS must be positive")
 
     start_http_server(port)

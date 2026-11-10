@@ -64,9 +64,15 @@ case "${1:-start}" in
     printf '%s\n' "$PORT" >"$STATE/port-forward.port"
     ps -p "$!" -o lstart= >"$STATE/port-forward.started"
     for attempt in $(seq 1 20); do
+      # Health alone could come from another listener that won the port; it must be our live forward.
+      if ! owned_forward; then
+        stop_forward
+        die "VMSingle port-forward exited before becoming ready on port $PORT; see $STATE/port-forward.log"
+      fi
       healthy && exit 0
       if [[ "$attempt" -lt 20 ]]; then sleep 1; fi
     done
+    stop_forward
     die "VMSingle port-forward did not become ready on port $PORT"
     ;;
   stop)

@@ -82,8 +82,18 @@ def test_main_bicep_exports_hook_contract():
         "EXISTING_DEDICATED_CLUSTER_RESOURCE_ID": "existingDedicatedClusterResourceId",
     }
 
-    declared = dict(re.findall(r"^output (\w+) string = (.+?)\s*$", text, re.MULTILINE))
-    assert declared == expected
+    assert _declared_outputs(text) == expected
+
+
+def _declared_outputs(text):
+    # Drop block and line comments first, so commented-out outputs never count as declared.
+    code = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    code = re.sub(r"(?m)//.*$", "", code)
+    return dict(re.findall(r"^output (\w+) string = (.+?)\s*$", code, re.MULTILINE))
+
+
+def test_commented_outputs_are_not_declared():
+    assert _declared_outputs("/*\noutput A string = x\n*/\n// output B string = y\noutput C string = z\n") == {"C": "z"}
 
 
 def test_main_parameters_map_azd_environment_values():

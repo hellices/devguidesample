@@ -26,8 +26,10 @@ trap cleanup EXIT
 "$LAB_ROOT/scripts/vm-query.sh" start
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+# Called through $(...), where errexit is off: return on failure so the caller's assignment fails
+# instead of querying a port that may belong to another environment.
 max_lag() {
-  "$LAB_ROOT/scripts/vm-query.sh" start
+  "$LAB_ROOT/scripts/vm-query.sh" start || return 1
   curl -fsS "http://127.0.0.1:$PORT/api/v1/query" \
     --data-urlencode 'query=max(eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"})' \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
@@ -37,7 +39,10 @@ stop_producer() {
   kube scale -n "$NS" deploy/eventhubs-producer --replicas 0 >/dev/null
   # wait exits non-zero when no pod matches (already gone), so verify the result instead.
   kube wait -n "$NS" --for=delete pod -l app=eventhubs-producer --timeout 120s >/dev/null 2>&1 || true
-  [[ -z "$(kube get pod -n "$NS" -l app=eventhubs-producer -o name)" ]] || die "producer pod is still running"
+  local remaining
+  # An API or auth failure also prints nothing; only a successful empty listing proves termination.
+  remaining="$(kube get pod -n "$NS" -l app=eventhubs-producer -o name)" || die "could not list producer pods"
+  [[ -z "$remaining" ]] || die "producer pod is still running"
 }
 last_log_value() {
   kube logs -n "$NS" "deploy/$1" --tail 200 2>/dev/null | grep -o "$2=[0-9]*" | tail -1 | cut -d= -f2

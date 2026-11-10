@@ -24,19 +24,28 @@ def _minute(epoch_seconds: float) -> str:
     return datetime.fromtimestamp(epoch_seconds, timezone.utc).strftime("%Y-%m-%dT%H:%M")
 
 
-def _per_minute(
-    fetch: Fetch, selector: str, start: int, end: int, off_bin: list[int] | None = None
-) -> dict[str, float]:
+def _samples(fetch: Fetch, selector: str, start: int, end: int) -> list[tuple[int, float]]:
+    """Every stored (timestamp ms, value) of the selector inside [start, end), filtered in ms."""
+    samples = []
+    for line in fetch("/api/v1/export", {"match[]": selector, "start": start, "end": end}).splitlines():
+        series = json.loads(line)
+        samples.extend(
+            (ts, value)
+            for value, ts in zip(series["values"], series["timestamps"])
+            if start * 1000 <= ts < end * 1000
+        )
+    return samples
+
+
+def _per_minute(samples: list[tuple[int, float]], off_bin: list[int] | None = None) -> dict[str, float]:
     """Sum samples per UTC minute; with off_bin, record samples not stamped exactly on a minute."""
     values: dict[str, float] = {}
-    for line in fetch("/api/v1/export", {"match[]": selector, "start": start, "end": end - 1}).splitlines():
-        series = json.loads(line)
-        for value, ts in zip(series["values"], series["timestamps"]):
-            if off_bin is not None and ts % 60000:
-                off_bin.append(ts)
-                continue
-            minute = _minute(ts / 1000)
-            values[minute] = values.get(minute, 0) + value
+    for ts, value in samples:
+        if off_bin is not None and ts % 60000:
+            off_bin.append(ts)
+            continue
+        minute = _minute(ts / 1000)
+        values[minute] = values.get(minute, 0) + value
     return values
 
 
@@ -55,17 +64,21 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
                     direct[minute] = direct.get(minute, 0) + point["total"]
         api = 'source_path="azure_monitor_api"'
         off_bin: list[int] = []
-        remote = _per_minute(
-            fetch, f'azure_{name.lower()}_total_Count{{{api},delivery_path="remote_write"}}', start, end, off_bin
-        )
-        totals = {}
-        for delivery in ("remote_write", "scrape"):
-            query = f'sum(sum_over_time(azure_{name.lower()}_total_Count{{{api},delivery_path="{delivery}"}}[{end - start}s]))'
-            result = json.loads(fetch("/api/v1/query", {"query": query, "time": end - 1}))["data"]["result"]
-            totals[delivery] = float(result[0]["value"][1]) if result else None
-        diagnostic = _per_minute(
+        stored = {
+            delivery: _samples(
+                fetch, f'azure_{name.lower()}_total_Count{{{api},delivery_path="{delivery}"}}', start, end
+            )
+            for delivery in ("remote_write", "scrape")
+        }
+        remote = _per_minute(stored["remote_write"], off_bin)
+        # Totals come from the same ms-filtered samples, so they share the [start, end) window exactly.
+        totals = {
+            delivery: sum(value for _, value in samples) if samples else None
+            for delivery, samples in stored.items()
+        }
+        diagnostic = _per_minute(_samples(
             fetch, f'{name.lower()}_total{{source_path="diagnostic_eventhub",delivery_path="remote_write"}}', start, end
-        )
+        ))
         minutes = sorted(direct)
         report["metrics"][name] = {
             "azure_monitor_total": sum(direct.values()),

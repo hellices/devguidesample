@@ -85,7 +85,7 @@ def test_producer_payload_is_exactly_the_requested_size(monkeypatch):
 
 
 
-def test_lag_exporter_failure_clears_stale_lag(monkeypatch):
+def _load_lag_exporter(monkeypatch):
     class FakeGauge:
         def __init__(self, name, *args, **kwargs):
             self.name, self.value, self.cleared = name, None, False
@@ -110,6 +110,28 @@ def test_lag_exporter_failure_clears_stale_lag(monkeypatch):
     monkeypatch.delitem(sys.modules, "lag_exporter", raising=False)
     import lag_exporter
 
+    return lag_exporter
+
+
+@pytest.mark.parametrize("poll", ["inf", "nan", "0", "-1"])
+def test_lag_exporter_rejects_a_non_finite_or_non_positive_poll(monkeypatch, poll):
+    lag_exporter = _load_lag_exporter(monkeypatch)
+    for name, value in {
+        "EVENT_HUB_NAMESPACE": "ehp-example.servicebus.windows.net",
+        "EVENT_HUB_NAME": "workload",
+        "EVENT_HUB_CONSUMER_GROUP": "slow-consumer",
+        "CHECKPOINT_STORAGE_URL": "https://stexample.blob.core.windows.net",
+        "CHECKPOINT_CONTAINER": "workload-checkpoints",
+        "LAG_POLL_SECONDS": poll,
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError):
+        asyncio.run(asyncio.wait_for(lag_exporter.run(), timeout=5))
+
+
+def test_lag_exporter_failure_clears_stale_lag(monkeypatch):
+    lag_exporter = _load_lag_exporter(monkeypatch)
     lag_exporter.record_failure()
 
     assert lag_exporter.COLLECTION_SUCCESS.value == 0

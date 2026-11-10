@@ -339,6 +339,13 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | lag series가 없을 때(-1) 상승 검사 통과, PU 0·음수, 무한대 처리 지연, 빈 partition의 역전 checkpoint | 유효한 측정값과 양의 peak를 요구, PU는 양의 정수만 허용, 유한한 지연만 허용, 빈 partition에서도 역전 표시 |
 | 캡처가 404·500 응답 페이지를 저장하고 probe의 시각이 조회마다 다름 | 응답 상태가 성공이 아니면 캡처 실패, probe의 모든 조회를 같은 snapshot 시각으로 평가 |
 | 계약 테스트가 이름·문자열 존재만 확인 | output 이름→Bicep 식, 매개변수 파일 전체 매핑, 지원하지 않는 역할 정의 형식 거부, NSG 복수형 속성 거부, 대조 stub의 정확한 selector, 모든 Azure selector의 matcher, bootstrap 실제 실행(인증서 갱신 시에만 Grafana 재시작) 검증 |
+| 고정 인증서를 CA로만 신뢰해 그 인증서가 서명한 다른 인증서도 통과(bootstrap 인증서는 `CA:TRUE`) | 캡처 프록시가 서버 leaf 인증서의 SHA-256 지문까지 비교. 로컬 Grafana OSS 13.3.0에서 고정 인증서가 서명한 다른 인증서를 쓰면 이전 코드는 로그인·캡처했고, 수정 후에는 자격 증명 입력 전에 실패 |
+| 없는 대시보드도 Grafana가 HTTP 200 오류 화면으로 응답해 캡처됨 | 같은 세션으로 `/api/dashboards/uid/<uid>`를 먼저 조회해 404이거나 panel이 없으면 실패. 같은 Grafana에서 없는 uid는 404로 중단되고 PNG를 만들지 않음 |
+| 인증서는 있는데 key가 없거나 다른 key이면 bootstrap이 실패 | key 존재와 인증서·key 공개키 일치를 함께 확인해 어긋나면 둘을 재발급 |
+| federated credential 정리가 resource group의 모든 identity를 훑음 | producer·consumer client ID로 찾은 두 identity의 해당 credential만 삭제 |
+| port-forward가 bind에 실패한 사이 다른 listener가 health에 응답하면 성공으로 판단, 조회 실패를 빈 결과로 해석 | 준비 확인마다 이 환경의 forward가 살아 있는지 함께 확인, `max_lag`·Pod 목록 조회 실패를 즉시 오류로 처리 |
+| Azure Monitor 대조가 export 끝 1초를 빼고 합계를 다른 query로 계산 | export를 ms 단위 `[start, end)`로 직접 걸러 분별 대조와 합계를 같은 sample에서 계산 |
+| Key Vault `enabledForTemplateDeployment: true` | 템플릿이 Key Vault 참조를 쓰지 않으므로 `false` |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

@@ -29,10 +29,19 @@ def test_every_source_fans_out_to_both_delivery_paths():
     config = render_config(BASE_ENV)
     pipelines = config["service"]["pipelines"]
 
-    for source in ("azure_monitor_api", "diagnostic_eventhub", "lag_exporter", "collector_self"):
+    expected_receivers = {
+        "azure_monitor_api": ["azure_monitor/premium"],
+        "diagnostic_eventhub": ["azure_event_hub/diagnostic"],
+        "lag_exporter": ["prometheus/lag"],
+        "collector_self": ["prometheus/self"],
+    }
+    assert set(pipelines) == {f"metrics/{source}-{delivery}" for source in expected_receivers
+                              for delivery in ("scrape", "remote_write")}
+    for source, receivers in expected_receivers.items():
         scrape = pipelines[f"metrics/{source}-scrape"]
         push = pipelines[f"metrics/{source}-remote_write"]
-        assert scrape["receivers"] == push["receivers"]
+        # Each source must read its own receiver, so data can never be labelled with another source.
+        assert scrape["receivers"] == push["receivers"] == receivers
         assert scrape["exporters"] == ["prometheus"]
         assert push["exporters"] == ["prometheusremotewrite"]
         assert f"resource/source_{source}" in scrape["processors"]
@@ -140,7 +149,11 @@ def test_fallback_replaces_api_source_only_when_requested():
         assert pipeline["receivers"] == ["prometheus/fallback"]
         assert pipeline["exporters"] == [exporter]
         assert "resource/source_fallback_exporter" in pipeline["processors"]
-    scrape = config["receivers"]["prometheus/fallback"]["config"]["scrape_configs"][0]
+    scrape_configs = config["receivers"]["prometheus/fallback"]["config"]["scrape_configs"]
+    assert len(scrape_configs) == 1  # a second, unfiltered job would admit other namespaces
+    scrape = scrape_configs[0]
+    assert len(scrape["metric_relabel_configs"]) == 1
+    assert scrape["metric_relabel_configs"][0]["action"] == "keep"
     # Prometheus anchors relabel regexes: emulate that to prove only this namespace is kept.
     regex = scrape["metric_relabel_configs"][0]["regex"]
     assert regex.startswith("(?i)")
@@ -169,4 +182,10 @@ def test_lag_pipelines_drop_python_runtime_metrics():
 
     assert "filter/lag" in pipelines["metrics/lag_exporter-scrape"]["processors"]
     assert "filter/lag" not in pipelines["metrics/azure_monitor_api-scrape"]["processors"]
-    assert "eventhubs_" in config["processors"]["filter/lag"]["metric_conditions"][0]
+    # The filter drops a metric when the condition is true: keep eventhubs_* and up, drop the rest.
+    assert config["processors"]["filter/lag"]["metric_conditions"] == [
+        'not IsMatch(metric.name, "^(eventhubs_.*|up)$")'
+    ]
+    assert config["processors"]["filter/self"]["metric_conditions"] == [
+        'not IsMatch(metric.name, "^otelcol_(receiver|exporter)_.*")'
+    ]
