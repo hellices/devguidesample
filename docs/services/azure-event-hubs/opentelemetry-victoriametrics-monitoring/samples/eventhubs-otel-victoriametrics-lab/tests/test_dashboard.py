@@ -264,9 +264,13 @@ def test_variables_are_substituted_as_whole_tokens(monkeypatch):
     assert report[0]["status"] == "pass"
 
 
-def test_connection_failures_are_reported_not_raised(monkeypatch):
+@pytest.mark.parametrize("failure", ["url", "read_timeout", "reset"])
+def test_connection_failures_are_reported_not_raised(monkeypatch, failure):
     import urllib.error
 
-    report, _ = _verify_with(monkeypatch, "up", [], query_error=urllib.error.URLError("timed out"))
+    error = {"url": urllib.error.URLError("timed out"),
+             "read_timeout": TimeoutError("timed out"),
+             "reset": ConnectionResetError("connection reset")}[failure]
+    report, _ = _verify_with(monkeypatch, "up", [], query_error=error)
     assert report[0]["status"] == "error"
-    assert "timed out" in report[0]["error"]
+    assert ("timed out" if failure != "reset" else "reset") in report[0]["error"]

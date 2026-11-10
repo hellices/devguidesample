@@ -117,9 +117,10 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
                     entry["status"] = "pass" if rows and finite else "empty"
             except urllib.error.HTTPError as error:
                 entry.update(status="error", error=f"HTTP {error.code}: {error.read()[:300]!r}")
-            except urllib.error.URLError as error:
-                # Connection, DNS, TLS or timeout failures are recorded; optional panels still never fail the run.
-                entry.update(status="error", error=f"request failed: {error.reason}")
+            except OSError as error:
+                # URLError (connection, DNS, TLS) and a timeout or reset while reading the body are all
+                # OSError; record them so optional panels still never fail the run.
+                entry.update(status="error", error=f"request failed: {getattr(error, 'reason', None) or error!r}")
             report.append(entry)
     return report
 
