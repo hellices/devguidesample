@@ -13,8 +13,8 @@ The visualization follows the question each panel answers, not a default line ch
 - "is any Pod missing a metric"       -> status history
 
 Usage:
-  python build_dashboard.py > ../grafana/movielog-dashboard.json
-  python build_dashboard.py --appinsights-id <resource-id> > /tmp/live.json   # default for a live push
+  python3 grafana/build_dashboard.py > grafana/movielog-dashboard.json
+  python3 grafana/build_dashboard.py --appinsights-id <resource-id> > /tmp/live.json   # default for a live push
 """
 import argparse
 import json

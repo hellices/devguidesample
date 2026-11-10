@@ -140,6 +140,8 @@ official_source_hosts:
   - blog.google
   - openjdk.org
   - docs.micrometer.io
+  - code.visualstudio.com
+  - docs.github.com
   - kubernetes.io
   - karpenter.sh
   - keda.sh

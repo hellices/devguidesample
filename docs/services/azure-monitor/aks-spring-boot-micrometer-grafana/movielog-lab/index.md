@@ -1,6 +1,6 @@
 ---
-title: "MovieLog 실습: AKS 자동 계측 지표 수집과 agent 검증 Grafana 대시보드"
-description: MovieLog(Spring Boot 4.1) 앱을 AKS에 배포해 Micrometer 지표를 Application Insights customMetrics로 수집하고, agent가 probe → build → verify → look 순서로 Azure Managed Grafana 대시보드를 만드는 과정을 명령, 실측값, 캡처와 함께 재현합니다. 관리형 agent 3.7.7-aks에서 3.7.10으로 바꾸는 절차와 비용, 정리 방법을 포함합니다.
+title: "MovieLog 실습: AKS 자동 계측 지표 수집과 GitHub Copilot 검증 Grafana 대시보드"
+description: MovieLog(Spring Boot 4.1) 앱을 AKS에 배포해 Micrometer 지표를 Application Insights customMetrics로 수집하고, GitHub Copilot이 skill 지침에 따라 probe → build → verify → look 순서로 Azure Managed Grafana 대시보드를 만드는 과정을 명령, 실측값, 캡처와 함께 재현합니다. 관리형 agent 3.7.7-aks에서 3.7.10으로 바꾸는 절차와 비용, 정리 방법을 포함합니다.
 document_type: lab
 services: [azure-monitor, azure-kubernetes-service, azure-managed-grafana]
 technologies: [java, spring-boot, micrometer, kubernetes, grafana]
@@ -51,9 +51,9 @@ related_guides:
   - ../../aks-java-micrometer-custom-metrics/index.md
 ---
 
-# MovieLog 실습: AKS 자동 계측 지표 수집과 agent 검증 Grafana 대시보드
+# MovieLog 실습: AKS 자동 계측 지표 수집과 GitHub Copilot 검증 Grafana 대시보드
 
-## 실습 범위: 수집 경로부터 agent 검증 대시보드까지 { #summary }
+## 실습 범위: 수집 경로부터 GitHub Copilot 검증 대시보드까지 { #summary }
 
 [주제 소개](../index.md)에서 설명한 흐름을 영화 리뷰 앱 MovieLog로 직접
 재현합니다. 아래 명령과 수치, 캡처는 Korea Central에서 실제로 구성해 얻은
@@ -78,11 +78,11 @@ related_guides:
 [주제 소개](../index.md#message)에 있습니다.
 
 - 관리형 `3.7.7-aks`로는 `movielog_*`가 0건이었고, 3.7.10 init image로 바꾸자
-  12개 지표가 두 Pod에서 도착했습니다([agent 버전 확인](#version-gate)).
+  12개 지표가 두 Pod에서 도착했습니다([Java agent 버전 확인](#version-gate)).
 - 이미 주입된 Deployment에서 custom agent로 바꾸려면 patch를 두 번에 나눠야
   했습니다([webhook 주입 해제](#webhook-revert)).
-- agent 대시보드는 probe → build → verify → look 단계마다 정한 점검 기준을 통과한 뒤
-  반영합니다([agent 대시보드 방법론](#agent-method)).
+- GitHub Copilot이 만든 대시보드는 probe → build → verify → look 단계마다 정한 점검
+  기준을 통과한 뒤 반영합니다([Copilot 대시보드 작업 단계](#agent-method)).
 
 ## 실습 자원: 단일 resource group 구성 { #resources }
 
@@ -206,7 +206,7 @@ JVM flag는 Pod의 `JAVA_TOOL_OPTIONS`에 선언합니다. 실습에서 webhook�
 JAVA_TOOL_OPTIONS = -javaagent:/azure-monitor-auto-instrumentation-java/applicationinsights-agent-codeless.jar -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError
 ```
 
-## agent 버전 확인과 3.7.10 init image 적용 { #version-gate }
+## Java agent 버전 확인과 3.7.10 init image 적용 { #version-gate }
 
 Spring Boot 4 앱은 주입된 agent가 3.7.9 이상이어야 Micrometer 지표가 수집됩니다.
 원인과 대응 방식 비교는
@@ -285,31 +285,43 @@ envsubst < k8s/20-movielog.yaml | kubectl replace -f -
 kubectl scale deploy/movielog -n movielog --replicas=2
 ```
 
-## agent 대시보드 방법론: probe → build → verify → look { #agent-method }
+## Copilot 대시보드 작업 단계: probe → build → verify → look { #agent-method }
 
-이 절은 probe → build → verify → look 각 단계를 실제 명령과 출력으로 실행합니다.
-단계별 목적은 [주제 소개의 agent 절](../index.md#agent)에
-있습니다.
+이 절은 GitHub Copilot이 skill 지침에 따라 수행하는 probe → build → verify → look
+각 단계의 query와 통과 기준입니다. 단계별 목적은
+[주제 소개의 Copilot 절](../index.md#agent)에 있습니다.
 
-agent에게 줄 prompt 전체는
-[agent-dashboard-prompt.md](../downloads/agent-dashboard-prompt.md)에 있습니다.
-도구는 둘 중 하나를 씁니다. 두 경로 모두 실습에서 동작을 확인했습니다.
+`samples/movielog-app`에는 `grafana-metrics-dashboard` skill이 들어 있습니다. 이 폴더를
+VS Code workspace로 열거나 skill 폴더를 자기 저장소의 `.github/skills/`에 복사한 뒤,
+Copilot chat에서 다음처럼 요청합니다. skill 지침 전문은
+[grafana-metrics-dashboard-skill.md](../downloads/grafana-metrics-dashboard-skill.md)입니다.
+
+```text
+/grafana-metrics-dashboard Application Insights rg-movielog-lab/appi-movielog-lab의
+movielog_ 지표로 Grafana <grafana-name>에 대시보드를 만들어 줘.
+```
+
+Copilot은 둘 중 사용할 수 있는 도구로 작업합니다. 두 경로 모두 실습에서 동작을
+확인했습니다.
 
 | 도구 경로 | probe | 반영·확인 |
 |---|---|---|
 | Managed Grafana MCP (`https://<grafana-endpoint>/api/azure-mcp`) | `amgmcp_query_resource_log` | `amgmcp_dashboard_update`, `amgmcp_dashboard_inspect` |
-| CLI toolkit (`samples/movielog-app/agent`) | `kql.sh` + `01~03*.kql` | `az grafana dashboard create`, `verify_panels.py`, `capture.mjs` |
+| skill의 터미널 도구(`.github/skills/grafana-metrics-dashboard/scripts`) | `kql.sh` + `01~03*.kql` | `az grafana dashboard create`, `verify_panels.py`, `capture.mjs` |
 
-Managed Grafana MCP는 VS Code의 GitHub Copilot에서 Entra OAuth로 연결합니다.
+Managed Grafana MCP는 VS Code의 GitHub Copilot에서 Entra OAuth로 연결합니다. sample의
+`.vscode/mcp.json`에서 `<grafana-endpoint>`만 바꿉니다.
 `amgmcp_query_resource_log`는 시간 범위를 보내지 않고 `$__timeFilter`, `$__timeTo()` 같은
 Grafana macro를 거부하므로 query 안에 `ago(...)`와 `now()`를 직접 씁니다.
 
-```json
-{
-  "servers": {
-    "movielog-grafana": { "type": "http", "url": "https://<grafana-endpoint>/api/azure-mcp" }
-  }
-}
+아래 명령은 `samples/movielog-app` 폴더에서 Copilot이 실행하는 것과 같은 터미널 도구를
+직접 실행하는 형태입니다.
+
+```bash
+SKILL=.github/skills/grafana-metrics-dashboard/scripts
+export APPINSIGHTS_APP_ID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query appId -o tsv)"
+export METRIC_PREFIX=movielog_
+$SKILL/kql.sh $SKILL/01-inventory.kql
 ```
 
 ### probe 1: inventory와 지표 도착 여부 { #probe-inventory }
@@ -325,7 +337,7 @@ customMetrics
 | order by name asc
 ```
 
-prefix 지표가 없으면 대시보드 작업을 멈추고 주입된 agent 버전, annotation,
+prefix 지표가 없으면 대시보드 작업을 멈추고 주입된 Java agent 버전, annotation,
 allowlist를 먼저 확인합니다. 실습의 3.7.7-aks 구간이 이 경우였습니다.
 inventory는 `cloud_RoleName`(`movielog`)도 알려 줍니다. dashboard의 `role` 변수에
 이 값을 씁니다.
@@ -418,7 +430,7 @@ DistributionSummary·Timer는 모든 간격이 1일 수도 있으므로 `maxValu
 
 panel마다 답할 질문과 집계식을 먼저 정한 뒤 JSON을 만듭니다.
 
-`agent/build_dashboard.py`는 probe 3의 표를 그대로 코드로 옮겼습니다.
+MovieLog 대시보드는 `grafana/build_dashboard.py`가 아래 표의 집계식과 시각화로 만듭니다.
 
 | panel | 질문 | 집계식 | 시각화 |
 |---|---|---|---|
@@ -476,7 +488,7 @@ Grafana Viewer 이상 역할이 필요합니다.
 ```bash
 export GRAFANA_URL="$(az grafana show -g $RG -n "$GRAFANA" --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token --resource https://dashboard.azure.com --query accessToken -o tsv)"
-python3 agent/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
+python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "<app-insights-resource-id>"
 ```
 
 통과 기준은 다음과 같습니다. 모든 panel이 `OK`일 때만
@@ -494,7 +506,7 @@ python3 agent/verify_panels.py grafana/movielog-dashboard.json --appinsights-id 
 ### look: 렌더링 화면 캡처와 시각 점검 { #look }
 
 query가 모두 성공해도 색, legend, panel 간 합계는 렌더링한 화면에서만 확인할 수
-있습니다. agent에게 대시보드를 캡처해 직접 보고 아래 기준을 점검하게 합니다.
+있습니다. Copilot이 대시보드를 캡처해 직접 보고 아래 기준을 점검하게 합니다.
 
 `capture.mjs`는 같은 Entra token을 Grafana origin 요청에만 bearer header로 붙여
 headless Chromium에서 dashboard를 캡처합니다.
@@ -525,14 +537,14 @@ threshold 경계 근처 값은 표시 자릿수 때문에 숫자와 색이 어�
 3.4996이 3.50으로 표시되지만 3.5 기준 미만 색). 경계값은 tooltip이나 query로 실제
 값을 확인합니다.
 
-## 대시보드 반영 실습: 로컬 agent 직접 반영과 JSON import { #publish }
+## 대시보드 반영 실습: 로컬 Copilot 직접 반영과 JSON import { #publish }
 
-같은 dashboard를 로컬 agent가 직접 반영하는 방법과, JSON 파일로 추출해 import하는
+같은 dashboard를 로컬 Copilot이 직접 반영하는 방법과, JSON 파일로 추출해 import하는
 방법을 모두 실행했습니다(2026-11-07). 두 방식의 선택 기준은
 [주제 소개의 반영 방식](../index.md#publish)에 있습니다. 아래 명령은
 `samples/movielog-app` 폴더에서 실행합니다.
 
-### 로컬 agent 직접 반영 { #publish-direct }
+### 로컬 Copilot 직접 반영 { #publish-direct }
 
 CLI로 반영할 때는 Application Insights resource ID를 채운 JSON을 만들어 바로
 올립니다. 이 JSON은 resource ID 변수를 숨기고 값을 채우므로 저장소에 커밋하지
@@ -540,12 +552,12 @@ CLI로 반영할 때는 Application Insights resource ID를 채운 JSON을 만�
 
 ```bash
 AIID="$(az monitor app-insights component show -g $RG -a appi-movielog-lab --query id -o tsv)"
-python3 agent/build_dashboard.py --appinsights-id "$AIID" > /tmp/movielog-live.json
+python3 grafana/build_dashboard.py --appinsights-id "$AIID" > /tmp/movielog-live.json
 az grafana dashboard create -g $RG -n "$GRAFANA" \
   --definition @/tmp/movielog-live.json --overwrite true
 ```
 
-Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON을
+Managed Grafana MCP를 쓰면 Copilot이 `amgmcp_dashboard_update`로 전체 JSON을
 만들거나 바꾸고(`dashboard`), 일부만 고칠 때는 JSONPath patch(`dashboardUid` +
 `operations`)를 보냅니다. 실습에서는 probe용 dashboard의 제목을 patch하고
 `amgmcp_dashboard_inspect`(`jsonPath: "$.title"`)로 바뀐 값을 확인한 뒤 되돌렸습니다.
@@ -562,7 +574,7 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
 ### JSON 추출과 Grafana import { #publish-import }
 
 1. **가져갈 JSON을 준비합니다.** 저장소의 `grafana/movielog-dashboard.json`은
-   변수 값이 빈 범용 JSON이며 `python3 agent/build_dashboard.py`로 다시 만들 수
+   변수 값이 빈 범용 JSON이며 `python3 grafana/build_dashboard.py`로 다시 만들 수
    있습니다. 이미 검증한 dashboard를 가져가려면 Grafana의 공유 메뉴에서
    **Export > Save to file**을 쓰거나 CLI로 내보냅니다.
 
@@ -622,8 +634,8 @@ Managed Grafana MCP를 쓰면 agent가 `amgmcp_dashboard_update`로 전체 JSON�
    저장해야 값이 유지됩니다. URL에 `?var-appinsights=<URL 인코딩한 resource ID>`를
    붙이는 방법은 그 화면에서만 적용되므로 확인용으로 씁니다. `role`은
    `customMetrics`의 `cloud_RoleName`입니다.
-5. **결과를 확인합니다.** `agent/verify_panels.py`로 query를 실행하고
-   `agent/capture.mjs`로 화면을 캡처합니다.
+5. **결과를 확인합니다.** skill의 `verify_panels.py`로 query를 실행하고
+   `capture.mjs`로 화면을 캡처합니다.
 
 실습에서는 두 작업을 따로 실행했습니다. 먼저 live dashboard를 Export하고 2단계
 명령으로 resource ID 3건이 0건이 되는 것을 확인했습니다. import는 저장소의 범용
@@ -685,7 +697,7 @@ meter 수, tag 조합 수가 늘면 비례해 늘어납니다.
 
 | 증상 | 원인 | 조치 |
 |---|---|---|
-| request는 보이지만 `movielog_*`가 없음 | 주입된 agent가 3.7.9 미만 | init container image 확인 후 [agent 버전 확인](#version-gate) 적용 |
+| request는 보이지만 `movielog_*`가 없음 | 주입된 agent가 3.7.9 미만 | init container image 확인 후 [Java agent 버전 확인](#version-gate) 적용 |
 | custom agent patch 뒤 agent가 시작하지 않음 | webhook이 주입 해제하며 `APPLICATIONINSIGHTS_*` 삭제 | annotation `"false"`를 먼저 적용한 뒤 custom patch |
 | 관리형으로 되돌리는 `kubectl apply`가 `mountPath ... must be unique` | patch로 넣은 init container·volume이 남아 webhook 주입과 충돌 | `kubectl replace`로 manifest 전체 교체 |
 | `az acr build`가 `layer does not exist`로 실패 | classic builder에서 빈 layer나 같은 내용의 layer가 연속 | sample Dockerfile처럼 layer마다 다른 marker 파일 추가 |
@@ -720,6 +732,10 @@ AKS가 만든 node resource group(`MC_...`)도 함께 삭제됩니다. 삭제 �
   대조했습니다.
 - meter 종류별 column 매핑은 Application Insights Java 3.7.10 source로
   확인했습니다.
+- 실 환경의 대시보드 작성은 2026-11-06~07에 현재 skill과 같은 단계·규칙을 담은 prompt를
+  GitHub Copilot에 주어 실행했습니다. 2026-11-10에 이 지침을 `grafana-metrics-dashboard`
+  skill로 옮기면서 조회 query의 meter prefix를 `METRIC_PREFIX`로 바꾸고 스크립트 문법과
+  치환을 로컬에서 확인했습니다. skill 형식으로 실 환경에서 다시 실행하지는 않았습니다.
 - Deployment webhook의 주입 해제 동작, `kubectl apply` 충돌, role assignment
   실패는 실습 관측이며 공식 동작 계약이 아닙니다. 문서의 두 단계 전환과
   `kubectl replace` 복귀는 관리형 → custom → 관리형 → custom 순서로 다시 실행해

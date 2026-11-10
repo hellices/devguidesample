@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs a KQL query against Application Insights and prints the result as a table.
 # Usage: kql.sh <query-file.kql>   (needs APPINSIGHTS_APP_ID, or APPINSIGHTS_NAME + RESOURCE_GROUP)
+# {{METRIC_PREFIX}} in the query is replaced with METRIC_PREFIX (for example movielog_).
 # The CLI also limits every query to the last KQL_OFFSET (default 1h, format ##d##h), on top of
 # the query's own time filter; raise it to look further back.
 set -euo pipefail
@@ -15,6 +16,10 @@ if [[ -z "$app_id" ]]; then
 fi
 
 query="$(cat -- "$query_file")"
+if [[ "$query" == *"{{METRIC_PREFIX}}"* ]]; then
+  prefix="${METRIC_PREFIX:?set METRIC_PREFIX, for example movielog_}"
+  query="${query//\{\{METRIC_PREFIX\}\}/$prefix}"
+fi
 az monitor app-insights query --app "$app_id" --offset "${KQL_OFFSET:-1h}" \
   --analytics-query "$query" -o json \
   | python3 -c '

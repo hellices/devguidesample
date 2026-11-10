@@ -76,7 +76,7 @@ topic entry는 독자가 이 주제를 끝까지 읽을지, 직접 해 볼지 �
 1. **첫 절 본문에서 핵심 메시지를 한 흐름으로 제시합니다.** "무엇을 하면 어떤
    결과가 나온다"를 2–4단계로 요약합니다. 독자가 entry만 읽어도 주제의 결론을
    알 수 있어야 합니다. 절 제목은 [핵심 용어 제목](#content-first-headings)
-   기준을 따릅니다(예: `핵심 흐름: meter 기록 → 자동 수집 → agent 대시보드`).
+   기준을 따릅니다(예: `핵심 흐름: meter 기록 → 자동 수집 → Copilot 대시보드`).
 2. **메시지 바로 곁에 실제 결과를 보여 줍니다.** 실제로 실행해 얻은 캡처, 측정값,
    다이어그램을 첫 화면 가까이에 두어 흥미와 신뢰를 줍니다. 만들어 낸 예시 화면이나
    실행하지 않은 결과는 쓰지 않으며, 캡처의 식별자는 공개 안전성 기준대로
@@ -93,7 +93,7 @@ topic entry는 독자가 이 주제를 끝까지 읽을지, 직접 해 볼지 �
    않습니다.
 
 독립 topic도 첫 절에서 1–2의 순서를 따릅니다. 이 구성의 예는
-[Micrometer 비즈니스 지표와 agent 기반 Grafana 대시보드](../services/azure-monitor/aks-spring-boot-micrometer-grafana/index.md)
+[Micrometer 비즈니스 지표와 GitHub Copilot 기반 Grafana 대시보드](../services/azure-monitor/aks-spring-boot-micrometer-grafana/index.md)
 topic입니다.
 
 ### topic 소유 sample

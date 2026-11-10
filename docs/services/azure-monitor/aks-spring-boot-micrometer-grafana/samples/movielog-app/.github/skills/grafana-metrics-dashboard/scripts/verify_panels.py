@@ -1,6 +1,6 @@
 """Runs every panel query of a dashboard through Grafana's /api/ds/query and reports empty panels.
 
-The agent uses this before it says a dashboard is done: a panel that renders "No data"
+GitHub Copilot runs this before it says a dashboard is done: a panel that renders "No data"
 is a failed panel, not a finished one.
 
 The token audience is https://dashboard.azure.com, as documented in "Authenticate to Azure Managed

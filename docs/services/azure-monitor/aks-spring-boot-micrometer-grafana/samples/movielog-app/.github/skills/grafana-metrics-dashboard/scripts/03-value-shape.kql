@@ -7,7 +7,7 @@
 // - Gauge: value is a point-in-time level (do not sum over time).
 customMetrics
 | where timestamp > ago(30m)
-| where name startswith "movielog_"
+| where name startswith "{{METRIC_PREFIX}}"
 | where isnotempty(cloud_RoleInstance)
 | summarize rows = count(), instances = dcount(cloud_RoleInstance),
             maxValueCount = max(valueCount),

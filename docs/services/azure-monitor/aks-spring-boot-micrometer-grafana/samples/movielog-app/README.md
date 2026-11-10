@@ -1,8 +1,8 @@
 # MovieLog on AKS: Micrometer → Application Insights → Grafana
 
 영화 리뷰 앱 MovieLog(Spring Boot 4.1.2, Java 25)의 `movielog.*` Micrometer
-지표를 AKS autoinstrumentation agent로 `customMetrics`에 보내고, agent가 실제
-데이터를 조회해 Grafana 대시보드를 만들고 검증하는 실습 sample입니다.
+지표를 AKS autoinstrumentation으로 `customMetrics`에 보내고, GitHub Copilot이 skill
+지침에 따라 실제 데이터를 조회해 Grafana 대시보드를 만들고 검증하는 실습 sample입니다.
 
 ## 구성
 
@@ -18,11 +18,12 @@
 | `k8s/20-movielog.yaml` | `inject-java` annotation을 단 앱 Deployment와 Service입니다. |
 | `k8s/21-agent-3.7.10.patch.yaml` | managed agent가 3.7.9 미만일 때 쓰는 3.7.10 init image patch입니다. |
 | `k8s/30-loadgen.yaml`, `loadgen/loadgen.py` | 가입·조회·리뷰·댓글을 반복하는 합성 사용자 6개입니다. |
-| `agent/*.kql`, `agent/kql.sh` | inventory, dimensions, value shape probe query입니다. |
-| `agent/build_dashboard.py` | probe에서 정한 집계식으로 dashboard JSON을 만듭니다. |
-| `agent/verify_panels.py` | 모든 panel query를 Grafana `/api/ds/query`로 실행해 빈 panel을 찾습니다. |
-| `agent/capture.mjs` | Entra access token으로 Managed Grafana 화면을 headless 캡처합니다. |
-| `agent/prompt.md` | agent에게 probe → build → verify → look 순서를 시키는 prompt입니다. |
+| `.github/skills/grafana-metrics-dashboard/SKILL.md` | GitHub Copilot이 customMetrics 조회 → 집계식 결정 → dashboard 생성 → query 실행 → 화면 확인 순서로 작업하게 하는 skill입니다. |
+| `.github/skills/grafana-metrics-dashboard/scripts/*.kql`, `kql.sh` | skill이 쓰는 inventory, dimensions, value shape 조회입니다. `METRIC_PREFIX`로 meter prefix를 지정합니다. |
+| `.github/skills/grafana-metrics-dashboard/scripts/verify_panels.py` | 모든 panel query를 Grafana `/api/ds/query`로 실행해 오류와 빈 panel을 찾습니다. |
+| `.github/skills/grafana-metrics-dashboard/scripts/capture.mjs` | Entra access token으로 Managed Grafana 화면을 headless 캡처합니다. |
+| `.vscode/mcp.json` | VS Code에서 Managed Grafana MCP endpoint를 연결하는 설정 예시입니다. |
+| `grafana/build_dashboard.py` | MovieLog의 panel별 집계식과 시각화로 dashboard JSON을 만듭니다. |
 | `grafana/movielog-dashboard.json` | import용 dashboard입니다. |
 
 ## 로컬 test
@@ -82,27 +83,36 @@ kubectl logs -n movielog -l app=movielog -c movielog --tail=-1 --prefix | grep "
 처음 배포는 replica 1개로 시작합니다. `ddl-auto=update`가 schema를 만들 때 두
 Pod가 동시에 같은 table을 만들려고 경쟁하지 않게 하기 위해서입니다.
 
-## agent toolkit
+## GitHub Copilot skill로 대시보드 만들기
+
+skill은 VS Code의 GitHub Copilot과 GitHub Copilot CLI가 `.github/skills/`에서 찾습니다.
+이 폴더를 workspace로 열거나 skill 폴더를 자기 저장소의 `.github/skills/`에 복사한 뒤,
+Copilot chat에서 `/grafana-metrics-dashboard`를 실행하거나 "customMetrics로 Grafana
+대시보드를 만들어 줘"처럼 요청합니다. Managed Grafana MCP를 쓰려면 `.vscode/mcp.json`의
+`<grafana-endpoint>`를 바꿉니다.
+
+skill의 터미널 도구를 직접 실행할 때는 다음과 같습니다.
 
 ```bash
-cd agent
+SKILL=.github/skills/grafana-metrics-dashboard/scripts
 export APPINSIGHTS_APP_ID="$(az monitor app-insights component show -g "$RG" -a "$AI" --query appId -o tsv)"
-./kql.sh 01-inventory.kql
-./kql.sh 02-dimensions.kql
-./kql.sh 03-value-shape.kql
+export METRIC_PREFIX=movielog_
+$SKILL/kql.sh $SKILL/01-inventory.kql
+$SKILL/kql.sh $SKILL/02-dimensions.kql
+$SKILL/kql.sh $SKILL/03-value-shape.kql
 
 AIID="$(az monitor app-insights component show -g "$RG" -a "$AI" --query id -o tsv)"
 export GRAFANA_URL="$(az grafana show -g "$RG" -n "$GRAFANA" --query properties.endpoint -o tsv)"
 export GRAFANA_TOKEN="$(az account get-access-token \
   --resource https://dashboard.azure.com --query accessToken -o tsv)"
 
-python3 build_dashboard.py > ../grafana/movielog-dashboard.json
-python3 verify_panels.py ../grafana/movielog-dashboard.json --appinsights-id "$AIID"
-python3 build_dashboard.py --appinsights-id "$AIID" > /tmp/live.json
+python3 grafana/build_dashboard.py > grafana/movielog-dashboard.json
+python3 $SKILL/verify_panels.py grafana/movielog-dashboard.json --appinsights-id "$AIID"
+python3 grafana/build_dashboard.py --appinsights-id "$AIID" > /tmp/live.json
 az grafana dashboard create -g "$RG" -n "$GRAFANA" --definition @/tmp/live.json --overwrite true
 
 npm i playwright && npx playwright install chromium-headless-shell
-node capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
+node $SKILL/capture.mjs "/d/movielog-business-metrics/x?orgId=1&from=now-30m&to=now&kiosk" dashboard.png
 ```
 
 `now-30m` 같은 상대 범위는 panel마다 query 시각이 조금씩 달라 분 경계에서는
@@ -110,7 +120,7 @@ panel 간 합계가 1분 bin만큼 어긋날 수 있습니다. 문서에 쓸 캡
 절대 범위(`from=<epoch ms>&to=<epoch ms>`)로 찍습니다.
 
 `kql.sh`는 `az monitor app-insights query`의 기본 범위인 최근 1시간만 조회합니다.
-지난 구간을 볼 때는 `KQL_OFFSET=12h ./kql.sh ...`처럼 늘립니다. `capture.mjs`는
+지난 구간을 볼 때는 `KQL_OFFSET=12h $SKILL/kql.sh ...`처럼 늘립니다. `capture.mjs`는
 token을 Grafana origin에만 보내고, 내부 scroll 높이에 맞춰 viewport를 늘리며,
 panel 로딩이 60초를 넘으면 실패로 종료합니다.
 

@@ -1,6 +1,6 @@
 ---
-title: "Micrometer 비즈니스 지표 · AKS 자동 계측 · agent 기반 Grafana 대시보드"
-description: Spring Boot 앱에 Micrometer meter만 남기면 AKS 자동 계측이 Application Insights로 수집하고, agent에게 실제 customMetrics를 조회·검증하게 하면 Grafana 대시보드가 데이터에 맞게 완성됩니다. MovieLog 캡처, agent prompt 예시, 로컬 agent 직접 반영과 JSON import 방식을 함께 안내합니다.
+title: "Micrometer 비즈니스 지표 · AKS 자동 계측 · GitHub Copilot 기반 Grafana 대시보드"
+description: Spring Boot 앱이 Micrometer API로 지표를 기록하면 AKS 자동 계측이 Application Insights로 수집하고, GitHub Copilot에 skill 지침을 주면 실제 customMetrics를 조회·검증해 데이터에 맞는 Grafana 대시보드를 만듭니다. MovieLog 캡처, Copilot skill 사용법, 직접 반영과 JSON import 방식을 함께 안내합니다.
 document_type: guide
 services: [azure-monitor, azure-kubernetes-service, azure-managed-grafana]
 technologies: [java, spring-boot, micrometer, kubernetes, grafana]
@@ -15,6 +15,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-monitor/app/java-standalone-config
   - title: Metrics in Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/app/metrics-overview
+  - title: Use Agent Skills in VS Code
+    url: https://code.visualstudio.com/docs/agent-customization/agent-skills
+  - title: Adding agent skills for GitHub Copilot CLI
+    url: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
   - title: Micrometer Meters
     url: https://docs.micrometer.io/micrometer/reference/concepts/meters.html
   - title: Micrometer Counters
@@ -45,11 +49,11 @@ related_guides:
   - ../aks-java-micrometer-custom-metrics/index.md
 ---
 
-# Micrometer 비즈니스 지표 · AKS 자동 계측 · agent 기반 Grafana 대시보드
+# Micrometer 비즈니스 지표 · AKS 자동 계측 · GitHub Copilot 기반 Grafana 대시보드
 
-## 핵심 흐름: meter 기록 → 자동 수집 → agent 대시보드 { #message }
+## 핵심 흐름: meter 기록 → 자동 수집 → Copilot 대시보드 { #message }
 
-meter 기록, 자동 수집, agent 검증의 세 단계만 연결하면 비즈니스 대시보드가
+meter 기록, 자동 수집, Copilot 검증의 세 단계만 연결하면 비즈니스 대시보드가
 완성됩니다. "오늘 리뷰가 몇 건 올라왔나", "별점 평균이 떨어지고 있나" 같은 지표를
 보려고 exporter를 붙이거나, scrape 설정을 만들거나, 대시보드 query를 손으로
 설계할 필요는 없습니다.
@@ -59,9 +63,10 @@ meter 기록, 자동 수집, agent 검증의 세 단계만 연결하면 비즈�
 2. **AKS 자동 계측이 수집합니다.** 클러스터의 자동 계측을 켜면 Pod에 주입된
    Application Insights Java agent가 Micrometer 지표를 읽어 Application Insights
    `customMetrics`로 보냅니다. 앱에는 exporter도, metrics endpoint도 필요 없습니다.
-3. **agent가 실제 지표를 보며 Grafana 대시보드를 만듭니다.** 코드의 meter 이름을
-   추측하지 않고 `customMetrics`를 직접 조회해 집계식을 정하고, 모든 panel
-   query를 실행하고, 렌더링한 화면을 캡처해 확인합니다.
+3. **GitHub Copilot이 실제 지표를 보며 Grafana 대시보드를 만듭니다.** 별도 agent를
+   만들지 않고 Copilot에 작업 지침(skill)을 줍니다. Copilot은 코드의 meter 이름을
+   추측하지 않고 `customMetrics`를 직접 조회해 집계식을 정하고, 모든 panel query를
+   실행하고, 렌더링한 화면을 캡처해 확인합니다.
 
 아래는 Spring Boot로 만든 영화 리뷰 sample 앱 MovieLog의 custom metric을 이 흐름으로
 시각화한 대시보드입니다. 앱 구성과 배포, 대시보드를 만든 과정과 실측값은
@@ -202,15 +207,19 @@ init image를 주입한 상태에서 얻었습니다.
 
 ![customMetrics inventory. JVM 기본 지표와 함께 movielog_comments_posted부터 movielog_reviews_stored까지 12개 비즈니스 지표가 두 Pod에서 도착](images/probe-inventory-agent-3.7.10.png)
 
-## agent 대시보드 작성: 실제 지표 조회 기반 panel 설계 { #agent }
+## Copilot 대시보드 작성: skill 지침과 실제 지표 조회 { #agent }
 
-agent를 쓰면 KQL과 panel 설정을 직접 짜지 않고도 대시보드를 만들 수 있고, agent가
-실제로 수집된 지표를 먼저 확인하게 하면 대시보드가 데이터에 더 정확히 맞습니다.
+대시보드용 agent를 따로 만들 필요는 없습니다. GitHub Copilot에 작업 순서와 점검 기준을
+skill로 주면, Copilot이 KQL과 panel 설정을 직접 짜고 실행해 대시보드를 만듭니다.
+지침에서 실제로 수집된 지표를 먼저 확인하게 하면 대시보드가 데이터에 더 정확히
+맞습니다.
+
 코드에는 meter 이름과 종류만 있습니다. Application Insights에 들어온 이름, dimension
 값, 값 모양(`value`, `valueCount`, `valueSum`)은 조회해야 알 수 있습니다. 그래서
-agent에게 "그려 줘" 한 번 대신 조회, 생성, 실행 확인, 화면 확인의 네 단계를 맡깁니다.
+skill은 Copilot에게 "그려 줘" 한 번 대신 조회, 생성, 실행 확인, 화면 확인의 네 단계를
+맡깁니다.
 
-| agent 단계 | 하는 일 | 정확해지는 부분 |
+| 단계 | Copilot이 하는 일 | 정확해지는 부분 |
 |---|---|---|
 | probe | 실제 `customMetrics`의 이름, dimension, Pod 수, 값 모양 조회 | metric별 집계식. Counter는 `sum`, 분포는 `sum(valueSum)/sum(valueCount)`, Pod마다 같은 값을 보내는 Gauge는 Pod 간 `max` |
 | build | probe가 정한 집계식과 질문 유형별 시각화로 dashboard JSON 생성 | panel마다 답할 질문과 시각화의 짝 |
@@ -224,13 +233,13 @@ query가 모두 성공해도 화면에서는 아래처럼 정상 건수가 경�
 ![수정 전 캡처. 영화 조회 2.17K, 새 리뷰 366, 신규 회원 542가 빨간색으로 표시되고 legend가 perMin api, perMin web으로 표시됨](images/look-step-before-fix.png)
 
 단계별 query와 통과 기준, 화면 점검 항목은 실습의
-[agent 대시보드 방법론](movielog-lab/index.md#agent-method)에 있습니다.
+[Copilot 대시보드 작업 단계](movielog-lab/index.md#agent-method)에 있습니다.
 
 ### 질문 유형별 panel 시각화 { #visualization }
 
 panel 시각화는 답할 질문의 유형으로 고릅니다. `customMetrics`는 시간 bin으로
-조회되므로 agent에게 따로 말하지 않으면 거의 모든 panel을 꺾은선으로 그립니다.
-질문 유형과 시각화의 짝을 prompt에 넣어 줍니다.
+조회되므로 Copilot에게 따로 말하지 않으면 거의 모든 panel을 꺾은선으로 그립니다.
+질문 유형과 시각화의 짝을 skill 지침에 넣어 둡니다.
 
 | 질문 유형 | 시각화 |
 |---|---|
@@ -244,52 +253,48 @@ panel 시각화는 답할 질문의 유형으로 고릅니다. `customMetrics`�
 MovieLog panel별 질문, 집계식, 시각화는 실습의 [build 절](movielog-lab/index.md#build)에
 있습니다.
 
-### MovieLog 대시보드 prompt 예시 { #prompt-example }
+### GitHub Copilot skill 사용법 { #prompt-example }
 
-MovieLog 대시보드는 agent가 지표 조회 → 집계식 결정 → panel 제안 → query 실행 →
-화면 확인 순서로 작업해 만들었습니다. 아래는 그 작업 순서를 다른 환경에서 다시
-시킬 수 있게 줄여 정리한 prompt입니다. 단계별 query와 도구까지 적은 원본 지시문은
-[agent-dashboard-prompt.md](downloads/agent-dashboard-prompt.md)입니다.
-Managed Grafana MCP endpoint(`/api/azure-mcp`)를 연결한 VS Code의 GitHub Copilot이나,
-`az`로 로그인한 터미널에서 실행하는 agent(예: GitHub Copilot CLI)에 붙입니다.
-`<...>`는 자기 환경 값으로 바꿉니다.
+작업 지침은 GitHub Copilot의 skill(`SKILL.md`와 보조 스크립트를 담은 폴더)로 줍니다.
+skill은 VS Code의 GitHub Copilot과 GitHub Copilot CLI가 저장소의 `.github/skills/`에서
+찾고, 요청 내용이 skill 설명과 맞으면 Copilot이 지침을 불러와 따릅니다.
+
+1. sample의 `.github/skills/grafana-metrics-dashboard/` 폴더를 자기 저장소의
+   `.github/skills/`에 복사합니다. 지침 전문은
+   [grafana-metrics-dashboard-skill.md](downloads/grafana-metrics-dashboard-skill.md)에
+   있습니다.
+2. Copilot이 Grafana에 접근할 경로를 준비합니다. VS Code에서는 Managed Grafana MCP
+   endpoint(`https://<grafana-endpoint>/api/azure-mcp`)를 연결하고, 터미널에서는 `az`로
+   로그인합니다.
+3. Copilot chat에서 skill 이름과 환경을 넣어 요청합니다. `<...>`는 자기 환경 값으로
+   바꿉니다.
 
 ```text
-MovieLog의 비즈니스 지표로 Grafana 대시보드를 만들어 줘.
-코드의 meter 이름을 그대로 믿지 말고, 실제로 들어온 데이터를 먼저 조회해서 결정해.
-
-- 데이터: Application Insights <app-insights-resource-group>/<app-insights-name>의 customMetrics
-  (cloud_RoleName = movielog, 지표 prefix = movielog_)
-- Grafana: Azure Managed Grafana <grafana-resource-group>/<grafana-name>의 Azure Monitor data source
-
-1. 최근 30분 동안 들어온 movielog_* 지표의 이름, Pod 수, dimension과 값 개수,
-   valueCount·value 모양을 조회해서 표로 보여 줘.
-2. 그 결과로 metric마다 집계식을 정해 줘. Counter, 분포(DistributionSummary·Timer),
-   Gauge를 구분하고, 근거가 된 조회 결과를 한 줄씩 적어.
-3. panel 목록을 "답할 질문 / metric / 집계식 / 시각화" 표로 먼저 제안해.
-   시각화는 질문 유형으로 골라. 합계는 stat, 정상 범위는 gauge, 비율은 donut,
-   비교와 쏠림은 bar gauge, 추이만 time series로 그려.
-4. dashboard JSON을 만들고 모든 panel query를 Grafana에서 실제로 실행해서
-   0행이나 오류가 있으면 고친 뒤 다시 실행해.
-5. Grafana에 올리고 화면을 캡처해서 식별자 노출, 정상 값의 경고색,
-   읽기 어려운 legend, 끝이 꺾이는 미완성 구간이 없는지 직접 확인해.
-
-connection string, subscription ID, resource ID는 출력·파일·캡처에 남기지 마.
+/grafana-metrics-dashboard Application Insights <app-insights-resource-group>/<app-insights-name>의
+movielog_ 지표로 Azure Managed Grafana <grafana-resource-group>/<grafana-name>에 대시보드를 만들어 줘.
 ```
 
-1단계가 돌려주는 표의 실제 형태는 실습의 [probe 1~3](movielog-lab/index.md#probe-inventory)
-출력에 있습니다.
+skill 지침에는 다음이 들어 있습니다.
 
-## 대시보드 반영 방식: 로컬 agent 직접 반영과 JSON import { #publish }
+| 지침 | 내용 |
+|---|---|
+| 조회 우선 | 코드의 meter 이름을 믿지 않고 inventory, dimension, 값 모양을 먼저 조회 |
+| 집계식 규칙 | Counter·분포 meter·Gauge 구분과 meter 종류별 집계식 |
+| 시각화 규칙 | [질문 유형별 panel 시각화](#visualization) 표 |
+| 통과 기준 | 모든 panel query 실행과 화면 점검 항목 |
+| 보안 규칙 | 읽기 전용 조회와 dashboard 생성·수정만 허용, connection string·subscription ID·resource ID를 출력·파일·캡처에 남기지 않음 |
+| 보조 스크립트 | 조회 query, panel query 일괄 실행(`verify_panels.py`), Entra token 기반 화면 캡처(`capture.mjs`) |
 
-agent가 만든 대시보드를 Grafana에 넣는 방법은 두 가지입니다. 개발 환경에서는 로컬
-agent가 직접 반영하고, 운영처럼 agent에 쓰기 권한을 주지 않는 환경에는 검증된 JSON을
+## 대시보드 반영 방식: 로컬 Copilot 직접 반영과 JSON import { #publish }
+
+Copilot이 만든 대시보드를 Grafana에 넣는 방법은 두 가지입니다. 개발 환경에서는 로컬
+Copilot이 직접 반영하고, 운영처럼 Copilot에 쓰기 권한을 주지 않는 환경에는 검증된 JSON을
 import합니다.
 
 | 방식 | 흐름 | 적합한 경우 |
 |---|---|---|
-| 로컬 agent 직접 반영 | 개발자 PC의 agent가 Managed Grafana MCP(`amgmcp_dashboard_update`) 또는 `az grafana dashboard create`로 반영하고, 같은 세션에서 query 실행과 캡처 확인까지 반복 | 대시보드를 처음 만들거나 자주 고칠 때, agent 계정에 Grafana Editor 이상을 줄 수 있을 때 |
-| JSON 추출 후 import | agent가 만든 JSON 파일이나 검증된 dashboard를 Export한 파일을 저장소에 커밋·리뷰한 뒤, 대상 Grafana의 **Dashboards > Import** 또는 `az grafana dashboard import`로 가져옴 | 운영 Grafana에 agent 권한을 주지 않을 때, 여러 환경에 같은 대시보드를 배포하거나 변경 이력을 남길 때 |
+| 로컬 Copilot 직접 반영 | 개발자 PC의 Copilot이 Managed Grafana MCP(`amgmcp_dashboard_update`) 또는 `az grafana dashboard create`로 반영하고, 같은 세션에서 query 실행과 캡처 확인까지 반복 | 대시보드를 처음 만들거나 자주 고칠 때, 로그인한 계정에 Grafana Editor 이상이 있을 때 |
+| JSON 추출 후 import | Copilot이 만든 JSON 파일이나 검증된 dashboard를 Export한 파일을 저장소에 커밋·리뷰한 뒤, 대상 Grafana의 **Dashboards > Import** 또는 `az grafana dashboard import`로 가져옴 | 운영 Grafana에 Copilot이 쓰는 계정의 쓰기 권한을 주지 않을 때, 여러 환경에 같은 대시보드를 배포하거나 변경 이력을 남길 때 |
 
 - 환경마다 달라지는 Application Insights resource ID와 `cloud_RoleName`은
   dashboard 변수로 빼 두고, import 뒤 변수 값을 채웁니다.
@@ -303,12 +308,12 @@ import합니다.
 [MovieLog 실습](movielog-lab/index.md)은 AKS, Application Insights, Azure Managed
 Grafana를 만들고 MovieLog와 합성 부하를 배포한 뒤, 위 네 단계와 두 반영 방식을
 명령과 실측값, 캡처로 재현합니다. 약 90분이 걸리고 유료 자원을 쓰며, 마지막에 resource group을
-지워 정리합니다. 실행 가능한 앱, manifest, agent 도구는 이 페이지의
+지워 정리합니다. 실행 가능한 앱, manifest, Copilot skill은 이 페이지의
 `movielog-app` sample에 있습니다.
 
 ## Spring Boot 4 호환성: 관리형 agent 3.7.7-aks 제약 { #spring-boot-4 }
 
-Spring Boot 4에서는 주입된 agent가 3.7.9 이상인지 먼저 확인합니다. Application
+Spring Boot 4에서는 주입된 Java agent가 3.7.9 이상인지 먼저 확인합니다. Application
 Insights Java agent는 3.7.9부터 Spring Boot 4의 Micrometer 구성을 인식합니다.
 2026-11-06 기준 AKS가 주입하는 관리형 agent는 `3.7.7-aks`였습니다.
 
@@ -320,6 +325,8 @@ Insights Java agent는 3.7.9부터 Spring Boot 4의 Micrometer 구성을 인식�
 - [Autoinstrument AKS apps with Azure Monitor Application Insights](https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless)
 - [Configure Azure Monitor Application Insights for Java](https://learn.microsoft.com/azure/azure-monitor/app/java-standalone-config)
 - [Metrics in Application Insights](https://learn.microsoft.com/azure/azure-monitor/app/metrics-overview)
+- [Use Agent Skills in VS Code](https://code.visualstudio.com/docs/agent-customization/agent-skills)
+- [Adding agent skills for GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills)
 - [Micrometer Meters](https://docs.micrometer.io/micrometer/reference/concepts/meters.html)
 - [Micrometer Counters](https://docs.micrometer.io/micrometer/reference/concepts/counters.html)
 - [Micrometer Timers](https://docs.micrometer.io/micrometer/reference/concepts/timers.html)
