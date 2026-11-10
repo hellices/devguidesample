@@ -38,19 +38,25 @@ def test_every_source_fans_out_to_both_delivery_paths():
     assert set(pipelines) == {f"metrics/{source}-{delivery}" for source in expected_receivers
                               for delivery in ("scrape", "remote_write")}
     for source, receivers in expected_receivers.items():
-        scrape = pipelines[f"metrics/{source}-scrape"]
-        push = pipelines[f"metrics/{source}-remote_write"]
-        # Each source must read its own receiver, so data can never be labelled with another source.
-        assert scrape["receivers"] == push["receivers"] == receivers
-        assert scrape["exporters"] == ["prometheus"]
-        assert push["exporters"] == ["prometheusremotewrite"]
-        assert f"resource/source_{source}" in scrape["processors"]
-        assert f"resource/source_{source}" in push["processors"]
-        assert "resource/delivery_scrape" in scrape["processors"]
-        assert "resource/delivery_remote_write" in push["processors"]
-        # Apart from the delivery stamp, both pipelines process data identically.
-        strip = lambda processors: [p for p in processors if not p.startswith("resource/delivery_")]
-        assert strip(scrape["processors"]) == strip(push["processors"])
+        _assert_fans_out(pipelines, source, receivers)
+
+
+def _assert_fans_out(pipelines, source, receivers):
+    """The source reads its own receivers into exactly two pipelines that differ only in delivery."""
+    scrape = pipelines[f"metrics/{source}-scrape"]
+    push = pipelines[f"metrics/{source}-remote_write"]
+    # Each source must read its own receiver, so data can never be labelled with another source.
+    assert scrape["receivers"] == push["receivers"] == receivers
+    assert scrape["exporters"] == ["prometheus"]
+    assert push["exporters"] == ["prometheusremotewrite"]
+    for pipeline, delivery in ((scrape, "scrape"), (push, "remote_write")):
+        assert f"resource/source_{source}" in pipeline["processors"]
+        # Exactly one delivery stamp, the right one: a second stamp would overwrite delivery_path.
+        stamps = [p for p in pipeline["processors"] if p.startswith("resource/delivery_")]
+        assert stamps == [f"resource/delivery_{delivery}"], (source, stamps)
+    # Apart from the delivery stamp, both pipelines process data identically.
+    strip = lambda processors: [p for p in processors if not p.startswith("resource/delivery_")]
+    assert strip(scrape["processors"]) == strip(push["processors"])
 
 
 def test_exporters_promote_only_lab_labels():
@@ -109,10 +115,9 @@ def test_dedicated_profile_requires_existing_cluster_id():
     assert "NamespaceMemoryUsage" not in metrics
     pipelines = config["service"]["pipelines"]
     assert pipelines["metrics/azure_monitor_api-scrape"]["receivers"] == ["azure_monitor/premium"]
+    _assert_fans_out(pipelines, "azure_monitor_dedicated", ["azure_monitor/dedicated"])
     for delivery in ("scrape", "remote_write"):
-        dedicated = pipelines[f"metrics/azure_monitor_dedicated-{delivery}"]
-        assert dedicated["receivers"] == ["azure_monitor/dedicated"]
-        assert "filter/dedicated" in dedicated["processors"]
+        assert "filter/dedicated" in pipelines[f"metrics/azure_monitor_dedicated-{delivery}"]["processors"]
     # The filter drops a data point when this is true, so it must be exactly "not the chosen cluster".
     assert config["processors"]["filter/dedicated"]["metric_conditions"] == [
         f'ConvertCase(datapoint.attributes["azuremonitor.resource_id"], "lower") != "{DEDICATED_ID.lower()}"'
@@ -145,11 +150,7 @@ def test_fallback_replaces_api_source_only_when_requested():
 
     assert "azure_monitor/premium" not in config["receivers"]
     assert not any(name.startswith("metrics/azure_monitor_api") for name in pipelines)
-    for delivery, exporter in (("scrape", "prometheus"), ("remote_write", "prometheusremotewrite")):
-        pipeline = pipelines[f"metrics/fallback_exporter-{delivery}"]
-        assert pipeline["receivers"] == ["prometheus/fallback"]
-        assert pipeline["exporters"] == [exporter]
-        assert "resource/source_fallback_exporter" in pipeline["processors"]
+    _assert_fans_out(pipelines, "fallback_exporter", ["prometheus/fallback"])
     scrape_configs = config["receivers"]["prometheus/fallback"]["config"]["scrape_configs"]
     assert len(scrape_configs) == 1  # a second, unfiltered job would admit other namespaces
     scrape = scrape_configs[0]
@@ -183,7 +184,10 @@ def test_lag_pipelines_drop_python_runtime_metrics():
     config = render_config(BASE_ENV)
     pipelines = config["service"]["pipelines"]
 
-    assert "filter/lag" in pipelines["metrics/lag_exporter-scrape"]["processors"]
+    for delivery in ("scrape", "remote_write"):
+        assert "filter/lag" in pipelines[f"metrics/lag_exporter-{delivery}"]["processors"]
+        # The self filter must be wired into both collector_self pipelines, not merely defined.
+        assert "filter/self" in pipelines[f"metrics/collector_self-{delivery}"]["processors"]
     assert "filter/lag" not in pipelines["metrics/azure_monitor_api-scrape"]["processors"]
     # The filter drops a metric when the condition is true: keep eventhubs_* and up, drop the rest.
     assert config["processors"]["filter/lag"]["metric_conditions"] == [

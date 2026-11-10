@@ -357,12 +357,42 @@ def test_dedicated_compares_cluster_cpu_across_api_and_diagnostic_settings():
     assert "cpu_maximum" in exprs[1] and "eventhub/clusters/" in exprs[1]
 
 
-def test_capture_refuses_a_page_whose_height_never_settles():
-    text = (LAB_ROOT / "agent" / "capture.mjs").read_text()
+SETTLE_CASES = {
+    # content height per measurement; a layout that keeps growing is refused, not captured
+    "grows_forever": "let h = 1000; const measure = async () => (h += 500);",
+    # height: 100% layouts report the viewport itself and must count as settled
+    "full_height": "let v = 1000; const measure = async () => v;",
+    # lazy panels appear once, then the content fits the grown viewport
+    "grows_then_fits": "let v = 1000; const sizes = [2400, 2400]; const measure = async () => sizes.shift() ?? v;",
+}
 
-    loop = text[text.index("let stable = false;"):text.index("await page.waitForFunction(")]
-    assert "stable = true;" in loop
-    assert "if (!stable) throw new Error(" in loop
+
+@pytest.mark.parametrize("case, expected", [
+    ("grows_forever", "rejected"), ("full_height", "1000"), ("grows_then_fits", "2400"),
+])
+def test_capture_waits_until_the_dashboard_fits_and_refuses_one_that_never_does(case, expected):
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    module = (LAB_ROOT / "agent" / "settle.mjs").as_uri()
+    script = (
+        f"import {{ settleViewport }} from '{module}';\n{SETTLE_CASES[case]}\n"
+        "const resize = async (height) => { if (typeof v !== 'undefined') v = height; };\n"
+        "settleViewport({ measure, resize, initialHeight: 1000 })"
+        ".then((h) => console.log(h), () => console.log('rejected'));\n"
+    )
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30)
+
+    assert result.stdout.strip() == expected, result.stderr
+
+
+def test_capture_uses_the_settle_helper():
+    text = (LAB_ROOT / "agent" / "capture.mjs").read_text()
+    assert "import { settleViewport } from './settle.mjs';" in text
+    assert "const height = await settleViewport({" in text
 
 
 def test_hidden_targets_are_not_queried(monkeypatch):

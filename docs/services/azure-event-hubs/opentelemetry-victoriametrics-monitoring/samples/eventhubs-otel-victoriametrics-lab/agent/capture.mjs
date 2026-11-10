@@ -7,6 +7,7 @@ import http from 'node:http';
 import https from 'node:https';
 import tls from 'node:tls';
 import { chromium } from 'playwright';
+import { settleViewport } from './settle.mjs';
 
 const [dashboardPath, output, from = 'now-1h', to = 'now', width = '1600'] = process.argv.slice(2);
 if (!dashboardPath || !output) {
@@ -121,24 +122,17 @@ try {
   // A server error renders a page without loading bars; never capture it.
   await gotoOk(page, url, { waitUntil: 'networkidle' });
 
-  // Grafana lazily renders panels inside its own scroll container; grow the viewport until the
-  // height stays the same, and refuse to capture a layout that never settled.
-  let height = 0;
-  let stable = false;
-  for (let i = 0; i < 12; i += 1) {
-    const next = await page.evaluate(() => {
+  const height = await settleViewport({
+    initialHeight: 1000,
+    measure: () => page.evaluate(() => {
       const scroller = document.querySelector('[data-testid="data-testid dashboard-scrollbar"], .scrollbar-view, main') ?? document.body;
       return Math.max(scroller.scrollHeight, document.body.scrollHeight);
-    });
-    if (next === height) {
-      stable = true;
-      break;
-    }
-    height = next;
-    await page.setViewportSize({ width: Number(width), height: height + 40 });
-    await page.waitForLoadState('networkidle');
-  }
-  if (!stable) throw new Error(`dashboard height did not settle (last ${height}px); not capturing a partial page`);
+    }),
+    resize: async (height) => {
+      await page.setViewportSize({ width: Number(width), height });
+      await page.waitForLoadState('networkidle');
+    },
+  });
   await page.waitForFunction(
     () => document.querySelectorAll('[aria-label="Panel loading bar"], [data-testid="data-testid panel loading bar"]').length === 0,
     null,

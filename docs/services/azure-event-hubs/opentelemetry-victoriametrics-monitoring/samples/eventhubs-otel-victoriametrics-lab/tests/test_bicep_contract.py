@@ -146,6 +146,31 @@ def test_messaging_creates_the_cluster_only_for_the_dedicated_tier():
     assert "dedicated ? {\n    clusterArmId: dedicatedCluster.id\n  } : {}" in namespace
     assert re.search(r"name: 'Premium'\s*tier: 'Premium'\s*capacity: 1", namespace)
     assert "Microsoft.Insights/diagnosticSettings@2021-05-01-preview" in text
+    # Everything scoped to the cluster exists only when the cluster does.
+    for symbol in ("gatewayClusterMonitoringReader", "clusterMetricsToTelemetryHub"):
+        block = _resource_block(text, symbol)
+        assert "= if (dedicated) {" in block and "scope: dedicatedCluster" in block, symbol
+
+
+# Built-in role definition IDs (Azure built-in roles reference); a swapped GUID grants the wrong role.
+ROLE_GUIDS = {
+    "acrPullRoleDefinitionId": "7f951dda-4ed3-4680-a7ca-43fe172d538d",
+    "keyVaultSecretsUserRoleDefinitionId": "4633458b-17de-408a-b874-0445c86b69e6",
+    "storageBlobDataContributorRoleDefinitionId": "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+    "storageBlobDataReaderRoleDefinitionId": "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+    "monitoringReaderRoleDefinitionId": "43d0d8ad-25c7-4714-9337-8ba259a9fe05",
+    "eventHubsDataSenderRoleDefinitionId": "2b629674-e913-4c01-ae53-ef4638d8f975",
+    "eventHubsDataReceiverRoleDefinitionId": "a638d3c7-ab3a-418d-83e6-5f17a39d4fde",
+    "networkContributorRoleDefinitionId": "4d97b98b-1d4f-4787-a291-c67834d212e7",
+    "aksRbacClusterAdminRoleDefinitionId": "b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b",
+}
+
+
+def test_every_role_variable_holds_the_guid_its_name_promises():
+    for path in (LAB_ROOT / "infra").rglob("*.bicep"):
+        declared = dict(re.findall(r"^var (\w+RoleDefinitionId) = '([0-9a-f-]{36})'", _code(path.read_text()), re.MULTILINE))
+        for name, guid in declared.items():
+            assert ROLE_GUIDS.get(name) == guid, (path.name, name, guid)
 
 
 def test_cluster_streams_its_metrics_to_the_same_telemetry_hub_only_for_dedicated():

@@ -92,6 +92,7 @@ def test_azure_cli_calls_pin_the_subscription():
                     ), line
                     continue
                 if 'az vm run-command invoke "${args[@]}"' in segment:
+                    # The array is expanded at run time; test_gateway_run_pins_the_subscription executes it.
                     continue
                 assert "--subscription" in segment, f"{path.name}: {segment.strip()}"
 
@@ -588,6 +589,22 @@ def test_gateway_bundle_restores_the_previous_bundle_when_the_copy_fails(fake_bi
     assert not list(tmp_path.glob("app.previous.*"))
 
 
+def test_gateway_keeps_the_grafana_secret_when_key_vault_fails(fake_bin, tmp_path):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write)
+    write("az", 'if [[ "$1 $2" == "keyvault secret" ]]; then echo "throttled" >&2; exit 1; fi')
+    app = tmp_path / "app"
+    (app / "secrets").mkdir(parents=True)
+    (app / "secrets" / "grafana_admin_password").write_text("current")
+    (app / "compose.yaml").write_text("previous")
+
+    result = _run_bootstrap(bin_dir, tmp_path, app)
+
+    assert result.returncode != 0
+    assert (app / "secrets" / "grafana_admin_password").read_text() == "current"
+    assert not list((app / "secrets").glob(".grafana_admin_password.*"))
+
+
 def test_gateway_bootstrap_sets_home_for_run_command():
     text = (LAB_ROOT / "gateway" / "bootstrap.sh").read_text()
     # Without HOME, az writes .cache under a literal "None" directory in the bundle directory.
@@ -927,3 +944,22 @@ def test_group_lookup_rejects_an_unexpected_answer(fake_bin, script, args):
 
     assert result.returncode != 0
     assert "unexpected answer to the resource group existence check" in result.stderr
+
+
+def test_gateway_run_pins_the_subscription(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    write("az", "exit 0")
+    script = tmp_path / "step.sh"
+    script.write_text("echo hi\n")
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+           "LAB_STATE_ROOT": str(tmp_path / "state"), "AZURE_SUBSCRIPTION_ID": "00000000-0000-0000-0000-000000000000",
+           "AZURE_RESOURCE_GROUP": "rg-example", "GATEWAY_VM_NAME": "vm-example"}
+    result = subprocess.run(
+        ["bash", "-c", f'source "{SCRIPTS / "lib.sh"}"; gateway_run "{script}" BUNDLE_B64=abc'],
+        env=env, capture_output=True, text=True, timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    [call] = [line for line in log.read_text().splitlines() if line.startswith("az vm run-command invoke")]
+    assert " --subscription 00000000-0000-0000-0000-000000000000 " in f"{call} "
+    assert " --resource-group rg-example " in call and " --parameters BUNDLE_B64=abc" in call

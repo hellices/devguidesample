@@ -14,7 +14,11 @@ START = int(datetime(2026, 11, 9, 21, 25, tzinfo=timezone.utc).timestamp())
 END = START + 180
 
 
-API = 'source_path="azure_monitor_api"'
+RESOURCE = "/subscriptions/s/resourceGroups/rg-example/providers/Microsoft.EventHub/namespaces/ehp-example"
+# Exactly the namespace Azure Monitor answered for, so another namespace's series is never summed in.
+API = ('source_path="azure_monitor_api",'
+       'azuremonitor_resource_id=~"(?i)/subscriptions/s/resourceGroups/rg\\\\-example/providers/'
+       'Microsoft\\\\.EventHub/namespaces/ehp\\\\-example"')
 
 
 def _values(name):
@@ -30,7 +34,8 @@ def _raw(names=REQUIRED, drop=None):
             {"timeStamp": f"2026-11-09T21:{25 + i}:00Z", "total": None if drop == (name, i) else total}
             for i, total in enumerate(_values(name))
         ]
-        value.append({"name": {"value": name}, "timeseries": [{"data": data}]})
+        value.append({"id": f"{RESOURCE}/providers/Microsoft.Insights/metrics/{name}",
+                      "name": {"value": name}, "timeseries": [{"data": data}]})
     return {"value": value}
 
 
@@ -193,3 +198,10 @@ def test_cli_rejects_windows_that_are_not_whole_minutes(tmp_path, from_ms, to_ms
     )
     assert result.returncode == 2
     assert "whole minutes" in result.stderr
+
+
+def test_a_metric_without_a_resource_id_is_rejected():
+    raw = _raw()
+    del raw["value"][0]["id"]
+    with pytest.raises(ValueError):
+        compare(raw, START, END, _fetch())

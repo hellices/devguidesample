@@ -630,7 +630,7 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 기본 배포도 fallback exporter 이미지를 pull | `COMPOSE_PROFILE=fallback`일 때만 fallback profile로 pull |
 | Run Command에 `HOME`이 없어 Azure CLI가 bundle 디렉터리에 `None/.cache`를 만듦 | bootstrap에서 `HOME`을 `/root`로 지정. 실제 VM에서 `None` 디렉터리가 더 생기지 않음을 확인 |
 | predown 기록이 없어도 현재 환경 값으로 resource group 삭제를 확인 | postdown은 predown이 남긴 resource group·subscription 기록을 필수로 요구 |
-| 대시보드 높이가 6번 안에 안정되지 않아도 캡처 | 높이가 같아질 때까지 최대 12번 확인하고, 안정되지 않으면 캡처하지 않고 실패 |
+| 대시보드 높이가 6번 안에 안정되지 않아도 캡처 | 내용이 viewport 안에 들어올 때까지 viewport를 키우며 최대 12번 확인하고, 그래도 넘치면 캡처하지 않고 실패. 높이 100% 레이아웃도 안정으로 판정하며, 실제 Grafana에서 전체 대시보드와 단일 panel 캡처를 확인 |
 | Premium에서 기존 cluster를 지정해도 Gateway에 그 cluster 조회 권한이 없음 | `modules/cluster-reader.bicep`이 지정한 cluster에 Monitoring Reader를 할당. 실제 cluster에 같은 module을 배포해 idempotent하게 성공함을 확인 |
 | 누락 판정이 window 뒤의 분 경계가 아닌 sample로도 gap을 확정 | 분 경계에 찍힌 bin만 뒤 bin으로 인정 |
 | 숨긴(`hide`) panel target도 검증해 필수 panel 실패로 판정 | Grafana처럼 숨긴 target은 실행하지 않음 |
@@ -638,6 +638,10 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 전체 postprovision이 중간에 실패해도 `GATEWAY_ONLY` 실행이 통과 | 마지막 health check까지 성공한 전체 실행만 완료 stamp를 남기고, `GATEWAY_ONLY`는 stamp를 요구 |
 | 이전 predown 기록이 남아 다른 대상을 검증할 수 있음, `az group exists` 출력 형식에 의존 | predown이 매번 기록을 지우고 두 값 또는 "대상 없음"만 기록, 조회는 `-o tsv`와 `true`/`false` 확인 |
 | 마지막 sequence를 알 수 없는 partition을 빈 partition(lag 0)으로 처리 | 알 수 없는 lag로 처리해 lag series를 남기지 않음 |
+| Azure Monitor 대조가 같은 이름의 다른 namespace series까지 합산 | Azure Monitor 응답의 resource ID로 `azuremonitor_resource_id`를 정확히 일치시키는 matcher 추가 |
+| Key Vault 조회가 일시 실패하면 Grafana 비밀번호 파일이 빈 파일로 남음 | 임시 파일에 받아 성공했을 때만 교체 |
+| peak lag 조회 구간이 부하 시작보다 60초 앞섬 | 부하 시작 시각부터의 구간만 조회 |
+| `ps` 출력 폭 때문에 port-forward 소유권 확인이 실패할 수 있음 | `ps -ww`로 전체 명령줄 확인 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 

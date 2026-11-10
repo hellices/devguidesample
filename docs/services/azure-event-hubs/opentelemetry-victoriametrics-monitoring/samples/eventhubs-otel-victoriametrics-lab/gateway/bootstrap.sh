@@ -54,10 +54,16 @@ set -a; . ./.env; set +a
 
 az login --identity --client-id "$GATEWAY_CLIENT_ID" --allow-no-subscriptions --output none
 install -d -m 0700 secrets
-az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name grafana-admin-password --query value -o tsv > secrets/grafana_admin_password
+# Write to a temporary file and replace the secret only after a successful read, so a transient
+# Key Vault failure never truncates the password Grafana already uses.
+SECRET_TMP="$(mktemp secrets/.grafana_admin_password.XXXXXX)"
+az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name grafana-admin-password --query value -o tsv >"$SECRET_TMP" \
+  || { rm -f "$SECRET_TMP"; echo "GATEWAY_STEP_FAILED key vault secret" >&2; exit 1; }
+[ -s "$SECRET_TMP" ] || { rm -f "$SECRET_TMP"; echo "GATEWAY_STEP_FAILED empty key vault secret" >&2; exit 1; }
 # Grafana runs as uid 472 and reads the file-based Compose secret.
-chown 472:0 secrets/grafana_admin_password
-chmod 0400 secrets/grafana_admin_password
+chown 472:0 "$SECRET_TMP"
+chmod 0400 "$SECRET_TMP"
+mv -f "$SECRET_TMP" secrets/grafana_admin_password
 chmod 0755 secrets
 
 # Grafana listens on the public IP for the operator /32 only. Serve it over TLS with a

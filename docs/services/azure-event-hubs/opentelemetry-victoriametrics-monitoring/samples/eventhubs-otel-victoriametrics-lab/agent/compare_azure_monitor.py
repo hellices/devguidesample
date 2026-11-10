@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -27,6 +28,17 @@ DIAGNOSTIC = ('source_path="diagnostic_eventhub",delivery_path="remote_write",'
 Fetch = Callable[[str, dict], str]
 # How far past the window to look for a later bin that proves an earlier one was skipped.
 LOOKAHEAD_SECONDS = 300
+
+
+def _resource_matcher(metric: dict) -> str:
+    """Exact, case-insensitive azuremonitor_resource_id matcher for the resource Azure Monitor answered for."""
+    metric_id = metric.get("id") or ""
+    cut = metric_id.lower().find("/providers/microsoft.insights/")
+    if cut <= 0:
+        raise ValueError(f"Azure Monitor metric {metric.get('name')} has no resource id")
+    pattern = "(?i)" + re.escape(metric_id[:cut])
+    # A PromQL string literal needs its backslashes and quotes escaped once more.
+    return 'azuremonitor_resource_id=~"' + pattern.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _minute(epoch_seconds: float) -> str:
@@ -72,7 +84,9 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
                 minute = point["timeStamp"][:16]
                 if minute in expected_set:
                     direct[minute] = direct.get(minute, 0) + point["total"]
-        api = 'source_path="azure_monitor_api"'
+        # Only the series of the resource Azure Monitor answered for; another namespace with the same
+        # metric name must not be summed into the comparison.
+        api = f'source_path="azure_monitor_api",{_resource_matcher(metric)}'
         off_bin: list[int] = []
         stored = {
             delivery: _samples(

@@ -12,7 +12,7 @@ is_our_forward() {
   local pid="$1" port="$2"
   [[ -f "$STATE/port-forward.started" ]] \
     && [[ "$(ps -p "$pid" -o lstart= 2>/dev/null)" == "$(<"$STATE/port-forward.started")" ]] \
-    && ps -p "$pid" -o command= 2>/dev/null | grep -qE "(^|/)kubectl .*port-forward .*(^| )$port:8428( |$)"
+    && ps -ww -p "$pid" -o command= 2>/dev/null | grep -qE "(^|/)kubectl .*port-forward .*(^| )$port:8428( |$)"
 }
 
 # Stops the recorded forward on the port it was started with, even if VM_LOCAL_PORT changed since.

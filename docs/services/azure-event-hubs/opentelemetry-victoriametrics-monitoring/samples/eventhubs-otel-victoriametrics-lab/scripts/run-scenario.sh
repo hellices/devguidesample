@@ -46,7 +46,7 @@ max_lag() {
 }
 # The largest lag stored since the load started; lag keeps rising until the producer stops.
 peak_lag() {
-  vm_scalar 30 "max(max_over_time($LAG_SERIES[$(( $(date +%s) - LOAD_START_EPOCH + 60 ))s]))"
+  vm_scalar 30 "max(max_over_time($LAG_SERIES[$(( $(date +%s) - LOAD_START_EPOCH ))s]))"
 }
 # Scaling to 0 only requests termination; the load ends when the producer pod is gone.
 stop_producer() {
