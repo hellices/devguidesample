@@ -112,7 +112,7 @@ Collector는 receiver 4개를 source로 두고, source마다 scrape용과 remote
 두 개를 만듭니다. 두 pipeline은 같은 receiver instance를 공유하므로 두 전달 경로의 차이가
 서로 다른 Azure API 호출의 차이가 되지 않습니다.
 
-![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace·cluster Diagnostic Settings, telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private endpoint subnet에 Storage Blob·Key Vault](../images/architecture.svg)
+![실습 구성. Korea South의 Event Hubs Dedicated cluster 1 CU와 그 안의 namespace, namespace·cluster Diagnostic Settings, telemetry용 Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer·slow consumer·VMAgent·VMSingle, gateway subnet에 OpenTelemetry Collector·lag exporter·Grafana와 두 exporter, private-endpoints subnet에 Storage Blob·Key Vault의 private endpoint](../images/architecture.svg)
 
 ```yaml
 # gateway/render_collector.py가 만드는 pipeline 일부
@@ -263,7 +263,7 @@ checkpoint가 없는 partition은 lag 값을 만들지 않고 존재 여부만 �
 |---|---|---|
 | baseline | 09:00:43 | producer 중지, 모든 partition lag 0 |
 | 부하 | 09:05:43–09:15:52 | producer 목표 200 events/s, 1 KiB. Azure Monitor 기준 수신 12,000 msg/min, 처리 7,200–8,100 msg/min |
-| lag 정점 | 09:16:00 | partition별 최대 10,800–10,980건, 합계 43,560건. 스크립트가 producer 중지 순간 읽은 최대 lag는 10,280 |
+| lag 정점 | 09:16:00 | partition별 최대 10,800–10,980건, 합계 43,560건. 이 실행의 스크립트는 부하 끝에 한 번 읽어 최대 lag 10,280을 기록 |
 | 회복 | 09:21:25 | 최대 lag가 정점의 20% 이하로 감소(producer 중지 후 5분 33초), 09:22:15에 0 |
 
 Azure Monitor `IncomingMessages`는 09:00–09:26에 118,200건이었습니다. lag 해상도는
@@ -276,7 +276,9 @@ producer 로그의 `sent_total`(116,400)은 10초 간격 로그의 마지막 값
 Azure Monitor `IncomingMessages`를 기준으로 봅니다. 같은 Dedicated 환경의 첫 시나리오
 (08:21–08:44)도 최대 lag 10,320건, 회복 5분 32초로 비슷했고, 이전 Premium 1 PU 환경에서도
 partition별 peak 10,700–11,040건, 회복 5분 33초–6분이었습니다. 이 부하에서는 lag가 consumer
-처리 속도로 정해지므로 tier에 따른 차이가 거의 없습니다.
+처리 속도로 정해지므로 tier에 따른 차이가 거의 없습니다. 리뷰 뒤 `peak_max_lag`를 부하 구간
+최댓값(`max_over_time`)으로 읽도록 고친 스크립트로 같은 환경에서 다시 실행(10:28–10:51)했을 때는
+`peak_max_lag` 11,120, producer 중지 5분 52초 뒤 회복이었습니다.
 
 시나리오는 10분 넘게 VMSingle을 조회하므로 `kubectl port-forward`가 `lost connection
 to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 없으면 port-forward를
@@ -620,6 +622,13 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | 복구 판정이 수집이 멈춘 뒤 남은 마지막 lag 값을 현재 값으로 사용할 수 있음 | 최근 120초 안의 sample만 쓰는 query(`time() - timestamp(...) < 120`)로 바꾸고, 최종 lag도 유효한 값이어야 완료. 로컬 VictoriaMetrics v1.155.0에서 오래된 series만 있으면 빈 결과, 새 series가 있으면 그 값만 반환함을 확인 |
 | postdown이 현재 환경의 subscription으로 기록된 resource group을 조회, 빈 client ID로 identity 조회 | predown이 subscription도 기록하고 다르면 실패, client ID가 없는 identity는 건너뜀 |
 | 캡처 health 요청에 timeout이 없고 없는 `viewPanel`도 통과, Gateway readiness `curl`에 timeout 없음 | 15초 timeout, panel tree에서 `viewPanel` id 확인, `curl --max-time` 지정 |
+| lag가 큰 partition의 series가 사라지면 나머지 partition만으로 회복 판정 | 최근 120초 lag series 수가 `eventhubs_checkpoint_present` partition 수와 같을 때만 최댓값 사용. 실제 VictoriaMetrics에서 두 수가 다르면 빈 결과임을 확인 |
+| 부하 구간에 producer rollout 대기가 포함되고, peak lag가 부하 끝 한 번의 조회 값 | rollout 완료 뒤 `load_start` 기록, producer 중지 뒤 `max_over_time`으로 부하 구간 최댓값을 읽음 |
+| `APP_DIR`가 `/`나 다른 애플리케이션 디렉터리여도 내용을 지움 | 두 단계 이상의 절대 경로만 허용하고, 비어 있지 않으면 bundle marker·`compose.yaml`·`tls`·`secrets`가 있어야 교체 |
+| 기본 배포도 fallback exporter 이미지를 pull | `COMPOSE_PROFILE=fallback`일 때만 fallback profile로 pull |
+| Run Command에 `HOME`이 없어 Azure CLI가 bundle 디렉터리에 `None/.cache`를 만듦 | bootstrap에서 `HOME`을 `/root`로 지정. 실제 VM에서 `None` 디렉터리가 더 생기지 않음을 확인 |
+| predown 기록이 없어도 현재 환경 값으로 resource group 삭제를 확인 | postdown은 predown이 남긴 resource group·subscription 기록을 필수로 요구 |
+| 대시보드 높이가 6번 안에 안정되지 않아도 캡처 | 높이가 같아질 때까지 최대 12번 확인하고, 안정되지 않으면 캡처하지 않고 실패 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 

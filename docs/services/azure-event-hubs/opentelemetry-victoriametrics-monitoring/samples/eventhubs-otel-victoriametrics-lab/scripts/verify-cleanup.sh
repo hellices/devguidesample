@@ -7,20 +7,19 @@ require_commands az
 AZURE_SUBSCRIPTION_ID="$(env_value AZURE_SUBSCRIPTION_ID)"
 AZURE_RESOURCE_GROUP="$(env_value AZURE_RESOURCE_GROUP)"
 STATE="$(state_dir)"
-# The group predown recorded is the one being deleted; a different current value is a mismatch.
-if [[ -f "$STATE/down-resource-group" ]]; then
-  recorded="$(<"$STATE/down-resource-group")"
-  [[ -z "$AZURE_RESOURCE_GROUP" || "$AZURE_RESOURCE_GROUP" == "$recorded" ]] \
-    || die "predown recorded $recorded but the environment now targets $AZURE_RESOURCE_GROUP"
-  AZURE_RESOURCE_GROUP="$recorded"
-fi
-if [[ -f "$STATE/down-subscription" ]]; then
-  recorded_subscription="$(<"$STATE/down-subscription")"
-  [[ -z "$AZURE_SUBSCRIPTION_ID" || "$AZURE_SUBSCRIPTION_ID" == "$recorded_subscription" ]] \
-    || die "predown recorded subscription $recorded_subscription but the environment now uses $AZURE_SUBSCRIPTION_ID"
-  AZURE_SUBSCRIPTION_ID="$recorded_subscription"
-fi
-[[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] || die "no resource group recorded to verify"
+# Verify exactly the group and subscription predown recorded; the current environment values may
+# already point elsewhere, so they never stand in for a missing record.
+[[ -f "$STATE/down-resource-group" && -f "$STATE/down-subscription" ]] \
+  || die "predown did not record the resource group and subscription to verify"
+recorded="$(<"$STATE/down-resource-group")"
+recorded_subscription="$(<"$STATE/down-subscription")"
+[[ -z "$AZURE_RESOURCE_GROUP" || "$AZURE_RESOURCE_GROUP" == "$recorded" ]] \
+  || die "predown recorded $recorded but the environment now targets $AZURE_RESOURCE_GROUP"
+[[ -z "$AZURE_SUBSCRIPTION_ID" || "$AZURE_SUBSCRIPTION_ID" == "$recorded_subscription" ]] \
+  || die "predown recorded subscription $recorded_subscription but the environment now uses $AZURE_SUBSCRIPTION_ID"
+AZURE_RESOURCE_GROUP="$recorded"
+AZURE_SUBSCRIPTION_ID="$recorded_subscription"
+[[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] || die "predown recorded an empty resource group or subscription"
 
 for attempt in $(seq 1 60); do
   # A failed lookup is an error, not "still exists".

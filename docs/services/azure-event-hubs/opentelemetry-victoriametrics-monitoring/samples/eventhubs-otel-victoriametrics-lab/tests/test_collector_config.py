@@ -155,6 +155,8 @@ def test_fallback_replaces_api_source_only_when_requested():
     scrape = scrape_configs[0]
     assert len(scrape["metric_relabel_configs"]) == 1
     assert scrape["metric_relabel_configs"][0]["action"] == "keep"
+    # azure-metrics-exporter puts the ARM resource ID in resourceID; the regex must apply to it.
+    assert scrape["metric_relabel_configs"][0]["source_labels"] == ["resourceID"]
     # Prometheus anchors relabel regexes: emulate that to prove only this namespace is kept.
     regex = scrape["metric_relabel_configs"][0]["regex"]
     assert regex.startswith("(?i)")

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-labelledby="archTitle archDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
   <title id="archTitle">Event Hubs OpenTelemetry·VictoriaMetrics 실습 구성</title>
-  <desc id="archDesc">Korea South의 Event Hubs Dedicated cluster(1 CU)와 그 안의 workload namespace, namespace·cluster Diagnostic Settings, telemetry Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private endpoint subnet에 Storage Blob과 Key Vault.</desc>
+  <desc id="archDesc">Korea South의 Event Hubs Dedicated cluster(1 CU)와 그 안의 workload namespace, namespace·cluster Diagnostic Settings, telemetry Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private-endpoints subnet에 Storage Blob과 Key Vault의 private endpoint.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
     <style>
@@ -75,7 +75,7 @@
   <path class="edge" d="M252,400 V422"/>
   <path class="edge" d="M110,250 V196 H110 V152"/>
   <text class="edgelabel" x="116" y="180">send</text>
-  <path class="edge" d="M330,250 V176 H230 V152"/>
+  <path class="edge" d="M230,152 V176 H330 V248"/>
   <text class="edgelabel" x="236" y="172">receive</text>
 
   <rect class="subnet" x="488" y="222" width="680" height="300" rx="8"/>
@@ -118,9 +118,9 @@
   <rect class="subnet" x="32" y="556" width="1136" height="76" rx="8"/>
   <text class="sublabel" x="44" y="574">private-endpoints subnet · Key Vault·Storage public network access disabled</text>
   <rect class="azure" x="44" y="582" width="540" height="42" rx="8"/>
-  <text class="title" x="56" y="608">Storage Blob · workload-checkpoints · collector-checkpoints</text>
+  <text class="title" x="56" y="608">Storage Blob private endpoint · checkpoint containers</text>
   <rect class="azure" x="604" y="582" width="552" height="42" rx="8"/>
-  <text class="title" x="616" y="608">Key Vault · Grafana 관리자 비밀번호(Managed Identity로 조회)</text>
+  <text class="title" x="616" y="608">Key Vault private endpoint · Grafana 관리자 비밀번호</text>
 
   <!-- operator and legend -->
   <rect x="16" y="660" width="640" height="84" rx="10" fill="#F7FAFC" stroke="#A0AEC0"/>

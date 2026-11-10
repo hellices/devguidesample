@@ -4,7 +4,26 @@
 set -euo pipefail
 trap 'echo "GATEWAY_STEP_FAILED line $LINENO" >&2' ERR
 BUNDLE_B64="${BUNDLE_B64:?BUNDLE_B64 parameter is required}"
+# Run Command starts without HOME; Azure CLI would then write its cache under ./None in APP_DIR.
+export HOME="${HOME:-/root}"
 APP_DIR="${APP_DIR:-/opt/eventhubs-observability}"
+# Every top-level entry of APP_DIR is replaced below, so it must be a dedicated directory: a
+# canonical path at least two levels deep (never / or /opt), and if it already holds files they
+# must be this bundle's (marker, compose.yaml or the tls/secrets runtime state).
+BUNDLE_MARKER=.eventhubs-observability-bundle
+while [ "${APP_DIR%/}" != "$APP_DIR" ]; do APP_DIR="${APP_DIR%/}"; done
+case "$APP_DIR/" in
+  */./* | */../* | *//*) echo "GATEWAY_STEP_FAILED unsafe APP_DIR $APP_DIR" >&2; exit 1 ;;
+esac
+case "$APP_DIR" in
+  /*/?*) ;;
+  *) echo "GATEWAY_STEP_FAILED unsafe APP_DIR ${APP_DIR:-/}" >&2; exit 1 ;;
+esac
+if [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR")" ] && [ ! -e "$APP_DIR/$BUNDLE_MARKER" ] \
+  && [ ! -e "$APP_DIR/compose.yaml" ] && [ ! -d "$APP_DIR/tls" ] && [ ! -d "$APP_DIR/secrets" ]; then
+  echo "GATEWAY_STEP_FAILED APP_DIR $APP_DIR is not a gateway bundle directory" >&2
+  exit 1
+fi
 
 cloud-init status --wait >/dev/null || true
 command -v docker >/dev/null
@@ -19,6 +38,7 @@ echo "$BUNDLE_B64" | base64 -d | tar -xz -C "$BUNDLE_DIR"
 [ -s "$BUNDLE_DIR/.env" ] && [ -s "$BUNDLE_DIR/compose.yaml" ] || { echo "GATEWAY_STEP_FAILED bundle" >&2; exit 1; }
 find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec rm -rf {} +
 cp -a "$BUNDLE_DIR/." "$APP_DIR/"
+touch "$APP_DIR/$BUNDLE_MARKER"
 cd "$APP_DIR"
 set -a; . ./.env; set +a
 
@@ -53,7 +73,12 @@ chmod 0400 tls/grafana.key
 chmod 0444 tls/grafana.crt
 
 az acr login --name "$ACR_NAME" --output none
-docker compose --profile fallback pull --quiet
+# Pull the fallback exporter image only when it will run; the default deployment must not depend on it.
+if [ "${COMPOSE_PROFILE:-}" = "fallback" ]; then
+  docker compose --profile fallback pull --quiet
+else
+  docker compose pull --quiet
+fi
 docker compose up -d --remove-orphans
 if [ "${COMPOSE_PROFILE:-}" = "fallback" ]; then
   docker compose --profile fallback up -d azure-metrics-exporter

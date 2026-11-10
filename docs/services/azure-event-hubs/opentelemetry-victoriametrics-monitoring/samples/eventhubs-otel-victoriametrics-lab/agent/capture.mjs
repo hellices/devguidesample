@@ -121,18 +121,24 @@ try {
   // A server error renders a page without loading bars; never capture it.
   await gotoOk(page, url, { waitUntil: 'networkidle' });
 
-  // Grafana lazily renders panels inside its own scroll container; grow the viewport until stable.
+  // Grafana lazily renders panels inside its own scroll container; grow the viewport until the
+  // height stays the same, and refuse to capture a layout that never settled.
   let height = 0;
-  for (let i = 0; i < 6; i += 1) {
+  let stable = false;
+  for (let i = 0; i < 12; i += 1) {
     const next = await page.evaluate(() => {
       const scroller = document.querySelector('[data-testid="data-testid dashboard-scrollbar"], .scrollbar-view, main') ?? document.body;
       return Math.max(scroller.scrollHeight, document.body.scrollHeight);
     });
-    if (next === height) break;
+    if (next === height) {
+      stable = true;
+      break;
+    }
     height = next;
     await page.setViewportSize({ width: Number(width), height: height + 40 });
     await page.waitForLoadState('networkidle');
   }
+  if (!stable) throw new Error(`dashboard height did not settle (last ${height}px); not capturing a partial page`);
   await page.waitForFunction(
     () => document.querySelectorAll('[aria-label="Panel loading bar"], [data-testid="data-testid panel loading bar"]').length === 0,
     null,

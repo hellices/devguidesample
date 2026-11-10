@@ -41,17 +41,20 @@ def test_dashboard_answers_required_questions():
 def test_no_query_hides_missing_series_as_zero():
     exprs = [t["expr"] for p in _panels(build_dashboard({"processing_units": 1})) for t in p.get("targets", [])]
     # Any spacing or matching modifier (or on() vector (0)) still turns "no data" into 0.
-    zero_fill = re.compile(r"\bor\b(?:\s+on\s*\([^)]*\))?\s*vector\s*\(\s*0(?:\.0*)?\s*\)")
+    # Parentheses around vector(0) are still a zero fill.
+    zero_fill = re.compile(r"\bor\b(?:\s+on\s*\([^)]*\))?[\s(]*vector\s*\(\s*0(?:\.0*)?\s*\)")
     assert not [e for e in exprs if zero_fill.search(e)]
     assert zero_fill.search("x or on() vector (0)") and zero_fill.search("x or vector(0.0)")
+    assert zero_fill.search("x or on() (vector(0))") and zero_fill.search("x or ( vector(0) )")
 
 
 def _azure_total_targets():
+    # Every target that references a request total, however it is spelled, is checked.
     targets = [
         target["expr"]
         for panel in _panels(build_dashboard({"processing_units": 1}))
         for target in panel.get("targets", [])
-        if "sum_over_time(azure_" in target["expr"]
+        if any(re.match(r"azure_\w*requests_total", name) for name, _ in AZURE_REFERENCE.findall(target["expr"]))
     ]
     # Each request stat must keep its total; an empty match would make the checks vacuous.
     references = [name for expr in targets for name, _ in _azure_selectors(expr)]
@@ -312,10 +315,12 @@ def test_malformed_query_responses_are_reported_not_raised(monkeypatch, failure)
 
 def test_diagnostic_series_stat_counts_one_delivery_path():
     panel = next(p for p in _panels(build_dashboard({"processing_units": 1})) if p.get("title") == "DS Event Hub series")
-    [selector] = re.findall(r"\{[^}]*\}", panel["targets"][0]["expr"])
-    matchers = _matchers(selector)
-    assert matchers.pop("azure_resource_id")[0] == "=~"  # namespace records only, not the cluster's
-    assert matchers == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}
+    selectors = [s for t in panel["targets"] for s in re.findall(r"\{[^}]*\}", t["expr"])]
+    assert selectors and len(selectors) == len(panel["targets"])  # every target is one filtered selector
+    for selector in selectors:
+        matchers = _matchers(selector)
+        assert matchers.pop("azure_resource_id")[0] == "=~"  # namespace records only, not the cluster's
+        assert matchers == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}
 
 
 def test_dedicated_tier_shows_cluster_capacity_instead_of_premium_namespace():
@@ -349,3 +354,11 @@ def test_dedicated_compares_cluster_cpu_across_api_and_diagnostic_settings():
     assert "azure_cpu_maximum_Percent" in exprs[0]
     # Cluster records only; namespace records share the same hub and metric names.
     assert "cpu_maximum" in exprs[1] and "eventhub/clusters/" in exprs[1]
+
+
+def test_capture_refuses_a_page_whose_height_never_settles():
+    text = (LAB_ROOT / "agent" / "capture.mjs").read_text()
+
+    loop = text[text.index("let stable = false;"):text.index("await page.waitForFunction(")]
+    assert "stable = true;" in loop
+    assert "if (!stable) throw new Error(" in loop

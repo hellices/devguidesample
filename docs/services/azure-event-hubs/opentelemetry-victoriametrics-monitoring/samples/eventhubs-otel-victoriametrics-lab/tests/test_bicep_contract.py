@@ -328,7 +328,9 @@ def test_private_endpoint_check_sees_a_commented_out_setting():
 
 def _role_assignments(text: str) -> list[tuple[str, str, str]]:
     """(scope, role variable, principal) of every roleAssignments resource block."""
-    blocks = re.split(r"(?m)^resource \w+ 'Microsoft\.Authorization/roleAssignments@", text)[1:]
+    # Indented declarations are still declarations; every occurrence of the type must be parsed.
+    blocks = re.split(r"(?m)^\s*resource \w+ 'Microsoft\.Authorization/roleAssignments@", text)[1:]
+    assert len(blocks) == text.count("'Microsoft.Authorization/roleAssignments@"), "unparsed roleAssignments"
     assignments = []
     for block in blocks:
         block = block.split("\n}\n", 1)[0]
@@ -427,3 +429,17 @@ def test_modules_assign_only_expected_roles():
         "4d97b98b-1d4f-4787-a291-c67834d212e7",  # Network Contributor (AKS subnet)
         "b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b",  # Azure Kubernetes Service RBAC Cluster Admin
     }
+
+
+def test_role_assignment_parser_sees_indented_declarations():
+    text = (
+        "resource a 'Microsoft.Authorization/roleAssignments@2022-04-01' = {\n"
+        "  scope: hub\n  properties: {\n"
+        "    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', readerRole)\n"
+        "    principalId: gatewayPrincipalId\n  }\n}\n"
+        "  resource b 'Microsoft.Authorization/roleAssignments@2022-04-01' = {\n"
+        "    scope: resourceGroupScope\n    properties: {\n"
+        "      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', readerRole)\n"
+        "      principalId: gatewayPrincipalId\n    }\n  }\n"
+    )
+    assert [scope for scope, _, _ in _role_assignments(text)] == ["hub", "resourceGroupScope"]

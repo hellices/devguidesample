@@ -34,8 +34,27 @@ AZ_CALL = re.compile(r"(?:^|\$\(|[\s;|&(])az\s+([a-z-]+(?:\s+[a-z-]+)?)")
 COMMAND_END = re.compile(r"\)|;|&&|\||(?<![&>])&(?![&>])")
 
 
+def _strip_comment(line: str) -> str:
+    """The line without a shell comment: an unquoted # at the start of a word ends the command."""
+    quote, escaped = None, False
+    for index, char in enumerate(line):
+        if escaped:
+            escaped = False
+        elif char == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if char == quote:
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "#" and (index == 0 or line[index - 1].isspace()):
+            return line[:index]
+    return line
+
+
 def _az_calls(line: str) -> list[tuple[str, str]]:
     """Each az invocation on a line with the text up to its own command boundary."""
+    line = _strip_comment(line)
     calls = []
     for match in AZ_CALL.finditer(line):
         rest = line[match.end():]
@@ -50,6 +69,13 @@ def test_az_call_segments_do_not_borrow_options_from_the_next_command():
         assert [("--subscription" in segment) for _, segment in calls] == [False, True], separator
     # Redirections keep the rest of the command in the same segment.
     [(_, segment)] = _az_calls('az group show -n "$rg" 2>&1 --subscription "$sub"')
+    assert "--subscription" in segment
+    # A commented-out option is not passed to az; a quoted or ${#...} hash is not a comment.
+    [(_, segment)] = _az_calls('az group delete -n "$rg" # --subscription "$sub"')
+    assert "--subscription" not in segment
+    [(_, segment)] = _az_calls('az group show -n "a#b" --query "x" --subscription "${#sub}"')
+    assert "--subscription" in segment
+    [(_, segment)] = _az_calls('az group show -n "a\\" #b" --subscription "$sub"')
     assert "--subscription" in segment
 
 
@@ -84,8 +110,14 @@ def test_kubectl_uses_lab_kubeconfig_only():
         for line in _joined_commands(path.read_text()):
             if line.lstrip().startswith(("#", "require_commands")):
                 continue
-            for match in re.finditer(r"(?:^|[\s;|&(])kubectl\s([^;|&)]*)", line):
+            for match in re.finditer(r"(?:^|[\s;|&(])kubectl\s([^;|&)]*)", _strip_comment(line)):
                 assert "--kubeconfig" in match.group(1), f"{path.name}: {line.strip()}"
+
+
+def test_kubectl_check_ignores_a_commented_out_kubeconfig():
+    line = _strip_comment('kubectl get pods # --kubeconfig "$cfg"')
+    [args] = re.findall(r"(?:^|[\s;|&(])kubectl\s([^;|&)]*)", line)
+    assert "--kubeconfig" not in args
 
 
 @pytest.fixture
@@ -538,6 +570,48 @@ def test_gateway_bundle_replaces_stale_files_but_keeps_runtime_state(fake_bin, t
     assert (app / "tls" / "grafana.key").read_text() == "k1"  # reused, not regenerated
 
 
+def test_gateway_bootstrap_sets_home_for_run_command():
+    text = (LAB_ROOT / "gateway" / "bootstrap.sh").read_text()
+    # Without HOME, az writes .cache under a literal "None" directory in the bundle directory.
+    assert text.index('export HOME="${HOME:-/root}"') < text.index("az login")
+
+
+@pytest.mark.parametrize("app_dir", ["/", "/opt", "unrelated"])
+def test_gateway_bundle_refuses_a_directory_it_does_not_own(fake_bin, tmp_path, app_dir):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write)
+    if app_dir == "unrelated":
+        app = tmp_path / "other-app"
+        app.mkdir()
+        (app / "data.db").write_text("keep")
+        app_dir = str(app)
+
+    result = _run_bootstrap(bin_dir, tmp_path, app_dir)
+
+    assert result.returncode != 0
+    assert "GATEWAY_STEP_FAILED" in result.stderr
+    if app_dir.endswith("other-app"):
+        assert (tmp_path / "other-app" / "data.db").read_text() == "keep"
+
+
+@pytest.mark.parametrize("profile, pull", [
+    ("default", "compose pull --quiet"),
+    ("fallback", "compose --profile fallback pull --quiet"),
+])
+def test_gateway_pulls_the_fallback_image_only_for_the_fallback_profile(fake_bin, tmp_path, profile, pull):
+    bin_dir, log, write = fake_bin
+    _bootstrap_tools(write, docker=(
+        'if [[ "$*" == *"ps --status running --services"* ]]; then '
+        'printf "otel-collector\\ngrafana\\nazure-metrics-exporter\\n"; fi'
+    ))
+
+    result = _run_bootstrap(bin_dir, tmp_path, tmp_path / "app", profile=profile)
+
+    assert result.returncode == 0, result.stderr
+    pulls = [line for line in log.read_text().splitlines() if line.startswith("docker") and " pull " in f"{line} "]
+    assert pulls == [f"docker {pull}"]
+
+
 @pytest.mark.parametrize("running, ready", [
     ("otel-collector\ngrafana\nazure-metrics-exporter", True),
     ("otel-collector\ngrafana", False),  # the exporter exited right after `up -d`
@@ -679,13 +753,28 @@ def test_vm_query_never_signals_a_process_it_did_not_start(fake_bin, tmp_path, r
 
 def test_verify_cleanup_fails_fast_when_the_lookup_fails(fake_bin):
     bin_dir, _, write = fake_bin
-    write("az", 'echo "AADSTS700082: token expired" >&2; exit 1')
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
     write("azd", AZD_CLEANUP_ENV)
+    assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+    write("az", 'echo "AADSTS700082: token expired" >&2; exit 1')
 
     result = _run("verify-cleanup.sh", bin_dir)
 
     assert result.returncode != 0
     assert "could not query resource group" in result.stderr
+
+
+def test_verify_cleanup_requires_what_predown_recorded(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+    write("azd", AZD_CLEANUP_ENV)
+
+    # Without predown the current environment values must not be verified in its place.
+    result = _run("verify-cleanup.sh", bin_dir)
+
+    assert result.returncode != 0
+    assert "predown did not record" in result.stderr
+    assert "group exists" not in log.read_text()
 
 
 def test_vm_query_start_fails_when_its_forward_exits_while_another_listener_answers(fake_bin, tmp_path):
@@ -748,7 +837,20 @@ def test_postdown_checks_the_subscription_predown_recorded(fake_bin):
 def test_scenario_counts_only_fresh_lag_samples():
     text = (SCRIPTS / "run-scenario.sh").read_text()
     # A stopped exporter leaves its last value queryable; only samples newer than 120 s count.
-    assert 'query=max($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)' in text
+    assert 'FRESH_LAG="($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)"' in text
+    # A partition whose lag series disappeared must not let the others report a recovery.
+    assert '"max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"' in text
     final = text.index('FINAL_LAG="$(max_lag)"')
     assert final < text.index('SCENARIO_END="$(now)"', final)
     assert '[[ "$FINAL_LAG" -ge 0 ]] || die' in text
+
+
+def test_scenario_load_window_and_peak_cover_the_running_producer():
+    text = (SCRIPTS / "run-scenario.sh").read_text()
+
+    rollout = text.index("kube rollout status -n \"$NS\" deploy/eventhubs-producer")
+    assert rollout < text.index('LOAD_START="$(now)"') < text.index("sleep $((LOAD_MINUTES * 60))")
+    # The peak is the maximum over the whole load, read after the producer stopped.
+    stop = text.index("stop_producer\nPRODUCER_STOP=")
+    assert stop < text.index('PEAK_LAG="$(peak_lag)"')
+    assert "max_over_time($LAG_SERIES[" in text

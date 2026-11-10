@@ -144,8 +144,8 @@ OpenTelemetry Collector를 거쳐 VictoriaMetrics에 저장되기까지 약 3분
 ## Azure Monitor와 Diagnostic Settings의 지표 차이 { #receivers }
 
 Azure Monitor(Metrics explorer·Metrics API)는 Learn 지표표의 namespace 지표와 cluster 지표
-20개를 모두 dimension과 함께 조회할 수 있지만, Diagnostic Settings는 일부만 dimension을 합쳐
-내보냅니다. 실제 스트림은 지표표의 DS Export 값과도 달랐으므로 두 기준을 함께 적었습니다.
+20개를 모두 조회할 수 있고 dimension이 정의된 지표는 dimension별로 나눠 볼 수 있지만,
+Diagnostic Settings는 일부 지표만 dimension을 합쳐 내보냅니다. 실제 스트림은 지표표의 DS Export 값과도 달랐으므로 두 기준을 함께 적었습니다.
 실측은 Dedicated 환경(2026-11-10 08:21–09:44 UTC)에서 namespace와 cluster의 Diagnostic
 Settings를 같은 telemetry Event Hub로 보내 받은 지표입니다.
 

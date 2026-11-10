@@ -29,13 +29,24 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # Called through $(...), where errexit is off: return on failure so the caller's assignment fails
 # instead of querying a port that may belong to another environment.
 # Only series with a sample in the last 120 s count, so a stopped collector can never look like a
-# recovery; with no fresh series the function prints -1.
+# recovery. Every partition reports eventhubs_checkpoint_present, but a non-empty partition without a
+# checkpoint has no lag series; the maximum counts only when every partition has a fresh lag value,
+# otherwise the function prints -1 instead of the maximum of the remaining partitions.
 LAG_SERIES='eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"}'
-max_lag() {
+PARTITION_SERIES='eventhubs_checkpoint_present{source_path="lag_exporter",delivery_path="remote_write"}'
+FRESH_LAG="($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)"
+FRESH_PARTITIONS="($PARTITION_SERIES and (time() - timestamp($PARTITION_SERIES)) < 120)"
+vm_scalar() {
   "$LAB_ROOT/scripts/vm-query.sh" start || return 1
-  curl -fsS --max-time "${1:-30}" "http://127.0.0.1:$PORT/api/v1/query" \
-    --data-urlencode "query=max($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)" \
+  curl -fsS --max-time "$1" "http://127.0.0.1:$PORT/api/v1/query" --data-urlencode "query=$2" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
+}
+max_lag() {
+  vm_scalar "${1:-30}" "max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"
+}
+# The largest lag stored since the load started; lag keeps rising until the producer stops.
+peak_lag() {
+  vm_scalar 30 "max(max_over_time($LAG_SERIES[$(( $(date +%s) - LOAD_START_EPOCH + 60 ))s]))"
 }
 # Scaling to 0 only requests termination; the load ends when the producer pod is gone.
 stop_producer() {
@@ -62,18 +73,22 @@ BASELINE_START="$(now)"
 log "baseline ${BASELINE_MINUTES}m (producer stopped)"
 sleep $((BASELINE_MINUTES * 60))
 
-LOAD_START="$(now)"
 log "load ${LOAD_MINUTES}m at target ${EVENTS_PER_SECOND} events/s, consumer delay ${PROCESSING_DELAY_SECONDS}s/event/partition"
 kube scale -n "$NS" deploy/eventhubs-producer --replicas 1 >/dev/null
 kube rollout status -n "$NS" deploy/eventhubs-producer --timeout 300s >/dev/null
+# The load window starts once the producer runs, so it never includes the rollout wait.
+LOAD_START="$(now)"
+LOAD_START_EPOCH="$(date +%s)"
 LAG_AT_LOAD_START="$(max_lag)"
 sleep $((LOAD_MINUTES * 60))
 PRODUCER_SENT="$(last_log_value eventhubs-producer sent_total)"
-PEAK_LAG="$(max_lag)"
 CONSUMER_PROCESSED_AT_PEAK="$(last_log_value eventhubs-slow-consumer processed_total)"
 
 stop_producer
 PRODUCER_STOP="$(now)"
+# Read the peak after the producer is gone and the exporter has stored its last rising sample.
+sleep 20
+PEAK_LAG="$(peak_lag)"
 log "producer stopped; peak max lag=$PEAK_LAG"
 # max_lag prints -1 when no series exists; both readings must be real before comparing.
 [[ "$LAG_AT_LOAD_START" -ge 0 && "$PEAK_LAG" -gt 0 && "$PEAK_LAG" -gt "$LAG_AT_LOAD_START" ]] \
