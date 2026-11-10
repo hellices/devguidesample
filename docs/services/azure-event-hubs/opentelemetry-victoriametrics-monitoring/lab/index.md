@@ -101,7 +101,7 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 | 구성 요소 | `kubectl`, VM Run Command | cluster `Dedicated` 1 CU, namespace `clusterArmId` 연결, VMSingle·VMAgent·VMStaticScrape `operational`, Gateway 컨테이너 3개 running |
 | lag 시나리오 | `./scripts/run-scenario.sh` | partition별 peak 10,800–10,980건, producer 중지 5분 33초 뒤 회복 |
 | agent 검증 | `./scripts/collect-evidence.sh` | 29개 query 모두 통과. Azure Monitor와 API remote write 4개 지표 × 26분 대조, 저장된 분은 모두 일치하고 receiver 누락 2분 보고, Diagnostic Settings 합계 일치 |
-| 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–261초, 83분 동안 지표별 분 bin 누락 0–9개 |
+| 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–201초, 83분 동안 지표별 분 bin 누락 0–9개 |
 | fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(Premium 첫 환경) |
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
 | 정리 | `azd down --purge --force` | Premium 세 환경 resource group 삭제 확인. Dedicated 환경은 cluster 생성 4시간 뒤 정리([정리](#cleanup)) |
@@ -147,7 +147,7 @@ attribute가 label로 퍼지지 않게 했습니다.
 
 | 주체 | 역할 | 범위 |
 |---|---|---|
-| Gateway VM identity | Monitoring Reader | workload namespace, Dedicated cluster |
+| Gateway VM identity | Monitoring Reader | workload namespace, Dedicated cluster(만든 cluster 또는 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`의 기존 cluster) |
 | Gateway VM identity | Azure Event Hubs Data Receiver | workload hub, telemetry hub |
 | Gateway VM identity | Storage Blob Data Reader / Contributor | `workload-checkpoints` / `collector-checkpoints` container |
 | Gateway VM identity | Key Vault Secrets User, AcrPull | Key Vault, ACR |
@@ -445,15 +445,17 @@ otelcol-contrib 0.165.0과 VictoriaMetrics v1.155.0으로 같은 측정을 07:03
 |---|---|---|---|
 | 전송 | 15분, 2,550건 | 15분, 2,550건 | 20분, 3,900건 |
 | 이벤트 → Metrics API 조회 가능 | 71–101초 (중앙값 81) | 72–102초 (중앙값 92) | 81–151초 (중앙값 115) |
-| Metrics API → VictoriaMetrics | 100–130초 (12회), 전체 100–170초 | 130–160초 (중앙값 140) | 120–150초 (중앙값 130) |
-| 이벤트 → VictoriaMetrics 저장 | 190–261초 (중앙값 201) | 230–232초 (중앙값 232) | 221–281초 (중앙값 250) |
+| Metrics API → VictoriaMetrics | 100–130초 (14회) | 130–160초 (중앙값 140) | 120–150초 (중앙값 130) |
+| 이벤트 → VictoriaMetrics 저장 | 190–201초 (14회, 중앙값 201) | 230–232초 (중앙값 232) | 221–281초 (중앙값 250) |
 | VictoriaMetrics 도착 시점의 bin 경과 시간 | 146초(일부 206초) | 177초 | 166초 |
 | 저장 값 | 15개 bin 모두 Azure Monitor 최종값과 같음, 합계 2,550 | 15개 bin 모두 같음, 합계 2,550 | 10개 bin 모두 같음, 합계 3,900 |
 | bin timestamp | 이벤트를 보낸 분보다 1분 뒤(08:25:05 전송 → 08:26 bin) | 1분 뒤(07:15:05 전송 → 07:16 bin) | 2분 단위(07:03:05·07:04:05 전송 → 07:05 bin) |
 
 Dedicated 측정 중 08:28:05–08:29:15에 port-forward가 끊겨 VMSingle 조회가 70초 비었습니다.
-Collector 구간의 12회 값은 이 공백 직후 첫 도달로 잡혀 늦게 기록됐을 수 있는 3회를 뺀
-값입니다. 같은 Dedicated 환경의 cluster `CPU` bin도 VictoriaMetrics 도착 시점 경과 시간이
+08:25:05 전송분은 공백 직후 조회에서 처음 보여 261초로 잡혔으므로 VictoriaMetrics 관련 값에서
+뺐습니다. 나머지 14회 중 13회는 201초였고, 10초 늦게(08:24:15) 보낸 첫 회만 190초였습니다.
+Metrics API 지연은 71–101초로 달랐지만 VictoriaMetrics 도착은 매분 26초 무렵으로 같아,
+전체 지연은 Azure Monitor가 아니라 Collector 조회 주기의 위상으로 정해졌습니다. 같은 Dedicated 환경의 cluster `CPU` bin도 VictoriaMetrics 도착 시점 경과 시간이
 146–206초로 namespace 지표와 같았습니다.
 
 bin이 1분 뒤 timestamp로 기록되는 현상은 [lag 시나리오](#lag)에서 Azure Monitor 값이
@@ -501,8 +503,8 @@ Pod를 지우고 다시 조회했을 때 17:46–18:12 구간 `IncomingMessages`
 Premium과 Dedicated는 수집 구조가 같아도 용량 지표가 있는 리소스와 의미가 다릅니다.
 `EVENTHUBS_SKU`가 `Dedicated`(기본값)이면 템플릿이 1 CU cluster와 그 안의 namespace를
 만들고, Collector는 namespace 지표와 cluster 지표를 따로 수집합니다. `Premium`이면 1 PU
-namespace를 만들며, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 같은 resource group의
-기존 cluster를 함께 수집할 수 있습니다.
+namespace를 만들며, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 기존 cluster를 함께 수집할
+수 있습니다. 이 경우 템플릿이 그 cluster에 Gateway identity의 Monitoring Reader를 할당합니다.
 
 | 항목 | Premium namespace | Dedicated cluster |
 |---|---|---|
@@ -629,6 +631,13 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | Run Command에 `HOME`이 없어 Azure CLI가 bundle 디렉터리에 `None/.cache`를 만듦 | bootstrap에서 `HOME`을 `/root`로 지정. 실제 VM에서 `None` 디렉터리가 더 생기지 않음을 확인 |
 | predown 기록이 없어도 현재 환경 값으로 resource group 삭제를 확인 | postdown은 predown이 남긴 resource group·subscription 기록을 필수로 요구 |
 | 대시보드 높이가 6번 안에 안정되지 않아도 캡처 | 높이가 같아질 때까지 최대 12번 확인하고, 안정되지 않으면 캡처하지 않고 실패 |
+| Premium에서 기존 cluster를 지정해도 Gateway에 그 cluster 조회 권한이 없음 | `modules/cluster-reader.bicep`이 지정한 cluster에 Monitoring Reader를 할당. 실제 cluster에 같은 module을 배포해 idempotent하게 성공함을 확인 |
+| 누락 판정이 window 뒤의 분 경계가 아닌 sample로도 gap을 확정 | 분 경계에 찍힌 bin만 뒤 bin으로 인정 |
+| 숨긴(`hide`) panel target도 검증해 필수 panel 실패로 판정 | Grafana처럼 숨긴 target은 실행하지 않음 |
+| bundle 복사가 중간에 실패하면 기존 bundle이 지워진 채 남음 | 기존 항목을 같은 파일시스템의 백업 디렉터리로 옮긴 뒤 복사하고, 실패하면 되돌림 |
+| 전체 postprovision이 중간에 실패해도 `GATEWAY_ONLY` 실행이 통과 | 마지막 health check까지 성공한 전체 실행만 완료 stamp를 남기고, `GATEWAY_ONLY`는 stamp를 요구 |
+| 이전 predown 기록이 남아 다른 대상을 검증할 수 있음, `az group exists` 출력 형식에 의존 | predown이 매번 기록을 지우고 두 값 또는 "대상 없음"만 기록, 조회는 `-o tsv`와 `true`/`false` 확인 |
+| 마지막 sequence를 알 수 없는 partition을 빈 partition(lag 0)으로 처리 | 알 수 없는 lag로 처리해 lag series를 남기지 않음 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 

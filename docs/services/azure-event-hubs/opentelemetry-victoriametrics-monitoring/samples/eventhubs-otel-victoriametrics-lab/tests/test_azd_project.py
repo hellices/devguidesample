@@ -58,9 +58,23 @@ def test_only_the_messaging_module_creates_a_dedicated_cluster():
     assert re.search(r"(?m)^param existingDedicatedClusterResourceId string = ''$", text)
     assert re.search(r"(?m)^param eventHubsSku string = 'Dedicated'$", text)
     # main.bicep deploys local modules, so every Bicep file is checked, case-insensitively.
+    # An `existing` reference only reads a cluster; any other declaration creates one.
+    declaration = re.compile(r"'microsoft\.eventhub/clusters@[^']*'\s*(existing\b)?")
     creators = [path.name for path in (LAB_ROOT / "infra").rglob("*.bicep")
-                if "microsoft.eventhub/clusters@" in _bicep_code(path.read_text()).lower()]
+                if any(not existing for existing in declaration.findall(_bicep_code(path.read_text()).lower()))]
     assert creators == ["messaging.bicep"]
+
+
+def test_a_premium_lab_grants_the_gateway_read_access_to_an_existing_cluster():
+    text = _bicep_code((LAB_ROOT / "infra" / "main.bicep").read_text())
+    module = _bicep_code((LAB_ROOT / "infra" / "modules" / "cluster-reader.bicep").read_text())
+
+    assert "var observeExistingCluster = eventHubsSku != 'Dedicated' && !empty(existingDedicatedClusterResourceId)" in text
+    assert re.search(r"module existingClusterReader 'modules/cluster-reader\.bicep' = if \(observeExistingCluster\)", text)
+    assert "scope: resourceGroup(existingClusterIdParts[2], existingClusterIdParts[4])" in text
+    assert "gatewayPrincipalId: foundation.outputs.gatewayPrincipalId" in text
+    assert "'Microsoft.EventHub/clusters@2024-01-01' existing" in module
+    assert "scope: cluster" in module and "43d0d8ad-25c7-4714-9337-8ba259a9fe05" in module
 
 
 def test_main_bicep_exports_hook_contract():

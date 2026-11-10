@@ -109,6 +109,22 @@ module compute 'modules/compute.bicep' = {
   }
 }
 
+// A Premium lab can also observe an existing cluster; the gateway needs Monitoring Reader on it.
+// The placeholder ID keeps every index valid when no cluster is given.
+var observeExistingCluster = eventHubsSku != 'Dedicated' && !empty(existingDedicatedClusterResourceId)
+var existingClusterIdParts = split(observeExistingCluster
+  ? existingDedicatedClusterResourceId
+  : '/subscriptions/${subscription().subscriptionId}/resourceGroups/none/providers/Microsoft.EventHub/clusters/none', '/')
+
+module existingClusterReader 'modules/cluster-reader.bicep' = if (observeExistingCluster) {
+  name: 'existing-cluster-reader'
+  scope: resourceGroup(existingClusterIdParts[2], existingClusterIdParts[4])
+  params: {
+    clusterName: existingClusterIdParts[8]
+    gatewayPrincipalId: foundation.outputs.gatewayPrincipalId
+  }
+}
+
 output AZURE_RESOURCE_GROUP string = rg.name
 output AKS_CLUSTER_NAME string = compute.outputs.aksName
 output ACR_NAME string = foundation.outputs.acrName

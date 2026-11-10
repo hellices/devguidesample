@@ -9,8 +9,9 @@ OpenTelemetry Collector Contrib·consumer lag exporter·Grafana OSS를 실행하
 `EVENTHUBS_SKU`의 기본값은 `Dedicated`입니다. Dedicated cluster는 만든 뒤 4시간 동안
 삭제할 수 없고 그동안 CU 시간 단위로 과금되므로, `azd down`은 cluster 생성 4시간 뒤에
 실행합니다. `azd env set EVENTHUBS_SKU Premium`이면 cluster 대신 Premium 1 PU namespace를
-만들고, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 같은 resource group의 기존 cluster
-지표를 함께 수집할 수 있습니다.
+만들고, 이때 `EXISTING_DEDICATED_CLUSTER_RESOURCE_ID`로 기존 cluster 지표를 함께 수집할 수
+있습니다. 템플릿은 그 cluster에 Gateway identity의 Monitoring Reader를 할당하므로 배포자에게
+해당 cluster의 역할 할당 권한이 필요합니다.
 
 ## 실행 순서
 

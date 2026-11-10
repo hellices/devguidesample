@@ -36,8 +36,18 @@ BUNDLE_DIR="$(mktemp -d)"
 trap 'rm -rf "$BUNDLE_DIR"' EXIT
 echo "$BUNDLE_B64" | base64 -d | tar -xz -C "$BUNDLE_DIR"
 [ -s "$BUNDLE_DIR/.env" ] && [ -s "$BUNDLE_DIR/compose.yaml" ] || { echo "GATEWAY_STEP_FAILED bundle" >&2; exit 1; }
-find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec rm -rf {} +
-cp -a "$BUNDLE_DIR/." "$APP_DIR/"
+# Move the previous bundle aside on the same filesystem and put it back if the copy fails, so a
+# failed update never leaves a half-installed directory.
+PREVIOUS_DIR="$(mktemp -d "${APP_DIR}.previous.XXXXXX")"
+find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec mv {} "$PREVIOUS_DIR/" \;
+if ! cp -a "$BUNDLE_DIR/." "$APP_DIR/"; then
+  find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec rm -rf {} +
+  find "$PREVIOUS_DIR" -mindepth 1 -maxdepth 1 -exec mv {} "$APP_DIR/" \;
+  rmdir "$PREVIOUS_DIR"
+  echo "GATEWAY_STEP_FAILED bundle copy; previous bundle restored" >&2
+  exit 1
+fi
+rm -rf "$PREVIOUS_DIR"
 touch "$APP_DIR/$BUNDLE_MARKER"
 cd "$APP_DIR"
 set -a; . ./.env; set +a

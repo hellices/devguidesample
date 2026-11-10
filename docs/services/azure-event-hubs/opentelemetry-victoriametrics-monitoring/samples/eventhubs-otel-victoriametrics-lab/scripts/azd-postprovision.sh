@@ -29,7 +29,10 @@ python_env() {
 }
 
 # GATEWAY_ONLY=true re-renders and restarts only the gateway bundle (for example to switch to the fallback exporter).
+# It needs the AKS and VictoriaMetrics side that only a full run that reached its last health check proves.
+COMPLETED_STAMP="$STATE/postprovision.completed"
 if [[ "${GATEWAY_ONLY:-false}" != "true" ]]; then
+rm -f "$COMPLETED_STAMP"
 log "1/6 AKS credentials in a lab-only kubeconfig"
 az aks get-credentials --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" -n "$AKS_CLUSTER_NAME" \
   --file "$STATE/kubeconfig" --overwrite-existing --output none
@@ -89,7 +92,7 @@ done
 kube rollout status deploy/vmagent-lab -n "$NS" --timeout 300s
 else
   WORKLOAD_IMAGE="$(env_value WORKLOAD_IMAGE)"
-  [[ -n "$WORKLOAD_IMAGE" ]] || die "GATEWAY_ONLY requires a previous full postprovision run"
+  [[ -f "$COMPLETED_STAMP" && -n "$WORKLOAD_IMAGE" ]] || die "GATEWAY_ONLY requires a previous full postprovision run"
 fi
 
 log "5/6 gateway bundle: Collector, lag exporter, Grafana"
@@ -144,4 +147,5 @@ grep -q "BEGIN CERTIFICATE" "$STATE/grafana.crt" || die "gateway did not return 
 log "6/6 operator-facing health checks"
 curl -fsS --max-time 10 --cacert "$STATE/grafana.crt" "https://$GATEWAY_PUBLIC_IP:3000/api/health" >/dev/null \
   || die "Grafana is not reachable over pinned HTTPS from the operator egress IP"
+[[ "${GATEWAY_ONLY:-false}" == "true" ]] || touch "$COMPLETED_STAMP"
 log "postprovision completed."

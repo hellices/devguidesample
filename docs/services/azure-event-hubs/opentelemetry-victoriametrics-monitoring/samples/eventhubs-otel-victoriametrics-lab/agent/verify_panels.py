@@ -89,6 +89,9 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
             continue
         optional = str(panel.get("description", "")).startswith("[optional]")
         for target in panel.get("targets", []):
+            # Grafana does not run a hidden target, so neither does the verification.
+            if target.get("hide"):
+                continue
             # One pass over whole $name / ${name} tokens, so $cluster never rewrites $cluster_name.
             expr = VARIABLE.sub(
                 lambda match: str(variables.get(match.group(1) or match.group(2), match.group(0))),

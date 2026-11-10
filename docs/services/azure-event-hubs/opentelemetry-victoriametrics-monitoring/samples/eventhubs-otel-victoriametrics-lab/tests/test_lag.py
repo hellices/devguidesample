@@ -23,12 +23,12 @@ def test_missing_checkpoint_is_reported_not_coerced_to_zero():
     )
 
 
+def test_unknown_last_sequence_is_unknown_lag_not_an_empty_partition():
+    assert compute_lag(None, None) == LagResult(messages=None, checkpoint_present=False, partition_empty=False)
+    assert compute_lag(None, 10) == LagResult(messages=None, checkpoint_present=True, partition_empty=False)
+
+
 def test_empty_partition_has_zero_lag():
-    assert compute_lag(None, None) == LagResult(
-        messages=0,
-        checkpoint_present=False,
-        partition_empty=True,
-    )
     assert compute_lag(-1, None) == LagResult(
         messages=0,
         checkpoint_present=False,

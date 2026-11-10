@@ -9,6 +9,11 @@ AZURE_RESOURCE_GROUP="$(env_value AZURE_RESOURCE_GROUP)"
 STATE="$(state_dir)"
 # Verify exactly the group and subscription predown recorded; the current environment values may
 # already point elsewhere, so they never stand in for a missing record.
+if [[ -f "$STATE/down-none" ]]; then
+  rm -f "$STATE/down-none"
+  log "predown recorded no resource group; nothing to verify"
+  exit 0
+fi
 [[ -f "$STATE/down-resource-group" && -f "$STATE/down-subscription" ]] \
   || die "predown did not record the resource group and subscription to verify"
 recorded="$(<"$STATE/down-resource-group")"
@@ -23,8 +28,11 @@ AZURE_SUBSCRIPTION_ID="$recorded_subscription"
 
 for attempt in $(seq 1 60); do
   # A failed lookup is an error, not "still exists".
-  exists="$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" \
+  # Pin the output format: a user default such as table would never print a bare "false".
+  exists="$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP" -o tsv)" \
     || die "could not query resource group $AZURE_RESOURCE_GROUP"
+  [[ "$exists" == "true" || "$exists" == "false" ]] \
+    || die "unexpected answer to the resource group existence check for $AZURE_RESOURCE_GROUP: $exists"
   if [[ "$exists" == "false" ]]; then
     log "resource group $AZURE_RESOURCE_GROUP no longer exists"
     rm -f "$STATE/down-resource-group" "$STATE/down-subscription"

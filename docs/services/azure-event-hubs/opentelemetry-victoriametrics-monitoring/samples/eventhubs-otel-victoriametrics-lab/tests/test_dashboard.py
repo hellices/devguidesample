@@ -42,10 +42,11 @@ def test_no_query_hides_missing_series_as_zero():
     exprs = [t["expr"] for p in _panels(build_dashboard({"processing_units": 1})) for t in p.get("targets", [])]
     # Any spacing or matching modifier (or on() vector (0)) still turns "no data" into 0.
     # Parentheses around vector(0) are still a zero fill.
-    zero_fill = re.compile(r"\bor\b(?:\s+on\s*\([^)]*\))?[\s(]*vector\s*\(\s*0(?:\.0*)?\s*\)")
+    zero_fill = re.compile(r"\bor\b(?:\s+(?:on|ignoring)\s*\([^)]*\))?[\s(]*vector\s*\(\s*0(?:\.0*)?\s*\)")
     assert not [e for e in exprs if zero_fill.search(e)]
     assert zero_fill.search("x or on() vector (0)") and zero_fill.search("x or vector(0.0)")
     assert zero_fill.search("x or on() (vector(0))") and zero_fill.search("x or ( vector(0) )")
+    assert zero_fill.search("x or ignoring(job) vector(0)")
 
 
 def _azure_total_targets():
@@ -362,3 +363,10 @@ def test_capture_refuses_a_page_whose_height_never_settles():
     loop = text[text.index("let stable = false;"):text.index("await page.waitForFunction(")]
     assert "stable = true;" in loop
     assert "if (!stable) throw new Error(" in loop
+
+
+def test_hidden_targets_are_not_queried(monkeypatch):
+    # Grafana skips a hidden target, so an invalid hidden expr must not fail the panel.
+    report, sent = _verify_with(monkeypatch, "broken(", [], target_extra={"hide": True})
+
+    assert sent == [] and report == []

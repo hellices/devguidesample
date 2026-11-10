@@ -31,14 +31,26 @@ def test_foundation_uses_fixed_non_overlapping_subnets():
 
 
 def test_storage_and_key_vault_disable_legacy_secret_access():
-    text = FOUNDATION.read_text()
+    text = _code(FOUNDATION.read_text())
 
-    assert "allowSharedKeyAccess: false" in text
-    assert "defaultToOAuthAuthentication: true" in text
-    assert "allowBlobPublicAccess: false" in text
-    assert "enableRbacAuthorization: true" in text
-    assert "defaultAction: 'Deny'" in text
+    # Each property is declared exactly once, with the value, inside its own resource block;
+    # a commented-out line or a value set elsewhere does not count.
+    expected = {
+        "storage": {"allowSharedKeyAccess": "false", "defaultToOAuthAuthentication": "true",
+                    "allowBlobPublicAccess": "false", "defaultAction": "'Deny'"},
+        "keyVault": {"enableRbacAuthorization": "true", "defaultAction": "'Deny'"},
+    }
+    for symbol, properties in expected.items():
+        block = _resource_block(text, symbol)
+        for name, value in properties.items():
+            assert re.findall(rf"^\s*{name}:\s*(\S+)\s*$", block, re.MULTILINE) == [value], (symbol, name)
     assert "grafana-admin-password" in text
+
+
+def test_security_property_check_ignores_commented_out_lines():
+    block = _resource_block(_code(
+        "resource storage 'x' = {\n  properties: {\n    // allowSharedKeyAccess: false\n  }\n}\n"), "storage")
+    assert re.findall(r"^\s*allowSharedKeyAccess:\s*(\S+)\s*$", block, re.MULTILINE) == []
 
 
 def _assigned_role_guids(text: str) -> set[str]:

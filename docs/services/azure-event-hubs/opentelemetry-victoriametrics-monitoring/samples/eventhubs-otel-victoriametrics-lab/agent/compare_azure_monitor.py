@@ -84,7 +84,8 @@ def compare(raw: dict, start: int, end: int, fetch: Fetch) -> dict:
         later = _samples(
             fetch, f'azure_{name.lower()}_total_Count{{{api},delivery_path="remote_write"}}', end, end + LOOKAHEAD_SECONDS
         )
-        last_stored = max([ts // 1000 for ts, _ in stored["remote_write"] + later], default=None)
+        # Only a bin stamped exactly on a minute proves the receiver moved past a missing one.
+        last_stored = max([ts // 1000 for ts, _ in stored["remote_write"] + later if ts % 60000 == 0], default=None)
         # Totals come from the same ms-filtered samples, so they share the [start, end) window exactly.
         totals = {
             delivery: sum(value for _, value in samples) if samples else None

@@ -190,7 +190,7 @@ def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path)
     assert first.returncode == 0, first.stderr
     assert second.returncode == 0, second.stderr
     az_calls = [c for c in log.read_text().splitlines() if c.startswith("az ")]
-    assert az_calls == ["az group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-example"] * 2
+    assert az_calls == ["az group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-example -o tsv"] * 2
 
 
 AZD_CLEANUP_ENV = (
@@ -204,7 +204,7 @@ AZ_CLEANUP = (
     'args="$*"; SUB=00000000-0000-0000-0000-000000000000\n'
     'case "$args" in\n'
     # Every allowed call is matched in full, including the exact subscription and resource group.
-    '  "group exists --subscription $SUB -n rg-example") echo true;;\n'
+    '  "group exists --subscription $SUB -n rg-example -o tsv") echo true;;\n'
     '  "identity list --subscription $SUB -g rg-example --query [?clientId==\'client-producer\'].name | [0] -o tsv") echo id-producer;;\n'
     '  "identity list --subscription $SUB -g rg-example --query [?clientId==\'client-consumer\'].name | [0] -o tsv") echo id-consumer;;\n'
     '  "identity federated-credential list --subscription $SUB -g rg-example --identity-name id-producer --query [?name==\'aks-eventhubs-producer\'].name -o tsv") echo aks-eventhubs-producer;;\n'
@@ -570,6 +570,24 @@ def test_gateway_bundle_replaces_stale_files_but_keeps_runtime_state(fake_bin, t
     assert (app / "tls" / "grafana.key").read_text() == "k1"  # reused, not regenerated
 
 
+def test_gateway_bundle_restores_the_previous_bundle_when_the_copy_fails(fake_bin, tmp_path):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write)
+    write("cp", "exit 1")  # e.g. the disk filled up while copying the new bundle
+    app = tmp_path / "app"
+    (app / "tls").mkdir(parents=True)
+    (app / "compose.yaml").write_text("previous")
+    (app / ".env").write_text("previous")
+
+    result = _run_bootstrap(bin_dir, tmp_path, app)
+
+    assert result.returncode != 0
+    assert "previous bundle restored" in result.stderr
+    assert (app / "compose.yaml").read_text() == "previous" and (app / ".env").read_text() == "previous"
+    assert (app / "tls").is_dir()
+    assert not list(tmp_path.glob("app.previous.*"))
+
+
 def test_gateway_bootstrap_sets_home_for_run_command():
     text = (LAB_ROOT / "gateway" / "bootstrap.sh").read_text()
     # Without HOME, az writes .cache under a literal "None" directory in the bundle directory.
@@ -854,3 +872,58 @@ def test_scenario_load_window_and_peak_cover_the_running_producer():
     stop = text.index("stop_producer\nPRODUCER_STOP=")
     assert stop < text.index('PEAK_LAG="$(peak_lag)"')
     assert "max_over_time($LAG_SERIES[" in text
+
+
+def test_gateway_only_requires_a_completed_full_postprovision():
+    text = (SCRIPTS / "azd-postprovision.sh").read_text()
+
+    full = text.index('if [[ "${GATEWAY_ONLY:-false}" != "true" ]]; then')
+    # A new full run invalidates the stamp first and writes it only after the last health check.
+    assert text.index('rm -f "$COMPLETED_STAMP"', full) < text.index('log "1/6', full)
+    health = text.index('log "6/6 operator-facing health checks"')
+    assert text.index('touch "$COMPLETED_STAMP"') > health
+    assert '[[ -f "$COMPLETED_STAMP" && -n "$WORKLOAD_IMAGE" ]] || die' in text
+
+
+def test_predown_never_leaves_an_earlier_target_for_postdown(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+    write("azd", AZD_CLEANUP_ENV)
+    assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+
+    # A later run on an environment with no provisioned group replaces the old target with "none".
+    write("azd", "exit 1")
+    assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+    log.write_text("")
+    result = _run("verify-cleanup.sh", bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert "nothing to verify" in result.stderr
+    assert "group exists" not in log.read_text()
+
+
+def test_predown_refuses_a_half_known_target(fake_bin):
+    bin_dir, _, write = fake_bin
+    write("az", "exit 0")
+    write("azd", 'case "${@: -1}" in AZURE_RESOURCE_GROUP) echo rg-example;; *) exit 1;; esac')
+
+    result = _run("cleanup-external.sh", bin_dir, "--yes")
+
+    assert result.returncode != 0
+    assert "only one of AZURE_RESOURCE_GROUP and AZURE_SUBSCRIPTION_ID" in result.stderr
+
+
+@pytest.mark.parametrize("script, args", [("verify-cleanup.sh", ()), ("cleanup-external.sh", ("--yes",))])
+def test_group_lookup_rejects_an_unexpected_answer(fake_bin, script, args):
+    bin_dir, _, write = fake_bin
+    write("azd", AZD_CLEANUP_ENV)
+    if script == "verify-cleanup.sh":
+        write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+        assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+    # A table-formatted answer would never equal "false" and must not loop until "still exists".
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then printf "Result\\n--------\\nFalse\\n"; fi')
+
+    result = _run(script, bin_dir, *args)
+
+    assert result.returncode != 0
+    assert "unexpected answer to the resource group existence check" in result.stderr

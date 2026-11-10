@@ -93,7 +93,7 @@ Azure Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 �
 | 방식 | 지표 범위·dimension | 지연(실측) | 운영·권한 | 맞는 용도 |
 |---|---|---|---|---|
 | ① Azure Monitor 직접 조회 | 모든 지표, dimension 분할 | 약 1분 20초(Metrics API 조회 가능 71–101초) | 추가 구성 없음 | portal 확인, Azure Monitor 경보 |
-| ② Metrics API — `azuremonitorreceiver` | 모든 지표, dimension 분할 | 약 3분 20초(이벤트 → VictoriaMetrics 190–261초) | Collector 운영, 대상 namespace·cluster의 Monitoring Reader. 늦게 게시된 분 bin은 다시 읽지 않아 누락 가능. 다수 리소스는 batch API(구독 범위 권한)로 호출 수 절감 | 외부 TSDB의 기본 경로 |
+| ② Metrics API — `azuremonitorreceiver` | 모든 지표, dimension 분할 | 약 3분 20초(이벤트 → VictoriaMetrics 190–201초) | Collector 운영, 대상 namespace·cluster의 Monitoring Reader. 늦게 게시된 분 bin은 다시 읽지 않아 누락 가능. 다수 리소스는 batch API(구독 범위 권한)로 호출 수 절감 | 외부 TSDB의 기본 경로 |
 | ③ Metrics API — `azure-metrics-exporter` | 모든 지표, dimension 분할 | 측정 안 함(②와 같은 Metrics API 조회에 scrape 주기 추가) | exporter 컨테이너 추가, ②와 같은 권한·호출 제약 | Prometheus exporter 중심 환경 |
 | ④ Diagnostic Settings → Event Hub | 지표표와 다른 일부 지표, dimension 합산, 값이 있는 분만 | ②보다 3–4분 더 늦음, 설정 직후 최대 90분 | telemetry Event Hub(같은 리전)와 receiver checkpoint | 로그와 같은 스트림으로 외부 연동 |
 | ⑤ Diagnostic Settings → Log Analytics·Storage | ④와 같음 | ④와 비슷 | workspace·storage 비용 | KQL 분석, 장기 보관 |
@@ -119,19 +119,20 @@ Azure Monitor를 원본으로 하는 방식은 초 단위 신호가 아닙니다
 OpenTelemetry Collector를 거쳐 VictoriaMetrics에 저장되기까지 약 3분 20초가 걸렸습니다.
 같은 receiver 설정으로 잰 Premium·Standard도 3–5분 범위였습니다.
 
-![이벤트 전송 후 조회 가능까지 걸린 시간. Dedicated 1 CU(배포한 Gateway)는 Metrics API 71–101초(중앙값 81), VictoriaMetrics 190–261초(중앙값 201). 로컬 Collector로 잰 Premium 1 PU는 72–102초와 230–232초, Standard 1 TU는 81–151초와 221–281초. Dedicated의 Collector 구간은 100–130초](images/metric-latency.svg)
+![이벤트 전송 후 조회 가능까지 걸린 시간. Dedicated 1 CU(배포한 Gateway)는 Metrics API 71–101초(중앙값 81), VictoriaMetrics 190–201초(중앙값 201). 로컬 Collector로 잰 Premium 1 PU는 72–102초와 230–232초, Standard 1 TU는 81–151초와 221–281초. Dedicated의 Collector 구간은 100–130초](images/metric-latency.svg)
 
-| 구간 | Dedicated 1 CU (배포한 Gateway, 15회) | Premium 1 PU (로컬 Collector, 15회) | Standard 1 TU (로컬 Collector, 20회) |
+| 구간 | Dedicated 1 CU (배포한 Gateway, 14회) | Premium 1 PU (로컬 Collector, 15회) | Standard 1 TU (로컬 Collector, 20회) |
 |---|---|---|---|
 | 이벤트 → Metrics API 조회 가능 | 71–101초 (중앙값 81) | 72–102초 (중앙값 92) | 81–151초 (중앙값 115) |
 | Metrics API → VictoriaMetrics(Collector 구간) | 100–130초 | 130–160초 (중앙값 140) | 120–150초 (중앙값 130) |
-| 이벤트 → VictoriaMetrics 저장 | 190–261초 (중앙값 201) | 230–232초 | 221–281초 (중앙값 250) |
+| 이벤트 → VictoriaMetrics 저장 | 190–201초 (중앙값 201) | 230–232초 | 221–281초 (중앙값 250) |
 | bin timestamp | 이벤트를 보낸 분보다 1분 뒤 | 이벤트를 보낸 분보다 1분 뒤 | 2분 단위 |
 
 - **Collector 구간이 수집 주기(60초)보다 깁니다.** receiver는 60초마다 `timespan=PT1M`으로
   조회하며, 이 조회는 1–2분 전에 끝난 분 bin 하나만 돌려줍니다. 그래서 bin이 Azure Monitor에
-  나타난 뒤에도 다음 조회까지 기다립니다. VictoriaMetrics에 저장된 값은 모두 Azure Monitor의
-  최종값과 같았습니다.
+  나타난 뒤에도 다음 조회까지 기다리고, Dedicated에서는 Metrics API 지연이 71–101초로 달라도
+  VictoriaMetrics 도착은 매분 같은 초에 맞춰져 전체 지연이 201초로 같았습니다. 저장된 값은
+  모두 Azure Monitor의 최종값과 같았습니다.
 - **대시보드의 마지막 sample 경과 시간은 bin timestamp 기준입니다.** 시나리오 뒤 probe에서 ②
   remote write는 157–158초, ④ Diagnostic Settings 경로는 337–398초로 ②보다 3–4분 더
   늦었습니다.

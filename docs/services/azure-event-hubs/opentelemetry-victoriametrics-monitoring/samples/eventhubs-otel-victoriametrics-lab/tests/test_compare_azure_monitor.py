@@ -125,6 +125,17 @@ def test_a_missing_last_bin_is_a_gap_only_when_a_later_bin_was_stored():
     assert report["complete"] is True
 
 
+def test_an_off_minute_sample_after_the_window_does_not_prove_a_gap():
+    def late(selector, values):
+        return values[:2] if "incomingrequests" in selector else values
+
+    after = {"IncomingRequests": [(END * 1000 + 30_000, 1.0)]}
+    report = compare(_raw(), START, END, _fetch(late, later=after))
+
+    assert report["metrics"]["IncomingRequests"]["remote_write_gaps"] == []
+    assert report["complete"] is False
+
+
 def test_a_mismatched_value_is_never_excused_as_a_gap():
     def wrong(selector, values):
         return [values[0], values[1] + 1, values[2]] if "incomingmessages" in selector else values
