@@ -74,7 +74,10 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
 3. **value shape**: metric별로 Pod·분당 행 수, `max(valueCount)`, `value` 범위,
    `sum(valueSum)`, `sum(valueCount)`를 조회해 집계식을 표로 정한다. Application Insights
    Java agent는 Micrometer meter를 export 간격(기본 60초)마다 한 행으로 보내며, meter 종류는
-   다음 모양으로 구분한다.
+   다음 모양으로 구분한다. `value`·`valueSum`·`valueCount`의 정의(단일 측정은 Count 1, 사전
+   집계는 1분 동안의 측정 수, 평균은 Sum/Count)는
+   [Application Insights telemetry data model](https://learn.microsoft.com/azure/azure-monitor/app/data-model-complete#custom-metrics)을
+   따른다.
 
    - Counter: 모든 행이 `valueCount` = 1이고 `value`가 간격의 증가량 → `sum(value)`
    - DistributionSummary·Timer: `valueCount` > 1, `valueSum`이 합계 →
@@ -102,8 +105,10 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
      값을 채우고 그 변수를 숨긴 사본을 임시 파일로 만든다(규칙 참고).
    - 건수 stat은 고정색, 크기만 비교하는 bar gauge는 중립 색 구간을 쓴다. threshold 색은
      도메인 기준이 있는 값에만 쓴다.
-   - legend는 `displayName`에 dimension label을 쓴다. KQL 예약어(`views`, `first` 등)를
-     column 이름으로 쓰지 않는다.
+   - legend는 `displayName`에 dimension label을 쓴다. KQL 키워드(`views`, `first` 등)를
+     column 이름으로 쓰지 않는다. `movieViews`처럼 다른 이름을 쓰거나 꼭 필요하면
+     `['views']`로 감싼다
+     ([Entity names](https://learn.microsoft.com/kusto/query/schema-entities/entity-names)).
 6. **verify**: 접힌 row 안의 panel까지 모든 panel query를 실제로 실행한다.
    HTTP 오류나 0행(숫자 field가 모두 null인 행 포함)이 하나라도 있으면 고치고 다시 실행한다.
    0은 정상 값이다.
@@ -124,6 +129,10 @@ description: Application Insights customMetrics로 들어오는 Micrometer 지�
    점검한다. 하나라도 걸리면 5단계로 돌아간다.
    - 렌더링은 Grafana MCP로 확인할 수 없다. `az`로 로그인한 터미널에서 `capture.mjs`를 쓰거나,
      Grafana에 로그인한 브라우저 도구로 dashboard를 열어 캡처한다.
+   - Playwright를 쓸 수 없으면 Azure Managed Grafana(Standard)의 image renderer로 panel 하나씩
+     PNG를 받는다: `GET <grafana-url>/render/d-solo/<uid>/x?panelId=<id>&from=<ms>&to=<ms>&width=1000&height=500`
+     (`Authorization: Bearer <token>`). panel당 약 10초가 걸리고 전체 dashboard 렌더는 200초
+     제한에 걸리기 쉬우므로, panel 간 배치와 합계 비교는 `capture.mjs` 화면으로 확인한다.
    - JSON만 만든 경우에는 사용자에게 import 후 dashboard URL을 요청하고 그 URL로 진행한다.
      URL을 받지 못하거나 렌더링 도구가 없으면 다른 dashboard로 대신 검증하지 말고,
      report에 "렌더링 미검증"으로 남긴 채 완료라고 하지 않는다.
