@@ -94,7 +94,7 @@ target이라는 저장 장치를 서비스합니다.
 | 구성 요소 | 역할 |
 |---|---|
 | MGS·MGT | 클러스터의 모든 Lustre 파일 시스템 구성 정보를 MGT에 저장하고 target과 client에 배포합니다. MDS와 같은 노드(HA 쌍)에 둘 수 있으며, MGT와 MDT를 같은 저장소에 두는 것도 가능하지만 매뉴얼은 별도 저장소를 선호하고 위키는 단일 LUN 결합을 강하게 비권장합니다. |
-| MDS·MDT | 이름·디렉터리·권한·file layout 같은 metadata를 MDT에 저장하고 open·close·rename 같은 namespace 연산을 처리합니다. 파일 생성 시 OST object를 할당합니다. |
+| MDS·MDT | 이름·디렉터리·권한·file layout 같은 metadata를 MDT에 저장하고 open·close·rename 같은 namespace 연산을 처리합니다. 파일 생성 시 layout을 정하고 OST object를 할당합니다. PFL 파일은 첫 구간의 object만 이때 만들고 나머지 구간은 이후 쓰기·truncate 시 할당합니다. |
 | OSS·OST | 파일 데이터를 OST의 object로 저장하고 I/O 요청을 처리합니다. OSS 하나가 보통 OST 2–8개를 서비스합니다(더 많이도 가능). |
 | client | MGC, MDC, OST마다 하나인 OSC로 구성됩니다. LOV가 여러 OSC를, LMV가 여러 MDT에 대응하는 MDC를 묶어 하나의 namespace로 보여 줍니다. |
 | LNet | 서버와 client 간 metadata·데이터 통신을 담당하는 커널 모듈 네트워크 계층입니다. |
@@ -220,7 +220,7 @@ Lustre의 약점은 신뢰성과 운영 편의를 하위 계층과 운영자에�
 | client 커널 의존 | client 커널과 `kmod-lustre-client` 패키지 버전이 같아야 함(DKMS 제외) |
 | 분산된 관리 | quota 명령을 MGS·MDS·OSS·client에 나누어 실행해야 하며 root quota는 강제되지 않음 |
 | 작은 파일·metadata 집약 워크로드 | 큰 파일에 최적화되어 작은 파일은 추가 RPC 왕복이 생김. DoM·DNE가 이를 보완 |
-| peer-to-peer 부적합 | 소프트웨어 수준 복제가 없어 client와 서버를 같은 노드에 두는 구성에는 맞지 않음 |
+| peer-to-peer 부적합 | 매뉴얼은 기본 소프트웨어 수준 데이터 복제가 없어 노드 하나가 실패하면 그 노드의 데이터에 재시작 전까지 접근할 수 없다는 이유로, client와 서버를 같은 노드에 두고 작은 저장소를 나누는 구성에 적합하지 않다고 설명. FLR은 파일별 선택 기능이라 이 기본 동작을 바꾸지 않음 |
 
 위 항목을 종합하면 자체 운영 Lustre는 단일 NFS 서버보다 운영 부담이 크다고 볼 수
 있습니다. 이 종합은 공식 문서의 개별 사실에서 도출한 해석입니다.
