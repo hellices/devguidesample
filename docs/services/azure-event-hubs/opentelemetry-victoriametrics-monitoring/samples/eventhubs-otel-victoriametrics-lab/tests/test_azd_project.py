@@ -101,7 +101,8 @@ def test_main_parameters_map_azd_environment_values():
     values = {name: entry["value"] for name, entry in document["parameters"].items()}
 
     # azd up validates required inputs before preprovision runs, so hook-filled values need
-    # an empty default; main.bicep enforces minimum lengths instead.
+    # an empty default. Bicep refuses @minLength with that default (BCP333) and ARM preflight
+    # accepts '', so azd-configure.sh is the guard (see test_preprovision_* in test_hooks.py).
     assert values == {
         "environmentName": "${AZURE_ENV_NAME}",
         "location": "${AZURE_LOCATION}",

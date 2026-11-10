@@ -122,3 +122,23 @@ def test_window_is_half_open_in_milliseconds():
 
     assert metric["remote_write_total"] == 30.0 + 7.0  # the last-millisecond sample is inside
     assert metric["remote_write_off_bin_samples"] == 1
+
+
+@pytest.mark.parametrize("from_ms, to_ms", [
+    (START * 1000 + 500, END * 1000),   # starts mid-minute
+    (START * 1000, END * 1000 - 1),     # ends mid-minute
+    (END * 1000, START * 1000),         # reversed
+])
+def test_cli_rejects_windows_that_are_not_whole_minutes(tmp_path, from_ms, to_ms):
+    import subprocess
+
+    raw = tmp_path / "raw.json"
+    raw.write_text("{}")
+    result = subprocess.run(
+        [sys.executable, str(LAB_ROOT / "agent" / "compare_azure_monitor.py"), "--azure-monitor", str(raw),
+         "--from-ms", str(from_ms), "--to-ms", str(to_ms), "--vm-url", "http://127.0.0.1:9", "--output",
+         str(tmp_path / "out.json")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 2
+    assert "whole minutes" in result.stderr

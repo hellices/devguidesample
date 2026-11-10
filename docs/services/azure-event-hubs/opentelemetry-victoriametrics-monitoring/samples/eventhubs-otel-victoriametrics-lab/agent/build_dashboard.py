@@ -292,7 +292,9 @@ def build_dashboard(probe: dict) -> dict:
     ))
     panels.append(layout.panel(
         "stat", "DS Event Hub series", 4, 11,
-        [{"expr": 'count(last_over_time({source_path="diagnostic_eventhub"}[$__range]))', "instant": True,
+        # One delivery path only: both exporters store the same receiver output, so counting
+        # without delivery_path would count every series twice.
+        [{"expr": f'count(last_over_time({{{DIAG}}}[$__range]))', "instant": True,
           "legendFormat": "series"}],
         description=("[optional] Diagnostic Settings가 telemetry Event Hub로 보낸 지표 수. "
                      "series가 없으면 0으로 바꾸지 않고 '수신 없음'으로 표시합니다."),

@@ -232,26 +232,33 @@ def test_panel_plan_describes_the_window_peak_it_shows():
     assert lag_rows and all("지금" not in row[0] for row in lag_rows)
 
 
-def _verify_with(monkeypatch, expr, variables, query_error=None):
+def _verify_with(monkeypatch, expr, variables, query_error=None, target_extra=None, response=None):
     import verify_panels
 
     dashboard = {
         "templating": {"list": [{"name": n, "current": {"value": v}} for n, v in variables]},
         "panels": [{"type": "stat", "title": "P", "description": "[optional] x",
-                    "targets": [{"refId": "A", "expr": expr}]}],
+                    "targets": [{"refId": "A", "expr": expr, **(target_extra or {})}]}],
     }
-    sent = []
+    calls = []
 
     def fake_request(url, user, password, path, payload=None):
-        if path.startswith("/api/dashboards/uid/"):
+        calls.append((url, path))
+        if path == "/api/dashboards/uid/uid":
             return {"dashboard": dashboard}
-        sent.append(payload["queries"][0]["expr"])
+        # Only the dashboard of the requested uid and Grafana's query endpoint are valid.
+        assert path == "/api/ds/query", path
+        calls.append(payload["queries"][0])
         if query_error:
             raise query_error
-        return {"results": {"A": {"frames": [{"data": {"values": [[1], [2.0]]}}]}}}
+        return response if response is not None else {
+            "results": {"A": {"frames": [{"data": {"values": [[1], [2.0]]}}]}}}
 
     monkeypatch.setattr(verify_panels, "grafana_request", fake_request)
     report = verify_panels.verify("https://g.example", "u", "p", "uid", "0", "1")
+    assert calls[0] == ("https://g.example", "/api/dashboards/uid/uid")
+    assert all(c[0] == "https://g.example" for c in calls if isinstance(c, tuple))
+    sent = [c for c in calls if isinstance(c, dict)]
     return report, sent
 
 
@@ -260,7 +267,7 @@ def test_variables_are_substituted_as_whole_tokens(monkeypatch):
         monkeypatch, "x{c=\"$cluster_name\",d=\"${cluster}\"} / $pu [$__range]",
         [("cluster", "one"), ("cluster_name", "two"), ("pu", "2")],
     )
-    assert sent == ['x{c="two",d="one"} / 2 [$__range]']
+    assert [q["expr"] for q in sent] == ['x{c="two",d="one"} / 2 [$__range]']
     assert report[0]["status"] == "pass"
 
 
@@ -274,3 +281,28 @@ def test_connection_failures_are_reported_not_raised(monkeypatch, failure):
     report, _ = _verify_with(monkeypatch, "up", [], query_error=error)
     assert report[0]["status"] == "error"
     assert ("timed out" if failure != "reset" else "reset") in report[0]["error"]
+
+
+@pytest.mark.parametrize("target, expected", [
+    ({}, (False, True)),
+    ({"instant": True}, (True, False)),
+    ({"instant": True, "range": True}, (True, True)),  # Grafana's "Both" query type
+])
+def test_query_type_flags_are_sent_as_configured(monkeypatch, target, expected):
+    _, sent = _verify_with(monkeypatch, "up", [], target_extra=target)
+    assert (sent[0]["instant"], sent[0]["range"]) == expected
+
+
+@pytest.mark.parametrize("failure", ["not_json", "no_results"])
+def test_malformed_query_responses_are_reported_not_raised(monkeypatch, failure):
+    import json
+
+    error = json.JSONDecodeError("Expecting value", "<html>", 0) if failure == "not_json" else None
+    report, _ = _verify_with(monkeypatch, "up", [], query_error=error, response={} if not error else None)
+    assert report[0]["status"] == "error"
+
+
+def test_diagnostic_series_stat_counts_one_delivery_path():
+    panel = next(p for p in _panels(build_dashboard({"processing_units": 1})) if p.get("title") == "DS Event Hub series")
+    [selector] = re.findall(r"\{[^}]*\}", panel["targets"][0]["expr"])
+    assert _matchers(selector) == {"source_path": ("=", "diagnostic_eventhub"), "delivery_path": ("=", "remote_write")}

@@ -13,7 +13,7 @@ NOW = 1_000_000
 
 def _fake(calls):
     def fake_query(base_url, path, params):
-        calls.append((path, params))
+        calls.append((base_url, path, params))
         if path == "/api/v1/series":
             return [{"__name__": "m", "source_path": "a"}]
         assert path == "/api/v1/query", path  # any other endpoint is a bug
@@ -35,10 +35,11 @@ def test_path_queries_use_the_series_snapshot_time(monkeypatch, window, start):
     inventory = probe.build_inventory("http://vm.example", window)
 
     selector = '{source_path="a",delivery_path=""}'  # a missing label stays ""
+    vm = "http://vm.example"  # every request must go to the VictoriaMetrics the caller chose
     assert calls == [
-        ("/api/v1/series", [("match[]", '{source_path!=""}'), ("start", str(start)), ("end", str(NOW))]),
-        ("/api/v1/query", {"query": f"sum(count_over_time({selector}[{window}]))", "time": str(NOW)}),
-        ("/api/v1/query", {"query": f"max(tlast_over_time({selector}[{window}]))", "time": str(NOW)}),
+        (vm, "/api/v1/series", [("match[]", '{source_path!=""}'), ("start", str(start)), ("end", str(NOW))]),
+        (vm, "/api/v1/query", {"query": f"sum(count_over_time({selector}[{window}]))", "time": str(NOW)}),
+        (vm, "/api/v1/query", {"query": f"max(tlast_over_time({selector}[{window}]))", "time": str(NOW)}),
     ]
     [stats] = inventory["paths"]
     assert stats["delivery_path"] == "(missing)"

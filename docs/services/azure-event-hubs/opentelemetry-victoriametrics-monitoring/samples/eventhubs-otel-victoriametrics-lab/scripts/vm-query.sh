@@ -63,13 +63,17 @@ case "${1:-start}" in
     echo $! >"$STATE/port-forward.pid"
     printf '%s\n' "$PORT" >"$STATE/port-forward.port"
     ps -p "$!" -o lstart= >"$STATE/port-forward.started"
+    pid="$(<"$STATE/port-forward.pid")"
     for attempt in $(seq 1 20); do
-      # Health alone could come from another listener that won the port; it must be our live forward.
-      if ! owned_forward; then
+      # A forward that exited (for example, it could not bind) is a failure even if another
+      # listener answers on the port.
+      if ! kill -0 "$pid" 2>/dev/null; then
         stop_forward
         die "VMSingle port-forward exited before becoming ready on port $PORT; see $STATE/port-forward.log"
       fi
-      healthy && exit 0
+      # Right after the fork the child may not have exec'd kubectl yet, so ownership is retried
+      # together with health instead of failing on the first look.
+      if owned_forward && healthy; then exit 0; fi
       if [[ "$attempt" -lt 20 ]]; then sleep 1; fi
     done
     stop_forward

@@ -30,7 +30,7 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # instead of querying a port that may belong to another environment.
 max_lag() {
   "$LAB_ROOT/scripts/vm-query.sh" start || return 1
-  curl -fsS "http://127.0.0.1:$PORT/api/v1/query" \
+  curl -fsS --max-time "${1:-30}" "http://127.0.0.1:$PORT/api/v1/query" \
     --data-urlencode 'query=max(eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_path="remote_write"})' \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
 }
@@ -80,8 +80,10 @@ TARGET=$((PEAK_LAG / 5))
 RECOVERED_AT=""
 deadline=$(( $(date +%s) + RECOVERY_TIMEOUT_MINUTES * 60 ))
 while [[ $(date +%s) -lt $deadline ]]; do
-  current="$(max_lag)"
-  if [[ "$current" -ge 0 && "$current" -le "$TARGET" ]]; then
+  # Bound each query by the time left, and count a recovery only if it was observed in time.
+  remaining=$(( deadline - $(date +%s) ))
+  current="$(max_lag "$(( remaining < 30 ? (remaining > 1 ? remaining : 1) : 30 ))")"
+  if [[ $(date +%s) -le $deadline && "$current" -ge 0 && "$current" -le "$TARGET" ]]; then
     RECOVERED_AT="$(now)"
     break
   fi

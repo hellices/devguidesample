@@ -280,7 +280,7 @@ Pod를 지우고 다시 조회했을 때 17:46–18:12 구간 `IncomingMessages`
 | `metrics:getBatch` 403 | batch API는 조회 대상 구독의 Monitoring Reader 필요 | ARM metrics API 사용(`use_batch_api: false`), namespace 범위 권한 유지 |
 | `ThrottledRequests` series 없음 | dimension 분할 조회에서 throttle이 없으면 time series가 오지 않음 | 이 지표만 `dimensions.overrides`로 분할 해제 |
 | 대시보드 쿼리 전체 0행 | 시나리오 UTC 문자열을 naive datetime으로 변환해 로컬 시간대(+9h)로 해석 | `timezone.utc` 지정 |
-| 새 환경 `azd up`이 3초 만에 `missing required inputs` | `azd up`은 preprovision hook보다 먼저 필수 Bicep 입력을 검사함. 매개변수 파일의 `${VAR=}` 빈 기본값도 누락으로 판단 | hook이 채우는 세 매개변수에 Bicep 기본값 `''` 지정. hook 없이 배포하면 빈 CIDR·SSH 키가 ARM 검증에서 실패 |
+| 새 환경 `azd up`이 3초 만에 `missing required inputs` | `azd up`은 preprovision hook보다 먼저 필수 Bicep 입력을 검사함. 매개변수 파일의 `${VAR=}` 빈 기본값도 누락으로 판단 | hook이 채우는 세 매개변수에 Bicep 기본값 `''` 지정. 이 기본값과 `@minLength`는 함께 쓸 수 없고(BCP333) ARM preflight도 빈 값을 통과시키므로, preprovision hook이 빈 CIDR·비밀번호·SSH 키를 쓰기 전에 실패 |
 | `azd up -e <env>`의 hook 값이 기본 환경에 기록될 위험 | hook 안의 `azd env set`이 `-e` 없이 기본 환경을 사용 | `azd_env` helper로 `AZURE_ENV_NAME`을 항상 지정 |
 | `postdown`의 `no resource group to verify` | `azd down`이 hook 실행 전에 provision output을 지움 | `predown`이 대상 resource group을 기록하고 `postdown`이 읽음 |
 | 시나리오 중 `curl: (7) Failed to connect … 18428` | 장시간 `kubectl port-forward`의 `lost connection to pod` | `/health`가 실패하면 port-forward를 다시 열고 조회마다 확인 |
@@ -299,7 +299,7 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 
 | 지적 | 수정 |
 |---|---|
-| Grafana 관리자 자격 증명이 공개 IP의 HTTP로 전송됨 | Gateway가 public IP용 self-signed 인증서를 만들어 Grafana를 HTTPS로만 제공. postprovision은 공개 인증서만 회수해 `.azure/<env>/grafana.crt`에 두고, `curl --cacert`·Python `ssl`·Playwright(사전 TLS 확인과 SPKI 고정)가 이 인증서로만 접속 |
+| Grafana 관리자 자격 증명이 공개 IP의 HTTP로 전송됨 | Gateway가 public IP용 self-signed 인증서를 만들어 Grafana를 HTTPS로만 제공. postprovision은 공개 인증서만 회수해 `.azure/<env>/grafana.crt`에 두고, `curl --cacert`와 Python `ssl`은 이 인증서로만 접속하고, Playwright는 loopback proxy에만 접속하며 proxy가 이 인증서 신뢰와 leaf SHA-256 지문 비교로 Grafana TLS를 검증 |
 | 요청 합계 stat이 첫 분 bin을 빼고 끝 bin을 포함 | `[$__range] offset 1s`로 Azure Monitor 조회와 같은 `[from, to)` 창 사용 |
 | 재배포 때 `kubectl apply`가 실행 중인 consumer를 0으로 되돌림 | apply 전 `spec.replicas`를 기억했다가 복원(최소 1) |
 | evidence 수집이 마지막 분 bin 도착 전에 시작됨 | 창 종료 후 기본 540초 대기, 분 단위 대조가 완전하지 않으면 실패로 보고 |
@@ -346,6 +346,10 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | port-forward가 bind에 실패한 사이 다른 listener가 health에 응답하면 성공으로 판단, 조회 실패를 빈 결과로 해석 | 준비 확인마다 이 환경의 forward가 살아 있는지 함께 확인, `max_lag`·Pod 목록 조회 실패를 즉시 오류로 처리 |
 | Azure Monitor 대조가 export 끝 1초를 빼고 합계를 다른 query로 계산 | export를 ms 단위 `[start, end)`로 직접 걸러 분별 대조와 합계를 같은 sample에서 계산 |
 | Key Vault `enabledForTemplateDeployment: true` | 템플릿이 Key Vault 참조를 쓰지 않으므로 `false` |
+| Gateway 번들을 기존 디렉터리에 덮어써 새 번들에서 빠진 파일이 남음, fallback exporter가 종료돼도 준비 완료 | 임시 디렉터리에 풀어 검증한 뒤 `secrets`·`tls`만 남기고 교체, fallback에서는 exporter 컨테이너 running까지 확인 |
+| 복구 대기 query가 무기한 멈추거나 제한 시간 뒤 관측을 복구로 기록, postdown이 기록된 resource group 대신 현재 환경값을 확인 | query마다 남은 시간 이내의 timeout, 제한 시간 안의 관측만 복구로 기록, predown 기록을 우선하고 다르면 실패 |
+| `DS Event Hub series` stat이 두 전달 경로의 복제본을 함께 셈 | remote write 경로 하나만 셈 |
+| panel 검증이 "Both" query의 range 실행을 빠뜨리거나 JSON이 아닌 응답에서 중단 | 두 flag를 그대로 전달하고, 형식 오류도 `error`로 기록 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인
 

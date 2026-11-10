@@ -112,7 +112,9 @@ scrape 합계가 두 배 안팎인 이유는 [전달 경로](#delivery)에서, D
 리뷰에서 이를 찾아 `offset 1s`로 `[from, to)` 창에 맞췄고, 로컬 VictoriaMetrics
 v1.155.0에 같은 형태의 표본을 넣어 두 식의 결과가 각각 `(from, to]`와 `[from, to)` 합계와
 같음을 확인했습니다. 수정 후 세 번째 새 환경(21:05–21:18 UTC)에서는 대시보드 stat이
-656건으로 Azure Monitor 직접 조회값 656건과 같았습니다.
+656건으로 Azure Monitor 직접 조회값 656건과 같았습니다. 캡처의 DS Event Hub series stat(178)도
+scrape와 remote write 두 경로의 복제본을 함께 센 값이어서, 이후 remote write 경로 하나만
+세도록 고쳤습니다.
 
 ![수정 후 세 번째 환경의 대시보드 상단. Incoming·Successful requests 656건, Throttled requests 0건](images/request-window-fixed.png)
 

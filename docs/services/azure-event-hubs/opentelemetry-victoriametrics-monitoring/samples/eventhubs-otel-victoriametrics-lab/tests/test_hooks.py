@@ -138,7 +138,9 @@ def test_preprovision_stops_before_mutation_on_subscription_mismatch(fake_bin):
 
 def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path):
     bin_dir, log, write = fake_bin
-    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+    # Only the existence lookup is allowed; any other az call (including deletes) fails the run.
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; exit 0; fi; '
+                'echo "unexpected az call: $*" >&2; exit 97')
     write(
         "azd",
         'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
@@ -150,7 +152,8 @@ def test_cleanup_is_idempotent_when_resource_group_is_absent(fake_bin, tmp_path)
 
     assert first.returncode == 0, first.stderr
     assert second.returncode == 0, second.stderr
-    assert "federated-credential delete" not in log.read_text()
+    az_calls = [c for c in log.read_text().splitlines() if c.startswith("az ")]
+    assert az_calls == ["az group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-example"] * 2
 
 
 AZD_CLEANUP_ENV = (
@@ -204,11 +207,17 @@ def test_cleanup_deletes_only_the_lab_credentials(fake_bin):
 
 
 def test_cleanup_requires_confirmation(fake_bin):
-    bin_dir, _, write = fake_bin
-    write("az", "exit 0")
-    write("azd", "exit 1")
+    bin_dir, log, write = fake_bin
+    # The environment is fully available, so only the missing --yes can stop the run.
+    write("az", AZ_CLEANUP)
+    write("azd", AZD_CLEANUP_ENV)
 
-    assert _run("cleanup-external.sh", bin_dir).returncode != 0
+    result = _run("cleanup-external.sh", bin_dir)
+
+    assert result.returncode != 0
+    assert "pass --yes to confirm cleanup" in result.stderr
+    calls = log.read_text().splitlines() if log.exists() else []
+    assert not [c for c in calls if c.startswith("az ")]
 
 
 def test_hooks_pin_azd_env_to_the_running_environment():
@@ -229,6 +238,7 @@ def test_preprovision_writes_to_the_requested_environment(fake_bin):
           'if [[ "$1 $2" == "env get-value" ]]; then exit 1; fi; exit 0')
     write("curl", "echo 203.0.113.10")
     write("python3", "exit 0")
+    write("openssl", 'if [[ "$1" == rand ]]; then echo "R3ZhbGlkUGFzc3dvcmRGb3JUZXN0c09ubHk="; fi')
     write("ssh-keygen", 'for a; do last="$a"; done; echo "ssh-ed25519 AAAA test" > "$last.pub"; touch "$last"')
 
     result = _run("azd-configure.sh", bin_dir)
@@ -237,6 +247,33 @@ def test_preprovision_writes_to_the_requested_environment(fake_bin):
     sets = [line for line in log.read_text().splitlines() if line.startswith("azd env set")]
     assert sets and all(line.startswith("azd env set -e unit ") for line in sets)
     assert "azd env set -e unit OPERATOR_EGRESS_CIDR 203.0.113.10/32" in log.read_text()
+    assert "azd env set -e unit GATEWAY_ADMIN_SSH_PUBLIC_KEY ssh-ed25519 AAAA test" in log.read_text()
+    password = [l for l in sets if " GRAFANA_ADMIN_PASSWORD " in l]
+    assert len(password) == 1 and len(password[0].rsplit(" ", 1)[1]) >= 16
+
+
+@pytest.mark.parametrize("broken", ["password", "ssh_key"])
+def test_preprovision_never_writes_an_empty_hook_value(fake_bin, broken):
+    bin_dir, log, write = fake_bin
+    write("az", 'case "$1 $2" in "account show") '
+          'if [[ "$*" == *user.type* ]]; then echo user; else echo 00000000-0000-0000-0000-000000000000; fi;; '
+          '"provider show") echo Registered;; "ad signed-in-user") echo 33333333-3333-3333-3333-333333333333;; esac')
+    write("azd", 'if [[ "$1 $2" == "env get-value" && "${@: -1}" == "AZURE_SUBSCRIPTION_ID" ]]; then '
+          "echo 00000000-0000-0000-0000-000000000000; exit 0; fi; "
+          'if [[ "$1 $2" == "env get-value" ]]; then exit 1; fi; exit 0')
+    write("curl", "echo 203.0.113.10")
+    write("python3", "exit 0")
+    # Tools that "succeed" but produce nothing usable.
+    write("openssl", "exit 0" if broken == "password" else 'echo "R3ZhbGlkUGFzc3dvcmRGb3JUZXN0c09ubHk="')
+    write("ssh-keygen", 'for a; do last="$a"; done; '
+          + (': > "$last.pub"' if broken == "ssh_key" else 'echo "ssh-ed25519 AAAA test" > "$last.pub"')
+          + '; touch "$last"')
+
+    result = _run("azd-configure.sh", bin_dir)
+
+    assert result.returncode != 0
+    name = "GRAFANA_ADMIN_PASSWORD" if broken == "password" else "GATEWAY_ADMIN_SSH_PUBLIC_KEY"
+    assert f" {name} " not in log.read_text()
 
 
 def test_postdown_verifies_the_group_recorded_by_predown(fake_bin):
@@ -260,17 +297,43 @@ def test_postdown_verifies_the_group_recorded_by_predown(fake_bin):
     assert "group exists --subscription 00000000-0000-0000-0000-000000000000 -n rg-example" in log.read_text()
 
 
+def test_postdown_rejects_a_group_other_than_the_recorded_one(fake_bin):
+    bin_dir, log, write = fake_bin
+    write("az", 'if [[ "$1 $2" == "group exists" ]]; then echo false; fi')
+    write("azd", AZD_CLEANUP_ENV)
+    assert _run("cleanup-external.sh", bin_dir, "--yes").returncode == 0
+
+    write("azd", AZD_CLEANUP_ENV.replace("rg-example", "rg-other"))
+    result = _run("verify-cleanup.sh", bin_dir)
+
+    assert result.returncode != 0
+    assert "predown recorded rg-example" in result.stderr
+    assert "-n rg-other" not in log.read_text()
+
+
 def test_postdeploy_never_scales_the_running_consumer(fake_bin):
     bin_dir, log, write = fake_bin
     write("az", 'if [[ "$1 $2" == "account show" ]]; then echo 00000000-0000-0000-0000-000000000000; fi')
     write("azd", 'case "${@: -1}" in AZURE_SUBSCRIPTION_ID) echo 00000000-0000-0000-0000-000000000000;; '
                  '*) echo value;; esac')
-    write("kubectl", 'if [[ "$*" == *" apply "* ]]; then cat >/dev/null; fi')
+    # Only the two expected kubectl calls succeed; scale, patch or anything else fails the run.
+    write("kubectl", (
+        'args="$*"\n'
+        'case "${args#--kubeconfig * }" in\n'
+        '  "apply -f -") cat >/dev/null;;\n'
+        '  "rollout status deploy/eventhubs-slow-consumer -n eventhubs-observability --timeout 300s") ;;\n'
+        '  *) echo "unexpected kubectl call: $*" >&2; exit 97;;\n'
+        'esac'
+    ))
 
     result = _run("azd-deploy.sh", bin_dir)
 
     assert result.returncode == 0, result.stderr
-    assert "scale deploy/eventhubs-slow-consumer" not in log.read_text()
+    kubectl = [c.split(" ", 3)[3] for c in log.read_text().splitlines() if c.startswith("kubectl ")]
+    assert kubectl == [
+        "apply -f -",
+        "rollout status deploy/eventhubs-slow-consumer -n eventhubs-observability --timeout 300s",
+    ]
     manifest = (LAB_ROOT / "k8s" / "workloads.yaml").read_text().split("---")
     consumer = next(doc for doc in manifest if "name: eventhubs-slow-consumer\n  namespace" in doc and "kind: Deployment" in doc)
     producer = next(doc for doc in manifest if "name: eventhubs-producer\n  namespace" in doc and "kind: Deployment" in doc)
@@ -405,6 +468,86 @@ def test_evidence_is_kept_per_environment():
     assert 'local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"' in text
 
 
+def _gateway_bundle(profile="default"):
+    import io
+    import tarfile
+
+    files = {
+        "./.env": ("GATEWAY_CLIENT_ID=c\nKEY_VAULT_NAME=kv\nACR_NAME=acr\n"
+                   f"GATEWAY_PUBLIC_IP=1.2.3.4\nCOMPOSE_PROFILE={profile}\n"),
+        "./compose.yaml": "services: {}\n",
+    }
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as bundle:
+        for name, text in files.items():
+            data = text.encode()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            bundle.addfile(info, io.BytesIO(data))
+    return buffer
+
+
+def _bootstrap_tools(write, docker="exit 0"):
+    for name in ("cloud-init", "chown", "curl", "sleep"):
+        write(name, "exit 0")
+    write("docker", docker)
+    write("az", 'if [[ "$1 $2" == "keyvault secret" ]]; then echo pw; fi')
+    write("openssl", (
+        'case "$*" in\n'
+        '  req*) echo "cert 1.2.3.4 pub=k1" >tls/grafana.crt; echo k1 >tls/grafana.key;;\n'
+        '  "x509 -in tls/grafana.crt -noout -pubkey") grep -o "pub=[a-z0-9]*" tls/grafana.crt | cut -d= -f2;;\n'
+        '  "pkey -in tls/grafana.key -pubout") [ -s tls/grafana.key ] && cat tls/grafana.key || exit 1;;\n'
+        '  *-checkend*) exit 0;;\n'
+        '  *subjectAltName*) printf "X509v3 Subject Alternative Name: \\n    IP Address:1.2.3.4\\n";;\n'
+        'esac'
+    ))
+
+
+def _run_bootstrap(bin_dir, tmp_path, app, profile="default"):
+    import base64
+
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "APP_DIR": str(app),
+           "BUNDLE_B64": base64.b64encode(_gateway_bundle(profile).getvalue()).decode()}
+    return subprocess.run(["bash", str(LAB_ROOT / "gateway" / "bootstrap.sh")], env=env,
+                          capture_output=True, text=True, timeout=60)
+
+
+def test_gateway_bundle_replaces_stale_files_but_keeps_runtime_state(fake_bin, tmp_path):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write)
+    app = tmp_path / "app"
+    (app / "grafana" / "provisioning").mkdir(parents=True)
+    (app / "grafana" / "provisioning" / "removed.yaml").write_text("old")
+    (app / "old-compose.override.yaml").write_text("old")
+    (app / "tls").mkdir()
+    (app / "tls" / "grafana.crt").write_text("cert 1.2.3.4 pub=k1")
+    (app / "tls" / "grafana.key").write_text("k1")
+
+    result = _run_bootstrap(bin_dir, tmp_path, app)
+
+    assert result.returncode == 0, result.stderr
+    assert not (app / "old-compose.override.yaml").exists()
+    assert not (app / "grafana").exists()
+    assert (app / "compose.yaml").exists() and (app / ".env").exists()
+    assert (app / "tls" / "grafana.key").read_text() == "k1"  # reused, not regenerated
+
+
+@pytest.mark.parametrize("running, ready", [
+    ("otel-collector\ngrafana\nazure-metrics-exporter", True),
+    ("otel-collector\ngrafana", False),  # the exporter exited right after `up -d`
+])
+def test_fallback_gateway_waits_for_the_exporter_container(fake_bin, tmp_path, running, ready):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write, docker=(
+        f'if [[ "$*" == *"ps --status running --services"* ]]; then printf "{running}\\n"; fi'
+    ))
+
+    result = _run_bootstrap(bin_dir, tmp_path, tmp_path / "app", profile="fallback")
+
+    assert ("GATEWAY_READY" in result.stdout) is ready
+    assert (result.returncode == 0) is ready
+
+
 @pytest.mark.parametrize("existing, key, renewed", [
     (None, None, True),                 # first bootstrap
     ("1.2.3.4", "k1", False),           # valid certificate and matching key are reused
@@ -435,13 +578,7 @@ def test_gateway_restarts_grafana_only_after_renewing_its_certificate(fake_bin, 
         '"$(grep -o "[0-9][0-9.]*" tls/grafana.crt | head -1)";;\n'
         'esac'
     ))
-    env_file = ("GATEWAY_CLIENT_ID=c\nKEY_VAULT_NAME=kv\nACR_NAME=acr\n"
-                "GATEWAY_PUBLIC_IP=1.2.3.4\nCOMPOSE_PROFILE=default\n").encode()
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w:gz") as bundle:
-        info = tarfile.TarInfo("./.env")
-        info.size = len(env_file)
-        bundle.addfile(info, io.BytesIO(env_file))
+    buffer = _gateway_bundle()
     if existing:
         (app / "tls").mkdir(parents=True)
         ip = "1.2.3.4 expiring" if existing == "expiring" else existing

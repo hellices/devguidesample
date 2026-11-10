@@ -7,12 +7,16 @@ require_commands az
 AZURE_SUBSCRIPTION_ID="$(env_value AZURE_SUBSCRIPTION_ID)"
 AZURE_RESOURCE_GROUP="$(env_value AZURE_RESOURCE_GROUP)"
 STATE="$(state_dir)"
-if [[ -z "$AZURE_RESOURCE_GROUP" && -f "$STATE/down-resource-group" ]]; then
-  AZURE_RESOURCE_GROUP="$(<"$STATE/down-resource-group")"
+# The group predown recorded is the one being deleted; a different current value is a mismatch.
+if [[ -f "$STATE/down-resource-group" ]]; then
+  recorded="$(<"$STATE/down-resource-group")"
+  [[ -z "$AZURE_RESOURCE_GROUP" || "$AZURE_RESOURCE_GROUP" == "$recorded" ]] \
+    || die "predown recorded $recorded but the environment now targets $AZURE_RESOURCE_GROUP"
+  AZURE_RESOURCE_GROUP="$recorded"
 fi
 [[ -n "$AZURE_SUBSCRIPTION_ID" && -n "$AZURE_RESOURCE_GROUP" ]] || die "no resource group recorded to verify"
 
-for _ in $(seq 1 60); do
+for attempt in $(seq 1 60); do
   # A failed lookup is an error, not "still exists".
   exists="$(az group exists --subscription "$AZURE_SUBSCRIPTION_ID" -n "$AZURE_RESOURCE_GROUP")" \
     || die "could not query resource group $AZURE_RESOURCE_GROUP"
@@ -21,6 +25,6 @@ for _ in $(seq 1 60); do
     rm -f "$STATE/down-resource-group"
     exit 0
   fi
-  sleep 20
+  if [[ "$attempt" -lt 60 ]]; then sleep 20; fi
 done
 die "resource group $AZURE_RESOURCE_GROUP still exists"

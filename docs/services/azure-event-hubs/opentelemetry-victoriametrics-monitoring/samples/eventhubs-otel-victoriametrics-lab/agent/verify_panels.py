@@ -93,12 +93,14 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
                 lambda match: str(variables.get(match.group(1) or match.group(2), match.group(0))),
                 target.get("expr", ""),
             )
+            instant = bool(target.get("instant", False))
             query = {
                 "refId": target.get("refId", "A"),
                 "datasource": {"type": "prometheus", "uid": "victoriametrics"},
                 "expr": expr,
-                "instant": target.get("instant", False),
-                "range": not target.get("instant", False),
+                # Keep both flags as configured: a "Both" target runs an instant and a range query.
+                "instant": instant,
+                "range": bool(target.get("range", not instant)),
                 "intervalMs": 60000,
                 "maxDataPoints": 500,
             }
@@ -117,6 +119,10 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
                     entry["status"] = "pass" if rows and finite else "empty"
             except urllib.error.HTTPError as error:
                 entry.update(status="error", error=f"HTTP {error.code}: {error.read()[:300]!r}")
+            except (ValueError, KeyError, TypeError) as error:
+                # A non-JSON body (JSONDecodeError is a ValueError) or a response without the
+                # expected results is recorded, never raised, like transport errors below.
+                entry.update(status="error", error=f"unexpected response: {error!r}")
             except OSError as error:
                 # URLError (connection, DNS, TLS) and a timeout or reset while reading the body are all
                 # OSError; record them so optional panels still never fail the run.

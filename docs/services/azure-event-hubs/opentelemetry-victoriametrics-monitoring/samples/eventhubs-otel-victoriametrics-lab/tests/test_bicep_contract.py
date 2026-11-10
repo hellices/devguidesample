@@ -177,6 +177,9 @@ def test_compute_enables_workload_identity_and_restricts_public_ports():
     assert "oidcIssuerProfile: { enabled: true }" in text
     assert "workloadIdentity: { enabled: true }" in text
     rules = text[text.index("securityRules: ["):text.index("resource gatewayNic")]
+    # Rules declared as separate child resources would sit outside this inline list.
+    for module in (LAB_ROOT / "infra").rglob("*.bicep"):
+        assert "networkSecurityGroups/securityRules" not in module.read_text(), module.name
     # Plural forms could open more ports or sources without matching the singular checks below.
     for plural in ("destinationPortRanges", "sourceAddressPrefixes"):
         assert plural not in rules, plural
@@ -267,7 +270,8 @@ def _role_assignments(text: str) -> list[tuple[str, str, str]]:
         block = block.split("\n}\n", 1)[0]
         scope = re.search(r"^\s*scope:\s*(\w+)\s*$", block, re.MULTILINE)
         role = re.search(r"roleDefinitions', (\w+)\)", block)
-        principal = re.search(r"principalId:\s*(\w+)Identity\.properties\.principalId", block)
+        principal = re.search(r"^\s*principalId:\s*(\S+)\s*$", block, re.MULTILINE)
+        # An assignment without an explicit scope would land on the whole resource group.
         assert scope and role and principal, block
         assignments.append((scope.group(1), role.group(1), principal.group(1)))
     return assignments
@@ -275,13 +279,40 @@ def _role_assignments(text: str) -> list[tuple[str, str, str]]:
 
 def test_foundation_role_assignments_are_exact():
     # Exact (scope, role, principal) list: a duplicate GUID at a wider scope cannot hide in a set.
+    gateway, consumer = "gatewayIdentity.properties.principalId", "consumerIdentity.properties.principalId"
     assert sorted(_role_assignments(FOUNDATION.read_text())) == sorted([
-        ("acr", "acrPullRoleDefinitionId", "gateway"),
-        ("keyVault", "keyVaultSecretsUserRoleDefinitionId", "gateway"),
-        ("workloadCheckpoints", "storageBlobDataContributorRoleDefinitionId", "consumer"),
-        ("workloadCheckpoints", "storageBlobDataReaderRoleDefinitionId", "gateway"),
-        ("collectorCheckpoints", "storageBlobDataContributorRoleDefinitionId", "gateway"),
+        ("acr", "acrPullRoleDefinitionId", gateway),
+        ("keyVault", "keyVaultSecretsUserRoleDefinitionId", gateway),
+        ("workloadCheckpoints", "storageBlobDataContributorRoleDefinitionId", consumer),
+        ("workloadCheckpoints", "storageBlobDataReaderRoleDefinitionId", gateway),
+        ("collectorCheckpoints", "storageBlobDataContributorRoleDefinitionId", gateway),
     ])
+
+
+def test_messaging_and_compute_role_assignments_are_exact():
+    assert sorted(_role_assignments(MESSAGING.read_text())) == sorted([
+        ("premiumNamespace", "monitoringReaderRoleDefinitionId", "gatewayPrincipalId"),
+        ("workloadHub", "eventHubsDataSenderRoleDefinitionId", "producerPrincipalId"),
+        ("workloadHub", "eventHubsDataReceiverRoleDefinitionId", "consumerPrincipalId"),
+        ("workloadHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
+        ("telemetryHub", "eventHubsDataReceiverRoleDefinitionId", "gatewayPrincipalId"),
+    ])
+    assert sorted(_role_assignments(COMPUTE.read_text())) == sorted([
+        ("acr", "acrPullRoleDefinitionId", "aks.properties.identityProfile.kubeletidentity.objectId"),
+        ("aksSubnet", "networkContributorRoleDefinitionId", "aks.identity.principalId"),
+        ("aks", "aksRbacClusterAdminRoleDefinitionId", "deployerPrincipalId"),
+    ])
+
+
+def test_role_assignment_parser_rejects_a_missing_scope():
+    unscoped = (
+        "resource x 'Microsoft.Authorization/roleAssignments@2022-04-01' = {\n"
+        "  properties: {\n"
+        "    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', r)\n"
+        "    principalId: p\n  }\n}\n"
+    )
+    with pytest.raises(AssertionError):
+        _role_assignments(unscoped)
 
 
 def test_checkpoint_roles_are_container_scoped():
@@ -297,7 +328,7 @@ def test_role_assignment_parser_sees_a_widened_scope():
         "    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', r)\n"
         "    principalId: gatewayIdentity.properties.principalId\n  }\n}\n"
     )
-    assert _role_assignments(widened) == [("storage", "r", "gateway")]
+    assert _role_assignments(widened) == [("storage", "r", "gatewayIdentity.properties.principalId")]
 
 
 def test_event_hubs_region_is_separable_and_zone_redundancy_is_platform_default():

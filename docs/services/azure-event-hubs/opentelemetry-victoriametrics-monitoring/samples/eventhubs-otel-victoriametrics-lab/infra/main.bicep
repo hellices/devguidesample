@@ -12,8 +12,9 @@ param location string = 'koreacentral'
 param eventHubsLocation string = ''
 
 // The preprovision hook fills operatorEgressCidr, grafanaAdminPassword and
-// gatewayAdminSshPublicKey. azd up checks required inputs before it runs hooks, so these
-// parameters default to ''. Without the hook, the empty CIDR and SSH key fail ARM validation.
+// gatewayAdminSshPublicKey and fails if it cannot produce them. azd up checks required inputs
+// before it runs hooks, so these parameters default to ''. That default also rules out
+// @minLength (BCP333), and ARM preflight accepts empty values, so the hook is the guard.
 @description('Single IPv4 CIDR allowed to reach Grafana and the AKS API server.')
 param operatorEgressCidr string = ''
 

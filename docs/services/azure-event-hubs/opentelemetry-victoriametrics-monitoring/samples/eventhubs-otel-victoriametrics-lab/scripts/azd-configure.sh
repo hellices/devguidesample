@@ -43,8 +43,12 @@ fi
 azd_env set AZURE_PRINCIPAL_ID "$PRINCIPAL_ID"
 azd_env set AZURE_PRINCIPAL_TYPE "$PRINCIPAL_TYPE"
 
+# main.bicep cannot reject these values: azd needs a '' default before this hook runs, and Bicep
+# refuses @minLength with that default. So this hook is the guard that they are never empty.
 if [[ -z "$(env_value GRAFANA_ADMIN_PASSWORD)" ]]; then
-  azd_env set GRAFANA_ADMIN_PASSWORD "$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
+  GRAFANA_ADMIN_PASSWORD="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
+  [[ ${#GRAFANA_ADMIN_PASSWORD} -ge 16 ]] || die "could not generate the Grafana admin password"
+  azd_env set GRAFANA_ADMIN_PASSWORD "$GRAFANA_ADMIN_PASSWORD"
 fi
 
 KEY_DIR="$(state_dir)"
@@ -53,5 +57,7 @@ if [[ ! -f "$KEY_DIR/gateway_ed25519" ]]; then
 elif [[ ! -s "$KEY_DIR/gateway_ed25519.pub" ]]; then
   ssh-keygen -y -f "$KEY_DIR/gateway_ed25519" >"$KEY_DIR/gateway_ed25519.pub"
 fi
-azd_env set GATEWAY_ADMIN_SSH_PUBLIC_KEY "$(<"$KEY_DIR/gateway_ed25519.pub")"
+GATEWAY_ADMIN_SSH_PUBLIC_KEY="$(<"$KEY_DIR/gateway_ed25519.pub")"
+[[ "$GATEWAY_ADMIN_SSH_PUBLIC_KEY" == "ssh-ed25519 "* ]] || die "the gateway SSH public key is missing or invalid"
+azd_env set GATEWAY_ADMIN_SSH_PUBLIC_KEY "$GATEWAY_ADMIN_SSH_PUBLIC_KEY"
 log "preprovision checks passed."

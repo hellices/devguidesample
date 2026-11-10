@@ -11,7 +11,14 @@ command -v docker >/dev/null
 command -v az >/dev/null
 
 install -d -m 0755 "$APP_DIR"
-echo "$BUNDLE_B64" | base64 -d | tar -xz -C "$APP_DIR"
+# Unpack into a fresh directory first, then replace every bundle-managed file so files removed
+# from a newer bundle do not linger. Only runtime state (secrets/, tls/) survives a rerun.
+BUNDLE_DIR="$(mktemp -d)"
+trap 'rm -rf "$BUNDLE_DIR"' EXIT
+echo "$BUNDLE_B64" | base64 -d | tar -xz -C "$BUNDLE_DIR"
+[ -s "$BUNDLE_DIR/.env" ] && [ -s "$BUNDLE_DIR/compose.yaml" ] || { echo "GATEWAY_STEP_FAILED bundle" >&2; exit 1; }
+find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec rm -rf {} +
+cp -a "$BUNDLE_DIR/." "$APP_DIR/"
 cd "$APP_DIR"
 set -a; . ./.env; set +a
 
@@ -59,10 +66,17 @@ if [ "$CERT_RENEWED" = true ]; then
   docker compose restart grafana >/dev/null
 fi
 
+# The fallback exporter has no HTTP check here, so require its container to be running.
+fallback_ready() {
+  [ "${COMPOSE_PROFILE:-}" != "fallback" ] \
+    || docker compose --profile fallback ps --status running --services 2>/dev/null | grep -qx azure-metrics-exporter
+}
+
 for _ in $(seq 1 30); do
   if curl -fsS http://127.0.0.1:13133/ >/dev/null \
     && curl -fsS --cacert tls/grafana.crt --resolve "${GATEWAY_PUBLIC_IP}:3000:127.0.0.1" \
-      "https://${GATEWAY_PUBLIC_IP}:3000/api/health" >/dev/null; then
+      "https://${GATEWAY_PUBLIC_IP}:3000/api/health" >/dev/null \
+    && fallback_ready; then
     echo "GATEWAY_READY"
     docker compose ps --format '{{.Service}} {{.State}}'
     # Public certificate only; the private key never leaves the VM.

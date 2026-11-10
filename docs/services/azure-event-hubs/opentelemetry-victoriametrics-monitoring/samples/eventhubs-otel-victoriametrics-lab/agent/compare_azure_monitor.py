@@ -114,6 +114,9 @@ def main() -> None:
     parser.add_argument("--vm-url", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    # The comparison is per PT1M bin, so both ends must be whole UTC minutes.
+    if args.from_ms >= args.to_ms or args.from_ms % 60000 or args.to_ms % 60000:
+        parser.error("--from-ms and --to-ms must be whole minutes (multiples of 60000) with from < to")
 
     def fetch(path: str, params: dict) -> str:
         body = urllib.parse.urlencode(params).encode()

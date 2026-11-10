@@ -81,7 +81,9 @@ kube() {
   kubectl --kubeconfig "$(state_dir)/kubeconfig" "$@"
 }
 
-# Runs a bash script on the gateway VM through Run Command and prints stdout.
+# Runs a bash script on the gateway VM through Run Command and prints the Run Command message,
+# which holds both the [stdout] and [stderr] sections. Callers read only explicit markers from
+# it (GATEWAY_READY, GRAFANA_CERT_BEGIN/END), never the whole message as data.
 # No inbound SSH is opened; the script and its parameters travel through the ARM control plane.
 gateway_run() {
   local script_file="$1"
