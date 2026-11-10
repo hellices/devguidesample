@@ -117,6 +117,26 @@ tier의 공칭 밀도는 tier 이름보다 조금 높은 20.8·41.7 MB/s per TiB
 - 가격은 tier별 GiB당 시간·월 단가의 종량제입니다. 기준일의 가격 페이지에는 40·125·
   250·500 tier만 표시되어 20 tier 가격은 확인하지 못했습니다.
 
+### AMLFS 20: 대용량·다중 MDS용 20 MB/s per TiB SKU { #amlfs-20 }
+
+"AMLFS 20"은 Lustre 버전이 아니라 **`AMLFS-Durable-Premium-20` SKU**, 즉 위 표의
+20 MB/s per TiB tier를 가리킵니다. Microsoft는 2025-11-18 Tech Community 블로그
+[Announcing the Public Preview of AMLFS 20](https://techcommunity.microsoft.com/blog/azurehighperformancecomputingblog/announcing-the-public-preview-of-amlfs-20-azure-managed-lustre-new-sku-for-massi/4470665)에서
+이 SKU를 public preview로 발표했습니다. 블로그가 밝힌 특징은 다음과 같습니다.
+
+- 단일 namespace 최대 25 PiB, 총 대역폭 최대 512 GB/s
+- 프로비저닝 용량 5 PiB마다 MDS를 하나씩 추가하는 다중 MDS 구조로, mdtest에서
+  metadata 연산이 5배 이상 향상
+- 최대 200억 inode
+- 이전에는 12.5 PiB를 넘는 데이터셋에 여러 파일 시스템이 필요했던 부분을 단일 파일
+  시스템으로 대체
+- 초기 사용은 신청 양식으로 접수
+
+TiB당 처리량이 가장 낮은 대신 용량 상한이 가장 높아, 대역폭보다 데이터셋 크기와 파일
+수가 큰 AI 데이터 준비·대규모 HPC 데이터셋에 맞춘 SKU입니다. Learn의 tier 표에서 20
+tier의 Blob 미통합 최대 25,632 TiB와 MDT 추가 간격 5,120 TiB(5 PiB)는 블로그의
+25 PiB·5 PiB당 MDS와 일치합니다.
+
 ## Blob Storage 통합: Lustre HSM 기반 import·export { #blob-hsm }
 
 Blob 통합은 **Lustre HSM을 서비스가 대신 구성한 기능**입니다. 오픈 소스 Lustre에서
@@ -207,6 +227,11 @@ mount하는 절차입니다. 따라서 AMLFS를 원본 저장소가 아니라 **
 - auto-import·auto-export는 preview 표시가 없지만 GA라고 명시된 문구도 찾지 못했습니다.
 - Resource Manager 템플릿 문서는 SKU 표에 20 tier를 포함하지만 허용 SKU 이름 목록에는
   빠져 있어 문서 내부가 일치하지 않습니다.
+- **20 tier(AMLFS 20)의 preview·GA 상태**: 블로그는 2025-11-18에 public preview로
+  발표했고, 기준일의 Learn tier 표는 preview 표시 없이 20 tier를 나열합니다. 반면 가격
+  페이지, Resource Manager 템플릿의 허용 SKU 목록, Azure Lustre CSI driver v0.6.0의
+  동적 프로비저닝 허용 `sku-name` 목록에는 20 tier가 없습니다. GA 여부와 구독별 사용
+  가능 여부는 배포 전에 확인해야 합니다.
 - Learn은 MDT 추가 간격(MDT 단위)과 Blob 통합 한도(MDS 단위)를 다른 단위로 설명하며,
   정확한 용량 경계에서 몇 개의 MDS·MDT가 배치되는지는 명시하지 않습니다. 배포 후 MDT
   수는 mount한 client에서 `lfs df -h`로 확인합니다.

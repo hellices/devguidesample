@@ -104,7 +104,7 @@ backend 파일 시스템으로는 성능을 강화한 ext4인 **ldiskfs** 또는
 
 ## I/O 경로: metadata 조회와 OSS 직접 데이터 전송 { #io-path }
 
-client는 파일의 위치 정보만 MDS에서 받고, 실제 데이터는 OSS와 직접 주고받습니다.
+client는 파일의 위치 정보를 MDS에서 받고, OST에 있는 데이터는 OSS와 직접 주고받습니다.
 
 1. mount 시 client는 MGS에서 파일 시스템 구성을 받습니다.
 2. 파일을 열면 MDT object의 확장 속성인 **layout EA**를 가져옵니다. layout은 파일이

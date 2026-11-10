@@ -45,8 +45,8 @@ official_sources:
 이 주제의 결론은 세 단계로 요약됩니다.
 
 1. **Lustre는 metadata와 data 경로를 나눈 병렬 파일 시스템입니다.** client는 MDS에서
-   파일 layout만 받고 여러 OSS와 직접 병렬 I/O를 하므로 OSS·OST를 더하면 총 대역폭이
-   늘어납니다. 그 대신 데이터 보호는 주로 하위 RAID에(파일 단위 mirror인 FLR은 선택
+   파일 layout을 받은 뒤 OST에 있는 데이터를 여러 OSS와 직접 병렬로 주고받으므로
+   OSS·OST를 더하면 총 대역폭이 늘어납니다(DoM으로 MDT에 둔 작은 파일 구간은 MDS가 처리). 그 대신 데이터 보호는 주로 하위 RAID에(파일 단위 mirror인 FLR은 선택
    기능), HA는 Pacemaker 같은 외부 도구에 맡겨야 해서 직접 운영하기 어렵습니다.
 2. **Azure Managed Lustre(AMLFS)는 서버 계층 운영을 서비스로 바꾸고 Blob Storage를
    HSM 백엔드로 붙입니다.** 사용자는 MB/s per TiB tier와 용량만 고르고, 유지 관리 창·
