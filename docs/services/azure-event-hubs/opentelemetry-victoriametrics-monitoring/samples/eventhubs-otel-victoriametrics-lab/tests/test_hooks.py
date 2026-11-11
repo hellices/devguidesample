@@ -23,7 +23,7 @@ def _joined_commands(text: str) -> list[str]:
 
 
 def test_hooks_exist_and_are_executable():
-    for name in (*HOOKS, "run-scenario.sh", "vm-query.sh", "managed-grafana.sh"):
+    for name in (*HOOKS, "run-scenario.sh", "run-lag-cycles.sh", "vm-query.sh", "managed-grafana.sh"):
         path = SCRIPTS / name
         assert path.is_file(), name
         assert os.access(path, os.X_OK), name
@@ -506,7 +506,8 @@ def test_vm_query_cleans_up_a_forward_started_on_a_previous_port(fake_forward):
 
 def test_evidence_is_kept_per_environment():
     text = (SCRIPTS / "lib.sh").read_text()
-    assert 'local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"' in text
+    # One directory per environment under the evidence root (overridable only for tests).
+    assert 'local dir="${LAB_EVIDENCE_ROOT:-$LAB_ROOT/evidence}/$(env_value AZURE_ENV_NAME)"' in text
 
 
 def _gateway_bundle(profile="default"):
@@ -1113,3 +1114,119 @@ def test_managed_grafana_is_wired_only_when_enabled_and_approves_only_its_own_co
     # The data source keeps the Gateway Grafana uid so the agent dashboard works unchanged.
     assert '"uid": "victoriametrics"' in text and 'http://{sys.argv[1]}:8428' in text
     assert 'die "managed private endpoint $MPE_NAME was not approved' in text
+
+
+def _run_lag_cycles(bin_dir, tmp_path, **settings):
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path), "AZURE_ENV_NAME": "unit",
+           "LAB_STATE_ROOT": str(tmp_path / "state"), "LAB_EVIDENCE_ROOT": str(tmp_path / "evidence"),
+           **{key: str(value) for key, value in settings.items()}}
+    return subprocess.run(["bash", str(SCRIPTS / "run-lag-cycles.sh")], env=env,
+                          capture_output=True, text=True, timeout=60)
+
+
+def test_lag_cycles_alternate_load_and_drain_and_always_stop_the_producer(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    write("kubectl", "exit 0")
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    assert result.returncode == 0, result.stderr
+    events = [line.split(" ", 1)[1] for line in (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text().splitlines()]
+    assert events[0].startswith("start: 5s total, load 1s") and events[-1] == "stopped (producer 0)"
+    assert 'DURATION_SECONDS="${DURATION_SECONDS:-15000}"' in (SCRIPTS / "run-lag-cycles.sh").read_text()
+    cycles = [e for e in events if e.startswith("cycle ")]
+    # Every cycle is load_start -> producer_stop (-> drain_end), in order, and a load phase never
+    # starts unless it fits before the deadline.
+    assert cycles[:3] == ["cycle 1 load_start", "cycle 1 producer_stop", "cycle 1 drain_end"]
+    assert 2 <= sum(e.endswith("load_start") for e in cycles) <= 3
+    scales = [c for c in log.read_text().splitlines() if "deploy/eventhubs-producer --replicas" in c]
+    assert scales[-1].endswith("deploy/eventhubs-producer --replicas 0")
+    assert sum(c.endswith("--replicas 1") for c in scales) == sum(e.endswith("load_start") for e in cycles)
+    assert all("--kubeconfig" in c for c in log.read_text().splitlines() if c.startswith("kubectl"))
+
+
+def test_lag_cycles_stop_the_producer_when_interrupted_by_an_error(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    # Scaling the producer up succeeds, then the cluster stops answering mid-cycle.
+    write("kubectl", 'if [[ "$*" == *"--replicas 0"* && -f "$HOME/up" ]]; then rm "$HOME/up"; exit 1; fi; '
+                     '[[ "$*" == *"--replicas 1"*eventhubs-producer* || "$*" == *eventhubs-producer*"--replicas 1"* ]] '
+                     '&& [[ "$*" == *producer* ]] && touch "$HOME/up"; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    assert result.returncode != 0
+    scales = [c for c in log.read_text().splitlines() if "eventhubs-producer --replicas" in c]
+    # The failed stop is retried by the exit trap.
+    assert scales[-1].endswith("eventhubs-producer --replicas 0") and scales.count(scales[-1]) >= 2
+
+
+def test_lag_cycles_never_record_a_stop_that_failed(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    # The producer starts, then every scale-down is rejected.
+    write("kubectl", 'if [[ "$*" == *"--replicas 0"* && -f "$HOME/up" ]]; then exit 1; fi; '
+                     'if [[ "$*" == *eventhubs-producer*"--replicas 1"* ]]; then touch "$HOME/up"; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    events = (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
+    assert result.returncode != 0
+    assert "stopped (producer 0)" not in events
+    assert events.rstrip().endswith("stop failed (producer state unknown)")
+    assert "could not stop the producer" in result.stderr
+
+
+@pytest.mark.parametrize("name", ["DURATION_SECONDS", "LOAD_SECONDS", "DRAIN_SECONDS"])
+@pytest.mark.parametrize("value", ["0", "-1", "1.5", "ten"])
+def test_lag_cycles_reject_a_non_positive_duration(fake_bin, tmp_path, name, value):
+    bin_dir, log, write = fake_bin
+    write("kubectl", "exit 0")
+
+    result = _run_lag_cycles(bin_dir, tmp_path, **{name: value})
+
+    assert result.returncode != 0 and "positive integers" in result.stderr
+    # Rejected before any cluster call.
+    assert not log.exists() or "kubectl" not in log.read_text()
+
+
+def test_lag_cycles_record_boundaries_only_after_the_producer_is_ready_or_gone():
+    text = (SCRIPTS / "run-lag-cycles.sh").read_text()
+    loop = text[text.index("while (( $(date +%s) + LOAD_SECONDS <= END )); do"):]
+    # load_start follows the producer rollout and a fresh deadline check.
+    assert (loop.index("kube scale -n \"$NS\" deploy/eventhubs-producer --replicas 1")
+            < loop.index("kube rollout status -n \"$NS\" deploy/eventhubs-producer")
+            < loop.index("if (( $(date +%s) + LOAD_SECONDS > END )); then")
+            < loop.index('record "cycle $cycle load_start"'))
+    # producer_stop follows a stop that waited for, and verified, Pod deletion.
+    stop = text[text.index("stop_producer() {"):text.index("\n}\n", text.index("stop_producer() {"))]
+    assert "--for=delete pod -l app=eventhubs-producer" in stop
+    assert 'remaining="$(kube get pod -n "$NS" -l app=eventhubs-producer -o name)" || return 1' in stop
+    assert '[[ -z "$remaining" ]]' in stop
+    assert loop.index('stop_producer || die') < loop.index('record "cycle $cycle producer_stop"')
+    # The consumer configuration is rolled out before the first cycle.
+    assert text.index("kube rollout status -n \"$NS\" deploy/eventhubs-slow-consumer") < text.index("while ((")
+
+
+def test_lag_cycles_do_not_record_a_cycle_for_a_producer_that_never_starts(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    write("kubectl", 'if [[ "$*" == *"rollout status"*eventhubs-producer* ]]; then exit 1; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    assert result.returncode != 0 and "producer did not become ready" in result.stderr
+    events = (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
+    assert "load_start" not in events and events.rstrip().endswith("stopped (producer 0)")
+    # The exit trap scales the producer the script started back to zero.
+    assert [c for c in log.read_text().splitlines() if "eventhubs-producer --replicas" in c][-1].endswith("--replicas 0")
+
+
+def test_lag_cycles_fail_when_a_producer_pod_remains(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    # The scale-down is accepted but a producer Pod is still listed afterwards.
+    write("kubectl", 'if [[ "$*" == *"get pod"*eventhubs-producer* && -f "$HOME/up" ]]; then '
+                     'echo pod/eventhubs-producer-1; exit 0; fi; '
+                     'if [[ "$*" == *eventhubs-producer*"--replicas 1"* ]]; then touch "$HOME/up"; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    assert result.returncode != 0 and "still running after the load phase" in result.stderr
+    assert "producer_stop" not in (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()

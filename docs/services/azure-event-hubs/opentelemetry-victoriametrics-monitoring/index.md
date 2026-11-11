@@ -112,8 +112,10 @@ Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 생깁�
   `Microsoft.EventHub/clusters`의 `CPU`·`AvailableMemory`(Role별)로만 나옵니다. Learn은
   `CPU` 최댓값이 70%에 가까워지면 CU 확장을 검토하라고 안내합니다.
 - **②는 분 bin을 한 번만 읽습니다.** 그 조회 시점에 Azure Monitor에 없던 bin은 다시 채워지지
-  않습니다. 83분 동안 namespace 지표는 0–4개(최대 5%), cluster 지표는 1–9개(최대 11%)가
-  빠졌습니다. 정확한 구간 합계가 필요하면 Azure Monitor에서 그 구간을 직접 조회합니다. ④가 이
+  않습니다. 첫 Dedicated 환경에서는 83분 동안 namespace 지표 0–4개(최대 5%), cluster 지표
+  1–9개(최대 11%)가 빠졌지만, 다른 환경에서 [4시간 반복 부하](lab/index.md#lag-cycles)를 249분
+  동안 대조했을 때는 하나도 빠지지 않았습니다. 누락은 간헐적이므로, 정확한 구간 합계가 필요하면
+  Azure Monitor에서 그 구간을 직접 조회합니다. ④가 이
   분을 채운 경우도 있었지만, 이것만으로 지연이 길고 시작 시점을 알 수 없는 두 번째 경로를 둘
   이유는 되지 않습니다.
 - **Prometheus exporter 중심으로 운영하면 ③**이 같은 데이터를 줍니다. 이전 Premium 환경에서

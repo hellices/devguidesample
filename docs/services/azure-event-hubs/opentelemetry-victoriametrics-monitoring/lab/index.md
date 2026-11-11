@@ -1,6 +1,6 @@
 ---
 title: Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
-description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, Event Hubs 리소스 로그의 지표화, Azure Managed Grafana 연결, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
+description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, 4시간 반복 lag 부하, Event Hubs 리소스 로그의 지표화, Azure Managed Grafana 연결, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
 document_type: lab
 services:
 - azure-event-hubs
@@ -110,7 +110,9 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 재배포를 확인했으며, fallback 전환과 VMSingle 보존 확인은 첫 Premium 환경에서
 실행했습니다. 같은 날 13:46 UTC부터는 두 번째 Dedicated 환경(`ehotel-ded2`)에서
 [Event Hubs 리소스 로그의 지표화](#resource-logs)와 선택 항목인
-[Azure Managed Grafana](#managed-grafana)를 추가로 검증했습니다.
+[Azure Managed Grafana](#managed-grafana)를 추가로 검증했습니다. 다음 날에는 지표용
+Diagnostic Settings를 기본으로 끈 세 번째 Dedicated 환경(`ehotel-ded3`)을 배포해
+[4시간 반복 lag 부하](#lag-cycles)를 측정했습니다.
 
 ## 실습 결과물: 배포·시나리오·대시보드·정리 증거
 
@@ -124,6 +126,7 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 | 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–201초, 83분 동안 지표별 분 bin 누락 0–9개 |
 | fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(Premium 첫 환경) |
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
+| 반복 부하 | `./scripts/run-lag-cycles.sh` | 10회 모두 lag 정점 10,880–11,140건, producer 중지 6분 안팎에 0. 249분 동안 Metrics API 분 bin 누락 0(`ehotel-ded3`) |
 | 리소스 로그 | `EVENTHUBS_LOGS=Enabled`(기본값), 시나리오 두 번 | 로그를 끈 구간은 로그 패널 6개 모두 수신 없음, 켠 구간은 26분 동안 레코드 1,469건과 6개 패널 통과(`ehotel-ded2`) |
 | Managed Grafana | `MANAGED_GRAFANA=Enabled`, `azd provision` | Private Link Service·managed private endpoint 승인·data source까지 hook 1분 30초. 같은 대시보드 37개 query 중 35개 통과, Gateway Grafana와 같은 결과(`ehotel-ded2`) |
 | 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 두 환경 모두 resource group 삭제 확인 |
@@ -311,6 +314,62 @@ partition별 peak 10,700–11,040건, 회복 5분 33초–6분이었습니다. �
 to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 없으면 port-forward를
 다시 열고, `run-scenario.sh`는 조회할 때마다 이를 호출합니다.
 
+## 반복 lag 부하: 4시간 10회 { #lag-cycles }
+
+한 번의 시나리오가 우연이 아닌지 확인하려고, 같은 부하를 4시간 동안 10번 반복했습니다.
+`run-lag-cycles.sh`는 producer를 10분 동안 켜고(200 events/s, 1 KiB) 15분 동안 꺼서 consumer가
+따라잡게 하는 주기를 반복하며, 각 경계를 `evidence/<env>/lag-cycles.log`에 남깁니다. 어떤
+이유로 끝나도 producer는 0 replica로 되돌립니다. `load_start`는 producer rollout이 끝난 뒤,
+`producer_stop`은 producer Pod가 모두 사라진 것을 확인한 뒤 기록합니다. 아래 측정은 이
+확인을 넣기 전 버전으로 실행해 scale 요청 시각을 경계로 기록했으므로, 표의 회복 시간에는
+Pod가 멈추기까지의 몇 초가 포함됩니다.
+
+```bash
+./scripts/run-lag-cycles.sh   # 기본 DURATION_SECONDS=15000(25분 주기 10회), LOAD_SECONDS=600, DRAIN_SECONDS=900
+```
+
+세 번째 Dedicated 환경(`ehotel-ded3`, 지표용 Diagnostic Settings는 기본값대로 꺼짐)에서
+2026-11-11 00:29–04:29 UTC에 `DURATION_SECONDS=14400`으로 실행했습니다. 이 값에서는 10번째
+부하 뒤 소진이 4분 17초에 잘리므로, 그 회차의 lag가 0이 되는 시점(04:31:15)은 loop가 끝난 뒤에도
+계속 실행된 consumer와 lag exporter로 관측했습니다. 소진까지 10회를 모두 loop 안에서 마치려면
+기본값 15,000초로 실행합니다. 10회 모두 같은 모양으로 lag가 쌓였다가 0으로 돌아갔습니다.
+
+![4시간 동안 반복한 부하의 Grafana 대시보드. CU당 분당 message·byte 막대가 25분 간격으로 10번 나타나고, 4시간 전체에서 partition별 최댓값 11,000–11,140(회차별 최대 partition 정점은 10,880–11,140), partition 4개를 누적한 lag 영역이 10번 올랐다가 0으로 내려감, lag 수집 OK, 모든 partition에 checkpoint 있음](../images/lag-cycles-throughput-lag.png)
+
+| 회차 | 부하 시작(UTC) | lag 정점(최대 partition) | producer 중지 → lag 0 | ConsumerLag 로그 정점 | 로그 정점 시차 | Metrics API 수신 | cluster CPU 최대 | 로그 도착 지연(중앙값) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 00:29 | 10,900 | 6분 12초 | 10,500 | 91초 | 119,800 | 10.5% | 105초 |
+| 2 | 00:54 | 11,000 | 6분 21초 | 10,500 | 112초 | 119,600 | 9.9% | 105초 |
+| 3 | 01:19 | 10,920 | 6분 17초 | 10,600 | 116초 | 119,800 | 10.3% | 98초 |
+| 4 | 01:44 | 10,980 | 5분 59초 | 10,500 | 105초 | 119,800 | 11.6% | 101초 |
+| 5 | 02:09 | 11,020 | 6분 10초 | 10,700 | 108초 | 119,600 | 11.5% | 97초 |
+| 6 | 02:34 | 11,120 | 6분 22초 | 10,600 | 112초 | 119,800 | 7.0% | 64초 |
+| 7 | 02:59 | 10,960 | 6분 18초 | 10,600 | 100초 | 119,600 | 12.2% | 66초 |
+| 8 | 03:24 | 11,140 | 6분 00초 | 10,500 | 104초 | 119,600 | 8.8% | 87초 |
+| 9 | 03:50 | 10,880 | 6분 10초 | 10,400 | 122초 | 119,600 | 9.8% | 87초 |
+| 10 | 04:15 | 11,060 | 6분 07초 | 10,300 | 111초 | 119,800 | 11.2% | 92초 |
+
+- **lag는 consumer 처리 속도로 정해집니다.** 정점은 10,880–11,140건, producer를
+  멈춘 뒤 0이 될 때까지 5분 59초–6분 22초로 10회가 거의 같았습니다. 단일 시나리오와 이전
+  Premium 환경의 결과와도 같은 범위입니다.
+- **Metrics API는 4시간 동안 분 bin을 하나도 놓치지 않았습니다.** 00:29–04:38의 249분 동안
+  Azure Monitor 직접 조회와 remote write를 분별로 대조해 `IncomingMessages`·`OutgoingMessages`
+  1,197,000건, `IncomingRequests` 15,218건, `ThrottledRequests` 0건이 모든 분에서 일치했습니다.
+  cluster `CPU`·`AvailableMemory`도 Backend·Gateway Role 모두 249분이 빠짐없이 저장됐습니다.
+  회차별 수신량(119,600–119,800건)의 합도 Azure Monitor 합계와 같습니다. 이전 환경에서 본
+  [분 bin 누락](#gaps)은 이번 4시간에는 나타나지 않았으므로, 늘 생기는 손실이 아니라 간헐적인
+  현상으로 봅니다.
+- **ConsumerLag 로그는 checkpoint lag를 1.5–2분 늦게, 조금 낮게 따라갑니다.** 정점은
+  10,300–10,700건으로 lag exporter보다 3–7% 낮았고, 정점 시각은 91–122초 늦었습니다. 로그 도착
+  지연의 회차별 중앙값은 64–105초였습니다.
+- **1 CU는 이 부하에 여유가 큽니다.** cluster `CPU` Role 최댓값은 7.0–12.2%였고 throttle은
+  없었습니다.
+
+![같은 4시간의 리소스 로그 행. 리소스 로그 레코드 14,170건, checkpoint lag(초록)와 ConsumerLag 로그(노랑)가 10번 같은 모양으로 오르내리며 로그 선이 1–2분 늦음, 부하 구간마다 SendMessage·ReceiveMessage가 늘어나는 분당 runtime audit operation 막대](../images/lag-cycles-resource-logs.png)
+
+같은 구간을 scrape 경로로 저장한 `IncomingMessages` 합계는 2,394,000건으로 원본의 2.0배였습니다.
+30초 scrape가 같은 분 값을 두 번 저장하기 때문이며, 구간 합계는 remote write 경로로 계산합니다.
+
 ## agent 대시보드 workflow와 Azure Monitor 대조
 
 `collect-evidence.sh`는 시나리오 구간을 분 경계에 맞춘 절대 시간으로 다음을 실행합니다.
@@ -449,6 +508,9 @@ series로 오지 않는 `IncomingMessages`·`OutgoingMessages`는 값이 있는 
   경로는 cluster CPU의 Metrics API 경로가 비어 있던 09:09·09:16에도 값을 받았습니다.
 - **evidence는 누락을 숨기지 않습니다.** `collect-evidence.sh`는 누락한 분을
   `remote_write_gaps`에 남기고 경고를 출력합니다.
+- **누락은 간헐적입니다.** 세 번째 Dedicated 환경에서 [4시간 반복 부하](#lag-cycles)를 249분 동안
+  같은 방식으로 대조했을 때는 위 namespace 지표 4개와 cluster `CPU`·`AvailableMemory` 모두 누락이
+  없었습니다.
 
 ## 지연 측정: Azure Monitor + OpenTelemetry Collector { #latency }
 
