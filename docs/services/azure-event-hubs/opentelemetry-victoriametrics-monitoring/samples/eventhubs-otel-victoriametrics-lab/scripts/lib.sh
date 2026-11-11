@@ -126,13 +126,16 @@ resolve_platform_metrics() {
     # The fallback exporter is another platform metrics copy; this mode promises logs and self metrics only.
     [[ "${ENABLE_FALLBACK_EXPORTER:-false}" != "true" ]] \
       || die "PLATFORM_METRICS=AzureMonitor does not collect platform metrics; unset ENABLE_FALLBACK_EXPORTER"
-    ENABLE_API_RECEIVER=false
+    COLLECTOR_API_RECEIVER=false
     ENABLE_LAG_RECEIVER=false
     LAG_EXPORTER_SCALE=0
     # A metrics Diagnostic Settings hub (EVENTHUBS_DIAGNOSTIC_METRICS=Enabled) stays deployed, but the
     # Collector does not read it in this mode.
     METRICS_HUB=""
   else
+    # ENABLE_API_RECEIVER stays the caller's input (false switches to the fallback exporter); the result
+    # goes to its own variable so every call computes complete settings, whatever the previous call set.
+    COLLECTOR_API_RECEIVER="${ENABLE_API_RECEIVER:-true}"
     ENABLE_LAG_RECEIVER=true
     LAG_EXPORTER_SCALE=1
     METRICS_HUB="$(env_value TELEMETRY_EVENTHUB_NAME)"

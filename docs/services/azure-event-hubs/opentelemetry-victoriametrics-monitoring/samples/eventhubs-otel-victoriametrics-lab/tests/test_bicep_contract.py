@@ -598,9 +598,24 @@ def test_managed_grafana_identity_reads_only_the_charted_resources():
     # Data flow: the workspace principal leaves grafana.bicep only through this one reference, which feeds
     # grafanaReader; grafana-reader.bicep exposes no outputs and declares no modules, so the principal
     # cannot travel on under another parameter name. Its only role assignments are the two above.
-    assert main.count("grafana.?outputs.principalId") == 1
-    assert "grafana.outputs.principalId" not in main and "grafanaReader.outputs" not in main
-    assert "grafanaReader.?outputs" not in main
+    # Every reference to the grafana module, in any access form (., .?, ['x'], aliases built from it),
+    # is located; principalId may appear once and only inside the grafanaReader module, and every
+    # other reference must be one of the top-level outputs.
+    reader_block = main[main.index("module grafanaReader"):]
+    reader_block = reader_block[:reader_block.index("\n}\n")]
+    # The module declaration (`module grafana '...'`), its file path and 'grafana-*' names are not references.
+    references = list(re.finditer(r"(?<!modules/)\bgrafana\b(?!\s*'|-)", main))
+    accesses = list(re.finditer(
+        r"\bgrafana\s*(?:\.\?|\.)\s*outputs\s*(?:\.\s*(\w+)|\[\s*'(\w+)'\s*\])", main))
+    assert len(references) == len(accesses), "grafana is referenced other than through a named output"
+    principal = [a for a in accesses if (a.group(1) or a.group(2)) == "principalId"]
+    assert len(principal) == 1 and principal[0].group(0) in reader_block
+    for access in accesses:
+        if access in principal:
+            continue
+        line = main[main.rfind("\n", 0, access.start()) + 1:main.find("\n", access.start())]
+        assert re.match(r"^output MANAGED_GRAFANA_(NAME|ENDPOINT) string = ", line), line
+    assert not re.search(r"\bgrafanaReader\s*(?:\.\?|\.)\s*outputs", main)
     assert not re.search(r"(?m)^\s*(output|module)\s", reader)
     assert not re.search(r"(?m)^\s*module\s", _code(GRAFANA.read_text()))
     assert "Microsoft.Authorization/roleAssignments" not in _code(GRAFANA.read_text())

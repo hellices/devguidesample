@@ -1130,12 +1130,13 @@ def test_platform_metrics_azure_monitor_keeps_only_the_event_hub_receiver():
     assert re.findall(r"(?m)^resolve_platform_metrics$", post) == ["resolve_platform_metrics"]
     # Heredoc bodies are file contents written to the bundle, not shell assignments.
     shell = re.sub(r"(?ms)<<ENV\n.*?^ENV$", "<<ENV", post)
-    assert "ENABLE_API_RECEIVER=${ENABLE_API_RECEIVER:-true}" in post and "<<ENV" in shell
-    assert not re.search(r"(?m)^\s*(ENABLE_API_RECEIVER|ENABLE_LAG_RECEIVER|LAG_EXPORTER_SCALE|METRICS_HUB)=", shell)
+    assert "ENABLE_API_RECEIVER=$COLLECTOR_API_RECEIVER" in post and "<<ENV" in shell
+    assert not re.search(
+        r"(?m)^\s*(COLLECTOR_API_RECEIVER|ENABLE_API_RECEIVER|ENABLE_LAG_RECEIVER|LAG_EXPORTER_SCALE|METRICS_HUB)=", shell)
     assert post.index("resolve_platform_metrics") < post.index("collector.env")
     # Lag comes from the ConsumerLag resource log, so the logs hub is mandatory in this mode.
     assert '[[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]]' in mode
-    assert "ENABLE_API_RECEIVER=false" in mode and "ENABLE_LAG_RECEIVER=false" in mode
+    assert "COLLECTOR_API_RECEIVER=false" in mode and "ENABLE_LAG_RECEIVER=false" in mode
     assert "LAG_EXPORTER_SCALE=0" in mode
     assert "ENABLE_LAG_RECEIVER=$ENABLE_LAG_RECEIVER" in post and "LAG_EXPORTER_SCALE=$LAG_EXPORTER_SCALE" in post
     assert "scale: ${LAG_EXPORTER_SCALE:-1}" in compose
@@ -1170,12 +1171,14 @@ def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
 
 
 
-def _run_platform_mode(fake_bin, tmp_path, **env):
+PRINT_MODE = 'echo "API=$COLLECTOR_API_RECEIVER LAG=$ENABLE_LAG_RECEIVER SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"'
+
+
+def _run_platform_mode(fake_bin, tmp_path, script="resolve_platform_metrics; " + PRINT_MODE, **env):
     bin_dir, _, write = fake_bin
     write("azd", "exit 1")  # no azd env value: only the process environment counts
     # The same function postprovision calls, not a copy of its text.
-    harness = (f'source "{SCRIPTS / "lib.sh"}"; resolve_platform_metrics; '
-               'echo "API=${ENABLE_API_RECEIVER:-} LAG=$ENABLE_LAG_RECEIVER SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"')
+    harness = f'source "{SCRIPTS / "lib.sh"}"; {script}'
     return subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60,
                           env={"PATH": f"{bin_dir}:/usr/bin:/bin", "AZURE_ENV_NAME": "unit", **env})
 
@@ -1197,4 +1200,19 @@ def test_platform_mode_sets_collector_inputs(fake_bin, tmp_path):
     assert direct.stdout.strip() == "API=false LAG=false SCALE=0 HUB="
     collector = _run_platform_mode(fake_bin, tmp_path, TELEMETRY_EVENTHUB_NAME="platform-metrics")
     assert collector.returncode == 0, collector.stderr
-    assert collector.stdout.strip() == "API= LAG=true SCALE=1 HUB=platform-metrics"
+    assert collector.stdout.strip() == "API=true LAG=true SCALE=1 HUB=platform-metrics"
+    # The fallback switch (ENABLE_API_RECEIVER=false) still reaches the Collector in its own mode.
+    fallback = _run_platform_mode(fake_bin, tmp_path, ENABLE_API_RECEIVER="false")
+    assert fallback.returncode == 0, fallback.stderr
+    assert fallback.stdout.strip().startswith("API=false LAG=true SCALE=1")
+
+
+def test_platform_mode_is_complete_on_every_call(fake_bin, tmp_path):
+    # Resolving AzureMonitor and then Collector in one shell must not leak the first call's settings.
+    script = ("PLATFORM_METRICS=AzureMonitor resolve_platform_metrics; " + PRINT_MODE +
+              "; PLATFORM_METRICS=Collector resolve_platform_metrics; " + PRINT_MODE)
+    result = _run_platform_mode(fake_bin, tmp_path, script=script, TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs",
+                                TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["API=false LAG=false SCALE=0 HUB=",
+                                          "API=true LAG=true SCALE=1 HUB=platform-metrics"]
