@@ -132,6 +132,8 @@ def test_panels_do_not_overlap():
     occupied = set()
     for panel in build_dashboard({"processing_units": 1})["panels"]:
         pos = panel["gridPos"]
+        # A zero or negative size has no cells and would hide the panel while passing the overlap check.
+        assert pos["w"] > 0 and pos["h"] > 0 and pos["x"] >= 0 and pos["y"] >= 0, panel["title"]
         cells = {(x, y) for x in range(pos["x"], pos["x"] + pos["w"]) for y in range(pos["y"], pos["y"] + pos["h"])}
         assert not occupied & cells, panel["title"]
         assert pos["x"] + pos["w"] <= 24
@@ -412,6 +414,8 @@ QUERY_CASES = {
     "http_error": ("false", "500", "{}", "HTTP 500"),
     "partial_error": ("true", "207", '{"results": {"A": {}, "B": {"error": "bad_data"}}}', "B: bad_data"),
     "not_json": ("true", "200", None, "response is not JSON"),
+    "no_results": ("true", "200", "{}", "response has no query results"),
+    "empty_results": ("true", "200", '{"results": {}}', "response has no query results"),
 }
 
 
@@ -447,6 +451,8 @@ def test_hidden_targets_are_not_queried(monkeypatch):
     ("https://203.0.113.10:3000", True), ("https://203.0.113.10:3000/", True),
     ("https://203.0.113.10:3000/grafana", False), ("https://203.0.113.10:3000/?x=1", False),
     ("http://203.0.113.10:3000", False),
+    # Empty separators parse to an empty search/hash but are still not a root URL.
+    ("https://203.0.113.10:3000/?", False), ("https://203.0.113.10:3000/#", False),
 ])
 def test_capture_accepts_only_a_root_https_grafana_url(url, ok):
     import shutil

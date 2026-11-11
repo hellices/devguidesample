@@ -161,7 +161,7 @@ def test_main_parameters_map_azd_environment_values():
         assert re.search(rf"(?m)^param {parameter} string = ''$", _bicep_code(main)), parameter
 
 
-def test_managed_grafana_is_optional_standard_and_reachable_only_privately():
+def test_managed_grafana_is_optional_standard_and_reads_vmsingle_privately():
     main = _bicep_code((LAB_ROOT / "infra" / "main.bicep").read_text())
     module = _bicep_code((LAB_ROOT / "infra" / "modules" / "grafana.bicep").read_text())
     foundation = _bicep_code((LAB_ROOT / "infra" / "modules" / "foundation.bicep").read_text())
@@ -171,6 +171,12 @@ def test_managed_grafana_is_optional_standard_and_reachable_only_privately():
     # Managed private endpoints need Standard; API keys stay off.
     assert re.search(r"sku: \{\s*name: 'Standard'\s*\}", module)
     assert "apiKey: 'Disabled'" in module
+    # Users sign in to the workspace over the internet with Microsoft Entra ID; only its path to the
+    # data (VMSingle) is private, through the managed private endpoint to the Private Link Service.
+    assert "publicNetworkAccess: 'Enabled'" in module
+    mpe_hook = (LAB_ROOT / "scripts" / "managed-grafana.sh").read_text()
+    assert '--private-link-resource-id "$PLS_ID"' in mpe_hook
+    assert 'VMSINGLE_DOMAIN="vmsingle.eventhubs-lab.internal"' in mpe_hook
     # Creating the workspace already grants the caller Grafana Admin; a Bicep duplicate fails, so the
     # hook grants it only when missing.
     assert "roleAssignments" not in module

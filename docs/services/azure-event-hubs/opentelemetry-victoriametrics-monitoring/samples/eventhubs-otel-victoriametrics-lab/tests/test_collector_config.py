@@ -243,7 +243,11 @@ def test_resource_logs_become_metrics_only_when_a_logs_hub_is_set():
     _assert_fans_out(pipelines, "diagnostic_logs", ["signal_to_metrics/runtime_logs"])
     for delivery in ("scrape", "remote_write"):
         assert "delta_to_cumulative" in pipelines[f"metrics/diagnostic_logs-{delivery}"]["processors"]
-    metrics = {m["name"]: m for m in config["connectors"]["signal_to_metrics/runtime_logs"]["logs"]}
+    log_metrics = config["connectors"]["signal_to_metrics/runtime_logs"]["logs"]
+    # Exactly five definitions with unique names; a duplicate would be hidden by the dict below.
+    assert len(log_metrics) == 5
+    assert len({m["name"] for m in log_metrics}) == len(log_metrics)
+    metrics = {m["name"]: m for m in log_metrics}
     assert set(metrics) == {"eventhubs_log_consumer_lag", "eventhubs_log_application_count",
                             "eventhubs_log_runtime_operations", "eventhubs_log_records",
                             "eventhubs_log_arrival_delay_seconds"}

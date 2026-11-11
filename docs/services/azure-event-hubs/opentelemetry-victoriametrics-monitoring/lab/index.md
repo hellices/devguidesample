@@ -829,16 +829,19 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 
 Dedicated cluster는 만든 뒤 4시간 동안 삭제할 수 없으므로, cluster의 `createdAt`에서 4시간이
-지난 뒤 실행합니다. 그 전에 실행하면 cluster 삭제가 거부되고 resource group이 남으므로,
+지난 뒤 실행합니다. `ehotel-ded2`에서는 4시간이 되기 5분 전에 실행했는데, 삭제가 4시간 시점을
+지나 끝나면서 명령이 성공했습니다. 그보다 일찍 실행해 명령이 실패하고 resource group이 남으면
 4시간이 지난 뒤 같은 명령을 다시 실행합니다. `postdown`이 resource group이 사라졌음을 확인해야
-명령이 성공으로 끝납니다.
+명령이 성공으로 끝납니다. 확인 명령은 실습 환경의 구독을 지정해 실행합니다
+(`azd env get-value AZURE_SUBSCRIPTION_ID`, `azd down` 뒤에는 `predown`이 기록한 값).
 
 ```bash
-az eventhubs cluster show -g <resource-group> -n <cluster> --query createdAt -o tsv
+SUB=<subscription-id>
+az eventhubs cluster show --subscription $SUB -g <resource-group> -n <cluster> --query createdAt -o tsv
 azd down -e <env-name> --purge --force
-az group exists -n <resource-group>                                   # false
-az eventhubs cluster list --query "[?name=='<cluster>'] | length(@)"  # 0(구독의 다른 cluster는 세지 않음)
-az keyvault list-deleted --query "[?name=='<key-vault>'] | length(@)"  # 0
+az group exists --subscription $SUB -n <resource-group>                                   # false
+az eventhubs cluster list --subscription $SUB --query "[?name=='<cluster>'] | length(@)"  # 0
+az keyvault list-deleted --subscription $SUB --query "[?name=='<key-vault>'] | length(@)"  # 0
 ```
 
 `predown`은 port-forward와 federated credential, lab kubeconfig를 지우고 대상 resource

@@ -47,8 +47,9 @@ load_env() {
 
 state_dir() {
   local dir="${LAB_STATE_ROOT:-$LAB_ROOT/.azure}/$(env_value AZURE_ENV_NAME)"
-  mkdir -p "$dir"
-  chmod 700 "$dir"
+  # Called inside $(...), where errexit does not apply: fail explicitly before printing a path.
+  mkdir -p "$dir" || return 1
+  chmod 700 "$dir" || return 1
   printf '%s' "$dir"
 }
 
@@ -85,7 +86,10 @@ dedicated_cluster_id() {
 }
 
 kube() {
-  kubectl --kubeconfig "$(state_dir)/kubeconfig" "$@"
+  # A separate assignment, so a state directory that could not be prepared stops kubectl.
+  local dir
+  dir="$(state_dir)" || die "could not prepare the lab state directory"
+  kubectl --kubeconfig "$dir/kubeconfig" "$@"
 }
 
 # Runs a bash script on the gateway VM through Run Command and prints the Run Command message,

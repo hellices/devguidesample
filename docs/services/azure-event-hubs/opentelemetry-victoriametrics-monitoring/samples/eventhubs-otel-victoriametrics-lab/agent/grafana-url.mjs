@@ -9,7 +9,8 @@ export function grafanaBase(value, caFile, { token = false } = {}) {
   // The loopback proxy forwards request paths as they are, so Grafana must be served at the root;
   // a sub-path would send the login form to another service on the same host.
   const url = new URL(base);
-  if (url.pathname !== '/' || url.search || url.hash) {
+  // An empty "?" or "#" parses to an empty search/hash, so look for the separators themselves.
+  if (url.pathname !== '/' || /[?#]/.test(base)) {
     throw new Error('GRAFANA_URL must be the Grafana root (https://host:port) without a path, query or fragment');
   }
   return base;
