@@ -24,12 +24,19 @@ PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"
 if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then
   [[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]] \
     || die "PLATFORM_METRICS=AzureMonitor reads lag from resource logs; set EVENTHUBS_LOGS=Enabled and rerun azd provision"
+  # The fallback exporter is another platform metrics copy; this mode promises logs and self metrics only.
+  [[ "${ENABLE_FALLBACK_EXPORTER:-false}" != "true" ]] \
+    || die "PLATFORM_METRICS=AzureMonitor does not collect platform metrics; unset ENABLE_FALLBACK_EXPORTER"
   ENABLE_API_RECEIVER=false
   ENABLE_LAG_RECEIVER=false
   LAG_EXPORTER_SCALE=0
+  # A metrics Diagnostic Settings hub (EVENTHUBS_DIAGNOSTIC_METRICS=Enabled) stays deployed, but the
+  # Collector does not read it in this mode.
+  METRICS_HUB=""
 else
   ENABLE_LAG_RECEIVER=true
   LAG_EXPORTER_SCALE=1
+  METRICS_HUB="$(env_value TELEMETRY_EVENTHUB_NAME)"
 fi
 
 # The stamp is written only after a successful install, so a failed or outdated venv is rebuilt.
@@ -126,7 +133,7 @@ AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID
 AZURE_RESOURCE_GROUP=$AZURE_RESOURCE_GROUP
 PREMIUM_NAMESPACE_NAME=$PREMIUM_NAMESPACE_NAME
 TELEMETRY_NAMESPACE=$(telemetry_namespace="$(env_value TELEMETRY_NAMESPACE_NAME)"; printf '%s' "${telemetry_namespace:+$telemetry_namespace.servicebus.windows.net}")
-TELEMETRY_EVENTHUB_NAME=$(env_value TELEMETRY_EVENTHUB_NAME)
+TELEMETRY_EVENTHUB_NAME=$METRICS_HUB
 TELEMETRY_LOGS_EVENTHUB_NAME=$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)
 CHECKPOINT_ACCOUNT_URL=$CHECKPOINT_ACCOUNT_URL
 GATEWAY_CLIENT_ID=$GATEWAY_CLIENT_ID

@@ -704,12 +704,12 @@ azd up
 
 | 구성 요소 | `Collector`(기본값) | `AzureMonitor` |
 |---|---|---|
-| Collector receiver | `azure_monitor/premium`(·`dedicated`), `prometheus/lag`, `azure_event_hub/runtime_logs`, `prometheus/self` | `azure_event_hub/runtime_logs`, `prometheus/self` |
+| Collector receiver | `azure_monitor/premium`(·`dedicated`), `prometheus/lag`, `azure_event_hub/runtime_logs`, `prometheus/self`, 선택 항목 `azure_event_hub/diagnostic` | `azure_event_hub/runtime_logs`, `prometheus/self`. `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`라도 지표 hub는 읽지 않고, `ENABLE_FALLBACK_EXPORTER=true`이면 postprovision이 실패 |
 | lag exporter 컨테이너 | 실행 | 실행하지 않음(Compose `scale: 0`) |
 | 플랫폼 지표 패널 | VictoriaMetrics(`source_path="azure_monitor_api"`) | Azure Monitor 데이터 소스(uid `azure-monitor-oob`) |
 | consumer lag 패널 | checkpoint lag(`eventhubs_consumer_lag_messages`) | `ConsumerLag` 로그(`eventhubs_log_consumer_lag`) |
 | 대시보드 | `build_dashboard.py`, uid `eventhubs-otel-victoriametrics` | `build_direct_dashboard.py`, uid `eventhubs-azure-monitor-direct` |
-| 시나리오 lag 판정 | 모든 partition의 checkpoint lag | 최근 180초 `ConsumerLag` 레코드의 최댓값, 레코드가 없으면 0 |
+| 시나리오 lag 판정 | 모든 partition의 checkpoint lag | 최근 180초 `ConsumerLag` 레코드의 최댓값. 레코드가 없으면 최근 3분 안에 다른 리소스 로그가 도착했을 때만 0이고 아니면 판정 보류. 회복은 consumer 처리 수가 부하 종료 때보다 늘었을 때만 인정 |
 | evidence 대조 | remote write ↔ Azure Monitor 분 단위 | Grafana 패널 합계 ↔ `az monitor metrics list` 합계 |
 
 `ConsumerLag` 로그는 리소스 로그 hub가 있어야 하므로 `EVENTHUBS_LOGS=Disabled`이면
@@ -770,9 +770,10 @@ OK ThrottledRequests: azure_monitor=0.0 grafana=0.0
 | VictoriaMetrics series | `diagnostic_logs` 19개, `collector_self` 62개(각각 scrape·remote write). `azure_monitor_api`·`lag_exporter` 없음 |
 
 Learn은 AMQP receiver가 따라잡아 받을 것이 없으면 `ConsumerLag` 레코드를 만들지 않는다고
-설명하지만, 이 실행에서는 consumer가 연결된 동안 0 레코드가 계속 왔습니다. 시나리오의 회복
-판정은 consumer를 계속 실행하는 통제된 조건이라 최근 레코드가 없을 때 0으로 읽지만, 운영
-경보에서는 레코드 부재를 0으로 해석하지 않습니다.
+설명하지만, 이 실행에서는 consumer가 연결된 동안 0 레코드가 계속 왔습니다. 레코드 부재는
+따라잡은 상태일 수도, Collector나 로그 전달이 멈춘 상태일 수도 있습니다. 그래서 시나리오는
+다른 리소스 로그가 계속 도착하는 동안에만 부재를 0으로 읽고, 회복은 consumer 처리 수가 늘어난
+것까지 확인한 뒤 인정합니다. 운영 경보에서는 레코드 부재를 0으로 해석하지 않습니다.
 
 ### Azure Monitor 데이터 소스의 조회 지연
 

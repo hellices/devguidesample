@@ -580,8 +580,12 @@ def test_managed_grafana_identity_reads_only_the_charted_resources():
         ("namespace", "monitoringReaderRoleDefinitionId", "grafanaPrincipalId"),
         ("cluster", "monitoringReaderRoleDefinitionId", "grafanaPrincipalId"),
     ])
-    assert "var monitoringReaderRoleDefinitionId = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'" in GRAFANA_READER.read_text()
-    assert "output principalId string = grafana.identity.principalId" in GRAFANA.read_text()
+    # Declarations are read from code only, so a commented-out copy cannot stand in for the real value.
+    reader = _code(GRAFANA_READER.read_text())
+    assert re.findall(r"^var monitoringReaderRoleDefinitionId = '([0-9a-f-]+)'$", reader, re.MULTILINE) == [
+        "43d0d8ad-25c7-4714-9337-8ba259a9fe05"]
+    assert re.findall(r"^output principalId string = (.+)$", _code(GRAFANA.read_text()), re.MULTILINE) == [
+        "grafana.identity.principalId"]
     main = _code(MAIN.read_text())
     block = main[main.index("module grafanaReader"):]
     block = block[:block.index("\n}\n")]

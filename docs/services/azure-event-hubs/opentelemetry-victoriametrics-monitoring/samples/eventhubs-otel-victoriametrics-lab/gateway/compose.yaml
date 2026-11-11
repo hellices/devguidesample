@@ -22,7 +22,8 @@ services:
       - ./lag-exporter.env
     expose:
       - "9464"
-    # PLATFORM_METRICS=AzureMonitor runs no lag exporter: lag comes from the ConsumerLag resource log.
+    # azd-postprovision.sh writes LAG_EXPORTER_SCALE=0 into the bundle .env for PLATFORM_METRICS=AzureMonitor
+    # (lag then comes from the ConsumerLag resource log). Running this file by hand needs the same value.
     scale: ${LAG_EXPORTER_SCALE:-1}
     restart: unless-stopped
 

@@ -1133,6 +1133,12 @@ def test_platform_metrics_azure_monitor_keeps_only_the_event_hub_receiver():
     assert "scale: ${LAG_EXPORTER_SCALE:-1}" in compose
     # Nothing outside the Collector reads the exporter any more.
     assert "lag-scrape" not in post and not (LAB_ROOT / "k8s" / "lag-scrape.yaml").exists()
+    # No other platform metrics copy may run in this mode.
+    assert 'die "PLATFORM_METRICS=AzureMonitor does not collect platform metrics; unset ENABLE_FALLBACK_EXPORTER"' in mode
+    assert 'METRICS_HUB=""' in mode and "TELEMETRY_EVENTHUB_NAME=$METRICS_HUB" in post
+    # A managed report from an earlier run is not compared unless this run produced it.
+    assert '[[ -n "$MANAGED_ENDPOINT" ]] && reports+=(panel-verification-managed)' in collect
+    assert '--cluster-resource-group "$CLUSTER_RG"' in collect
     assert "GF_AZURE_MANAGED_IDENTITY_CLIENT_ID: ${GATEWAY_CLIENT_ID" in compose
     assert "build_direct_dashboard.py" in collect and "compare_grafana_azure_monitor.py" in collect
     assert '"/d/$DASHBOARD_UID"' in collect
@@ -1145,6 +1151,8 @@ def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
     branch = branch[:branch.index("\nfi\n")]
     assert 'eventhubs_log_consumer_lag{source_path="diagnostic_logs",delivery_path="remote_write"}' in branch
     assert "SETTLE_SECONDS=180" in branch and "LOG_LAG=true" in branch
-    # No record means nothing left to receive; the peak check still demands real records.
-    assert 'vm_scalar "${1:-30}" "max($FRESH_LAG) or vector(0)"' in text
+    # An absent record reads as 0 only while other resource logs still arrive; otherwise it is unknown.
+    assert 'vm_scalar "${1:-30}" "max($FRESH_LAG) or (vector(0) and on() (sum(increase($LOG_RECORDS[3m])) > 0))"' in text
+    assert "&& consumer_progressed; then" in text
+    assert '"$processed" -gt "$CONSUMER_PROCESSED_AT_LOAD_END"' in text
     assert 'sleep "$SETTLE_SECONDS"' in text

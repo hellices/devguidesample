@@ -41,7 +41,7 @@ def test_platform_metrics_come_only_from_azure_monitor_and_lag_only_from_resourc
         else:
             expr = target["expr"]
             # Collector platform series are named azure_<metric>_<aggregation>_<unit>.
-            assert not re.search(r"\bazure_[a-z]+_(total|maximum|average)_", expr), \
+            assert not re.search(r"\bazure_[a-z0-9_]+_(?:total|maximum|average)_[a-z0-9_]+\b", expr, re.IGNORECASE), \
                 "platform metrics must not be read from VictoriaMetrics"
             # No lag exporter in this mode: no checkpoint lag series may be queried.
             assert "eventhubs_consumer_lag_messages" not in expr and "eventhubs_checkpoint" not in expr
@@ -86,7 +86,10 @@ def test_verify_runs_azure_monitor_targets_as_is(monkeypatch):
     azure = [q for q in sent if q["datasource"] == AZMON]
     prometheus = [q for q in sent if q["datasource"]["type"] == "prometheus"]
     assert azure and prometheus
-    assert all("azureMonitor" in q and "expr" not in q for q in azure)
+    # Every Azure Monitor target reaches Grafana unchanged except for the request-only fields.
+    expected = [t for _, t in _targets(dashboard) if "azureMonitor" in t]
+    added = {"intervalMs", "maxDataPoints"}
+    assert [{k: v for k, v in q.items() if k not in added} for q in azure] == expected
     assert all(q["datasource"] == {"type": "prometheus", "uid": "victoriametrics"} for q in prometheus)
     incoming = [r for r in report if r.get("metric") == "IncomingRequests"]
     assert incoming[0]["value_sum"] == 7.0 and incoming[0]["aggregation"] == "Total"
@@ -116,3 +119,30 @@ def test_azure_monitor_panels_force_their_unit_over_the_data_source_unit():
             unit = panel["fieldConfig"]["defaults"]["unit"]
             assert {"matcher": {"id": "byType", "options": "number"},
                     "properties": [{"id": "unit", "value": unit}]} in panel["fieldConfig"]["overrides"]
+
+
+def test_selector_regex_catches_platform_series_with_underscores():
+    pattern = r"\bazure_[a-z0-9_]+_(?:total|maximum|average)_[a-z0-9_]+\b"
+    for name in ("azure_incomingmessages_total_Count", "azure_incoming_messages_total_count",
+                 "azure_cpu_maximum_Percent"):
+        assert re.search(pattern, name, re.IGNORECASE), name
+    assert not re.search(pattern, "max by (azure_category) (eventhubs_log_arrival_delay_seconds)", re.IGNORECASE)
+
+
+def test_compare_uses_an_absolute_tolerance_and_rejects_an_empty_result():
+    raw = {"value": [{"name": {"value": "IncomingMessages"},
+                      "timeseries": [{"data": [{"total": 1_000_000_000.0}]}]}]}
+    report = [{"panel": "Messages / min", "metric": "IncomingMessages", "aggregation": "Total",
+               "status": "pass", "value_sum": 1_000_000_000.9}]
+    assert not compare(report, raw)["all_match"]
+    assert not compare(report, {"value": []})["all_match"]
+
+
+def test_cluster_resource_group_can_differ_from_the_namespace():
+    dashboard = build_dashboard({**SETTINGS, "tier": "dedicated", "cluster": "ehc-example",
+                                 "cluster_resource_group": "rg-cluster"})
+    groups = {t["azureMonitor"]["resources"][0]["resourceGroup"] for _, t in _targets(dashboard)
+              if t.get("azureMonitor", {}).get("metricNamespace") == "microsoft.eventhub/clusters"}
+    assert groups == {"rg-cluster"}
+    text = (Path(__file__).parents[1] / "agent" / "build_direct_dashboard.py").read_text()
+    assert '"cluster_resource_group": args.cluster_resource_group' in text

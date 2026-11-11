@@ -41,8 +41,10 @@ def compare(report: list[dict], raw: dict) -> dict:
         for entry in entries:
             grafana = entry.get("value_sum") if entry.get("status") == "pass" else None
             rows.append({"metric": metric, "panel": entry["panel"], "azure_monitor": total, "grafana": grafana,
-                         "match": grafana is not None and math.isclose(grafana, total, abs_tol=0.5)})
-    return {"metrics": rows, "all_match": all(row["match"] for row in rows)}
+                         # Absolute tolerance only: the default rel_tol would accept large absolute gaps.
+                         "match": grafana is not None and math.isclose(grafana, total, rel_tol=0.0, abs_tol=0.5)})
+    # An empty Azure Monitor result compares nothing and must not read as a match.
+    return {"metrics": rows, "all_match": bool(rows) and all(row["match"] for row in rows)}
 
 
 def main() -> None:

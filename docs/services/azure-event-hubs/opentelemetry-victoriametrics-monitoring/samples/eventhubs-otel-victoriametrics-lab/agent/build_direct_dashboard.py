@@ -323,6 +323,8 @@ def main() -> None:
     parser.add_argument("--resource-group", required=True)
     parser.add_argument("--namespace", required=True, help="workload Event Hubs namespace name")
     parser.add_argument("--cluster", default="", help="Dedicated cluster name (Dedicated tier)")
+    parser.add_argument("--cluster-resource-group", default="",
+                        help="resource group of the cluster when it differs from --resource-group")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     dashboard = build_dashboard({
@@ -332,6 +334,7 @@ def main() -> None:
         "resource_group": args.resource_group,
         "namespace": args.namespace,
         "cluster": args.cluster,
+        "cluster_resource_group": args.cluster_resource_group,
     })
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(dashboard, indent=2, ensure_ascii=False))

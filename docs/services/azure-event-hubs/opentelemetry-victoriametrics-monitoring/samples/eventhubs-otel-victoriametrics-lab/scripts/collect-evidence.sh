@@ -53,9 +53,13 @@ if [[ "${PLATFORM_METRICS:-Collector}" == "AzureMonitor" ]]; then
   # Platform metrics come from the Azure Monitor data source; only lag (and logs) from VictoriaMetrics.
   DASHBOARD_UID=eventhubs-azure-monitor-direct
   CLUSTER_ID="$(env_value DEDICATED_CLUSTER_RESOURCE_ID)"
+  CLUSTER_RG=""
+  # The resource group is the fifth '/'-separated field of the cluster resource ID.
+  [[ -n "$CLUSTER_ID" ]] && CLUSTER_RG="$(cut -d/ -f5 <<<"$CLUSTER_ID")"
   "$PY" "$LAB_ROOT/agent/build_direct_dashboard.py" --tier "${TIER:-premium}" \
     --subscription "$AZURE_SUBSCRIPTION_ID" --resource-group "$AZURE_RESOURCE_GROUP" \
-    --namespace "$PREMIUM_NAMESPACE_NAME" --cluster "${CLUSTER_ID##*/}" --output "$EVIDENCE/dashboard.json"
+    --namespace "$PREMIUM_NAMESPACE_NAME" --cluster "${CLUSTER_ID##*/}" --cluster-resource-group "$CLUSTER_RG" \
+    --output "$EVIDENCE/dashboard.json"
 else
   DASHBOARD_UID=eventhubs-otel-victoriametrics
   "$PY" "$LAB_ROOT/agent/build_dashboard.py" --probe "$EVIDENCE/probe.json" --tier "${TIER:-premium}" \
@@ -97,9 +101,11 @@ az monitor metrics list --subscription "$AZURE_SUBSCRIPTION_ID" --resource "$NAM
   --metrics IncomingMessages OutgoingMessages IncomingRequests ThrottledRequests \
   --aggregation Total --interval PT1M --start-time "$FROM" --end-time "$TO" -o json >"$EVIDENCE/azure-monitor-raw.json"
 if [[ "$DASHBOARD_UID" == "eventhubs-azure-monitor-direct" ]]; then
-  # Grafana queried the same Azure Monitor bins; its panel sums must equal the CLI totals.
-  for report in panel-verification panel-verification-managed; do
-    [[ -f "$EVIDENCE/$report.json" ]] || continue
+  # Grafana queried the same Azure Monitor bins; its panel sums must equal the CLI totals. A managed
+  # report left by an earlier run is not evidence for this one, so compare it only if this run made it.
+  reports=(panel-verification)
+  [[ -n "$MANAGED_ENDPOINT" ]] && reports+=(panel-verification-managed)
+  for report in "${reports[@]}"; do
     "$PY" "$LAB_ROOT/agent/compare_grafana_azure_monitor.py" --panel-verification "$EVIDENCE/$report.json" \
       --azure-monitor "$EVIDENCE/azure-monitor-raw.json" --output "$EVIDENCE/$report-azure-monitor.json" \
       || die "Grafana $report totals differ from the direct Azure Monitor query"
