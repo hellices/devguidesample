@@ -235,7 +235,8 @@ def render_config(env: Mapping[str, str]) -> dict:
         }
         sources["diagnostic_logs"] = ["signal_to_metrics/runtime_logs"]
 
-    # PLATFORM_METRICS=AzureMonitor turns this off: VMAgent scrapes the lag exporter directly.
+    # PLATFORM_METRICS=AzureMonitor turns this off: no lag exporter runs, and lag comes from the
+    # ConsumerLag resource log through azure_event_hub/runtime_logs.
     if _flag(env, "ENABLE_LAG_RECEIVER", True):
         receivers["prometheus/lag"] = {
             "config": {
