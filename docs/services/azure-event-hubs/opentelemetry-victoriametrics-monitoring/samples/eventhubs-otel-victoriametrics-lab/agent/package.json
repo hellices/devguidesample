@@ -1,0 +1,9 @@
+{
+  "name": "eventhubs-otel-dashboard-agent",
+  "private": true,
+  "type": "module",
+  "description": "Playwright capture for the agent-built Grafana dashboard.",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

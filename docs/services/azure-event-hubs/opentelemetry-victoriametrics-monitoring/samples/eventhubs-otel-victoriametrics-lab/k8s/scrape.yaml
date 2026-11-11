@@ -1,0 +1,14 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: otel-gateway
+  namespace: eventhubs-observability
+spec:
+  jobName: otel-gateway-prometheus-exporter
+  targetEndpoints:
+    - targets:
+        - __GATEWAY_PRIVATE_IP__:8889
+      interval: 30s
+      scrapeTimeout: 10s
+      # Keep source_path/delivery_path produced by the Collector instead of renaming them exported_*.
+      honorLabels: true

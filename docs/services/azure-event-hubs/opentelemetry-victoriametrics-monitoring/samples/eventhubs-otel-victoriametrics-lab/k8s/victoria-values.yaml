@@ -1,0 +1,14 @@
+# Helm values for victoria-metrics-operator chart 0.68.2 (operator v0.75.2).
+image:
+  repository: victoriametrics/operator
+  tag: v0.75.2@sha256:237fac68b608c7ed7bc4c47ad25ebcb1cbe973c9a789661d2b6cfaa83093f87a
+crds:
+  plain: true
+admissionWebhooks:
+  enabled: false
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi

@@ -1,0 +1,1 @@
+{"metric":{"__name__":"eventhubs_consumer_lag_messages","source_path":"lag_exporter","delivery_path":"remote_write","partition":"0"},"values":[5],"timestamps":[1794296720000]}

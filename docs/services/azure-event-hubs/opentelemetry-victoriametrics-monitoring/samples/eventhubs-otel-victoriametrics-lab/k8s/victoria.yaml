@@ -1,0 +1,52 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMSingle
+metadata:
+  name: lab
+  namespace: eventhubs-observability
+spec:
+  image:
+    repository: victoriametrics/victoria-metrics
+    tag: v1.155.0@sha256:f60dc268b54ecf87f6e09d740c2b732838aa9193090cc741417c9f6386a130df
+  retentionPeriod: 7d
+  removePvcAfterDelete: true
+  storage:
+    accessModes: [ReadWriteOnce]
+    storageClassName: managed-csi-premium
+    resources:
+      requests:
+        storage: 10Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  serviceSpec:
+    useAsDefault: false
+    metadata:
+      name: vmsingle-internal
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+        service.beta.kubernetes.io/azure-load-balancer-ipv4: __VMSINGLE_PRIVATE_IP__
+    spec:
+      type: LoadBalancer
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMAgent
+metadata:
+  name: lab
+  namespace: eventhubs-observability
+spec:
+  image:
+    repository: victoriametrics/vmagent
+    tag: v1.155.0@sha256:8e3c03905be15bba8312d4868e8ae6f9fc2fefee0a41d544472034249ca42bb4
+  selectAllByDefault: true
+  scrapeInterval: 30s
+  remoteWrite:
+    - url: http://vmsingle-lab.eventhubs-observability.svc:8428/api/v1/write
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi

@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 846" width="1200" height="846" role="img" aria-labelledby="archTitle archDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
+  <title id="archTitle">Event Hubs OpenTelemetry·VictoriaMetrics 실습 구성</title>
+  <desc id="archDesc">Korea South의 Event Hubs Dedicated cluster(1 CU)와 그 안의 workload namespace, namespace 리소스 로그 Diagnostic Settings와 기본으로 꺼진 namespace·cluster 지표 Diagnostic Settings, runtime-logs hub와 선택 항목 platform-metrics hub가 있는 telemetry Standard namespace, namespace와 cluster 지표를 주는 Azure Monitor Metrics API. Korea Central VNet의 AKS subnet에 producer, slow consumer, VMAgent, VMSingle, gateway subnet에 OpenTelemetry Collector, lag exporter, Grafana, 두 exporter, private-endpoints subnet에 Storage Blob과 Key Vault의 private endpoint. 선택 항목인 Azure Managed Grafana는 managed private endpoint와 Private Link Service로 VMSingle을 조회.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
+    <style>
+      .title { font-weight: 600; font-size: 14px; fill: #1A202C; }
+      .body { fill: #2D3748; }
+      .mono { font-family: 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 12px; fill: #2D3748; }
+      .zone { fill: #F7FAFC; stroke: #A0AEC0; stroke-width: 1.5; }
+      .subnet { fill: none; stroke: #A0AEC0; stroke-dasharray: 5 4; }
+      .zonelabel { font-weight: 600; font-size: 15px; fill: #2D3748; }
+      .sublabel { font-size: 12px; fill: #4A5568; }
+      .azure { fill: #EBF4FF; stroke: #3182CE; }
+      .otel { fill: #FFF7E6; stroke: #DD8A12; }
+      .vm { fill: #EDF7EE; stroke: #38A169; }
+      .work { fill: #F3EEFF; stroke: #805AD5; }
+      .graf { fill: #FFF0F3; stroke: #D53F8C; }
+      .muted { fill: #F7F7F7; stroke: #A0AEC0; stroke-dasharray: 5 4; }
+      .edge { stroke: #4A5568; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .edgelabel { font-size: 11px; fill: #4A5568; }
+    </style>
+  </defs>
+  <rect width="1200" height="846" fill="#FFFFFF"/>
+
+  <!-- Korea South -->
+  <rect class="zone" x="16" y="16" width="860" height="150" rx="10"/>
+  <text class="zonelabel" x="32" y="40">Korea South · Event Hubs</text>
+  <rect class="azure" x="32" y="54" width="260" height="96" rx="8"/>
+  <text class="title" x="44" y="76">Event Hubs Dedicated · 1 CU</text>
+  <text class="body" x="44" y="98">cluster 안 namespace · workload hub</text>
+  <text class="body" x="44" y="118">4 partitions · slow-consumer group</text>
+  <text class="body" x="44" y="138">Entra ID 인증만 허용</text>
+  <rect class="azure" x="320" y="54" width="250" height="96" rx="8"/>
+  <text class="title" x="332" y="76">Diagnostic Settings</text>
+  <text class="body" x="332" y="98">AllMetrics(선택 · 기본 꺼짐)</text>
+  <text class="body" x="332" y="118">리소스 로그 2종(namespace)</text>
+  <text class="body" x="332" y="138">→ telemetry hub(같은 리전)</text>
+  <rect class="azure" x="598" y="54" width="262" height="96" rx="8"/>
+  <text class="title" x="610" y="76">Event Hubs Standard · telemetry</text>
+  <text class="body" x="610" y="98">platform-metrics hub(선택)</text>
+  <text class="body" x="610" y="118">runtime-logs hub(로그)</text>
+  <text class="body" x="610" y="138">consumer group otel-collector</text>
+  <path class="edge" d="M292,102 H318"/>
+  <path class="edge" d="M570,102 H596"/>
+
+  <!-- Azure Monitor -->
+  <rect class="azure" x="900" y="30" width="284" height="74" rx="8"/>
+  <text class="title" x="912" y="52">Azure Monitor Metrics API</text>
+  <text class="body" x="912" y="74">PT1M bin · namespace 지표</text>
+  <text class="body" x="912" y="92">Monitoring Reader</text>
+  <rect class="azure" x="900" y="114" width="284" height="52" rx="8"/>
+  <text class="title" x="912" y="136">Dedicated cluster 지표</text>
+  <text class="body" x="912" y="156">CPU·AvailableMemory(Role) · 처리량</text>
+  <path class="edge" d="M162,54 V24 H1040 V28"/>
+  <text class="edgelabel" x="600" y="20">platform metrics (1분 집계)</text>
+
+  <!-- Korea Central VNet -->
+  <rect class="zone" x="16" y="186" width="1168" height="458" rx="10"/>
+  <text class="zonelabel" x="32" y="210">Korea Central · lab VNet</text>
+
+  <rect class="subnet" x="32" y="222" width="440" height="300" rx="8"/>
+  <text class="sublabel" x="44" y="240">aks subnet · AKS · Workload Identity</text>
+  <rect class="work" x="44" y="250" width="200" height="66" rx="8"/>
+  <text class="title" x="56" y="272">producer</text>
+  <text class="body" x="56" y="294">200 events/s · 1 KiB</text>
+  <rect class="work" x="260" y="250" width="200" height="66" rx="8"/>
+  <text class="title" x="272" y="272">slow consumer</text>
+  <text class="body" x="272" y="294">20 event마다 checkpoint</text>
+  <rect class="vm" x="44" y="336" width="416" height="64" rx="8"/>
+  <text class="title" x="56" y="358">VMAgent + VMStaticScrape</text>
+  <text class="body" x="56" y="380">Collector exporter를 30초마다 scrape</text>
+  <rect class="vm" x="44" y="424" width="416" height="84" rx="8"/>
+  <text class="title" x="56" y="446">VMSingle v1.155.0</text>
+  <text class="body" x="56" y="468">VictoriaMetrics Operator · internal load balancer</text>
+  <text class="body" x="56" y="488">7일 보존 · 10 GiB PVC</text>
+  <path class="edge" d="M252,400 V422"/>
+  <path class="edge" d="M110,250 V196 H110 V152"/>
+  <text class="edgelabel" x="116" y="180">send</text>
+  <path class="edge" d="M230,152 V176 H330 V248"/>
+  <text class="edgelabel" x="236" y="172">receive</text>
+
+  <rect class="subnet" x="488" y="222" width="680" height="300" rx="8"/>
+  <text class="sublabel" x="500" y="240">gateway subnet · Gateway VM · Docker Compose · Managed Identity</text>
+  <rect class="otel" x="500" y="250" width="440" height="160" rx="8"/>
+  <text class="title" x="512" y="272">OpenTelemetry Collector Contrib 0.165.0</text>
+  <text class="mono" x="512" y="292">azure_monitor/premium   → azure_monitor_api</text>
+  <text class="mono" x="512" y="310">azure_monitor/dedicated → azure_monitor_dedicated</text>
+  <text class="mono" x="512" y="328">azure_event_hub/diagnostic → diagnostic_eventhub (선택)</text>
+  <text class="mono" x="512" y="346">azure_event_hub/runtime_logs → diagnostic_logs</text>
+  <text class="mono" x="512" y="364">prometheus/lag          → lag_exporter</text>
+  <text class="mono" x="512" y="382">prometheus/self         → collector_self</text>
+  <text class="body" x="512" y="402">source마다 scrape·remote write pipeline으로 fan-out</text>
+  <rect class="work" x="956" y="250" width="200" height="70" rx="8"/>
+  <text class="title" x="968" y="272">lag exporter</text>
+  <text class="body" x="968" y="294">마지막 enqueue sequence −</text>
+  <text class="body" x="968" y="312">checkpoint sequence</text>
+  <rect class="graf" x="956" y="334" width="200" height="66" rx="8"/>
+  <text class="title" x="968" y="356">Grafana OSS 13.3.0</text>
+  <text class="body" x="968" y="378">HTTPS · operator /32만 허용</text>
+  <path class="edge" d="M956,285 H942"/>
+  <rect class="otel" x="500" y="424" width="210" height="84" rx="8"/>
+  <text class="title" x="512" y="446">prometheus exporter</text>
+  <text class="mono" x="512" y="468">delivery_path=scrape</text>
+  <rect class="otel" x="730" y="424" width="210" height="84" rx="8"/>
+  <text class="title" x="742" y="446">prometheusremotewrite</text>
+  <text class="mono" x="742" y="468">delivery_path=remote_write</text>
+  <path class="edge" d="M605,410 V422"/>
+  <path class="edge" d="M835,410 V422"/>
+  <path class="edge" d="M729,150 V196 H760 V248"/>
+  <text class="edgelabel" x="736" y="180">AMQP · MI</text>
+  <path class="edge" d="M1040,166 V176 H900 V248"/>
+  <text class="edgelabel" x="1046" y="180">metrics API · MI</text>
+  <path class="edge" d="M500,466 H480 V368 H462"/>
+  <text class="edgelabel" x="466" y="440" transform="rotate(-90 466 440)">scrape</text>
+  <path class="edge" d="M835,508 V530 H300 V510"/>
+  <text class="edgelabel" x="540" y="524">remote write → /api/v1/write</text>
+  <path class="edge" d="M1056,400 V542 H200 V510"/>
+  <text class="edgelabel" x="900" y="538">PromQL (Grafana data source)</text>
+
+  <rect class="subnet" x="32" y="556" width="1136" height="76" rx="8"/>
+  <text class="sublabel" x="44" y="574">private-endpoints subnet · Key Vault·Storage public network access disabled</text>
+  <rect class="azure" x="44" y="582" width="540" height="42" rx="8"/>
+  <text class="title" x="56" y="608">Storage Blob private endpoint · checkpoint containers</text>
+  <rect class="azure" x="604" y="582" width="552" height="42" rx="8"/>
+  <text class="title" x="616" y="608">Key Vault private endpoint · Grafana 관리자 비밀번호</text>
+
+  <!-- operator and legend -->
+  <rect x="16" y="676" width="640" height="84" rx="10" fill="#F7FAFC" stroke="#A0AEC0"/>
+  <text class="title" x="32" y="702">Operator PC · azd up</text>
+  <text class="body" x="32" y="726">Bicep provision → hooks(ACR build · Helm · VM Run Command)</text>
+  <text class="body" x="32" y="746">agent: probe → build → verify → capture</text>
+  <!-- optional Azure Managed Grafana -->
+  <rect class="graf" x="680" y="676" width="504" height="84" rx="10" stroke-dasharray="6 4"/>
+  <text class="title" x="696" y="700">Azure Managed Grafana (선택 · Standard)</text>
+  <text class="body" x="696" y="722">managed private endpoint → Private Link Service → VMSingle</text>
+  <text class="body" x="696" y="742">Microsoft Entra ID 로그인 · 같은 대시보드</text>
+  <path class="edge" d="M700,676 V654 H24 V466 H42"/>
+  <text class="edgelabel" x="300" y="669">PromQL · vmsingle.eventhubs-lab.internal:8428</text>
+
+  <g font-size="12">
+    <rect class="azure" x="32" y="786" width="14" height="14"/><text class="body" x="52" y="798">Azure 관리형</text>
+    <rect class="otel" x="162" y="786" width="14" height="14"/><text class="body" x="182" y="798">OTel Collector</text>
+    <rect class="vm" x="302" y="786" width="14" height="14"/><text class="body" x="322" y="798">VictoriaMetrics</text>
+    <rect class="work" x="452" y="786" width="14" height="14"/><text class="body" x="472" y="798">lab workload</text>
+    <rect class="graf" x="582" y="786" width="14" height="14"/><text class="body" x="602" y="798">Grafana</text>
+    <rect class="graf" x="692" y="786" width="14" height="14" stroke-dasharray="3 2"/><text class="body" x="712" y="798">점선 테두리: 선택 항목</text>
+  </g>
+</svg>

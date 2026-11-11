@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: eventhubs-otel-victoriametrics-lab
+infra:
+  provider: bicep
+  path: infra
+  module: main
+hooks:
+  preprovision:
+    shell: sh
+    run: ./scripts/azd-configure.sh
+    interactive: true
+    continueOnError: false
+  postprovision:
+    shell: sh
+    run: ./scripts/azd-postprovision.sh
+    interactive: true
+    continueOnError: false
+  postdeploy:
+    shell: sh
+    run: ./scripts/azd-deploy.sh
+    interactive: true
+    continueOnError: false
+  predown:
+    shell: sh
+    run: ./scripts/cleanup-external.sh --yes
+    interactive: true
+    continueOnError: false
+  postdown:
+    shell: sh
+    run: ./scripts/verify-cleanup.sh
+    interactive: true
+    continueOnError: false

@@ -1,0 +1,70 @@
+# Gateway VM runtime. Rendered files live next to this file under /opt/eventhubs-observability.
+# Image references pin both the human-readable tag and the verified multi-arch index digest.
+name: eventhubs-observability
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      # VMAgent in the AKS subnet scrapes this endpoint; the NIC NSG admits only VNet traffic here.
+      - "8889:8889"
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:13133:13133"
+    restart: unless-stopped
+    depends_on:
+      - lag-exporter
+
+  lag-exporter:
+    image: ${LAG_EXPORTER_IMAGE:?set LAG_EXPORTER_IMAGE}
+    command: ["python", "lag_exporter.py"]
+    env_file:
+      - ./lag-exporter.env
+    expose:
+      - "9464"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      VMSINGLE_PRIVATE_IP: ${VMSINGLE_PRIVATE_IP:?set VMSINGLE_PRIVATE_IP}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      # Admin credentials cross the internet from the operator; never serve plain HTTP.
+      GF_SERVER_PROTOCOL: https
+      GF_SERVER_CERT_FILE: /etc/grafana/tls/grafana.crt
+      GF_SERVER_CERT_KEY: /etc/grafana/tls/grafana.key
+    secrets:
+      - grafana_admin_password
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./tls:/etc/grafana/tls:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  azure-metrics-exporter:
+    profiles: ["fallback"]
+    image: webdevops/azure-metrics-exporter:26.10.0@sha256:0f26a275e593538983a13c9ebb9d229e296524a3f292e684666667f24eae2b76
+    environment:
+      AZURE_CLIENT_ID: ${GATEWAY_CLIENT_ID:?set GATEWAY_CLIENT_ID}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:?set AZURE_TENANT_ID}
+      AZURE_ENVIRONMENT: AzurePublicCloud
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+secrets:
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password
+
+volumes:
+  grafana-data:
