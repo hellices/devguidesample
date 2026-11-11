@@ -319,7 +319,10 @@ to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 �
 한 번의 시나리오가 우연이 아닌지 확인하려고, 같은 부하를 4시간 동안 10번 반복했습니다.
 `run-lag-cycles.sh`는 producer를 10분 동안 켜고(200 events/s, 1 KiB) 15분 동안 꺼서 consumer가
 따라잡게 하는 주기를 반복하며, 각 경계를 `evidence/<env>/lag-cycles.log`에 남깁니다. 어떤
-이유로 끝나도 producer는 0 replica로 되돌립니다.
+이유로 끝나도 producer는 0 replica로 되돌립니다. `load_start`는 producer rollout이 끝난 뒤,
+`producer_stop`은 producer Pod가 모두 사라진 것을 확인한 뒤 기록합니다. 아래 측정은 이
+확인을 넣기 전 버전으로 실행해 scale 요청 시각을 경계로 기록했으므로, 표의 회복 시간에는
+Pod가 멈추기까지의 몇 초가 포함됩니다.
 
 ```bash
 ./scripts/run-lag-cycles.sh   # 기본 DURATION_SECONDS=14400, LOAD_SECONDS=600, DRAIN_SECONDS=900

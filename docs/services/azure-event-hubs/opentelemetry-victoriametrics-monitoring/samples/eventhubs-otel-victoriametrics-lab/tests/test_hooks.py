@@ -1169,3 +1169,47 @@ def test_lag_cycles_reject_a_non_positive_duration(fake_bin, tmp_path, name):
     assert result.returncode != 0 and "positive integers" in result.stderr
     # Rejected before any cluster call.
     assert not log.exists() or "kubectl" not in log.read_text()
+
+
+def test_lag_cycles_record_boundaries_only_after_the_producer_is_ready_or_gone():
+    text = (SCRIPTS / "run-lag-cycles.sh").read_text()
+    loop = text[text.index("while (( $(date +%s) + LOAD_SECONDS <= END )); do"):]
+    # load_start follows the producer rollout and a fresh deadline check.
+    assert (loop.index("kube scale -n \"$NS\" deploy/eventhubs-producer --replicas 1")
+            < loop.index("kube rollout status -n \"$NS\" deploy/eventhubs-producer")
+            < loop.index("if (( $(date +%s) + LOAD_SECONDS > END )); then")
+            < loop.index('record "cycle $cycle load_start"'))
+    # producer_stop follows a stop that waited for, and verified, Pod deletion.
+    stop = text[text.index("stop_producer() {"):text.index("\n}\n", text.index("stop_producer() {"))]
+    assert "--for=delete pod -l app=eventhubs-producer" in stop
+    assert 'remaining="$(kube get pod -n "$NS" -l app=eventhubs-producer -o name)" || return 1' in stop
+    assert '[[ -z "$remaining" ]]' in stop
+    assert loop.index('stop_producer || die') < loop.index('record "cycle $cycle producer_stop"')
+    # The consumer configuration is rolled out before the first cycle.
+    assert text.index("kube rollout status -n \"$NS\" deploy/eventhubs-slow-consumer") < text.index("while ((")
+
+
+def test_lag_cycles_do_not_record_a_cycle_for_a_producer_that_never_starts(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    write("kubectl", 'if [[ "$*" == *"rollout status"*eventhubs-producer* ]]; then exit 1; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    assert result.returncode != 0 and "producer did not become ready" in result.stderr
+    events = (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
+    assert "load_start" not in events and events.rstrip().endswith("stopped (producer 0)")
+    # The exit trap scales the producer the script started back to zero.
+    assert [c for c in log.read_text().splitlines() if "eventhubs-producer --replicas" in c][-1].endswith("--replicas 0")
+
+
+def test_lag_cycles_fail_when_a_producer_pod_remains(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    # The scale-down is accepted but a producer Pod is still listed afterwards.
+    write("kubectl", 'if [[ "$*" == *"get pod"*eventhubs-producer* && -f "$HOME/up" ]]; then '
+                     'echo pod/eventhubs-producer-1; exit 0; fi; '
+                     'if [[ "$*" == *eventhubs-producer*"--replicas 1"* ]]; then touch "$HOME/up"; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    assert result.returncode != 0 and "still running after the load phase" in result.stderr
+    assert "producer_stop" not in (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
