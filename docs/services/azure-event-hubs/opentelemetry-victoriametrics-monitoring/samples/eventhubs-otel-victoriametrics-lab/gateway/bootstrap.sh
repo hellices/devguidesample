@@ -40,11 +40,26 @@ echo "$BUNDLE_B64" | base64 -d | tar -xz -C "$BUNDLE_DIR"
 # Move the previous bundle aside on the same filesystem and put it back if the copy fails, so a
 # failed update never leaves a half-installed directory.
 PREVIOUS_DIR="$(mktemp -d "${APP_DIR}.previous.XXXXXX")"
-find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec mv {} "$PREVIOUS_DIR/" \;
-if ! cp -a "$BUNDLE_DIR/." "$APP_DIR/"; then
-  find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec rm -rf {} +
+# Puts the moved-aside entries back. After a failed copy, the partial new bundle is removed first;
+# after a failed move, APP_DIR still holds the entries that were not moved and they are kept.
+restore_previous() {
+  if [[ "${1:-}" == "--discard-new" ]]; then
+    find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -exec rm -rf {} +
+  fi
   find "$PREVIOUS_DIR" -mindepth 1 -maxdepth 1 -exec mv {} "$APP_DIR/" \;
   rmdir "$PREVIOUS_DIR"
+}
+# One mv per entry with its status checked: `find -exec mv` would hide a failed move, leaving a
+# stale file from an older bundle in place.
+while IFS= read -r -d '' entry; do
+  if ! mv "$entry" "$PREVIOUS_DIR/"; then
+    restore_previous
+    echo "GATEWAY_STEP_FAILED could not move $entry aside; previous bundle restored" >&2
+    exit 1
+  fi
+done < <(find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name secrets ! -name tls -print0)
+if ! cp -a "$BUNDLE_DIR/." "$APP_DIR/"; then
+  restore_previous --discard-new
   echo "GATEWAY_STEP_FAILED bundle copy; previous bundle restored" >&2
   exit 1
 fi

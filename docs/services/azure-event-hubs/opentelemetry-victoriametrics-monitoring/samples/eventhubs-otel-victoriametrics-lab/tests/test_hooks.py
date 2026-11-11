@@ -601,6 +601,23 @@ def test_gateway_bundle_restores_the_previous_bundle_when_the_copy_fails(fake_bi
     assert not list(tmp_path.glob("app.previous.*"))
 
 
+def test_gateway_bundle_restores_the_previous_bundle_when_an_entry_cannot_be_moved(fake_bin, tmp_path):
+    bin_dir, _, write = fake_bin
+    _bootstrap_tools(write)
+    app = _previous_bundle(tmp_path / "app")
+    (app / "compose.yaml").write_text("previous")
+    (app / "stale.yaml").write_text("old")
+    # e.g. an immutable entry or a mount point: only this move fails.
+    write("mv", f'case "$1" in {app}/stale.yaml) exit 1;; esac; exec /bin/mv "$@"')
+
+    result = _run_bootstrap(bin_dir, tmp_path, app)
+
+    assert result.returncode != 0
+    assert "could not move" in result.stderr and "previous bundle restored" in result.stderr
+    assert (app / "compose.yaml").read_text() == "previous" and (app / "stale.yaml").read_text() == "old"
+    assert not list(tmp_path.glob("app.previous.*"))
+
+
 def test_gateway_keeps_the_grafana_secret_when_key_vault_fails(fake_bin, tmp_path):
     bin_dir, _, write = fake_bin
     _bootstrap_tools(write)
@@ -898,6 +915,15 @@ def test_scenario_counts_only_fresh_lag_samples():
     assert '[[ "$FINAL_LAG" -ge 0 ]] || die' in text
 
 
+def test_scenario_completes_only_when_the_final_lag_is_still_recovered():
+    text = (SCRIPTS / "run-scenario.sh").read_text()
+
+    # A dip below the target that rose again by the end is not a recovery.
+    check = '[[ "$FINAL_LAG" -le "$TARGET" ]] || die'
+    assert check in text
+    assert text.index('FINAL_LAG="$(max_lag)"') < text.index(check) < text.index('log "scenario completed"')
+
+
 def test_scenario_load_window_and_peak_cover_the_running_producer():
     text = (SCRIPTS / "run-scenario.sh").read_text()
 
@@ -922,6 +948,8 @@ def test_gateway_only_requires_a_completed_full_postprovision():
     failure = text.index('|| die "Grafana is not reachable', check)
     assert text.index('touch "$COMPLETED_STAMP"') > failure
     assert text.count('touch "$COMPLETED_STAMP"') == 1
+    # The only write is skipped for GATEWAY_ONLY, so a gateway-only run can never create the stamp.
+    assert '[[ "${GATEWAY_ONLY:-false}" == "true" ]] || touch "$COMPLETED_STAMP"\n' in text
     assert '[[ -f "$COMPLETED_STAMP" && -n "$WORKLOAD_IMAGE" ]] || die' in text
 
 

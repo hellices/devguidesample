@@ -26,6 +26,7 @@ DIAG_CLUSTER = ('source_path="diagnostic_eventhub",delivery_path="remote_write",
 LAG = 'source_path="lag_exporter",delivery_path="remote_write"'
 LOGS = 'source_path="diagnostic_logs",delivery_path="remote_write"'
 LOGS_OFF = "로그 꺼짐·수신 없음"
+DS_OFF = "지표 DS 꺼짐·수신 없음"
 SELF = 'source_path="collector_self",delivery_path="remote_write"'
 LEARN_METRICS = "https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference"
 
@@ -355,9 +356,10 @@ def build_dashboard(probe: dict) -> dict:
         # without delivery_path would count every series twice.
         [{"expr": f'count(last_over_time({{{DIAG}}}[$__range]))', "instant": True,
           "legendFormat": "series"}],
-        description=("[optional] Diagnostic Settings가 telemetry Event Hub로 보낸 지표 수. "
-                     "series가 없으면 0으로 바꾸지 않고 '수신 없음'으로 표시합니다."),
-        fieldConfig={"defaults": {"unit": "short", "decimals": 0, "noValue": "수신 없음",
+        description=("[optional] Diagnostic Settings가 telemetry Event Hub로 보낸 지표 수. 지표용 설정은 "
+                     "EVENTHUBS_DIAGNOSTIC_METRICS=Enabled일 때만 만들어지며(기본 꺼짐), series가 없으면 0으로 "
+                     f"바꾸지 않고 '{DS_OFF}'로 표시합니다."),
+        fieldConfig={"defaults": {"unit": "short", "decimals": 0, "noValue": DS_OFF,
                                   "color": {"mode": "fixed", "fixedColor": "text"}}, "overrides": []},
         options=stat_opts | {"textMode": "value"},
     ))
@@ -370,7 +372,7 @@ def build_dashboard(probe: dict) -> dict:
         options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
     ))
 
-    panels.append(layout.row("Azure Monitor API vs Diagnostic Settings (remote write)"))
+    panels.append(layout.row("Azure Monitor API vs Diagnostic Settings (remote write, EVENTHUBS_DIAGNOSTIC_METRICS=Enabled일 때)"))
     incoming_targets = [
         {"expr": f"sum(azure_incomingmessages_total_Count{{{API}}})", "legendFormat": "azure_monitor_api"},
         {"expr": f"sum(incomingmessages_total{{{DIAG}}})", "legendFormat": "diagnostic_eventhub"},

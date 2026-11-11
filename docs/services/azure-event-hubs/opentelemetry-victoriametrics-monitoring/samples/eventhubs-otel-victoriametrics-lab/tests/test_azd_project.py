@@ -175,7 +175,12 @@ def test_managed_grafana_is_optional_standard_and_reachable_only_privately():
     # hook grants it only when missing.
     assert "roleAssignments" not in module
     hook = (LAB_ROOT / "scripts" / "managed-grafana.sh").read_text()
-    assert '--role "Grafana Admin"' in hook and 'if [[ "$assigned" == "0" ]]; then' in hook
+    # The grant is the create call inside the "not assigned yet" branch, and there is no other grant.
+    branch = re.search(r'if \[\[ "\$assigned" == "0" \]\]; then\n(.*?)\nfi\n', hook, re.DOTALL)
+    assert branch, "missing Grafana Admin branch"
+    assert re.search(r'az role assignment create .*--assignee-object-id "\$DEPLOYER_ID".*--role "Grafana Admin" '
+                     r'--scope "\$GRAFANA_ID"', branch.group(1).replace("\\\n", " "), re.DOTALL)
+    assert hook.count("az role assignment create") == 1
     # The Private Link Service on the AKS internal load balancer needs this subnet policy off.
     assert "privateLinkServiceNetworkPolicies: 'Disabled'" in foundation
     pls = (LAB_ROOT / "k8s" / "vmsingle-pls.yaml").read_text()

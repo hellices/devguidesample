@@ -820,6 +820,11 @@ PR 리뷰에서 지적된 다음 항목도 고쳤습니다.
 | Private Link Service 연결 승인이 예측 가능한 요청 메시지에만 의존 | 환경별 임의 nonce를 요청 메시지에 넣고 그 연결만 승인. nonce는 로컬 azd 환경에만 저장하고 재실행에 재사용 |
 | provision이 output 저장 전에 실패하면 `predown`이 대상 resource group을 몰라 `azd down`이 중단됨 | `AZURE_RESOURCE_GROUP`이 없고 subscription만 있으면 `rg-<env-name>`을 대상으로 사용 |
 | 기존 cluster에 만든 Monitoring Reader 할당이 정리 뒤에도 남음 | 할당 ID를 provision output으로 남기고 `predown`이 그 할당 하나만 삭제 |
+| probe의 일반 token 검사가 끝에 newline이 붙은 값도 통과 | `fullmatch`로 값 전체를 검사 |
+| bundle 교체 중 항목 하나의 이동 실패가 `find -exec`에 묻혀 이전 파일이 남을 수 있음 | 항목마다 이동 결과를 확인하고, 실패하면 옮긴 항목만 되돌린 뒤 중단. 이 경우를 실제 bootstrap 실행 테스트로 확인했고, 첫 구현의 복구가 옮기지 않은 항목까지 지우는 문제도 이 테스트로 찾아 고침 |
+| lag가 잠깐 목표 아래로 내려갔다가 다시 올라도 시나리오가 완료로 끝남 | 관찰 꼬리 뒤의 최종 lag도 목표 이하일 때만 완료 |
+| `GRAFANA_URL` 끝의 슬래시가 여러 개면 하나만 제거 | 끝의 슬래시를 모두 제거 |
+| 계약 테스트가 subnet 교환, 이름을 바꾼 비밀 output, NSG 규칙의 방향·protocol, collection resource 범위, 상수 식 `vector()`, stamp의 분기 위치, Grafana Admin 부여 호출을 확인하지 않음 | CIDR 겹침 계산과 subnet별 변수, output 이름 허용 목록, 규칙 한 단위 검사, 괄호 깊이로 자르는 `_resource_block`, `vector()` 금지, `GATEWAY_ONLY` 가드가 붙은 stamp 줄, 조건문 안의 `az role assignment create` 확인 |
 
 ## 정리: `azd down --purge`와 resource group 삭제 확인 { #cleanup }
 

@@ -144,4 +144,6 @@ PY
 cat "$EVIDENCE/scenario.json"
 COMPLETED=true
 [[ -n "$RECOVERED_AT" ]] || die "max lag did not recover by 80% within ${RECOVERY_TIMEOUT_MINUTES}m"
+# A dip below the target that rose again by the end of the tail is not a recovery.
+[[ "$FINAL_LAG" -le "$TARGET" ]] || die "lag dipped to the target at $RECOVERED_AT but was $FINAL_LAG (> $TARGET) at the end"
 log "scenario completed"

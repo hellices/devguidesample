@@ -57,6 +57,8 @@ def test_window_must_be_a_supported_positive_duration(window):
     ("workload", True), ("Backend", True), ("remote_write", True),
     ("ns.servicebus.windows.net", False), ("/subscriptions/s/resourceGroups/g", False),
     ("00000000-0000-0000-0000-000000000000", False), ("x" * 65, False),
+    # "$" also matches before a trailing newline; the whole value must be a plain token.
+    ("token\n", False), ("00000000-0000-0000-0000-000000000000\n", False),
 ])
 def test_allowlisted_values_are_copied_only_when_they_are_plain_tokens(value, kept):
     from probe import _safe_value

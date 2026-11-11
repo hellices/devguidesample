@@ -74,8 +74,9 @@ Event Hubs의 CPU·memory·요청·처리량 지표는 Azure Monitor가 1분 단
 ![Event Hubs Dedicated 관측 대시보드. Dedicated CPU 3.3%·가용 memory 42% gauge와 Role별 추이, 요청 1,528건·throttle 0건 stat, CU당 분당 message·byte 막대, partition별 peak lag 10,800–10,980과 누적 lag 영역, source_path·delivery_path별 series 수와 분당 sample 수 표, scrape와 remote write의 IncomingMessages 시차, Metrics API와 Diagnostic Settings의 IncomingMessages·cluster CPU 비교, Collector 실패 0건](images/grafana-dashboard.png)
 
 같은 26분 구간을 Azure Monitor에서 직접 조회한 값과 비교하면, 원본 timestamp를 유지하는
-remote write 경로는 ②·④ 모두 합계가 일치했습니다. 다만 ②는 receiver가 놓친 분 bin을 다시
-채우지 않았습니다([분 bin 누락](lab/index.md#gaps)).
+remote write 경로는 ②의 4개 지표 모두, ④는 실제로 수신된 지표의 합계가 일치했습니다. ④에는
+`ThrottledRequests`가 오지 않아 throttle 합계는 ④로 확인할 수 없습니다. ②는 receiver가 놓친 분
+bin을 다시 채우지 않았습니다([분 bin 누락](lab/index.md#gaps)).
 
 | 지표 | Azure Monitor 직접 조회 | ② Metrics API → remote write | ④ Diagnostic Settings → remote write |
 |---|---:|---:|---:|

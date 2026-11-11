@@ -22,12 +22,22 @@ def test_foundation_declares_required_resource_types():
 
 
 def test_foundation_uses_fixed_non_overlapping_subnets():
-    text = FOUNDATION.read_text()
+    import ipaddress
 
-    assert "10.42.0.0/16" in text
-    assert "10.42.1.0/24" in text
-    assert "10.42.2.0/24" in text
-    assert "10.42.2.250" in text
+    text = _code(FOUNDATION.read_text())
+    prefixes = dict(re.findall(r"^var (\w+SubnetPrefix) = '([\d./]+)'$", text, re.MULTILINE))
+    assert prefixes == {"gatewaySubnetPrefix": "10.42.1.0/24", "aksSubnetPrefix": "10.42.2.0/24",
+                        "endpointsSubnetPrefix": "10.42.3.0/24"}
+    # Each subnet uses its own prefix variable (swapping them would move the AKS load balancer IP).
+    for subnet, var in (("gatewaySubnet", "gatewaySubnetPrefix"), ("aksSubnet", "aksSubnetPrefix"),
+                        ("endpointsSubnet", "endpointsSubnetPrefix")):
+        assert re.findall(r"addressPrefix: (\w+)", _resource_block(text, subnet)) == [var], subnet
+    vnet = ipaddress.ip_network(re.search(r"addressPrefixes: \[\s*'([\d./]+)'\s*\]", text).group(1))
+    nets = [ipaddress.ip_network(v) for v in prefixes.values()]
+    assert vnet == ipaddress.ip_network("10.42.0.0/16") and all(n.subnet_of(vnet) for n in nets)
+    assert not any(a.overlaps(b) for i, a in enumerate(nets) for b in nets[i + 1:])
+    vmsingle = ipaddress.ip_address(re.search(r"^var vmSinglePrivateIp = '([\d.]+)'$", text, re.MULTILINE).group(1))
+    assert vmsingle == ipaddress.ip_address("10.42.2.250") and vmsingle in ipaddress.ip_network("10.42.2.0/24")
 
 
 def test_storage_and_key_vault_disable_legacy_secret_access():
@@ -97,11 +107,18 @@ def test_foundation_assigns_only_expected_built_in_roles():
 
 
 def test_foundation_does_not_expose_secrets():
-    text = FOUNDATION.read_text()
+    text = _code(FOUNDATION.read_text())
 
-    assert "output grafanaPassword" not in text
-    assert "output connectionString" not in text
-    assert "output storageKey" not in text
+    # An exact allowlist: a renamed secret output cannot slip in under a new name.
+    outputs = dict(re.findall(r"^output (\w+) \w+ = (.+)$", text, re.MULTILINE))
+    assert set(outputs) == {
+        "vnetId", "vnetName", "gatewaySubnetId", "gatewayNsgId", "aksSubnetId", "acrId", "acrName",
+        "acrLoginServer", "storageName", "storageBlobEndpoint", "keyVaultName", "gatewayIdentityId",
+        "gatewayPrincipalId", "gatewayClientId", "producerPrincipalId", "producerClientId",
+        "consumerPrincipalId", "consumerClientId", "vmSinglePrivateIp",
+    }
+    for name, expr in outputs.items():
+        assert not re.search(r"(?i)listKeys|listSecrets|getSecret|password|connectionString|primaryKey", expr), name
 
 
 def test_foundation_exports_main_module_contract():
@@ -265,6 +282,13 @@ def test_compute_enables_workload_identity_and_restricts_public_ports():
     allow = re.findall(r"access: 'Allow'.*?destinationPortRange: '(\w+)'", rules, re.DOTALL)
     assert allow == ["3000"]
     assert re.findall(r"sourceAddressPrefix: (\S+)", rules) == ["operatorEgressCidr"]
+    # The single allow rule as one unit: inbound TCP 3000 from the operator /32 only.
+    [rule] = re.findall(r"properties: \{(.*?)\n\s*\}", rules, re.DOTALL)
+    fields = dict(re.findall(r"^\s*(\w+): (\S+)\s*$", rule, re.MULTILINE))
+    assert {k: fields.get(k) for k in ("access", "direction", "protocol", "sourceAddressPrefix",
+                                       "destinationPortRange")} == {
+        "access": "'Allow'", "direction": "'Inbound'", "protocol": "'Tcp'",
+        "sourceAddressPrefix": "operatorEgressCidr", "destinationPortRange": "'3000'"}
     assert "destinationPortRange: '22'" not in text
     assert "destinationPortRange: '22'" not in foundation
 
@@ -349,10 +373,33 @@ def _code(text: str) -> str:
 
 
 def _resource_block(text: str, symbol: str) -> str:
+    """One top-level resource, from its declaration to the bracket that closes its body.
+
+    Counts {} and [] depth outside strings, so a `[for ...: { ... }]` collection ends at its own `}]`
+    rather than at a later resource's closing brace.
+    """
     start = re.search(rf"(?m)^resource {symbol} '", text)
     assert start, symbol
-    end = re.search(r"(?m)^}", text[start.start():])
-    return text[start.start():start.start() + end.end()]
+    body = text.index("=", start.end()) + 1
+    depth, quoted, opened = 0, False, False
+    for i in range(body, len(text)):
+        ch = text[i]
+        if ch == "'" and text[i - 1] != "\\":
+            quoted = not quoted
+        elif not quoted and ch in "{[":
+            depth, opened = depth + 1, True
+        elif not quoted and ch in "}]":
+            depth -= 1
+            if opened and depth == 0:
+                return text[start.start():i + 1]
+    raise AssertionError(f"unterminated resource {symbol}")
+
+
+def test_resource_block_stops_at_the_end_of_a_collection_resource():
+    text = ("resource a 'x' = [for i in list: {\n  name: i\n}]\n"
+            "resource b 'y' = {\n  groupIds: [ 'blob' ]\n}\n")
+    assert _resource_block(text, "a") == "resource a 'x' = [for i in list: {\n  name: i\n}]"
+    assert "groupIds" not in _resource_block(text, "a")
 
 
 def test_data_plane_uses_private_endpoints_only():

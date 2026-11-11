@@ -44,6 +44,9 @@ def test_no_query_hides_missing_series_as_zero():
     # Parentheses around vector(0) are still a zero fill.
     zero_fill = re.compile(r"\bor\b(?:\s+(?:on|ignoring)\s*\([^)]*\))?[\s(]*vector\s*\(\s*0(?:\.0*)?\s*\)")
     assert not [e for e in exprs if zero_fill.search(e)]
+    # Any constant fallback (vector(0 * 1), vector(1 - 1), ...) fills a missing series, so the
+    # dashboard uses no vector() at all.
+    assert not [e for e in exprs if re.search(r"\bvector\s*\(", e)]
     assert zero_fill.search("x or on() vector (0)") and zero_fill.search("x or vector(0.0)")
     assert zero_fill.search("x or on() (vector(0))") and zero_fill.search("x or ( vector(0) )")
     assert zero_fill.search("x or ignoring(job) vector(0)")
@@ -458,3 +461,18 @@ def test_capture_accepts_only_a_root_https_grafana_url(url, ok):
     result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30)
 
     assert result.stdout.strip() == ("ok" if ok else "rejected"), result.stderr
+
+
+def test_grafana_base_drops_every_trailing_slash():
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    module = (LAB_ROOT / "agent" / "grafana-url.mjs").as_uri()
+    script = (f"import {{ grafanaBase }} from '{module}';\n"
+              "console.log(grafanaBase('https://203.0.113.10:3000//', 'ca.crt'));\n")
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=30)
+
+    assert result.stdout.strip() == "https://203.0.113.10:3000", result.stderr

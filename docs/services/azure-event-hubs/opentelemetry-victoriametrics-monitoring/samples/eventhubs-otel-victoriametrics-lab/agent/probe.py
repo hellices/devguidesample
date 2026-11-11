@@ -29,13 +29,14 @@ SAFE_LABEL_VALUES = {
     "unit",
 }
 WINDOW = "30m"
-SAFE_VALUE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+# fullmatch: "$" would also accept a value that ends in a newline.
+SAFE_VALUE = re.compile(r"[A-Za-z0-9_-]{1,64}")
+GUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 
 def _safe_value(value: str) -> str:
     """The value when it is a short plain token, otherwise a redaction marker."""
-    return value if SAFE_VALUE.match(value) and not GUID.match(value) else "<redacted>"
+    return value if SAFE_VALUE.fullmatch(value) and not GUID.fullmatch(value) else "<redacted>"
 
 
 def _quote(value: str) -> str:
