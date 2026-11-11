@@ -24,6 +24,7 @@ azd env set EVENTHUBS_LOCATION koreasouth   # Event Hubs만 다른 리전에 둘
 # azd env set MANAGED_GRAFANA Enabled        # Azure Managed Grafana(Standard)와 managed private endpoint 추가
 azd up                                       # provision + hooks + workload
 ./scripts/run-scenario.sh                    # baseline 5분, 부하 10분, 회복
+# ./scripts/run-lag-cycles.sh               # 선택: 부하 10분·소진 15분을 4시간 반복
 ./scripts/collect-evidence.sh                # probe → build → verify → capture
 azd down --purge --force                     # cluster 생성 4시간 뒤. postdown이 resource group 삭제까지 확인
 ```
@@ -46,6 +47,7 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `scripts/azd-postprovision.sh` | `postprovision`: kubeconfig, federated credential, ACR build, VictoriaMetrics, Run Command로 Gateway 번들 적용입니다. `GATEWAY_ONLY=true`이면 Gateway만 다시 적용합니다. |
 | `scripts/azd-deploy.sh` | `postdeploy`: Workload Identity를 쓰는 producer와 slow consumer입니다. |
 | `scripts/run-scenario.sh` | lag 상승·회복 시나리오와 UTC 경계를 `evidence/<env>/scenario.json`에 남깁니다. |
+| `scripts/run-lag-cycles.sh` | 부하와 소진을 정해진 시간 동안 반복하고 경계를 `evidence/<env>/lag-cycles.log`에 남깁니다. 끝나거나 중단되면 producer를 0으로 되돌립니다. |
 | `scripts/collect-evidence.sh` | agent 대시보드 workflow와 Azure Monitor 분 단위 대조입니다. Managed Grafana가 있으면 Microsoft Entra token으로 같은 대시보드를 게시·검증·캡처합니다. |
 | `scripts/managed-grafana.sh` | `postprovision`이 호출합니다. VMSingle Private Link Service, managed private endpoint 생성·승인, Grafana Admin, VictoriaMetrics data source입니다. |
 | `scripts/cleanup-external.sh`, `scripts/verify-cleanup.sh` | `predown`, `postdown`입니다. |
