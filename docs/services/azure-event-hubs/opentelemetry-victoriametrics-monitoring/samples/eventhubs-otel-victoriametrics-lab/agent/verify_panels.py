@@ -63,8 +63,9 @@ def iter_panels(panels: list[dict]):
             yield panel
 
 
-def inspect_frames(result: dict) -> tuple[int, int, int | None]:
+def inspect_frames(result: dict) -> tuple[int, int, int | None, float]:
     rows = finite = 0
+    total = 0.0
     newest = None
     for frame in result.get("frames", []):
         values = frame.get("data", {}).get("values", [])
@@ -77,9 +78,11 @@ def inspect_frames(result: dict) -> tuple[int, int, int | None]:
                     newest = max(newest or value, value)
                 elif isinstance(value, (int, float)) and math.isfinite(value):
                     finite += 1
-    return rows, finite, newest
+                    total += value
+    return rows, finite, newest, total
 
 
+PROMETHEUS = {"type": "prometheus", "uid": "victoriametrics"}
 VARIABLE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
 
 
@@ -98,23 +101,33 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
             # Grafana does not run a hidden target, so neither does the verification.
             if target.get("hide"):
                 continue
-            # One pass over whole $name / ${name} tokens, so $cluster never rewrites $cluster_name.
-            expr = VARIABLE.sub(
-                lambda match: str(variables.get(match.group(1) or match.group(2), match.group(0))),
-                target.get("expr", ""),
-            )
-            instant = bool(target.get("instant", False))
-            query = {
-                "refId": target.get("refId", "A"),
-                "datasource": {"type": "prometheus", "uid": "victoriametrics"},
-                "expr": expr,
-                # Keep both flags as configured: a "Both" target runs an instant and a range query.
-                "instant": instant,
-                "range": bool(target.get("range", not instant)),
-                "intervalMs": 60000,
-                "maxDataPoints": 500,
-            }
-            entry = {"panel": panel["title"], "refId": query["refId"], "optional": optional, "expr": expr}
+            datasource = target.get("datasource") or panel.get("datasource") or PROMETHEUS
+            if datasource.get("type", "prometheus") == "prometheus":
+                # One pass over whole $name / ${name} tokens, so $cluster never rewrites $cluster_name.
+                expr = VARIABLE.sub(
+                    lambda match: str(variables.get(match.group(1) or match.group(2), match.group(0))),
+                    target.get("expr", ""),
+                )
+                instant = bool(target.get("instant", False))
+                query = {
+                    "refId": target.get("refId", "A"),
+                    "datasource": datasource,
+                    "expr": expr,
+                    # Keep both flags as configured: a "Both" target runs an instant and a range query.
+                    "instant": instant,
+                    "range": bool(target.get("range", not instant)),
+                    "intervalMs": 60000,
+                    "maxDataPoints": 500,
+                }
+                entry = {"panel": panel["title"], "refId": query["refId"], "optional": optional, "expr": expr}
+            else:
+                # Other data sources (Azure Monitor) take the panel target model as is.
+                query = {**target, "refId": target.get("refId", "A"), "datasource": datasource,
+                         "intervalMs": 60000, "maxDataPoints": 500}
+                metric = target.get("azureMonitor", {})
+                entry = {"panel": panel["title"], "refId": query["refId"], "optional": optional,
+                         "datasource": datasource.get("type"), "metric": metric.get("metricName"),
+                         "aggregation": metric.get("aggregation")}
             try:
                 body = grafana_request(
                     url, user, password, "/api/ds/query",
@@ -124,8 +137,8 @@ def verify(url: str, user: str, password: str, uid: str, time_from: str, time_to
                 if result.get("error"):
                     entry.update(status="error", error=result["error"])
                 else:
-                    rows, finite, newest = inspect_frames(result)
-                    entry.update(rows=rows, finite_values=finite, newest_ms=newest)
+                    rows, finite, newest, total = inspect_frames(result)
+                    entry.update(rows=rows, finite_values=finite, newest_ms=newest, value_sum=total)
                     entry["status"] = "pass" if rows and finite else "empty"
             except urllib.error.HTTPError as error:
                 try:

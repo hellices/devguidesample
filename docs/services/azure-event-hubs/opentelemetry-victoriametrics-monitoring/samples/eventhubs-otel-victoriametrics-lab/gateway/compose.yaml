@@ -14,8 +14,6 @@ services:
       - "127.0.0.1:8888:8888"
       - "127.0.0.1:13133:13133"
     restart: unless-stopped
-    depends_on:
-      - lag-exporter
 
   lag-exporter:
     image: ${LAG_EXPORTER_IMAGE:?set LAG_EXPORTER_IMAGE}
@@ -24,6 +22,8 @@ services:
       - ./lag-exporter.env
     expose:
       - "9464"
+    # PLATFORM_METRICS=AzureMonitor runs no lag exporter: lag comes from the ConsumerLag resource log.
+    scale: ${LAG_EXPORTER_SCALE:-1}
     restart: unless-stopped
 
   grafana:
@@ -31,6 +31,10 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       VMSINGLE_PRIVATE_IP: ${VMSINGLE_PRIVATE_IP:?set VMSINGLE_PRIVATE_IP}
+      AZURE_SUBSCRIPTION_ID: ${AZURE_SUBSCRIPTION_ID:?set AZURE_SUBSCRIPTION_ID}
+      # The Azure Monitor data source authenticates with the Gateway VM's user-assigned identity.
+      GF_AZURE_MANAGED_IDENTITY_ENABLED: "true"
+      GF_AZURE_MANAGED_IDENTITY_CLIENT_ID: ${GATEWAY_CLIENT_ID:?set GATEWAY_CLIENT_ID}
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"

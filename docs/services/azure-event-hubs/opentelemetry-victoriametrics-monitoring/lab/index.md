@@ -1,10 +1,11 @@
 ---
 title: Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
-description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, Event Hubs 리소스 로그의 지표화, Azure Managed Grafana 연결, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
+description: azd up으로 Event Hubs Dedicated cluster(1 CU), AKS의 VictoriaMetrics, OpenTelemetry Collector Gateway를 배포하고 consumer lag 상승·회복 시나리오, agent 대시보드 검증, 지연·분 bin 누락 측정, Event Hubs 리소스 로그의 지표화, Azure Managed Grafana 연결, Azure Monitor 직접 조회와 리소스 로그 수집을 나눈 분리 구성, azd down --purge까지 실제로 실행한 기록과 배포 중 만난 오류의 원인·수정을 정리한 실습입니다.
 document_type: lab
 services:
 - azure-event-hubs
 - azure-monitor
+- azure-managed-grafana
 technologies:
 - open-telemetry
 - victoriametrics
@@ -18,7 +19,7 @@ tags:
 - evaluate
 status: verified
 verification_status: verified
-sources_checked_at: 2026-11-10
+sources_checked_at: 2026-11-11
 official_sources:
 - title: Azure Event Hubs monitoring data reference
   url: https://learn.microsoft.com/azure/event-hubs/monitor-event-hubs-reference
@@ -70,6 +71,14 @@ official_sources:
   url: https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api
 - title: Grant users and identities access to Azure Managed Grafana
   url: https://learn.microsoft.com/azure/managed-grafana/how-to-manage-access-permissions-users-identities
+- title: Grant Azure Monitor access to Azure Managed Grafana
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-permissions
+- title: How to manage data sources in Azure Managed Grafana
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity
+- title: Configure the Azure Monitor data source (Grafana documentation source)
+  url: https://github.com/grafana/grafana/blob/main/docs/sources/datasources/azure-monitor/configure/index.md
+- title: Grafana Azure Monitor metrics query backend (v12.3.0)
+  url: https://github.com/grafana/grafana/blob/v12.3.0/pkg/tsdb/azuremonitor/metrics/azuremonitor-datasource.go
 - title: Disable network policies for Private Link service source IP
   url: https://learn.microsoft.com/azure/private-link/disable-private-link-service-network-policy
 - title: OpenTelemetry Collector Contrib azuremonitorreceiver (v0.165.0)
@@ -88,7 +97,7 @@ official_sources:
   url: https://docs.victoriametrics.com/operator/resources/vmsingle/
 - title: VictoriaMetrics Operator VMStaticScrape
   url: https://docs.victoriametrics.com/operator/resources/vmstaticscrape/
-last_verified: 2026-11-10
+last_verified: 2026-11-11
 review_cycle_days: 60
 estimated_time: 4h
 cost: paid
@@ -110,7 +119,9 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 재배포를 확인했으며, fallback 전환과 VMSingle 보존 확인은 첫 Premium 환경에서
 실행했습니다. 같은 날 13:46 UTC부터는 두 번째 Dedicated 환경(`ehotel-ded2`)에서
 [Event Hubs 리소스 로그의 지표화](#resource-logs)와 선택 항목인
-[Azure Managed Grafana](#managed-grafana)를 추가로 검증했습니다.
+[Azure Managed Grafana](#managed-grafana)를 추가로 검증했습니다. 2026-11-11에는 Premium 1 PU
+환경(`ehotel-amd`)에서 플랫폼 지표를 Azure Monitor로 직접 조회하고 리소스 로그만 Collector로
+받는 [분리 구성](#direct-query)을 실행했습니다.
 
 ## 실습 결과물: 배포·시나리오·대시보드·정리 증거
 
@@ -126,7 +137,8 @@ cluster(1 CU)와 그 안의 namespace를 `azd up` 한 번으로 배포했고, �
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
 | 리소스 로그 | `EVENTHUBS_LOGS=Enabled`(기본값), 시나리오 두 번 | 로그를 끈 구간은 로그 패널 6개 모두 수신 없음, 켠 구간은 26분 동안 레코드 1,469건과 6개 패널 통과(`ehotel-ded2`) |
 | Managed Grafana | `MANAGED_GRAFANA=Enabled`, `azd provision` | Private Link Service·managed private endpoint 승인·data source까지 hook 1분 30초. 같은 대시보드 37개 query 중 35개 통과, Gateway Grafana와 같은 결과(`ehotel-ded2`) |
-| 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 두 환경 모두 resource group 삭제 확인 |
+| 분리 구성 | `PLATFORM_METRICS=AzureMonitor`, `azd up` | Gateway·Managed Grafana 모두 23개 query 통과, Grafana 패널 합계와 Azure Monitor 직접 조회 4개 지표 일치, Grafana 조회 지연은 Metrics API와 같음(`ehotel-amd`) |
+| 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. 분리 구성 Premium 환경(`ehotel-amd`)은 18분 2초. Premium 네 환경과 Dedicated 두 환경 모두 resource group 삭제 확인 |
 
 ## 수집 구조: source별 2개 전달 경로 { #architecture }
 
@@ -182,6 +194,7 @@ attribute가 label로 퍼지지 않게 했습니다.
 | consumer identity | Storage Blob Data Contributor | `workload-checkpoints` container |
 | AKS cluster identity | Network Contributor | AKS subnet (internal load balancer 고정 IP) |
 | 배포자 | Azure Kubernetes Service RBAC Cluster Admin | AKS cluster |
+| Managed Grafana identity (`MANAGED_GRAFANA=Enabled`) | Monitoring Reader | workload namespace, 템플릿이 만든 Dedicated cluster |
 
 AKS internal load balancer에 대해 Learn은 VNet 범위 Network Contributor 또는 subnet
 `join`·`read` 권한을 요구합니다. 이 실습은 Network Contributor를 AKS subnet 범위로만
@@ -668,6 +681,118 @@ namespace Diagnostic Settings 지연 때문입니다.
 웹 UI는 Microsoft Entra ID로 로그인합니다. 다른 사용자에게 보여 주려면 workspace에 Grafana
 Viewer 역할을 할당합니다.
 
+## 분리 구성: `PLATFORM_METRICS=AzureMonitor` { #direct-query }
+
+플랫폼 지표는 Grafana의 Azure Monitor 데이터 소스로 직접 조회하고, Collector에는 리소스 로그를
+받는 `azureeventhubreceiver`만 남기는 [분리 구성](../index.md#direct-query)입니다.
+2026-11-11 UTC에 Premium 1 PU 환경(`ehotel-amd`, Event Hubs는 Korea South)에서 실행했습니다.
+
+```bash
+azd env new ehotel-amd --subscription <subscription-id> --location koreacentral
+azd env set EVENTHUBS_LOCATION koreasouth
+azd env set EVENTHUBS_SKU Premium
+azd env set MANAGED_GRAFANA Enabled
+azd env set PLATFORM_METRICS AzureMonitor   # EVENTHUBS_LOGS=Enabled(기본값) 필요
+azd up
+./scripts/run-scenario.sh
+./scripts/collect-evidence.sh
+```
+
+`PLATFORM_METRICS`의 기본값은 `Collector`이며, 이미 배포한 환경은 값을 바꾼 뒤
+`GATEWAY_ONLY=true azd hooks run postprovision`으로 Gateway만 다시 적용해 전환합니다.
+`AzureMonitor`일 때 sample은 다음과 같이 달라집니다.
+
+| 구성 요소 | `Collector`(기본값) | `AzureMonitor` |
+|---|---|---|
+| Collector receiver | `azure_monitor/premium`(·`dedicated`), `prometheus/lag`, `azure_event_hub/runtime_logs`, `prometheus/self` | `azure_event_hub/runtime_logs`, `prometheus/self` |
+| lag exporter 컨테이너 | 실행 | 실행하지 않음(Compose `scale: 0`) |
+| 플랫폼 지표 패널 | VictoriaMetrics(`source_path="azure_monitor_api"`) | Azure Monitor 데이터 소스(uid `azure-monitor-oob`) |
+| consumer lag 패널 | checkpoint lag(`eventhubs_consumer_lag_messages`) | `ConsumerLag` 로그(`eventhubs_log_consumer_lag`) |
+| 대시보드 | `build_dashboard.py`, uid `eventhubs-otel-victoriametrics` | `build_direct_dashboard.py`, uid `eventhubs-azure-monitor-direct` |
+| 시나리오 lag 판정 | 모든 partition의 checkpoint lag | 최근 180초 `ConsumerLag` 레코드의 최댓값, 레코드가 없으면 0 |
+| evidence 대조 | remote write ↔ Azure Monitor 분 단위 | Grafana 패널 합계 ↔ `az monitor metrics list` 합계 |
+
+`ConsumerLag` 로그는 리소스 로그 hub가 있어야 하므로 `EVENTHUBS_LOGS=Disabled`이면
+postprovision이 실패합니다.
+
+Azure Monitor 데이터 소스는 두 Grafana에 같은 uid로 있습니다. Managed Grafana는 새
+workspace에 `azure-monitor-oob`가 managed identity 인증으로 자동 추가되며, Gateway Grafana는
+`gateway/grafana/provisioning/datasources/azure-monitor.yaml`로 같은 uid를 만들고
+`GF_AZURE_MANAGED_IDENTITY_ENABLED`·`GF_AZURE_MANAGED_IDENTITY_CLIENT_ID`로 Gateway VM의
+user-assigned identity를 씁니다. portal에서 workspace를 만들면 구독 범위 Monitoring Reader가
+기본으로 선택되지만 Bicep 배포는 역할을 만들지 않으므로, `infra/modules/grafana-reader.bicep`이
+`MANAGED_GRAFANA=Enabled`일 때 Managed Grafana의 system-assigned identity에 workload
+namespace(Dedicated에서는 cluster도) 범위 Monitoring Reader를 할당합니다.
+
+| 주체 | 역할 | 범위 |
+|---|---|---|
+| Managed Grafana system-assigned identity | Monitoring Reader | workload namespace, Dedicated cluster |
+
+대시보드의 Azure Monitor target은 모두 리소스 하나만 지정합니다. Grafana Azure Monitor
+backend는 리소스가 하나면 `<resource-id>/providers/microsoft.insights/metrics`를, 여럿이면
+구독 범위 metrics endpoint를 호출하므로 리소스 범위 역할로 충분하려면 이 조건이 필요합니다.
+
+| 단계 | 결과 |
+|---|---|
+| provision | Premium namespace·Managed Grafana·`grafana-reader` 모듈 포함 6분 14초. Managed Grafana identity의 역할은 workload namespace 범위 Monitoring Reader 하나 |
+| postprovision | 4분 37초. Managed Grafana 단계(Private Link Service·managed private endpoint·Grafana Admin·데이터 소스 2개) 1분 1초 |
+| Gateway | `grafana`·`otel-collector` 컨테이너만 running. Collector receiver는 `azure_event_hub/runtime_logs`, `prometheus/self` 두 개 |
+| 시나리오 | baseline 10:57:03, 부하 11:02:09–11:12:32, `ConsumerLag` 정점 10,700건, 11:19:21 회복(producer 중지 6분 49초 뒤) |
+| agent 검증 | Gateway Grafana와 Managed Grafana 모두 23개 query 통과, 패널 합계와 `az monitor metrics list` 4개 지표 일치 |
+
+```text
+$ ./scripts/collect-evidence.sh
+23/23 queries usable (0 required failing)
+[11:34:39] Managed Grafana: publish, verify and capture the same dashboard
+23/23 queries usable (0 required failing)
+[11:35:23] Azure Monitor direct query for the same window
+OK IncomingMessages: azure_monitor=124000.0 grafana=124000.0
+OK IncomingRequests: azure_monitor=1142.0 grafana=1142.0
+OK OutgoingMessages: azure_monitor=124000.0 grafana=124000.0
+OK ThrottledRequests: azure_monitor=0.0 grafana=0.0
+```
+
+![분리 구성의 Managed Grafana 대시보드. Azure Monitor 데이터 소스의 Premium CPU·memory, 요청 1,142건·throttle 0건, 분당 처리량과 VictoriaMetrics 데이터 소스의 ConsumerLag 정점 10,700, partition별 ConsumerLag 영역 그래프, 리소스 로그 600건과 도착 지연, runtime audit 작업, 저장 series 표](../images/direct-query-dashboard.png)
+
+`verify_panels.py`는 target의 데이터 소스가 Prometheus가 아니면 패널 target을 그대로
+`/api/ds/query`로 실행하고 반환된 값의 합을 기록합니다. `compare_grafana_azure_monitor.py`는
+`az monitor metrics list`의 Total 합계와 같은 지표 이름의 패널 합계를 비교해 하나라도 다르거나
+패널이 없으면 실패합니다.
+
+리소스 로그 경로의 측정값은 다음과 같습니다.
+
+| 항목 | 실측(10:57–11:24 UTC) |
+|---|---|
+| `ConsumerLag` | partition별 정점 10,500–10,700건, 합계 정점 42,200건(Collector 처리 시각 11:13:45). 11:04:28에 첫 0이 아닌 값, 11:20:45 이후 모두 0 |
+| 0 레코드 | baseline(10:55–11:03)과 회복 뒤(11:20–11:29)에도 partition마다 1분 간격으로 값 0 레코드 도착 |
+| 도착 지연 | `ApplicationMetricsLogs` 69–118초, `RuntimeAuditLogs` 92–141초 |
+| 레코드 수 | 600건 |
+| VictoriaMetrics series | `diagnostic_logs` 19개, `collector_self` 62개(각각 scrape·remote write). `azure_monitor_api`·`lag_exporter` 없음 |
+
+Learn은 AMQP receiver가 따라잡아 받을 것이 없으면 `ConsumerLag` 레코드를 만들지 않는다고
+설명하지만, 이 실행에서는 consumer가 연결된 동안 0 레코드가 계속 왔습니다. 시나리오의 회복
+판정은 consumer를 계속 실행하는 통제된 조건이라 최근 레코드가 없을 때 0으로 읽지만, 운영
+경보에서는 레코드 부재를 0으로 해석하지 않습니다.
+
+### Azure Monitor 데이터 소스의 조회 지연
+
+Grafana가 Metrics API 위에 지연을 더하는지 확인하려고 같은 namespace에 측정용 hub `lat`
+(partition 1개)를 만들고, 10:25–10:43 UTC에 1분마다 100, 110, 120, …개의 이벤트를 보냈습니다.
+10–11초마다 Metrics API(`IncomingMessages`, `PT1M`, `Total`, `EntityName eq 'lat'`)와 Managed
+Grafana `/api/ds/query`의 같은 Azure Monitor target을 차례로 조회해, 각 합계가 누적 전송 수에
+처음 도달한 시각에서 전송 시각을 뺐습니다.
+
+| 항목 | Metrics API | Managed Grafana Azure Monitor 데이터 소스 |
+|---|---|---|
+| 이벤트 → 조회 가능(12회) | 61–170초(중앙값 120) | 61–170초(중앙값 120) |
+| 두 값이 다른 조회 | 87회 중 0회 | 87회 중 0회 |
+| 최종 합계 | 1,860 | 1,860 |
+
+Grafana는 지연을 더하지 않았습니다. 이 Premium 환경의 Metrics API 지연은 전날 Premium 측정
+(72–102초)보다 길었고, 조회 간격 때문에 ±11초 오차가 있습니다. 10:33:24 조회 한 번은 측정
+client의 ARM 연결 timeout으로 빠졌습니다.
+
+
 ## 배포 중 오류와 수정 { #errors }
 
 원래 브랜치의 구성으로 실제 구독에 배포하며 만난 오류입니다. 모두 sample에 반영했고,
@@ -718,6 +843,15 @@ Dedicated 기본값으로 바꾼 뒤 실제 배포에서 만난 문제입니다.
 | Private Link Service는 Approved인데 data source 연결 실패 | VMSingle container는 8429에서 listen하고 operator Service가 8428을 alias로 노출 | PLS Service의 `targetPort: 8429` |
 | Private Link Service가 만들어지지 않음 | subnet의 private link service network policy가 켜져 있음 | aks subnet에 `privateLinkServiceNetworkPolicies: 'Disabled'` |
 | Managed Grafana 캡처가 401·첫 화면 높이만 저장 | `/api/health`도 인증이 필요하고, Grafana 12.4는 `.react-grid-layout`으로 높이를 계산 | health 요청에 bearer token, 높이 측정에 grid 하단 포함 |
+
+분리 구성 환경(`ehotel-amd`)에서 만난 문제입니다.
+
+| 증상 | 원인 | 수정 |
+|---|---|---|
+| postprovision의 Azure Monitor 데이터 소스 단계가 `409 Conflict`로 실패 | Grafana Admin을 막 할당한 직후 `az grafana data-source show`가 실패해 데이터 소스가 없다고 판단하고 만들기를 시도했는데, 새 workspace에는 `azure-monitor-oob`가 이미 있음 | show 실패를 "없음"으로 보지 않고 show → create → 20초 대기를 6번까지 반복 |
+| Premium CPU·memory 추이 패널이 HTTP 400 | Metrics API가 `NamespaceCpuUsage`·`NamespaceMemoryUsage`의 `Replica` 분할 요청을 `include hidden dimensions: Replica`로 거부 | 분할 없이 Maximum·Average로 조회 |
+| 요청 stat이 `1,142` 대신 `1K` | Azure Monitor 데이터 소스가 반환 field에 단위를 넣어 패널 기본 단위보다 우선함 | Azure Monitor 패널에 숫자 field의 단위 override 추가 |
+| 시나리오가 `lag did not increase (start=-1 peak=-1)`로 실패 | 시나리오가 lag exporter 경로의 series만 조회 | `PLATFORM_METRICS=AzureMonitor`이면 `ConsumerLag` 로그 series를 읽고, 늦게 오는 레코드를 위해 정점 측정 전 180초 대기 |
 
 원래 브랜치에 없던 다음 항목도 보강했습니다.
 
@@ -893,6 +1027,10 @@ azd는 같은 resource group을 대소문자만 다른 이름으로 두 번 표�
 - [Tutorial: connect to a self-hosted Prometheus service on an AKS cluster using a managed private endpoint](https://learn.microsoft.com/azure/managed-grafana/tutorial-mpe-oss-prometheus)
 - [Authenticate to Azure Managed Grafana data plane APIs with Microsoft Entra ID](https://learn.microsoft.com/azure/managed-grafana/how-to-authenticate-data-plane-api)
 - [Grant users and identities access to Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-manage-access-permissions-users-identities)
+- [Grant Azure Monitor access to Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-permissions)
+- [How to manage data sources in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity)
+- [Configure the Azure Monitor data source (Grafana documentation source)](https://github.com/grafana/grafana/blob/main/docs/sources/datasources/azure-monitor/configure/index.md)
+- [Grafana Azure Monitor metrics query backend v12.3.0](https://github.com/grafana/grafana/blob/v12.3.0/pkg/tsdb/azuremonitor/metrics/azuremonitor-datasource.go)
 - [Disable network policies for Private Link service source IP](https://learn.microsoft.com/azure/private-link/disable-private-link-service-network-policy)
 - [OpenTelemetry Collector Contrib azuremonitorreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver)
 - [OpenTelemetry Collector Contrib azureeventhubreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azureeventhubreceiver)

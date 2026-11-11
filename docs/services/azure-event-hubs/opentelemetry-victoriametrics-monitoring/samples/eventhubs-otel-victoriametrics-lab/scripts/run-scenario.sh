@@ -36,13 +36,31 @@ LAG_SERIES='eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_
 PARTITION_SERIES='eventhubs_checkpoint_present{source_path="lag_exporter",delivery_path="remote_write"}'
 FRESH_LAG="($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)"
 FRESH_PARTITIONS="($PARTITION_SERIES and (time() - timestamp($PARTITION_SERIES)) < 120)"
+# PLATFORM_METRICS=AzureMonitor has no lag exporter; lag is the ApplicationMetricsLogs ConsumerLag
+# that azureeventhubreceiver turns into a gauge. Event Hubs writes a record only when it delivers
+# events, so a caught-up receiver leaves none. The scenario keeps the consumer running and reads an
+# absent fresh record as 0 (the peak check still requires real records); outside this controlled run
+# no record does not mean zero lag. Records reach the Collector about 100 s late, hence the wider
+# freshness window.
+LOG_LAG=false
+SETTLE_SECONDS=20
+if [[ "$(env_value PLATFORM_METRICS)" == "AzureMonitor" ]]; then
+  LOG_LAG=true
+  SETTLE_SECONDS=180
+  LAG_SERIES='eventhubs_log_consumer_lag{source_path="diagnostic_logs",delivery_path="remote_write"}'
+  FRESH_LAG="($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 180)"
+fi
 vm_scalar() {
   "$LAB_ROOT/scripts/vm-query.sh" start || return 1
   curl -fsS --max-time "$1" "http://127.0.0.1:$PORT/api/v1/query" --data-urlencode "query=$2" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
 }
 max_lag() {
-  vm_scalar "${1:-30}" "max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"
+  if [[ "$LOG_LAG" == "true" ]]; then
+    vm_scalar "${1:-30}" "max($FRESH_LAG) or vector(0)"
+  else
+    vm_scalar "${1:-30}" "max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"
+  fi
 }
 # The largest lag stored since the producer was scaled up (it may send before its rollout is
 # reported complete); lag keeps rising until the producer stops.
@@ -90,8 +108,8 @@ CONSUMER_PROCESSED_AT_LOAD_END="$(last_log_value eventhubs-slow-consumer process
 
 stop_producer
 PRODUCER_STOP="$(now)"
-# Read the peak after the producer is gone and the exporter has stored its last rising sample.
-sleep 20
+# Read the peak after the producer is gone and the last rising sample is stored.
+sleep "$SETTLE_SECONDS"
 PEAK_LAG="$(peak_lag)"
 log "producer stopped; peak max lag=$PEAK_LAG"
 # max_lag prints -1 when no series exists; both readings must be real before comparing.

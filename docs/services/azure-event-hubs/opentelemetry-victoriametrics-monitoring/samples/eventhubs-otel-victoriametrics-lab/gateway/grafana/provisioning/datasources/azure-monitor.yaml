@@ -1,0 +1,12 @@
+apiVersion: 1
+datasources:
+  # Same uid as the built-in data source of Azure Managed Grafana, so one dashboard works in both.
+  # The Gateway VM identity already has Monitoring Reader on the workload namespace and cluster.
+  - name: Azure Monitor
+    uid: azure-monitor-oob
+    type: grafana-azure-monitor-datasource
+    access: proxy
+    editable: false
+    jsonData:
+      azureAuthType: msi
+      subscriptionId: ${AZURE_SUBSCRIPTION_ID}

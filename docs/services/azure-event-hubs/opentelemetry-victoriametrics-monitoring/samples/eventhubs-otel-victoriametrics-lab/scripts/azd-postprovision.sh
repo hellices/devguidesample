@@ -13,6 +13,24 @@ assert_active_subscription
 STATE="$(state_dir)"
 NS=eventhubs-observability
 AZURE_TENANT_ID="$(az account show --subscription "$AZURE_SUBSCRIPTION_ID" --query tenantId -o tsv)"
+# Collector (default): the Collector pulls the Metrics API and the lag exporter into VictoriaMetrics.
+# AzureMonitor: Grafana reads platform metrics from Azure Monitor directly. The Collector keeps only
+# azureeventhubreceiver, which turns the Event Hubs resource logs (ConsumerLag, RuntimeAuditLogs) into
+# metrics; the Metrics API receiver and the lag exporter do not run.
+PLATFORM_METRICS="$(env_value PLATFORM_METRICS)"
+PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"
+[[ "$PLATFORM_METRICS" == "Collector" || "$PLATFORM_METRICS" == "AzureMonitor" ]] \
+  || die "PLATFORM_METRICS must be Collector or AzureMonitor, got $PLATFORM_METRICS"
+if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then
+  [[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]] \
+    || die "PLATFORM_METRICS=AzureMonitor reads lag from resource logs; set EVENTHUBS_LOGS=Enabled and rerun azd provision"
+  ENABLE_API_RECEIVER=false
+  ENABLE_LAG_RECEIVER=false
+  LAG_EXPORTER_SCALE=0
+else
+  ENABLE_LAG_RECEIVER=true
+  LAG_EXPORTER_SCALE=1
+fi
 
 # The stamp is written only after a successful install, so a failed or outdated venv is rebuilt.
 # Command substitution does not inherit errexit, hence the explicit || die.
@@ -115,6 +133,7 @@ GATEWAY_CLIENT_ID=$GATEWAY_CLIENT_ID
 VMSINGLE_URL=http://$VMSINGLE_PRIVATE_IP:8428
 EXISTING_DEDICATED_CLUSTER_RESOURCE_ID=$(dedicated_cluster_id)
 ENABLE_API_RECEIVER=${ENABLE_API_RECEIVER:-true}
+ENABLE_LAG_RECEIVER=$ENABLE_LAG_RECEIVER
 ENABLE_FALLBACK_EXPORTER=${ENABLE_FALLBACK_EXPORTER:-false}
 ENV
 PY="$(python_env)"
@@ -133,7 +152,9 @@ cat > "$BUNDLE/.env" <<ENV
 LAG_EXPORTER_IMAGE=$WORKLOAD_IMAGE
 GATEWAY_CLIENT_ID=$GATEWAY_CLIENT_ID
 AZURE_TENANT_ID=$AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID
 VMSINGLE_PRIVATE_IP=$VMSINGLE_PRIVATE_IP
+LAG_EXPORTER_SCALE=$LAG_EXPORTER_SCALE
 KEY_VAULT_NAME=$KEY_VAULT_NAME
 ACR_NAME=$ACR_NAME
 GATEWAY_PUBLIC_IP=$GATEWAY_PUBLIC_IP

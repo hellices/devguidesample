@@ -567,3 +567,24 @@ def test_resource_logs_go_to_their_own_hub_only_when_enabled():
     assert "eventHubName: telemetryLogsHub.name" in logs_ds and "scope: premiumNamespace" in logs_ds
     assert re.findall(r"category: '(\w+)'", logs_ds) == ["ApplicationMetricsLogs", "RuntimeAuditLogs"]
     assert "telemetryLogsHub" not in _resource_block(text, "premiumMetricsToTelemetryHub")
+
+
+GRAFANA = LAB_ROOT / "infra" / "modules" / "grafana.bicep"
+GRAFANA_READER = LAB_ROOT / "infra" / "modules" / "grafana-reader.bicep"
+
+
+def test_managed_grafana_identity_reads_only_the_charted_resources():
+    # The Azure Monitor data source runs as the workspace identity; Bicep (unlike portal creation)
+    # grants nothing at subscription scope, so the lab assigns Monitoring Reader per resource.
+    assert sorted(_role_assignments(GRAFANA_READER.read_text())) == sorted([
+        ("namespace", "monitoringReaderRoleDefinitionId", "grafanaPrincipalId"),
+        ("cluster", "monitoringReaderRoleDefinitionId", "grafanaPrincipalId"),
+    ])
+    assert "var monitoringReaderRoleDefinitionId = '43d0d8ad-25c7-4714-9337-8ba259a9fe05'" in GRAFANA_READER.read_text()
+    assert "output principalId string = grafana.identity.principalId" in GRAFANA.read_text()
+    main = _code(MAIN.read_text())
+    block = main[main.index("module grafanaReader"):]
+    block = block[:block.index("\n}\n")]
+    assert "if (managedGrafana == 'Enabled')" in block
+    assert "grafanaPrincipalId: grafana.?outputs.principalId" in block
+    assert "namespaceName: messaging.outputs.premiumNamespaceName" in block

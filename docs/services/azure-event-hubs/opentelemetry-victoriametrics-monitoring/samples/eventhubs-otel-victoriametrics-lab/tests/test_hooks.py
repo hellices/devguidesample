@@ -1113,3 +1113,38 @@ def test_managed_grafana_is_wired_only_when_enabled_and_approves_only_its_own_co
     # The data source keeps the Gateway Grafana uid so the agent dashboard works unchanged.
     assert '"uid": "victoriametrics"' in text and 'http://{sys.argv[1]}:8428' in text
     assert 'die "managed private endpoint $MPE_NAME was not approved' in text
+
+
+def test_platform_metrics_azure_monitor_keeps_only_the_event_hub_receiver():
+    post = (SCRIPTS / "azd-postprovision.sh").read_text()
+    collect = (SCRIPTS / "collect-evidence.sh").read_text()
+    managed = (SCRIPTS / "managed-grafana.sh").read_text()
+    compose = (LAB_ROOT / "gateway" / "compose.yaml").read_text()
+
+    assert 'PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"' in post
+    assert 'die "PLATFORM_METRICS must be Collector or AzureMonitor' in post
+    mode = post[post.index('if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then'):]
+    mode = mode[:mode.index("\nfi\n")]
+    # Lag comes from the ConsumerLag resource log, so the logs hub is mandatory in this mode.
+    assert '[[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]]' in mode
+    assert "ENABLE_API_RECEIVER=false" in mode and "ENABLE_LAG_RECEIVER=false" in mode
+    assert "LAG_EXPORTER_SCALE=0" in mode
+    assert "ENABLE_LAG_RECEIVER=$ENABLE_LAG_RECEIVER" in post and "LAG_EXPORTER_SCALE=$LAG_EXPORTER_SCALE" in post
+    assert "scale: ${LAG_EXPORTER_SCALE:-1}" in compose
+    # Nothing outside the Collector reads the exporter any more.
+    assert "lag-scrape" not in post and not (LAB_ROOT / "k8s" / "lag-scrape.yaml").exists()
+    assert "GF_AZURE_MANAGED_IDENTITY_CLIENT_ID: ${GATEWAY_CLIENT_ID" in compose
+    assert "build_direct_dashboard.py" in collect and "compare_grafana_azure_monitor.py" in collect
+    assert '"/d/$DASHBOARD_UID"' in collect
+    assert "--data-source azure-monitor-oob" in managed and '"azureAuthType": "msi"' in managed
+
+
+def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
+    text = (SCRIPTS / "run-scenario.sh").read_text()
+    branch = text[text.index('if [[ "$(env_value PLATFORM_METRICS)" == "AzureMonitor" ]]; then'):]
+    branch = branch[:branch.index("\nfi\n")]
+    assert 'eventhubs_log_consumer_lag{source_path="diagnostic_logs",delivery_path="remote_write"}' in branch
+    assert "SETTLE_SECONDS=180" in branch and "LOG_LAG=true" in branch
+    # No record means nothing left to receive; the peak check still demands real records.
+    assert 'vm_scalar "${1:-30}" "max($FRESH_LAG) or vector(0)"' in text
+    assert 'sleep "$SETTLE_SECONDS"' in text

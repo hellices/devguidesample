@@ -165,6 +165,73 @@ def dedicated_capacity_panels(layout: "Layout", panels: list[dict], usage: dict)
     ))
 
 
+def consumer_lag_panels(layout: "Layout", panels: list[dict], lag: str, row_title: str) -> None:
+    """Checkpoint-based consumer lag panels over the lag exporter series selected by ``lag``."""
+    stat_opts = {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+                 "colorMode": "value", "graphMode": "none", "textMode": "value_and_name"}
+    panels.append(layout.row(row_title))
+    panels.append(layout.panel(
+        "stat", "Peak lag (window)", 4, 8,
+        [{"expr": f"max(max_over_time(eventhubs_consumer_lag_messages{{{lag}}}[$__range]))", "instant": True,
+          "legendFormat": "peak lag"}],
+        description="조회 구간에서 checkpoint가 있는 partition 중 가장 컸던 미처리 event 수",
+        fieldConfig=field("locale", thresholds(("green", None), ("orange", 1000), ("red", 20000)), decimals=0),
+        options=stat_opts | {"textMode": "value"},
+    ))
+    panels.append(layout.panel(
+        "bargauge", "Peak lag by partition (window)", 6, 8,
+        [{"expr": f"max by (partition) (max_over_time(eventhubs_consumer_lag_messages{{{lag}}}[$__range]))",
+          "instant": True,
+          "legendFormat": "partition {{partition}}"}],
+        # Reduce to one numeric field so every partition shares the same 0..max scale.
+        transformations=[{"id": "reduce", "options": {"reducers": ["max"], "labelsToFields": False}}],
+        fieldConfig={"defaults": {"unit": "locale", "decimals": 0, "min": 0, "color": {"mode": "thresholds"},
+                                  "thresholds": thresholds(("green", None), ("orange", 1000), ("red", 20000))},
+                     "overrides": []},
+        options={"orientation": "horizontal", "displayMode": "gradient",
+                 "reduceOptions": {"calcs": [], "fields": "/^Max$/", "values": True}},
+    ))
+    panels.append(layout.panel(
+        "timeseries", "Consumer lag by partition (stacked)", 6, 8,
+        [{"expr": f"max by (partition) (eventhubs_consumer_lag_messages{{{lag}}})",
+          "legendFormat": "partition {{partition}}"}],
+        description="partition별 lag를 쌓아 위쪽 경계가 전체 backlog가 되도록 표시합니다.",
+        fieldConfig=field("locale", None, min=0, lineWidth=1, fillOpacity=35,
+                          stacking={"mode": "normal", "group": "A"}),
+        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+    ))
+    panels.append(layout.panel(
+        "stat", "Lag collection", 3, 8,
+        [{"expr": f"min(min_over_time(eventhubs_lag_collection_success{{{lag}}}[$__range]))", "instant": True,
+          "legendFormat": "collection"}],
+        description="조회 구간에서 lag exporter의 수집이 한 번이라도 실패했으면 Failed로 표시합니다. 실패하면 lag 값을 지워 오래된 값이 정상처럼 보이지 않게 합니다.",
+        fieldConfig={"defaults": {"unit": "short", "decimals": 0, "noValue": "No data",
+                                  "color": {"mode": "thresholds"},
+                                  "thresholds": thresholds(("red", None), ("green", 1)),
+                                  "mappings": [{"type": "value", "options": {
+                                      "0": {"text": "Failed"}, "1": {"text": "OK"}}}]},
+                     "overrides": []},
+        options=stat_opts | {"textMode": "value"},
+    ))
+    panels.append(layout.panel(
+        "table", "Checkpoint presence", 5, 8,
+        [{"expr": f"min by (partition) (eventhubs_checkpoint_present{{{lag}}})", "instant": True,
+          "format": "table"}],
+        description="1 = checkpoint blob 존재. checkpoint가 없으면 lag 값을 만들지 않습니다.",
+        fieldConfig={"defaults": {"unit": "short", "decimals": 0}, "overrides": [{
+            "matcher": {"id": "byName", "options": "Checkpoint"},
+            "properties": [
+                {"id": "thresholds", "value": thresholds(("red", None), ("green", 1))},
+                {"id": "color", "value": {"mode": "thresholds"}},
+                {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+            ]}]},
+        transformations=[{"id": "organize", "options": {
+            "excludeByName": {"Time": True},
+            "renameByName": {"partition": "Partition", "Value": "Checkpoint"}}}],
+    ))
+
+
+
 def build_dashboard(probe: dict) -> dict:
     raw_pu = probe.get("processing_units", 1)
     # Reject 1.5 or True instead of silently truncating them into a different capacity.
@@ -259,66 +326,7 @@ def build_dashboard(probe: dict) -> dict:
             options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
         ))
 
-    panels.append(layout.row("Consumer lag (마지막 enqueue sequence − checkpoint sequence)"))
-    panels.append(layout.panel(
-        "stat", "Peak lag (window)", 4, 8,
-        [{"expr": f"max(max_over_time(eventhubs_consumer_lag_messages{{{LAG}}}[$__range]))", "instant": True,
-          "legendFormat": "peak lag"}],
-        description="조회 구간에서 checkpoint가 있는 partition 중 가장 컸던 미처리 event 수",
-        fieldConfig=field("locale", thresholds(("green", None), ("orange", 1000), ("red", 20000)), decimals=0),
-        options=stat_opts | {"textMode": "value"},
-    ))
-    panels.append(layout.panel(
-        "bargauge", "Peak lag by partition (window)", 6, 8,
-        [{"expr": f"max by (partition) (max_over_time(eventhubs_consumer_lag_messages{{{LAG}}}[$__range]))",
-          "instant": True,
-          "legendFormat": "partition {{partition}}"}],
-        # Reduce to one numeric field so every partition shares the same 0..max scale.
-        transformations=[{"id": "reduce", "options": {"reducers": ["max"], "labelsToFields": False}}],
-        fieldConfig={"defaults": {"unit": "locale", "decimals": 0, "min": 0, "color": {"mode": "thresholds"},
-                                  "thresholds": thresholds(("green", None), ("orange", 1000), ("red", 20000))},
-                     "overrides": []},
-        options={"orientation": "horizontal", "displayMode": "gradient",
-                 "reduceOptions": {"calcs": [], "fields": "/^Max$/", "values": True}},
-    ))
-    panels.append(layout.panel(
-        "timeseries", "Consumer lag by partition (stacked)", 6, 8,
-        [{"expr": f"max by (partition) (eventhubs_consumer_lag_messages{{{LAG}}})",
-          "legendFormat": "partition {{partition}}"}],
-        description="partition별 lag를 쌓아 위쪽 경계가 전체 backlog가 되도록 표시합니다.",
-        fieldConfig=field("locale", None, min=0, lineWidth=1, fillOpacity=35,
-                          stacking={"mode": "normal", "group": "A"}),
-        options={"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
-    ))
-    panels.append(layout.panel(
-        "stat", "Lag collection", 3, 8,
-        [{"expr": f"min(min_over_time(eventhubs_lag_collection_success{{{LAG}}}[$__range]))", "instant": True,
-          "legendFormat": "collection"}],
-        description="조회 구간에서 lag exporter의 수집이 한 번이라도 실패했으면 Failed로 표시합니다. 실패하면 lag 값을 지워 오래된 값이 정상처럼 보이지 않게 합니다.",
-        fieldConfig={"defaults": {"unit": "short", "decimals": 0, "noValue": "No data",
-                                  "color": {"mode": "thresholds"},
-                                  "thresholds": thresholds(("red", None), ("green", 1)),
-                                  "mappings": [{"type": "value", "options": {
-                                      "0": {"text": "Failed"}, "1": {"text": "OK"}}}]},
-                     "overrides": []},
-        options=stat_opts | {"textMode": "value"},
-    ))
-    panels.append(layout.panel(
-        "table", "Checkpoint presence", 5, 8,
-        [{"expr": f"min by (partition) (eventhubs_checkpoint_present{{{LAG}}})", "instant": True,
-          "format": "table"}],
-        description="1 = checkpoint blob 존재. checkpoint가 없으면 lag 값을 만들지 않습니다.",
-        fieldConfig={"defaults": {"unit": "short", "decimals": 0}, "overrides": [{
-            "matcher": {"id": "byName", "options": "Checkpoint"},
-            "properties": [
-                {"id": "thresholds", "value": thresholds(("red", None), ("green", 1))},
-                {"id": "color", "value": {"mode": "thresholds"}},
-                {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-            ]}]},
-        transformations=[{"id": "organize", "options": {
-            "excludeByName": {"Time": True},
-            "renameByName": {"partition": "Partition", "Value": "Checkpoint"}}}],
-    ))
+    consumer_lag_panels(layout, panels, LAG, "Consumer lag (마지막 enqueue sequence − checkpoint sequence)")
 
     panels.append(layout.row("수집·전달 경로 비교 (source_path × delivery_path)"))
     panels.append(layout.panel(

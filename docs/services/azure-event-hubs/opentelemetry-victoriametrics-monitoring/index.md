@@ -1,10 +1,11 @@
 ---
 title: "Event Hubs 지표 수집 방식 비교 — OpenTelemetry Collector·VictoriaMetrics"
-description: Event Hubs 플랫폼 지표를 외부 VictoriaMetrics로 가져오는 다섯 가지 방식(Azure Monitor 직접 조회, Metrics API pull 두 가지, Diagnostic Settings 스트림, Azure 내부 저장)의 지표 범위·지연·누락·운영 차이를 Event Hubs Dedicated cluster에 실제 배포한 Grafana 대시보드와 측정값으로 비교합니다.
+description: Event Hubs 플랫폼 지표를 외부 VictoriaMetrics로 가져오는 다섯 가지 방식(Azure Monitor 직접 조회, Metrics API pull 두 가지, Diagnostic Settings 스트림, Azure 내부 저장)의 지표 범위·지연·누락·운영 차이를 Event Hubs Dedicated cluster에 실제 배포한 Grafana 대시보드와 측정값으로 비교하고, 플랫폼 지표는 Azure Managed Grafana에서 Azure Monitor로 직접 조회하고 consumer lag 같은 리소스 로그만 OpenTelemetry Collector의 azureeventhubreceiver로 VictoriaMetrics에 저장하는 분리 구성을 실측합니다.
 document_type: guide
 services:
 - azure-event-hubs
 - azure-monitor
+- azure-managed-grafana
 technologies:
 - open-telemetry
 - victoriametrics
@@ -18,8 +19,8 @@ tags:
 - evaluate
 status: current
 verification_status: verified
-sources_checked_at: 2026-11-10
-last_verified: 2026-11-10
+sources_checked_at: 2026-11-11
+last_verified: 2026-11-11
 review_cycle_days: 60
 official_sources:
 - title: Monitor Azure Event Hubs
@@ -38,6 +39,16 @@ official_sources:
   url: https://learn.microsoft.com/azure/azure-monitor/metrics/migrate-to-batch-api
 - title: Monitor Azure Functions and Event Hubs
   url: https://learn.microsoft.com/azure/architecture/serverless/event-hubs-functions/observability
+- title: Use Azure Managed Grafana (Azure Monitor)
+  url: https://learn.microsoft.com/azure/azure-monitor/visualize/visualize-use-managed-grafana-how-to
+- title: Grant Azure Monitor access to Azure Managed Grafana
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-permissions
+- title: How to manage data sources in Azure Managed Grafana
+  url: https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity
+- title: Configure the Azure Monitor data source (Grafana documentation source)
+  url: https://github.com/grafana/grafana/blob/main/docs/sources/datasources/azure-monitor/configure/index.md
+- title: Grafana Azure Monitor metrics query backend (v12.3.0)
+  url: https://github.com/grafana/grafana/blob/v12.3.0/pkg/tsdb/azuremonitor/metrics/azuremonitor-datasource.go
 - title: OpenTelemetry Collector Contrib azuremonitorreceiver (v0.165.0)
   url: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver
 - title: OpenTelemetry Collector Contrib azureeventhubreceiver (v0.165.0)
@@ -52,6 +63,7 @@ applies_to:
 - Azure Event Hubs Standard namespace (지연 측정)
 - OpenTelemetry Collector Contrib 0.165.0
 - VictoriaMetrics Operator 0.75.2, VictoriaMetrics v1.155.0, Grafana OSS 13.3.0
+- Azure Managed Grafana Standard의 Azure Monitor 데이터 소스(분리 구성 실측)
 ---
 
 # Event Hubs 지표 수집 방식 비교 — OpenTelemetry Collector·VictoriaMetrics
@@ -85,10 +97,17 @@ bin을 다시 채우지 않았습니다([분 bin 누락](lab/index.md#gaps)).
 | `IncomingRequests` | 1,528 | 1,528 (26/26분 일치) | 1,528 (26분) |
 | `ThrottledRequests` | 0 | 0 (24/26분, 2분 누락) | 수신 안 됨 |
 
+Grafana로 보는 것이 목적이라면 플랫폼 지표를 VictoriaMetrics로 옮기지 않아도 됩니다.
+Azure Managed Grafana의 Azure Monitor 데이터 소스로 ①을 바로 조회하고, Azure Monitor 지표에
+없는 consumer lag 같은 리소스 로그만 Collector의 `azureeventhubreceiver`로 VictoriaMetrics에
+저장하는 [분리 구성](#direct-query)에서는 분 bin 누락이 없었고 Grafana 값이 Azure Monitor 직접
+조회와 매 조회 같았습니다.
+
 ## 방식별 주요 차이: 지표 범위·dimension·지연·운영 { #metrics }
 
 외부 TSDB로 지표를 모을 때는 ② Metrics API pull 하나로 충분하고, ④ Diagnostic Settings의
-지표 스트림(`AllMetrics`)은 필요하지 않습니다. ④가 보내는 지표는 모두 ②로도 받을 수 있으며,
+지표 스트림(`AllMetrics`)은 필요하지 않습니다. 대시보드만 필요하면 TSDB로 모으지 않고 ①을
+Grafana에서 직접 조회하는 [분리 구성](#direct-query)이 더 단순합니다. ④가 보내는 지표는 모두 ②로도 받을 수 있으며,
 ④는 3–4분 더 늦고 dimension을 합쳐 보내며 값이 있는 분만 보냅니다. 두 번째 Dedicated
 환경에서는 namespace 설정이 만든 뒤 약 2시간이 지나서야 레코드를 보냈고, 그 뒤에도
 `IncomingMessages`가 오지 않았습니다. Diagnostic Settings가 필요한 경우는 Metrics API에 없는
@@ -99,7 +118,7 @@ Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 생깁�
 
 | 방식 | 지표 범위·dimension | 지연(실측) | 운영·권한 | 맞는 용도 |
 |---|---|---|---|---|
-| ① Azure Monitor 직접 조회 | 모든 지표, dimension 분할 | 약 1분 20초(Metrics API 조회 가능 71–101초) | 추가 구성 없음 | portal 확인, Azure Monitor 경보 |
+| ① Azure Monitor 직접 조회 | 모든 지표, dimension 분할 | 약 1분 20초(Metrics API 조회 가능 71–101초) | 추가 구성 없음. Grafana에서는 Azure Monitor 데이터 소스와 대상 리소스의 Monitoring Reader | portal 확인, Azure Monitor 경보, Grafana 대시보드([분리 구성](#direct-query)) |
 | ② Metrics API — `azuremonitorreceiver` | 모든 지표, dimension 분할 | 약 3분 20초(이벤트 → VictoriaMetrics 190–201초) | Collector 운영, 대상 namespace·cluster의 Monitoring Reader. 늦게 게시된 분 bin은 다시 읽지 않아 누락 가능. 다수 리소스는 batch API(구독 범위 권한)로 호출 수 절감 | 외부 TSDB의 기본 경로 |
 | ③ Metrics API — `azure-metrics-exporter` | 모든 지표, dimension 분할 | 측정 안 함(②와 같은 Metrics API 조회에 scrape 주기 추가) | exporter 컨테이너 추가, ②와 같은 권한·호출 제약 | Prometheus exporter 중심 환경 |
 | ④ Diagnostic Settings → Event Hub | 지표표와 다른 일부 지표, dimension 합산, 값이 있는 분만 | ②보다 3–4분 더 늦음, 설정 후 13분–약 2시간 동안 비어 있음 | telemetry Event Hub(같은 리전)와 receiver checkpoint | 지표 수집에는 불필요. 이미 다른 용도로 지표를 Event Hub에 내보내고 있을 때만 재사용 |
@@ -120,6 +139,73 @@ Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 생깁�
   ②를 끄고 ③으로 전환해 Premium 지표 9개 × 집계 3개, 27개 series를 받았습니다.
 - **④·⑤는 경보나 용량 판단의 기준으로 삼지 않습니다.** 0값 구간이 비고 지연이 길며,
   설정 직후 수십 분 동안 비어 있을 수 있습니다.
+
+## 분리 구성: Azure Monitor 직접 조회 + 리소스 로그 수집 { #direct-query }
+
+플랫폼 지표를 Grafana에서 보는 것이 목적이면 ② Collector 경로 대신 Azure Managed Grafana의
+Azure Monitor 데이터 소스로 Azure Monitor를 직접 조회하고, Collector에는 Azure Monitor 지표에
+없는 신호를 받는 `azureeventhubreceiver`만 남기는 구성이 더 단순하고 정확합니다. consumer
+lag(`ApplicationMetricsLogs`의 `ConsumerLag`)와 data plane 접근(`RuntimeAuditLogs`)은
+Diagnostic Settings가 telemetry Event Hub로 보내는 리소스 로그를 이 receiver가 지표로 바꿔
+VictoriaMetrics에 저장합니다. 플랫폼 지표의 사본을 만들지 않으므로 receiver가 분 bin을 놓칠
+일이 없고, `azuremonitorreceiver`와 checkpoint lag exporter를 운영하지 않습니다. sample에서는
+`PLATFORM_METRICS=AzureMonitor`로 이 구성을 배포합니다.
+
+![분리 구성. Event Hubs 플랫폼 지표는 Azure Monitor에 1분 단위로 쌓이고 Azure Managed Grafana의 Azure Monitor 데이터 소스가 workspace managed identity와 namespace·cluster 범위 Monitoring Reader로 직접 조회하며, Collector의 azuremonitorreceiver와 checkpoint lag exporter는 실행하지 않음. ApplicationMetricsLogs의 ConsumerLag와 RuntimeAuditLogs는 Diagnostic Settings가 telemetry Event Hub로 보내고 Gateway VM의 OpenTelemetry Collector Contrib azureeventhubreceiver가 지표로 바꿔 VMSingle에 remote write하며, Managed Grafana는 managed private endpoint로 VMSingle을 조회](images/direct-query-architecture.svg)
+
+아래는 Premium 1 PU namespace에 같은 200 events/s 부하를 10분 준 구간(2026-11-11
+10:57–11:24 UTC)을 이 구성으로 Azure Managed Grafana에서 본 대시보드입니다. 위 두 행은
+Azure Monitor 데이터 소스, 아래 두 행은 VictoriaMetrics 데이터 소스입니다.
+
+![분리 구성의 Azure Managed Grafana 대시보드. Azure Monitor 데이터 소스로 조회한 Premium CPU 1.0%·memory 10.0% gauge와 추이, 요청 1,142건·성공 1,142건·throttle 0건, 분당 message·byte 막대. VictoriaMetrics 데이터 소스로 조회한 ConsumerLag 정점 10,700과 partition 4개를 쌓은 영역 그래프(11:13 무렵 합계 약 42,000), 리소스 로그 600건, 도착 지연 1–2.5분, 작업별 runtime audit 막대, AAD·Unknown 인증 표, VictoriaMetrics에는 collector_self와 diagnostic_logs series만 있음, Collector 실패 0건](images/direct-query-dashboard.png)
+
+| 항목 | ② Collector 경로(기본 구성) | 분리 구성(`PLATFORM_METRICS=AzureMonitor`) |
+|---|---|---|
+| 플랫폼 지표 경로 | Metrics API → Collector → remote write → VictoriaMetrics → Grafana | Grafana Azure Monitor 데이터 소스 → Metrics API |
+| 분 bin 누락 | receiver가 놓친 분은 다시 채우지 않음(83분 중 지표별 최대 11%) | 없음. 조회할 때마다 Azure Monitor의 현재 값을 읽음 |
+| 이벤트 → 대시보드 | 190–201초(Dedicated, 배포한 Gateway) | Metrics API와 같음. Premium 실측 61–170초, 87회 조회 모두 API 값과 같음 |
+| consumer lag | checkpoint lag exporter(마지막 enqueue − checkpoint, 15초) | `ConsumerLag` 리소스 로그(마지막 enqueue − receiver에 전달한 sequence, 1–2분 늦게 도착) |
+| VictoriaMetrics 저장 | 플랫폼 지표 + checkpoint lag + 로그 지표 + Collector 자체 지표 | 리소스 로그 지표 + Collector 자체 지표 |
+| 권한 | Gateway identity의 Monitoring Reader | Managed Grafana identity의 Monitoring Reader(namespace·cluster 범위), Gateway identity의 telemetry hub Data Receiver |
+| 보존 | VMSingle 보존 기간(sample 7일) | Azure Monitor 플랫폼 지표 93일 |
+| lag와 같은 식으로 계산 | PromQL 한 식으로 가능 | 데이터 소스가 달라 Grafana Expressions 등으로 따로 결합 |
+| 지원 tier | 모든 tier | `ConsumerLag`·`RuntimeAuditLogs`는 Premium·Dedicated만 |
+
+같은 26분 구간에서 Grafana 패널 합계는 `az monitor metrics list` 직접 조회와 4개 지표
+모두 같았고(`IncomingMessages`·`OutgoingMessages` 124,000, `IncomingRequests` 1,142,
+`ThrottledRequests` 0, 27개 분 bin), Gateway Grafana와 Managed Grafana에서 23개 query가 모두
+통과했습니다. 별도 측정용 hub로 잰 지연에서도 Metrics API와 Managed Grafana의 값은 87회
+조회마다 같았습니다. VictoriaMetrics에는 리소스 로그 지표(`diagnostic_logs`) 19개와 Collector
+자체 지표 62개 series만 있었습니다. `ConsumerLag` 정점은 partition별 10,500–10,700건으로
+이전 Premium 환경의 checkpoint lag 정점(10,700–11,040건)과 비슷했고, 레코드가 Collector에
+도착하기까지 `ApplicationMetricsLogs`는 69–118초, `RuntimeAuditLogs`는 92–141초가
+걸렸습니다.
+
+- **Azure Monitor 쿼리 하나에 리소스 하나를 지정합니다.** Grafana는 리소스가 하나면 그
+  리소스의 metrics endpoint를, 여럿이면 구독 범위 endpoint를 호출하므로, 리소스 범위
+  Monitoring Reader로 충분하려면 패널마다 리소스를 하나씩 둡니다. portal에서 workspace를
+  만들 때는 구독 범위 Monitoring Reader가 기본으로 선택되지만 Bicep 배포는 역할을 만들지
+  않으므로, sample은 namespace와 cluster에 역할을 할당합니다.
+- **Premium `NamespaceCpuUsage`·`NamespaceMemoryUsage`는 `Replica`로 나눠 조회할 수
+  없습니다.** Metrics API가 `include hidden dimensions: Replica`로 거부해 Maximum·Average로
+  봅니다. Dedicated cluster의 `CPU`·`AvailableMemory`는 `Role`로 나눠 조회됩니다.
+- **패널을 새로 고칠 때마다 Metrics API를 호출합니다.** Learn은 metrics API를 많이 쓰면
+  throttling이나 성능 문제가 생길 수 있다고 안내하므로, 대시보드·사용자·리소스가 많으면
+  새로 고침 주기를 늘리거나 ② 경로로 한 번만 모읍니다.
+- **`ConsumerLag`는 checkpoint lag가 아닙니다.** AMQP에서는 receiver에 마지막으로 전달한
+  sequence 기준이라 전달됐지만 아직 처리하지 않은 event와 재시작하면 다시 처리할 양은 보이지
+  않습니다. Learn은 따라잡아 받을 것이 없는 receiver는 레코드를 만들지 않고, receiver가
+  멈추거나 link가 닫히면 기록도 멈춘다고 설명합니다. 이 실측에서는 consumer가 연결된 동안
+  따라잡은 뒤에도 partition마다 1분 간격으로 0 레코드가 왔지만, 어느 쪽이든 레코드가 없다고
+  lag가 0인 것은 아니므로 멈춘 consumer를 이 신호만으로 알 수는 없습니다. Collector
+  v0.165.0의 `azure_encoding`은 consumer group을 attribute로 남기지 않아 group이 여럿이면
+  값이 섞입니다. 재처리량, consumer 정지, group별 lag가 필요하면 checkpoint lag exporter를
+  함께 둡니다([추가](#events)).
+- **93일보다 오래 보관하거나 lag와 플랫폼 지표를 한 PromQL로 경보해야 하면 ② 경로가
+  맞습니다.** 분리 구성의 경보는 Azure Monitor 경보나 Grafana alert에서 데이터 소스별로
+  만듭니다.
+
+절차와 측정 방법은 [실습의 분리 구성](lab/index.md#direct-query)에 있습니다.
 
 ## 지연 시간: Azure Monitor + OpenTelemetry Collector { #latency }
 
@@ -242,7 +328,8 @@ sample에 있습니다. Dedicated cluster는 만든 뒤 4시간
 동안 삭제할 수 없어 최소 4시간의 CU 비용과 AKS·VM 비용이 발생합니다. `EVENTHUBS_SKU=Premium`
 으로 Premium 1 PU 구성도 배포할 수 있습니다. `MANAGED_GRAFANA=Enabled`를 선택하면 같은
 대시보드를 managed private endpoint로 VictoriaMetrics에 연결한 Azure Managed Grafana에서도
-볼 수 있습니다([실습](lab/index.md#managed-grafana)).
+볼 수 있습니다([실습](lab/index.md#managed-grafana)). 여기에 `PLATFORM_METRICS=AzureMonitor`를 더하면
+[분리 구성](#direct-query)으로 배포합니다([실습](lab/index.md#direct-query)).
 
 ## 공식 참고 자료
 
@@ -254,6 +341,11 @@ sample에 있습니다. Dedicated cluster는 만든 뒤 4시간
 - [Log data ingestion time in Azure Monitor](https://learn.microsoft.com/azure/azure-monitor/logs/data-ingestion-time)
 - [How to migrate from the metrics API to the getBatch API](https://learn.microsoft.com/azure/azure-monitor/metrics/migrate-to-batch-api)
 - [Monitor Azure Functions and Event Hubs](https://learn.microsoft.com/azure/architecture/serverless/event-hubs-functions/observability)
+- [Use Azure Managed Grafana (Azure Monitor)](https://learn.microsoft.com/azure/azure-monitor/visualize/visualize-use-managed-grafana-how-to)
+- [Grant Azure Monitor access to Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-permissions)
+- [How to manage data sources in Azure Managed Grafana](https://learn.microsoft.com/azure/managed-grafana/how-to-data-source-plugins-managed-identity)
+- [Configure the Azure Monitor data source (Grafana documentation source)](https://github.com/grafana/grafana/blob/main/docs/sources/datasources/azure-monitor/configure/index.md)
+- [Grafana Azure Monitor metrics query backend v12.3.0](https://github.com/grafana/grafana/blob/v12.3.0/pkg/tsdb/azuremonitor/metrics/azuremonitor-datasource.go)
 - [OpenTelemetry Collector Contrib azuremonitorreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azuremonitorreceiver)
 - [OpenTelemetry Collector Contrib azureeventhubreceiver v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/receiver/azureeventhubreceiver)
 - [OpenTelemetry Collector Contrib prometheusremotewriteexporter v0.165.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.165.0/exporter/prometheusremotewriteexporter)
