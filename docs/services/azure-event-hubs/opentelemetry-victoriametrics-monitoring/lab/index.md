@@ -698,8 +698,10 @@ azd up
 ./scripts/collect-evidence.sh
 ```
 
-`PLATFORM_METRICS`의 기본값은 `Collector`이며, 이미 배포한 환경은 값을 바꾼 뒤
-`GATEWAY_ONLY=true azd hooks run postprovision`으로 Gateway만 다시 적용해 전환합니다.
+`PLATFORM_METRICS`의 기본값은 `Collector`입니다. 이미 배포한 환경은 값을 바꾼 뒤 `azd provision`으로
+전환합니다. 이 sample의 이전 버전으로 만든 Managed Grafana에는 Monitoring Reader가 없으므로 처음에는
+`grafana-reader.bicep`을 배포해야 하며, 역할이 이미 있는 환경에서만
+`GATEWAY_ONLY=true azd hooks run postprovision`으로 Gateway만 다시 적용해도 됩니다.
 `AzureMonitor`일 때 sample은 다음과 같이 달라집니다.
 
 | 구성 요소 | `Collector`(기본값) | `AzureMonitor` |

@@ -75,7 +75,9 @@ def test_verify_runs_azure_monitor_targets_as_is(monkeypatch):
 
     def fake_request(url, user, password, path, body=None):
         if body is None:
+            assert path == "/api/dashboards/uid/uid"
             return {"dashboard": dashboard}
+        assert path == "/api/ds/query"
         query = body["queries"][0]
         sent.append(query)
         frame = {"data": {"values": [[1, 2], [3.0, 4.0]]}}
@@ -144,5 +146,24 @@ def test_cluster_resource_group_can_differ_from_the_namespace():
     groups = {t["azureMonitor"]["resources"][0]["resourceGroup"] for _, t in _targets(dashboard)
               if t.get("azureMonitor", {}).get("metricNamespace") == "microsoft.eventhub/clusters"}
     assert groups == {"rg-cluster"}
-    text = (Path(__file__).parents[1] / "agent" / "build_direct_dashboard.py").read_text()
-    assert '"cluster_resource_group": args.cluster_resource_group' in text
+
+
+
+def test_cli_passes_the_cluster_resource_group(monkeypatch, tmp_path):
+    import build_direct_dashboard
+
+    seen = {}
+
+    def fake_build(settings):
+        seen.update(settings)
+        return {"panels": []}
+
+    monkeypatch.setattr(build_direct_dashboard, "build_dashboard", fake_build)
+    base = ["build_direct_dashboard.py", "--tier", "dedicated", "--subscription", "sub", "--resource-group", "rg-ns",
+            "--namespace", "ehp-example", "--cluster", "ehc-example", "--output", str(tmp_path / "d.json")]
+    monkeypatch.setattr(sys, "argv", [*base, "--cluster-resource-group", "rg-cluster"])
+    build_direct_dashboard.main()
+    assert seen["cluster_resource_group"] == "rg-cluster" and seen["resource_group"] == "rg-ns"
+    monkeypatch.setattr(sys, "argv", base)
+    build_direct_dashboard.main()
+    assert seen["cluster_resource_group"] == ""  # empty falls back to the namespace group in build_dashboard

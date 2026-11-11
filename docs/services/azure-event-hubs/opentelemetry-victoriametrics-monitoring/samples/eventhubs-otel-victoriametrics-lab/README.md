@@ -69,8 +69,13 @@ Azure Monitor 데이터 소스(uid `azure-monitor-oob`)로 직접 조회하고, 
 
 ```bash
 azd env set PLATFORM_METRICS AzureMonitor
-GATEWAY_ONLY=true azd hooks run postprovision   # 이미 배포한 환경은 Gateway만 다시 적용
+azd provision                                   # grafana-reader 역할 할당과 postprovision 전체 적용
+# GATEWAY_ONLY=true azd hooks run postprovision  # 역할 할당이 이미 배포된 환경에서 Gateway만 다시 적용
 ```
+
+이 sample의 이전 버전으로 만든 `MANAGED_GRAFANA=Enabled` 환경에는 Managed Grafana identity의
+Monitoring Reader가 없으므로, 처음 전환할 때는 `azd provision`으로 `grafana-reader.bicep`을
+배포합니다. `GATEWAY_ONLY=true`는 Bicep을 배포하지 않습니다.
 
 ## fallback exporter 전환
 

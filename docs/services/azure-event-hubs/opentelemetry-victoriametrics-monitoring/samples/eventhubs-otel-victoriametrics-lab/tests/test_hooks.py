@@ -1156,3 +1156,38 @@ def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
     assert "&& consumer_progressed; then" in text
     assert '"$processed" -gt "$CONSUMER_PROCESSED_AT_LOAD_END"' in text
     assert 'sleep "$SETTLE_SECONDS"' in text
+
+
+
+def _run_platform_mode(fake_bin, tmp_path, **env):
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")  # no azd env value: only the process environment counts
+    text = (SCRIPTS / "azd-postprovision.sh").read_text()
+    start = text.index('PLATFORM_METRICS="$(env_value PLATFORM_METRICS)"')
+    end = text.index("\nfi\n", start) + 4
+    block = tmp_path / "mode.sh"
+    block.write_text(text[start:end] + 'echo "API=${ENABLE_API_RECEIVER:-} LAG=$ENABLE_LAG_RECEIVER '
+                     'SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"\n')
+    harness = f'source "{SCRIPTS / "lib.sh"}"; source "{block}"'
+    return subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60,
+                          env={"PATH": f"{bin_dir}:/usr/bin:/bin", "AZURE_ENV_NAME": "unit", **env})
+
+
+def test_azure_monitor_mode_fails_without_logs_hub_or_with_fallback(fake_bin, tmp_path):
+    missing = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor")
+    assert missing.returncode != 0 and "set EVENTHUBS_LOGS=Enabled" in missing.stderr
+    fallback = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor",
+                                  TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs", ENABLE_FALLBACK_EXPORTER="true")
+    assert fallback.returncode != 0 and "unset ENABLE_FALLBACK_EXPORTER" in fallback.stderr
+    invalid = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="Direct")
+    assert invalid.returncode != 0 and "must be Collector or AzureMonitor" in invalid.stderr
+
+
+def test_platform_mode_sets_collector_inputs(fake_bin, tmp_path):
+    direct = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor",
+                                TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs", TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert direct.returncode == 0, direct.stderr
+    assert direct.stdout.strip() == "API=false LAG=false SCALE=0 HUB="
+    collector = _run_platform_mode(fake_bin, tmp_path, TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert collector.returncode == 0, collector.stderr
+    assert collector.stdout.strip() == "API= LAG=true SCALE=1 HUB=platform-metrics"

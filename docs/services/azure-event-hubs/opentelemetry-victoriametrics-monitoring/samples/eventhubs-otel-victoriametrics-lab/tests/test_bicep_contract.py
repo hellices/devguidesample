@@ -592,3 +592,13 @@ def test_managed_grafana_identity_reads_only_the_charted_resources():
     assert "if (managedGrafana == 'Enabled')" in block
     assert "grafanaPrincipalId: grafana.?outputs.principalId" in block
     assert "namespaceName: messaging.outputs.premiumNamespaceName" in block
+    # The cluster role must land on the cluster the dashboard charts: the one this lab created.
+    assert ("clusterName: empty(messaging.outputs.dedicatedClusterId) ? '' : "
+            "last(split(messaging.outputs.dedicatedClusterId, '/'))") in block
+    # The workspace identity reaches no other module, and no other module grants it a role.
+    assert main.count("grafana.?outputs.principalId") == 1
+    for path in (LAB_ROOT / "infra").rglob("*.bicep"):
+        if path == GRAFANA_READER:
+            continue
+        principals = [principal for _, _, principal in _role_assignments(path.read_text())]
+        assert not any("grafana" in principal.lower() for principal in principals), path.name
