@@ -143,8 +143,9 @@ Monitor의 같은 1분 집계이므로, 차이는 꺼내는 방식에서 생깁�
 ## 분리 구성: Azure Monitor 직접 조회 + 리소스 로그 수집 { #direct-query }
 
 플랫폼 지표를 Grafana에서 보는 것이 목적이면 ② Collector 경로 대신 Azure Managed Grafana의
-Azure Monitor 데이터 소스로 Azure Monitor를 직접 조회하고, Collector에는 Azure Monitor 지표에
-없는 신호를 받는 `azureeventhubreceiver`만 남기는 구성이 더 단순하고 정확합니다. consumer
+Azure Monitor 데이터 소스로 Azure Monitor를 직접 조회하고, Collector의 데이터 수집에는 Azure
+Monitor 지표에 없는 신호를 받는 `azureeventhubreceiver`만 남기는 구성이 더 단순하고 정확합니다.
+Collector 자체 지표(`prometheus/self`)는 그대로 수집합니다. consumer
 lag(`ApplicationMetricsLogs`의 `ConsumerLag`)와 data plane 접근(`RuntimeAuditLogs`)은
 Diagnostic Settings가 telemetry Event Hub로 보내는 리소스 로그를 이 receiver가 지표로 바꿔
 VictoriaMetrics에 저장합니다. 플랫폼 지표의 사본을 만들지 않으므로 receiver가 분 bin을 놓칠

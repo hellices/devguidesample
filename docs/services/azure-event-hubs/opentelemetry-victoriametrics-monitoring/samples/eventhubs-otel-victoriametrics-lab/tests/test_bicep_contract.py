@@ -595,8 +595,15 @@ def test_managed_grafana_identity_reads_only_the_charted_resources():
     # The cluster role must land on the cluster the dashboard charts: the one this lab created.
     assert ("clusterName: empty(messaging.outputs.dedicatedClusterId) ? '' : "
             "last(split(messaging.outputs.dedicatedClusterId, '/'))") in block
-    # The workspace identity reaches no other module, and no other module grants it a role.
+    # Data flow: the workspace principal leaves grafana.bicep only through this one reference, which feeds
+    # grafanaReader; grafana-reader.bicep exposes no outputs and declares no modules, so the principal
+    # cannot travel on under another parameter name. Its only role assignments are the two above.
     assert main.count("grafana.?outputs.principalId") == 1
+    assert "grafana.outputs.principalId" not in main and "grafanaReader.outputs" not in main
+    assert "grafanaReader.?outputs" not in main
+    assert not re.search(r"(?m)^\s*(output|module)\s", reader)
+    assert not re.search(r"(?m)^\s*module\s", _code(GRAFANA.read_text()))
+    assert "Microsoft.Authorization/roleAssignments" not in _code(GRAFANA.read_text())
     for path in (LAB_ROOT / "infra").rglob("*.bicep"):
         if path == GRAFANA_READER:
             continue

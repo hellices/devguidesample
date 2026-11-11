@@ -61,9 +61,9 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 ## 플랫폼 지표 수집 방식 전환
 
 `PLATFORM_METRICS`의 기본값은 `Collector`입니다. `AzureMonitor`이면 Grafana가 플랫폼 지표를
-Azure Monitor 데이터 소스(uid `azure-monitor-oob`)로 직접 조회하고, Collector에는 리소스 로그를
-받는 `azureeventhubreceiver`만 남으며 `azuremonitorreceiver`와 lag exporter는 실행하지
-않습니다. consumer lag는 `ApplicationMetricsLogs`의 `ConsumerLag`로 보므로
+Azure Monitor 데이터 소스(uid `azure-monitor-oob`)로 직접 조회합니다. Collector에는 리소스 로그를
+받는 `azureeventhubreceiver`와 자체 지표용 `prometheus/self`만 남고, `azuremonitorreceiver`와 lag
+exporter는 실행하지 않습니다. consumer lag는 `ApplicationMetricsLogs`의 `ConsumerLag`로 보므로
 `EVENTHUBS_LOGS=Enabled`(기본값)가 필요합니다. 이 모드에서는 `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`라도
 지표 hub를 읽지 않으며, `ENABLE_FALLBACK_EXPORTER=true`와 함께 쓰면 postprovision이 실패합니다.
 

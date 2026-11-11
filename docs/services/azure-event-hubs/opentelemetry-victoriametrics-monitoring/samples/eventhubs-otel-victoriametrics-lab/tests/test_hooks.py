@@ -1121,10 +1121,18 @@ def test_platform_metrics_azure_monitor_keeps_only_the_event_hub_receiver():
     managed = (SCRIPTS / "managed-grafana.sh").read_text()
     compose = (LAB_ROOT / "gateway" / "compose.yaml").read_text()
 
-    assert 'PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"' in post
-    assert 'die "PLATFORM_METRICS must be Collector or AzureMonitor' in post
-    mode = post[post.index('if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then'):]
-    mode = mode[:mode.index("\nfi\n")]
+    lib = (SCRIPTS / "lib.sh").read_text()
+    assert 'PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"' in lib
+    assert 'die "PLATFORM_METRICS must be Collector or AzureMonitor' in lib
+    mode = lib[lib.index('  if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then'):]
+    mode = mode[:mode.index("\n  fi\n")]
+    # postprovision takes the Collector inputs only from resolve_platform_metrics and never reassigns them.
+    assert re.findall(r"(?m)^resolve_platform_metrics$", post) == ["resolve_platform_metrics"]
+    # Heredoc bodies are file contents written to the bundle, not shell assignments.
+    shell = re.sub(r"(?ms)<<ENV\n.*?^ENV$", "<<ENV", post)
+    assert "ENABLE_API_RECEIVER=${ENABLE_API_RECEIVER:-true}" in post and "<<ENV" in shell
+    assert not re.search(r"(?m)^\s*(ENABLE_API_RECEIVER|ENABLE_LAG_RECEIVER|LAG_EXPORTER_SCALE|METRICS_HUB)=", shell)
+    assert post.index("resolve_platform_metrics") < post.index("collector.env")
     # Lag comes from the ConsumerLag resource log, so the logs hub is mandatory in this mode.
     assert '[[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]]' in mode
     assert "ENABLE_API_RECEIVER=false" in mode and "ENABLE_LAG_RECEIVER=false" in mode
@@ -1154,6 +1162,9 @@ def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
     # An absent record reads as 0 only while other resource logs still arrive; otherwise it is unknown.
     assert 'vm_scalar "${1:-30}" "max($FRESH_LAG) or (vector(0) and on() (sum(increase($LOG_RECORDS[3m])) > 0))"' in text
     assert "&& consumer_progressed; then" in text
+    # An unknown (-1) baseline fails the lag check instead of being replaced with 0.
+    assert not re.search(r"(?m)^\s*LAG_AT_LOAD_START=0\b", text)
+    assert '[[ "$LAG_AT_LOAD_START" -ge 0 &&' in text
     assert '"$processed" -gt "$CONSUMER_PROCESSED_AT_LOAD_END"' in text
     assert 'sleep "$SETTLE_SECONDS"' in text
 
@@ -1162,13 +1173,9 @@ def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
 def _run_platform_mode(fake_bin, tmp_path, **env):
     bin_dir, _, write = fake_bin
     write("azd", "exit 1")  # no azd env value: only the process environment counts
-    text = (SCRIPTS / "azd-postprovision.sh").read_text()
-    start = text.index('PLATFORM_METRICS="$(env_value PLATFORM_METRICS)"')
-    end = text.index("\nfi\n", start) + 4
-    block = tmp_path / "mode.sh"
-    block.write_text(text[start:end] + 'echo "API=${ENABLE_API_RECEIVER:-} LAG=$ENABLE_LAG_RECEIVER '
-                     'SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"\n')
-    harness = f'source "{SCRIPTS / "lib.sh"}"; source "{block}"'
+    # The same function postprovision calls, not a copy of its text.
+    harness = (f'source "{SCRIPTS / "lib.sh"}"; resolve_platform_metrics; '
+               'echo "API=${ENABLE_API_RECEIVER:-} LAG=$ENABLE_LAG_RECEIVER SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"')
     return subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60,
                           env={"PATH": f"{bin_dir}:/usr/bin:/bin", "AZURE_ENV_NAME": "unit", **env})
 

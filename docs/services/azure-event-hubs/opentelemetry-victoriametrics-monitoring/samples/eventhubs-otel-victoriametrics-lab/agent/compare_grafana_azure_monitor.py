@@ -15,17 +15,20 @@ import sys
 from pathlib import Path
 
 
-def azure_totals(raw: dict) -> dict[str, float]:
-    totals: dict[str, float] = {}
+def azure_totals(raw: dict) -> dict[str, float | None]:
+    """Total per metric, or None when Azure Monitor returned no finite total at all for it."""
+    totals: dict[str, float | None] = {}
     for metric in raw.get("value", []):
         name = metric["name"]["value"]
         total = 0.0
+        observed = False
         for series in metric.get("timeseries", []):
             for point in series.get("data", []):
                 value = point.get("total")
                 if isinstance(value, (int, float)) and math.isfinite(value):
                     total += value
-        totals[name] = total
+                    observed = True
+        totals[name] = total if observed else None
     return totals
 
 
@@ -41,8 +44,10 @@ def compare(report: list[dict], raw: dict) -> dict:
         for entry in entries:
             grafana = entry.get("value_sum") if entry.get("status") == "pass" else None
             rows.append({"metric": metric, "panel": entry["panel"], "azure_monitor": total, "grafana": grafana,
+                         # A metric Azure Monitor never observed cannot confirm the panel, even at 0.
                          # Absolute tolerance only: the default rel_tol would accept large absolute gaps.
-                         "match": grafana is not None and math.isclose(grafana, total, rel_tol=0.0, abs_tol=0.5)})
+                         "match": total is not None and grafana is not None
+                         and math.isclose(grafana, total, rel_tol=0.0, abs_tol=0.5)})
     # An empty Azure Monitor result compares nothing and must not read as a match.
     return {"metrics": rows, "all_match": bool(rows) and all(row["match"] for row in rows)}
 

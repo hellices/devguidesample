@@ -92,6 +92,12 @@ def test_verify_runs_azure_monitor_targets_as_is(monkeypatch):
     expected = [t for _, t in _targets(dashboard) if "azureMonitor" in t]
     added = {"intervalMs", "maxDataPoints"}
     assert [{k: v for k, v in q.items() if k not in added} for q in azure] == expected
+    # Prometheus targets keep their expression and instant/range flags exactly (this dashboard has no variables).
+    expected_prom = [{"refId": t["refId"], "datasource": t["datasource"], "expr": t["expr"],
+                      "instant": bool(t.get("instant", False)),
+                      "range": bool(t.get("range", not t.get("instant", False)))}
+                     for p, t in _targets(dashboard) if "expr" in t and not t.get("hide")]
+    assert [{k: v for k, v in q.items() if k not in added} for q in prometheus] == expected_prom
     assert all(q["datasource"] == {"type": "prometheus", "uid": "victoriametrics"} for q in prometheus)
     incoming = [r for r in report if r.get("metric") == "IncomingRequests"]
     assert incoming[0]["value_sum"] == 7.0 and incoming[0]["aggregation"] == "Total"
@@ -167,3 +173,12 @@ def test_cli_passes_the_cluster_resource_group(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", base)
     build_direct_dashboard.main()
     assert seen["cluster_resource_group"] == ""  # empty falls back to the namespace group in build_dashboard
+
+
+
+@pytest.mark.parametrize("timeseries", [[], [{"data": [{"total": None}, {}]}]])
+def test_compare_rejects_a_metric_azure_monitor_never_observed(timeseries):
+    raw = {"value": [{"name": {"value": "ThrottledRequests"}, "timeseries": timeseries}]}
+    report = [{"panel": "Throttled requests", "metric": "ThrottledRequests", "aggregation": "Total",
+               "status": "pass", "value_sum": 0.0}]
+    assert not compare(report, raw)["all_match"]

@@ -683,8 +683,9 @@ Viewer 역할을 할당합니다.
 
 ## 분리 구성: `PLATFORM_METRICS=AzureMonitor` { #direct-query }
 
-플랫폼 지표는 Grafana의 Azure Monitor 데이터 소스로 직접 조회하고, Collector에는 리소스 로그를
-받는 `azureeventhubreceiver`만 남기는 [분리 구성](../index.md#direct-query)입니다.
+플랫폼 지표는 Grafana의 Azure Monitor 데이터 소스로 직접 조회하고, Collector의 데이터 수집에는
+리소스 로그를 받는 `azureeventhubreceiver`만 남기는 [분리 구성](../index.md#direct-query)입니다.
+Collector 자체 지표용 `prometheus/self` receiver는 유지합니다.
 2026-11-11 UTC에 Premium 1 PU 환경(`ehotel-amd`, Event Hubs는 Korea South)에서 실행했습니다.
 
 ```bash

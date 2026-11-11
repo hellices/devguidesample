@@ -114,12 +114,6 @@ PRODUCER_STOP="$(now)"
 sleep "$SETTLE_SECONDS"
 PEAK_LAG="$(peak_lag)"
 log "producer stopped; peak max lag=$PEAK_LAG"
-# An idle namespace may leave no ConsumerLag record or other resource log at load start; with log lag
-# that reading is a baseline of 0, while the peak below must still come from real records.
-if [[ "$LOG_LAG" == "true" && "$LAG_AT_LOAD_START" -lt 0 ]]; then
-  log "no resource log record at load start; using 0 as the baseline"
-  LAG_AT_LOAD_START=0
-fi
 # max_lag prints -1 when no series exists; both readings must be real before comparing.
 [[ "$LAG_AT_LOAD_START" -ge 0 && "$PEAK_LAG" -gt 0 && "$PEAK_LAG" -gt "$LAG_AT_LOAD_START" ]] \
   || die "lag did not increase (start=$LAG_AT_LOAD_START peak=$PEAK_LAG)"
