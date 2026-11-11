@@ -1224,13 +1224,13 @@ done
 ## Step 04-A. 고객사 동일 환경 구성: `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) 1클릭 Import (및 선택형 `Azure Managed Grafana`)
 
 `SRE-AKS-Management | Dashboard with Grafana` (부제: `Azure Monitor dashboards with Grafana | Azure Monitor`) 대시보드는 별도 유료 워크스페이스 없이 Azure Portal 내 **Azure Monitor에 기본 내장된 `Dashboards with Grafana` (`Microsoft.Dashboard/dashboards`)** 기능입니다.
-내보내 둔 **[`sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json)** 파일을 업로드하면 Overview(관리그룹 표, 등급별 컬러 카드 5종, Standard/LTS 버전 표, 단위서비스 목록)와 하단 12컬럼 인벤토리 + NodePool 표까지 **총 13개 패널이 1클릭으로 동일하게 생성**됩니다.
+내보내 둔 **[`sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json)** 파일을 업로드하면 Overview(관리그룹 표, 등급별 컬러 카드 5종, Standard/LTS 버전 표, 단위서비스 목록)와 하단 12컬럼 인벤토리 + NodePool 표까지 **총 13개 패널이 1클릭으로 동일하게 생성**됩니다.
 
 ### 방법 1 (고객사 화면과 100% 동일 — 권장): `Azure Monitor > Dashboards with Grafana`에서 바로 Import
 1. **Azure Portal 상단 검색창에서 `Monitor` (`모니터`) 검색 후 이동**
 2. **좌측 메뉴에서 `Dashboards with Grafana` (`Grafana를 사용한 대시보드`) 클릭**
 3. **상단 툴바에서 `New` (`새로 만들기`) ➔ `Import` (`가져오기`) 클릭**
-4. **`Upload dashboard JSON file`에 [`sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json) 파일 선택 후 `Load` 클릭**:
+4. **`Upload dashboard JSON file`에 [`sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json) 파일 선택 후 `Load` 클릭**:
    - **이름 (`Dashboard Name`)**: **`SRE-AKS-Management`**
    - **구독 (`Subscription`)**: 현재 실습 구독 선택
    - **리소스 그룹 (`Resource Group`)**: **`rg-sre-private-aks-fleet`**
@@ -1251,11 +1251,10 @@ az resource create \
   --api-version 2025-09-01-preview --properties "{}"
 
 # 2) sre-aks-management-dashboard.json (13개 패널 전체) 정의를 대시보드에 주입
-DASH_JSON=$(cat docs/services/azure-monitor/azure-sre-agent/samples/event-lab/evidence/sre-aks-management-dashboard.json)
 python3 -c '
 import json, subprocess, sys
 sub_id, rg = sys.argv[1], "rg-sre-private-aks-fleet"
-dash = open("docs/services/azure-monitor/azure-sre-agent/samples/event-lab/evidence/sre-aks-management-dashboard.json").read()
+dash = open("docs/services/azure-monitor/azure-sre-agent/samples/private-aks-fleet-lab/monitoring/sre-aks-management-dashboard.json").read()
 body = json.dumps({"properties": {"serializedData": dash}})
 open("/tmp/dash_def.json", "w").write(body)
 url = f"https://management.azure.com/subscriptions/{sub_id}/resourceGroups/{rg}/providers/Microsoft.Dashboard/dashboards/SRE-AKS-Management/dashboardDefinitions/default?api-version=2025-09-01-preview"
@@ -1269,10 +1268,8 @@ subprocess.run(["az", "rest", "--method", "PUT", "--url", url, "--body", "@/tmp/
 
 `SRE-AKS-Management` 대시보드의 표준 구성을 100% 동일한 패널 및 12개 표준 컬럼을 확인합니다.
 
-### 대시보드 레퍼런스 캡처 및 대시보드 JSON
-- **1클릭 Import용 대시보드 JSON**: [`./sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json)
-- **상단 Overview 패널 실제 레퍼런스 캡처**: [`./ui-captures/ref-grafana-overview.png`](./ui-captures/ref-grafana-overview.png)
-- **하단 12컬럼 Inventory 패널 실제 레퍼런스 캡처**: [`./ui-captures/ref-grafana-inventory.png`](./ui-captures/ref-grafana-inventory.png)
+### 대시보드 JSON 파일 경로
+- **1클릭 Import용 대시보드 JSON**: [`./monitoring/sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json)
 
 ### 포털 UI 확인 순서 (`①` ➔ `⑤`)
 1. **`①` Azure Portal > `Azure Monitor > Dashboards with Grafana` > `SRE-AKS-Management` 클릭**
@@ -1419,16 +1416,16 @@ Resources
 ## Step 07. `Knowledge sources`에 하드코딩이 제거된 핵심 정책 · 공지 메일 템플릿 문서 3종 업로드
 
 > **지식 베이스 구성 원칙 (하드코딩 Zero · 구버전 무관 문서 제거)**:
-> 이전 실습에서 넘어온 무관한 문서(`appgw-unhealthy...`, `legacy-landingzone...`, `legacy-monitoring...` 등)나 고정된 클러스터 이력표/날짜가 남아 있으면 에이전트가 `SearchMemory` 호출 시 옛날 정보를 섞어서 답할 수 있습니다. 따라서 `kb-uploads/`에는 **실제 데이터 하드코딩을 완전히 걷어내고(모든 예시 문구에 `[양식 예시 — 실제 값은 실시간 API 조회 결과만 사용]`을 명시한) 아래 핵심 문서 3종만 업로드**합니다.
+> 이전 실습에서 넘어온 무관한 문서(`appgw-unhealthy...`, `legacy-landingzone...`, `legacy-monitoring...` 등)나 고정된 클러스터 이력표/날짜가 남아 있으면 에이전트가 `SearchMemory` 호출 시 옛날 정보를 섞어서 답할 수 있습니다. 따라서 `agent/knowledge/`에는 **실제 데이터 하드코딩을 완전히 걷어내고(모든 예시 문구에 `[양식 예시 — 실제 값은 실시간 API 조회 결과만 사용]`을 명시한) 아래 핵심 문서 3종만 업로드**합니다.
 
 ### 화면 이동 및 입력 순서 (`①` ➔ `④`)
 1. **`①` 좌측 사이드바 `Build & setup > Context > Knowledge sources` 클릭**
 2. **`②` 기존에 불필요한 구버전 문서가 있다면 삭제 후, 상단 `+ Upload files` 클릭**:
-   - 로컬 워크스페이스의 `evidence/kb-uploads/` 폴더에 정리된 아래 3개 마크다운 파일만 업로드합니다.
+   - 로컬 워크스페이스의 `agent/knowledge/` 폴더에 정리된 아래 3개 마크다운 파일만 업로드합니다.
 3. **`③` 업로드할 핵심 지식 문서 3종 확인**:
-   - [`./kb-uploads/aks-eol-notice-template-and-history.md`](./kb-uploads/aks-eol-notice-template-and-history.md): **고객 발송용 5개 섹션 공지 메일 마크다운(`.md`) 표준 템플릿** (`[직접 입력: ...]` 링크 자리표시자, 대상 버전 클러스터 전용 필터링 규칙, 섹션 `5-1. SRE 에이전트 사전 점검 상세 결과` 표 양식 정의 — 하드코딩 데이터 없음)
-   - [`./kb-uploads/aks-9point-upgrade-preflight-policy.md`](./kb-uploads/aks-9point-upgrade-preflight-policy.md): **AKS 업그레이드 9대 사전 점검 항목 정의 · 배점(100점) · 판정 기준(`READY`/`CONDITIONAL`/`BLOCKED`) 및 선행 조치 가이드** + **`3건 이하 호출 시 kubectl vs 4건 이상 다중 값 조회 시 Python REST API 코드 호출` 분기 규칙**
-   - [`./kb-uploads/aks-dataplane-inspection-sop.md`](./kb-uploads/aks-dataplane-inspection-sop.md): **사설 AKS 데이터플레인 조회 SOP** (`3건 이하 단건 조회 시 RunKubectlReadCommand` vs `4건 이상 다중 리소스 조회 시 DefaultAzureCredential 기반 Python K8s REST API 일괄 호출 표준 코드 예시`)
+   - [`./agent/knowledge/aks-eol-notice-template-and-history.md`](./agent/knowledge/aks-eol-notice-template-and-history.md): **고객 발송용 5개 섹션 공지 메일 마크다운(`.md`) 표준 템플릿** (`[직접 입력: ...]` 링크 자리표시자, 대상 버전 클러스터 전용 필터링 규칙, 섹션 `5-1. SRE 에이전트 사전 점검 상세 결과` 표 양식 정의 — 하드코딩 데이터 없음)
+   - [`./agent/knowledge/aks-9point-upgrade-preflight-policy.md`](./agent/knowledge/aks-9point-upgrade-preflight-policy.md): **AKS 업그레이드 9대 사전 점검 항목 정의 · 배점(100점) · 판정 기준(`READY`/`CONDITIONAL`/`BLOCKED`) 및 선행 조치 가이드** + **`3건 이하 호출 시 kubectl vs 4건 이상 다중 값 조회 시 Python REST API 코드 호출` 분기 규칙**
+   - [`./agent/knowledge/aks-dataplane-inspection-sop.md`](./agent/knowledge/aks-dataplane-inspection-sop.md): **사설 AKS 데이터플레인 조회 SOP** (`3건 이하 단건 조회 시 RunKubectlReadCommand` vs `4건 이상 다중 리소스 조회 시 DefaultAzureCredential 기반 Python K8s REST API 일괄 호출 표준 코드 예시`)
 4. **`④` `Indexing Status`가 `● Indexed (Ready)`로 바뀌었는지 확인**:
    - `Indexed` 상태가 되면 서브에이전트가 `SearchMemory` 도구로 즉시 RAG 검색을 수행할 수 있습니다.
 
@@ -1437,10 +1434,9 @@ Resources
 # Phase 4. MCP 커넥터 · 핵심 Python 도구(2종) · 스킬(`3건 이하 kubectl vs 다중 값 Python API`) · 고급 권한 · 서브에이전트 구성
 
 > **빠른 자동 등록 팁**:
-> Step 08 ~ Step 12의 모든 도구(7종)·스킬(3종)·지침·서브에이전트는 UI에서 하나씩 손으로 입력할 수도 있고, 아래 1줄 명령어로 어느 SRE Agent에든 **10초 만에 일괄 동기화**할 수도 있습니다:
+> Step 08 ~ Step 12의 모든 도구·스킬·지침·서브에이전트는 UI에서 하나씩 손으로 입력할 수도 있고, 아래 스크립트로 일괄 동기화할 수도 있습니다:
 > ```bash
-> python3 docs/services/azure-monitor/azure-sre-agent/samples/event-lab/evidence/sync_261103_sre_agent.py \
->   "https://<YOUR_AGENT_ENDPOINT>.azuresre.ai"
+> ./scripts/apply-agent-config.sh
 > ```
 
 ---
@@ -2266,12 +2262,12 @@ spec:
 
 ---
 
-## 부록: 검증된 자동화 산출물 및 실제 고객사 레퍼런스 파일 목록 (`evidence/`)
+## 부록: 검증된 자동화 산출물 및 샘플 파일 목록 (`samples/private-aks-fleet-lab/`)
 
 | 구분 | 파일 경로 | 설명 |
 |---|---|---|
-| **대시보드 JSON** | [`sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json) | `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) 및 `Azure Managed Grafana` 1클릭 Import용 13패널 완성본 JSON |
-| **지식 베이스 메일 템플릿** | [`kb-uploads/aks-eol-notice-template-and-history.md`](./kb-uploads/aks-eol-notice-template-and-history.md) | 5개 섹션 고객 공지 메일 마크다운(`.md`) 표준 템플릿 (`[직접 입력: ...]` 자리표시자, 대상 버전 필터링 규칙, 섹션 5-1 사전 점검 상세 결과표 포함) |
-| **실제 레퍼런스 1** | [`ui-captures/ref-grafana-overview.png`](./ui-captures/ref-grafana-overview.png) | `SRE-AKS-Management` Overview 패널 레퍼런스 캡처 |
-| **실제 레퍼런스 2** | [`ui-captures/ref-grafana-inventory.png`](./ui-captures/ref-grafana-inventory.png) | `SRE-AKS-Management` 12컬럼 Inventory 패널 레퍼런스 캡처 |
+| **대시보드 JSON** | [`monitoring/sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json) | `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) 및 `Azure Managed Grafana` 1클릭 Import용 13패널 완성본 JSON |
+| **지식 베이스 1 (공지 템플릿)** | [`agent/knowledge/aks-eol-notice-template-and-history.md`](./agent/knowledge/aks-eol-notice-template-and-history.md) | 5개 섹션 고객 공지 메일 마크다운(`.md`) 표준 템플릿 (`[직접 입력: ...]` 자리표시자, 대상 버전 필터링 규칙, 섹션 5-1 사전 점검 상세 결과표 포함) |
+| **지식 베이스 2 (9대 점검 정책)** | [`agent/knowledge/aks-9point-upgrade-preflight-policy.md`](./agent/knowledge/aks-9point-upgrade-preflight-policy.md) | AKS 업그레이드 9대 사전 점검 배점(100점)·판정 기준(`READY`/`CONDITIONAL`/`BLOCKED`) 및 선행 조치 가이드 |
+| **지식 베이스 3 (데이터플레인 SOP)** | [`agent/knowledge/aks-dataplane-inspection-sop.md`](./agent/knowledge/aks-dataplane-inspection-sop.md) | 사설 AKS 데이터플레인 조회 SOP (`3건 이하 kubectl` vs `4건 이상 Python K8s REST API` 분기 규칙) |
 
