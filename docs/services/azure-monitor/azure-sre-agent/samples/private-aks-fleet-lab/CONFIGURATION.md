@@ -1,66 +1,9 @@
 # 다중 허브·방화벽 Private AKS 사전 점검 실습 구성 상세
 
-이 문서는 [다중 허브 Private AKS 업그레이드 사전 점검 실습](../../private-aks-multihub-preflight/index.md)의
-네트워크 라우팅, 사설 DNS, 데이터 평면 RBAC, 그리고 **다중 클러스터 조회 시간을 4~20분에서
-21~96초로 줄인 설계 결정과 실측 근거**를 정리한 참고 자료입니다.
-
-## 네트워크
-
-| 영역 | 리소스 및 주소 대역 | 역할 및 핵심 설정 |
-| --- | --- | --- |
-| 에이전트 관리 VNet (`koreacentral`) | `vnet-sre-agent-hub` (`10.42.0.0/16`)<br>`snet-sre-agent-sandbox` (`10.42.4.0/24`) | `Microsoft.App/environments` 위임 전용 서브넷. UDR(`rt-sre-agent-sandbox`)이 `10.52.0.0/16` 및 `10.60.0.0/16` 목적지의 Next Hop을 Hub #1 방화벽(`10.51.250.4`)으로 전달 |
-| 코어 방화벽 허브 (`australiaeast`) | `vnet-fleet-hub-01` (`10.51.0.0/16`, `fw-hub-01` `10.51.250.4`)<br>`vnet-fleet-aks-hub` (`10.52.0.0/16`, `fw-hub-02` `10.52.250.4`)<br>`vnet-fleet-hub-03` (`10.53.0.0/16`, `fw-hub-03` `10.53.250.4`) | 3개 허브 VNet이 Full-Mesh VNet Peering(`AllowForwardedTraffic: true`)으로 연결되어 에이전트 서브넷(`10.42.4.x`)과 각 AKS API 서버 Private Endpoint 간 양방향 대칭 라우팅 제공 |
-| Hub #2 내장 Private AKS | `aks-priv-01` ~ `05` (`10.52.11.0/24` ~ `10.52.15.0/24`) | API 서버 Private Endpoint(`10.52.11.4` ~ `10.52.15.4`). 동일 VNet 내 방화벽 우회 방지를 위해 `privateEndpointNetworkPolicies: Enabled` 적용 |
-| Hub #3 산하 Spoke Private AKS | `aks-priv-06` ~ `10` (`10.60.6.0/24` ~ `10.60.10.0/24`) | API 서버 Private Endpoint(`10.60.6.4` ~ `10.60.10.4`). `10.42.4.x ➔ 10.51.250.4 ➔ 10.53.250.4 ➔ 10.60.x.4:443` 경로로 통신 |
-
-### 에이전트 VNet 설정과 `*.azmk8s.io` 공용 우회 해제
-
-에이전트 리소스의 `sandboxConfiguration.egress.allowedHosts`에 `*.azmk8s.io`가 포함되어 있으면,
-에이전트는 사설 VNet 경로 대신 Microsoft 공용 인프라 네트워크로 AKS API 호출을 우회시켜 사설 DNS 해석에
-실패합니다. 따라서 `allowedHosts`에서 `*.azmk8s.io`를 반드시 제외합니다.
-
-또한 에이전트의 일반 `bash` 터미널 도구는 외부 HTTPS(443) 연결에 내부 이그레스 프록시 인증서(`ADC Egress Proxy Intermediate CA`)를
-주입하므로 사설 AKS 자체 서명 인증서와 충돌(`x509: certificate signed by unknown authority`)할 수 있습니다.
-데이터 플레인 조회에는 프록시 간섭 없이 전용 서브넷으로 직접 나가는 내장 도구 `RunKubectlReadCommand`를 사용합니다.
-
-## 권한
-
-| 주체 | 범위 | 역할 | 목적 |
-| --- | --- | --- | --- |
-| 에이전트 UAMI·시스템 MI | 클러스터 리소스 그룹 | `Reader`, `Azure Kubernetes Service Cluster User Role` | 컨트롤 플레인 메타데이터(`az aks list`) 및 `kubeconfig` 조회 |
-| 에이전트 UAMI·시스템 MI | 클러스터 리소스 그룹 | `Azure Kubernetes Service RBAC Reader` | Azure RBAC(`--enable-azure-rbac`) 기반 클러스터 내부 파드·디플로이먼트·PDB 읽기(`dataActions`) |
-| 배포 관리자 계정 | 에이전트 리소스 | `SRE Agent Administrator` | 포털 도구·스킬·지식 원본 관리 및 변경 작업 승인 |
-
-## 다중 클러스터 조회 지연(4~20분) 원인 분석 및 30~60초 고속화 설계
-
-초기 가이드 프롬프트를 그대로 실행했을 때 단일 클러스터 조회(`25~30초`)와 달리 다중 클러스터 점검에서는
-한 턴당 **3분 38초 ~ 9분 25초(인프라 변경 포함 시 최대 20분 12초)** 가 소요되었습니다. 메시지 타임스탬프 전수 분석으로
-확인한 5대 병목 원인과 해결 설계는 다음과 같습니다.
-
-| 병목 원인 | 초기 동작 (최적화 전) | 고속화 설계 (최적화 후) | 설계 구분 |
-| --- | --- | --- | --- |
-| 1. N+1 개별 CLI / `kubectl` 반복 호출 | 10대 클러스터에 `az aks get-upgrades`·`nodepool list`를 개별 호출(`azCli` 23회)하고, `get pods`·`deploy`·`pdb`를 분리 호출(`kubectl` 27~34회) | `az aks list --query ...` **단 1회 배치 호출(3초)** 로 10대 버전을 모두 수집하고, 클러스터당 `kubectl get pods,deploy,pdb -n <ns>` **1회 복합 호출**로 통합 | 근본적 아키텍처 개선 (Best Practice) |
-| 2. 도구 출력 앞부분 잘림(Head-Truncation) 재조회 | SRE Agent 런타임은 도구 출력이 약 1.5~2KB를 넘으면 **앞부분을 절단**함. 잘린 앞쪽 데이터를 다시 얻으려고 에이전트가 느린 CLI 쿼리를 3~4회 재실행(+60~140초) | `evaluate_aks_upgrade_preflight.py` 등 모든 Python 도구가 불필요한 공백·장문 배열을 빼고 **900자 이하 압축 JSON**만 반환하도록 설계 | 근본적 아키텍처 개선 (도구 단 Projection) |
-| 3. 장기 인프라 변경의 동기식 `sleep` 대기 | 노드풀 추가·증설·업그레이드 시 VMSS 프로비저닝 완료(5~15분)까지 한 턴 안에서 `sleep`과 `az aks show`를 수십 회 폴링 | 장기 실행 작업은 `--no-wait` 비동기 트리거(15초 내 반환)와 사후 상태 확인 턴으로 분리 | 근본적 아키텍처 개선 (비동기 분리) |
-| 4. `/agent` 슬래시 호출 시 자식 Subagent 이중 위임 | Workspace 모드(`adc: true`)에서 `/agent` 슬래시 입력 시 내부 `Task` 자식 에이전트를 생성해 2분 이상 대기 후 메인 에이전트가 또 재요약(+45초) | `@aks_fleet_specialist:` 직접 멘션 호출 및 지침에 `자식 Task 서브에이전트 중복 생성 금지` 명시 | 프리뷰 플랫폼 Workaround |
-| 5. 무제한 MCP / Memory 검색 루프 | 한 턴 안에서 `mslearn` MCP를 19회, `SearchMemory`를 9회까지 반복 호출(+90~150초) | 지침과 스킬에 한 턴당 `SearchMemory` 최대 1회, `mslearn` MCP 최대 1~2회 상한 명시 | 프리뷰 플랫폼 Workaround |
-
-### 전/후 실측 시간 비교 (Korea Central 에이전트 ➔ Australia East 10대 사설 AKS)
-
-| 시나리오 단계 | 최적화 전 실측 (메시지 수) | 최적화 후 실측 (메시지 수) | 단축률 |
-| --- | ---: | ---: | ---: |
-| 1단계: 10대 사설 AKS 버전·EOL·우선순위 식별 | `218.5s ~ 246.2s` (47~69개) | **`24.6s` (7개)** | **-89%** |
-| 2단계: K8s `1.36 → 1.37` 변경사항(`mslearn` MCP) 분석 | `156.2s` (34개, MCP 19회) | **`21.2s` (5개, MCP 1회)** | **-86%** |
-| 3단계: 3대 사설 AKS 방화벽(`TCP 443`) + `kubectl` + 7대 채점 | `249.6s ~ 389.9s` (56~71개) | **`96.4s` (13개)** | **-62~75%** |
-
----
-
-# [A-to-Z UI 구축 바이블] 완전 빈 구독(0%)에서 시작하는 엔터프라이즈 Private AKS + vWAN 방화벽 + Grafana(12컬럼) + Azure SRE Agent(9대 사전 점검 · 점프박스 감사) 전체 구축 가이드
-
-- **문서 목적**: 아무것도 생성되어 있지 않은 **완전 빈 신규 Azure 구독(0% 상태)** 에서 출발하여 **리소스 공급자 등록 ➔ 리소스 그룹 3개(태그 포함) ➔ Virtual WAN & Secured Hub(Azure Firewall) ➔ 방화벽 정책(`afwp-sre-vwan`) · 규칙 컬렉션 그룹(`rcg-sre-to-aks`) · 규칙 · 허브 연결 · `Routing Intent` ➔ VNet 4개 & 전용 서브넷 위임 ➔ DNS Private Resolver(`10.10.0.4`) & 허브 VNet 연결 4건 ➔ Log Analytics 2개 · UAMI 3개(RBAC) · Private AKS 3대(12컬럼 태그) · DNS 링크 ➔ 9대 점검/점프박스 재현용 K8s 워크로드 배포 ➔ SRE Agent & 최소 권한 RBAC ➔ Dashboard with Grafana 13패널 JSON 1클릭 Import ➔ `sre.azure.com` 도구(7종)·스킬·안전 훅·서브에이전트·월간 스케줄·채팅 검증**까지 **CLI 스크립트의 모든 리소스·파라미터를 실제 Azure Portal UI의 탭·필드 단위 입력표와 1:1로 일치시킨 완전판 매뉴얼**입니다.
-- **반영된 엔터프라이즈 운영 표준 사양**:
-  1. **Grafana (`SRE-AKS-Management` — `Azure Monitor > Dashboards with Grafana`) 13개 패널 및 12개 표준 인벤토리 컬럼 (1클릭 Import JSON 제공)**:
-     - **1클릭 Import용 대시보드 JSON 파일**: [`./sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json) (`Azure Monitor > Dashboards with Grafana > New > Import`로 즉시 13개 패널 생성)
+- **문서 목적**: **리소스 공급자 등록 ➔ 리소스 그룹 3개 ➔ Virtual WAN & Secured Hub(Azure Firewall) ➔ 방화벽 정책(`afwp-sre-vwan`) · 규칙 컬렉션 그룹(`rcg-sre-to-aks`) · 규칙 · 허브 연결 · `Routing Intent` ➔ VNet 4개 & 전용 서브넷 위임 ➔ DNS Private Resolver(`10.10.0.4`) & 허브 VNet 연결 4건 ➔ Log Analytics 2개 · UAMI 3개(RBAC) · Private AKS 3대(12컬럼 태그) · DNS 링크 ➔ 사전 점검 재현용 K8s 워크로드 배포 ➔ SRE Agent & 최소 권한 RBAC ➔ Dashboard with Grafana 13패널 JSON Import ➔ `sre.azure.com` 도구·스킬·고급 권한·서브에이전트·월간 스케줄·채팅 검증**까지 순서대로 구성하는 매뉴얼입니다.
+- **주요 구성 사양**:
+  1. **Grafana (`SRE-AKS-Management` — `Azure Monitor > Dashboards with Grafana`) 13개 패널 및 12개 표준 인벤토리 컬럼**:
+     - **대시보드 JSON 파일**: [`./monitoring/sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json) (`Azure Monitor > Dashboards with Grafana > New > Import`)
      - **표준 12개 컬럼**: `mgmtName`, `Subscription`, `Cluster`, `k8sVersion`, `SupportPlan` (`KubernetesOfficial` vs `AKSLongTermSupport`), `PricingTier`, `ServiceName`, `ServiceCode`, `ServiceOpenDate`, `ServiceGrade` (`S`/`A`/`B`/`C`), `APIServerAccess`, `NetworkPlugin` (+ 노드풀 패널 `NodePool`, `Mode`)
   2. **AKS 업그레이드 9대 사전 점검 체크리스트 (`evaluate-aks-upgrade-preflight`)**:
      - ① 애플리케이션 Pod 고가용성 구성 (특정 노드 파드 편중 여부, 컨트롤러 없는 Naked Pod 존재 여부, `replicas==1`)
@@ -71,33 +14,26 @@
      - ⑥ Graceful Shutdown (`livenessProbe` / `readinessProbe` / `preStop` 설정 여부)
      - ⑦ 노드풀이 사용 중인 서브넷의 가용 IP 확인 (`maxSurge` 여유 IP)
      - ⑧ AKS Identity 권한 확인 (사용 중인 타 RG VNet/Subnet에 클러스터 UMI `Network Contributor` 권한 누락 여부)
-     - ⑨ AKS의 MDC(Microsoft Defender for Cloud) / 모니터링 속성 중 Log Analytics Workspace Resource ID 확인 (삭제된 유령 LAW를 참조하고 있는 경우 등)
-  3. **점프박스 대체 데이터 플레인 전수조사 (`audit-aks-ingress-and-pods`)**:
-     - 공식 점프박스나 느린 포털 `Run Command` 없이 VNet 사설망 기반 내장 `RunKubectlReadCommand`로 N대 Private AKS의 `Pending`/`ImagePullBackOff`/`CrashLoopBackOff` 파드와 Kube Events, 그리고 `ingress-nginx` (`v1.9.4`~`v1.11.2`) 및 `Gateway API` 버전·설정 인벤토리 즉시 추출
-- **검증 완료된 기준 환경 및 자동화 자산**:
-  - **Azure 구독**: `<YOUR_SUBSCRIPTION_NAME>` (`<YOUR_SUBSCRIPTION_ID>`)
-  - **SRE Agent**: `sre-aks-fleet-agent` (`rg-sre-agent-fleet`, `https://sre-aks-fleet-agent--09505742.e01924b8.koreacentral.azuresre.ai`)
-  - **Private AKS 클러스터 3종 (`rg-sre-private-aks-fleet`)**: `aks-priv-01` (`1.36.4`), `aks-priv-02` (`1.35.9`), `aks-priv-03` (`1.34.12`)
-  - **Grafana 대시보드**: `SRE-AKS-Management` (`Microsoft.Dashboard/dashboards`) 및 `grafana-sre-aks-fleet` (`https://grafana-sre-aks-fleet.<region>.grafana.azure.com/d/sre-aks-eol-inv/eb6a07e`)
-  - **Grafana 13패널 Import JSON**: [`./sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json)
-  - **SRE Agent 1클릭 전체 동기화 스크립트**: [`./sync_261103_sre_agent.py`](./sync_261103_sre_agent.py)
+     - ⑨ AKS 모니터링 속성 중 Log Analytics Workspace Resource ID 유효성 확인
+  3. **데이터 플레인 상태 점검 (`RunKubectlReadCommand`)**:
+     - VNet 사설망 기반 내장 `RunKubectlReadCommand`로 Private AKS의 비정상 파드(`Pending`/`ImagePullBackOff`/`CrashLoopBackOff`), 이벤트 및 인그레스 구성을 조회합니다.
 
 ---
 
-## 전체 구축 로드맵 요약 (0% 빈 구독 ➔ 100% 운영 완료)
+## 전체 구축 로드맵 요약
 
 | 단계 (Phase) | Step 번호 | 작업 위치 | 핵심 수행 내용 |
 |---|---|---|---|
-| **Phase 0**<br>빈 구독 기초 준비 | • **Step 00**: 리소스 공급자 5종 등록 & RG 3개(태그 포함) 생성 | `portal.azure.com` | • `Microsoft.Network`, `ContainerService`, `App`, `Dashboard`, `OperationalInsights` 등록<br>• `rg-sre-vwan-network`, `rg-sre-private-aks-fleet`, `rg-sre-agent-fleet` 생성 |
-| **Phase 1**<br>vWAN · 방화벽 · VNet · DNS · Private AKS · 워크로드 배포 | • **Step 01-A**: vWAN(`vwan-sre`) & Secured Hub(`vhub-sre` + FW + `afwp-sre-vwan`) 생성<br>• **Step 01-B**: 방화벽 규칙 컬렉션 그룹(`rcg-sre-to-aks`) · 규칙 · 허브 연결 · `Routing Intent`<br>• **Step 01-C**: 4개 VNet & 서브넷(`snet-sre-agent-sandbox` 등) 위임<br>• **Step 01-D**: DNS Private Resolver(`dnspr-sre` / `in-ep-sre`) & vWAN VNet 연결 4건<br>• **Step 02-A**: Log Analytics 2개 · UAMI 3개(RBAC) · Private AKS 3대(12컬럼 태그) · DNS 링크<br>• **Step 02-B**: 포털 `Run command`로 9대 점검·점프박스 시나리오 워크로드 배포 | `portal.azure.com` | • Standard vWAN, 방화벽 정책(`afwp-sre-vwan`), Secured Hub 내장 Azure Firewall 생성<br>• `rcg-sre-to-aks`(우선순위 200) 내 네트워크 규칙(210)·애플리케이션 규칙(220) 및 Routing Intent 구성<br>• 4개 VNet 서브넷 및 위임(`Microsoft.Network/dnsResolvers`, `Microsoft.App/environments`) 설정<br>• UAMI 3개 권한 부여, Private AKS 3대 생성, 항목 ⑧/⑨ 장애 조건 재현, Private DNS Zone 링크 연결<br>• 버전별 `ingress-nginx`, `Pending`, `HostPath`, 차단 `PDB`, `CrashLoop` 등 시나리오 파드 주입 |
-| **Phase 2**<br>SRE Agent 생성 · 최소 권한 · Grafana 1클릭 Import | • **Step 03**: SRE Agent 생성 및 최소 읽기 권한(RBAC) 부여<br>• **Step 04-A**: `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) JSON Import<br>• **Step 04-B**: Grafana 13개 패널 & 12컬럼 인벤토리 KQL 검증 | `portal.azure.com` | • SRE VNet과 동일 리전에 SRE Agent 생성, UAMI에 구독 `Reader`/`Monitoring Reader` 및 AKS `Cluster User`/`RBAC Reader` 부여<br>• `SRE-AKS-Management`에 [`sre-aks-management-dashboard.json`](./sre-aks-management-dashboard.json) 업로드 |
-| **Phase 3**<br>SRE 포털 리소스 · VNet 우회 해제 · 지식 베이스 | • **Step 05**: 관리 대상 구독/RG 연결 (`Managed resources`)<br>• **Step 06**: VNet 통합 및 `[ ] AKS API server` 우회 해제<br>• **Step 07**: 지식 베이스(`Knowledge sources`) 정책 문서 업로드 | `sre.azure.com` | • 관리 대상 Management Group / 구독 연결<br>• `snet-sre-agent-sandbox` 연결 후 **`[ ] AKS API server (*.azmk8s.io)` 체크 해제**<br>• 12컬럼·9대 체크리스트·공지 양식 마크다운 업로드(`Indexed`) |
-| **Phase 4**<br>MCP 커넥터 · 핵심 Python 도구(2종) · 스킬 · 고급 권한(`Advanced permissions`) · 서브에이전트 | • **Step 08**: `mslearn-mcp` & `azure-arg-mcp`(`npx @azure/mcp`) 커넥터<br>• **Step 09**: `Agent Canvas > Toolbox` 핵심 Python 도구 2종(EOS 타겟팅 + 9대 사전 점검) 등록<br>• **Step 10**: `Skill builder` 지식 기반 공지 메일(`.md`) 조립 워크플로 스킬 등록<br>• **Step 11**: `Tools > Advanced permissions` (`Allow`/`Ask`/`Deny`) & `Custom instructions`<br>• **Step 12**: `Agent Canvas` 서브에이전트(`aks_upgrade_specialist`) 결합 | `sre.azure.com` | • MS Learn 원격 MCP 및 공식 Azure 로컬 Stdio MCP(`azure-arg-mcp`) 연결<br>• **파이썬 도구에 국한하지 않고 SRE Agent의 6대 기능을 종합 활용**:<br>  - `check-aks-eos-release-calendar` (EOS 일정 파싱 + **해당 버전(`1.34`) 클러스터만 엄격 필터링**)<br>  - `evaluate-aks-upgrade-preflight` (전체 `ALL` 또는 선택 `1,3,4` 9대 사전 점검)<br>  - `mslearn-mcp` (버전별 주요 변경사항 실시간 수집)<br>  - `Knowledge Memory + Skill` (**대상 버전 클러스터 + 사전 점검 상세 결과표가 포함된 최종 공지 메일 `.md` 작성**) |
-| **Phase 5**<br>0-AAU Live Report · 월간 스케줄 & Full Cycle 채팅 검증 | • **Step 13**: `Live Reports` (0 AAU 실시간 대시보드) & 매월 1일 `Scheduled tasks`<br>• **Step 14**: 실시간 채팅(`/agent aks_upgrade_specialist`) Full Cycle 검증 | `sre.azure.com` | • `azure-arg-mcp` 기반 0-AAU Live Report 대시보드 및 매월 1일(`0 0 1 * *`) 정기 작업 등록<br>• 채팅 한 번으로 `1.34` 대상 클러스터 단독 필터링 + 9대 사전 점검 + 릴리즈 노트 + 점검 결과 포함 공지 메일(`.md`) 출력 검증 |
+| **Phase 0**<br>기초 준비 | • **Step 00**: 리소스 공급자 5종 등록 & RG 3개 생성 | `portal.azure.com` | • `Microsoft.Network`, `ContainerService`, `App`, `Dashboard`, `OperationalInsights` 등록<br>• `rg-sre-vwan-network`, `rg-sre-private-aks-fleet`, `rg-sre-agent-fleet` 생성 |
+| **Phase 1**<br>vWAN · 방화벽 · VNet · DNS · Private AKS · 워크로드 배포 | • **Step 01-A**: vWAN(`vwan-sre`) & Secured Hub(`vhub-sre` + FW + `afwp-sre-vwan`) 생성<br>• **Step 01-B**: 방화벽 규칙 컬렉션 그룹(`rcg-sre-to-aks`) · 규칙 · 허브 연결 · `Routing Intent`<br>• **Step 01-C**: 4개 VNet & 서브넷(`snet-sre-agent-sandbox` 등) 위임<br>• **Step 01-D**: DNS Private Resolver(`dnspr-sre` / `in-ep-sre`) & vWAN VNet 연결 4건<br>• **Step 02-A**: Log Analytics 2개 · UAMI 3개(RBAC) · Private AKS 3대(12컬럼 태그) · DNS 링크<br>• **Step 02-B**: 포털 `Run command`로 사전 점검 시나리오 워크로드 배포 | `portal.azure.com` | • Standard vWAN, 방화벽 정책(`afwp-sre-vwan`), Secured Hub 내장 Azure Firewall 생성<br>• `rcg-sre-to-aks`(우선순위 200) 내 네트워크 규칙(210)·애플리케이션 규칙(220) 및 Routing Intent 구성<br>• 4개 VNet 서브넷 및 위임(`Microsoft.Network/dnsResolvers`, `Microsoft.App/environments`) 설정<br>• UAMI 3개 권한 부여, Private AKS 3대 생성, 항목 ⑧/⑨ 장애 조건 재현, Private DNS Zone 링크 연결<br>• 버전별 `ingress-nginx`, `Pending`, `HostPath`, 차단 `PDB`, `CrashLoop` 등 시나리오 파드 주입 |
+| **Phase 2**<br>SRE Agent 생성 · 최소 권한 · Grafana Import | • **Step 03**: SRE Agent 생성 및 최소 읽기 권한(RBAC) 부여<br>• **Step 04-A**: `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) JSON Import<br>• **Step 04-B**: Grafana 13개 패널 & 12컬럼 인벤토리 KQL 확인 | `portal.azure.com` | • SRE VNet과 동일 리전에 SRE Agent 생성, UAMI에 구독 `Reader`/`Monitoring Reader` 및 AKS `Cluster User`/`RBAC Reader` 부여<br>• `SRE-AKS-Management`에 [`sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json) 업로드 |
+| **Phase 3**<br>SRE 포털 리소스 · VNet 우회 해제 · 지식 베이스 | • **Step 05**: 관리 대상 구독/RG 연결 (`Managed resources`)<br>• **Step 06**: VNet 통합 및 `[ ] AKS API server` 우회 해제<br>• **Step 07**: 지식 베이스(`Knowledge sources`) 정책 문서 업로드 | `sre.azure.com` | • 관리 대상 Management Group / 구독 연결<br>• `snet-sre-agent-sandbox` 연결 후 **`[ ] AKS API server (*.azmk8s.io)` 체크 해제**<br>• 9대 체크리스트·데이터플레인 SOP·공지 양식 마크다운 3종 업로드(`Indexed`) |
+| **Phase 4**<br>MCP 커넥터 · Python 도구 · 스킬 · 고급 권한 · 서브에이전트 | • **Step 08**: `mslearn-mcp` & `azure-arg-mcp`(`npx @azure/mcp`) 커넥터<br>• **Step 09**: `Agent Canvas > Toolbox` Python 도구 2종 등록<br>• **Step 10**: `Skill builder` 공지 메일(`.md`) 워크플로 스킬 등록<br>• **Step 11**: `Tools > Advanced permissions` (`Allow`/`Ask`/`Deny`) & `Custom instructions`<br>• **Step 12**: `Agent Canvas` 서브에이전트(`aks_upgrade_specialist`) 생성 | `sre.azure.com` | • MS Learn 원격 MCP 및 공식 Azure 로컬 Stdio MCP(`azure-arg-mcp`) 연결<br>• `check-aks-eos-release-calendar` (EOS 일정 파싱 + SupportPlan별 대상 클러스터 필터링)<br>• `evaluate-aks-upgrade-preflight` (전체 `ALL` 또는 선택 `1,3,4` 9대 사전 점검)<br>• `Knowledge Memory + Skill` 기반 공지 메일 `.md` 생성 및 다운로드 링크 제공 |
+| **Phase 5**<br>Live Report · 정기 스케줄 & 채팅 검증 | • **Step 13**: `Live Reports` 대시보드 & 매월 1일 `Scheduled tasks`<br>• **Step 14**: 실시간 채팅(`/agent aks_upgrade_specialist`) 실행 검증 | `sre.azure.com` | • `azure-arg-mcp` 기반 Live Report 대시보드 및 매월 1일(`0 0 1 * *`) 정기 작업 등록<br>• 채팅으로 EOS 대상 클러스터 필터링 + 9대 사전 점검 + 릴리즈 노트 + 공지 메일(`.md`) 다운로드 검증 |
 
 ---
 
-# Phase 0. [완전 빈 구독 첫 단계] 리소스 공급자(Resource Providers) 5종 등록 및 리소스 그룹 3개 생성 (`portal.azure.com`)
+# Phase 0. 리소스 공급자(Resource Providers) 5종 등록 및 리소스 그룹 3개 생성 (`portal.azure.com`)
 
 아무것도 없는 신규 Azure 구독에서는 AKS, Managed Grafana, SRE Agent(`Microsoft.App`), vWAN/DNS Resolver를 생성하기 전에 반드시 해당 **리소스 공급자(Resource Providers)** 가 `Registered` 상태여야 합니다.
 
@@ -124,9 +60,8 @@
 | **2번째 RG** | **`rg-sre-private-aks-fleet`** | `(Asia Pacific) Korea Central` | • `env` : `sre-lab`<br>• `role` : `private-aks-fleet` | Private AKS 클러스터 3대(`aks-priv-01..03`), Log Analytics Workspace, `SRE-AKS-Management` 대시보드 배치용 |
 | **3번째 RG** | **`rg-sre-agent-fleet`** | `(Asia Pacific) Korea Central` | • `env` : `sre-lab`<br>• `role` : `sre-agent` | Azure SRE Agent 리소스 및 에이전트 전용 VNet(`vnet-sre-event-lab`) 배치용 |
 
-> **참고 (구독별 리전 VM SKU 쿼터 제한이 있는 경우의 리전 선택 규칙)**:
-> - 기본적으로 모든 리소스를 `Korea Central`로 생성하면 됩니다.
-> - 단, **특정 구독에 `Korea Central` VM SKU 생성 제한(`NotAvailableForSubscription`)** 이 걸려 있으므로, 리소스 그룹·vWAN·방화벽·DNS·SRE Agent·Grafana는 모두 **`Korea Central`** 에 생성하되, **워커 노드 VM이 뜨는 `AKS용 VNet 2개`(`vnet-sre-aks-hub`, `vnet-sre-spoke-03`)와 `Private AKS 클러스터 3대`만 `East US 2` 리전(노드 크기: `Standard_D2s_v7`)으로 선택**하면 막힘 없이 생성되며 `Korea Central` vWAN 허브에 글로벌 연결됩니다.
+> **참고 (리전 선택)**:
+> 기본 리전은 `Korea Central`입니다. 구독에 `Korea Central` VM SKU 쿼터 제한이 있는 경우 AKS용 VNet 2개(`vnet-sre-aks-hub`, `vnet-sre-spoke-03`)와 Private AKS 클러스터 3대는 `East US 2`(노드 크기: `Standard_D2s_v7`)로 생성해 `Korea Central` vWAN 허브에 연결할 수 있습니다.
 
 ### 복사·붙여넣기용 Step 00 전체 Azure CLI 명령어
 ```bash
@@ -200,13 +135,6 @@ SRE Agent 서브넷(`10.42.4.0/24`)에서 출발한 트래픽이 중앙 방화�
 | **3. TLS 검사 (`TLS Inspection`)** | TLS 검사 | **`사용 안 함 (Disabled)`** (기본값 유지) | 사설 AKS API 서버 자체 CA 인증서 보존 필수 |
 | **4. 규칙 (`Rules`)** | 규칙 추가 | *(생성 후 Step 01-B에서 `rcg-sre-to-aks`와 함께 추가)* | 바로 건너뛰기 가능 |
 | **5. IDPS / 위협 인텔리전스** | 모드 | **`경고만 (Alert only)`** (기본값 유지) | 바로 **`검토 + 만들기` ➔ `만들기`** 클릭 |
-
-> **UI 참고 노트: 이미 일반 허브(`vhub-sre`, `방화벽이 배포되지 않음`)를 만든 뒤 In-Place로 전환하거나 `기본 거부 정책`을 `afwp-sre-vwan`으로 교체할 때**
-> 1. **`네트워크 보안 (Firewall Manager) > 좌측 리소스 보호 > 가상 허브`** 로 이동합니다.
-> 2. 목록에서 **`vhub-sre` 왼쪽 체크박스 `[v]`를 선택**합니다.
-> 3. 상단 툴바의 **`🔒 보안 관리`** 를 클릭합니다:
->    - 아직 방화벽이 없다면 **`기존 정책을 사용하여 방화벽 배포`** 클릭 ➔ 방화벽 계층 `표준`, 정책 `afwp-sre-vwan` 선택 후 배포
->    - 이미 `기본 거부 정책`으로 방화벽(`AzureFirewall_vhub-sre`)이 생성되어 있다면, **`afwp-sre-vwan` 정책 리소스 > 좌측 `관리 > 연결된 허브(Associated hubs)` > `+ 허브 연결(+ Associate hubs)`** 에서 **`vhub-sre`** 를 체크하고 **`추가(Add)`** 를 클릭하면 정책이 `✅ afwp-sre-vwan`으로 변경됩니다.
 
 ### 복사·붙여넣기용 Step 01-A Azure CLI 명령어
 ```bash
@@ -353,11 +281,8 @@ az rest --method PUT \
 | **VNet 3**<br>(AKS 01·02용) | **`rg-sre-vwan-network`** | **`vnet-sre-aks-hub`** | **`East US 2`** *(상용 구독은 `Korea Central` 가능)* | **`10.52.0.0/16`** | ① **`snet-aks-01`**<br>② **`snet-aks-02`** | ① **`10.52.11.0/24`**<br>② **`10.52.12.0/27`** *(IP 부족 재현용 `/27`)* | ① `없음 (None)`<br>② `없음 (None)` |
 | **VNet 4**<br>(AKS 03용) | **`rg-sre-vwan-network`** | **`vnet-sre-spoke-03`** | **`East US 2`** *(상용 구독은 `Korea Central` 가능)* | **`10.60.0.0/16`** | **`snet-aks-03`** | **`10.60.3.0/24`** | `없음 (None)` |
 
-> **포털 UI 참고 사항 (`서브넷 위임` 위치 및 포털의 `프라이빗 서브넷` 기본값)**:
-> 1. **서브넷 위임(`Subnet delegation`) 위치**: 초기 `가상 네트워크 만들기` 마법사의 `IP 주소` 탭에서 `서브넷 위임` 드롭다운이 보이지 않는다면, 먼저 VNet 생성을 완료한 뒤 **`생성된 VNet 클릭 > 좌측 설정(Settings) > 서브넷(Subnets) > 해당 서브넷 클릭`** 으로 들어가 하단의 **`서브넷 위임 (Subnet delegation)`** 을 선택합니다.
-> 2. **포털 생성 시 기본 체크되는 `프라이빗 서브넷 (defaultOutboundAccess: false)` 및 자동 생성 NSG**:
->    - CLI(`az network vnet subnet create`)로 만들 때는 `defaultOutboundAccess`가 `null`(기본 아웃바운드 허용)로 생성되지만, 포털 UI에서 서브넷을 만들면 **`defaultOutboundAccess: false`** 와 기본 NSG가 자동으로 붙습니다.
->    - **별도로 변경하실 필요 없이 그대로 두셔도 됩니다.** AKS 서브넷(`snet-aks-01..03`)은 AKS 자체 Standard Load Balancer를 통해 아웃바운드가 나가고, SRE Agent 서브넷(`snet-sre-agent-sandbox`)은 `Microsoft.App/environments`(`legionservicelink`)가 자체 관리형 아웃바운드 로드밸런서를 사용하므로 `defaultOutboundAccess: false` 상태에서도 `learn.microsoft.com` 및 외부 통신이 정상 동작합니다.
+> **포털 UI 참고 (`서브넷 위임` 위치)**:
+> 초기 `가상 네트워크 만들기` 마법사의 `IP 주소` 탭에서 `서브넷 위임` 드롭다운이 보이지 않는 경우, VNet 생성을 먼저 완료한 뒤 **`생성된 VNet 클릭 > 좌측 설정(Settings) > 서브넷(Subnets) > 해당 서브넷 클릭`** 에서 하단의 **`서브넷 위임 (Subnet delegation)`** 을 선택합니다. 포털에서 기본 체크되는 `프라이빗 서브넷 (defaultOutboundAccess: false)` 및 기본 NSG는 그대로 유지합니다.
 
 ### 복사·붙여넣기용 Step 01-C 4개 VNet 및 전용 서브넷 일괄 생성 CLI
 ```bash
@@ -615,15 +540,15 @@ done
 
 ---
 
-## Step 02-B. [시나리오 데이터 준비] 포털 `Run command`(또는 CLI)로 3대 클러스터에 9대 점검 · 점프박스 시나리오용 K8s 워크로드 배포
+## Step 02-B. 포털 `Run command`(또는 CLI)로 3대 클러스터에 사전 점검 시나리오용 K8s 워크로드 배포
 
-빈 클러스터만 만들면 `Pending` 파드나 구버전 `ingress-nginx`, 차단 `PDB`, `HostPath` 등이 없어서 시나리오를 검증할 수 없습니다. Azure Portal의 **`Kubernetes 리소스 (Kubernetes resources) > 명령 실행 (Run command)`** 화면(또는 `az aks command invoke`)에서 3대 클러스터에 시나리오용 워크로드 매니페스트를 배포합니다.
+Azure Portal의 **`Kubernetes 리소스 (Kubernetes resources) > 명령 실행 (Run command)`** 화면(또는 `az aks command invoke`)에서 3대 클러스터에 사전 점검 검증용 워크로드 매니페스트를 배포합니다.
 
 ### 포털 UI 화면 이동 및 실행 순서 (`실행 명령` 600자 제한 대응 분할 실행)
 1. **`Kubernetes 서비스 > aks-priv-01` (이후 `02`, `03` 반복) > 좌측 메뉴 `Kubernetes 리소스` > `실행 명령 (Run command)` 클릭**
 2. **하단 명령 입력창(`최대 600자 제한`)에 아래 클러스터별 분할 블록(`[블록 1]`, `[블록 2]`, `[블록 3]`...)을 순서대로 하나씩 복사해 붙여넣고 우측 하단 `▷ (실행)` 아이콘 클릭**
-   - 💡 **팁 (파일 첨부로 한 번에 실행하기)**: 입력창 우측 하단(`시험 실행` 토글 옆)의 **`📎 (파일 첨부)`** 아이콘을 눌러 클러스터별 YAML 파일(`priv01.yaml` 등)을 첨부한 뒤, 입력창에 `kubectl apply -f priv01.yaml`을 입력해 한 번에 실행할 수도 있습니다.
-3. **클러스터별 주입되는 9대 체크리스트 & 점프박스 검증 데이터 확인**:
+   - 입력창 우측 하단(`시험 실행` 토글 옆)의 **`📎 (파일 첨부)`** 아이콘으로 클러스터별 YAML 파일을 첨부한 뒤 `kubectl apply -f priv01.yaml`을 실행할 수도 있습니다.
+3. **클러스터별 배포 워크로드 구성**:
    - **`aks-priv-01` (`1.36.4`, 정상 `READY`)**: `commerce/ecommerce-storefront` (`replicas: 2`, Probe/preStop 정상), `ingress-nginx` **`v1.11.2`**, Gateway API **`v1.1.0`**
    - **`aks-priv-02` (`1.35.9`, `BLOCKED`)**:
      - [항목 ② Local Storage] `banking-cache` 파드 `emptyDir` 볼륨 마운트
@@ -1221,12 +1146,11 @@ done
 
 ---
 
-## Step 04-A. 고객사 동일 환경 구성: `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) 1클릭 Import (및 선택형 `Azure Managed Grafana`)
+## Step 04-A. `Azure Monitor > Dashboards with Grafana` (`SRE-AKS-Management`) Import
 
-`SRE-AKS-Management | Dashboard with Grafana` (부제: `Azure Monitor dashboards with Grafana | Azure Monitor`) 대시보드는 별도 유료 워크스페이스 없이 Azure Portal 내 **Azure Monitor에 기본 내장된 `Dashboards with Grafana` (`Microsoft.Dashboard/dashboards`)** 기능입니다.
-내보내 둔 **[`sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json)** 파일을 업로드하면 Overview(관리그룹 표, 등급별 컬러 카드 5종, Standard/LTS 버전 표, 단위서비스 목록)와 하단 12컬럼 인벤토리 + NodePool 표까지 **총 13개 패널이 1클릭으로 동일하게 생성**됩니다.
+Azure Portal 내 **Azure Monitor의 `Dashboards with Grafana` (`Microsoft.Dashboard/dashboards`)** 기능에 **[`sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json)** 파일을 업로드하여 Overview(관리그룹 표, 등급별 카드 5종, Standard/LTS 버전 표, 단위서비스 목록)와 하단 12컬럼 인벤토리 + NodePool 표까지 총 13개 패널을 생성합니다.
 
-### 방법 1 (고객사 화면과 100% 동일 — 권장): `Azure Monitor > Dashboards with Grafana`에서 바로 Import
+### 방법 1: `Azure Monitor > Dashboards with Grafana`에서 Import
 1. **Azure Portal 상단 검색창에서 `Monitor` (`모니터`) 검색 후 이동**
 2. **좌측 메뉴에서 `Dashboards with Grafana` (`Grafana를 사용한 대시보드`) 클릭**
 3. **상단 툴바에서 `New` (`새로 만들기`) ➔ `Import` (`가져오기`) 클릭**
@@ -1236,14 +1160,14 @@ done
    - **리소스 그룹 (`Resource Group`)**: **`rg-sre-private-aks-fleet`**
    - **지역 (`Region`)**: **`Korea Central`**
 5. **`Import` (`가져오기 / 저장`) 클릭**:
-   - 리소스 그룹(`rg-sre-private-aks-fleet`) 안에 **`SRE-AKS-Management` (`Dashboard with Grafana` 타입)** 리소스가 생성되며, 포털 좌측 메뉴 **`Dashboard with Grafana`** 탭에서 고객사 캡처 화면과 100% 동일한 대시보드를 바로 조회·편집·CSV 다운로드할 수 있습니다.
+   - 리소스 그룹(`rg-sre-private-aks-fleet`) 안에 **`SRE-AKS-Management` (`Dashboard with Grafana` 타입)** 리소스가 생성되며, 포털 좌측 메뉴 **`Dashboard with Grafana`** 탭에서 대시보드를 조회·편집·CSV 다운로드할 수 있습니다.
 
-### 방법 2 (선택 사항): 독립형 `Azure Managed Grafana` (`grafana-sre-aks-fleet`) 워크스페이스에 Import
-- 포털 내장 대시보드 상단 툴바의 **`Copy to Managed Grafana`** 버튼을 누르거나, `Azure Managed Grafana` 웹 UI(`Dashboards > New > Import`)에서 동일한 `sre-aks-management-dashboard.json` 파일을 그대로 업로드해도 동일하게 동작합니다.
+### 방법 2 (선택 사항): 독립형 `Azure Managed Grafana` 워크스페이스에 Import
+- 포털 내장 대시보드 상단 툴바의 **`Copy to Managed Grafana`** 버튼을 누르거나, `Azure Managed Grafana` 웹 UI(`Dashboards > New > Import`)에서 동일한 `sre-aks-management-dashboard.json` 파일을 업로드합니다.
 
 ### 복사·붙여넣기용 Step 04-A Azure CLI 명령어 (`Dashboard with Grafana` 리소스 생성 + 13패널 정의 배포)
 ```bash
-# 1) 고객사와 동일한 포털 내장 'Dashboard with Grafana' (Microsoft.Dashboard/dashboards) 리소스 생성
+# 1) 포털 내장 'Dashboard with Grafana' (Microsoft.Dashboard/dashboards) 리소스 생성
 az resource create \
   --resource-group rg-sre-private-aks-fleet \
   --namespace Microsoft.Dashboard --resource-type dashboards \
@@ -1266,7 +1190,7 @@ subprocess.run(["az", "rest", "--method", "PUT", "--url", url, "--body", "@/tmp/
 
 ## Step 04-B. Grafana (`SRE-AKS-Management`) 13개 패널 및 12컬럼 인벤토리 KQL 확인
 
-`SRE-AKS-Management` 대시보드의 표준 구성을 100% 동일한 패널 및 12개 표준 컬럼을 확인합니다.
+`SRE-AKS-Management` 대시보드의 패널 구성과 12개 표준 컬럼을 확인합니다.
 
 ### 대시보드 JSON 파일 경로
 - **1클릭 Import용 대시보드 JSON**: [`./monitoring/sre-aks-management-dashboard.json`](./monitoring/sre-aks-management-dashboard.json)
@@ -1373,23 +1297,19 @@ Resources
 
 ---
 
-## Step 06. [가장 중요] `Workspace configuration > Networking`에서 VNet 연결 및 `[ ] AKS API server (*.azmk8s.io)` 우회 체크 해제
+## Step 06. `Workspace configuration > Networking`에서 VNet 연결 및 `[ ] AKS API server (*.azmk8s.io)` 우회 체크 해제
 
-> **핵심 주의사항 (Gotcha)**:
-> SRE Agent에 VNet(`snet-sre-agent-sandbox`)을 연결하더라도, 하단 `Common Azure endpoints`에서 **`[✓] AKS API server (*.azmk8s.io)`** 가 기본 체크되어 있으면 에이전트가 `kubectl` 패킷을 고객 VNet으로 보내지 않고 Microsoft 공용 인프라망으로 우회시켜 사설 AKS 접속이 실패합니다. **반드시 이 체크박스를 해제(Uncheck)해야 합니다!**
+> **주의사항**:
+> SRE Agent에 VNet(`snet-sre-agent-sandbox`)을 연결하더라도, 하단 `Common Azure endpoints`에서 **`[✓] AKS API server (*.azmk8s.io)`** 가 기본 체크되어 있으면 에이전트가 `kubectl` 패킷을 사용자 VNet 대신 공용 인프라망으로 우회시킵니다. 이 체크박스를 반드시 해제합니다.
 
 ### 화면 이동 및 입력 순서 (`①` ➔ `⑤`)
 1. **`①` 좌측 하단 `Settings > Workspace configuration` 클릭 후 상단 `Networking` 탭 선택**
 2. **`②` `Egress mode`에서 세 번째 카드인 `Azure VNet (Private egress via your VNet)` 선택**
 3. **`③` `Virtual network`: `vnet-sre-event-lab`, `Subnet`: `snet-sre-agent-sandbox` 선택 및 `[✓] Use VNet's private DNS for resolution` 체크**:
-   - `Test connection` 버튼을 눌러 **`● Verified`** 초록색 배지가 뜨는지 확인합니다.
-4. **`④` [필수] `Common Azure endpoints`에서 `[ ] AKS API server (*.azmk8s.io)` (및 거버넌스 정책 시 `Log Analytics`, `Azure Managed Grafana`) 체크 해제 (Uncheck!)**:
-   - **`[ ] AKS API server (*.azmk8s.io)` 체크 해제 (필수)**: 체크를 해제하면 모든 `RunKubectlReadCommand` 및 Python 소켓 호출이 `10.42.4.x` 사설 IP를 달고 고객 VNet 및 vWAN 방화벽을 경유해 Private AKS Private Endpoint(`10.52.11.4`, `10.52.12.4`, `10.60.3.4`)로 진입합니다.
-   - **거버넌스상 모든 트래픽이 VNet을 경유해야 하는 경우 (`Log Analytics`, `Azure Managed Grafana` 허용 목록 제외 가능)**:
-     - 본 실습 아키텍처에서 SRE Agent는 **`Azure Managed Grafana (*.grafana.azure.com)`나 `Log Analytics (api.loganalytics.io)` 데이터플레인에 직접 접속하지 않습니다.**
-     - 대시보드(`SRE-AKS-Management`)는 Azure Monitor 내장 `Dashboards with Grafana`(`Microsoft.Dashboard/dashboards`) 리소스이며, 에이전트는 Grafana가 아닌 **ARM / Azure Resource Graph (`management.azure.com`)** 를 직접 조회합니다.
-     - 9대 사전 점검 항목 ⑨(삭제된 Log Analytics 참조 검사) 역시 AKS ARM 메타데이터(`management.azure.com`)의 리소스 존재 여부(`200` vs `404`)로 판별하며, 파드·이벤트·인그레스 점검은 모두 **VNet 경유 `kubectl` (`*.privatelink.eastus2.azmk8s.io`)** 로 직접 수행합니다.
-     - 또한 Step 01-B에서 vWAN 방화벽 애플리케이션 규칙(`app-allow-sre-https-fqdns`)에 `management.azure.com`, `login.microsoftonline.com`, `learn.microsoft.com`, `*.azmk8s.io`가 이미 허용되어 있으므로, `Common Azure endpoints`에서 **`Log Analytics`, `Azure Managed Grafana`, `AKS API server`를 모두 체크 해제(제외)** 하더라도 VNet 방화벽을 통해 100% 정상 동작합니다.
+   - `Test connection` 버튼을 눌러 **`● Verified`** 상태를 확인합니다.
+4. **`④` `Common Azure endpoints`에서 `[ ] AKS API server (*.azmk8s.io)` 체크 해제**:
+   - 체크를 해제하면 모든 `RunKubectlReadCommand` 및 Python 소켓 호출이 `10.42.4.x` 사설 IP를 통해 사용자 VNet 및 vWAN 방화벽을 경유해 Private AKS Private Endpoint(`10.52.11.4`, `10.52.12.4`, `10.60.3.4`)로 전달됩니다.
+   - 모든 트래픽이 VNet 방화벽을 경유해야 하는 정책 환경에서는 `Log Analytics`, `Azure Managed Grafana` 항목도 함께 체크 해제할 수 있습니다.
 5. **`⑤` 하단 `Save` 버튼 클릭 후, `Trusted CA certificates`에 Private AKS 클러스터 CA 인증서 등록 (`*.azmk8s.io`)**:
    - 사설 AKS API 서버(`*.privatelink.eastus2.azmk8s.io`)는 클러스터별 자체 서명(Self-signed) Kubernetes Root CA 인증서(`CN=ca`)를 사용합니다.
    - Python 도구 샌드박스에서 VNet 경유로 K8s REST API(`https://<privateFQDN>/api/v1/pods` 등)를 직접 호출할 때 SRE Agent 이그레스 프록시가 TLS 인증서를 신뢰하도록 `hostPattern: "*.azmk8s.io"`로 3개 클러스터의 CA 인증서를 등록합니다:
@@ -1413,31 +1333,22 @@ Resources
 
 ---
 
-## Step 07. `Knowledge sources`에 하드코딩이 제거된 핵심 정책 · 공지 메일 템플릿 문서 3종 업로드
-
-> **지식 베이스 구성 원칙 (하드코딩 Zero · 구버전 무관 문서 제거)**:
-> 이전 실습에서 넘어온 무관한 문서(`appgw-unhealthy...`, `legacy-landingzone...`, `legacy-monitoring...` 등)나 고정된 클러스터 이력표/날짜가 남아 있으면 에이전트가 `SearchMemory` 호출 시 옛날 정보를 섞어서 답할 수 있습니다. 따라서 `agent/knowledge/`에는 **실제 데이터 하드코딩을 완전히 걷어내고(모든 예시 문구에 `[양식 예시 — 실제 값은 실시간 API 조회 결과만 사용]`을 명시한) 아래 핵심 문서 3종만 업로드**합니다.
+## Step 07. `Knowledge sources`에 정책 · 공지 메일 템플릿 문서 3종 업로드
 
 ### 화면 이동 및 입력 순서 (`①` ➔ `④`)
 1. **`①` 좌측 사이드바 `Build & setup > Context > Knowledge sources` 클릭**
-2. **`②` 기존에 불필요한 구버전 문서가 있다면 삭제 후, 상단 `+ Upload files` 클릭**:
-   - 로컬 워크스페이스의 `agent/knowledge/` 폴더에 정리된 아래 3개 마크다운 파일만 업로드합니다.
-3. **`③` 업로드할 핵심 지식 문서 3종 확인**:
-   - [`./agent/knowledge/aks-eol-notice-template-and-history.md`](./agent/knowledge/aks-eol-notice-template-and-history.md): **고객 발송용 5개 섹션 공지 메일 마크다운(`.md`) 표준 템플릿** (`[직접 입력: ...]` 링크 자리표시자, 대상 버전 클러스터 전용 필터링 규칙, 섹션 `5-1. SRE 에이전트 사전 점검 상세 결과` 표 양식 정의 — 하드코딩 데이터 없음)
-   - [`./agent/knowledge/aks-9point-upgrade-preflight-policy.md`](./agent/knowledge/aks-9point-upgrade-preflight-policy.md): **AKS 업그레이드 9대 사전 점검 항목 정의 · 배점(100점) · 판정 기준(`READY`/`CONDITIONAL`/`BLOCKED`) 및 선행 조치 가이드** + **`3건 이하 호출 시 kubectl vs 4건 이상 다중 값 조회 시 Python REST API 코드 호출` 분기 규칙**
+2. **`②` 상단 `+ Upload files` 클릭**:
+   - 로컬 워크스페이스의 `agent/knowledge/` 폴더에 있는 아래 3개 마크다운 파일을 업로드합니다.
+3. **`③` 업로드할 지식 문서 3종 확인**:
+   - [`./agent/knowledge/aks-eol-notice-template-and-history.md`](./agent/knowledge/aks-eol-notice-template-and-history.md): **고객 발송용 5개 섹션 공지 메일 마크다운(`.md`) 표준 템플릿** (`[직접 입력: ...]` 링크 자리표시자, 대상 버전 클러스터 전용 필터링 규칙, 섹션 `5-1. SRE 에이전트 사전 점검 상세 결과` 표 양식 정의)
+   - [`./agent/knowledge/aks-9point-upgrade-preflight-policy.md`](./agent/knowledge/aks-9point-upgrade-preflight-policy.md): **AKS 업그레이드 9대 사전 점검 항목 정의 · 배점(100점) · 판정 기준(`READY`/`CONDITIONAL`/`BLOCKED`) 및 선행 조치 가이드**
    - [`./agent/knowledge/aks-dataplane-inspection-sop.md`](./agent/knowledge/aks-dataplane-inspection-sop.md): **사설 AKS 데이터플레인 조회 SOP** (`3건 이하 단건 조회 시 RunKubectlReadCommand` vs `4건 이상 다중 리소스 조회 시 DefaultAzureCredential 기반 Python K8s REST API 일괄 호출 표준 코드 예시`)
 4. **`④` `Indexing Status`가 `● Indexed (Ready)`로 바뀌었는지 확인**:
-   - `Indexed` 상태가 되면 서브에이전트가 `SearchMemory` 도구로 즉시 RAG 검색을 수행할 수 있습니다.
+   - `Indexed` 상태가 되면 서브에이전트가 `SearchMemory` 도구로 RAG 검색을 수행할 수 있습니다.
 
 ---
 
-# Phase 4. MCP 커넥터 · 핵심 Python 도구(2종) · 스킬(`3건 이하 kubectl vs 다중 값 Python API`) · 고급 권한 · 서브에이전트 구성
-
-> **빠른 자동 등록 팁**:
-> Step 08 ~ Step 12의 모든 도구·스킬·지침·서브에이전트는 UI에서 하나씩 손으로 입력할 수도 있고, 아래 스크립트로 일괄 동기화할 수도 있습니다:
-> ```bash
-> ./scripts/apply-agent-config.sh
-> ```
+# Phase 4. MCP 커넥터 · 핵심 Python 도구(2종) · 스킬 · 고급 권한 · 서브에이전트 구성
 
 ---
 
@@ -1473,38 +1384,34 @@ Resources
 
 ---
 
-## Step 09. SRE Agent 6대 기능 종합 아키텍처 및 `Agent Canvas > Toolbox` 핵심 Python 도구 2종 등록
+## Step 09. `Agent Canvas > Toolbox` 핵심 Python 도구 2종 등록
 
-> **설계 원칙 (파이썬 도구 만능주의 탈피 — SRE Agent 6대 고유 기능의 최적 역할 분담)**:
-> 모든 작업을 커스텀 Python 도구로 만들면 4,095자 출력 버퍼 제한이나 컨테이너 내부 `/tmp` 파일 접근 불가 문제가 발생합니다. 따라서 **웹 스크래핑·날짜 계산과 9대 항목 일괄 채점만 핵심 Python 도구 2종으로 수행**하고, **상시 인벤토리(`Live Report + azure-arg-mcp`), 릴리즈 노트 수집(`mslearn-mcp`), 공지 메일 `.md` 작성(`Knowledge Memory + Skill`), 선행 조치(`Advanced permissions`)** 는 SRE Agent의 네이티브 기능을 종합 활용하여 완성합니다.
-
-| 데모 Full Cycle 단계 | 수행 역할 | 담당 SRE Agent 기능 | 핵심 포인트 |
+| 단계 | 수행 역할 | 담당 SRE Agent 기능 | 핵심 포인트 |
 |---|---|---|---|
-| **0. 상시 인벤토리 관제** | 전사 12컬럼 AKS 인벤토리 & 버전 현황판 | 📊 **Live Report** + **`azure-arg-mcp` (`npx @azure/mcp`)** | LLM(AAU) 호출 없이 공식 Azure MCP가 ARG KQL로 실시간 렌더링 (`query-aks-eol-arg-inventory` 파이썬 도구 불필요) |
-| **1. EOS 버전 및 대상 클러스터 필터링** | MS Learn 릴리스 일정 파싱 + **업그레이드 대상 버전(예: `1.34`) 클러스터만 추출** | 🐍 **핵심 Python 도구 1**<br>`check-aks-eos-release-calendar` | `target_minor_version="1.34"`(또는 `months_ahead=2`) 입력 시 **`1.34.*` 클러스터(`aks-priv-03`)만 `targetUpgradeClusters`로 추출**하고 타 버전(`1.35`, `1.36`)은 제외 |
-| **2. 클러스터 9대 사전 점검** | 대상 클러스터에 대해 9대 항목(전체 `ALL` 또는 선택 `1,3,4` / `7,8,9`) 실시간 채점 | 🐍 **핵심 Python 도구 2**<br>`evaluate-aks-upgrade-preflight` | ARM API + VNet 경유 사설 K8s API를 1회 호출(4초)로 점검하여 항목별 `PASS`/`WARN`/`FAIL` 및 특이사항 반환 |
-| **3. 버전간 주요 변경사항 수집** | `v1.34 → v1.35 → v1.36` 주요 변경사항 실시간 조사 | 🔌 **원격 MCP 커넥터**<br>`mslearn-mcp` | MS Learn 공식 문서에서 관리형 AKS 자동 처리 항목을 제외한 사용자 조치 필요 사항만 실시간 발췌 |
-| **4. 최종 공지 메일(`.md`) 생성** | **Step 07 지식 베이스의 메일 템플릿**에 `(1) 1.34 대상 클러스터` + `(2) 9대 사전 점검 상세 결과표` + `(3) 주요 변경사항`을 결합해 `.md` 작성 | 🧠 **Knowledge Memory**<br>+ 📋 **Skill (`Step 10`)** | 별도 파이썬 문자열 생성 도구 없이 에이전트가 지식 문서 양식을 참조해 **사전 점검 결과가 포함된 완성형 `.md` 메일 초안**을 채팅창에 즉시 출력 |
-| **5. 차단 요인 반자동 조치** | 사전 점검 `FAIL` 항목(차단 PDB, VNet 권한 등) 1클릭 승인 조치 | 🛡️ **내장 `kubectl` / `az`**<br>+ **`Advanced permissions (Ask)`** | `Allow` / `Ask` / `Deny` 패턴 매칭으로 안전한 조회와 관리자 승인 기반 조치 수행 |
+| **0. 상시 인벤토리 관제** | 12컬럼 AKS 인벤토리 & 버전 현황판 | 📊 **Live Report** + **`azure-arg-mcp` (`npx @azure/mcp`)** | LLM(AAU) 호출 없이 공식 Azure MCP가 ARG KQL로 실시간 렌더링 |
+| **1. EOS 버전 및 대상 클러스터 필터링** | MS Learn 릴리스 일정 파싱 + 업그레이드 대상 클러스터 추출 | 🐍 **핵심 Python 도구 1**<br>`check-aks-eos-release-calendar` | `months_ahead=4` 기준 각 클러스터의 `SupportPlan` 종료일(`Standard` vs `LTS`)을 대조해 대상 클러스터만 `targetUpgradeClusters`로 추출 |
+| **2. 클러스터 9대 사전 점검** | 대상 클러스터에 대해 9대 항목(전체 `ALL` 또는 선택 `1,3,4` / `7,8,9`) 실시간 채점 | 🐍 **핵심 Python 도구 2**<br>`evaluate-aks-upgrade-preflight` | ARM API + VNet 경유 사설 K8s API를 1회 호출로 점검하여 항목별 `PASS`/`WARN`/`FAIL` 및 특이사항 반환 |
+| **3. 버전간 주요 변경사항 수집** | 마이너 버전 구간별 주요 변경사항 실시간 조사 | 🔌 **원격 MCP 커넥터**<br>`mslearn-mcp` | MS Learn 공식 문서에서 서비스 담당자 확인이 필요한 변경사항 발췌 |
+| **4. 최종 공지 메일(`.md`) 생성** | Step 07 지식 베이스의 메일 템플릿에 대상 클러스터 + 9대 사전 점검 결과표 + 주요 변경사항을 결합해 `.md` 작성 | 🧠 **Knowledge Memory**<br>+ 📋 **Skill (`Step 10`)** | 에이전트가 지식 문서 양식을 참조해 `./aks-upgrade-notice.md` 파일 저장 및 다운로드 링크 출력 |
+| **5. 차단 요인 반자동 조치** | 사전 점검 `FAIL` 항목(차단 PDB, VNet 권한 등) 승인 조치 | 🛡️ **내장 `kubectl` / `az`**<br>+ **`Advanced permissions (Ask)`** | `Allow` / `Ask` / `Deny` 패턴 매칭으로 조회와 관리자 승인 기반 조치 수행 |
 
-> **UI 경로 주의사항**:
-> 좌측 `Extensions > Tools` 메뉴는 카탈로그 화면이어서 클릭해도 설명과 파라미터만 보입니다. **실제 Python 코드(`def main`)를 입력·수정하고 `Test playground`에서 실행해 보려면 반드시 `Build & setup > Workflows > Agent Canvas` ➔ `Toolbox` ➔ 도구 옆 연필(`✎ Edit`) 아이콘을 클릭**해야 합니다!
+> **참고**: 좌측 `Extensions > Tools`는 도구 카탈로그 조회 화면입니다. Python 코드(`def main`)를 입력·수정하고 `Test playground`에서 실행하려면 **`Build & setup > Workflows > Agent Canvas` ➔ `Toolbox` ➔ `+ Create > Tool` (또는 도구 옆 `✎ Edit`)** 경로를 사용합니다.
 
 ### 화면 이동 및 입력 순서 (`①` ➔ `⑤`)
 1. **`①` 좌측 사이드바 `Build & setup > Workflows > Agent Canvas` 클릭**
 2. **`②` 상단 `+ Create > Tool` 클릭 (또는 좌측 `Toolbox` 패널 열기)**
 3. **`③` 아래 핵심 Python 도구 2종(+ 선택 네트워크 진단 도구 1종) 등록**:
-   - **핵심 도구 1 (`check-aks-eos-release-calendar`)**: MS Learn 공식 AKS 릴리스 일정 실시간 파서 + **EOS 대상 버전(`1.34`) 클러스터 전용 필터링 (`targetUpgradeClusters`)**
+   - **핵심 도구 1 (`check-aks-eos-release-calendar`)**: MS Learn 공식 AKS 릴리스 일정 실시간 파서 및 `SupportPlan` 기준 업그레이드 대상 클러스터 필터링 (`targetUpgradeClusters`)
    - **핵심 도구 2 (`evaluate-aks-upgrade-preflight`)**: AKS 업그레이드 9대 사전 체크리스트 실시간 평가기 (`check_items="ALL"` 전체 점검 및 `"1,3,4"` / `"7,8,9"` 부분 선택 점검 지원)
    - *(선택) 도구 3 (`verify-multihub-firewall-udr-route`)*: 다중 허브 방화벽 경유 Private AKS TCP 443 & `/livez` 네트워크 도달성 검증기
 4. **`④` `Code` 탭에서 아래 Python 코드(`def main(...) -> dict:`) 붙여넣기**
-5. **`⑤` `Test playground` (`플레이그라운드 테스트`) 탭에서 각 도구의 입력값으로 즉시 검증**
+5. **`⑤` `Test playground` (`플레이그라운드 테스트`) 탭에서 각 도구의 입력값으로 검증**
 
 ---
 
-### 등록할 핵심 Python 도구 코드 전체 원문 (복사·붙여넣기용)
+### 등록할 핵심 Python 도구 코드 원문 (복사·붙여넣기용)
 
-#### 핵심 도구 1: `check-aks-eos-release-calendar` (MS Learn 공식 릴리스 일정 실시간 파서 + 업그레이드 대상 버전 클러스터 전용 필터링 — 하드코딩 0%)
+#### 핵심 도구 1: `check-aks-eos-release-calendar` (MS Learn 공식 릴리스 일정 실시간 파서 + 업그레이드 대상 클러스터 필터링)
 - **Name**: `check-aks-eos-release-calendar`
 - **Description**: `Dynamically fetches and parses the official Microsoft Learn AKS Kubernetes Release Calendar, queries live Azure Resource Graph (ARG) clusters and live ARM regional patch versions, and filters ONLY the targetUpgradeClusters matching the target/expiring Kubernetes minor version (e.g. 1.34) while excluding other versions.`
 - **Parameters** (코드 붙여넣기 시 자동 인식됨):
@@ -1688,7 +1595,7 @@ def main(months_ahead: int = 4, target_minor_version: str = "", support_plan: st
 
 ---
 
-#### 핵심 도구 2: `evaluate-aks-upgrade-preflight` (실시간 ARM + VNet 경유 Private AKS K8s REST API 9대 사전 체크리스트 평가기 · 전체/일부 항목 선택 지원 — 하드코딩 0%)
+#### 핵심 도구 2: `evaluate-aks-upgrade-preflight` (실시간 ARM + VNet 경유 Private AKS K8s REST API 9대 사전 체크리스트 평가기)
 - **Name**: `evaluate-aks-upgrade-preflight`
 - **Description**: `Evaluates a Private AKS cluster in real time against the 9-Point AKS Upgrade Pre-flight Checklist by querying live Azure ARM and live Private AKS Kubernetes REST API over the VNet. Supports checking all 9 items by default (check_items='ALL') or a specific subset of items (e.g. check_items='1,3,4' or '7,8,9').`
 - **Parameters**:
@@ -1940,8 +1847,8 @@ def main(cluster_name: str, check_items: str = "ALL") -> dict:
 
 ---
 
-#### (선택) 도구 3: `verify-multihub-firewall-udr-route` (실시간 ARG + VNet Private DNS 해석 + TCP 443 & K8s `/livez` 도달성 검증기 — 하드코딩 0%)
-> 💡 **참고**: 네트워크/방화벽 라우팅 개통 확인 데모가 필요한 경우에만 선택적으로 추가합니다. 공지 메일(`.md`) 작성은 별도 파이썬 도구(`generate-aks-confluence-notice`)를 쓰지 않고 아래 **Step 10의 Skill + Step 07의 Knowledge Memory 템플릿 + Step 08의 `mslearn-mcp`** 조합으로 수행합니다.
+#### (선택) 도구 3: `verify-multihub-firewall-udr-route` (실시간 ARG + VNet Private DNS 해석 + TCP 443 & K8s `/livez` 도달성 검증기)
+> **참고**: 네트워크/방화벽 라우팅 개통 확인이 필요한 경우에 선택적으로 추가합니다.
 
 - **Name**: `verify-multihub-firewall-udr-route`
 - **Description**: `Dynamically resolves a Private AKS cluster's privateFQDN via VNet Private DNS and verifies TCP 443 socket reachability and Kubernetes API /livez health over the vWAN Firewall.`
@@ -2001,22 +1908,18 @@ def main(cluster_name: str, api_server_private_ip: str = "") -> dict:
 
 ---
 
-## Step 10. `Skill builder`에서 조회 분기 규칙(`3건 이하 kubectl` vs `다중 값 Python API`) 및 공지 메일(`.md`) 생성 스킬 등록
-
-> **핵심 아키텍처**:
-> 1. **조회 방식 자동 분기**: **3건 이하의 단순·단건 호출**은 내장 `RunKubectlReadCommand`를 쓰고, **4건 이상의 다중 값·다중 리소스 조회**는 사전 등록된 Python API 도구(`check-aks-eos-release-calendar`, `evaluate-aks-upgrade-preflight`)를 호출하거나 내장 `ExecutePythonCode`로 Python REST API 코드를 작성해 1회 실행으로 일괄 조회하도록 스킬에 명시합니다.
-> 2. **하드코딩 금지 및 지식 기반 `.md` 조립**: 스킬 및 지식 베이스에 적힌 모든 예시 값은 형태 참고용일 뿐이며, 에이전트가 실시간 조회 결과(`1.34` 대상 클러스터 + 9대 사전 점검 상세 결과 + MS Learn 릴리즈 노트)만 사용해 최종 공지 메일 `.md`를 완성하도록 정의합니다.
+## Step 10. `Skill builder`에서 조회 분기 규칙 및 공지 메일(`.md`) 생성 스킬 등록
 
 ### 화면 이동 및 입력 순서 (`①` ➔ `⑤`)
 1. **`①` 좌측 사이드바 `Build & setup > Capabilities > Skills` (또는 `Skill builder`) 클릭**
 2. **`②` 상단 `+ Create skill` 클릭**
 3. **`③` 스킬 이름 입력**: **`aks-eol-notice-and-history-workflow`**
 4. **`④` `Choose tools` (`도구 선택`)에서 UI 목록에 표시되는 아래 6개 도구 선택**:
-   > 💡 **참고**: `RunKubectlReadCommand`나 터미널/Python 실행(`RunInTerminal`)은 에이전트 코어 런타임 기본 내장 기능(`stableOnly=false`)이므로 `Choose tools` 팝업 목록에는 표시되지 않으며, Step 11의 `Advanced permissions`를 통해 기본 제공됩니다. 따라서 팝업에서는 아래 6개만 체크합니다.
+   > **참고**: `RunKubectlReadCommand`나 터미널/Python 실행(`RunInTerminal`)은 에이전트 코어 내장 기능이므로 `Choose tools` 팝업 목록에는 표시되지 않으며, Step 11의 `Advanced permissions`를 통해 기본 제공됩니다. 팝업에서는 아래 6개만 체크합니다.
    - **Custom**: `check-aks-eos-release-calendar`, `evaluate-aks-upgrade-preflight`
    - **System (`Knowledge Base` / `Azure Operation`)**: `SearchMemory`, `RunAzCliReadCommands`
    - **MCP (`mslearn-mcp`)**: `mslearn-mcp_microsoft_docs_search`, `mslearn-mcp_microsoft_docs_fetch`
-5. **`⑤` 우측 마크다운 에디터(`SKILL.md`)에 아래 원문을 그대로 복사·붙여넣기 후 `Save` 클릭**:
+5. **`⑤` 우측 마크다운 에디터(`SKILL.md`)에 아래 원문을 복사·붙여넣기 후 `Save` 클릭**:
 
 ```markdown
 ---
@@ -2106,23 +2009,21 @@ SRE Agent가 진단(Read)은 무승인으로 즉시 수행하되, **사전 점�
 
 ---
 
-## Step 12. `Agent Canvas` (또는 `Subagent builder`)에서 `aks_upgrade_specialist` 사용자 지정 에이전트 생성 (지침 · 전역 도구 상속 / YAML 설정)
+## Step 12. `Agent Canvas` (또는 `Subagent builder`)에서 `aks_upgrade_specialist` 사용자 지정 에이전트 생성
 
-> **핵심 주의사항 (`RunKubectlReadCommand` 등 코어 내장 도구가 `Choose tools` 목록에 안 보이는 이유와 해결법)**:
-> 1. 사용자 지정 에이전트 생성 창의 `Choose tools`(`도구 선택`) 팝업은 선택형 도구(`/api/v1/extendedAgent/systemtools?stableOnly=true`, 총 81개)와 Custom/MCP 도구만 표시하며, **`RunKubectlReadCommand`, `RunKubectlWriteCommand`, `RunInTerminal`(Python/Bash 실행) 같은 코어 런타임 도구는 목록에 표시되지 않습니다.**
-> 2. 대신 `Tools`와 `Skills` 섹션 바로 위에 적힌 안내 문구(*"By default, this agent inherits N global tools / skills. Selecting tools here will override the defaults."*)처럼, **`Form` 탭에서 `Skills`와 `Tools`를 아무것도 선택하지 않고 비워두면 코어 내장 도구(`RunKubectlReadCommand` 등) + Custom Python 도구 + MCP 도구 + Skill을 전역 설정에서 100% 자동 상속**받습니다!
->    *(반대로 `Form` 탭의 `Choose tools`에서 일부 도구만 체크하면 기본 상속이 덮어써져(Override) 목록에 없는 `RunKubectlReadCommand`가 빠질 수 있으니, **비워두거나(방법 A)** 우측 상단 **`YAML` 탭(방법 B)** 을 사용하세요.)*
+> **참고 (`RunKubectlReadCommand` 등 코어 내장 도구의 전역 상속)**:
+> `Choose tools` 팝업에는 선택형 도구와 Custom/MCP 도구만 표시되며 `RunKubectlReadCommand`, `RunKubectlWriteCommand`, `RunInTerminal` 같은 코어 도구는 목록에 나타나지 않습니다. **`Form` 탭에서 `Skills`와 `Tools`를 비워두면 코어 내장 도구, Custom 도구, MCP 도구, Skill이 전역 설정에서 자동 상속**됩니다. 명시적으로 도구를 지정하려면 우측 상단 **`YAML` 탭(방법 B)** 을 사용합니다.
 
-### 방법 A (`Form` 탭 사용 — 가장 간단·권장: 전역 도구/스킬 자동 상속)
+### 방법 A (`Form` 탭 사용: 전역 도구/스킬 자동 상속)
 1. **`①` 좌측 사이드바 `Build & setup > Workflows > Agent Canvas` ➔ `+ Create > Agent` 클릭** (또는 `Capabilities > Subagent builder > + Create`)
 2. **`②` 상단 탭이 `Form` (`양식`)으로 선택된 상태에서 아래 표와 같이 입력**:
 
 | 필드명 (포털 표시명) | 입력 / 선택할 값 |
 |---|---|
 | **Agent name (`에이전트 이름 *`)** | **`aks_upgrade_specialist`** |
-| **Instructions (`지침 *`)** | 아래 복사·붙여넣기용 **에이전트 지침 원문** 전체 붙여넣기 |
-| **Skills (`스킬` — `Choose skills`)** | **선택하지 않고 비워둠** *(기본값으로 전역 스킬 `aks-eol-notice-and-history-workflow` 자동 상속 — 또는 `aks-eol-notice-and-history-workflow` 1개 명시 선택 가능)* |
-| **Tools (`도구` — `Choose tools`)** | **선택하지 않고 비워둠 (권장!)**<br>*(비워두면 `RunKubectlReadCommand`, `RunInTerminal`, `SearchMemory`, `check-aks-eos-release-calendar`, `evaluate-aks-upgrade-preflight`, `mslearn-mcp`, `azure-arg-mcp` 등 전역 도구를 모두 자동 상속받음)* |
+| **Instructions (`지침 *`)** | 아래 복사·붙여넣기용 **에이전트 지침 원문** 붙여넣기 |
+| **Skills (`스킬` — `Choose skills`)** | **비워둠** *(전역 스킬 `aks-eol-notice-and-history-workflow` 자동 상속 — 또는 1개 명시 선택 가능)* |
+| **Tools (`도구` — `Choose tools`)** | **비워둠** *(전역 도구 자동 상속)* |
 
 #### 복사·붙여넣기용 `Instructions (지침 *)` 원문
 ```markdown
@@ -2228,13 +2129,13 @@ spec:
 
 ---
 
-## Step 14. 실시간 채팅(`/agent aks_upgrade_specialist`)에서 Full Cycle End-to-End 실행 검증
+## Step 14. 실시간 채팅(`/agent aks_upgrade_specialist`)에서 End-to-End 실행 검증
 
 ### 화면 이동 및 실행 순서 (`①` ➔ `⑤`)
 1. **`①` 좌측 사이드바 `Investigate > New chat` 클릭**
-2. **`②` 채팅 입력창에 아래 Full Cycle 프롬프트 입력** *(버전 번호나 도구 파라미터를 미리 적지 않고 자연어로만 질문하며, 에이전트가 공식 문서와 클러스터 실측으로 직접 대상을 식별함)*:
+2. **`②` 채팅 입력창에 아래 프롬프트 입력**:
 
-   **[시나리오 A: 평상시 전체 사전 점검 + 4개월 내 EOS 도래 대상 클러스터(`1.35`) 공지 메일(`.md`) 생성 및 다운로드]**
+   **[시나리오 A: 전체 사전 점검 + 4개월 내 EOS 도래 대상 클러스터(`1.35`) 공지 메일(`.md`) 생성 및 다운로드]**
    ```text
    /agent aks_upgrade_specialist 향후 4개월 내에 지원 종료(EOS)가 도래하는 AKS 클러스터(Standard는 Standard 종료일, LTS는 LTS 종료일 기준)를 확인하고, 해당 대상 클러스터만 골라내어 9대 사전 점검을 모두 수행한 뒤, 점검 상세 결과가 포함된 최종 사용자 발송용 업그레이드 공지 메일 초안(.md)을 작성하고 다운로드 링크를 제공해 주세요.
    ```
@@ -2244,21 +2145,21 @@ spec:
    /agent aks_upgrade_specialist 향후 4개월 내에 지원 종료(EOS)가 도래하는 업그레이드 대상 클러스터만 추출하여 9대 체크리스트 중 3번(스케줄링 제약/Pending), 7번(서브넷 가용 IP), 8번(타 RG VNet 권한) 항목만 선택 점검(check_items="3,7,8")하고, 그 점검 결과를 포함한 고객 공지 메일 초안(.md)과 다운로드 링크를 제공해 주세요.
    ```
 
-3. **`③` 상단 도구 실행 배지(`Executed Tools`)에서 SRE Agent 6대 기능 연계 동작 확인**:
-   - 🐍 **`check-aks-eos-release-calendar`**: MS Learn 실시간 파싱 및 클러스터별 `SupportPlan` 종료일 대조를 통해:
-     - `aks-priv-03` (`1.34.12`, `AKSLongTermSupport`)은 LTS 종료일(`2027-11-30`)이 1년 이상 남아 있으므로 **자동 제외 (`LTS 지원 종료일 미도래`)**
-     - `aks-priv-01` (`1.36.4`, `KubernetesOfficial`)은 Standard 종료일(`2027-06-30`)이 7개월 남아 있으므로 **자동 제외 (`Standard 지원 종료일 여유`)**
-     - 오직 4개월 내 Standard 종료일(`2027-03-31`)이 도래하는 **`aks-priv-02` (`1.35.9`, `KubernetesOfficial`) 딱 1대만 `targetUpgradeClusters`(`targetMinorVersionsWithClusters: ["1.35"]`)로 추출**
-   - 🐍 **`evaluate-aks-upgrade-preflight`**: 추출된 `aks-priv-02`에 대해 실시간 ARM + VNet K8s API 점검 수행 (1~9번 또는 선택 항목별 `PASS` / `FAIL` 실측 판정 반환)
-   - 🔌 **`mslearn-mcp`**: 식별된 경로(`v1.35 -> v1.36 -> v1.37`)의 단계별 주요 변경사항 실시간 조회
-   - 🧠 **`SearchMemory`**: 지식 베이스에서 업그레이드 공지 메일 5개 섹션 표준 템플릿 로드
-4. **`④` 최종 출력된 마크다운(`.md`) 메일 초안 및 `[📥 aks-upgrade-notice.md 파일 다운로드]` 링크 검증**:
-   - **섹션 1~3**: 목표 버전(`v1.37.1`), 순차 경로(`v1.35.9 -> v1.36.5 -> v1.37.1`), 직접 입력 링크 자리표시자(`[직접 입력: ...]`) 정상 반영
-   - **섹션 4 (`4. 버전간 주요 변경 사항`)**: MS Learn / GitHub 릴리즈 노트 기반 주요 변경사항 정상 기입
-   - **섹션 5 (`5. 작업 대상 클러스터`)**: LTS여서 종료일이 남은 `1.34`(`priv-03`)와 여유 있는 `1.36`(`priv-01`)은 제외되고 **오직 `aks-priv-02` (`1.35.9`) 1대만** 표에 포함되며, 바로 아래 **`### 5-1. SRE 에이전트 사전 점검 상세 결과`** 표에 방금 수행한 점검 항목별 `PASS` / `FAIL` 내역과 선행 조치 권고사항이 빠짐없이 포함됨
-   - **1클릭 파일 다운로드**: 채팅창의 **`[📥 aks-upgrade-notice.md 파일 다운로드](/api/files/aks-upgrade-notice.md)`** 링크 클릭 시 브라우저에서 `.md` 파일이 즉시 다운로드됨
+3. **`③` 도구 실행 배지(`Executed Tools`)에서 기능 연계 동작 확인**:
+   - **`check-aks-eos-release-calendar`**: MS Learn 실시간 파싱 및 클러스터별 `SupportPlan` 종료일 대조를 통해:
+     - `aks-priv-03` (`1.34.12`, `AKSLongTermSupport`): LTS 종료일(`2027-11-30`) 미도래로 제외
+     - `aks-priv-01` (`1.36.4`, `KubernetesOfficial`): Standard 종료일(`2027-06-30`) 여유로 제외
+     - `aks-priv-02` (`1.35.9`, `KubernetesOfficial`): 4개월 내 Standard 종료일(`2027-03-31`) 도래로 `targetUpgradeClusters`(`targetMinorVersionsWithClusters: ["1.35"]`)에 추출
+   - **`evaluate-aks-upgrade-preflight`**: 추출된 `aks-priv-02`에 대해 실시간 ARM + VNet K8s API 점검 수행 (1~9번 또는 선택 항목별 `PASS` / `FAIL` 판정 반환)
+   - **`mslearn-mcp`**: 식별된 경로(`v1.35 -> v1.36 -> v1.37`)의 단계별 주요 변경사항 조회
+   - **`SearchMemory`**: 지식 베이스에서 업그레이드 공지 메일 5개 섹션 표준 템플릿 로드
+4. **`④` 출력된 마크다운(`.md`) 메일 초안 및 `[📥 aks-upgrade-notice.md 파일 다운로드]` 링크 확인**:
+   - **섹션 1~3**: 목표 버전(`v1.37.1`), 순차 경로(`v1.35.9 -> v1.36.5 -> v1.37.1`), 직접 입력 링크 자리표시자(`[직접 입력: ...]`) 반영
+   - **섹션 4 (`4. 버전간 주요 변경 사항`)**: MS Learn 릴리즈 노트 기반 주요 변경사항 기입
+   - **섹션 5 (`5. 작업 대상 클러스터`)**: `aks-priv-02` (`1.35.9`) 표기 및 하단 **`### 5-1. SRE 에이전트 사전 점검 상세 결과`** 표에 점검 항목별 `PASS` / `FAIL` 내역과 선행 조치 권고사항 포함
+   - **파일 다운로드**: 채팅창의 **`[📥 aks-upgrade-notice.md 파일 다운로드](/api/files/aks-upgrade-notice.md)`** 링크 클릭 시 브라우저에서 `.md` 파일 다운로드
 5. **`⑤` (선택) 차단 요인 반자동 조치 (`Advanced permissions > Ask`) 테스트**:
-   - 이어서 채팅창에 *"사전 점검에서 FAIL이 나온 `aks-priv-03`의 차단 PDB(`notification-pdb`)를 업그레이드 가능하도록 완화해 줘"*라고 입력하면, `Step 11`에 설정한 `Ask` 규칙에 의해 **관리자 1클릭 승인 카드(`Approve` / `Reject`)** 가 뜨는 것을 확인할 수 있습니다.
+   - 채팅창에 *"사전 점검에서 FAIL이 나온 `aks-priv-03`의 차단 PDB(`notification-pdb`)를 업그레이드 가능하도록 완화해 줘"*라고 입력하면, `Step 11`에 설정한 `Ask` 규칙에 의해 **관리자 승인 카드(`Approve` / `Reject`)** 가 표시됩니다.
 
 ---
 
