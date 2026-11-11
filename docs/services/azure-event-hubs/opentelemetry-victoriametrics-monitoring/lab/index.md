@@ -126,7 +126,7 @@ Diagnostic Settings를 기본으로 끈 세 번째 Dedicated 환경(`ehotel-ded3
 | 지연·누락 | 측정용 hub `lat`, 10초 polling | 이벤트 → VictoriaMetrics 190–201초, 83분 동안 지표별 분 bin 누락 0–9개 |
 | fallback | `GATEWAY_ONLY=true azd hooks run postprovision` | fallback exporter가 Premium 지표 27개 series를 두 경로로 저장(Premium 첫 환경) |
 | 보존 | VMSingle Pod 재생성 | 같은 구간 `IncomingMessages` 합계 120,000 유지(Premium 첫 환경) |
-| 반복 부하 | `./scripts/run-lag-cycles.sh` | 4시간 10회 모두 lag 정점 10,880–11,140건, producer 중지 6분 안팎에 0. 249분 동안 Metrics API 분 bin 누락 0(`ehotel-ded3`) |
+| 반복 부하 | `./scripts/run-lag-cycles.sh` | 10회 모두 lag 정점 10,880–11,140건, producer 중지 6분 안팎에 0. 249분 동안 Metrics API 분 bin 누락 0(`ehotel-ded3`) |
 | 리소스 로그 | `EVENTHUBS_LOGS=Enabled`(기본값), 시나리오 두 번 | 로그를 끈 구간은 로그 패널 6개 모두 수신 없음, 켠 구간은 26분 동안 레코드 1,469건과 6개 패널 통과(`ehotel-ded2`) |
 | Managed Grafana | `MANAGED_GRAFANA=Enabled`, `azd provision` | Private Link Service·managed private endpoint 승인·data source까지 hook 1분 30초. 같은 대시보드 37개 query 중 35개 통과, Gateway Grafana와 같은 결과(`ehotel-ded2`) |
 | 정리 | `azd down --purge --force` | cluster 생성 4시간 뒤 12:10:30에 실행해 8분 42초 만에 성공. Premium 세 환경과 Dedicated 두 환경 모두 resource group 삭제 확인 |
@@ -325,14 +325,16 @@ to pod`로 끊길 수 있습니다. `vm-query.sh start`는 `/health` 응답이 �
 Pod가 멈추기까지의 몇 초가 포함됩니다.
 
 ```bash
-./scripts/run-lag-cycles.sh   # 기본 DURATION_SECONDS=14400, LOAD_SECONDS=600, DRAIN_SECONDS=900
+./scripts/run-lag-cycles.sh   # 기본 DURATION_SECONDS=15000(25분 주기 10회), LOAD_SECONDS=600, DRAIN_SECONDS=900
 ```
 
 세 번째 Dedicated 환경(`ehotel-ded3`, 지표용 Diagnostic Settings는 기본값대로 꺼짐)에서
-2026-11-11 00:29–04:29 UTC에 실행했습니다. 10회 모두 같은 모양으로 lag가 쌓였다가 0으로
-돌아갔습니다.
+2026-11-11 00:29–04:29 UTC에 `DURATION_SECONDS=14400`으로 실행했습니다. 이 값에서는 10번째
+부하 뒤 소진이 4분 17초에 잘리므로, 그 회차의 lag가 0이 되는 시점(04:31:15)은 loop가 끝난 뒤에도
+계속 실행된 consumer와 lag exporter로 관측했습니다. 소진까지 10회를 모두 loop 안에서 마치려면
+기본값 15,000초로 실행합니다. 10회 모두 같은 모양으로 lag가 쌓였다가 0으로 돌아갔습니다.
 
-![4시간 동안 반복한 부하의 Grafana 대시보드. CU당 분당 message·byte 막대가 25분 간격으로 10번 나타나고, partition별 peak lag 11,000–11,140, partition 4개를 누적한 lag 영역이 10번 올랐다가 0으로 내려감, lag 수집 OK, 모든 partition에 checkpoint 있음](../images/lag-cycles-throughput-lag.png)
+![4시간 동안 반복한 부하의 Grafana 대시보드. CU당 분당 message·byte 막대가 25분 간격으로 10번 나타나고, 4시간 전체에서 partition별 최댓값 11,000–11,140(회차별 최대 partition 정점은 10,880–11,140), partition 4개를 누적한 lag 영역이 10번 올랐다가 0으로 내려감, lag 수집 OK, 모든 partition에 checkpoint 있음](../images/lag-cycles-throughput-lag.png)
 
 | 회차 | 부하 시작(UTC) | lag 정점(최대 partition) | producer 중지 → lag 0 | ConsumerLag 로그 정점 | 로그 정점 시차 | Metrics API 수신 | cluster CPU 최대 | 로그 도착 지연(중앙값) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|

@@ -24,7 +24,7 @@ azd env set EVENTHUBS_LOCATION koreasouth   # Event Hubs만 다른 리전에 둘
 # azd env set MANAGED_GRAFANA Enabled        # Azure Managed Grafana(Standard)와 managed private endpoint 추가
 azd up                                       # provision + hooks + workload
 ./scripts/run-scenario.sh                    # baseline 5분, 부하 10분, 회복
-# ./scripts/run-lag-cycles.sh               # 선택: 부하 10분·소진 15분을 4시간 반복
+# ./scripts/run-lag-cycles.sh               # 선택: 부하 10분·소진 15분을 10회(약 4시간 10분) 반복
 ./scripts/collect-evidence.sh                # probe → build → verify → capture
 azd down --purge --force                     # cluster 생성 4시간 뒤. postdown이 resource group 삭제까지 확인
 ```

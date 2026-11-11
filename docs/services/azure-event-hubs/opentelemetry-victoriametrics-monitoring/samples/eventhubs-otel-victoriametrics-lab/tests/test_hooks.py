@@ -1133,6 +1133,7 @@ def test_lag_cycles_alternate_load_and_drain_and_always_stop_the_producer(fake_b
     assert result.returncode == 0, result.stderr
     events = [line.split(" ", 1)[1] for line in (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text().splitlines()]
     assert events[0].startswith("start: 5s total, load 1s") and events[-1] == "stopped (producer 0)"
+    assert 'DURATION_SECONDS="${DURATION_SECONDS:-15000}"' in (SCRIPTS / "run-lag-cycles.sh").read_text()
     cycles = [e for e in events if e.startswith("cycle ")]
     # Every cycle is load_start -> producer_stop (-> drain_end), in order, and a load phase never
     # starts unless it fits before the deadline.
@@ -1159,12 +1160,28 @@ def test_lag_cycles_stop_the_producer_when_interrupted_by_an_error(fake_bin, tmp
     assert scales[-1].endswith("eventhubs-producer --replicas 0") and scales.count(scales[-1]) >= 2
 
 
+def test_lag_cycles_never_record_a_stop_that_failed(fake_bin, tmp_path):
+    bin_dir, log, write = fake_bin
+    # The producer starts, then every scale-down is rejected.
+    write("kubectl", 'if [[ "$*" == *"--replicas 0"* && -f "$HOME/up" ]]; then exit 1; fi; '
+                     'if [[ "$*" == *eventhubs-producer*"--replicas 1"* ]]; then touch "$HOME/up"; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=5, LOAD_SECONDS=1, DRAIN_SECONDS=1)
+
+    events = (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
+    assert result.returncode != 0
+    assert "stopped (producer 0)" not in events
+    assert events.rstrip().endswith("stop failed (producer state unknown)")
+    assert "could not stop the producer" in result.stderr
+
+
 @pytest.mark.parametrize("name", ["DURATION_SECONDS", "LOAD_SECONDS", "DRAIN_SECONDS"])
-def test_lag_cycles_reject_a_non_positive_duration(fake_bin, tmp_path, name):
+@pytest.mark.parametrize("value", ["0", "-1", "1.5", "ten"])
+def test_lag_cycles_reject_a_non_positive_duration(fake_bin, tmp_path, name, value):
     bin_dir, log, write = fake_bin
     write("kubectl", "exit 0")
 
-    result = _run_lag_cycles(bin_dir, tmp_path, **{name: 0})
+    result = _run_lag_cycles(bin_dir, tmp_path, **{name: value})
 
     assert result.returncode != 0 and "positive integers" in result.stderr
     # Rejected before any cluster call.

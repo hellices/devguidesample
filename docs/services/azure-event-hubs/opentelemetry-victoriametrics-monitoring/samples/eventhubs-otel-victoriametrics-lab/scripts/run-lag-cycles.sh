@@ -10,7 +10,8 @@ load_env AZURE_ENV_NAME
 NS=eventhubs-observability
 EVIDENCE="$(evidence_dir)"
 LOG_FILE="$EVIDENCE/lag-cycles.log"
-DURATION_SECONDS="${DURATION_SECONDS:-14400}"
+# 10 full cycles of 10 minutes of load and 15 minutes of drain.
+DURATION_SECONDS="${DURATION_SECONDS:-15000}"
 LOAD_SECONDS="${LOAD_SECONDS:-600}"
 DRAIN_SECONDS="${DRAIN_SECONDS:-900}"
 EVENTS_PER_SECOND="${EVENTS_PER_SECOND:-200}"
@@ -31,7 +32,15 @@ stop_producer() {
   [[ -z "$remaining" ]]
 }
 # Whatever ends the loop (completion, an error, Ctrl-C), the producer must not keep sending.
-trap 'stop_producer || log "WARNING: could not stop the producer; scale deploy/eventhubs-producer to 0"; record "stopped (producer 0)"' EXIT
+on_exit() {
+  if stop_producer; then
+    record "stopped (producer 0)"
+  else
+    record "stop failed (producer state unknown)"
+    log "WARNING: could not stop the producer; scale deploy/eventhubs-producer to 0"
+  fi
+}
+trap on_exit EXIT
 
 kube set env -n "$NS" deploy/eventhubs-slow-consumer PROCESSING_DELAY_SECONDS="$PROCESSING_DELAY_SECONDS" >/dev/null
 kube set env -n "$NS" deploy/eventhubs-producer EVENTS_PER_SECOND="$EVENTS_PER_SECOND" >/dev/null
