@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" role="img" aria-labelledby="directTitle directDesc" font-family="'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif" font-size="13">
+  <title id="directTitle">Azure Monitor 직접 조회와 리소스 로그 수집 분리 구성</title>
+  <desc id="directDesc">플랫폼 지표는 Event Hubs가 Azure Monitor에 1분 단위로 쌓고, Azure Managed Grafana의 Azure Monitor 데이터 소스가 workspace managed identity와 namespace·cluster 범위의 Monitoring Reader로 바로 조회한다. Collector의 azuremonitorreceiver와 lag exporter는 실행하지 않는다. consumer lag와 data plane 접근은 Event Hubs 리소스 로그 ApplicationMetricsLogs·RuntimeAuditLogs를 Diagnostic Settings가 telemetry Event Hub로 보내고, Gateway VM의 OpenTelemetry Collector Contrib azureeventhubreceiver가 읽어 지표로 바꾼 뒤 VMSingle에 remote write한다. Managed Grafana는 managed private endpoint로 VMSingle을 조회한다.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4A5568"/></marker>
+    <style>
+      .t { font-weight: 600; font-size: 14px; fill: #1A202C; }
+      .b { fill: #2D3748; }
+      .s { font-size: 12px; fill: #4A5568; }
+      .lane { font-weight: 700; font-size: 13px; fill: #2B6CB0; }
+      .lane2 { font-weight: 700; font-size: 13px; fill: #6B46C1; }
+      .azure { fill: #EBF4FF; stroke: #3182CE; }
+      .otel { fill: #FFF7E6; stroke: #DD8A12; }
+      .vm { fill: #EDF7EE; stroke: #38A169; }
+      .ds { fill: #F3EEFF; stroke: #805AD5; }
+      .off { fill: #F7FAFC; stroke: #A0AEC0; stroke-dasharray: 5 4; }
+      .grafana { fill: #FFF5F0; stroke: #DD6B20; }
+      .e { stroke: #4A5568; stroke-width: 1.6; fill: none; marker-end: url(#a); }
+    </style>
+  </defs>
+  <rect width="1200" height="470" fill="#FFFFFF"/>
+
+  <text class="lane" x="250" y="26">플랫폼 지표: Azure Monitor에서 바로 조회(사본 없음)</text>
+  <text class="lane2" x="250" y="262">consumer lag·data plane 접근: 리소스 로그 → azureeventhubreceiver → VictoriaMetrics</text>
+
+  <rect class="azure" x="20" y="150" width="190" height="130" rx="10"/>
+  <text class="t" x="34" y="180">Event Hubs</text>
+  <text class="b" x="34" y="204">Premium namespace</text>
+  <text class="b" x="34" y="224">또는 Dedicated cluster</text>
+  <text class="s" x="34" y="250">플랫폼 지표 · 리소스 로그</text>
+
+  <rect class="azure" x="250" y="40" width="250" height="120" rx="10"/>
+  <text class="t" x="266" y="68">Azure Monitor 플랫폼 지표</text>
+  <text class="b" x="266" y="94">자동 수집, 1분 집계(PT1M)</text>
+  <text class="b" x="266" y="114">93일 보관, dimension 분할</text>
+  <text class="s" x="266" y="138">CPU·memory·요청·throttle·처리량</text>
+  <path class="e" d="M115,150 V100 H248"/>
+
+  <rect class="off" x="540" y="132" width="290" height="56" rx="8"/>
+  <text class="s" x="556" y="156">실행하지 않음: Collector azuremonitorreceiver,</text>
+  <text class="s" x="556" y="176">checkpoint lag exporter</text>
+
+  <path class="e" d="M500,90 H868"/>
+  <text class="s" x="540" y="80">리소스별 Metrics API 직접 호출</text>
+  <text class="s" x="540" y="112">namespace·cluster 범위 Monitoring Reader</text>
+
+  <rect class="ds" x="250" y="280" width="220" height="130" rx="10"/>
+  <text class="t" x="266" y="308">Diagnostic Settings</text>
+  <text class="b" x="266" y="332">ApplicationMetricsLogs</text>
+  <text class="s" x="266" y="350">(ConsumerLag, Premium·Dedicated)</text>
+  <text class="b" x="266" y="372">RuntimeAuditLogs</text>
+  <text class="s" x="266" y="394">→ telemetry Event Hub</text>
+  <path class="e" d="M115,280 V345 H248"/>
+
+  <rect class="otel" x="510" y="280" width="250" height="130" rx="10"/>
+  <text class="t" x="526" y="308">OTel Collector Contrib</text>
+  <text class="b" x="526" y="332">azureeventhubreceiver</text>
+  <text class="s" x="526" y="352">azure_encoding</text>
+  <text class="s" x="526" y="370">signal_to_metrics</text>
+  <text class="s" x="526" y="392">Gateway VM, remote write</text>
+  <path class="e" d="M470,345 H508"/>
+
+  <rect class="vm" x="800" y="280" width="160" height="130" rx="10"/>
+  <text class="t" x="816" y="308">VMSingle</text>
+  <text class="b" x="816" y="332">리소스 로그 지표</text>
+  <text class="s" x="816" y="356">+ Collector 자체 지표</text>
+  <text class="s" x="816" y="376">(AKS)</text>
+  <path class="e" d="M760,345 H798"/>
+
+  <rect class="grafana" x="870" y="40" width="310" height="200" rx="10"/>
+  <text class="t" x="886" y="68">Azure Managed Grafana</text>
+  <text class="b" x="886" y="94">대시보드 하나, 데이터 소스 둘</text>
+  <text class="b" x="886" y="124">Azure Monitor (azure-monitor-oob)</text>
+  <text class="s" x="886" y="144">workspace managed identity</text>
+  <text class="b" x="886" y="178">VictoriaMetrics (victoriametrics)</text>
+  <text class="s" x="886" y="198">managed private endpoint →</text>
+  <text class="s" x="886" y="216">Private Link Service → VMSingle</text>
+  <path class="e" d="M900,280 V242"/>
+</svg>

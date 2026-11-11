@@ -48,18 +48,34 @@ log "probe"
 "$PY" "$LAB_ROOT/agent/probe.py" --vm-url "http://127.0.0.1:$PORT" --output "$EVIDENCE/probe.json"
 log "build and publish"
 TIER="$(env_value EVENTHUBS_SKU | tr '[:upper:]' '[:lower:]')"
-"$PY" "$LAB_ROOT/agent/build_dashboard.py" --probe "$EVIDENCE/probe.json" --tier "${TIER:-premium}" \
-  --output "$EVIDENCE/dashboard.json"
+PLATFORM_METRICS="$(env_value PLATFORM_METRICS)"
+if [[ "${PLATFORM_METRICS:-Collector}" == "AzureMonitor" ]]; then
+  # Platform metrics come from the Azure Monitor data source; only lag (and logs) from VictoriaMetrics.
+  DASHBOARD_UID=eventhubs-azure-monitor-direct
+  CLUSTER_ID="$(env_value DEDICATED_CLUSTER_RESOURCE_ID)"
+  CLUSTER_RG=""
+  # The resource group is the fifth '/'-separated field of the cluster resource ID.
+  [[ -n "$CLUSTER_ID" ]] && CLUSTER_RG="$(cut -d/ -f5 <<<"$CLUSTER_ID")"
+  "$PY" "$LAB_ROOT/agent/build_direct_dashboard.py" --tier "${TIER:-premium}" \
+    --subscription "$AZURE_SUBSCRIPTION_ID" --resource-group "$AZURE_RESOURCE_GROUP" \
+    --namespace "$PREMIUM_NAMESPACE_NAME" --cluster "${CLUSTER_ID##*/}" --cluster-resource-group "$CLUSTER_RG" \
+    --output "$EVIDENCE/dashboard.json"
+else
+  DASHBOARD_UID=eventhubs-otel-victoriametrics
+  "$PY" "$LAB_ROOT/agent/build_dashboard.py" --probe "$EVIDENCE/probe.json" --tier "${TIER:-premium}" \
+    --output "$EVIDENCE/dashboard.json"
+fi
 "$PY" "$LAB_ROOT/agent/publish_dashboard.py" "$EVIDENCE/dashboard.json"
 log "verify panels over $FROM .. $TO"
-"$PY" "$LAB_ROOT/agent/verify_panels.py" --from "$FROM_MS" --to "$TO_MS" --output "$EVIDENCE/panel-verification.json"
+"$PY" "$LAB_ROOT/agent/verify_panels.py" --uid "$DASHBOARD_UID" --from "$FROM_MS" --to "$TO_MS" \
+  --output "$EVIDENCE/panel-verification.json"
 log "capture"
 # npm ci recreates node_modules; the stamp marks a completed install of this lockfile.
 (cd "$LAB_ROOT/agent" \
   && { cmp -s package-lock.json node_modules/.lab-package-lock.json \
        || { npm ci --silent && cp package-lock.json node_modules/.lab-package-lock.json; }; } \
   && npx playwright install chromium >/dev/null) || die "could not install the capture dependencies"
-node "$LAB_ROOT/agent/capture.mjs" /d/eventhubs-otel-victoriametrics "$EVIDENCE/grafana-dashboard.png" "$FROM_MS" "$TO_MS"
+node "$LAB_ROOT/agent/capture.mjs" "/d/$DASHBOARD_UID" "$EVIDENCE/grafana-dashboard.png" "$FROM_MS" "$TO_MS"
 
 MANAGED_ENDPOINT="$(env_value MANAGED_GRAFANA_ENDPOINT)"
 if [[ -n "$MANAGED_ENDPOINT" ]]; then
@@ -71,9 +87,9 @@ if [[ -n "$MANAGED_ENDPOINT" ]]; then
     export GRAFANA_URL="$MANAGED_ENDPOINT" GRAFANA_TOKEN="$MANAGED_TOKEN"
     unset GRAFANA_CA_FILE GRAFANA_PASSWORD
     "$PY" "$LAB_ROOT/agent/publish_dashboard.py" "$EVIDENCE/dashboard.json"
-    "$PY" "$LAB_ROOT/agent/verify_panels.py" --from "$FROM_MS" --to "$TO_MS" \
+    "$PY" "$LAB_ROOT/agent/verify_panels.py" --uid "$DASHBOARD_UID" --from "$FROM_MS" --to "$TO_MS" \
       --output "$EVIDENCE/panel-verification-managed.json"
-    node "$LAB_ROOT/agent/capture.mjs" /d/eventhubs-otel-victoriametrics "$EVIDENCE/grafana-dashboard-managed.png" \
+    node "$LAB_ROOT/agent/capture.mjs" "/d/$DASHBOARD_UID" "$EVIDENCE/grafana-dashboard-managed.png" \
       "$FROM_MS" "$TO_MS"
   ) || die "Managed Grafana could not show the dashboard"
 fi
@@ -84,6 +100,18 @@ NAMESPACE_ID="$(az eventhubs namespace show --subscription "$AZURE_SUBSCRIPTION_
 az monitor metrics list --subscription "$AZURE_SUBSCRIPTION_ID" --resource "$NAMESPACE_ID" \
   --metrics IncomingMessages OutgoingMessages IncomingRequests ThrottledRequests \
   --aggregation Total --interval PT1M --start-time "$FROM" --end-time "$TO" -o json >"$EVIDENCE/azure-monitor-raw.json"
+if [[ "$DASHBOARD_UID" == "eventhubs-azure-monitor-direct" ]]; then
+  # Grafana queried the same Azure Monitor bins; its panel sums must equal the CLI totals. A managed
+  # report left by an earlier run is not evidence for this one, so compare it only if this run made it.
+  reports=(panel-verification)
+  [[ -n "$MANAGED_ENDPOINT" ]] && reports+=(panel-verification-managed)
+  for report in "${reports[@]}"; do
+    "$PY" "$LAB_ROOT/agent/compare_grafana_azure_monitor.py" --panel-verification "$EVIDENCE/$report.json" \
+      --azure-monitor "$EVIDENCE/azure-monitor-raw.json" --output "$EVIDENCE/$report-azure-monitor.json" \
+      || die "Grafana $report totals differ from the direct Azure Monitor query"
+  done
+  exit 0
+fi
 "$PY" "$LAB_ROOT/agent/compare_azure_monitor.py" --azure-monitor "$EVIDENCE/azure-monitor-raw.json" \
   --from-ms "$FROM_MS" --to-ms "$TO_MS" --vm-url "http://127.0.0.1:$PORT" \
   --output "$EVIDENCE/azure-monitor-comparison.json" >/dev/null \

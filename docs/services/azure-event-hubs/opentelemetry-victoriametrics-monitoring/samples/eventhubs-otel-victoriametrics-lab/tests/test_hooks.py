@@ -1113,3 +1113,106 @@ def test_managed_grafana_is_wired_only_when_enabled_and_approves_only_its_own_co
     # The data source keeps the Gateway Grafana uid so the agent dashboard works unchanged.
     assert '"uid": "victoriametrics"' in text and 'http://{sys.argv[1]}:8428' in text
     assert 'die "managed private endpoint $MPE_NAME was not approved' in text
+
+
+def test_platform_metrics_azure_monitor_keeps_only_the_event_hub_receiver():
+    post = (SCRIPTS / "azd-postprovision.sh").read_text()
+    collect = (SCRIPTS / "collect-evidence.sh").read_text()
+    managed = (SCRIPTS / "managed-grafana.sh").read_text()
+    compose = (LAB_ROOT / "gateway" / "compose.yaml").read_text()
+
+    lib = (SCRIPTS / "lib.sh").read_text()
+    assert 'PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"' in lib
+    assert 'die "PLATFORM_METRICS must be Collector or AzureMonitor' in lib
+    mode = lib[lib.index('  if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then'):]
+    mode = mode[:mode.index("\n  fi\n")]
+    # postprovision takes the Collector inputs only from resolve_platform_metrics and never reassigns them.
+    assert re.findall(r"(?m)^resolve_platform_metrics$", post) == ["resolve_platform_metrics"]
+    # Heredoc bodies are file contents written to the bundle, not shell assignments.
+    shell = re.sub(r"(?ms)<<ENV\n.*?^ENV$", "<<ENV", post)
+    assert "ENABLE_API_RECEIVER=$COLLECTOR_API_RECEIVER" in post and "<<ENV" in shell
+    assert not re.search(
+        r"(?m)^\s*(COLLECTOR_API_RECEIVER|ENABLE_API_RECEIVER|ENABLE_LAG_RECEIVER|LAG_EXPORTER_SCALE|METRICS_HUB)=", shell)
+    assert post.index("resolve_platform_metrics") < post.index("collector.env")
+    # Lag comes from the ConsumerLag resource log, so the logs hub is mandatory in this mode.
+    assert '[[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]]' in mode
+    assert "COLLECTOR_API_RECEIVER=false" in mode and "ENABLE_LAG_RECEIVER=false" in mode
+    assert "LAG_EXPORTER_SCALE=0" in mode
+    assert "ENABLE_LAG_RECEIVER=$ENABLE_LAG_RECEIVER" in post and "LAG_EXPORTER_SCALE=$LAG_EXPORTER_SCALE" in post
+    assert "scale: ${LAG_EXPORTER_SCALE:-1}" in compose
+    # Nothing outside the Collector reads the exporter any more.
+    assert "lag-scrape" not in post and not (LAB_ROOT / "k8s" / "lag-scrape.yaml").exists()
+    # No other platform metrics copy may run in this mode.
+    assert 'die "PLATFORM_METRICS=AzureMonitor does not collect platform metrics; unset ENABLE_FALLBACK_EXPORTER"' in mode
+    assert 'METRICS_HUB=""' in mode and "TELEMETRY_EVENTHUB_NAME=$METRICS_HUB" in post
+    # A managed report from an earlier run is not compared unless this run produced it.
+    assert '[[ -n "$MANAGED_ENDPOINT" ]] && reports+=(panel-verification-managed)' in collect
+    assert '--cluster-resource-group "$CLUSTER_RG"' in collect
+    assert "GF_AZURE_MANAGED_IDENTITY_CLIENT_ID: ${GATEWAY_CLIENT_ID" in compose
+    assert "build_direct_dashboard.py" in collect and "compare_grafana_azure_monitor.py" in collect
+    assert '"/d/$DASHBOARD_UID"' in collect
+    assert "--data-source azure-monitor-oob" in managed and '"azureAuthType": "msi"' in managed
+
+
+def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
+    text = (SCRIPTS / "run-scenario.sh").read_text()
+    branch = text[text.index('if [[ "$(env_value PLATFORM_METRICS)" == "AzureMonitor" ]]; then'):]
+    branch = branch[:branch.index("\nfi\n")]
+    assert 'eventhubs_log_consumer_lag{source_path="diagnostic_logs",delivery_path="remote_write"}' in branch
+    assert "SETTLE_SECONDS=180" in branch and "LOG_LAG=true" in branch
+    # An absent record reads as 0 only while other resource logs still arrive; otherwise it is unknown.
+    assert 'vm_scalar "${1:-30}" "max($FRESH_LAG) or (vector(0) and on() (sum(increase($LOG_RECORDS[3m])) > 0))"' in text
+    assert "&& consumer_progressed; then" in text
+    # An unknown (-1) baseline fails the lag check instead of being replaced with 0.
+    assert not re.search(r"(?m)^\s*LAG_AT_LOAD_START=0\b", text)
+    assert '[[ "$LAG_AT_LOAD_START" -ge 0 &&' in text
+    assert '"$processed" -gt "$CONSUMER_PROCESSED_AT_LOAD_END"' in text
+    assert 'sleep "$SETTLE_SECONDS"' in text
+
+
+
+PRINT_MODE = 'echo "API=$COLLECTOR_API_RECEIVER LAG=$ENABLE_LAG_RECEIVER SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"'
+
+
+def _run_platform_mode(fake_bin, tmp_path, script="resolve_platform_metrics; " + PRINT_MODE, **env):
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")  # no azd env value: only the process environment counts
+    # The same function postprovision calls, not a copy of its text.
+    harness = f'source "{SCRIPTS / "lib.sh"}"; {script}'
+    return subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60,
+                          env={"PATH": f"{bin_dir}:/usr/bin:/bin", "AZURE_ENV_NAME": "unit", **env})
+
+
+def test_azure_monitor_mode_fails_without_logs_hub_or_with_fallback(fake_bin, tmp_path):
+    missing = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor")
+    assert missing.returncode != 0 and "set EVENTHUBS_LOGS=Enabled" in missing.stderr
+    fallback = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor",
+                                  TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs", ENABLE_FALLBACK_EXPORTER="true")
+    assert fallback.returncode != 0 and "unset ENABLE_FALLBACK_EXPORTER" in fallback.stderr
+    invalid = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="Direct")
+    assert invalid.returncode != 0 and "must be Collector or AzureMonitor" in invalid.stderr
+
+
+def test_platform_mode_sets_collector_inputs(fake_bin, tmp_path):
+    direct = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor",
+                                TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs", TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert direct.returncode == 0, direct.stderr
+    assert direct.stdout.strip() == "API=false LAG=false SCALE=0 HUB="
+    collector = _run_platform_mode(fake_bin, tmp_path, TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert collector.returncode == 0, collector.stderr
+    assert collector.stdout.strip() == "API=true LAG=true SCALE=1 HUB=platform-metrics"
+    # The fallback switch (ENABLE_API_RECEIVER=false) still reaches the Collector in its own mode.
+    fallback = _run_platform_mode(fake_bin, tmp_path, ENABLE_API_RECEIVER="false")
+    assert fallback.returncode == 0, fallback.stderr
+    assert fallback.stdout.strip().startswith("API=false LAG=true SCALE=1")
+
+
+def test_platform_mode_is_complete_on_every_call(fake_bin, tmp_path):
+    # Resolving AzureMonitor and then Collector in one shell must not leak the first call's settings.
+    script = ("PLATFORM_METRICS=AzureMonitor resolve_platform_metrics; " + PRINT_MODE +
+              "; PLATFORM_METRICS=Collector resolve_platform_metrics; " + PRINT_MODE)
+    result = _run_platform_mode(fake_bin, tmp_path, script=script, TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs",
+                                TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["API=false LAG=false SCALE=0 HUB=",
+                                          "API=true LAG=true SCALE=1 HUB=platform-metrics"]

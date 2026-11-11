@@ -27,3 +27,4 @@ resource grafana 'Microsoft.Dashboard/grafana@2024-10-01' = {
 
 output name string = grafana.name
 output endpoint string = grafana.properties.endpoint
+output principalId string = grafana.identity.principalId

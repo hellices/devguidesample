@@ -22,6 +22,7 @@ azd env set EVENTHUBS_LOCATION koreasouth   # Event Hubs만 다른 리전에 둘
 # azd env set EVENTHUBS_LOGS Disabled        # 리소스 로그 → 지표 경로 끄기(기본 Enabled)
 # azd env set EVENTHUBS_DIAGNOSTIC_METRICS Enabled  # 비교용 지표 Diagnostic Settings 켜기(기본 Disabled)
 # azd env set MANAGED_GRAFANA Enabled        # Azure Managed Grafana(Standard)와 managed private endpoint 추가
+# azd env set PLATFORM_METRICS AzureMonitor  # 플랫폼 지표는 Grafana가 Azure Monitor에서 직접 조회, Collector는 리소스 로그만
 azd up                                       # provision + hooks + workload
 ./scripts/run-scenario.sh                    # baseline 5분, 부하 10분, 회복
 ./scripts/collect-evidence.sh                # probe → build → verify → capture
@@ -41,20 +42,40 @@ Python 3.10 이상(`venv`), Node.js 20 이상, OpenSSL, `ssh-keygen`입니다. �
 | `infra/modules/foundation.bicep` | VNet, ACR, private endpoint 뒤의 Storage·Key Vault, identity, container 범위 역할입니다. |
 | `infra/modules/messaging.bicep` | Dedicated cluster와 그 안의 namespace(또는 Premium namespace), Diagnostic Settings sink인 telemetry Standard namespace(로그나 지표 설정을 켤 때만), `EVENTHUBS_LOGS=Enabled`일 때 리소스 로그 hub `runtime-logs`와 로그 Diagnostic Settings, `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`일 때 namespace·cluster 지표 Diagnostic Settings, Event Hubs 데이터 역할, Monitoring Reader입니다. |
 | `infra/modules/grafana.bicep` | `MANAGED_GRAFANA=Enabled`일 때 Azure Managed Grafana(Standard) workspace입니다. |
+| `infra/modules/grafana-reader.bicep` | Managed Grafana system-assigned identity에 workload namespace·Dedicated cluster 범위 Monitoring Reader를 할당합니다. Azure Monitor 데이터 소스가 이 권한으로 조회합니다. |
 | `infra/modules/compute.bicep` | AKS(Workload Identity, Azure RBAC), internal load balancer용 subnet 역할, Gateway VM입니다. |
 | `scripts/azd-configure.sh` | `preprovision`: 구독·provider 확인, operator egress `/32`, 비밀 생성입니다. |
 | `scripts/azd-postprovision.sh` | `postprovision`: kubeconfig, federated credential, ACR build, VictoriaMetrics, Run Command로 Gateway 번들 적용입니다. `GATEWAY_ONLY=true`이면 Gateway만 다시 적용합니다. |
 | `scripts/azd-deploy.sh` | `postdeploy`: Workload Identity를 쓰는 producer와 slow consumer입니다. |
 | `scripts/run-scenario.sh` | lag 상승·회복 시나리오와 UTC 경계를 `evidence/<env>/scenario.json`에 남깁니다. |
 | `scripts/collect-evidence.sh` | agent 대시보드 workflow와 Azure Monitor 분 단위 대조입니다. Managed Grafana가 있으면 Microsoft Entra token으로 같은 대시보드를 게시·검증·캡처합니다. |
-| `scripts/managed-grafana.sh` | `postprovision`이 호출합니다. VMSingle Private Link Service, managed private endpoint 생성·승인, Grafana Admin, VictoriaMetrics data source입니다. |
+| `scripts/managed-grafana.sh` | `postprovision`이 호출합니다. VMSingle Private Link Service, managed private endpoint 생성·승인, Grafana Admin, VictoriaMetrics data source, 기본 Azure Monitor data source(`azure-monitor-oob`) 확인입니다. |
 | `scripts/cleanup-external.sh`, `scripts/verify-cleanup.sh` | `predown`, `postdown`입니다. |
 | `gateway/render_collector.py` | source별 scrape·remote write 두 전달 경로 Collector 구성(Metrics API, 리소스 로그 `diagnostic_logs`, lag, 자체 지표, 선택 항목 `diagnostic_eventhub`), Dedicated·fallback profile입니다. |
 | `gateway/compose.yaml`, `gateway/bootstrap.sh` | digest를 고정한 Gateway runtime과 Run Command bootstrap입니다. |
 | `k8s/` | Operator values, VMSingle, VMAgent, VMStaticScrape, Managed Grafana용 Private Link Service Service(`vmsingle-pls.yaml`), workload입니다. |
 | `workloads/` | producer, slow consumer, checkpoint 기반 lag exporter image입니다. |
-| `agent/` | `probe.py`, `build_dashboard.py`, `publish_dashboard.py`, `verify_panels.py`, `capture.mjs`(panel query가 실패하면 캡처하지 않음), Azure Monitor 분 단위 대조 `compare_azure_monitor.py`입니다. Grafana는 Gateway가 만든 인증서를 고정한 HTTPS로만 접속합니다. |
+| `agent/` | `probe.py`, `build_dashboard.py`, `build_direct_dashboard.py`(`PLATFORM_METRICS=AzureMonitor`), `compare_grafana_azure_monitor.py`, `publish_dashboard.py`, `verify_panels.py`, `capture.mjs`(panel query가 실패하면 캡처하지 않음), Azure Monitor 분 단위 대조 `compare_azure_monitor.py`입니다. Grafana는 Gateway가 만든 인증서를 고정한 HTTPS로만 접속합니다. |
 | `tests/` | Bicep, hook, Collector 구성, lag 계산, 대시보드의 계약·단위 테스트입니다. |
+
+## 플랫폼 지표 수집 방식 전환
+
+`PLATFORM_METRICS`의 기본값은 `Collector`입니다. `AzureMonitor`이면 Grafana가 플랫폼 지표를
+Azure Monitor 데이터 소스(uid `azure-monitor-oob`)로 직접 조회합니다. Collector에는 리소스 로그를
+받는 `azureeventhubreceiver`와 자체 지표용 `prometheus/self`만 남고, `azuremonitorreceiver`와 lag
+exporter는 실행하지 않습니다. consumer lag는 `ApplicationMetricsLogs`의 `ConsumerLag`로 보므로
+`EVENTHUBS_LOGS=Enabled`(기본값)가 필요합니다. 이 모드에서는 `EVENTHUBS_DIAGNOSTIC_METRICS=Enabled`라도
+지표 hub를 읽지 않으며, `ENABLE_FALLBACK_EXPORTER=true`와 함께 쓰면 postprovision이 실패합니다.
+
+```bash
+azd env set PLATFORM_METRICS AzureMonitor
+azd provision                                   # grafana-reader 역할 할당과 postprovision 전체 적용
+# GATEWAY_ONLY=true azd hooks run postprovision  # 역할 할당이 이미 배포된 환경에서 Gateway만 다시 적용
+```
+
+이 sample의 이전 버전으로 만든 `MANAGED_GRAFANA=Enabled` 환경에는 Managed Grafana identity의
+Monitoring Reader가 없으므로, 처음 전환할 때는 `azd provision`으로 `grafana-reader.bicep`을
+배포합니다. `GATEWAY_ONLY=true`는 Bicep을 배포하지 않습니다.
 
 ## fallback exporter 전환
 

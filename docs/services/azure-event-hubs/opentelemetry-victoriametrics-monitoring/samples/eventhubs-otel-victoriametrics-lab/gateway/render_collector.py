@@ -235,18 +235,21 @@ def render_config(env: Mapping[str, str]) -> dict:
         }
         sources["diagnostic_logs"] = ["signal_to_metrics/runtime_logs"]
 
-    receivers["prometheus/lag"] = {
-        "config": {
-            "scrape_configs": [
-                {
-                    "job_name": "eventhubs-lag-exporter",
-                    "scrape_interval": "15s",
-                    "static_configs": [{"targets": [env.get("LAG_EXPORTER_TARGET", "lag-exporter:9464")]}],
-                }
-            ]
+    # PLATFORM_METRICS=AzureMonitor turns this off: no lag exporter runs, and lag comes from the
+    # ConsumerLag resource log through azure_event_hub/runtime_logs.
+    if _flag(env, "ENABLE_LAG_RECEIVER", True):
+        receivers["prometheus/lag"] = {
+            "config": {
+                "scrape_configs": [
+                    {
+                        "job_name": "eventhubs-lag-exporter",
+                        "scrape_interval": "15s",
+                        "static_configs": [{"targets": [env.get("LAG_EXPORTER_TARGET", "lag-exporter:9464")]}],
+                    }
+                ]
+            }
         }
-    }
-    sources["lag_exporter"] = ["prometheus/lag"]
+        sources["lag_exporter"] = ["prometheus/lag"]
 
     receivers["prometheus/self"] = {
         "config": {
@@ -303,10 +306,11 @@ def render_config(env: Mapping[str, str]) -> dict:
         "batch": {"timeout": "5s"},
     }
     # The lag exporter also exposes Python runtime metrics; keep only the lab's lag signals.
-    processors["filter/lag"] = {
-        "error_mode": "ignore",
-        "metric_conditions": ['not IsMatch(metric.name, "^(eventhubs_.*|up)$")'],
-    }
+    if "lag_exporter" in sources:
+        processors["filter/lag"] = {
+            "error_mode": "ignore",
+            "metric_conditions": ['not IsMatch(metric.name, "^(eventhubs_.*|up)$")'],
+        }
     # Keep only component throughput and failure counters from the Collector's own telemetry.
     processors["filter/self"] = {
         "error_mode": "ignore",

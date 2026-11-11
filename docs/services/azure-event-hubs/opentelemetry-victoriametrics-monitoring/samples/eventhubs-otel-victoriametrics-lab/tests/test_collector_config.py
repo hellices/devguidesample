@@ -256,3 +256,16 @@ def test_resource_logs_become_metrics_only_when_a_logs_hub_is_set():
     assert not keys & {"client.address", "azure.auth.id"}
     # Only a harmless resource attribute is kept, so service.name never turns into the job label.
     assert all(m["include_resource_attributes"] == [{"key": "cloud.provider"}] for m in metrics.values())
+
+
+def test_lag_receiver_can_be_left_to_vmagent():
+    # PLATFORM_METRICS=AzureMonitor: no Metrics API receiver and no Collector lag scrape; VMAgent
+    # scrapes the lag exporter directly, so the Collector must not store a second lag copy.
+    config = render_config({**BASE_ENV, "ENABLE_API_RECEIVER": "false", "ENABLE_LAG_RECEIVER": "false",
+                            "TELEMETRY_EVENTHUB_NAME": ""})
+    assert "prometheus/lag" not in config["receivers"]
+    assert not any(name.startswith("azure_monitor/") for name in config["receivers"])
+    assert "filter/lag" not in config["processors"]
+    assert set(config["service"]["pipelines"]) == {
+        "metrics/collector_self-scrape", "metrics/collector_self-remote_write"}
+    assert "prometheus/lag" in render_config(BASE_ENV)["receivers"]
