@@ -1,5 +1,36 @@
 # 다중 허브·방화벽 Private AKS 사전 점검 실습 구성 상세
 
+## 네트워크
+
+| 영역 | 리소스 및 주소 대역 | 역할 및 핵심 설정 |
+| --- | --- | --- |
+| 에이전트 관리 VNet (`koreacentral`) | `vnet-sre-agent-hub` (`10.42.0.0/16`)<br>`snet-sre-agent-sandbox` (`10.42.4.0/24`) | `Microsoft.App/environments` 위임 전용 서브넷. UDR(`rt-sre-agent-sandbox`)이 `10.52.0.0/16` 및 `10.60.0.0/16` 목적지의 Next Hop을 Hub #1 방화벽(`10.51.250.4`)으로 전달 |
+| 코어 방화벽 허브 (`australiaeast`) | `vnet-fleet-hub-01` (`10.51.0.0/16`, `fw-hub-01` `10.51.250.4`)<br>`vnet-fleet-aks-hub` (`10.52.0.0/16`, `fw-hub-02` `10.52.250.4`)<br>`vnet-fleet-hub-03` (`10.53.0.0/16`, `fw-hub-03` `10.53.250.4`) | 3개 허브 VNet이 Full-Mesh VNet Peering(`AllowForwardedTraffic: true`)으로 연결되어 에이전트 서브넷(`10.42.4.x`)과 각 AKS API 서버 Private Endpoint 간 양방향 대칭 라우팅 제공 |
+| Hub #2 내장 Private AKS | `aks-priv-01` ~ `05` (`10.52.11.0/24` ~ `10.52.15.0/24`) | API 서버 Private Endpoint(`10.52.11.4` ~ `10.52.15.4`). 동일 VNet 내 방화벽 우회 방지를 위해 `privateEndpointNetworkPolicies: Enabled` 적용 |
+| Hub #3 산하 Spoke Private AKS | `aks-priv-06` ~ `10` (`10.60.6.0/24` ~ `10.60.10.0/24`) | API 서버 Private Endpoint(`10.60.6.4` ~ `10.60.10.4`). `10.42.4.x ➔ 10.51.250.4 ➔ 10.53.250.4 ➔ 10.60.x.4:443` 경로로 통신 |
+
+### 에이전트 VNet 설정과 `*.azmk8s.io` 공용 우회 해제
+
+에이전트 리소스의 `sandboxConfiguration.egress.allowedHosts`에 `*.azmk8s.io`가 포함되어 있으면,
+에이전트는 사설 VNet 경로 대신 Microsoft 공용 인프라 네트워크로 AKS API 호출을 우회시켜 사설 DNS 해석에
+실패합니다. 따라서 `allowedHosts`에서 `*.azmk8s.io`를 반드시 제외합니다.
+
+또한 에이전트의 일반 `bash` 터미널 도구는 외부 HTTPS(443) 연결에 내부 이그레스 프록시 인증서(`ADC Egress Proxy Intermediate CA`)를
+주입하므로 사설 AKS 자체 서명 인증서와 충돌(`x509: certificate signed by unknown authority`)할 수 있습니다.
+데이터 플레인 조회에는 프록시 간섭 없이 전용 서브넷으로 직접 나가는 내장 도구 `RunKubectlReadCommand`를 사용합니다.
+
+## 권한
+
+| 주체 | 범위 | 역할 | 목적 |
+| --- | --- | --- | --- |
+| 에이전트 UAMI·시스템 MI | 클러스터 리소스 그룹 | `Reader`, `Azure Kubernetes Service Cluster User Role` | 컨트롤 플레인 메타데이터(`az aks list`) 및 `kubeconfig` 조회 |
+| 에이전트 UAMI·시스템 MI | 클러스터 리소스 그룹 | `Azure Kubernetes Service RBAC Reader` | Azure RBAC(`--enable-azure-rbac`) 기반 클러스터 내부 파드·디플로이먼트·PDB 읽기(`dataActions`) |
+| 배포 관리자 계정 | 에이전트 리소스 | `SRE Agent Administrator` | 포털 도구·스킬·지식 원본 관리 및 변경 작업 승인 |
+
+---
+
+# 엔터프라이즈 Private AKS + vWAN 방화벽 + Grafana(12컬럼) + Azure SRE Agent(9대 사전 점검 · 점프박스 감사) 전체 구축 가이드
+
 - **문서 목적**: **리소스 공급자 등록 ➔ 리소스 그룹 3개 ➔ Virtual WAN & Secured Hub(Azure Firewall) ➔ 방화벽 정책(`afwp-sre-vwan`) · 규칙 컬렉션 그룹(`rcg-sre-to-aks`) · 규칙 · 허브 연결 · `Routing Intent` ➔ VNet 4개 & 전용 서브넷 위임 ➔ DNS Private Resolver(`10.10.0.4`) & 허브 VNet 연결 4건 ➔ Log Analytics 2개 · UAMI 3개(RBAC) · Private AKS 3대(12컬럼 태그) · DNS 링크 ➔ 사전 점검 재현용 K8s 워크로드 배포 ➔ SRE Agent & 최소 권한 RBAC ➔ Dashboard with Grafana 13패널 JSON Import ➔ `sre.azure.com` 도구·스킬·고급 권한·서브에이전트·월간 스케줄·채팅 검증**까지 순서대로 구성하는 매뉴얼입니다.
 - **주요 구성 사양**:
   1. **Grafana (`SRE-AKS-Management` — `Azure Monitor > Dashboards with Grafana`) 13개 패널 및 12개 표준 인벤토리 컬럼**:
