@@ -4,14 +4,28 @@ const searchInput = require("../../docs/assets/javascripts/search-input.js");
 
 const searchSelector = 'input[data-md-component="search-query"]';
 
+class FakeKeyboardEvent {
+  constructor(type, init) {
+    this.type = type;
+    this.init = init;
+  }
+}
+
 function createTarget(selector) {
   const dispatched = [];
+  const events = [];
   return {
     dispatched,
+    events,
     matches(candidate) {
       return candidate === selector;
     },
     dispatchEvent(event) {
+      // Mirror EventTarget.dispatchEvent, which rejects non-Event arguments.
+      if (!(event instanceof FakeKeyboardEvent)) {
+        throw new TypeError("dispatchEvent requires an Event instance");
+      }
+      events.push(event);
       dispatched.push(event.type);
       return true;
     },
@@ -28,12 +42,6 @@ function createFixture() {
       listeners[type] = {callback, options};
     },
   };
-  class FakeKeyboardEvent {
-    constructor(type, init) {
-      this.type = type;
-      this.init = init;
-    }
-  }
   return {listeners, registrations, documentRef, windowRef: {KeyboardEvent: FakeKeyboardEvent}};
 }
 
@@ -46,6 +54,10 @@ test("non-keyboard input on the header search box is forwarded as keyup", () => 
   fixture.listeners.compositionend.callback({target: query});
 
   assert.deepEqual(query.dispatched, ["keyup", "keyup"]);
+  for (const event of query.events) {
+    assert.ok(event instanceof FakeKeyboardEvent);
+    assert.deepEqual(event.init, {bubbles: true});
+  }
   assert.equal(fixture.listeners.input.options, true);
 });
 
