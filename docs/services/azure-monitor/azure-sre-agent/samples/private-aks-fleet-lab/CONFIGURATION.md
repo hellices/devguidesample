@@ -1343,17 +1343,17 @@ Resources
    - 모든 트래픽이 VNet 방화벽을 경유해야 하는 정책 환경에서는 `Log Analytics`, `Azure Managed Grafana` 항목도 함께 체크 해제할 수 있습니다.
 5. **`⑤` 하단 `Save` 버튼 클릭 후, `Trusted CA certificates`에 Private AKS 클러스터 CA 인증서 등록 (`*.azmk8s.io`)**:
    - 사설 AKS API 서버(`*.privatelink.eastus2.azmk8s.io`)는 클러스터별 자체 서명(Self-signed) Kubernetes Root CA 인증서(`CN=ca`)를 사용합니다.
-   - Python 도구 샌드박스에서 VNet 경유로 K8s REST API(`https://<privateFQDN>/api/v1/pods` 등)를 직접 호출할 때 SRE Agent 이그레스 프록시가 TLS 인증서를 신뢰하도록 `hostPattern: "*.azmk8s.io"`로 3개 클러스터의 CA 인증서를 등록합니다:
+   - Python 도구 샌드박스에서 VNet 경유로 K8s REST API(`https://<privateFQDN>/api/v1/pods` 등)를 직접 호출할 때 SRE Agent 이그레스 프록시가 TLS 인증서를 신뢰하도록, 구독 내 전체 AKS 클러스터를 동적으로 조회하여 `hostPattern: "*.azmk8s.io"`에 CA 인증서를 일괄 등록합니다:
    ```bash
    python3 -c '
    import base64, json, subprocess
-   sub = "<YOUR_SUBSCRIPTION_ID>"
-   rg = "rg-sre-private-aks-fleet"
+   sub = subprocess.check_output(["az", "account", "show", "--query", "id", "-o", "tsv"], text=True).strip()
    ep = "https://sre-aks-fleet-agent--50e381d3.e01924b8.koreacentral.azuresre.ai"
    tok = subprocess.check_output(["az", "account", "get-access-token", "--resource", "https://azuresre.ai", "--query", "accessToken", "-o", "tsv"], text=True).strip()
+   clusters = json.loads(subprocess.check_output(["az", "aks", "list", "--subscription", sub, "--query", "[].{rg:resourceGroup, name:name}", "-o", "json"], text=True))
    certs = []
-   for c in ["aks-priv-01", "aks-priv-02", "aks-priv-03"]:
-       u = f"https://management.azure.com/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.ContainerService/managedClusters/{c}/listClusterUserCredential?api-version=2024-09-01"
+   for item in clusters:
+       u = f"https://management.azure.com/subscriptions/{sub}/resourceGroups/{item[\"rg\"]}/providers/Microsoft.ContainerService/managedClusters/{item[\"name\"]}/listClusterUserCredential?api-version=2024-09-01"
        raw = subprocess.check_output(["az", "rest", "-m", "POST", "--url", u, "--query", "kubeconfigs[0].value", "-o", "tsv"], text=True).strip()
        for line in base64.b64decode(raw).decode().splitlines():
            if "certificate-authority-data:" in line:
