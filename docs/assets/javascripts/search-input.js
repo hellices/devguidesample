@@ -5,7 +5,9 @@
 
   // Material reads the header search query only on keyup. IME commits, mouse
   // paste, mobile predictions and voice input change the value without a
-  // keyup, so the query never reaches the search worker. Forward those changes.
+  // keyup, so the query never reaches the search worker. Forward those changes;
+  // in-progress IME input is skipped and the committed text arrives on
+  // compositionend.
   function mountSearchInputBridge(documentRef, windowRef) {
     if (!documentRef || !windowRef) return false;
     const root = documentRef.documentElement;
@@ -13,6 +15,7 @@
     root.dataset.dgSearchInputReady = "true";
 
     const forward = event => {
+      if (event.isComposing) return;
       const target = event.target;
       if (!target || typeof target.matches !== "function" || !target.matches(searchSelector)) return;
       const KeyboardEventRef = windowRef.KeyboardEvent || windowRef.Event;

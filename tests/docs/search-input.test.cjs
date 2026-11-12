@@ -20,9 +20,11 @@ function createTarget(selector) {
 
 function createFixture() {
   const listeners = {};
+  const registrations = [];
   const documentRef = {
     documentElement: {dataset: {}},
     addEventListener(type, callback, options) {
+      registrations.push(type);
       listeners[type] = {callback, options};
     },
   };
@@ -32,7 +34,7 @@ function createFixture() {
       this.init = init;
     }
   }
-  return {listeners, documentRef, windowRef: {KeyboardEvent: FakeKeyboardEvent}};
+  return {listeners, registrations, documentRef, windowRef: {KeyboardEvent: FakeKeyboardEvent}};
 }
 
 test("non-keyboard input on the header search box is forwarded as keyup", () => {
@@ -45,6 +47,18 @@ test("non-keyboard input on the header search box is forwarded as keyup", () => 
 
   assert.deepEqual(query.dispatched, ["keyup", "keyup"]);
   assert.equal(fixture.listeners.input.options, true);
+});
+
+test("in-progress IME composition is not forwarded until compositionend", () => {
+  const fixture = createFixture();
+  searchInput.mountSearchInputBridge(fixture.documentRef, fixture.windowRef);
+  const query = createTarget(searchSelector);
+
+  fixture.listeners.input.callback({target: query, isComposing: true});
+  assert.deepEqual(query.dispatched, []);
+
+  fixture.listeners.compositionend.callback({target: query});
+  assert.deepEqual(query.dispatched, ["keyup"]);
 });
 
 test("other inputs such as the explore text filter are left untouched", () => {
@@ -61,5 +75,7 @@ test("other inputs such as the explore text filter are left untouched", () => {
 test("the bridge mounts once per document", () => {
   const fixture = createFixture();
   assert.equal(searchInput.mountSearchInputBridge(fixture.documentRef, fixture.windowRef), true);
+  assert.deepEqual(fixture.registrations, ["input", "compositionend"]);
   assert.equal(searchInput.mountSearchInputBridge(fixture.documentRef, fixture.windowRef), false);
+  assert.deepEqual(fixture.registrations, ["input", "compositionend"]);
 });
