@@ -7,7 +7,8 @@
   // paste, mobile predictions and voice input change the value without a
   // keyup, so the query never reaches the search worker. Forward those changes;
   // in-progress IME input is skipped and the committed text arrives on
-  // compositionend.
+  // compositionend. A real keyup that follows is harmless because Material only
+  // queries the worker when the value changes (distinctUntilChanged).
   function mountSearchInputBridge(documentRef, windowRef) {
     if (!documentRef || !windowRef) return false;
     const root = documentRef.documentElement;
