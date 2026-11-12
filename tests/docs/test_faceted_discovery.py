@@ -252,6 +252,7 @@ def test_home_navigation_and_article_chips_use_explore(taxonomy, catalog):
 def test_explore_assets_are_configured_and_accessible():
     config = yaml.safe_load((ROOT / "mkdocs.yml").read_text())
     assert "assets/javascripts/explore.js" in config.get("extra_javascript", [])
+    assert "assets/javascripts/search-input.js" in config.get("extra_javascript", [])
     css = (ROOT / "docs/assets/stylesheets/extra.css").read_text()
     for selector in (".dg-explore", ".dg-explore-filters", ".dg-explore-member", ".dg-explore-topic", ".dg-filter-option"):
         assert selector in css
@@ -270,7 +271,8 @@ def test_service_discovery_reports_topics_and_documents(taxonomy, catalog):
 
 
 @pytest.mark.parametrize(
-    "script_name", ("explore.test.cjs", "sidebar-toggle.test.cjs", "daily-updates.test.cjs")
+    "script_name",
+    ("explore.test.cjs", "sidebar-toggle.test.cjs", "daily-updates.test.cjs", "search-input.test.cjs"),
 )
 def test_javascript_behavior_with_available_node(script_name):
     node = shutil.which("node")
