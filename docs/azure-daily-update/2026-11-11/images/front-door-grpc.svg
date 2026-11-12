@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="320" viewBox="0 0 960 320" role="img" aria-labelledby="front-door-grpc-title front-door-grpc-desc">
+  <title id="front-door-grpc-title">Native gRPC through Azure Front Door</title>
+  <desc id="front-door-grpc-desc">Front Door terminates client TLS and forwards gRPC over a separate HTTPS and HTTP/2 connection to the origin; response messages and gRPC trailers return through the edge.</desc>
+  <defs>
+    <marker id="front-door-grpc-response-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 8 3 0 6Z" fill="#687787"/>
+    </marker>
+    <marker id="front-door-grpc-request-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0 0 8 3 0 6Z" fill="#2e5aa8"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .name { font-size: 20px; font-weight: 600; text-anchor: middle; }
+      .detail { font-size: 16px; text-anchor: middle; }
+      .flow { font-size: 15px; text-anchor: middle; fill: #2e5aa8; }
+    </style>
+  </defs>
+  <rect width="960" height="320" fill="#ffffff"/>
+  <text x="32" y="40" font-size="26" font-weight="600">Azure Front Door native gRPC (preview)</text>
+  <text x="32" y="68" font-size="17">Two TLS connections, not TLS passthrough</text>
+  <path d="M208 152 H366" fill="none" stroke="#2e5aa8" stroke-width="2" marker-end="url(#front-door-grpc-request-arrow)"/>
+  <path d="M608 152 H766" fill="none" stroke="#2e5aa8" stroke-width="2" marker-end="url(#front-door-grpc-request-arrow)"/>
+  <path d="M368 216 H210" fill="none" stroke="#687787" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#front-door-grpc-response-arrow)"/>
+  <path d="M768 216 H610" fill="none" stroke="#687787" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#front-door-grpc-response-arrow)"/>
+  <rect x="220" y="120" width="136" height="24" fill="#ffffff"/>
+  <text x="288" y="138" class="flow">HTTPS / HTTP/2</text>
+  <rect x="620" y="120" width="136" height="24" fill="#ffffff"/>
+  <text x="688" y="138" class="flow">HTTPS / HTTP/2</text>
+  <rect x="220" y="184" width="136" height="24" fill="#ffffff"/>
+  <text x="288" y="202" class="flow">gRPC + trailers</text>
+  <rect x="620" y="184" width="136" height="24" fill="#ffffff"/>
+  <text x="688" y="202" class="flow">gRPC + trailers</text>
+  <rect x="32" y="96" width="176" height="144" rx="8" fill="#f5f9fd" stroke="#687787"/>
+  <text x="120" y="140" class="name">gRPC client</text>
+  <text x="120" y="172" class="detail">Unary / streaming</text>
+  <rect x="368" y="96" width="240" height="144" rx="8" fill="#e4f1fc" stroke="#0078d4" stroke-width="2"/>
+  <text x="488" y="132" class="name">Front Door edge</text>
+  <text x="488" y="164" class="detail">TLS termination</text>
+  <text x="488" y="192" class="detail">Route / metadata checks</text>
+  <text x="488" y="220" class="detail">Healthy origin selection</text>
+  <rect x="768" y="96" width="160" height="144" rx="8" fill="#f5f9fd" stroke="#687787"/>
+  <text x="848" y="140" class="name">gRPC origin</text>
+  <text x="848" y="172" class="detail">TLS + HTTP/2</text>
+  <path d="M32 264 H928" stroke="#b4cce3"/>
+  <text x="32" y="294" font-size="17">WAF metadata checks do not decode protobuf message bodies.</text>
+</svg>
