@@ -11,8 +11,8 @@ autoinstrumentation(Application Insights Java agent)으로 계측하고 Managed 
 ## 구성
 
 이 sample은 [MovieLog sample](../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/README.md)
-위에 바꾸거나 더한 파일만 담습니다. 앱 전체 소스는 `scripts/assemble-app.sh`가 기존 sample을
-`out/app/`에 복사하고 이 sample의 `src/`, `build.gradle.kts`, `.env.sample`을 덮어써서 만듭니다.
+위에 바꾸거나 더한 파일만 담습니다. 앱 전체 소스는 `scripts/assemble-app.sh`가 기존 sample의 git 추적
+파일만 `out/app/`에 복사하고(로컬 `.env`나 DB 파일은 제외) 이 sample의 `src/`, `build.gradle.kts`, `.env.sample`을 덮어써서 만듭니다.
 Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 `k8s/21-agent-3.7.10.patch.yaml`은 기존 sample의 파일을 그대로 씁니다.
 

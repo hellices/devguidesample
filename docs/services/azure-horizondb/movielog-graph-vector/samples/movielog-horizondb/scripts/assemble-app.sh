@@ -26,9 +26,17 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 # Base app: source, Gradle wrapper, Dockerfile and the agent init image.
 # That topic's Copilot skill, dashboard, manifests, load generator and docs are not part of the app.
-(cd "$BASE" && tar -cf - \
-  --exclude ./.github --exclude ./.vscode --exclude ./grafana --exclude ./k8s --exclude ./loadgen \
-  --exclude ./README.md --exclude ./sample.yml --exclude ./build --exclude ./.gradle .) | (cd "$OUT" && tar -xf -)
+# Only committed files are copied, so a local .env, database files or build output of the base sample never
+# reach the app source or the ACR build context.
+if git -C "$BASE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  (cd "$BASE" && git ls-files -z -- . ':(exclude).github' ':(exclude).vscode' ':(exclude)grafana' ':(exclude)k8s' \
+      ':(exclude)loadgen' ':(exclude)README.md' ':(exclude)sample.yml' | tar --null -T - -cf -) | (cd "$OUT" && tar -xf -)
+else
+  (cd "$BASE" && tar -cf - \
+    --exclude ./.github --exclude ./.vscode --exclude ./grafana --exclude ./k8s --exclude ./loadgen \
+    --exclude ./README.md --exclude ./sample.yml --exclude ./build --exclude ./.gradle \
+    --exclude './.env' --exclude './.env.*' --exclude '*.db' --exclude './data' .) | (cd "$OUT" && tar -xf -)
+fi
 # Overlay: changed and new files of this sample.
 (cd "$HERE" && tar -cf - src build.gradle.kts .env.sample) | (cd "$OUT" && tar -xf -)
 echo "assembled $OUT"
