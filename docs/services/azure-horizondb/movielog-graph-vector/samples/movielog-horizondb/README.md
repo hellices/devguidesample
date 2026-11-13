@@ -29,8 +29,9 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `k8s/00-namespace.yaml` | namespace와 workload identity ServiceAccount입니다. |
 | `scripts/assemble-app.sh` | 기존 MovieLog sample과 이 sample의 변경 파일을 합쳐 `out/app/`에 앱 소스를 만듭니다. |
 | `k8s/20-movielog.yaml` | HorizonDB 연결(secret)과 Azure OpenAI endpoint를 받는 앱 Deployment입니다. |
-| `k8s/26-agfc.yaml` | Application Gateway for Containers(AKS add-on)로 앱을 공개하는 ApplicationLoadBalancer, Gateway, HTTPRoute와 session affinity·health check policy입니다. |
-| `k8s/30-loadgen.yaml`, `loadgen/loadgen.py` | 가입·조회·리뷰와 의미 검색·그래프 조회를 반복하는 합성 사용자입니다. |
+| `k8s/26-agfc.yaml` | Application Gateway for Containers(AKS add-on)로 앱을 커스텀 도메인 HTTPS로 공개하는 ApplicationLoadBalancer, HTTP·HTTPS listener Gateway, 앱 HTTPRoute, HTTP→HTTPS redirect HTTPRoute와 session affinity·health check policy입니다. |
+| `k8s/27-tls.yaml` | cert-manager가 Let's Encrypt에서 HTTP-01 challenge로 인증서를 받아 `movielog-tls` secret에 넣는 ClusterIssuer와 Certificate입니다. |
+| `loadgen/loadgen.py` | 가입·조회·리뷰와 의미 검색·그래프 조회를 반복하는 합성 사용자입니다. Deployment는 기존 sample의 `k8s/30-loadgen.yaml`을 씁니다. |
 | `grafana/movielog-horizondb-dashboard.json` | discover Timer, HorizonDB·Azure OpenAI dependency, discover 요청을 보는 dashboard입니다. resource ID 변수는 비어 있습니다. |
 
 ## 화면과 API
@@ -179,13 +180,13 @@ PGDATABASE=movielog psql -f db/10-schema.sql
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.1.2 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.1.3 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.1.2"
+export APP_IMAGE="$ACR_SERVER/movielog:2.1.3"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -
@@ -219,18 +220,21 @@ psql -f db/30-graph.sql
 ```bash
 kubectl scale deploy/movielog -n movielog --replicas=2
 kubectl create configmap loadgen -n movielog --from-file=loadgen/loadgen.py
-kubectl apply -f k8s/30-loadgen.yaml
+kubectl apply -f $BASE/k8s/30-loadgen.yaml
 ```
 
-Application Gateway for Containers로 앱을 공개합니다. AKS 관리형 VNet의
-`aks-appgateway` 서브넷 NSG가 association에 적용되므로 frontend 포트(TCP 80)를 Internet에서
-허용하는 규칙이 필요합니다. AGFC에서 Pod로 가는 트래픽은 VNet 내부라 노드 NSG는 바꾸지
-않습니다. 회원 가입과 Azure OpenAI를 호출하는 의미 검색이 인증 없이 공개되므로 실습이
-끝나면 규칙을 지웁니다.
+Application Gateway for Containers로 앱을 커스텀 도메인의 HTTPS로 공개합니다. 회원 가입과
+form login이 있어 HTTP만 열면 비밀번호와 session cookie가 평문으로 전달되므로, HTTP listener는
+Let's Encrypt HTTP-01 challenge에만 응답하고 나머지 요청은 HTTPS로 301 redirect합니다.
 
-실습 구독에서는 모든 포트를 여는 Internet 허용 규칙을 만든 지 약 25분 뒤 조직 보안
-자동화(다른 tenant의 app)가 NSG를 다시 써서 규칙을 지웠고, 그 뒤 frontend 접속이
-시간 초과됐습니다. 필요한 포트만 여는 규칙을 씁니다.
+- **DNS** — 소유한 DNS zone에 이미 쓰는 이름과 겹치지 않는 host를 정하고, CNAME을 Gateway 주소로
+  향하게 합니다. 실습은 Azure DNS zone의 새 하위 이름 하나를 썼습니다.
+- **NSG** — AKS 관리형 VNet의 `aks-appgateway` 서브넷 NSG가 association에 적용되므로 frontend
+  포트(TCP 80, 443)를 Internet에서 허용하는 규칙이 필요합니다. AGFC에서 Pod로 가는 트래픽은
+  VNet 내부라 노드 NSG는 바꾸지 않습니다.
+- **조직 보안 자동화** — 실습 구독에서는 모든 포트를 여는 Internet 허용 규칙을 만든 지 약 25분 뒤
+  조직 보안 자동화(다른 tenant의 app)가 NSG를 다시 써서 규칙을 지웠고, 그 뒤 frontend 접속이
+  시간 초과됐습니다. 포트를 지정한 규칙은 유지됐습니다.
 
 ```bash
 # Requires the ManagedGatewayAPIPreview and ApplicationLoadBalancerPreview features (Microsoft.ContainerService).
@@ -239,17 +243,48 @@ NRG="$(az aks show -g $RG -n aks-movielog-hz --query nodeResourceGroup -o tsv)"
 export ALB_SUBNET_ID="$(az network vnet list -g "$NRG" \
   --query "[].subnets[?name=='aks-appgateway'][].id | [0]" -o tsv)"
 ALB_NSG="$(az network vnet subnet show --ids "$ALB_SUBNET_ID" --query networkSecurityGroup.id -o tsv)"
-az network nsg rule create -g "$NRG" --nsg-name "${ALB_NSG##*/}" -n allow-agfc-frontend-http \
-  --priority 200 --direction Inbound --access Allow --protocol Tcp \
-  --source-address-prefixes Internet --source-port-ranges '*' \
-  --destination-address-prefixes '*' --destination-port-ranges 80
-envsubst < k8s/26-agfc.yaml | kubectl apply -f -
-kubectl get gateway movielog -n movielog -o jsonpath='{.status.addresses[0].value}'
+for rule in http:200:80 https:210:443; do
+  IFS=: read -r name priority port <<< "$rule"
+  az network nsg rule create -g "$NRG" --nsg-name "${ALB_NSG##*/}" -n "allow-agfc-frontend-$name" \
+    --priority "$priority" --direction Inbound --access Allow --protocol Tcp \
+    --source-address-prefixes Internet --source-port-ranges '*' \
+    --destination-address-prefixes '*' --destination-port-ranges "$port"
+done
+
+# cert-manager with Gateway API support (Learn: Cert-manager and Let's Encrypt with AGFC - Gateway API).
+helm install cert-manager oci://quay.io/jetstack/charts/cert-manager --version v1.19.3 \
+  --namespace cert-manager --create-namespace \
+  --set config.enableGatewayAPI=true --set crds.enabled=true --wait
+
+# APP_HOST: a new name in a DNS zone you own, for example movielog.example.com.
+export APP_HOST=movielog.example.com
+envsubst '$APP_HOST $ALB_SUBNET_ID' < k8s/26-agfc.yaml | kubectl apply -f -
+GATEWAY_FQDN="$(kubectl get gateway movielog -n movielog -o jsonpath='{.status.addresses[0].value}')"
+# Azure DNS example; DNS_ZONE_RG and DNS_ZONE are the resource group and name of your zone.
+az network dns record-set list -g "$DNS_ZONE_RG" -z "$DNS_ZONE" --query "[].name" -o tsv  # pick an unused name
+az network dns record-set cname set-record -g "$DNS_ZONE_RG" -z "$DNS_ZONE" \
+  -n "${APP_HOST%%.$DNS_ZONE}" -c "$GATEWAY_FQDN" --ttl 300
+envsubst '$APP_HOST' < k8s/27-tls.yaml | kubectl apply -f -
+kubectl wait certificate/movielog-tls -n movielog --for=condition=Ready --timeout=5m
 ```
+
+실습에서는 `Certificate` 적용 후 약 45초 만에 Let's Encrypt 인증서가 발급됐고, 두 listener가
+모두 `Programmed`가 됐습니다. 확인은 다음처럼 합니다.
+
+```bash
+curl -sI "http://$APP_HOST/" | grep -iE '^HTTP|^location'     # 301 -> https://$APP_HOST/
+curl -sv -o /dev/null "https://$APP_HOST/" 2>&1 | grep issuer # O=Let's Encrypt
+curl -sI "https://$APP_HOST/reviews/new" | grep -i location   # https://$APP_HOST/login
+```
+
+AGFC는 백엔드에 `x-forwarded-proto`를 넘기고 Spring Boot는 Kubernetes에서 이 헤더를 따르므로,
+앱이 만드는 redirect는 `https://` 주소가 되고 `JSESSIONID`·`XSRF-TOKEN` cookie에는 `Secure`가
+붙었습니다. listener에 hostname을 지정했으므로 AGFC 기본 FQDN으로 들어온 요청은 404를 받습니다.
+cert-manager는 만료 전에 인증서를 자동으로 갱신합니다.
 
 `RoutePolicy`의 `managed-cookie`는 gateway가 `AGCAffinity` cookie를 첫 응답에 붙여
 로그인 session이 한 Pod에 머물게 합니다. 실습에서 가입·로그인 뒤 인증이 필요한 리뷰 작성
-10건이 모두 성공했습니다.
+10건이 모두 성공했고, HTTPS 전환 뒤에도 가입·로그인이 정상 동작했습니다.
 
 ## Grafana dashboard
 
@@ -284,6 +319,9 @@ rm /tmp/live.json
 
 ## 정리
 
+DNS 레코드는 실습 resource group 밖의 zone에 있으므로 따로 지웁니다.
+
 ```bash
+az network dns record-set cname delete -g "$DNS_ZONE_RG" -z "$DNS_ZONE" -n "${APP_HOST%%.$DNS_ZONE}" --yes
 az group delete -n "$RG" --yes --no-wait
 ```

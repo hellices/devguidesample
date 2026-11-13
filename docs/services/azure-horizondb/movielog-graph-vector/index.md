@@ -33,6 +33,12 @@ official_sources:
     url: https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure
   - title: "Quickstart: Deploy Application Gateway for Containers ALB Controller using AKS Add-on"
     url: https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-addon
+  - title: Cert-manager and Let's Encrypt with Application Gateway for Containers - Gateway API
+    url: https://learn.microsoft.com/azure/application-gateway/for-containers/how-to-cert-manager-lets-encrypt-gateway-api
+  - title: URL Redirect for Azure Application Gateway for Containers - Gateway API
+    url: https://learn.microsoft.com/azure/application-gateway/for-containers/how-to-url-redirect-gateway-api
+  - title: Application Gateway for Containers components
+    url: https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-components
   - title: Autoinstrument AKS apps with Azure Monitor Application Insights
     url: https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless
   - title: Use Microsoft Entra Workload ID with Azure Kubernetes Service (AKS)
@@ -120,16 +126,17 @@ Learn 목록보다 실제 cluster의 버전이 더 높았습니다.
 
 ## 아키텍처: AGFC → AKS MovieLog → HorizonDB { #architecture }
 
-요청은 Application Gateway for Containers(AGFC)를 거쳐 AKS의 MovieLog Pod로 들어오고,
+요청은 커스텀 도메인의 HTTPS로 Application Gateway for Containers(AGFC)를 거쳐 AKS의 MovieLog Pod로 들어오고,
 앱은 Azure OpenAI로 질의를 임베딩한 뒤 HorizonDB에 SQL과 openCypher를 보냅니다.
 카탈로그와 그래프는 배치 로더가 한 번 만들고, 텔레메트리는 Application Insights를 거쳐
 Managed Grafana에서 봅니다.
 
-![MovieLog on Azure HorizonDB 아키텍처. 브라우저가 HTTP로 App Gateway for Containers에 들어오고, AKS 관리형 VNet 안의 MovieLog 앱이 Azure OpenAI에 질의 임베딩을 요청한 뒤 Azure HorizonDB에 SQL과 Cypher를 보냄. HorizonDB 안에는 관계형 테이블, pgvector와 DiskANN, Apache AGE movie_graph가 있음. 카탈로그 로더는 Wikidata와 Wikipedia 데이터를 HorizonDB에 적재하고 Azure OpenAI로 문서를 임베딩함. MovieLog의 텔레메트리는 Application Insights로, Application Insights는 KQL로 Managed Grafana에 연결됨](images/architecture.svg)
+![MovieLog on Azure HorizonDB 아키텍처. 브라우저가 HTTPS로 App Gateway for Containers에 들어오고(cert-manager가 발급한 Let's Encrypt 인증서), AKS 관리형 VNet 안의 MovieLog 앱이 Azure OpenAI에 질의 임베딩을 요청한 뒤 Azure HorizonDB에 SQL과 Cypher를 보냄. HorizonDB 안에는 관계형 테이블, pgvector와 DiskANN, Apache AGE movie_graph가 있음. 카탈로그 로더는 Wikidata와 Wikipedia 데이터를 HorizonDB에 적재하고 Azure OpenAI로 문서를 임베딩함. MovieLog의 텔레메트리는 Application Insights로, Application Insights는 KQL로 Managed Grafana에 연결됨](images/architecture.svg)
 
 | 구성 요소 | 역할 | 구성 |
 |---|---|---|
-| App Gateway for Containers | 공개 진입점 | AKS add-on의 ALB Controller, `Gateway`·`HTTPRoute`, 로그인 session을 한 Pod에 묶는 `RoutePolicy` managed cookie |
+| App Gateway for Containers | 공개 진입점, TLS 종료 | AKS add-on의 ALB Controller, 커스텀 도메인의 HTTP·HTTPS listener, HTTP→HTTPS 301 redirect, 로그인 session을 한 Pod에 묶는 `RoutePolicy` managed cookie |
+| cert-manager | 인증서 발급·갱신 | Let's Encrypt `ClusterIssuer`, Gateway API HTTP-01 challenge, `Certificate`가 만든 TLS secret을 HTTPS listener가 참조 |
 | MovieLog 앱 | 의미 검색·그래프 API와 화면 | Spring Boot 4.1, Pod 2개, workload identity로 Azure OpenAI 호출 |
 | Azure HorizonDB | 관계형·벡터·그래프 저장과 조회 | 위 [리소스 구조](#resource-model)와 [확장](#extensions) |
 | Azure OpenAI | 문서·질의 임베딩 | `text-embedding-3-large`, `dimensions=1536`, key 인증 없이 Entra token |
@@ -363,11 +370,21 @@ topic에서 이어 받았습니다.
   2026-11-13 현재 모두 미리 보기입니다. CLI와 API 구조가 Learn 예제와 달랐으므로 사용 전
   `az horizondb -h`와 provider의 API 버전을 확인합니다.
 - **AGFC와 NSG** — AKS 관리형 VNet을 쓰면 add-on이 `aks-appgateway` 서브넷을 만듭니다.
-  실습에서는 이 서브넷 NSG에 Internet 허용 규칙을 넣어야 frontend에 접속됐습니다. 실습 구독에서는 Internet의 모든 포트를 여는
-  규칙을 만든 지 약 25분 뒤 조직 보안 자동화가 규칙을 지워 접속이 끊겼습니다. TCP 80만
-  여는 규칙은 이후 30분 이상 유지됐습니다.
+  실습에서는 이 서브넷 NSG에 Internet에서 TCP 80·443을 허용하는 규칙을 넣어야 frontend에
+  접속됐습니다. 실습 구독에서는 Internet의 모든 포트를 여는 규칙을 만든 지 약 25분 뒤 조직 보안
+  자동화가 규칙을 지워 접속이 끊겼고, 포트를 지정한 규칙은 유지됐습니다.
+- **HTTPS와 커스텀 도메인** — 회원 가입과 form login이 있어 HTTP로는 비밀번호와 session cookie가
+  평문으로 전달됩니다. 그래서 커스텀 도메인의 CNAME을 Gateway 주소로 향하게 하고,
+  [cert-manager와 Let's Encrypt](https://learn.microsoft.com/azure/application-gateway/for-containers/how-to-cert-manager-lets-encrypt-gateway-api)로
+  HTTPS listener의 인증서를 발급했습니다. HTTP listener는 HTTP-01 challenge만 응답하고 나머지는
+  HTTPS로 301 redirect합니다. 실측에서 인증서 발급은 약 45초 걸렸고, AGFC가 넘기는
+  `x-forwarded-proto` 덕분에 앱의 로그인 redirect는 `https://` 주소로, `JSESSIONID`는 `Secure`로
+  나왔습니다. listener에 hostname을 지정해 AGFC 기본 FQDN으로 들어온 요청은 404가 됩니다.
 - **공개 범위** — 회원 가입과 Azure OpenAI를 호출하는 의미 검색이 인증 없이 열리므로
-  실습이 끝나면 NSG 규칙과 resource group을 지웁니다.
+  실습이 끝나면 NSG 규칙, DNS 레코드와 resource group을 지웁니다.
+- **클러스터 자동 중지** — 실습 구독에서는 조직 자동화가 자정 무렵 AKS 클러스터를 중지했습니다.
+  다음 날 다시 볼 때는 `az aks start`로 시작합니다. 인증서와 Gateway 구성은 재시작 뒤에도
+  유지됐습니다.
 
 ## 공식 참고 자료
 
@@ -383,6 +400,9 @@ topic에서 이어 받았습니다.
 - [AI Model Management in Azure HorizonDB (Preview)](https://learn.microsoft.com/azure/horizondb/ai/ai-model-management)
 - [Foundry Models sold by Azure](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure)
 - [Quickstart: Deploy Application Gateway for Containers ALB Controller using AKS Add-on](https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-addon)
+- [Cert-manager and Let's Encrypt with Application Gateway for Containers - Gateway API](https://learn.microsoft.com/azure/application-gateway/for-containers/how-to-cert-manager-lets-encrypt-gateway-api)
+- [URL Redirect for Azure Application Gateway for Containers - Gateway API](https://learn.microsoft.com/azure/application-gateway/for-containers/how-to-url-redirect-gateway-api)
+- [Application Gateway for Containers components](https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-components)
 - [Autoinstrument AKS apps with Azure Monitor Application Insights](https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless)
 - [Use Microsoft Entra Workload ID with Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/workload-identity-overview)
 - [Apache AGE](https://github.com/apache/age)

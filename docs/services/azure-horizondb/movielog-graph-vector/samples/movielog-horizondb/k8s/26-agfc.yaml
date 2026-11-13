@@ -1,7 +1,10 @@
 # Public access through Application Gateway for Containers (AKS add-on, ALB Controller).
 # ALB_SUBNET_ID: the aks-appgateway subnet the add-on uses in the AKS managed VNet, for example
 #   az network vnet list -g <node-resource-group> --query "[].subnets[?name=='aks-appgateway'][].id | [0]" -o tsv
-# The subnet NSG applies to the association, so it needs an inbound rule for the frontend port.
+# The subnet NSG applies to the association, so it needs inbound rules for the frontend ports (80, 443).
+# APP_HOST: the custom domain name whose CNAME points at the Gateway address. The https listener uses the
+#   movielog-tls secret that cert-manager issues from Let's Encrypt (27-tls.yaml); the http listener only
+#   answers the HTTP-01 challenge and redirects everything else to https.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -28,8 +31,19 @@ spec:
   gatewayClassName: azure-alb-external
   listeners:
     - name: http
+      hostname: "${APP_HOST}"
       port: 80
       protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      hostname: "${APP_HOST}"
+      port: 443
+      protocol: HTTPS
+      tls:
+        certificateRefs:
+          - name: movielog-tls
       allowedRoutes:
         namespaces:
           from: Same
@@ -42,10 +56,33 @@ metadata:
 spec:
   parentRefs:
     - name: movielog
+      sectionName: https
+  hostnames:
+    - "${APP_HOST}"
   rules:
     - backendRefs:
         - name: movielog
           port: 80
+---
+# Plain HTTP carries no app traffic: sign-up and login only run over https. cert-manager adds its own
+# HTTPRoute for /.well-known/acme-challenge/<token>, a more specific path match that takes precedence.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: movielog-http-redirect
+  namespace: movielog
+spec:
+  parentRefs:
+    - name: movielog
+      sectionName: http
+  hostnames:
+    - "${APP_HOST}"
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
 ---
 # Login sessions live in Pod memory, so pin each client to one Pod with the gateway-managed
 # AGCAffinity cookie, set on the first response before the app creates JSESSIONID.
