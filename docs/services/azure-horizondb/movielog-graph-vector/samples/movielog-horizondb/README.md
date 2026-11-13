@@ -52,7 +52,8 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
   Azure OpenAI를 호출하므로, 앱이 Azure OpenAI를 부르기 전에 Pod마다 클라이언트 주소당 분당
   30건(`DISCOVER_RATE_LIMIT_PER_CLIENT`)과 전체 분당 300건(`DISCOVER_RATE_LIMIT_TOTAL`)으로
   제한합니다. 넘으면 API는 429, 화면은 안내 문구를 돌려줍니다. 클라이언트 주소는 AGFC가 넘기는
-  `x-forwarded-for`에서 Tomcat이 얻습니다. 한도는 Pod 메모리에 있어 replica 수만큼 늘어나며,
+  `x-forwarded-for`에서 Tomcat이 얻습니다. 카운터는 분마다 비우고 한 분에 주소 1만 개까지만
+  추적해 그 이상 새 주소는 다음 분까지 거부합니다. 한도는 Pod 메모리에 있어 replica 수만큼 늘어나며,
   Azure OpenAI deployment의 용량(실습은 GlobalStandard 150K TPM)이 마지막 상한입니다.
 
 - **질의 임베딩은 앱에서 합니다.** HorizonDB `azure_ai` 2.5.6은 `azure_ai.set_setting`을

@@ -123,7 +123,7 @@ function renderRelationList(view, base) {
 }
 
 async function render() {
-	if (!container || typeof window.cytoscape !== "function") {
+	if (!container) {
 		return;
 	}
 	let view;
@@ -144,6 +144,11 @@ async function render() {
 	}
 	const base = container.dataset.graphUrl || container.dataset.movieUrl;
 	renderRelationList(view, base);
+	// The text list needs no library; only the canvas does (the CDN may be blocked).
+	if (typeof window.cytoscape !== "function") {
+		container.textContent = "그래프 라이브러리를 불러오지 못했습니다. 아래 관계 목록에서 같은 관계를 볼 수 있습니다.";
+		return;
+	}
 	const cy = window.cytoscape({
 		container,
 		elements: toElements(view),

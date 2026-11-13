@@ -5,75 +5,85 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
  * Fixed one-minute windows per client address and for all clients, checked before each query embedding so that
  * anonymous traffic cannot spend Azure OpenAI quota without bound. Counts live in Pod memory, so the effective
- * limits scale with the replica count.
+ * limits scale with the replica count. The client map is cleared once per minute and holds at most
+ * {@code maxTrackedClients} addresses; new addresses beyond that are refused until the next minute.
  */
 @Component
 class DiscoverRateLimiter {
 
-	private static final int MAX_TRACKED_CLIENTS = 10_000;
+	static final int MAX_TRACKED_CLIENTS = 10_000;
 
 	private final DiscoverRateLimitProperties properties;
 
 	private final Clock clock;
 
-	private final ConcurrentMap<String, Window> clients = new ConcurrentHashMap<>();
+	private final int maxTrackedClients;
 
-	private volatile Window total = new Window(-1);
+	private final ConcurrentMap<String, AtomicInteger> clients = new ConcurrentHashMap<>();
 
+	private final AtomicInteger total = new AtomicInteger();
+
+	private volatile long minute = Long.MIN_VALUE;
+
+	@Autowired
 	DiscoverRateLimiter(DiscoverRateLimitProperties properties, Clock clock) {
+		this(properties, clock, MAX_TRACKED_CLIENTS);
+	}
+
+	DiscoverRateLimiter(DiscoverRateLimitProperties properties, Clock clock, int maxTrackedClients) {
 		this.properties = properties;
 		this.clock = clock;
+		this.maxTrackedClients = maxTrackedClients;
 	}
 
 	/** Counts one search for the client, or returns false without counting when a cap is reached. */
 	boolean tryAcquire(String client) {
-		long minute = clock.millis() / 60_000;
-		if (clients.size() > MAX_TRACKED_CLIENTS) {
-			clients.values().removeIf(window -> window.minute != minute);
-		}
-		Window clientWindow = clients.compute(client,
-				(key, window) -> (window == null || window.minute != minute) ? new Window(minute) : window);
-		if (!clientWindow.tryIncrement(properties.perClientPerMinute())) {
+		rollOver(clock.millis() / 60_000);
+		int totalLimit = properties.totalPerMinute();
+		if (totalLimit > 0 && total.get() >= totalLimit) {
 			return false;
 		}
-		Window totalWindow = total;
-		if (totalWindow.minute != minute) {
-			synchronized (this) {
-				if (total.minute != minute) {
-					total = new Window(minute);
-				}
-				totalWindow = total;
+		AtomicInteger count = clients.get(client);
+		if (count == null) {
+			if (clients.size() >= maxTrackedClients) {
+				return false;
 			}
+			count = clients.computeIfAbsent(client, key -> new AtomicInteger());
 		}
-		if (!totalWindow.tryIncrement(properties.totalPerMinute())) {
-			clientWindow.count.decrementAndGet();
+		if (!tryIncrement(count, properties.perClientPerMinute())) {
+			return false;
+		}
+		if (!tryIncrement(total, totalLimit)) {
+			count.decrementAndGet();
 			return false;
 		}
 		return true;
 	}
 
-	private static final class Window {
-
-		final long minute;
-
-		final AtomicInteger count = new AtomicInteger();
-
-		Window(long minute) {
-			this.minute = minute;
-		}
-
-		boolean tryIncrement(int limit) {
-			if (limit <= 0) {
-				return true;
+	private void rollOver(long now) {
+		if (now != minute) {
+			synchronized (this) {
+				if (now != minute) {
+					clients.clear();
+					total.set(0);
+					minute = now;
+				}
 			}
-			return count.getAndUpdate(current -> (current < limit) ? current + 1 : current) < limit;
 		}
+	}
 
+	private static boolean tryIncrement(AtomicInteger count, int limit) {
+		if (limit <= 0) {
+			count.incrementAndGet();
+			return true;
+		}
+		return count.getAndUpdate(current -> (current < limit) ? current + 1 : current) < limit;
 	}
 
 }

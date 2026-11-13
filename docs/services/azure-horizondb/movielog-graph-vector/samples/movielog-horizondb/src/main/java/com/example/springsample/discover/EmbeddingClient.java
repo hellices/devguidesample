@@ -3,6 +3,7 @@ package com.example.springsample.discover;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import com.azure.core.credential.AccessToken;
 import com.azure.core.credential.TokenCredential;
@@ -10,6 +11,7 @@ import com.azure.core.credential.TokenRequestContext;
 import com.azure.core.exception.ClientAuthenticationException;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -30,13 +32,23 @@ class EmbeddingClient {
 
 	private final RestClient rest;
 
+	private final Supplier<TokenCredential> credentialFactory;
+
 	private volatile TokenCredential credential;
 
 	private volatile AccessToken token;
 
+	@Autowired
 	EmbeddingClient(EmbeddingProperties properties, RestClient.Builder builder) {
+		this(properties, builder, () -> new DefaultAzureCredentialBuilder().build());
+	}
+
+	/** The credential is created on the first call, so startup works without an Azure login. */
+	EmbeddingClient(EmbeddingProperties properties, RestClient.Builder builder,
+			Supplier<TokenCredential> credentialFactory) {
 		this.properties = properties;
 		this.rest = builder.clone().baseUrl(properties.endpoint()).build();
+		this.credentialFactory = credentialFactory;
 	}
 
 	boolean isEnabled() {
@@ -83,7 +95,7 @@ class EmbeddingClient {
 				current = token;
 				if (current == null || current.getExpiresAt().isBefore(OffsetDateTime.now().plusMinutes(5))) {
 					if (credential == null) {
-						credential = new DefaultAzureCredentialBuilder().build();
+						credential = credentialFactory.get();
 					}
 					current = credential.getTokenSync(SCOPE);
 					token = current;

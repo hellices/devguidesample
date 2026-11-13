@@ -40,6 +40,19 @@ class DiscoverRateLimiterTests {
 	}
 
 	@Test
+	void refusesNewClientsBeyondTheTrackedLimitUntilTheNextMinute() {
+		var limiter = new DiscoverRateLimiter(new DiscoverRateLimitProperties(5, 0), clock, 2);
+
+		assertThat(limiter.tryAcquire("a")).isTrue();
+		assertThat(limiter.tryAcquire("b")).isTrue();
+		assertThat(limiter.tryAcquire("c")).isFalse();
+		assertThat(limiter.tryAcquire("a")).isTrue();
+
+		clock.now = clock.now.plusSeconds(60);
+		assertThat(limiter.tryAcquire("c")).isTrue();
+	}
+
+	@Test
 	void truncatesQueriesOnCodePointBoundaries() {
 		String text = "a".repeat(3) + "😀" + "b";
 
