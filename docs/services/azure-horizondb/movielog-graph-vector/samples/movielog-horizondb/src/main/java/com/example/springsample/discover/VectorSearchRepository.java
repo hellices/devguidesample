@@ -35,11 +35,13 @@ class VectorSearchRepository {
 			.list();
 	}
 
+	/** Empty when the movie has no embedding, instead of unrelated movies scored from a NULL distance. */
 	List<MovieHit> similar(long tmdbId, int limit) {
 		return jdbc.sql("""
 				SELECT %s, 1 - (d.embedding <=> (SELECT embedding FROM catalog.movie_docs WHERE tmdb_id = :tmdbId)) AS score
 				FROM catalog.movie_docs d JOIN public.movies m ON m.tmdb_id = d.tmdb_id
 				WHERE d.tmdb_id <> :tmdbId AND d.embedding IS NOT NULL
+				  AND EXISTS (SELECT 1 FROM catalog.movie_docs WHERE tmdb_id = :tmdbId AND embedding IS NOT NULL)
 				ORDER BY d.embedding <=> (SELECT embedding FROM catalog.movie_docs WHERE tmdb_id = :tmdbId)
 				LIMIT :limit""".formatted(COLUMNS))
 			.param("tmdbId", tmdbId)

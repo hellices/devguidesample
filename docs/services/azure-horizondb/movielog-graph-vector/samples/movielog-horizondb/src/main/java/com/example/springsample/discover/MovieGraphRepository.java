@@ -96,7 +96,7 @@ class MovieGraphRepository {
 		}
 		if (onlyShared) {
 			Set<String> keep = new HashSet<>();
-			Map<String, Integer> focusDegree = new HashMap<>();
+			Map<String, Set<String>> linkedFocus = new HashMap<>();
 			for (GraphView.Node node : nodes.values()) {
 				if (node.focus()) {
 					keep.add(node.id());
@@ -104,14 +104,16 @@ class MovieGraphRepository {
 			}
 			for (GraphView.Edge edge : edges.values()) {
 				if (keep.contains(edge.source()) && !keep.contains(edge.target())) {
-					focusDegree.merge(edge.target(), 1, Integer::sum);
+					linkedFocus.computeIfAbsent(edge.target(), id -> new HashSet<>()).add(edge.source());
 				}
 				else if (keep.contains(edge.target()) && !keep.contains(edge.source())) {
-					focusDegree.merge(edge.source(), 1, Integer::sum);
+					linkedFocus.computeIfAbsent(edge.source(), id -> new HashSet<>()).add(edge.target());
 				}
 			}
-			focusDegree.forEach((id, degree) -> {
-				if (degree >= 2) {
+			// A neighbor stays only when it links two different result movies, not two edges to the same one
+			// (for example a director who also acted in that movie).
+			linkedFocus.forEach((id, focus) -> {
+				if (focus.size() >= 2) {
 					keep.add(id);
 				}
 			});

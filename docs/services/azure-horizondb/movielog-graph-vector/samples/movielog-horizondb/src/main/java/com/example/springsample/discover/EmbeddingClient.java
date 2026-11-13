@@ -7,6 +7,7 @@ import java.util.Map;
 import com.azure.core.credential.AccessToken;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.credential.TokenRequestContext;
+import com.azure.core.exception.ClientAuthenticationException;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.http.MediaType;
@@ -47,11 +48,12 @@ class EmbeddingClient {
 			throw new EmbeddingUnavailableException("Embedding endpoint is not configured (AZURE_OPENAI_ENDPOINT)", null);
 		}
 		try {
+			String bearer = accessToken();
 			EmbeddingResponse response = rest.post()
 				.uri("/openai/deployments/{deployment}/embeddings?api-version={version}", properties.deployment(),
 						properties.apiVersion())
 				.contentType(MediaType.APPLICATION_JSON)
-				.headers(headers -> headers.setBearerAuth(accessToken()))
+				.headers(headers -> headers.setBearerAuth(bearer))
 				.body(Map.of("input", text, "dimensions", properties.dimensions()))
 				.retrieve()
 				.body(EmbeddingResponse.class);
@@ -64,6 +66,9 @@ class EmbeddingClient {
 				vector[i] = values.get(i);
 			}
 			return vector;
+		}
+		catch (ClientAuthenticationException ex) {
+			throw new EmbeddingUnavailableException("Microsoft Entra token for Azure OpenAI is unavailable", ex);
 		}
 		catch (RestClientException ex) {
 			throw new EmbeddingUnavailableException("Azure OpenAI embedding call failed", ex);

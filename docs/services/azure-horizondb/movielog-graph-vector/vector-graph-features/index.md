@@ -155,6 +155,10 @@ LIMIT 10;
 - **MovieLog에 적용할 때** — 현재 질의는 필터 없이 `public.movies`와 join합니다. 이 제약에
   따르면 장르 조건을 index 안에서 거르려면 `catalog.movie_genres` join이 아니라
   `movie_docs`에 장르 열을 두어야 합니다. 실습에서는 측정하지 않았습니다.
+- **선택도 판정** — 실습 cluster에서 `embedding IS NOT NULL AND tmdb_id <> :id`처럼 거의 모든
+  행이 통과하는 조건을 붙이면 `pg_diskann: Filter selectivity too high (0.9979), skipping
+  filtered vector scan` NOTICE를 내고 필터 탐색을 건너뛰었습니다. 이 질의는 `public.movies`와
+  join해, seq scan을 꺼도 DiskANN 대신 정렬 계획을 썼습니다.
 
 ## 그래프 저장 구조: graph는 schema, label은 테이블 { #age-storage }
 
