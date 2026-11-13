@@ -57,6 +57,8 @@ class DiscoverRateLimiter {
 
 		final AtomicInteger total = new AtomicInteger();
 
+		final AtomicInteger tracked = new AtomicInteger();
+
 		Window(long minute) {
 			this.minute = minute;
 		}
@@ -67,10 +69,19 @@ class DiscoverRateLimiter {
 			}
 			AtomicInteger count = clients.get(client);
 			if (count == null) {
-				if (clients.size() >= maxClients) {
+				// Reserve a slot before inserting so concurrent new addresses cannot exceed maxClients.
+				if (!tryIncrement(tracked, maxClients)) {
 					return false;
 				}
-				count = clients.computeIfAbsent(client, key -> new AtomicInteger());
+				AtomicInteger created = new AtomicInteger();
+				AtomicInteger existing = clients.putIfAbsent(client, created);
+				if (existing != null) {
+					tracked.decrementAndGet();
+					count = existing;
+				}
+				else {
+					count = created;
+				}
 			}
 			if (!tryIncrement(count, perClient)) {
 				return false;

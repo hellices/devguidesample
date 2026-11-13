@@ -79,6 +79,28 @@ class DiscoverRateLimiterTests {
 	}
 
 	@Test
+	void concurrentNewClientsNeverExceedTheTrackedLimit() throws Exception {
+		var limiter = new DiscoverRateLimiter(new DiscoverRateLimitProperties(1, 0), clock, 10);
+		AtomicInteger granted = new AtomicInteger();
+		CountDownLatch start = new CountDownLatch(1);
+		try (ExecutorService pool = Executors.newFixedThreadPool(16)) {
+			for (int i = 0; i < 500; i++) {
+				String client = "client-" + i;
+				pool.submit(() -> {
+					start.await();
+					if (limiter.tryAcquire(client)) {
+						granted.incrementAndGet();
+					}
+					return null;
+				});
+			}
+			start.countDown();
+		}
+
+		assertThat(granted).hasValue(10);
+	}
+
+	@Test
 	void truncatesQueriesOnCodePointBoundaries() {
 		String text = "a".repeat(3) + "😀" + "b";
 
