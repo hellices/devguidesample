@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -51,6 +52,15 @@ class VectorSearchRepository {
 			.param("limit", limit)
 			.query(VectorSearchRepository::hit)
 			.list();
+	}
+
+	/** Wikipedia article the stored overview of a catalog movie was taken from, for attribution. */
+	@Nullable String overviewSource(long tmdbId) {
+		return jdbc.sql("SELECT source_url FROM catalog.movie_docs WHERE tmdb_id = :tmdbId")
+			.param("tmdbId", tmdbId)
+			.query(String.class)
+			.optional()
+			.orElse(null);
 	}
 
 	/** pgvector text form: [0.1,0.2,...]. */

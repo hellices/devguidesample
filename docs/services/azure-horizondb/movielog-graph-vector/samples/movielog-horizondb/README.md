@@ -194,13 +194,13 @@ PGDATABASE=movielog psql -f db/10-schema.sql
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.1.9 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.1.10 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.1.9"
+export APP_IMAGE="$ACR_SERVER/movielog:2.1.10"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -
@@ -330,7 +330,9 @@ rm /tmp/live.json
 
 카탈로그 구조는 [Wikidata](https://www.wikidata.org/)(CC0), 요약은
 [Wikipedia](https://www.wikipedia.org/)([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/))에서
-가져옵니다. 생성된 `data/out/`은 커밋하지 않습니다.
+가져옵니다. 앱의 검색 결과와 영화 상세 화면은 줄거리 아래에 원문 Wikipedia 문서 링크와 라이선스를
+표시하고, 임베딩 문서에만 쓰는 영어 요약의 출처는 `catalog.movie_docs.summary_en_source`에 기록합니다.
+생성된 `data/out/`은 커밋하지 않습니다.
 
 ## 정리
 

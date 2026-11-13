@@ -7,6 +7,7 @@ import java.util.function.Supplier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -70,6 +71,17 @@ public class DiscoverService {
 	public List<MovieHit> similar(long tmdbId, int limit) {
 		return timed("movielog.discover.similar", "vector",
 				() -> vectors.similar(tmdbId, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
+	}
+
+	/** Source article of the movie's overview, or null when unknown or the catalog cannot be read. */
+	public @Nullable String overviewSource(long tmdbId) {
+		try {
+			return vectors.overviewSource(tmdbId);
+		}
+		catch (DataAccessException ex) {
+			logger.warn("overview source lookup failed: {}", ex.getMostSpecificCause().getMessage());
+			return null;
+		}
 	}
 
 	public GraphView movieGraph(long tmdbId) {

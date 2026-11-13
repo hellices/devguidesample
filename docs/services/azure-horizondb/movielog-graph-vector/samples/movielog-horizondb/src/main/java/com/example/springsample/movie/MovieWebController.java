@@ -54,6 +54,7 @@ class MovieWebController {
 		model.addAttribute("slice", reviewService.forMovie(tmdbId, null, ReviewService.DEFAULT_SLICE_SIZE));
 		model.addAttribute("pageSize", ReviewService.DEFAULT_SLICE_SIZE);
 		model.addAttribute("myReviewId", (user == null) ? null : reviewService.findOwnReviewId(tmdbId, user.getUsername()));
+		model.addAttribute("overviewSource", discoverService.overviewSource(tmdbId));
 		try {
 			model.addAttribute("similar", discoverService.similar(tmdbId, 6));
 		}
