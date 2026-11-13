@@ -9,7 +9,10 @@ import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Nearest-neighbor search over {@code catalog.movie_docs.embedding} (pgvector, DiskANN index, cosine distance). */
+/**
+ * Nearest-neighbor search over {@code catalog.movie_docs.embedding} by pgvector cosine distance. A DiskANN index
+ * exists, but with a few hundred rows the planner usually prefers a sequential scan.
+ */
 @Repository
 class VectorSearchRepository {
 

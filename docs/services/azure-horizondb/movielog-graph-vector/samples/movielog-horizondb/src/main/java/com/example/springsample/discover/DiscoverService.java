@@ -13,7 +13,8 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 /**
- * Semantic search (Azure OpenAI query embedding, HorizonDB pgvector + DiskANN) and graph exploration (Apache AGE).
+ * Semantic search (query embedded in the app with Azure OpenAI, pgvector cosine distance in HorizonDB) and graph
+ * exploration (Apache AGE).
  * Each call is timed as {@code movielog.discover.*} with an {@code outcome} tag so the AKS
  * Application Insights agent exports it to customMetrics next to the other movielog meters.
  */

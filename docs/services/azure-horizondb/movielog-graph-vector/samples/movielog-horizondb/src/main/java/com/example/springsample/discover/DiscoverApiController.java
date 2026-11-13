@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Discover", description = "HorizonDB 벡터 검색(DiskANN)과 Apache AGE 영화 그래프")
+@Tag(name = "Discover", description = "HorizonDB pgvector 벡터 검색과 Apache AGE 영화 그래프")
 @RestController
 @RequestMapping("/api/discover")
 @RequiredArgsConstructor

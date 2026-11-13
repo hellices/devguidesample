@@ -15,9 +15,10 @@
 	</form>
 
 	<p class="secondary-text" th:if="${#strings.isEmpty(q)}">
-		질의는 HorizonDB 안에서 <code>azure_openai.create_embeddings()</code>로 임베딩되고,
-		DiskANN 인덱스로 영화 문서 임베딩과 코사인 거리를 비교합니다. 결과 영화들 사이의 공통 감독·배우·장르는
-		Apache AGE 그래프로 함께 보여 줍니다.
+		질의는 앱이 Azure OpenAI <code>text-embedding-3-large</code>로 임베딩하고, HorizonDB가 pgvector
+		코사인 거리(<code>&lt;=&gt;</code>)로 영화 문서 임베딩과 비교합니다. DiskANN 인덱스가 있지만 영화 수가 적어
+		planner가 전체 비교를 고를 수 있습니다. 결과 영화들 사이의 공통 감독·배우·장르는 Apache AGE 그래프로 함께
+		보여 줍니다.
 	</p>
 
 	<article class="round error-container" th:if="${searchFailed}">
