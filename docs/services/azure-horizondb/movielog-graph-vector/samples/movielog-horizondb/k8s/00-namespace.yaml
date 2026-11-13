@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: movielog
+---
+# Workload identity: Pods using this ServiceAccount get Entra tokens for the user-assigned identity
+# (role: Cognitive Services OpenAI User on the Azure OpenAI account) to embed search queries.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: movielog
+  namespace: movielog
+  annotations:
+    azure.workload.identity/client-id: "${MI_CLIENT_ID}"

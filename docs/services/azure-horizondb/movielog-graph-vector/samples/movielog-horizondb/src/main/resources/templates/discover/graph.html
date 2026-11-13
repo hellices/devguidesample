@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(|${movie.title} 관계 그래프|)}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<h5>
+		<a class="link" th:href="@{/movies/{id}(id=${movie.tmdbId})}" th:text="${movie.title}">영화</a>
+		<span class="secondary-text">관계 그래프</span>
+	</h5>
+	<p class="secondary-text small-text">
+		감독·배우·장르, 임베딩 기반 <code>SIMILAR_TO</code> 이웃, 같은 인물이 참여한 다른 영화입니다.
+		노드를 누르면 연결된 노드만 강조하고, 영화 노드를 두 번 누르면 그 영화의 그래프로 이동합니다.
+	</p>
+	<div id="graph" class="graph-canvas graph-canvas-tall round border"
+		th:attr="data-api-url=@{/api/discover/graph/movies/{id}(id=${movie.tmdbId})},data-movie-url=@{/movies/},data-graph-url=@{/graph/movies/}"></div>
+	<nav class="wrap small-space graph-legend">
+		<span class="chip"><span class="dot dot-movie"></span>영화</span>
+		<span class="chip"><span class="dot dot-person"></span>인물</span>
+		<span class="chip"><span class="dot dot-genre"></span>장르</span>
+		<span class="chip"><span class="line line-similar"></span>SIMILAR_TO</span>
+	</nav>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:fragment="scripts">
+	<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.35.0/dist/cytoscape.min.js"
+		integrity="sha384-kp3V5E6ICGTVK17un/PMnK9szzrW0dQW+dEyUb3B7dKhimb1EVzqm1wZ/Ulo7BJf" crossorigin="anonymous"></script>
+	<!-- fCoSE layout: label-aware overlap removal. Load order matters: layout-base, cose-base, then the extension. -->
+	<script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js"
+		integrity="sha384-5E2lB9AIGE6LRCnOOSTnZRlYZFZ01iMeN2fw97Z1r4Z/kXALxKw2AC+ZzQqoeDsG" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js"
+		integrity="sha384-RswRBkrMsPUYpJLbZ1CVA08zbNzAkykE2oGJTujBwfjWNdfxv2WVjLJNqv1LhAOp" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"
+		integrity="sha384-uk5Wbjq1+KqUdHO30w7N7GrEGdzBhaJeW9o/ANF6v9+yx3M/cBmoX51C000JNCUf" crossorigin="anonymous"></script>
+	<script type="module" th:src="@{/js/graph.js}"></script>
+</th:block>
+</body>
+</html>

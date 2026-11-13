@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head(${movie.title})}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<section class="movie-hero">
+		<th:block th:replace="~{fragments/layout :: poster(${movie.posterUrl}, ${movie.title}, 'poster-large')}"></th:block>
+
+		<div class="movie-info">
+			<h4 class="movie-title">
+				<span th:text="${movie.title}">영화 제목</span>
+				<span class="secondary-text" th:if="${movie.releaseYear != null}" th:text="|(${movie.releaseYear})|">(2024)</span>
+			</h4>
+			<p class="secondary-text" th:if="${movie.originalTitle != null and movie.originalTitle != movie.title}"
+				th:text="${movie.originalTitle}">원제</p>
+			<nav class="wrap small-space">
+				<span class="chip" th:each="genre : ${movie.genres}" th:text="${genre}">장르</span>
+				<span class="chip" th:if="${movie.runtime != null}">
+					<i>schedule</i>
+					<span th:text="|${movie.runtime}분|">120분</span>
+				</span>
+				<span class="chip" th:if="${movie.releaseDate != null}">
+					<i>calendar_month</i>
+					<span th:text="${movie.releaseDate}">2024-01-01</span>
+				</span>
+			</nav>
+
+			<div class="score-grid">
+				<article class="score-card" th:classappend="${movie.rottenTomatoes == null} ? 'score-missing'">
+					<div class="score-label">로튼토마토</div>
+					<div class="score-value">
+						<span class="score-emoji" aria-hidden="true"
+							th:text="${movie.rottenTomatoes == null} ? '🍅' : (${movie.rottenTomatoesFresh()} ? '🍅' : '🤢')">🍅</span>
+						<span th:text="${movie.rottenTomatoes == null} ? '-' : |${movie.rottenTomatoes}%|">90%</span>
+					</div>
+					<div class="small-text secondary-text"
+						th:text="${movie.rottenTomatoes == null} ? '정보 없음' : (${movie.rottenTomatoesFresh()} ? '신선 (평론가)' : '썩음 (평론가)')">신선</div>
+				</article>
+				<article class="score-card" th:classappend="${movie.audienceScore == null} ? 'score-missing'">
+					<div class="score-label">무비로그 신선도</div>
+					<div class="score-value">
+						<span class="score-emoji" aria-hidden="true"
+							th:text="${movie.audienceScore == null or movie.audienceFresh()} ? '🍿' : '😴'">🍿</span>
+						<span th:text="${movie.audienceScore == null} ? '-' : |${movie.audienceScore}%|">75%</span>
+					</div>
+					<div class="small-text secondary-text"
+						th:text="${movie.reviewCount == 0} ? '아직 리뷰 없음' : |별 3.5개 이상 비율 · 리뷰 ${movie.reviewCount}개|">리뷰</div>
+				</article>
+				<article class="score-card" th:classappend="${movie.averageRating == null} ? 'score-missing'">
+					<div class="score-label">평균 별점</div>
+					<div class="score-value">
+						<span th:text="${movie.averageRating} ?: '-'">4.0</span>
+					</div>
+					<th:block th:if="${movie.averageRating != null}">
+						<span th:replace="~{fragments/layout :: stars(${movie.averageHalfStars()})}"></span>
+					</th:block>
+					<div class="small-text secondary-text" th:if="${movie.averageRating == null}">5점 만점</div>
+				</article>
+				<article class="score-card" th:if="${movie.imdbRating != null or movie.metascore != null}">
+					<div class="score-label">IMDb · 메타크리틱</div>
+					<div class="score-value">
+						<span th:text="${movie.imdbRating} ?: '-'">8.0</span>
+						<span class="secondary-text">·</span>
+						<span th:text="${movie.metascore} ?: '-'">75</span>
+					</div>
+					<div class="small-text secondary-text">10점 · 100점 만점</div>
+				</article>
+			</div>
+
+			<p class="post-content movie-overview" th:if="${movie.overview != null}" th:text="${movie.overview}">줄거리</p>
+
+			<nav>
+				<a class="button" th:if="${myReviewId == null}" th:href="@{/movies/{id}/reviews/new(id=${movie.tmdbId})}">
+					<i>rate_review</i>
+					<span>리뷰 쓰기</span>
+				</a>
+				<a class="button border" th:if="${myReviewId != null}" th:href="@{/reviews/{id}(id=${myReviewId})}">
+					<i>visibility</i>
+					<span>내 리뷰 보기</span>
+				</a>
+				<a class="button border" th:href="@{/graph/movies/{id}(id=${movie.tmdbId})}">
+					<i>hub</i>
+					<span>관계 그래프</span>
+				</a>
+			</nav>
+		</div>
+	</section>
+
+	<section id="similar" th:if="${similar != null and !similar.isEmpty()}">
+		<h6>임베딩이 비슷한 영화</h6>
+		<div class="movie-grid">
+			<a class="movie-card" th:each="hit : ${similar}" th:href="@{/movies/{id}(id=${hit.tmdbId})}">
+				<div class="poster poster-empty poster-card" role="img" th:attr="aria-label=|${hit.title} 포스터 없음|"><i>movie</i></div>
+				<div class="movie-card-title" th:text="${hit.title}">제목</div>
+				<div class="small-text secondary-text">
+					<span th:text="${hit.releaseYear} ?: '연도 미상'">2024</span>
+					· 유사도 <span th:text="${#numbers.formatDecimal(hit.score, 1, 2)}">0.80</span>
+				</div>
+			</a>
+		</div>
+	</section>
+
+	<section id="reviews">
+		<h6>리뷰 <span class="primary-text" th:text="${movie.reviewCount}">0</span></h6>
+		<div class="infinite" data-renderer="review" data-cursor-param="cursor"
+			th:attr="data-api-url=@{/api/movies/{id}/reviews(id=${movie.tmdbId})},data-review-url=@{/reviews/},
+				data-movie-url=@{/movies/},data-param-size=${pageSize},data-next=${slice.nextCursor},data-has-next=${slice.hasNext}">
+			<ul class="list border review-list" data-items>
+				<th:block th:each="review : ${slice.items}">
+					<li th:replace="~{reviews/fragments :: item(${review})}"></li>
+				</th:block>
+			</ul>
+			<th:block th:replace="~{reviews/fragments :: scroll-status}"></th:block>
+			<p class="secondary-text" th:if="${slice.items.isEmpty()}">아직 리뷰가 없습니다. 첫 리뷰를 남겨 보세요!</p>
+		</div>
+		<template th:replace="~{reviews/fragments :: item-template}"></template>
+	</section>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<script type="module" th:src="@{/js/infinite-scroll.js}"></script>
+</body>
+</html>

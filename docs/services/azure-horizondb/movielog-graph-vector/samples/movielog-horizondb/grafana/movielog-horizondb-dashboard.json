@@ -1,0 +1,774 @@
+{
+ "title": "MovieLog · HorizonDB 의미 검색과 그래프",
+ "uid": "movielog-horizondb-discover",
+ "tags": [
+  "movielog",
+  "horizondb",
+  "age",
+  "pgvector"
+ ],
+ "timezone": "browser",
+ "editable": true,
+ "graphTooltip": 1,
+ "refresh": "1m",
+ "time": {
+  "from": "now-1h",
+  "to": "now"
+ },
+ "schemaVersion": 39,
+ "templating": {
+  "list": [
+   {
+    "name": "datasource",
+    "label": "Azure Monitor",
+    "type": "datasource",
+    "query": "grafana-azure-monitor-datasource",
+    "current": {},
+    "hide": 0
+   },
+   {
+    "name": "appinsights",
+    "label": "Application Insights resource ID",
+    "type": "textbox",
+    "query": "",
+    "current": {
+     "text": "",
+     "value": ""
+    },
+    "hide": 0
+   },
+   {
+    "name": "role",
+    "label": "cloud_RoleName",
+    "type": "textbox",
+    "query": "movielog",
+    "current": {
+     "text": "movielog",
+     "value": "movielog"
+    },
+    "hide": 0
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "row",
+   "title": "의미 검색과 그래프 (movielog.discover.* Micrometer Timer)",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 0
+   },
+   "panels": []
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "의미 검색 수",
+   "description": "movielog_discover_search 호출 수 합계(valueCount).",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 5,
+    "x": 0,
+    "y": 1
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_search\"\n| summarize calls = sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "blue"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "sum"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto"
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "평균 질의 임베딩 (ms)",
+   "description": "Azure OpenAI text-embedding-3-large 호출 시간. Entra token 발급 포함. sum(valueSum)/sum(valueCount).",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 5,
+    "x": 5,
+    "y": 1
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_embedding\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "purple"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "mean"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto"
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "평균 벡터 검색 (ms)",
+   "description": "HorizonDB pgvector 코사인 거리 정렬(DiskANN 인덱스) 시간. sum(valueSum)/sum(valueCount).",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 5,
+    "x": 10,
+    "y": 1
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_search\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "green"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "mean"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto"
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "평균 그래프 조회 (ms)",
+   "description": "Apache AGE openCypher 조회 시간. kind=movie(주변)와 results(결과 사이) 합산. sum(valueSum)/sum(valueCount).",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 5,
+    "x": 15,
+    "y": 1
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_graph\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "orange"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "mean"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto"
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "실패한 호출",
+   "description": "outcome=error인 discover 호출 수. 카탈로그·그래프 미적재, DB 또는 Azure OpenAI 오류.",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 5,
+    "w": 4,
+    "x": 20,
+    "y": 1
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name startswith \"movielog_discover_\"\n| where tostring(customDimensions.outcome) == \"error\"\n| summarize errors = sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "noValue": "0",
+     "color": {
+      "mode": "thresholds"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "sum"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto"
+   }
+  },
+  {
+   "id": 7,
+   "type": "timeseries",
+   "title": "단계별 평균 지연",
+   "description": "임베딩·벡터 검색·유사 영화·그래프(movie/results)의 분당 평균 시간.",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 0,
+    "y": 6
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name startswith \"movielog_discover_\"\n| extend series = strcat(replace_string(name, \"movielog_discover_\", \"\"), \"/\", tostring(customDimensions.kind))\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "type": "timeseries",
+   "title": "단계별 호출 수",
+   "description": "분당 호출 수(valueCount 합).",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 9,
+    "w": 12,
+    "x": 12,
+    "y": 6
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name startswith \"movielog_discover_\"\n| extend series = strcat(replace_string(name, \"movielog_discover_\", \"\"), \"/\", tostring(customDimensions.kind))\n| summarize calls = sum(valueCount) by bin(timestamp, max_of($__interval, 1m)), series\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "drawStyle": "bars",
+      "stacking": {
+       "mode": "normal"
+      },
+      "fillOpacity": 80
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "sum"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 9,
+   "type": "row",
+   "title": "HorizonDB · Azure OpenAI 의존성 (AKS 자동 계측 dependencies)",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 15
+   },
+   "panels": []
+  },
+  {
+   "id": 10,
+   "type": "timeseries",
+   "title": "HorizonDB SQL 호출 수와 평균 시간",
+   "description": "type=postgresql dependency. 왼쪽 축 분당 호출, 오른쪽 축 평균 ms.",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 16
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where type == \"postgresql\"\n| summarize calls = count(), avg_ms = avg(duration) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "axisPlacement": "auto"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "avg_ms"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "ms"
+       },
+       {
+        "id": "custom.axisPlacement",
+        "value": "right"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 11,
+   "type": "timeseries",
+   "title": "Azure OpenAI 임베딩 호출 시간",
+   "description": "openai.azure.com HTTP dependency의 평균과 p95.",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 16
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where target endswith \"openai.azure.com\"\n| summarize avg_ms = avg(duration), p95_ms = percentile(duration, 95) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 12,
+   "type": "table",
+   "title": "HorizonDB 쿼리 유형별 시간",
+   "description": "SQL 앞부분으로 묶은 쿼리별 호출 수, 평균, p95. AGE cypher와 벡터(<=>) 쿼리를 먼저, 나머지는 호출 수 순으로 보여 줍니다.",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 10,
+    "w": 24,
+    "x": 0,
+    "y": 24
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where type == \"postgresql\"\n| extend query_kind = case(data has \"ag_catalog.cypher\", \"AGE cypher\", data has \"<=>\", \"vector <=>\", \"other\")\n| extend statement = substring(replace_regex(data, @\"\\s+\", \" \"), 0, 120)\n| summarize calls = count(), avg_ms = round(avg(duration), 1), p95_ms = round(percentile(duration, 95), 1) by query_kind, statement\n| order by iff(query_kind == \"other\", 1, 0) asc, calls desc\n| take 15",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "table"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm"
+   }
+  },
+  {
+   "id": 13,
+   "type": "row",
+   "title": "Discover HTTP 요청 (requests)",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 34
+   },
+   "panels": []
+  },
+  {
+   "id": 14,
+   "type": "timeseries",
+   "title": "엔드포인트별 p95 응답 시간",
+   "description": "discover·graph 관련 요청의 p95.",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 16,
+    "x": 0,
+    "y": 35
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "requests\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name has \"discover\" or name startswith \"GET /graph\"\n| summarize p95_ms = percentile(duration, 95) by bin(timestamp, max_of($__interval, 1m)), name\n| order by timestamp asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "time_series"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms"
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   }
+  },
+  {
+   "id": 15,
+   "type": "bargauge",
+   "title": "엔드포인트별 실패율",
+   "description": "success == false 비율(%).",
+   "datasource": {
+    "type": "grafana-azure-monitor-datasource",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 35
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-azure-monitor-datasource",
+      "uid": "${datasource}"
+     },
+     "queryType": "Azure Log Analytics",
+     "azureLogAnalytics": {
+      "query": "requests\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name has \"discover\" or name startswith \"GET /graph\"\n| summarize failed_pct = round(100.0 * countif(success == false) / count(), 2) by name\n| order by name asc",
+      "resources": [
+       "$appinsights"
+      ],
+      "resultFormat": "table"
+     }
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "min": 0,
+     "max": 100,
+     "noValue": "0"
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "basic",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": true
+    }
+   }
+  }
+ ]
+}

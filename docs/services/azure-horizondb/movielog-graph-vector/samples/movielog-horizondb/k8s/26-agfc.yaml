@@ -1,0 +1,87 @@
+# Public access through Application Gateway for Containers (AKS add-on, ALB Controller).
+# ALB_SUBNET_ID: the aks-appgateway subnet the add-on uses in the AKS managed VNet, for example
+#   az network vnet list -g <node-resource-group> --query "[].subnets[?name=='aks-appgateway'][].id | [0]" -o tsv
+# The subnet NSG applies to the association, so it needs an inbound rule for the frontend port.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: alb-infra
+---
+apiVersion: alb.networking.azure.io/v1
+kind: ApplicationLoadBalancer
+metadata:
+  name: alb-movielog
+  namespace: alb-infra
+spec:
+  associations:
+    - "${ALB_SUBNET_ID}"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: movielog
+  namespace: movielog
+  annotations:
+    alb.networking.azure.io/alb-namespace: alb-infra
+    alb.networking.azure.io/alb-name: alb-movielog
+spec:
+  gatewayClassName: azure-alb-external
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: movielog
+  namespace: movielog
+spec:
+  parentRefs:
+    - name: movielog
+  rules:
+    - backendRefs:
+        - name: movielog
+          port: 80
+---
+# Login sessions live in Pod memory, so pin each client to one Pod with the gateway-managed
+# AGCAffinity cookie, set on the first response before the app creates JSESSIONID.
+apiVersion: alb.networking.azure.io/v1
+kind: RoutePolicy
+metadata:
+  name: movielog-session-affinity
+  namespace: movielog
+spec:
+  targetRef:
+    kind: HTTPRoute
+    name: movielog
+    group: gateway.networking.k8s.io
+  default:
+    sessionAffinity:
+      affinityType: managed-cookie
+      cookieDuration: 3600s
+---
+apiVersion: alb.networking.azure.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: movielog-health
+  namespace: movielog
+spec:
+  targetRef:
+    kind: Service
+    name: movielog
+    group: ""
+  default:
+    interval: 10s
+    timeout: 5s
+    healthyThreshold: 1
+    unhealthyThreshold: 3
+    http:
+      path: /actuator/health/readiness
+      match:
+        statusCodes:
+          - start: 200
+            end: 299

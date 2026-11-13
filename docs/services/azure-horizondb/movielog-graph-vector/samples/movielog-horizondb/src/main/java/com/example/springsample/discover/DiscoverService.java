@@ -1,0 +1,93 @@
+package com.example.springsample.discover;
+
+import java.util.List;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.stereotype.Service;
+
+/**
+ * Semantic search (Azure OpenAI query embedding, HorizonDB pgvector + DiskANN) and graph exploration (Apache AGE).
+ * Each call is timed as {@code movielog.discover.*} with an {@code outcome} tag so the AKS
+ * Application Insights agent exports it to customMetrics next to the other movielog meters.
+ */
+@Service
+public class DiscoverService {
+
+	private static final Logger logger = LoggerFactory.getLogger(DiscoverService.class);
+
+	public static final int MAX_RESULTS = 30;
+
+	public static final int MAX_QUERY_LENGTH = 200;
+
+	private static final int GRAPH_CO_CREDITS = 60;
+
+	private final EmbeddingClient embeddings;
+
+	private final VectorSearchRepository vectors;
+
+	private final MovieGraphRepository graph;
+
+	private final MeterRegistry registry;
+
+	public DiscoverService(EmbeddingClient embeddings, VectorSearchRepository vectors, MovieGraphRepository graph,
+			MeterRegistry registry) {
+		this.embeddings = embeddings;
+		this.vectors = vectors;
+		this.graph = graph;
+		this.registry = registry;
+	}
+
+	public List<MovieHit> search(String query, int limit) {
+		String text = query.strip();
+		if (text.length() > MAX_QUERY_LENGTH) {
+			text = text.substring(0, MAX_QUERY_LENGTH);
+		}
+		String input = text;
+		float[] embedding = timed("movielog.discover.embedding", "query", () -> embeddings.embed(input), v -> false);
+		return timed("movielog.discover.search", "vector",
+				() -> vectors.search(embedding, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
+	}
+
+	public List<MovieHit> similar(long tmdbId, int limit) {
+		return timed("movielog.discover.similar", "vector",
+				() -> vectors.similar(tmdbId, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
+	}
+
+	public GraphView movieGraph(long tmdbId) {
+		return timed("movielog.discover.graph", "movie", () -> graph.neighborhood(tmdbId, GRAPH_CO_CREDITS),
+				view -> view.nodes().isEmpty());
+	}
+
+	public GraphView graphAmong(List<Long> tmdbIds) {
+		List<Long> ids = tmdbIds.stream().distinct().limit(MAX_RESULTS).toList();
+		return timed("movielog.discover.graph", "results", () -> graph.among(ids), view -> view.nodes().isEmpty());
+	}
+
+	private <T> T timed(String name, String kind, Supplier<T> call, Predicate<T> empty) {
+		Timer.Sample sample = Timer.start(registry);
+		String outcome = "error";
+		try {
+			T result = call.get();
+			outcome = empty.test(result) ? "empty" : "found";
+			return result;
+		}
+		catch (DataAccessException ex) {
+			logger.warn("{} ({}) failed: {}", name, kind, ex.getMostSpecificCause().getMessage());
+			throw new DiscoverUnavailableException("Catalog search is not available", ex);
+		}
+		catch (EmbeddingUnavailableException ex) {
+			logger.warn("{} ({}) failed: {}", name, kind, ex.getMessage());
+			throw new DiscoverUnavailableException("Query embedding is not available", ex);
+		}
+		finally {
+			sample.stop(registry.timer(name, "kind", kind, "outcome", outcome));
+		}
+	}
+
+}

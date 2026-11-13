@@ -1,0 +1,233 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1004" role="img" aria-labelledby="horizondb-data-model-title horizondb-data-model-desc">
+  <title id="horizondb-data-model-title">HorizonDB data model: relational source, vector, and graph</title>
+  <desc id="horizondb-data-model-desc">Inside one Azure HorizonDB database, relational tables in the public and catalog schemas are the source of truth keyed by tmdb_id and qid; catalog.movie_docs adds a vector(1536) embedding column with a DiskANN index; and the Apache AGE graph movie_graph is derived from the tables and from embedding nearest neighbors. Five batch steps on the left show which script writes each part.</desc>
+  <defs>
+    <marker id="dm-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+    </marker>
+    <marker id="dm-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+    </marker>
+    <style>
+      .name { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; }
+      .label { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 12px; font-weight: 500; fill: #4f5d75; }
+      .zone { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #7a8399; }
+      .tbl { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 11px; font-weight: 600; fill: #2d3142; }
+      .mono { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; fill: #4f5d75; }
+      .key { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; font-weight: 600; fill: #2e5aa8; }
+      .vec { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; font-weight: 600; fill: #eb6c36; }
+      .tag { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 8px; letter-spacing: 0.08em; fill: #7a8399; }
+      .count { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; fill: #7a8399; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="1004" fill="#f5f5f5"/>
+
+  <!-- HorizonDB container -->
+  <rect x="320" y="40" width="936" height="888" rx="10" fill="rgba(235,108,54,0.03)" stroke="rgba(235,108,54,0.55)" stroke-width="1.2"/>
+  <text x="336" y="70" class="name">Azure HorizonDB</text>
+  <text x="464" y="70" class="mono">database movielog · PostgreSQL 17 · extensions vector, pg_diskann, age</text>
+
+  <!-- Zones -->
+  <rect x="336" y="104" width="904" height="256" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8"/>
+  <rect x="348" y="96" width="232" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="356" y="108" class="zone">관계형 원본 — public · catalog 스키마</text>
+
+  <rect x="336" y="384" width="712" height="224" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8"/>
+  <rect x="348" y="376" width="196" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="356" y="388" class="zone">벡터 — catalog.movie_docs</text>
+
+  <rect x="336" y="640" width="904" height="272" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8"/>
+  <rect x="348" y="632" width="272" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="356" y="644" class="zone">그래프 — Apache AGE movie_graph (파생)</text>
+
+  <!-- Step column header -->
+  <text x="24" y="70" class="name">작성 순서</text>
+  <text x="96" y="70" class="label">(배치 · 앱 기동)</text>
+
+  <!-- Connectors (before nodes) -->
+  <!-- step 0: Hibernate creates public.* -->
+  <line x1="280" y1="132" x2="334" y2="132" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <!-- step 1: catalog upsert into relational -->
+  <line x1="280" y1="216" x2="334" y2="216" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <!-- step 1: doc text into movie_docs -->
+  <path d="M280,248 H288 Q296,248 296,256 V404 Q296,412 304,412 H334" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <rect x="216" y="316" width="72" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="284" y="328" class="label" text-anchor="end">doc 텍스트</text>
+  <!-- step 2: embedding -->
+  <line x1="280" y1="452" x2="334" y2="452" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <!-- step 3: index -->
+  <line x1="280" y1="544" x2="334" y2="544" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <!-- step 4: graph -->
+  <line x1="280" y1="752" x2="334" y2="752" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <!-- derived: relational -> graph -->
+  <line x1="1208" y1="360" x2="1208" y2="638" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#dm-arrow)"/>
+  <rect x="1088" y="436" width="112" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="1198" y="448" class="label" text-anchor="end">행 → 노드·관계</text>
+  <rect x="1104" y="460" width="96" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="1198" y="472" class="mono" text-anchor="end">tmdb_id · qid</text>
+  <!-- derived: embedding kNN -> SIMILAR_TO -->
+  <line x1="680" y1="608" x2="680" y2="638" stroke="#eb6c36" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#dm-arrow-accent)"/>
+  <rect x="688" y="612" width="196" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="692" y="624" class="label">임베딩 최근접 3편 → SIMILAR_TO</text>
+
+  <!-- Step boxes -->
+  <rect x="24" y="112" width="256" height="40" rx="6" fill="#f5f5f5"/>
+  <rect x="24" y="112" width="256" height="40" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+  <text x="36" y="137" class="label"><tspan class="name" style="font-size:12px">⓪ 앱 기동</tspan>  Hibernate가 public.* 생성</text>
+
+  <rect x="24" y="168" width="256" height="96" rx="6" fill="#f5f5f5"/>
+  <rect x="24" y="168" width="256" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="36" y="184" class="tag">STEP 1 · BATCH</text>
+  <text x="36" y="208" class="name">① 카탈로그 적재</text>
+  <text x="36" y="228" class="mono">build_catalog.py → catalog.sql</text>
+  <text x="36" y="248" class="label">Wikidata·Wikipedia → psql upsert</text>
+
+  <rect x="24" y="408" width="256" height="88" rx="6" fill="#f5f5f5"/>
+  <rect x="24" y="408" width="256" height="88" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="36" y="424" class="tag">STEP 2 · BATCH</text>
+  <text x="36" y="446" class="name">② 문서 임베딩</text>
+  <text x="36" y="464" class="mono">embed_catalog.py</text>
+  <text x="36" y="484" class="label">Azure OpenAI 1536차원 → UPDATE</text>
+
+  <rect x="24" y="512" width="256" height="64" rx="6" fill="#f5f5f5"/>
+  <rect x="24" y="512" width="256" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="36" y="528" class="tag">STEP 3 · SQL</text>
+  <text x="36" y="548" class="name">③ DiskANN index</text>
+  <text x="36" y="566" class="mono">20-vector-index.sql</text>
+
+  <rect x="24" y="704" width="256" height="96" rx="6" fill="#f5f5f5"/>
+  <rect x="24" y="704" width="256" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="36" y="720" class="tag">STEP 4 · SQL</text>
+  <text x="36" y="744" class="name">④ 그래프 재생성</text>
+  <text x="36" y="764" class="mono">30-graph.sql</text>
+  <text x="36" y="784" class="label">drop → create · UNWIND 200행씩</text>
+
+  <!-- Relational row 1 -->
+  <rect x="352" y="136" width="280" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="364" y="156" class="tbl">public.movies</text>
+  <text x="620" y="156" class="tag" text-anchor="end">APP + LOADER</text>
+  <text x="364" y="178" class="mono">id  bigint PK</text>
+  <text x="364" y="194" class="key">tmdb_id  bigint UNIQUE</text>
+  <text x="364" y="210" class="mono">title · genres · overview</text>
+  <text x="364" y="226" class="mono">view_count · synced_at</text>
+
+  <rect x="648" y="136" width="280" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="660" y="156" class="tbl">public.reviews · members</text>
+  <text x="916" y="156" class="tag" text-anchor="end">APP</text>
+  <text x="660" y="178" class="mono">reviews.movie_id → movies.id</text>
+  <text x="660" y="194" class="mono">reviews.author_id → members.id</text>
+  <text x="660" y="210" class="mono">rating · content · comments</text>
+  <text x="660" y="226" class="label">요청마다 앱이 JPA로 씀</text>
+
+  <rect x="944" y="136" width="280" height="100" rx="6" fill="rgba(46,90,168,0.05)" stroke="rgba(46,90,168,0.45)" stroke-width="1"/>
+  <text x="956" y="158" class="name">조인 키</text>
+  <text x="956" y="182" class="key">tmdb_id</text>
+  <text x="1016" y="182" class="label">영화 — 테이블·벡터·그래프 공통</text>
+  <text x="956" y="204" class="key">qid</text>
+  <text x="1016" y="204" class="label">인물 — Wikidata id</text>
+  <text x="956" y="226" class="label">catalog.*는 FK 없이 tmdb_id로 조인</text>
+
+  <!-- Relational row 2 -->
+  <rect x="352" y="248" width="280" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="364" y="268" class="tbl">catalog.people</text>
+  <text x="620" y="268" class="tag" text-anchor="end">LOADER</text>
+  <text x="364" y="290" class="key">qid  text PK</text>
+  <text x="364" y="306" class="mono">name · name_en</text>
+  <text x="364" y="322" class="mono">sitelinks</text>
+  <text x="364" y="338" class="count">1,786 rows</text>
+
+  <rect x="648" y="248" width="280" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="660" y="268" class="tbl">catalog.movie_credits</text>
+  <text x="916" y="268" class="tag" text-anchor="end">LOADER</text>
+  <text x="660" y="290" class="key">tmdb_id</text>
+  <text x="660" y="306" class="key">person_qid → people.qid</text>
+  <text x="660" y="322" class="mono">role director|actor · position</text>
+  <text x="660" y="338" class="count">3,291 rows</text>
+
+  <rect x="944" y="248" width="280" height="100" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="956" y="268" class="tbl">catalog.movie_genres</text>
+  <text x="1212" y="268" class="tag" text-anchor="end">LOADER</text>
+  <text x="956" y="290" class="key">tmdb_id</text>
+  <text x="956" y="306" class="mono">genre</text>
+  <text x="956" y="338" class="count">1,647 rows · 124 genres</text>
+
+  <!-- Vector zone -->
+  <rect x="352" y="408" width="360" height="184" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="364" y="428" class="tbl">catalog.movie_docs</text>
+  <text x="700" y="428" class="tag" text-anchor="end">LOADER</text>
+  <text x="364" y="452" class="key">tmdb_id  bigint PK</text>
+  <text x="364" y="476" class="mono">doc  text</text>
+  <text x="440" y="476" class="label">제목·인물·장르·요약(한/영)</text>
+  <rect x="356" y="486" width="352" height="22" rx="3" fill="rgba(235,108,54,0.08)" stroke="rgba(235,108,54,0.6)" stroke-width="0.8"/>
+  <text x="364" y="501" class="vec">embedding  vector(1536)</text>
+  <text x="700" y="501" class="label" text-anchor="end">text-embedding-3-large</text>
+  <text x="364" y="528" class="mono">embedded_at · source_url · wikidata_qid</text>
+  <text x="364" y="552" class="label">doc이 바뀐 행만 embedding을 NULL로 비움</text>
+  <text x="364" y="576" class="count">479 rows · 479 embedded</text>
+
+  <rect x="728" y="408" width="304" height="80" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <text x="740" y="428" class="tag">INDEX</text>
+  <text x="740" y="450" class="name">DiskANN</text>
+  <text x="740" y="472" class="mono">diskann (embedding vector_cosine_ops)</text>
+
+  <rect x="728" y="504" width="304" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <text x="740" y="524" class="tag">QUERY</text>
+  <text x="740" y="546" class="name">코사인 거리 &lt;=&gt;</text>
+  <text x="740" y="566" class="mono">ORDER BY embedding &lt;=&gt; :q LIMIT 12</text>
+  <text x="740" y="582" class="mono">score = 1 - (a &lt;=&gt; b)</text>
+
+  <!-- Graph zone -->
+  <rect x="352" y="664" width="420" height="232" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="364" y="684" class="tag">VERTEX LABELS</text>
+  <text x="760" y="684" class="tag" text-anchor="end">COUNT</text>
+  <text x="364" y="712" class="name">Movie</text>
+  <text x="448" y="712" class="mono">{<tspan class="key">tmdb_id</tspan>, title, year}</text>
+  <text x="760" y="712" class="count" text-anchor="end">480</text>
+  <text x="364" y="744" class="name">Person</text>
+  <text x="448" y="744" class="mono">{<tspan class="key">qid</tspan>, name}</text>
+  <text x="760" y="744" class="count" text-anchor="end">1,785</text>
+  <text x="364" y="776" class="name">Genre</text>
+  <text x="448" y="776" class="mono">{name}</text>
+  <text x="760" y="776" class="count" text-anchor="end">124</text>
+  <line x1="364" y1="800" x2="760" y2="800" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="364" y="824" class="label">label마다 PostgreSQL 테이블 하나</text>
+  <text x="364" y="844" class="mono">movie_graph."Movie" · "Person" · "Genre"</text>
+  <text x="364" y="864" class="mono">properties agtype + GIN index</text>
+  <text x="364" y="882" class="label">테이블에서 언제든 다시 만들 수 있는 파생 데이터</text>
+
+  <rect x="788" y="664" width="436" height="232" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="800" y="684" class="tag">EDGE LABELS</text>
+  <text x="1212" y="684" class="tag" text-anchor="end">COUNT</text>
+  <text x="800" y="712" class="name">DIRECTED</text>
+  <text x="900" y="712" class="mono">Person → Movie</text>
+  <text x="1212" y="712" class="count" text-anchor="end">520</text>
+  <text x="800" y="744" class="name">ACTED_IN</text>
+  <text x="900" y="744" class="mono">Person → Movie {position}</text>
+  <text x="1212" y="744" class="count" text-anchor="end">2,771</text>
+  <text x="800" y="776" class="name">IN_GENRE</text>
+  <text x="900" y="776" class="mono">Movie → Genre</text>
+  <text x="1212" y="776" class="count" text-anchor="end">1,647</text>
+  <rect x="794" y="790" width="424" height="24" rx="3" fill="rgba(235,108,54,0.08)" stroke="rgba(235,108,54,0.6)" stroke-width="0.8"/>
+  <text x="800" y="807" class="name" style="fill:#eb6c36">SIMILAR_TO</text>
+  <text x="900" y="807" class="mono">Movie → Movie {score}</text>
+  <text x="1212" y="807" class="count" text-anchor="end">1,038</text>
+  <line x1="800" y1="828" x2="1212" y2="828" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="800" y="848" class="label">credits·genres 행 → DIRECTED·ACTED_IN·IN_GENRE</text>
+  <text x="800" y="866" class="label">embedding 최근접 3편 → SIMILAR_TO (코사인)</text>
+  <text x="800" y="884" class="mono">start_id · end_id btree index</text>
+
+  <!-- Legend -->
+  <line x1="24" y1="948" x2="1256" y2="948" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="24" y="980" class="tag" style="fill:#4f5d75">LEGEND</text>
+  <line x1="96" y1="976" x2="132" y2="976" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#dm-arrow)"/>
+  <text x="140" y="980" class="label">단계가 쓰는 대상</text>
+  <line x1="268" y1="976" x2="304" y2="976" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#dm-arrow)"/>
+  <text x="312" y="980" class="label">원본에서 다시 만드는 파생</text>
+  <text x="484" y="980" class="key">tmdb_id</text>
+  <text x="536" y="980" class="label">세 모델을 잇는 조인 키</text>
+  <rect x="696" y="969" width="20" height="14" rx="3" fill="rgba(235,108,54,0.08)" stroke="rgba(235,108,54,0.6)" stroke-width="0.8"/>
+  <text x="724" y="980" class="label">벡터 열과 벡터에서 나온 관계</text>
+  <rect x="916" y="969" width="20" height="14" rx="3" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="944" y="980" class="label">테이블 · label · 작성 단계</text>
+</svg>
