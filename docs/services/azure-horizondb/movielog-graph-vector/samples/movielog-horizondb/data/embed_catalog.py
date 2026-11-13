@@ -69,19 +69,20 @@ def main() -> int:
     if not rows:
         return 0
     bearer = token()
-    with tempfile.NamedTemporaryFile("w", suffix=".sql", delete=False, encoding="utf-8") as out:
-        out.write("BEGIN;\n")
-        for start in range(0, len(rows), BATCH):
-            batch = rows[start:start + BATCH]
-            vectors = embed(endpoint, bearer, [row["doc"] for row in batch])
-            for row, vector in zip(batch, vectors):
-                literal = "[" + ",".join(f"{v:.7g}" for v in vector) + "]"
-                out.write(f"UPDATE catalog.movie_docs SET embedding = '{literal}'::vector, embedded_at = now()"
-                          f" WHERE tmdb_id = {int(row['id'])};\n")
-            print(f"  embedded {min(start + BATCH, len(rows))}/{len(rows)}", file=sys.stderr)
-        out.write("COMMIT;\n")
-        path = out.name
+    # The file holds partial vectors until psql loads it, so remove it on every exit path.
+    fd, path = tempfile.mkstemp(suffix=".sql")
     try:
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write("BEGIN;\n")
+            for start in range(0, len(rows), BATCH):
+                batch = rows[start:start + BATCH]
+                vectors = embed(endpoint, bearer, [row["doc"] for row in batch])
+                for row, vector in zip(batch, vectors):
+                    literal = "[" + ",".join(f"{v:.7g}" for v in vector) + "]"
+                    out.write(f"UPDATE catalog.movie_docs SET embedding = '{literal}'::vector, embedded_at = now()"
+                              f" WHERE tmdb_id = {int(row['id'])};\n")
+                print(f"  embedded {min(start + BATCH, len(rows))}/{len(rows)}", file=sys.stderr)
+            out.write("COMMIT;\n")
         psql("-q", "-f", path)
     finally:
         os.unlink(path)

@@ -71,7 +71,8 @@ label 테이블과 openCypher로 다룹니다. 둘 다 같은 데이터베이스
   때만 쓰입니다. Learn은 Azure OpenAI `text-embedding-3-*`를 포함한 대부분의 임베딩 모델에
   코사인 거리를 기본으로 권합니다.
 - **함수와 집계** — `cosine_distance`, `l2_distance`, `inner_product`, `l1_distance`,
-  `vector_dims`, `vector_norms` 함수와 `AVG`·`SUM` 집계도 제공합니다.
+  `vector_dims`, `vector_norm` 함수와 `AVG`·`SUM` 집계도 제공합니다. Learn 문서는 `vector_norms`로
+  적지만 실습 cluster(`vector` 0.8.7)에는 `vector_norm`만 있었습니다.
 - **MovieLog 적용** — `catalog.movie_docs.embedding vector(1536)`에 코사인 operator class index를
   만들고, 화면 점수는 `1 - (embedding <=> :q)`로 계산합니다. 앱은 질의 벡터를 문자열로
   만들어 `CAST(:v AS vector)`로 넘깁니다.
@@ -91,7 +92,7 @@ Learn은 HorizonDB의 production AI 워크로드 기본값으로 DiskANN을 권�
 | 최대 차원 | 16,000 | 2,000 | 2,000 | 16,000 |
 | 필터 결합 | 항상 정확 | 후필터, recall 저하 | 후필터, recall 저하 | index 안에서 필터(advanced filtering) |
 
-선택 순서는 다음과 같습니다. 10만 행 미만이면 flat, 16,000차원을 넘거나 메타데이터 필터를
+선택 순서는 다음과 같습니다. 10만 행 미만이면 flat, 2,000차원을 넘고 16,000차원 이하이거나 메타데이터 필터를
 높은 recall로 결합해야 하면 DiskANN, RAM보다 커지거나 계속 늘어날 데이터면 DiskANN, 정적이고
 RAM에 들어가며 recall이 중요하면 HNSW, 빠른 build를 위해 낮은 recall을 감수하면 IVFFlat입니다.
 
@@ -298,4 +299,6 @@ schema-driven 방식, Microsoft GraphRAG 라이브러리를 듭니다. MovieLog�
 | `l_value_ib` 기본값 | DiskANN 문서는 100, pgvector 성능 문서는 50으로 적습니다. | 확인하지 않았습니다. 이 문서는 DiskANN 문서 값을 따릅니다. |
 | pgvector 성능 문서의 DiskANN 설명 | "DiskANN is only supported in Azure PostgreSQL Flexible Server" 문구가 있습니다. | HorizonDB에서 `pg_diskann` 0.7.6으로 DiskANN index를 만들고 썼습니다. |
 | `pg_diskann` 문서 버전 | 0.7.3 기준 | 0.7.6 |
+| index 선택 기준 문구 | 선택 기준 문서의 결정 순서가 "16,000차원을 넘으면 DiskANN"이라고 적지만, 같은 문서 표의 DiskANN 최대 차원은 16,000입니다. | 이 문서는 2,000차원 초과 16,000차원 이하를 DiskANN 조건으로 적었습니다. 실습은 1,536차원이라 확인하지 않았습니다. |
+| 벡터 norm 함수 이름 | pgvector 문서는 `vector_norms(vector)`로 적습니다. | `vector_norms`는 없고 `vector_norm`이 동작했습니다(`vector` 0.8.7). |
 | connection pooling | graph-augmented RAG 문서는 내장 PgBouncer(6432)를 권합니다. | 개요 문서는 미리 보기 제약으로 내장 PgBouncer 미지원을 듭니다. 실습은 앱의 HikariCP만 썼습니다. |

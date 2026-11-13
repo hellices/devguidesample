@@ -23,6 +23,9 @@
 	<article class="round error-container" th:if="${searchFailed}">
 		<p>카탈로그 검색을 사용할 수 없습니다. 임베딩과 그래프가 적재됐는지 확인해 주세요.</p>
 	</article>
+	<article class="round error-container" th:if="${searchLimited}">
+		<p>의미 검색 요청이 많아 잠시 제한했습니다. 1분 뒤에 다시 시도해 주세요.</p>
+	</article>
 
 	<th:block th:if="${hits != null}">
 		<section th:unless="${hits.isEmpty()}">

@@ -3,6 +3,7 @@ package com.example.springsample.discover;
 import java.util.List;
 
 import com.example.springsample.movie.MovieService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Controller;
@@ -23,17 +24,20 @@ class DiscoverWebController {
 	private final MovieService movieService;
 
 	@GetMapping("/discover")
-	String search(@RequestParam(required = false) @Nullable String q, Model model) {
+	String search(@RequestParam(required = false) @Nullable String q, Model model, HttpServletRequest request) {
 		String query = (q == null) ? "" : q.strip();
 		model.addAttribute("q", query);
 		if (StringUtils.hasText(query)) {
 			try {
-				List<MovieHit> hits = discoverService.search(query, PAGE_RESULTS);
+				List<MovieHit> hits = discoverService.search(query, PAGE_RESULTS, request.getRemoteAddr());
 				model.addAttribute("hits", hits);
 				model.addAttribute("hitIds", hits.stream().map(hit -> String.valueOf(hit.tmdbId())).toList());
 			}
 			catch (DiscoverUnavailableException ex) {
 				model.addAttribute("searchFailed", true);
+			}
+			catch (DiscoverRateLimitedException ex) {
+				model.addAttribute("searchLimited", true);
 			}
 		}
 		return "discover/search";

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -35,20 +36,31 @@ public class DiscoverService {
 
 	private final MeterRegistry registry;
 
+	private final DiscoverRateLimiter rateLimiter;
+
+	private final Counter rejected;
+
 	public DiscoverService(EmbeddingClient embeddings, VectorSearchRepository vectors, MovieGraphRepository graph,
-			MeterRegistry registry) {
+			MeterRegistry registry, DiscoverRateLimiter rateLimiter) {
 		this.embeddings = embeddings;
 		this.vectors = vectors;
 		this.graph = graph;
 		this.registry = registry;
+		this.rateLimiter = rateLimiter;
+		this.rejected = Counter.builder("movielog.discover.rejected")
+			.description("Semantic searches refused by the rate cap before calling Azure OpenAI")
+			.register(registry);
 	}
 
-	public List<MovieHit> search(String query, int limit) {
-		String text = query.strip();
-		if (text.length() > MAX_QUERY_LENGTH) {
-			text = text.substring(0, MAX_QUERY_LENGTH);
+	/**
+	 * @param client address of the caller (after forwarded headers), used for the per-client rate cap
+	 */
+	public List<MovieHit> search(String query, int limit, String client) {
+		if (!rateLimiter.tryAcquire(client)) {
+			rejected.increment();
+			throw new DiscoverRateLimitedException("Too many semantic searches; try again in a minute");
 		}
-		String input = text;
+		String input = truncate(query.strip(), MAX_QUERY_LENGTH);
 		float[] embedding = timed("movielog.discover.embedding", "query", () -> embeddings.embed(input), v -> false);
 		return timed("movielog.discover.search", "vector",
 				() -> vectors.search(embedding, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
@@ -67,6 +79,14 @@ public class DiscoverService {
 	public GraphView graphAmong(List<Long> tmdbIds) {
 		List<Long> ids = tmdbIds.stream().distinct().limit(MAX_RESULTS).toList();
 		return timed("movielog.discover.graph", "results", () -> graph.among(ids), view -> view.nodes().isEmpty());
+	}
+
+	/** Cuts at a code point boundary so a surrogate pair is never split. */
+	static String truncate(String text, int maxCodePoints) {
+		if (text.codePointCount(0, text.length()) <= maxCodePoints) {
+			return text;
+		}
+		return text.substring(0, text.offsetByCodePoints(0, maxCodePoints));
 	}
 
 	private <T> T timed(String name, String kind, Supplier<T> call, Predicate<T> empty) {

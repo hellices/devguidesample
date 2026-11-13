@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 1004" role="img" aria-labelledby="horizondb-data-model-title horizondb-data-model-desc">
   <title id="horizondb-data-model-title">HorizonDB data model: relational source, vector, and graph</title>
-  <desc id="horizondb-data-model-desc">Inside one Azure HorizonDB database, relational tables in the public and catalog schemas are the source of truth keyed by tmdb_id and qid; catalog.movie_docs adds a vector(1536) embedding column with a DiskANN index; and the Apache AGE graph movie_graph is derived from the tables and from embedding nearest neighbors. Five batch steps on the left show which script writes each part.</desc>
+  <desc id="horizondb-data-model-desc">Inside one Azure HorizonDB database, relational tables in the public and catalog schemas are the source of truth keyed by tmdb_id and qid; catalog.movie_docs adds a vector(1536) embedding column with a DiskANN index; and the Apache AGE graph movie_graph is derived from the tables and from embedding nearest neighbors. Five creation steps on the left show who writes each part: application startup (Hibernate creates public tables), two batch scripts (catalog load and document embedding) and two SQL scripts (DiskANN index and graph rebuild).</desc>
   <defs>
     <marker id="dm-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>

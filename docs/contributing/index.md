@@ -171,11 +171,14 @@ Registry 서버 빌드, Java 빌드를 Gradle Kotlin DSL로 통일합니다. 새
 |---|---|---|
 | Azure 리소스와 앱 배포 | `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`으로 만들고 `azd down`으로 정리합니다. | README에 나열한 단독 `az` 생성 명령 |
 | azd 밖의 단계 | Kubernetes manifest 적용, 데이터 적재, 미리 보기 API 호출은 `azure.yaml` hook(`preprovision`, `postprovision`, `postdeploy` 등) 스크립트로 실행합니다. | 수동으로 이어 붙이는 명령 순서 |
-| 컨테이너 이미지 | azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는 `az acr build --platform linux/amd64`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push` |
+| 컨테이너 이미지 | azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는 `az acr build --platform linux/amd64`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드 |
 | Java 프로젝트 | `build.gradle.kts`, `settings.gradle.kts`와 Gradle Wrapper(`gradlew`)를 커밋합니다. | Maven `pom.xml`, Groovy `build.gradle` |
 
 - `docker.remoteBuild: true`는 ACR 원격 빌드가 실패하면 로컬 Docker나 Podman으로
-  다시 빌드합니다. 배포 출력에서 이미지가 ACR에서 빌드됐는지 확인합니다.
+  다시 빌드합니다. 이 fallback으로 만든 이미지는 기준에 맞지 않으므로, 배포 출력에서
+  이미지가 ACR에서 빌드됐는지 확인하고 원격 빌드 실패를 고친 뒤 다시 배포합니다.
+  fallback 없이 ACR 빌드만 허용하려면 hook에서 `az acr build`로 이미지를 만들고,
+  배포 단계(Kubernetes manifest 등)가 그 이미지를 참조하게 합니다.
   근거: [Azure Developer CLI schema reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema)의
   `docker` 속성.
 - `azd up`은 `preprovision` hook보다 먼저 Bicep 필수 입력을 검사합니다. hook이

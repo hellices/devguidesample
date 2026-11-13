@@ -126,12 +126,18 @@ async function render() {
 	if (!container || typeof window.cytoscape !== "function") {
 		return;
 	}
-	const response = await fetch(container.dataset.apiUrl, { headers: { Accept: "application/json" } });
-	if (!response.ok) {
+	let view;
+	try {
+		const response = await fetch(container.dataset.apiUrl, { headers: { Accept: "application/json" } });
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}`);
+		}
+		view = await response.json();
+	} catch (error) {
+		console.warn("graph request failed", error);
 		container.textContent = "그래프를 불러오지 못했습니다.";
 		return;
 	}
-	const view = await response.json();
 	if (view.nodes.length === 0) {
 		container.textContent = "그래프에 연결된 노드가 없습니다.";
 		return;

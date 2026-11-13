@@ -19,16 +19,23 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA movie_graph GRANT SELECT ON TABLES TO movielo
 CREATE FUNCTION pg_temp.cy(value text) RETURNS text LANGUAGE sql IMMUTABLE
 AS $fn$ SELECT '"' || replace(replace(coalesce(value, ''), '\', '\\'), '"', '\"') || '"' $fn$;
 
--- Runs one UNWIND statement per batch of 200 map literals.
+-- Runs one UNWIND statement per batch of 200 map literals. AGE takes the Cypher text only as a dollar-quoted
+-- constant, so each batch uses a tag that does not occur in its text; data containing "$cy$" cannot end it early.
 CREATE FUNCTION pg_temp.unwind(items text[], statement text) RETURNS integer LANGUAGE plpgsql
 AS $fn$
 DECLARE
 	i integer := 1;
 	batches integer := 0;
+	body text;
+	tag text;
 BEGIN
 	WHILE i <= coalesce(array_length(items, 1), 0) LOOP
-		EXECUTE format('SELECT * FROM ag_catalog.cypher(''movie_graph'', $cy$ UNWIND [%s] AS e %s $cy$) AS (v ag_catalog.agtype)',
-			array_to_string(items[i:i + 199], ', '), statement);
+		body := format('UNWIND [%s] AS e %s', array_to_string(items[i:i + 199], ', '), statement);
+		LOOP
+			tag := '$cy' || substr(md5(random()::text), 1, 12) || '$';
+			EXIT WHEN position(tag IN body) = 0;
+		END LOOP;
+		EXECUTE format('SELECT * FROM ag_catalog.cypher(''movie_graph'', %s%s%s) AS (v ag_catalog.agtype)', tag, body, tag);
 		i := i + 200;
 		batches := batches + 1;
 	END LOOP;

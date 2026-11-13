@@ -7,6 +7,20 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="$(cd "$HERE/../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app" && pwd)"
 OUT="${1:-$HERE/out/app}"
+mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd -P)"
+SAMPLE="$(cd "$HERE" && pwd -P)"
+BASE_REAL="$(cd "$BASE" && pwd -P)"
+# OUT is wiped first, so it must not hold or sit inside the sources; inside this sample only out/ is allowed.
+case "${OUT%/}/" in
+  "$SAMPLE"/out/?*) ;;
+  "$SAMPLE"/* | "$BASE_REAL"/*) echo "refusing to use $OUT as output: it is inside a source directory" >&2; exit 1 ;;
+esac
+for source in "$SAMPLE" "$BASE_REAL"; do
+  case "$source/" in
+    "${OUT%/}"/*) echo "refusing to use $OUT as output: it contains $source" >&2; exit 1 ;;
+  esac
+done
 
 rm -rf "$OUT"
 mkdir -p "$OUT"

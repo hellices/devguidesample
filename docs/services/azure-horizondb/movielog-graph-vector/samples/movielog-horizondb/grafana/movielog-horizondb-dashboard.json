@@ -489,7 +489,7 @@
    "id": 10,
    "type": "timeseries",
    "title": "HorizonDB SQL 호출 수와 평균 시간",
-   "description": "type=postgresql dependency. 왼쪽 축 분당 호출, 오른쪽 축 평균 ms.",
+   "description": "type=postgresql dependency. 왼쪽 축 분당 호출, 오른쪽 축 평균 ms. sampling을 반영해 itemCount로 가중합니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -509,7 +509,7 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where type == \"postgresql\"\n| summarize calls = count(), avg_ms = avg(duration) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where type == \"postgresql\"\n| summarize calls = sum(itemCount), avg_ms = sum(duration * itemCount) / sum(itemCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
       "resources": [
        "$appinsights"
       ],
@@ -561,7 +561,7 @@
    "id": 11,
    "type": "timeseries",
    "title": "Azure OpenAI 임베딩 호출 시간",
-   "description": "openai.azure.com HTTP dependency의 평균과 p95.",
+   "description": "openai.azure.com HTTP dependency의 평균과 p95. sampling을 반영해 itemCount로 가중합니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -581,7 +581,7 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where target endswith \"openai.azure.com\"\n| summarize avg_ms = avg(duration), p95_ms = percentile(duration, 95) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where target endswith \"openai.azure.com\"\n| summarize avg_ms = sum(duration * itemCount) / sum(itemCount), p95_ms = percentilew(duration, itemCount, 95) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
       "resources": [
        "$appinsights"
       ],
@@ -613,7 +613,7 @@
    "id": 12,
    "type": "table",
    "title": "HorizonDB 쿼리 유형별 시간",
-   "description": "SQL 앞부분으로 묶은 쿼리별 호출 수, 평균, p95. AGE cypher와 벡터(<=>) 쿼리를 먼저, 나머지는 호출 수 순으로 보여 줍니다.",
+   "description": "SQL 앞부분으로 묶은 쿼리별 호출 수, 평균, p95. AGE cypher와 벡터(<=>) 쿼리를 먼저, 나머지는 호출 수 순으로 보여 줍니다. sampling을 반영해 itemCount로 가중합니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -633,7 +633,7 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where type == \"postgresql\"\n| extend query_kind = case(data has \"ag_catalog.cypher\", \"AGE cypher\", data has \"<=>\", \"vector <=>\", \"other\")\n| extend statement = substring(replace_regex(data, @\"\\s+\", \" \"), 0, 120)\n| summarize calls = count(), avg_ms = round(avg(duration), 1), p95_ms = round(percentile(duration, 95), 1) by query_kind, statement\n| order by iff(query_kind == \"other\", 1, 0) asc, calls desc\n| take 15",
+      "query": "dependencies\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where type == \"postgresql\"\n| extend query_kind = case(data has \"ag_catalog.cypher\", \"AGE cypher\", data has \"<=>\", \"vector <=>\", \"other\")\n| extend statement = substring(replace_regex(data, @\"\\s+\", \" \"), 0, 120)\n| summarize calls = sum(itemCount), avg_ms = round(sum(duration * itemCount) / sum(itemCount), 1), p95_ms = round(percentilew(duration, itemCount, 95), 1) by query_kind, statement\n| order by iff(query_kind == \"other\", 1, 0) asc, calls desc\n| take 15",
       "resources": [
        "$appinsights"
       ],
@@ -669,7 +669,7 @@
    "id": 14,
    "type": "timeseries",
    "title": "엔드포인트별 p95 응답 시간",
-   "description": "discover·graph 관련 요청의 p95.",
+   "description": "discover·graph 관련 요청의 p95. sampling을 반영해 itemCount로 가중합니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -689,7 +689,7 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "requests\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name has \"discover\" or name startswith \"GET /graph\"\n| summarize p95_ms = percentile(duration, 95) by bin(timestamp, max_of($__interval, 1m)), name\n| order by timestamp asc",
+      "query": "requests\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name has \"discover\" or name startswith \"GET /graph\"\n| summarize p95_ms = percentilew(duration, itemCount, 95) by bin(timestamp, max_of($__interval, 1m)), name\n| order by timestamp asc",
       "resources": [
        "$appinsights"
       ],
@@ -721,7 +721,7 @@
    "id": 15,
    "type": "bargauge",
    "title": "엔드포인트별 실패율",
-   "description": "success == false 비율(%).",
+   "description": "success == false 비율(%). sampling을 반영해 itemCount로 가중합니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -741,7 +741,7 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "requests\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name has \"discover\" or name startswith \"GET /graph\"\n| summarize failed_pct = round(100.0 * countif(success == false) / count(), 2) by name\n| order by name asc",
+      "query": "requests\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name has \"discover\" or name startswith \"GET /graph\"\n| summarize failed_pct = round(100.0 * sumif(itemCount, success == false) / sum(itemCount), 2) by name\n| order by name asc",
       "resources": [
        "$appinsights"
       ],

@@ -41,12 +41,19 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `/discover?q=` | 질의를 임베딩해 가까운 영화 12편과, 그 영화들을 잇는 인물·장르·`SIMILAR_TO` 그래프를 보여 줍니다. |
 | `/graph/movies/{tmdbId}` | 영화의 감독·배우·장르·`SIMILAR_TO` 이웃과 같은 인물의 다른 영화를 그립니다. 영화 노드를 두 번 누르면 이동합니다. |
 | `/movies/{tmdbId}` | 기존 상세 화면에 임베딩이 비슷한 영화 6편과 그래프 링크를 더했습니다. |
-| `GET /api/discover/search?q=&limit=` | 의미 검색 결과(코사인 유사도 포함) |
+| `GET /api/discover/search?q=&limit=` | 의미 검색 결과(코사인 유사도 포함). 요청률 한도를 넘으면 429 |
 | `GET /api/discover/movies/{tmdbId}/similar` | 임베딩 최근접 영화 |
 | `GET /api/discover/graph/movies/{tmdbId}` | 영화 주변 그래프(Cytoscape 형식 node·edge) |
 | `GET /api/discover/graph?ids=` | 주어진 영화들 사이의 연결 그래프 |
 
 ## 설계 메모
+
+- **익명 의미 검색에 요청률 한도를 둡니다.** `/discover`와 `/api/discover/search`는 로그인 없이
+  Azure OpenAI를 호출하므로, 앱이 Azure OpenAI를 부르기 전에 Pod마다 클라이언트 주소당 분당
+  30건(`DISCOVER_RATE_LIMIT_PER_CLIENT`)과 전체 분당 300건(`DISCOVER_RATE_LIMIT_TOTAL`)으로
+  제한합니다. 넘으면 API는 429, 화면은 안내 문구를 돌려줍니다. 클라이언트 주소는 AGFC가 넘기는
+  `x-forwarded-for`에서 Tomcat이 얻습니다. 한도는 Pod 메모리에 있어 replica 수만큼 늘어나며,
+  Azure OpenAI deployment의 용량(실습은 GlobalStandard 150K TPM)이 마지막 상한입니다.
 
 - **질의 임베딩은 앱에서 합니다.** HorizonDB `azure_ai` 2.5.6은 `azure_ai.set_setting`을
   막고 `model_registry`에 등록한 alias로 모델을 호출합니다. 실습에서 확인한 제약은
@@ -122,8 +129,10 @@ az rest --method patch --uri "https://management.azure.com$RID/clusters/$HZ/pool
   "{\"properties\":{\"parameterGroup\":{\"parameterGroupResourceId\":\"$RID/parameterGroups/pg-movielog-age\",\"applyMethod\":\"Immediate\"}}}"
 
 # Administrator (password authentication) and firewall rules for the operator and AKS egress.
+# jq escapes quotes and backslashes in the password.
 az rest --method put --uri "https://management.azure.com$RID/clusters/$HZ/authentications/passwordMethod?$API" \
-  --body "{\"properties\":{\"state\":\"Enabled\",\"administratorLogin\":\"movielogadmin\",\"administratorLoginPassword\":\"$HZ_ADMIN_PASSWORD\"}}"
+  --body "$(jq -nc --arg password "$HZ_ADMIN_PASSWORD" \
+    '{properties: {state: "Enabled", administratorLogin: "movielogadmin", administratorLoginPassword: $password}}')"
 az rest --method put --uri "https://management.azure.com$RID/clusters/$HZ/pools/pool-01/firewallRules/client?$API" \
   --body "{\"properties\":{\"startIpAddress\":\"$MY_IP\",\"endIpAddress\":\"$MY_IP\"}}"
 HZ_HOST="$(az rest --method get --uri "https://management.azure.com$RID/clusters/$HZ/endpoints?$API" \
@@ -137,6 +146,9 @@ Azure OpenAI, AKS(workload identity·app monitoring), 모니터링 리소스를 
 
 ```bash
 az cognitiveservices account create -g $RG -n "$AOAI" -l $LOC --kind OpenAI --sku S0 --custom-domain "$AOAI"
+# Keyless: only Microsoft Entra tokens (workload identity, az login) can call the account.
+az resource update --ids "$(az cognitiveservices account show -g $RG -n "$AOAI" --query id -o tsv)" \
+  --set properties.disableLocalAuth=true
 az cognitiveservices account deployment create -g $RG -n "$AOAI" --deployment-name text-embedding-3-large \
   --model-name text-embedding-3-large --model-version 1 --model-format OpenAI --sku-name GlobalStandard --sku-capacity 150
 az monitor log-analytics workspace create -g $RG -n law-movielog-hz
@@ -170,7 +182,8 @@ az rest --method put --uri "https://management.azure.com$RID/clusters/$HZ/pools/
   --body "{\"properties\":{\"startIpAddress\":\"$EGRESS\",\"endIpAddress\":\"$EGRESS\"}}"
 
 export PGHOST="$HZ_HOST" PGUSER=movielogadmin PGPASSWORD="$HZ_ADMIN_PASSWORD" PGSSLMODE=require
-psql -d postgres -v app_password="$APP_DB_PASSWORD" -f db/00-database.sql
+# 00-database.sql reads APP_DB_PASSWORD from the environment (psql 15+), not from the command line.
+APP_DB_PASSWORD="$APP_DB_PASSWORD" psql -d postgres -f db/00-database.sql
 PGDATABASE=movielog psql -f db/10-schema.sql
 ```
 
@@ -310,6 +323,7 @@ rm /tmp/live.json
 | `movielog.discover.embedding` | Timer | `kind=query`, `outcome` |
 | `movielog.discover.search`, `movielog.discover.similar` | Timer | `kind=vector`, `outcome` = `found`/`empty`/`error` |
 | `movielog.discover.graph` | Timer | `kind` = `movie`/`results`, `outcome` |
+| `movielog.discover.rejected` | Counter | 요청률 한도로 Azure OpenAI 호출 전에 거부한 의미 검색 |
 
 ## 데이터 출처
 

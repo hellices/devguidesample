@@ -6,8 +6,8 @@ Output (under --out, default data/out/):
   catalog.sql   idempotent upserts into public.movies and the catalog schema
 
 Wikidata content is CC0. Wikipedia summaries (Korean lead, plus the English lead in the
-embedded text) are CC BY-SA 4.0; the SQL keeps the shown article URL per movie for attribution. Only the Python standard
-library is used.
+embedded text) are CC BY-SA 4.0; the SQL keeps the URL of every article whose text is stored (source_url for the shown
+summary, summary_en_source for the English lead) for attribution. Only the Python standard library is used.
 """
 
 from __future__ import annotations
@@ -88,14 +88,15 @@ MAX_ACTORS = 6
 MAX_GENRES = 4
 
 
-def http_json(url: str, *, timeout: int = 120, retries: int = 4) -> dict:
+def http_json(url: str, *, timeout: int = 120, retries: int = 4, missing_ok: bool = False) -> dict:
+    """GET JSON with retries. A 404 is an empty result only when missing_ok (a Wikipedia page without summary)."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
     for attempt in range(retries):
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return json.load(response)
         except urllib.error.HTTPError as ex:
-            if ex.code == 404:
+            if ex.code == 404 and missing_ok:
                 return {}
             if ex.code in (429, 500, 502, 503, 504) and attempt + 1 < retries:
                 time.sleep(2 ** attempt * 3)
@@ -217,7 +218,8 @@ def summary(article_url: str | None) -> tuple[str | None, str | None]:
     # REST path segment, otherwise the summary of a different page ("2", "Off") is fetched.
     title = urllib.parse.unquote(parsed.path.removeprefix("/wiki/"))
     segment = urllib.parse.quote(title, safe="")
-    data = http_json(f"{parsed.scheme}://{parsed.netloc}/api/rest_v1/page/summary/{segment}", timeout=30)
+    data = http_json(f"{parsed.scheme}://{parsed.netloc}/api/rest_v1/page/summary/{segment}", timeout=30,
+                     missing_ok=True)
     extract = (data.get("extract") or "").strip()
     return (extract or None), (article_url if extract else None)
 
@@ -229,6 +231,7 @@ def add_summaries(films: dict[str, dict]) -> None:
         film["overview"], film["overview_source"] = (ko_text, ko_source) if ko_text else (en_text, en_source)
         # Korean leads often describe production only; the English lead usually states the premise.
         film["summary_en"] = en_text if ko_text else None
+        film["summary_en_source"] = en_source if ko_text and en_text else None
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         list(pool.map(work, films.values()))
@@ -295,9 +298,11 @@ def write_sql(films: list[dict], path: Path) -> None:
                          " ON CONFLICT DO NOTHING;")
         # Keep an existing embedding only while the embedded text is unchanged.
         lines.append(
-            "INSERT INTO catalog.movie_docs (tmdb_id, wikidata_qid, doc, source_url) VALUES ("
-            f"{tmdb}, {sql_text(film['qid'])}, {sql_text(film['doc'])}, {sql_text(film.get('overview_source'))})"
+            "INSERT INTO catalog.movie_docs (tmdb_id, wikidata_qid, doc, source_url, summary_en_source) VALUES ("
+            f"{tmdb}, {sql_text(film['qid'])}, {sql_text(film['doc'])}, {sql_text(film.get('overview_source'))}, "
+            f"{sql_text(film.get('summary_en_source'))})"
             " ON CONFLICT (tmdb_id) DO UPDATE SET wikidata_qid = EXCLUDED.wikidata_qid, source_url = EXCLUDED.source_url,"
+            " summary_en_source = EXCLUDED.summary_en_source,"
             " embedding = CASE WHEN catalog.movie_docs.doc = EXCLUDED.doc THEN catalog.movie_docs.embedding END,"
             " doc = EXCLUDED.doc;")
     lines.append("COMMIT;")

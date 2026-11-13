@@ -62,7 +62,8 @@
   실행하며 README의 단독 `az` 명령 나열로 대신하지 않는다.
 - 컨테이너 이미지는 로컬 `docker build` 대신 Azure Container Registry 서버
   빌드로 만든다. azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는
-  `az acr build --platform linux/amd64`를 사용한다.
+  `az acr build --platform linux/amd64`를 사용한다. `remoteBuild`는 ACR 빌드가
+  실패하면 로컬 Docker로 다시 빌드하므로, 그렇게 만든 이미지로 배포를 마치지 않는다.
 - Java 프로젝트는 Gradle Kotlin DSL(`build.gradle.kts`, `settings.gradle.kts`)과
   Gradle Wrapper를 사용한다. Maven `pom.xml`이나 Groovy `build.gradle`을
   새로 추가하지 않는다.

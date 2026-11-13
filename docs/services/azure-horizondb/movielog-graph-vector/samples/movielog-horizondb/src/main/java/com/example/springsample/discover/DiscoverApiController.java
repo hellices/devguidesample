@@ -5,6 +5,7 @@ import java.util.List;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -25,12 +26,13 @@ class DiscoverApiController {
 
 	private final DiscoverService discoverService;
 
-	@Operation(summary = "의미 검색", description = "질문을 HorizonDB 안에서 임베딩하고 코사인 거리로 가까운 영화를 반환합니다.")
+	@Operation(summary = "의미 검색", description = "질문을 앱에서 Azure OpenAI로 임베딩하고 HorizonDB에서 코사인 거리로 가까운 영화를 반환합니다. 요청이 많으면 429를 반환합니다.")
 	@GetMapping("/search")
 	List<MovieHit> search(
 			@Parameter(description = "자연어 질의") @RequestParam @NotBlank @Size(max = DiscoverService.MAX_QUERY_LENGTH) String q,
-			@RequestParam(defaultValue = "12") @Min(1) @Max(DiscoverService.MAX_RESULTS) int limit) {
-		return discoverService.search(q, limit);
+			@RequestParam(defaultValue = "12") @Min(1) @Max(DiscoverService.MAX_RESULTS) int limit,
+			HttpServletRequest request) {
+		return discoverService.search(q, limit, request.getRemoteAddr());
 	}
 
 	@Operation(summary = "비슷한 영화", description = "영화 문서 임베딩이 가까운 순으로 반환합니다.")
