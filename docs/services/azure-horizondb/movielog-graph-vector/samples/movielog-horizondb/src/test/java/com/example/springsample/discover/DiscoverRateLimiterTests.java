@@ -6,6 +6,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +54,28 @@ class DiscoverRateLimiterTests {
 
 		clock.now = clock.now.plusSeconds(60);
 		assertThat(limiter.tryAcquire("c")).isTrue();
+	}
+
+	@Test
+	void concurrentCallersNeverExceedTheCaps() throws Exception {
+		var limiter = new DiscoverRateLimiter(new DiscoverRateLimitProperties(25, 60), clock);
+		AtomicInteger granted = new AtomicInteger();
+		CountDownLatch start = new CountDownLatch(1);
+		try (ExecutorService pool = Executors.newFixedThreadPool(16)) {
+			for (int i = 0; i < 400; i++) {
+				String client = "client-" + (i % 4);
+				pool.submit(() -> {
+					start.await();
+					if (limiter.tryAcquire(client)) {
+						granted.incrementAndGet();
+					}
+					return null;
+				});
+			}
+			start.countDown();
+		}
+
+		assertThat(granted).hasValue(60);
 	}
 
 	@Test
