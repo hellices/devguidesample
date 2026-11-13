@@ -85,7 +85,7 @@ class MovieGraphRepository {
 				FROM ag_catalog.cypher('%s', $cy$ %s $cy$) AS (%s)""".formatted(GRAPH, query, ROW_COLUMNS), MovieGraphRepository::row);
 	}
 
-	private static GraphView assemble(List<EdgeRow> rows, Set<Long> focusIds, boolean onlyShared) {
+	static GraphView assemble(List<EdgeRow> rows, Set<Long> focusIds, boolean onlyShared) {
 		Map<String, GraphView.Node> nodes = new LinkedHashMap<>();
 		Map<String, GraphView.Edge> edges = new LinkedHashMap<>();
 		for (EdgeRow row : rows) {
@@ -135,11 +135,11 @@ class MovieGraphRepository {
 		return Props.parseString(agtypeString.strip(), new int[] { 0 });
 	}
 
-	private record EdgeRow(Vertex a, Vertex b, String edgeId, String type, String start, String end,
+	record EdgeRow(Vertex a, Vertex b, String edgeId, String type, String start, String end,
 			@Nullable Double score) {
 	}
 
-	private record Vertex(String id, String label, Props props) {
+	record Vertex(String id, String label, Props props) {
 
 		GraphView.Node toNode(Set<Long> focusIds) {
 			Double tmdb = props.number("tmdb_id");
