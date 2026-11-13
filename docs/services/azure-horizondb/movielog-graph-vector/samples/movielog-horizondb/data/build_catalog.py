@@ -298,11 +298,11 @@ def write_sql(films: list[dict], path: Path) -> None:
                          " ON CONFLICT DO NOTHING;")
         # Keep an existing embedding only while the embedded text is unchanged.
         lines.append(
-            "INSERT INTO catalog.movie_docs (tmdb_id, wikidata_qid, doc, source_url, summary_en_source) VALUES ("
-            f"{tmdb}, {sql_text(film['qid'])}, {sql_text(film['doc'])}, {sql_text(film.get('overview_source'))}, "
-            f"{sql_text(film.get('summary_en_source'))})"
-            " ON CONFLICT (tmdb_id) DO UPDATE SET wikidata_qid = EXCLUDED.wikidata_qid, source_url = EXCLUDED.source_url,"
-            " summary_en_source = EXCLUDED.summary_en_source,"
+            "INSERT INTO catalog.movie_docs (tmdb_id, wikidata_qid, doc, overview, source_url, summary_en_source) VALUES ("
+            f"{tmdb}, {sql_text(film['qid'])}, {sql_text(film['doc'])}, {sql_text((film.get('overview') or '')[:4000] or None)}, "
+            f"{sql_text(film.get('overview_source'))}, {sql_text(film.get('summary_en_source'))})"
+            " ON CONFLICT (tmdb_id) DO UPDATE SET wikidata_qid = EXCLUDED.wikidata_qid, overview = EXCLUDED.overview,"
+            " source_url = EXCLUDED.source_url, summary_en_source = EXCLUDED.summary_en_source,"
             " embedding = CASE WHEN catalog.movie_docs.doc = EXCLUDED.doc THEN catalog.movie_docs.embedding END,"
             " doc = EXCLUDED.doc;")
     lines.append("COMMIT;")

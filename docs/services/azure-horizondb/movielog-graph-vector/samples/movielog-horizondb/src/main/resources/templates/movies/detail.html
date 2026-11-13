@@ -69,9 +69,12 @@
 				</article>
 			</div>
 
-			<p class="post-content movie-overview" th:if="${movie.overview != null}" th:text="${movie.overview}">줄거리</p>
-			<p class="small-text secondary-text" th:if="${movie.overview != null and overviewSource != null}">
-				줄거리 출처: <a class="link" th:href="${overviewSource}" target="_blank" rel="noopener">Wikipedia</a>,
+			<!-- Catalog movies show the stored Wikipedia summary with its source; other movies keep the TMDB overview. -->
+			<p class="post-content movie-overview" th:if="${catalogOverview != null}" th:text="${catalogOverview.text}">줄거리</p>
+			<p class="post-content movie-overview" th:if="${catalogOverview == null and movie.overview != null}"
+				th:text="${movie.overview}">줄거리</p>
+			<p class="small-text secondary-text" th:if="${catalogOverview != null}">
+				줄거리 출처: <a class="link" th:href="${catalogOverview.sourceUrl}" target="_blank" rel="noopener">Wikipedia</a>,
 				<a class="link" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
 			</p>
 

@@ -73,13 +73,13 @@ public class DiscoverService {
 				() -> vectors.similar(tmdbId, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
 	}
 
-	/** Source article of the movie's overview, or null when unknown or the catalog cannot be read. */
-	public @Nullable String overviewSource(long tmdbId) {
+	/** The catalog's attributed summary of the movie, or null when there is none or the catalog cannot be read. */
+	public @Nullable CatalogOverview catalogOverview(long tmdbId) {
 		try {
-			return vectors.overviewSource(tmdbId);
+			return vectors.catalogOverview(tmdbId);
 		}
 		catch (DataAccessException ex) {
-			logger.warn("overview source lookup failed: {}", ex.getMostSpecificCause().getMessage());
+			logger.warn("catalog overview lookup failed: {}", ex.getMostSpecificCause().getMessage());
 			return null;
 		}
 	}

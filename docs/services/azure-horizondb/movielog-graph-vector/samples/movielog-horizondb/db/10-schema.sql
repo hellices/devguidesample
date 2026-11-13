@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS catalog.movie_docs (
 	tmdb_id bigint PRIMARY KEY,
 	wikidata_qid text,
 	doc text NOT NULL,
+	overview text,
 	source_url text,
 	summary_en_source text,
 	embedding vector(1536),
@@ -46,6 +47,9 @@ CREATE TABLE IF NOT EXISTS catalog.movie_docs (
 );
 -- Databases created before the English lead source was recorded.
 ALTER TABLE catalog.movie_docs ADD COLUMN IF NOT EXISTS summary_en_source text;
+-- The shown Wikipedia summary next to its source_url, so attribution stays with this text even after the app
+-- refreshes public.movies.overview from TMDB.
+ALTER TABLE catalog.movie_docs ADD COLUMN IF NOT EXISTS overview text;
 
 GRANT USAGE ON SCHEMA catalog TO movielog;
 GRANT SELECT ON ALL TABLES IN SCHEMA catalog TO movielog;

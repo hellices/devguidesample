@@ -17,8 +17,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 class VectorSearchRepository {
 
+	// The catalog's own summary is shown with its source article; public.movies.overview may later come from TMDB.
 	private static final String COLUMNS = """
-			d.tmdb_id, m.title, m.original_title, m.release_date, m.genres, m.overview, d.source_url""";
+			d.tmdb_id, m.title, m.original_title, m.release_date, m.genres, coalesce(d.overview, m.overview) AS overview,
+			CASE WHEN d.overview IS NOT NULL THEN d.source_url END AS source_url""";
 
 	private final JdbcClient jdbc;
 
@@ -54,11 +56,13 @@ class VectorSearchRepository {
 			.list();
 	}
 
-	/** Wikipedia article the stored overview of a catalog movie was taken from, for attribution. */
-	@Nullable String overviewSource(long tmdbId) {
-		return jdbc.sql("SELECT source_url FROM catalog.movie_docs WHERE tmdb_id = :tmdbId")
+	/** The catalog's Wikipedia summary of a movie with its source article, when both are stored. */
+	@Nullable CatalogOverview catalogOverview(long tmdbId) {
+		return jdbc.sql("""
+				SELECT overview, source_url FROM catalog.movie_docs
+				WHERE tmdb_id = :tmdbId AND overview IS NOT NULL AND source_url IS NOT NULL""")
 			.param("tmdbId", tmdbId)
-			.query(String.class)
+			.query((rs, row) -> new CatalogOverview(rs.getString("overview"), rs.getString("source_url")))
 			.optional()
 			.orElse(null);
 	}
