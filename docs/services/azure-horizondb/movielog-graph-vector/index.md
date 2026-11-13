@@ -75,8 +75,8 @@ Azure HorizonDB 하나에 관계형 데이터, 벡터, 그래프를 함께 두�
 
 ![MovieLog 의미 검색 화면. 질의 '호빗이나 오크같은게 나오는 영화'에 대해 결과 영화 12편 사이의 관계 그래프가 영화(보라 사각형), 인물(주황 원), 장르(초록 마름모), SIMILAR_TO 점선으로 그려지고, 아래에 호빗: 뜻밖의 여정 0.478, 호빗: 스마우그의 폐허 0.435 순서의 결과 목록이 보임](images/discover-semantic-search.png)
 
-같은 시간대 Grafana 대시보드에서 질의 임베딩은 평균 96.0 ms, HorizonDB 벡터 검색은
-5.32 ms, AGE 그래프 조회는 4.51 ms였습니다(2026-11-13 21:21–22:21 KST, 합성 부하
+같은 시간대 Grafana 대시보드에서 질의 임베딩은 평균 93.8 ms, HorizonDB 벡터 검색은
+5.28 ms, AGE 그래프 조회는 4.45 ms였습니다(2026-11-13 21:21–22:21 KST, 합성 부하
 의미 검색 4.68K건, 실패 0건). 응답 시간의 대부분은 Azure OpenAI 호출이고 DB 단계는
 수 밀리초입니다.
 
@@ -317,7 +317,8 @@ $cy$) AS (a_id agtype, a_label agtype, a_props agtype,
   Spring의 named parameter 파서가 `(a:Movie)`를 parameter로 읽지 않도록 그래프 조회는
   `JdbcTemplate`으로 실행합니다.
 - **화면** — 노드와 관계는 DB가 돌려준 그대로 Cytoscape.js가 그리고, 라벨 크기를 포함해
-  겹침을 피하는 fCoSE 레이아웃을 씁니다.
+  겹침을 피하는 fCoSE 레이아웃을 씁니다. 같은 JSON으로 그래프 아래에 노드별 관계와 영화 링크를
+  담은 텍스트 목록도 만들어, 키보드와 스크린 리더로 같은 관계를 탐색할 수 있습니다.
 
 ![반지의 제왕: 왕의 귀환 관계 그래프. 중심 영화 주변에 피터 잭슨, 이언 매켈런, 케이트 블란쳇, 올랜도 블룸 같은 인물과 판타지·모험 장르, 반지의 제왕·호빗 시리즈와 킹콩 같은 SIMILAR_TO 영화가 겹치지 않게 배치됨](images/movie-graph.png)
 
@@ -348,7 +349,7 @@ parameter로 넘깁니다. 이 구조에서는 앱의 embedding client만 바꾸
 Azure OpenAI 호출은 agent의 dependency로도 수집되어, 대시보드에서 쿼리 종류별(벡터 `<=>`,
 AGE cypher, 일반 SQL) 시간을 나눠 볼 수 있습니다.
 
-![MovieLog HorizonDB 의미 검색 대시보드. 의미 검색 4.68K, 평균 질의 임베딩 96.0 ms, 평균 벡터 검색 5.32 ms, 평균 그래프 조회 4.51 ms, 실패 0 stat과 단계별 지연·호출 수, HorizonDB SQL 호출 수와 평균 시간, Azure OpenAI 임베딩 호출 시간, 쿼리 유형별 시간 표, 엔드포인트별 p95와 실패율이 보임](images/grafana-discover-dashboard.png)
+![MovieLog HorizonDB 의미 검색 대시보드. 의미 검색 4.68K, 평균 질의 임베딩 93.8 ms, 평균 벡터 검색 5.28 ms, 평균 그래프 조회 4.45 ms, 실패 0 stat과 단계별 지연·호출 수, HorizonDB SQL 호출 수와 평균 시간, Azure OpenAI 임베딩 호출 시간, 쿼리 유형별 시간 표, 엔드포인트별 p95와 실패율이 보임](images/grafana-discover-dashboard.png)
 
 ## MovieLog HorizonDB 실습 sample { #lab }
 

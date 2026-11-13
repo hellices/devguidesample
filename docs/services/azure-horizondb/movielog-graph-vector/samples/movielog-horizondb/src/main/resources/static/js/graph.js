@@ -1,5 +1,7 @@
-// Renders /api/discover graph JSON with Cytoscape.js and the fCoSE layout (globals from the CDN).
+// Renders /api/discover graph JSON with Cytoscape.js and the fCoSE layout (globals from the CDN),
+// plus the same relations as a text list with links for keyboard and screen-reader users.
 const container = document.getElementById("graph");
+const relationList = document.getElementById("graph-relations");
 
 const COLORS = { Movie: "#6750a4", Person: "#e8a33d", Genre: "#2e7d6b", Similar: "#6750a4" };
 
@@ -49,6 +51,77 @@ function layoutOptions() {
 	return { ...common, name: "cose", nodeRepulsion: () => 40000, idealEdgeLength: edgeLength, nodeOverlap: 40 };
 }
 
+const RELATION_NAMES = { DIRECTED: "감독", ACTED_IN: "출연", IN_GENRE: "장르", SIMILAR_TO: "비슷한 영화" };
+const KIND_ORDER = { Movie: 0, Person: 1, Genre: 2 };
+
+function nodeLabel(node) {
+	return node.year ? `${node.name} (${node.year})` : node.name;
+}
+
+function nodeLink(node, base) {
+	if (node.kind !== "Movie" || node.tmdbId == null || !base) {
+		const span = document.createElement("span");
+		span.textContent = nodeLabel(node);
+		return span;
+	}
+	const link = document.createElement("a");
+	link.className = "link";
+	link.href = `${base}${node.tmdbId}`;
+	link.textContent = nodeLabel(node);
+	return link;
+}
+
+// One item per node: its neighbors grouped by relation type, in the order focus movies, movies, people, genres.
+function renderRelationList(view, base) {
+	if (!relationList) {
+		return;
+	}
+	const byId = new Map(view.nodes.map((node) => [node.id, node]));
+	const relations = new Map(view.nodes.map((node) => [node.id, new Map()]));
+	for (const edge of view.edges) {
+		for (const [from, to] of [[edge.source, edge.target], [edge.target, edge.source]]) {
+			const neighbor = byId.get(to);
+			const groups = relations.get(from);
+			if (!neighbor || !groups) {
+				continue;
+			}
+			if (!groups.has(edge.type)) {
+				groups.set(edge.type, []);
+			}
+			groups.get(edge.type).push({ node: neighbor, score: edge.type === "SIMILAR_TO" ? edge.score : null });
+		}
+	}
+	const ordered = [...view.nodes].sort((a, b) => (b.focus - a.focus) || (KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
+		|| nodeLabel(a).localeCompare(nodeLabel(b), "ko"));
+	const list = document.createElement("ul");
+	for (const node of ordered) {
+		const groups = relations.get(node.id);
+		if (!groups || groups.size === 0) {
+			continue;
+		}
+		const item = document.createElement("li");
+		item.append(nodeLink(node, base));
+		const details = document.createElement("ul");
+		for (const [type, neighbors] of groups) {
+			const line = document.createElement("li");
+			line.append(`${RELATION_NAMES[type] || type}: `);
+			neighbors.forEach(({ node: neighbor, score }, index) => {
+				if (index > 0) {
+					line.append(", ");
+				}
+				line.append(nodeLink(neighbor, base));
+				if (score != null) {
+					line.append(` (${score.toFixed(2)})`);
+				}
+			});
+			details.append(line);
+		}
+		item.append(details);
+		list.append(item);
+	}
+	relationList.replaceChildren(list);
+}
+
 async function render() {
 	if (!container || typeof window.cytoscape !== "function") {
 		return;
@@ -63,6 +136,8 @@ async function render() {
 		container.textContent = "그래프에 연결된 노드가 없습니다.";
 		return;
 	}
+	const base = container.dataset.graphUrl || container.dataset.movieUrl;
+	renderRelationList(view, base);
 	const cy = window.cytoscape({
 		container,
 		elements: toElements(view),
@@ -133,7 +208,6 @@ async function render() {
 	});
 	cy.on("dbltap", "node[kind = 'Movie']", (event) => {
 		const tmdbId = event.target.data("tmdbId");
-		const base = container.dataset.graphUrl || container.dataset.movieUrl;
 		if (tmdbId != null) {
 			window.location.href = `${base}${tmdbId}`;
 		}

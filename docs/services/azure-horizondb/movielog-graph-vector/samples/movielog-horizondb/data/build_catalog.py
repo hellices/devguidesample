@@ -213,8 +213,11 @@ def summary(article_url: str | None) -> tuple[str | None, str | None]:
     if not article_url:
         return None, None
     parsed = urllib.parse.urlparse(article_url)
-    title = parsed.path.rsplit("/", 1)[-1]
-    data = http_json(f"{parsed.scheme}://{parsed.netloc}/api/rest_v1/page/summary/{title}", timeout=30)
+    # Titles such as "8과_1/2" or "Face/Off" contain "/": keep everything after /wiki/ and send it as one
+    # REST path segment, otherwise the summary of a different page ("2", "Off") is fetched.
+    title = urllib.parse.unquote(parsed.path.removeprefix("/wiki/"))
+    segment = urllib.parse.quote(title, safe="")
+    data = http_json(f"{parsed.scheme}://{parsed.netloc}/api/rest_v1/page/summary/{segment}", timeout=30)
     extract = (data.get("extract") or "").strip()
     return (extract or None), (article_url if extract else None)
 

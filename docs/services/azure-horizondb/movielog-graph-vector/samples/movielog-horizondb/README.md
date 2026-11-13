@@ -25,7 +25,7 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `db/20-vector-index.sql` | `embedding`에 DiskANN 코사인 index를 만듭니다. |
 | `db/30-graph.sql` | 관계형 카탈로그에서 AGE 그래프 `movie_graph`를 다시 만듭니다. 영화마다 임베딩 최근접 3편을 `SIMILAR_TO`로 잇습니다. |
 | `src/main/java/.../discover/` | 의미 검색(`EmbeddingClient`, `VectorSearchRepository`), 그래프 조회(`MovieGraphRepository`), `movielog.discover.*` Timer를 기록하는 `DiscoverService`, 웹·API controller입니다. |
-| `src/main/resources/templates/discover/`, `static/js/graph.js` | `/discover` 의미 검색 화면과 `/graph/movies/{tmdbId}` 그래프 화면입니다. Cytoscape.js와 라벨 크기까지 계산해 겹침을 피하는 fCoSE 레이아웃으로 그립니다. |
+| `src/main/resources/templates/discover/`, `static/js/graph.js` | `/discover` 의미 검색 화면과 `/graph/movies/{tmdbId}` 그래프 화면입니다. Cytoscape.js와 라벨 크기까지 계산해 겹침을 피하는 fCoSE 레이아웃으로 그리고, 키보드·스크린 리더용 관계 텍스트 목록과 영화 링크를 함께 렌더링합니다. |
 | `k8s/00-namespace.yaml` | namespace와 workload identity ServiceAccount입니다. |
 | `scripts/assemble-app.sh` | 기존 MovieLog sample과 이 sample의 변경 파일을 합쳐 `out/app/`에 앱 소스를 만듭니다. |
 | `k8s/20-movielog.yaml` | HorizonDB 연결(secret)과 Azure OpenAI endpoint를 받는 앱 Deployment입니다. |
@@ -180,13 +180,13 @@ PGDATABASE=movielog psql -f db/10-schema.sql
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.1.3 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.1.4 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.1.3"
+export APP_IMAGE="$ACR_SERVER/movielog:2.1.4"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -

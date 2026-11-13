@@ -125,7 +125,7 @@
    "id": 3,
    "type": "stat",
    "title": "평균 질의 임베딩 (ms)",
-   "description": "Azure OpenAI text-embedding-3-large 호출 시간. Entra token 발급 포함. sum(valueSum)/sum(valueCount).",
+   "description": "Azure OpenAI text-embedding-3-large 호출 시간. Entra token 발급 포함. sum(valueSum)/sum(valueCount). 선택 기간 전체를 한 값으로 계산합니다. 구간별 추이는 아래 시계열 패널에서 봅니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -145,11 +145,11 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_embedding\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_embedding\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount)",
       "resources": [
        "$appinsights"
       ],
-      "resultFormat": "time_series"
+      "resultFormat": "table"
      }
     }
    ],
@@ -166,13 +166,13 @@
    "options": {
     "reduceOptions": {
      "calcs": [
-      "mean"
+      "lastNotNull"
      ],
      "fields": "",
      "values": false
     },
     "colorMode": "value",
-    "graphMode": "area",
+    "graphMode": "none",
     "textMode": "value",
     "justifyMode": "center",
     "orientation": "auto"
@@ -182,7 +182,7 @@
    "id": 4,
    "type": "stat",
    "title": "평균 벡터 검색 (ms)",
-   "description": "HorizonDB pgvector 코사인 거리 정렬(DiskANN 인덱스) 시간. sum(valueSum)/sum(valueCount).",
+   "description": "HorizonDB pgvector 코사인 거리 정렬 시간. sum(valueSum)/sum(valueCount). 선택 기간 전체를 한 값으로 계산합니다. 구간별 추이는 아래 시계열 패널에서 봅니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -202,11 +202,11 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_search\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_search\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount)",
       "resources": [
        "$appinsights"
       ],
-      "resultFormat": "time_series"
+      "resultFormat": "table"
      }
     }
    ],
@@ -223,13 +223,13 @@
    "options": {
     "reduceOptions": {
      "calcs": [
-      "mean"
+      "lastNotNull"
      ],
      "fields": "",
      "values": false
     },
     "colorMode": "value",
-    "graphMode": "area",
+    "graphMode": "none",
     "textMode": "value",
     "justifyMode": "center",
     "orientation": "auto"
@@ -239,7 +239,7 @@
    "id": 5,
    "type": "stat",
    "title": "평균 그래프 조회 (ms)",
-   "description": "Apache AGE openCypher 조회 시간. kind=movie(주변)와 results(결과 사이) 합산. sum(valueSum)/sum(valueCount).",
+   "description": "Apache AGE openCypher 조회 시간. kind=movie(주변)와 results(결과 사이) 합산. sum(valueSum)/sum(valueCount). 선택 기간 전체를 한 값으로 계산합니다. 구간별 추이는 아래 시계열 패널에서 봅니다.",
    "datasource": {
     "type": "grafana-azure-monitor-datasource",
     "uid": "${datasource}"
@@ -259,11 +259,11 @@
      },
      "queryType": "Azure Log Analytics",
      "azureLogAnalytics": {
-      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_graph\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount) by bin(timestamp, max_of($__interval, 1m))\n| order by timestamp asc",
+      "query": "customMetrics\n| where $__timeFilter(timestamp)\n| where cloud_RoleName == ${role:singlequote}\n| where name == \"movielog_discover_graph\"\n| summarize avg_ms = sum(valueSum) / sum(valueCount)",
       "resources": [
        "$appinsights"
       ],
-      "resultFormat": "time_series"
+      "resultFormat": "table"
      }
     }
    ],
@@ -280,13 +280,13 @@
    "options": {
     "reduceOptions": {
      "calcs": [
-      "mean"
+      "lastNotNull"
      ],
      "fields": "",
      "values": false
     },
     "colorMode": "value",
-    "graphMode": "area",
+    "graphMode": "none",
     "textMode": "value",
     "justifyMode": "center",
     "orientation": "auto"
