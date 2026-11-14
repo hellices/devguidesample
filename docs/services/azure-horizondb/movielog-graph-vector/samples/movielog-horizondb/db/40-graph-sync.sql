@@ -1,8 +1,8 @@
 -- Run as the HorizonDB administrator against the "movielog" database after 30-graph.sql. Re-running is safe.
 -- catalog.sync_movie_graph(tmdb_id) rebuilds one movie of the AGE graph "movie_graph" from the relational rows,
 -- the same way 30-graph.sql builds every movie: Movie, its Person and Genre neighbors, DIRECTED, ACTED_IN,
--- IN_GENRE and SIMILAR_TO to its 3 nearest movies by embedding. The app calls it after it stores a movie that
--- members imported from TMDB, so the movie appears in the graph without a full rebuild.
+-- IN_GENRE and the SIMILAR_TO pairs that touch the movie. The app calls it after it stores a movie that members
+-- imported from TMDB, so the movie appears in the graph without a full rebuild (about 1.4 s for 482 movies).
 -- The app role gets EXECUTE on this function only; it cannot write movie_graph tables directly.
 \set ON_ERROR_STOP on
 
@@ -67,21 +67,34 @@ BEGIN
 			CASE WHEN r.role = 'director' THEN 'DIRECTED' ELSE format('ACTED_IN {position: %s}', r.position) END));
 	END LOOP;
 
+	-- SIMILAR_TO pairs touching this movie, by the rule of 30-graph.sql: every movie links to its 3 nearest
+	-- neighbors, a pair is stored once from the lower to the higher tmdb_id, so a pair where another movie chose
+	-- this one is restored as well. DETACH DELETE above removed both directions.
 	FOR r IN
-		SELECT b.tmdb_id, round((1 - (a.embedding OPERATOR(public.<=>) b.embedding))::numeric, 4) AS score
-		FROM catalog.movie_docs a
-		CROSS JOIN LATERAL (
-			SELECT d.tmdb_id, d.embedding FROM catalog.movie_docs d
-			WHERE d.tmdb_id <> a.tmdb_id AND d.embedding IS NOT NULL
-				AND EXISTS (SELECT 1 FROM public.movies m WHERE m.tmdb_id = d.tmdb_id)
-			ORDER BY d.embedding OPERATOR(public.<=>) a.embedding
-			LIMIT 3
-		) b
-		WHERE a.tmdb_id = p_tmdb_id AND a.embedding IS NOT NULL
+		WITH knn AS (
+			SELECT a.tmdb_id AS a, b.tmdb_id AS b, 1 - (a.embedding OPERATOR(public.<=>) b.embedding) AS score
+			FROM catalog.movie_docs a
+			CROSS JOIN LATERAL (
+				SELECT d.tmdb_id, d.embedding FROM catalog.movie_docs d
+				WHERE d.tmdb_id <> a.tmdb_id AND d.embedding IS NOT NULL
+				ORDER BY d.embedding OPERATOR(public.<=>) a.embedding
+				LIMIT 3
+			) b
+			WHERE a.embedding IS NOT NULL
+		), pairs AS (
+			SELECT DISTINCT ON (least(a, b), greatest(a, b)) least(a, b) AS a, greatest(a, b) AS b,
+				round(score::numeric, 4) AS score
+			FROM knn
+			WHERE a = p_tmdb_id OR b = p_tmdb_id
+			ORDER BY least(a, b), greatest(a, b), score DESC
+		)
+		SELECT pairs.a, pairs.b, pairs.score FROM pairs
+		WHERE EXISTS (SELECT 1 FROM public.movies m WHERE m.tmdb_id = pairs.a)
+			AND EXISTS (SELECT 1 FROM public.movies m WHERE m.tmdb_id = pairs.b)
 	LOOP
 		PERFORM catalog.run_cypher(format(
 			'MATCH (a:Movie {tmdb_id: %s}), (b:Movie {tmdb_id: %s}) CREATE (a)-[:SIMILAR_TO {score: %s}]->(b)',
-			p_tmdb_id, r.tmdb_id, r.score));
+			r.a, r.b, r.score));
 	END LOOP;
 	RETURN true;
 END

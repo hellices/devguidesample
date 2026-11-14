@@ -25,8 +25,10 @@ import org.springframework.stereotype.Component;
  * <p>
  * Hangul is compared by jamo (NFD), where a vowel swap costs half an edit, because misspelled transliterations
  * mostly differ in vowels. To leave descriptive queries alone, only words found in no movie document (ignoring a
- * trailing particle such as 와·을) are corrected, the best candidate must reach {@link #MIN_SIMILARITY} and beat the
- * second by {@link #MIN_MARGIN}, and longer word windows win, so a full name replaces both of its words.
+ * trailing particle such as 와·을) are corrected, and the best candidate must reach {@link #MIN_SIMILARITY} and beat
+ * the second by {@link #MIN_MARGIN}. Windows of one to three words compete on similarity, so a full name replaces
+ * both of its words ("드늬 뷜베브") while a modifier next to a title stays ("인셉숀 2" → "인셉션 2"); on a tie the
+ * longer window wins.
  */
 @Component
 class QueryCorrector {
@@ -100,7 +102,7 @@ class QueryCorrector {
 	static Optional<QueryCorrection> correct(String query, Snapshot snapshot) {
 		String[] words = query.strip().split("\\s+");
 		Candidate chosen = null;
-		for (int size = Math.min(MAX_WINDOW, words.length); size >= 1 && chosen == null; size--) {
+		for (int size = Math.min(MAX_WINDOW, words.length); size >= 1; size--) {
 			for (int start = 0; start + size <= words.length; start++) {
 				String[] window = Arrays.copyOfRange(words, start, start + size);
 				if (Arrays.stream(window).allMatch(snapshot::isKnown)) {

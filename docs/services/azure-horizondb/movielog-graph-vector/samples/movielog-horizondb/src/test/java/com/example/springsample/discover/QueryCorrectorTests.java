@@ -22,6 +22,9 @@ class QueryCorrectorTests {
 		assertThat(QueryCorrector.correct("크리스토퍼 놀랜 영화", SNAPSHOT))
 			.contains(new QueryCorrection("크리스토퍼 놀런 영화", "크리스토퍼 놀랜", "크리스토퍼 놀런"));
 		assertThat(QueryCorrector.correct("인셉숀", SNAPSHOT)).map(QueryCorrection::query).contains("인셉션");
+		// The one-word window is the closer match, so the modifier "2" stays in the query.
+		assertThat(QueryCorrector.correct("인셉숀 2", SNAPSHOT))
+			.contains(new QueryCorrection("인셉션 2", "인셉숀", "인셉션"));
 	}
 
 	@Test
