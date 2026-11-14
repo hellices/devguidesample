@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import com.example.springsample.discover.CatalogIndexRepository.PendingMovie;
 import com.example.springsample.discover.TmdbCreditsClient.Credit;
@@ -21,6 +23,7 @@ import com.example.springsample.discover.TmdbCreditsClient.Credits;
 import com.example.springsample.movie.MovieApiUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionOperations;
 
 class CatalogIndexerTests {
@@ -41,8 +44,20 @@ class CatalogIndexerTests {
 
 	private final QueryCorrector corrector = mock();
 
+	private final MovieGraphSync graphSync = mock();
+
 	private final CatalogIndexer indexer = new CatalogIndexer(repository, embeddings, tmdb, corrector,
-			TransactionOperations.withoutTransaction(), 20);
+			provider(graphSync), TransactionOperations.withoutTransaction(), 20);
+
+	@SuppressWarnings("unchecked")
+	private static ObjectProvider<MovieGraphSync> provider(MovieGraphSync graphSync) {
+		ObjectProvider<MovieGraphSync> provider = mock();
+		willAnswer(call -> {
+			((Consumer<MovieGraphSync>) call.getArgument(0)).accept(graphSync);
+			return null;
+		}).given(provider).ifAvailable(any());
+		return provider;
+	}
 
 	@Test
 	void documentFollowsTheCatalogLayoutAndSkipsMissingParts() {
@@ -58,7 +73,7 @@ class CatalogIndexerTests {
 	}
 
 	@Test
-	void storesDocumentCreditsAndGenresThenUpdatesTheGraphForEachMovie() {
+	void storesDocumentCreditsAndGenresForEachMovieThenAppliesTheGraphQueue() {
 		given(embeddings.isEnabled()).willReturn(true);
 		given(tmdb.isEnabled()).willReturn(true);
 		given(tmdb.credits(693134)).willReturn(DUNE_2_CREDITS);
@@ -66,7 +81,6 @@ class CatalogIndexerTests {
 		given(tmdb.wikidataId(137427)).willReturn(Optional.of("Q548823"));
 		given(repository.tryLock()).willReturn(true);
 		given(repository.pending(1)).willReturn(List.of(DUNE_2), List.of(UNKNOWN), List.of());
-		given(repository.syncGraph(anyLong())).willReturn(true);
 		float[] vector = { 0.1f, 0.2f };
 		given(embeddings.embed(anyString())).willReturn(vector);
 
@@ -75,9 +89,9 @@ class CatalogIndexerTests {
 		order.verify(repository).insert(693134L, CatalogIndexer.document(DUNE_2, DUNE_2_CREDITS), vector);
 		order.verify(repository).saveCredits(693134L, DUNE_2_CREDITS, Map.of(137427L, "Q548823"));
 		order.verify(repository).saveGenres(693134L, "SF, 모험");
-		order.verify(repository).syncGraph(693134L);
 		order.verify(repository).insert(1L, "제목: 제목", vector);
 		verify(corrector).refresh();
+		verify(graphSync).processQueue();
 	}
 
 	@Test
@@ -89,6 +103,7 @@ class CatalogIndexerTests {
 		verify(repository, never()).pending(1);
 		verify(embeddings, never()).embed(anyString());
 		verify(corrector, never()).refresh();
+		verify(graphSync, never()).processQueue();
 	}
 
 	@Test
@@ -96,7 +111,6 @@ class CatalogIndexerTests {
 		given(embeddings.isEnabled()).willReturn(true);
 		given(repository.tryLock()).willReturn(true);
 		given(repository.pending(1)).willReturn(List.of(DUNE_2), List.of(UNKNOWN));
-		given(repository.syncGraph(anyLong())).willReturn(true);
 		given(embeddings.embed(CatalogIndexer.document(DUNE_2, Credits.NONE))).willReturn(new float[] { 1f });
 		given(embeddings.embed("제목: 제목")).willThrow(new EmbeddingUnavailableException("down", null));
 
@@ -116,7 +130,7 @@ class CatalogIndexerTests {
 		assertThat(indexer.indexPending()).isEmpty();
 		verify(embeddings, never()).embed(anyString());
 		verify(repository, never()).insert(anyLong(), anyString(), any());
-		verify(repository, never()).syncGraph(anyLong());
+		verify(repository, never()).saveCredits(anyLong(), any(), any());
 	}
 
 	@Test

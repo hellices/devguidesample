@@ -13,10 +13,9 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Finds movies imported from TMDB after the catalog load ({@code public.movies} rows without a
- * {@code catalog.movie_docs} row) and stores their embedded document, credits and genres in the catalog tables,
- * then updates the AGE graph for that movie. The app role needs INSERT on {@code catalog.movie_docs}
- * ({@code db/10-schema.sql}), on {@code people}, {@code movie_credits} and {@code movie_genres}, and EXECUTE on
- * {@code catalog.sync_movie_graph} ({@code db/40-graph-sync.sql}).
+ * {@code catalog.movie_docs} row) and stores their embedded document, credits and genres in the catalog tables.
+ * The app role needs INSERT on {@code catalog.movie_docs} ({@code db/10-schema.sql}) and on {@code people},
+ * {@code movie_credits} and {@code movie_genres} ({@code db/40-graph-sync.sql}).
  */
 @Repository
 class CatalogIndexRepository {
@@ -133,14 +132,6 @@ class CatalogIndexRepository {
 				.param("genre", genre)
 				.update();
 		}
-	}
-
-	/** False when the graph does not exist yet; {@code db/30-graph.sql} then includes the movie. */
-	boolean syncGraph(long tmdbId) {
-		return jdbc.sql("SELECT catalog.sync_movie_graph(:tmdbId)")
-			.param("tmdbId", tmdbId)
-			.query(Boolean.class)
-			.single();
 	}
 
 	record PendingMovie(long tmdbId, String title, @Nullable String originalTitle, @Nullable Integer year,

@@ -24,8 +24,8 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `db/00-database.sql` | `movielog` DB와 앱 role을 만듭니다. |
 | `db/10-schema.sql` | `vector`, `pg_diskann`, `age` 확장과 `catalog` schema를 만듭니다. |
 | `db/20-vector-index.sql` | `embedding`에 DiskANN 코사인 index를 만듭니다. |
-| `db/30-graph.sql` | 관계형 카탈로그에서 AGE 그래프 `movie_graph`를 다시 만듭니다. 영화마다 임베딩 최근접 3편을 `SIMILAR_TO`로 잇습니다. |
-| `db/40-graph-sync.sql` | 영화 한 편을 관계형 행에서 그래프에 다시 반영하는 `catalog.sync_movie_graph`(SECURITY DEFINER)와, 앱이 TMDB credits·장르를 넣는 `INSERT` 권한입니다. `30-graph.sql` 다음에 한 번 실행합니다. |
+| `db/30-graph.sql` | 관계형 카탈로그에서 AGE 그래프 `movie_graph`를 처음 만듭니다. 영화마다 임베딩 최근접 3편을 `SIMILAR_TO`로 잇습니다. 이후 변경은 `40-graph-sync.sql`이 반영합니다. |
+| `db/40-graph-sync.sql` | 그래프 변경 queue(`catalog.graph_queue`)와 관계형 테이블 trigger, 바뀐 영화만 그래프에 반영하고 `SIMILAR_TO`를 맞추는 `catalog.process_graph_queue`, 관계형과 그래프의 차이를 queue에 넣는 `catalog.enqueue_graph_drift`(둘 다 SECURITY DEFINER)와 앱의 `INSERT` 권한입니다. `30-graph.sql` 다음에 한 번 실행합니다. |
 | `src/main/java/.../discover/` | 의미 검색(`EmbeddingClient`, 벡터·키워드 순위를 RRF로 합치는 `VectorSearchRepository`), 인물·제목 철자 교정(`QueryCorrector`), 카탈로그 밖 영화 색인(`CatalogIndexer`, `TmdbCreditsClient`), 그래프 조회(`MovieGraphRepository`), `movielog.discover.*` Timer를 기록하는 `DiscoverService`, 웹·API controller입니다. |
 | `src/main/resources/templates/discover/`, `static/js/graph.js` | `/discover` 의미 검색 화면과 `/graph/movies/{tmdbId}` 그래프 화면입니다. Cytoscape.js와 라벨 크기까지 계산해 겹침을 피하는 fCoSE 레이아웃으로 그리고, 키보드·스크린 리더용 관계 텍스트 목록과 영화 링크를 함께 렌더링합니다. |
 | `k8s/00-namespace.yaml` | namespace와 workload identity ServiceAccount입니다. |
@@ -106,8 +106,12 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 - **카탈로그 밖의 영화는 앱이 색인합니다.** 회원이 TMDB 검색으로 처음 연 영화는
   `public.movies`에만 저장되므로, `aks` profile의 `CatalogIndexer`가 30초마다 문서가 없는
   영화를 찾아 TMDB credits를 더한 문서를 임베딩해 `catalog.movie_docs`에 넣고, 인물(TMDB가 아는
-  Wikidata id로 카탈로그 인물과 연결)·출연·장르를 `catalog.*`에 넣은 뒤 `catalog.sync_movie_graph`로
-  그래프에 반영합니다. `db/10-schema.sql`과 `db/40-graph-sync.sql`의 권한이 필요합니다.
+  Wikidata id로 카탈로그 인물과 연결)·출연·장르를 `catalog.*`에 넣습니다. `db/10-schema.sql`과
+  `db/40-graph-sync.sql`의 권한이 필요합니다.
+- **그래프는 변경분만 반영합니다.** 관계형 테이블의 trigger가 바뀐 영화를 `catalog.graph_queue`에 넣고,
+  `aks` profile의 `MovieGraphSync`가 30초마다 `catalog.process_graph_queue`로 그 영화만 다시 만들고
+  `SIMILAR_TO`를 맞춥니다. 1시간마다 관계형과 그래프의 차이도 점검합니다. 카탈로그를 다시 적재해도
+  `30-graph.sql`을 다시 실행할 필요가 없습니다.
 - **틀린 철자는 인물·제목 사전으로 고칩니다.** 어떤 영화 문서에도 없는 단어가 든 구간을 한글 자모
   편집 거리로 `catalog.people` 이름과 영화 제목에 맞춰 보고, 유사도 0.75 이상이며 2위보다 0.1 이상
   높을 때만 바꿉니다(「드늬 뷜베브」 → 「드니 빌뇌브」).
@@ -266,13 +270,13 @@ rm -rf "$SECRETS"
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.4.2 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.5.0 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.4.2"
+export APP_IMAGE="$ACR_SERVER/movielog:2.5.0"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -

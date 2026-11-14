@@ -12,6 +12,7 @@ import com.example.springsample.movie.MovieApiUnavailableException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Configuration;
@@ -23,9 +24,9 @@ import org.springframework.transaction.support.TransactionOperations;
  * Makes movies that members import from TMDB searchable. The catalog load embeds only the movies it knows, so a
  * movie first opened through TMDB search has no {@code catalog.movie_docs} row and never appears in semantic search.
  * This job embeds such movies with the same deployment and document layout as {@code data/build_catalog.py}, taking
- * directors and leading cast from TMDB credits, stores the credits and genres in the catalog tables and adds the
- * movie to the AGE graph through {@code catalog.sync_movie_graph}. Each movie is one transaction, so a movie is
- * either fully indexed (document, credits, graph) or retried on the next run.
+ * directors and leading cast from TMDB credits, and stores the credits and genres in the catalog tables. Each movie
+ * is one transaction, so a movie is either fully indexed or retried on the next run. Triggers queue the stored rows
+ * for the graph, and {@link MovieGraphSync} applies them right after the run.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
@@ -42,17 +43,20 @@ class CatalogIndexer {
 
 	private final QueryCorrector corrector;
 
+	private final ObjectProvider<MovieGraphSync> graphSync;
+
 	private final TransactionOperations transactions;
 
 	private final int batchSize;
 
 	CatalogIndexer(CatalogIndexRepository repository, EmbeddingClient embeddings, TmdbCreditsClient tmdb,
-			QueryCorrector corrector, TransactionOperations transactions,
+			QueryCorrector corrector, ObjectProvider<MovieGraphSync> graphSync, TransactionOperations transactions,
 			@Value("${app.discover.indexer.batch-size:20}") int batchSize) {
 		this.repository = repository;
 		this.embeddings = embeddings;
 		this.tmdb = tmdb;
 		this.corrector = corrector;
+		this.graphSync = graphSync;
 		this.transactions = transactions;
 		this.batchSize = batchSize;
 	}
@@ -92,6 +96,7 @@ class CatalogIndexer {
 		if (!indexed.isEmpty()) {
 			// New people and titles become spelling-correction candidates right away.
 			corrector.refresh();
+			graphSync.ifAvailable(MovieGraphSync::processQueue);
 		}
 		return indexed;
 	}
@@ -128,10 +133,6 @@ class CatalogIndexer {
 		repository.insert(movie.tmdbId(), doc, vector);
 		repository.saveCredits(movie.tmdbId(), credits, wikidataIds);
 		repository.saveGenres(movie.tmdbId(), movie.genres());
-		if (!repository.syncGraph(movie.tmdbId())) {
-			logger.info("Graph movie_graph does not exist; movie {} joins it on the next 30-graph.sql run",
-					movie.tmdbId());
-		}
 		return movie.tmdbId();
 	}
 

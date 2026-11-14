@@ -2,10 +2,16 @@
 -- Rebuilds the Apache AGE graph "movie_graph" from the relational catalog:
 --   (:Person)-[:DIRECTED]->(:Movie), (:Person)-[:ACTED_IN {position}]->(:Movie),
 --   (:Movie)-[:IN_GENRE]->(:Genre), (:Movie)-[:SIMILAR_TO {score}]->(:Movie)
--- SIMILAR_TO links each movie to its 3 nearest neighbors by embedding (cosine).
+-- SIMILAR_TO links each movie to its 3 nearest neighbors by embedding (cosine). Run it for the first build or to
+-- start over; afterwards 40-graph-sync.sql keeps the graph current without dropping it.
 \set ON_ERROR_STOP on
 
 SET search_path = ag_catalog, "$user", public;
+
+-- Same lock as catalog.process_graph_queue (40-graph-sync.sql), so the app does not update the graph while it is
+-- rebuilt. Changes queued before this point are covered by the rebuild and cleared at the end.
+SELECT pg_advisory_lock(30810959134158952);
+SELECT clock_timestamp() AS rebuild_started \gset
 
 SELECT drop_graph('movie_graph', true) FROM ag_graph WHERE name = 'movie_graph';
 SELECT create_graph('movie_graph');
@@ -110,3 +116,13 @@ $cy$) AS (label ag_catalog.agtype, nodes ag_catalog.agtype);
 SELECT * FROM ag_catalog.cypher('movie_graph', $cy$
 	MATCH ()-[r]->() RETURN type(r), count(*)
 $cy$) AS (type ag_catalog.agtype, edges ag_catalog.agtype);
+
+SELECT set_config('movielog.rebuild_started', :'rebuild_started', false);
+DO $do$
+BEGIN
+	IF to_regclass('catalog.graph_queue') IS NOT NULL THEN
+		DELETE FROM catalog.graph_queue WHERE queued_at < current_setting('movielog.rebuild_started')::timestamptz;
+	END IF;
+END
+$do$;
+SELECT pg_advisory_unlock(30810959134158952);

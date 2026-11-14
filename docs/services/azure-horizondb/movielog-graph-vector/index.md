@@ -166,7 +166,7 @@ Managed Grafana에서 봅니다.
 | 관계형 | `public.movies`, `public.reviews`·`members`·`comments` | 원본. 앱의 리뷰·회원은 요청마다 바뀜 | `movies.tmdb_id`(UNIQUE), `reviews.movie_id → movies.id` | 앱(Hibernate·JPA), 로더(`movies` upsert) |
 | 관계형 | `catalog.people`, `catalog.movie_credits`, `catalog.movie_genres` | 원본. Wikidata 구조 | `tmdb_id`, `qid`(`person_qid → people.qid`) | 로더, 앱(`CatalogIndexer`: TMDB credits·장르) |
 | 벡터 | `catalog.movie_docs.embedding vector(1536)` + DiskANN index | 원본 행에 붙은 열. 문서가 바뀌면 다시 임베딩 | `movie_docs.tmdb_id`(PK) | 로더, 앱(`CatalogIndexer`: 카탈로그 적재 뒤 TMDB에서 가져온 영화) |
-| 그래프 | `movie_graph`의 label별 테이블(`"Movie"`, `"ACTED_IN"` 등) | 파생. 관계형 행과 임베딩에서 다시 생성 | vertex 속성 `tmdb_id`, `qid` | `30-graph.sql`(전체), `catalog.sync_movie_graph`(영화 한 편) |
+| 그래프 | `movie_graph`의 label별 테이블(`"Movie"`, `"ACTED_IN"` 등) | 파생. 관계형 행과 임베딩에서 다시 생성 | vertex 속성 `tmdb_id`, `qid` | `30-graph.sql`(최초 생성), `catalog.process_graph_queue`(변경분) |
 
 - **키로 잇는 이유** — `catalog.*` 테이블은 `public.movies`에 외래 키를 두지 않고 `tmdb_id`로
   조인합니다. 앱이 Hibernate로 `public.*`를 만드는 시점과 로더가 `catalog.*`를 채우는 시점이
@@ -176,8 +176,9 @@ Managed Grafana에서 봅니다.
   관계형 행과 맞출 수 있고, GIN·btree index와 `GRANT`도 일반 테이블처럼 적용합니다.
 - **권한 경계** — 앱 role `movielog`는 `public`에 쓰고, `catalog`와 `movie_graph`에는
   `SELECT`를 받습니다. 새 영화를 위해 `catalog`의 `movie_docs`·`people`·`movie_credits`·
-  `movie_genres`에 `INSERT`만 더 받고, 그래프 테이블에는 직접 쓰지 못합니다. 그래프는 관리자가
-  소유한 `SECURITY DEFINER` 함수 `catalog.sync_movie_graph`를 통해서만 영화 한 편씩 바꿉니다.
+  `movie_genres`에 `INSERT`만 더 받고, 그래프 테이블과 변경 queue에는 직접 쓰지 못합니다. 그래프는
+  관리자가 소유한 `SECURITY DEFINER` 함수 `catalog.process_graph_queue`·`enqueue_graph_drift`를 통해서만
+  바뀝니다.
 
 ### 작성 순서: 적재 → 임베딩 → index → 그래프 { #authoring }
 
@@ -190,7 +191,8 @@ Managed Grafana에서 봅니다.
 | ① 카탈로그 적재 | `build_catalog.py` → `catalog.sql` | Wikidata SPARQL, Wikipedia 요약 API | `public.movies`, `catalog.*`, `movie_docs.doc` | `ON CONFLICT` upsert. `doc`이 바뀐 행만 `embedding`을 `NULL`로 비움 | 생성 8–11분, 적재 약 3.5분 |
 | ② 문서 임베딩 | `embed_catalog.py` | `embedding IS NULL`인 `doc` | `movie_docs.embedding` | 비어 있는 행만 처리. `--all`은 전체 재임베딩 | 479건 약 3.5분 |
 | ③ 벡터 index | `20-vector-index.sql` | `embedding` | DiskANN index | `IF NOT EXISTS`. 모델을 바꾸면 `REINDEX` | 수 초 |
-| ④ 그래프 재생성 | `30-graph.sql` | `movies`, `catalog.*`, `embedding` | `movie_graph` 전체 | graph를 지우고 다시 생성 | 약 6초 |
+| ④ 그래프 재생성 | `30-graph.sql` | `movies`, `catalog.*`, `embedding` | `movie_graph` 전체 | graph를 지우고 다시 생성. 최초 1회 | 약 6–8초 |
+| ⑤ 그래프 동기화 설치 | `40-graph-sync.sql` | — | 변경 queue, trigger, 동기화 함수 | `CREATE OR REPLACE`. 이후 그래프는 변경분만 반영 | 수 초 |
 
 Wikidata와 Wikipedia에는 포스터가 없으므로 ① 다음에 `enrich_tmdb.py` → `tmdb.sql`로 TMDB 상세
 API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에만 채웁니다. 제목·요약·임베딩·그래프에는
@@ -207,15 +209,46 @@ API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에
 3. 인물·출연·장르를 `catalog.people`·`movie_credits`·`movie_genres`에 넣습니다. 인물 키는
    Wikidata id라서 표기가 달라도(TMDB 「조쉬 브롤린」, Wikidata 「조시 브롤린」) 카탈로그의 같은
    인물로 이어집니다. Wikidata id가 없으면 `tmdb:<person id>`를 씁니다.
-4. `db/40-graph-sync.sql`의 `catalog.sync_movie_graph(tmdb_id)`가 그 영화의 `Movie` 노드를 지우고
-   ④와 같은 규칙으로 `Person`·`Genre` 관계와 그 영화가 닿는 `SIMILAR_TO` 쌍을 다시 만듭니다. 쌍에는
-   그 영화가 고른 최근접 3편과, 그 영화를 최근접 3편으로 고른 다른 영화가 모두 들어갑니다.
+4. 이 행들이 바뀌면 아래 trigger가 영화를 그래프 변경 queue에 넣고, 색인 직후 앱이 queue를 반영합니다.
 
 여러 Pod 중 PostgreSQL advisory lock을 잡은 하나만 실행합니다. 2026-11-14 실습에서 「웡카」를 처음 연 뒤
 14초 만에 색인과 그래프 반영이 끝났고, 「티모시 샬라메」·「휴 그랜트」 노드와 「찰리와 초콜릿 공장」
-`SIMILAR_TO`로 연결됐습니다. 그래프 함수는 모든 영화의 최근접 3편을 다시 계산하므로 482편에서 한 번에
-약 1.4초 걸렸고, 이미 있던 「듄」(2021)을 다시 동기화한 결과는 ④로 전체를 다시 만든 결과와 같았습니다.
-새 영화 때문에 다른 영화의 최근접 3편에서 밀려난 기존 관계는 다음 ④에서 정리됩니다.
+`SIMILAR_TO`로 연결됐습니다.
+
+### 그래프 동기화: trigger 변경 queue와 주기 반영 { #graph-sync }
+
+그래프는 관계형 행에서 만든 파생 데이터라서, 원본이 바뀔 때마다 ④로 전체를 다시 만들면 그래프를
+지운 6–8초 동안 앱이 빈 그래프를 읽고, 관리자 비밀번호를 가진 작업이 cluster 안에 있어야 합니다.
+그래서 HorizonDB trigger가 바뀐 영화를 queue에 기록하고, 앱이 그 영화만 반영하는 방식으로 바꿨습니다.
+`db/40-graph-sync.sql`이 queue, trigger, 함수를 만듭니다.
+
+| 단계 | 구성 요소 | 동작 |
+|---|---|---|
+| 변경 감지 | `public.movies`, `catalog.movie_docs`·`movie_credits`·`movie_genres`·`people` trigger | 그래프에 영향을 주는 열이 바뀐 행의 `tmdb_id`를 `catalog.graph_queue`에 upsert합니다. 인물 이름이 바뀌면 그 인물의 영화를 모두 넣습니다. TMDB 갱신처럼 제목·개봉일이 그대로인 수정은 넣지 않습니다. |
+| 반영(30초) | 앱 `MovieGraphSync` → `catalog.process_graph_queue()` | 그래프 advisory lock을 잡고 queue에서 꺼낸 영화의 `Movie` 노드와 `DIRECTED`·`ACTED_IN`·`IN_GENRE`를 ④의 규칙으로 다시 만든 뒤, `SIMILAR_TO` 전체를 임베딩 최근접 3편 규칙과 비교해 다른 쌍만 지우고 만듭니다. 한 transaction이라 앱은 반쯤 바뀐 그래프를 읽지 않습니다. |
+| 정합성 점검(1시간) | 앱 → `catalog.enqueue_graph_drift()` + 강제 reconcile | 관계형과 그래프 한쪽에만 있는 영화를 queue에 넣고, queue가 비어 있어도 `SIMILAR_TO`를 맞춥니다. 실패한 실행이나 그래프를 직접 고친 흔적을 정리합니다. |
+| 전체 재생성 | `30-graph.sql` | 같은 lock을 잡아 반영 작업과 겹치지 않고, 시작 전에 쌓인 queue를 비웁니다. 최초 생성 때만 씁니다. |
+
+- **`SIMILAR_TO` 전체 비교** — 영화 한 편이 바뀌어도 다른 영화의 최근접 3편이 바뀔 수 있습니다.
+  처음에는 바뀐 영화와 닿는 쌍만 다시 만들었는데, 새 영화 때문에 다른 영화의 최근접 3편에서 밀려난
+  기존 관계가 남았습니다. 그래서 반영할 때마다 모든 영화의 최근접 3편을 다시 계산해 그래프와
+  비교합니다. 482편에서 약 1.3초 걸립니다.
+- **Cypher 제약** — 지울 edge를 `WHERE id(r) IN [...]`로 고르면 id가 두 개 이상일 때 AGE가
+  `not a common type: 17175`(agtype)로 실패했습니다. 양 끝 `Movie`의 `tmdb_id`로 `MATCH`해 지웁니다.
+- **실행 위치** — HorizonDB의 `pg_available_extensions`에는 `pg_cron`이 있지만 2026-11-14 실습 DB의
+  `shared_preload_libraries`에는 없어서, 쓰려면 server parameter 변경과 재시작이 필요했습니다. 이미
+  workload identity와 advisory lock을 쓰는 앱의 scheduler에서 실행합니다. 실행 시간과 결과는
+  `movielog.discover.graph.sync` Timer(`mode`=`queue`·`drift`, `outcome`=`applied`·`idle`·`skipped`·`error`)로 남깁니다.
+
+2026-11-14 실습 DB에서 다음 경우마다 그래프를 label별 속성 hash로 비교했고, 모두 ④로 전체를 다시 만든
+결과와 같았습니다.
+
+| 경우 | 결과 |
+|---|---|
+| 482편 전체를 queue에 넣고 반영 | 9.3초, 7개 label 모두 같음 |
+| 앱에서 카탈로그 밖 영화 2편(「패스트 라이브즈」, 「퓨리오사」)을 처음 열고 색인·반영 | 다른 영화에서 밀려난 `SIMILAR_TO`까지 정리되어 같음 |
+| 영화 제목과 인물 이름 변경 | 다음 반영에서 노드 속성이 바뀌고, 인물 노드는 1개로 유지 |
+| `Movie` 노드 삭제, 그래프에만 있는 영화, 중복·방향 반대·점수가 다른·근거 없는 `SIMILAR_TO` | 정합성 점검 한 번(약 1.3초)으로 복구 |
 
 ④는 노드를 먼저 만들고 label 테이블에 GIN index를 건 뒤 관계를 만듭니다. Cypher 문자열에
 값을 직접 넣어야 하므로 행을 Cypher map 문자열로 바꿔 200개씩 `UNWIND`합니다.
@@ -248,7 +281,8 @@ Spring 데이터 접근 방식을 씁니다. 연결을 만들 때 `SET search_pa
 |---|---|---|---|
 | 리뷰·댓글·회원·영화 상세 | `MovieRepository`, `ReviewRepository` 등 Spring Data JPA | Hibernate SQL | `public.*` |
 | 의미 검색 `/discover` | `QueryCorrector` → `EmbeddingClient` → `VectorSearchRepository`(`JdbcClient`) | 철자 교정 뒤 질의 벡터 `<=>` 순위와 문서 머리 키워드 순위를 RRF로 결합 | `movie_docs` ⋈ `movies` |
-| 새 영화 색인(30초 주기) | `CatalogIndexer` → `TmdbCreditsClient`, `EmbeddingClient`, `CatalogIndexRepository` | advisory lock 뒤 `INSERT ... ON CONFLICT DO NOTHING`, 그래프는 `SELECT catalog.sync_movie_graph(:id)` | `movie_docs`, `people`·`movie_credits`·`movie_genres`, `movie_graph` |
+| 새 영화 색인(30초 주기) | `CatalogIndexer` → `TmdbCreditsClient`, `EmbeddingClient`, `CatalogIndexRepository` | advisory lock 뒤 `INSERT ... ON CONFLICT DO NOTHING` | `movie_docs`, `people`·`movie_credits`·`movie_genres` |
+| 그래프 동기화(30초, 점검 1시간) | `MovieGraphSync` → `GraphSyncRepository` | `SELECT catalog.process_graph_queue(:limit, :reconcile)`, `catalog.enqueue_graph_drift()` | `graph_queue`, `movie_graph` |
 | 비슷한 영화(상세 화면) | `VectorSearchRepository.similar` | 저장된 영화 벡터끼리 `<=>`. Azure OpenAI 호출 없음 | `movie_docs` |
 | 관계 그래프 `/api/discover/graph` | `MovieGraphRepository`(`JdbcTemplate`) | `ag_catalog.cypher()` 안의 openCypher | `movie_graph` |
 
