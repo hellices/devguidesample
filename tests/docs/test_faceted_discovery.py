@@ -56,6 +56,7 @@ REFINEMENTS = {
         "incident-runbook": "diagnose operate ai-agents", "dynamic-thresholds": "operate design ai-agents",
         "sql-server-vm-health-check": "operate diagnose networking ai-agents",
         "sql-server-vm-grafana": "operate diagnose",
+        "private-aks-multihub-preflight": "operate diagnose networking ai-agents",
     },
     "azure-ai-search/custom-vectorization": {
         "index": "design build optimize", "rag-chunking": "design optimize evaluate",

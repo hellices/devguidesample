@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1750 820" width="1750" height="820" font-family="'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif">
+  <defs>
+    <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0078d4"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <rect width="1750" height="820" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="36" y="50" fill="#000000" font-size="28" font-weight="800">Enterprise</text>
+  <text x="36" y="84" fill="#111827" font-size="25" font-weight="400">SRE Agent Custom Architecture: Upgrade Pre-flight &amp; Recovery Verification</text>
+  <text x="36" y="110" fill="#6b7280" font-size="13">Agent Canvas 내 트리거 · 커스텀 에이전트(aks_fleet_specialist) · 스킬 · Python 도구 · MS Learn MCP · 안전 Hook이 맞물려 돌아가는 구조</text>
+
+  <!-- COLUMN 1: Triggers (Left) -->
+  <g transform="translate(36, 150)">
+    <rect x="0" y="0" width="310" height="590" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <text x="155" y="32" fill="#0f172a" font-size="16" font-weight="800" text-anchor="middle">1. 실행 트리거 (Triggers)</text>
+
+    <rect x="20" y="55" width="270" height="115" rx="6" fill="#ffffff" stroke="#0078d4" stroke-width="1.8"/>
+    <text x="36" y="82" fill="#0078d4" font-size="14" font-weight="700">① 대화형 호출 (/agent)</text>
+    <text x="36" y="104" fill="#334155" font-size="11.5">• /agent aks_fleet_specialist</text>
+    <text x="36" y="124" fill="#334155" font-size="11.5">• 특정 클러스터 업그레이드 사전 점검</text>
+    <text x="36" y="144" fill="#334155" font-size="11.5">• N대 클러스터 파드 전수 스캔 및 진단</text>
+
+    <rect x="20" y="195" width="270" height="115" rx="6" fill="#ffffff" stroke="#059669" stroke-width="1.8"/>
+    <text x="36" y="222" fill="#059669" font-size="14" font-weight="700">② 정기 예약 작업 (Scheduled Task)</text>
+    <text x="36" y="244" fill="#334155" font-size="11.5">• Private AKS N-Cluster 정기 점검</text>
+    <text x="36" y="264" fill="#334155" font-size="11.5">• 주간 K8s 버전/EOL 대상 자동 식별</text>
+    <text x="36" y="284" fill="#334155" font-size="11.5">• 클러스터 서브넷 용량 및 상태 점검</text>
+
+    <rect x="20" y="335" width="270" height="115" rx="6" fill="#ffffff" stroke="#dc2626" stroke-width="1.8"/>
+    <text x="36" y="362" fill="#dc2626" font-size="14" font-weight="700">③ Azure Monitor Incident (Sev0~2)</text>
+    <text x="36" y="384" fill="#334155" font-size="11.5">• 파드 재시작 급증 / HTTP 500 경고</text>
+    <text x="36" y="404" fill="#334155" font-size="11.5">• 자동 감지 및 상태 스캔 실행</text>
+    <text x="36" y="424" fill="#334155" font-size="11.5">• 무인 RCA 및 복구 조치안 도출</text>
+
+    <rect x="20" y="475" width="270" height="95" rx="6" fill="#ffffff" stroke="#7c3aed" stroke-width="1.8"/>
+    <text x="36" y="502" fill="#7c3aed" font-size="14" font-weight="700">④ 외부 웹훅 (HTTP Trigger)</text>
+    <text x="36" y="524" fill="#334155" font-size="11.5">• 외부 관제 시스템 / CI/CD 파이프라인 연동</text>
+    <text x="36" y="544" fill="#334155" font-size="11.5">• POST /api/v1/httptriggers/trigger/{id}</text>
+  </g>
+
+  <!-- Arrow Col 1 -> Col 2 -->
+  <line x1="346" y1="440" x2="430" y2="440" stroke="#0078d4" stroke-width="3.5" marker-end="url(#arrB)"/>
+
+  <!-- COLUMN 2: Orchestrator & Custom Agent + Hooks + Memory (Center-Left) -->
+  <g transform="translate(440, 150)">
+    <rect x="0" y="0" width="410" height="590" rx="8" fill="#f0f9ff" stroke="#0078d4" stroke-width="2.4" stroke-dasharray="7,4"/>
+    <text x="205" y="32" fill="#0078d4" font-size="16" font-weight="800" text-anchor="middle">2. 커스텀 에이전트 &amp; 거버넌스 계층</text>
+
+    <!-- Start Hook -->
+    <rect x="24" y="55" width="362" height="75" rx="6" fill="#fefce8" stroke="#ca8a04" stroke-width="1.6"/>
+    <text x="40" y="80" fill="#854d0e" font-size="13.5" font-weight="700">Global Hook #1: fleet-start-context-injector (Start)</text>
+    <text x="40" y="100" fill="#713f12" font-size="11.5">• 스레드 시작 시 대상 RG 및 기본 운영 지침 자동 주입</text>
+    <text x="40" y="118" fill="#713f12" font-size="11">• 글로벌 Custom Instructions (한국어 표 양식 + RunKubectlRead 규칙)</text>
+
+    <!-- Custom Agent Box -->
+    <rect x="24" y="150" width="362" height="165" rx="8" fill="#ffffff" stroke="#0078d4" stroke-width="2.5"/>
+    <rect x="24" y="150" width="362" height="34" rx="6" fill="#0078d4"/>
+    <text x="205" y="172" fill="#ffffff" font-size="14.5" font-weight="700" text-anchor="middle">Custom Agent: aks_fleet_specialist</text>
+    <text x="40" y="206" fill="#111827" font-size="12.5" font-weight="700">• 연결된 커스텀 스킬 (2종):</text>
+    <text x="52" y="226" fill="#0078d4" font-size="11.5" font-weight="600">1) private-aks-upgrade-preflight</text>
+    <text x="52" y="244" fill="#0078d4" font-size="11.5" font-weight="600">2) fleet-private-aks-cluster-diagnostics</text>
+    <text x="40" y="270" fill="#111827" font-size="12.5" font-weight="700">• 연결된 공통 프롬프트:</text>
+    <text x="52" y="290" fill="#334155" font-size="11.5">- fleet-private_aks_diagnostic_checklist</text>
+
+    <!-- Knowledge & Memory Box -->
+    <rect x="24" y="335" width="362" height="125" rx="6" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.8"/>
+    <text x="40" y="362" fill="#5b21b6" font-size="13.5" font-weight="700">Knowledge Base (Indexed) &amp; Memory</text>
+    <text x="40" y="384" fill="#334155" font-size="11.5">• aks-upgrade-and-eol-policy.md (EOL/7대 점검표)</text>
+    <text x="40" y="404" fill="#334155" font-size="11.5">• aks-private-cluster-troubleshooting-runbook.md (진단 SOP)</text>
+    <text x="40" y="424" fill="#334155" font-size="11.5">• memories/synthesizedKnowledge/*.md (#remember 팀 공용 기억)</text>
+    <text x="40" y="444" fill="#5b21b6" font-size="11" font-weight="700">• GitHub 코드 리포지토리 연결 (Ready)</text>
+
+    <!-- PreTool / Stop Hooks -->
+    <rect x="24" y="480" width="362" height="90" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.6"/>
+    <text x="40" y="505" fill="#991b1b" font-size="13.5" font-weight="700">Safety Hooks (PreToolUse &amp; Stop)</text>
+    <text x="40" y="525" fill="#7f1d1d" font-size="11.5">• PreToolUse: 클러스터 변경 및 파괴적 명령 사전 차단 (Read-Only 유지)</text>
+    <text x="40" y="545" fill="#7f1d1d" font-size="11.5">• Stop Hook: 응답 종료 전 권장 조치 CLI 포함 여부 검증</text>
+  </g>
+
+  <!-- Arrow Col 2 -> Col 3 -->
+  <line x1="850" y1="280" x2="935" y2="280" stroke="#0078d4" stroke-width="3.5" marker-end="url(#arrB)"/>
+  <line x1="850" y1="530" x2="935" y2="530" stroke="#059669" stroke-width="3.5" marker-end="url(#arrG)"/>
+
+  <!-- COLUMN 3: Execution Tools & Output (Right) -->
+  <!-- Top Half: Flow A - AKS Version Upgrade Pre-flight Automation -->
+  <g transform="translate(945, 150)">
+    <rect x="0" y="0" width="765" height="275" rx="8" fill="#ffffff" stroke="#0078d4" stroke-width="2.2" stroke-dasharray="6,3"/>
+    <rect x="16" y="-12" width="390" height="26" fill="#ffffff"/>
+    <text x="24" y="6" fill="#0078d4" font-size="15" font-weight="800">파이프라인 A. [AKS 버전 업그레이드 사전 점검 및 관리 자동화]</text>
+
+    <rect x="20" y="28" width="230" height="150" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.6"/>
+    <text x="32" y="52" fill="#1e3a8a" font-size="13" font-weight="700">STEP 1. 업그레이드 대상 식별</text>
+    <text x="32" y="74" fill="#0078d4" font-size="11.5" font-weight="700">[도구: RunAzCliReadCommands]</text>
+    <text x="32" y="94" fill="#334155" font-size="11">• az aks list (N대 현재 버전 조회)</text>
+    <text x="32" y="112" fill="#334155" font-size="11">• az aks get-upgrades (목표 버전 조회)</text>
+    <text x="32" y="130" fill="#334155" font-size="11">• EOL 일정 대조 및 P0/P1/P2 목록 추출</text>
+
+    <rect x="268" y="28" width="230" height="150" rx="6" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.6"/>
+    <text x="280" y="52" fill="#5b21b6" font-size="13" font-weight="700">STEP 2. 버전별 변경사항 분석</text>
+    <text x="280" y="74" fill="#6d28d9" font-size="11.5" font-weight="700">[도구: mslearn-mcp (3종)]</text>
+    <text x="280" y="94" fill="#334155" font-size="11">• MS Learn 공식 릴리즈 노트 실시간 검색</text>
+    <text x="280" y="112" fill="#334155" font-size="11">• 현재 ➔ 목표 버전 주요 변경점 &amp; 제거 API</text>
+    <text x="280" y="130" fill="#334155" font-size="11">• 클러스터 내 실제 배포 리소스와 대조</text>
+
+    <rect x="516" y="28" width="230" height="150" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.6"/>
+    <text x="528" y="52" fill="#065f46" font-size="13" font-weight="700">STEP 3. 7대 체크리스트 자동 채점</text>
+    <text x="528" y="74" fill="#059669" font-size="11.5" font-weight="700">[RunKubectlRead + Python Tool]</text>
+    <text x="528" y="94" fill="#334155" font-size="11">• evaluate-aks-upgrade-preflight</text>
+    <text x="528" y="112" fill="#334155" font-size="11">• Surge IP / PDB / 단일 레플리카 / 파드</text>
+    <text x="528" y="130" fill="#065f46" font-size="11" font-weight="700">• 01번(100점) / 06번(82점) / 10번(55점)</text>
+
+    <rect x="20" y="194" width="726" height="62" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="36" y="218" fill="#0f172a" font-size="12.5" font-weight="700">출력 산출물: 클러스터별 [READY / CONDITIONAL / BLOCKED] 판정표 + 권장 사전 조치 CLI 제시</text>
+    <text x="36" y="240" fill="#475569" font-size="11.5">• Live Report 대시보드를 통한 클러스터별 점검 상태 시각화 공유</text>
+  </g>
+
+  <!-- Bottom Half: Flow B - Pod Diagnostics & Recovery Verification -->
+  <g transform="translate(945, 465)">
+    <rect x="0" y="0" width="765" height="275" rx="8" fill="#ffffff" stroke="#059669" stroke-width="2.2" stroke-dasharray="6,3"/>
+    <rect x="16" y="-12" width="380" height="26" fill="#ffffff"/>
+    <text x="24" y="6" fill="#059669" font-size="15" font-weight="800">파이프라인 B. [비정상 파드 탐지 · 원인 분석 및 복구 검증]</text>
+
+    <rect x="20" y="28" width="230" height="150" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.6"/>
+    <text x="32" y="52" fill="#1e3a8a" font-size="13" font-weight="700">STEP 1. N대 클러스터 전수 스캔</text>
+    <text x="32" y="74" fill="#0078d4" font-size="11.5" font-weight="700">[도구: RunKubectlReadCommand]</text>
+    <text x="32" y="94" fill="#334155" font-size="11">• 다중 허브 방화벽 경유 사설 API 접속</text>
+    <text x="32" y="112" fill="#334155" font-size="11">• 03번: ledger-audit-worker (ImagePull)</text>
+    <text x="32" y="130" fill="#334155" font-size="11">• 06번: push-webhook-relay (CrashLoop)</text>
+    <text x="32" y="148" fill="#334155" font-size="11">• 10번: legacy-batch-sync (ImagePull)</text>
+
+    <rect x="268" y="28" width="230" height="150" rx="6" fill="#fefce8" stroke="#eab308" stroke-width="1.6"/>
+    <text x="280" y="52" fill="#854d0e" font-size="13" font-weight="700">STEP 2. 원인 특정 및 조치안 도출</text>
+    <text x="280" y="74" fill="#b45309" font-size="11.5" font-weight="700">[describe pod &amp; get deploy -o json]</text>
+    <text x="280" y="94" fill="#334155" font-size="11">• 오타 이미지 태그 및 비정상 command 특정</text>
+    <text x="280" y="112" fill="#334155" font-size="11">• 직전 정상 이미지(nginx:1.25-alpine) 확인</text>
+    <text x="280" y="130" fill="#854d0e" font-size="11" font-weight="700">• 클러스터별 권장 복구 명령어 제시</text>
+
+    <rect x="516" y="28" width="230" height="150" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.6"/>
+    <text x="528" y="52" fill="#065f46" font-size="13" font-weight="700">STEP 3. 상태 재조회 및 복구 검증</text>
+    <text x="528" y="74" fill="#059669" font-size="11.5" font-weight="700">[도구: RunKubectlReadCommand]</text>
+    <text x="528" y="94" fill="#334155" font-size="11">• 조치 후 파드 및 레플리카 상태 재스캔</text>
+    <text x="528" y="112" fill="#334155" font-size="11">• 이벤트 및 헬스 프로브 정상화 확인</text>
+    <text x="528" y="130" fill="#065f46" font-size="11" font-weight="700">• 재조회 검증: 전체 파드 Running 확인</text>
+
+    <rect x="20" y="194" width="726" height="62" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+    <text x="36" y="218" fill="#065f46" font-size="12.5" font-weight="700">최종 결과: 점프박스 없이 복구 검증까지 검증 완료</text>
+    <text x="36" y="240" fill="#047857" font-size="11.5">• 모든 조회 명령과 실행 결과는 Application Insights 감사 로그에 기록됨</text>
+  </g>
+</svg>
