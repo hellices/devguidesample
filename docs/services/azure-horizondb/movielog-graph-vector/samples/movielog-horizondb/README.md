@@ -29,6 +29,8 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `k8s/00-namespace.yaml` | namespace와 workload identity ServiceAccount입니다. |
 | `scripts/assemble-app.sh` | 기존 MovieLog sample과 이 sample의 변경 파일을 합쳐 `out/app/`에 앱 소스를 만듭니다. |
 | `k8s/20-movielog.yaml` | HorizonDB 연결(secret)과 Azure OpenAI endpoint를 받는 앱 Deployment입니다. |
+| `k8s/24-keyvault-secrets.yaml` | Secrets Store CSI driver가 Key Vault의 TMDB·OMDb 키와 Entra ID client secret을 앱 workload identity로 읽어 `movielog-keyvault` secret으로 동기화하는 SecretProviderClass입니다. |
+| `src/main/java/.../member/`, `config/SecurityConfig.java`, `templates/auth/login.html`, `application-entra.properties` | 아이디·비밀번호 로그인 옆에 Microsoft Entra ID(OpenID Connect) 로그인을 더하고, 첫 로그인 때 `tid`·`oid`로 회원을 만듭니다. `entra` profile에서만 켜집니다. |
 | `k8s/26-agfc.yaml` | Application Gateway for Containers(AKS add-on)로 앱을 커스텀 도메인 HTTPS로 공개하는 ApplicationLoadBalancer, HTTP·HTTPS listener Gateway, 앱 HTTPRoute, HTTP→HTTPS redirect HTTPRoute와 session affinity·health check policy입니다. |
 | `k8s/27-tls.yaml` | cert-manager가 Let's Encrypt에서 HTTP-01 challenge로 인증서를 받아 `movielog-tls` secret에 넣는 ClusterIssuer와 Certificate입니다. |
 | `loadgen/loadgen.py` | 가입·조회·리뷰와 의미 검색·그래프 조회를 반복하는 합성 사용자입니다. Deployment는 기존 sample의 `k8s/30-loadgen.yaml`을 씁니다. |
@@ -47,6 +49,19 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `GET /api/discover/graph?ids=` | 주어진 영화들 사이의 연결 그래프 |
 
 ## 설계 메모
+
+- **Microsoft Entra ID 로그인은 기존 회원 구조에 붙입니다.** `entra` profile이 single-tenant 앱
+  등록을 OpenID Connect client로 등록하면 로그인 화면에 Entra ID 버튼이 생깁니다. 첫 로그인 때 ID token의
+  변하지 않는 `tid`·`oid`로 `members.external_id`(`entra:<tid>:<oid>`)를 만들고, 아이디는
+  `preferred_username` 앞부분과 hash로 `<이름>-<6자리>` 형태를 씁니다. 회원가입 아이디는 `-`를 쓸 수 없어
+  둘이 겹치지 않습니다. 닉네임은 `name` claim에서 가져오며 이후 이름이 바뀌어도 회원은 그대로입니다.
+  principal이 `UserDetails`이기도 해서 리뷰·댓글 코드는 두 로그인 방식을 구분하지 않습니다. 필요한 claim이
+  ID token에 있으므로 Microsoft Graph user info는 호출하지 않으며, 로그아웃은 앱 session만 끝냅니다.
+- **앱 비밀값은 Key Vault에서 받습니다.** TMDB·OMDb 키와 Entra ID client secret은 Key Vault에 두고,
+  AKS Secrets Store CSI driver가 앱과 같은 workload identity로 읽어 환경 변수로 넘깁니다. 실습 구독에서는
+  Azure Policy(`modify`)가 Key Vault의 공용 네트워크 접근을 끄므로, AKS VNet에 private endpoint와
+  `privatelink.vaultcore.azure.net` private DNS zone을 둡니다. 운영자는 Key Vault data plane 대신 ARM
+  `Microsoft.KeyVault/vaults/secrets`로 값을 넣습니다.
 
 - **익명 의미 검색에 요청률 한도를 둡니다.** `/discover`와 `/api/discover/search`는 로그인 없이
   Azure OpenAI를 호출하므로, 앱이 Azure OpenAI를 부르기 전에 Pod마다 클라이언트 주소당 분당
@@ -188,22 +203,63 @@ APP_DB_PASSWORD="$APP_DB_PASSWORD" psql -d postgres -f db/00-database.sql
 PGDATABASE=movielog psql -f db/10-schema.sql
 ```
 
+앱 비밀값을 Key Vault에 넣고 Microsoft Entra ID 앱을 등록합니다. 공개 주소(`APP_HOST`)를 먼저 정하면
+redirect URI를 미리 등록할 수 있습니다. 값은 파일 권한 600인 임시 파일로만 다루고 명령줄에 쓰지 않습니다.
+
+```bash
+# APP_HOST: a new name in a DNS zone you own, for example movielog.example.com.
+export APP_HOST=movielog.example.com
+export KEYVAULT_NAME="<keyvault-name>" KEYVAULT_TENANT_ID="$(az account show --query tenantId -o tsv)"
+az keyvault create -g $RG -n "$KEYVAULT_NAME" -l $LOC --enable-rbac-authorization true
+KV_ID="$(az keyvault show -n "$KEYVAULT_NAME" --query id -o tsv)"
+az role assignment create --assignee-object-id "$(az identity show -g $RG -n id-movielog-app --query principalId -o tsv)" \
+  --assignee-principal-type ServicePrincipal --role "Key Vault Secrets User" --scope "$KV_ID"
+
+# Private endpoint in the AKS VNet (public network access was disabled by policy in the lab subscription).
+NRG="$(az aks show -g $RG -n aks-movielog-hz --query nodeResourceGroup -o tsv)"
+VNET_ID="$(az network vnet list -g "$NRG" --query "[0].id" -o tsv)"
+az network private-dns zone create -g $RG -n privatelink.vaultcore.azure.net
+az network private-dns link vnet create -g $RG -z privatelink.vaultcore.azure.net -n aks-vnet-link -v "$VNET_ID" -e false
+az network private-endpoint create -g $RG -n "pe-$KEYVAULT_NAME" -l $LOC --subnet "$VNET_ID/subnets/aks-subnet" \
+  --private-connection-resource-id "$KV_ID" --group-ids vault --connection-name kv-conn
+az network private-endpoint dns-zone-group create -g $RG --endpoint-name "pe-$KEYVAULT_NAME" -n default \
+  --private-dns-zone privatelink.vaultcore.azure.net --zone-name vault
+az aks enable-addons -g $RG -n aks-movielog-hz --addons azure-keyvault-secrets-provider
+
+# Single-tenant Entra ID app; the client secret goes straight to a 600 file.
+export ENTRA_TENANT_ID="$KEYVAULT_TENANT_ID"
+export ENTRA_CLIENT_ID="$(az ad app create --display-name movielog-horizondb-lab --sign-in-audience AzureADMyOrg \
+  --web-redirect-uris "https://$APP_HOST/login/oauth2/code/entra" --query appId -o tsv)"
+az ad sp create --id "$ENTRA_CLIENT_ID"
+umask 077; SECRETS="$(mktemp -d)"
+az ad app credential reset --id "$ENTRA_CLIENT_ID" --display-name aks-movielog \
+  --end-date "$(date -u -d '+180 days' +%Y-%m-%d)" --query password -o tsv | tr -d '\n' > "$SECRETS/entra-client-secret"
+# Put the TMDB API Read Access Token and the OMDb key into $SECRETS/tmdb-api-key and $SECRETS/omdb-api-key.
+for name in tmdb-api-key omdb-api-key entra-client-secret; do
+  jq -nc --rawfile v "$SECRETS/$name" '{properties: {value: $v, contentType: "text/plain"}}' > "$SECRETS/body.json"
+  az rest --method put --uri "https://management.azure.com$KV_ID/secrets/$name?api-version=2023-07-01" \
+    --body @"$SECRETS/body.json" --query name -o tsv
+done
+rm -rf "$SECRETS"
+```
+
 앱을 배포합니다. 첫 배포는 replica 1개로 Hibernate가 schema를 만들게 합니다.
 
 ```bash
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.1.11 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.2.0 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.1.11"
+export APP_IMAGE="$ACR_SERVER/movielog:2.2.0"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -
+envsubst < k8s/24-keyvault-secrets.yaml | kubectl apply -f -
 kubectl create secret generic movielog-db -n movielog \
   --from-literal=url="jdbc:postgresql://$HZ_HOST:5432/movielog?sslmode=require" \
   --from-literal=username=movielog --from-literal=password="$APP_DB_PASSWORD"
@@ -270,8 +326,7 @@ helm install cert-manager oci://quay.io/jetstack/charts/cert-manager --version v
   --namespace cert-manager --create-namespace \
   --set config.enableGatewayAPI=true --set crds.enabled=true --wait
 
-# APP_HOST: a new name in a DNS zone you own, for example movielog.example.com.
-export APP_HOST=movielog.example.com
+# APP_HOST was set with the Entra ID redirect URI above.
 envsubst '$APP_HOST $ALB_SUBNET_ID' < k8s/26-agfc.yaml | kubectl apply -f -
 GATEWAY_FQDN="$(kubectl get gateway movielog -n movielog -o jsonpath='{.status.addresses[0].value}')"
 # Azure DNS example; DNS_ZONE_RG and DNS_ZONE are the resource group and name of your zone.
@@ -295,6 +350,20 @@ AGFC는 백엔드에 `x-forwarded-proto`를 넘기고 Spring Boot는 Kubernetes�
 앱이 만드는 redirect는 `https://` 주소가 되고 `JSESSIONID`·`XSRF-TOKEN` cookie에는 `Secure`가
 붙었습니다. listener에 hostname을 지정했으므로 AGFC 기본 FQDN으로 들어온 요청은 404를 받습니다.
 cert-manager는 만료 전에 인증서를 자동으로 갱신합니다.
+
+HTTPS가 준비되면 Microsoft Entra ID 로그인을 확인합니다. 로그인 화면의 **Microsoft Entra ID로 로그인**은
+`/oauth2/authorization/entra`에서 Entra ID authorize endpoint로 넘어갑니다. 실습에서는 redirect의
+`client_id`, `redirect_uri`(`https://$APP_HOST/login/oauth2/code/entra`), `scope=openid profile`, `state`·`nonce`와
+Entra ID 로그인 화면(이메일 입력)까지 브라우저로 확인했고, 기존 아이디·비밀번호 가입과 로그인도 그대로
+동작했습니다.
+
+```bash
+curl -s -o /dev/null -w '%{redirect_url}\n' "https://$APP_HOST/oauth2/authorization/entra"
+```
+
+이미 실행 중인 앱을 Entra ID 로그인이 있는 이미지로 바꾸면 Hibernate `ddl-auto=update`가 `members`에
+`external_id` 열을 더합니다. 실습에서는 이 순간 아직 남아 있던 이전 Pod의 회원가입 INSERT 7건이 약 1초 동안
+`cached plan must not change result type`으로 실패했고, 이전 Pod가 내려간 뒤에는 다시 나지 않았습니다.
 
 `RoutePolicy`의 `managed-cookie`는 gateway가 `AGCAffinity` cookie를 첫 응답에 붙여
 로그인 session이 한 Pod에 머물게 합니다. 실습에서 가입·로그인 뒤 인증이 필요한 리뷰 작성

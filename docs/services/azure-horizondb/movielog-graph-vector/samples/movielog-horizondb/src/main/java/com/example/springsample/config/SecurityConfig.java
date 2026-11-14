@@ -2,7 +2,9 @@ package com.example.springsample.config;
 
 import java.util.List;
 
+import com.example.springsample.member.EntraMemberService;
 import com.example.springsample.metrics.MetricsProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.security.autoconfigure.web.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +20,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.CsrfConfigurer;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.IpAddressAuthorizationManager;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
@@ -51,7 +54,9 @@ class SecurityConfig {
 
 	@Bean
 	@Order(2)
-	SecurityFilterChain defaultFilterChain(HttpSecurity http, MetricsProperties metrics) throws Exception {
+	SecurityFilterChain defaultFilterChain(HttpSecurity http, MetricsProperties metrics,
+			ObjectProvider<ClientRegistrationRepository> clientRegistrations,
+			ObjectProvider<EntraMemberService> entraMembers) throws Exception {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
@@ -81,6 +86,14 @@ class SecurityConfig {
 						AnyRequestMatcher.INSTANCE))
 			// Token in an XSRF-TOKEN cookie so Swagger UI and fetch() can echo it as a header.
 			.csrf(CsrfConfigurer::spa);
+		// Microsoft Entra ID sign-in next to the form login, only when the entra profile registers the client.
+		if (clientRegistrations.getIfAvailable() != null) {
+			http.oauth2Login(oauth -> oauth
+				.loginPage("/login")
+				.defaultSuccessUrl("/reviews")
+				.failureUrl("/login?entraError")
+				.userInfoEndpoint(userInfo -> userInfo.oidcUserService(entraMembers.getObject())));
+		}
 		return http.build();
 	}
 

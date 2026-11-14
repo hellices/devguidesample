@@ -7,7 +7,7 @@ technologies: [postgresql, java, spring-boot, kubernetes, grafana]
 tags: [build, deploy, evaluate]
 status: verified
 verification_status: needs-review
-sources_checked_at: 2026-11-13
+sources_checked_at: 2026-11-14
 official_sources:
   - title: What is Azure HorizonDB (Preview)?
     url: https://learn.microsoft.com/azure/horizondb/overview
@@ -43,6 +43,14 @@ official_sources:
     url: https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless
   - title: Use Microsoft Entra Workload ID with Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/workload-identity-overview
+  - title: ID token claims reference
+    url: https://learn.microsoft.com/entra/identity-platform/id-token-claims-reference
+  - title: Connect your Azure identity provider to the Azure Key Vault Secrets Store CSI Driver in Azure Kubernetes Service (AKS)
+    url: https://learn.microsoft.com/azure/aks/csi-secrets-store-identity-access
+  - title: Azure Key Vault provider for Secrets Store CSI Driver for Azure Kubernetes Service (AKS) configuration options
+    url: https://learn.microsoft.com/azure/aks/csi-secrets-store-configuration-options
+  - title: Integrate Key Vault with Azure Private Link
+    url: https://learn.microsoft.com/azure/key-vault/general/private-link-service
   - title: Apache AGE
     url: https://github.com/apache/age
 last_verified: 2026-11-13
@@ -137,6 +145,8 @@ Managed Grafana에서 봅니다.
 |---|---|---|
 | App Gateway for Containers | 공개 진입점, TLS 종료 | AKS add-on의 ALB Controller, 커스텀 도메인의 HTTP·HTTPS listener, HTTP→HTTPS 301 redirect, 로그인 session을 한 Pod에 묶는 `RoutePolicy` managed cookie |
 | cert-manager | 인증서 발급·갱신 | Let's Encrypt `ClusterIssuer`, Gateway API HTTP-01 challenge, `Certificate`가 만든 TLS secret을 HTTPS listener가 참조 |
+| Microsoft Entra ID | 로그인 | 아이디·비밀번호 로그인 옆의 OpenID Connect 로그인(single-tenant 앱 등록). 첫 로그인 때 ID token의 `tid`·`oid`로 회원을 만듦 |
+| Azure Key Vault | 앱 비밀값 | TMDB·OMDb 키와 Entra ID client secret. AKS Secrets Store CSI driver가 앱 workload identity로 private endpoint를 거쳐 읽음 |
 | MovieLog 앱 | 의미 검색·그래프 API와 화면 | Spring Boot 4.1, Pod 2개, workload identity로 Azure OpenAI 호출 |
 | Azure HorizonDB | 관계형·벡터·그래프 저장과 조회 | 위 [리소스 구조](#resource-model)와 [확장](#extensions) |
 | Azure OpenAI | 문서·질의 임베딩 | `text-embedding-3-large`, `dimensions=1536`, key 인증 없이 Entra token |
@@ -408,4 +418,8 @@ topic에서 이어 받았습니다.
 - [Application Gateway for Containers components](https://learn.microsoft.com/azure/application-gateway/for-containers/application-gateway-for-containers-components)
 - [Autoinstrument AKS apps with Azure Monitor Application Insights](https://learn.microsoft.com/azure/azure-monitor/containers/kubernetes-codeless)
 - [Use Microsoft Entra Workload ID with Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/workload-identity-overview)
+- [ID token claims reference](https://learn.microsoft.com/entra/identity-platform/id-token-claims-reference)
+- [Connect your Azure identity provider to the Azure Key Vault Secrets Store CSI Driver in Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/csi-secrets-store-identity-access)
+- [Azure Key Vault provider for Secrets Store CSI Driver for Azure Kubernetes Service (AKS) configuration options](https://learn.microsoft.com/azure/aks/csi-secrets-store-configuration-options)
+- [Integrate Key Vault with Azure Private Link](https://learn.microsoft.com/azure/key-vault/general/private-link-service)
 - [Apache AGE](https://github.com/apache/age)
