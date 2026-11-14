@@ -73,6 +73,39 @@ class EntraMemberServiceTests {
 	}
 
 	@Test
+	void usernameTakenByAnotherIdentityMovesToTheNextCandidate() {
+		String externalId = "entra:" + TENANT + ":" + OBJECT;
+		String first = EntraMemberService.username(externalId, "minji.kim@contoso.example", 0);
+		String second = EntraMemberService.username(externalId, "minji.kim@contoso.example", 1);
+		given(members.findByExternalId(externalId)).willReturn(Optional.empty());
+		given(members.existsByUsername(first)).willReturn(true);
+		given(members.saveAndFlush(any(Member.class))).willAnswer(invocation -> {
+			Member saved = invocation.getArgument(0);
+			ReflectionTestUtils.setField(saved, "id", 8L);
+			return saved;
+		});
+
+		OidcUser principal = service.loadUser(mock(OidcUserRequest.class));
+
+		assertThat(second).isNotEqualTo(first).matches("minji_kim-[0-9a-f]{6}");
+		assertThat(principal.getName()).isEqualTo(second);
+	}
+
+	@Test
+	void insertRaceOnTheUsernameRetriesWhileTheSameIdentityRaceReturnsTheWinner() {
+		String externalId = "entra:" + TENANT + ":" + OBJECT;
+		Member winner = new Member("minji_kim-000000", "{noop}x", "김민지", externalId);
+		given(members.findByExternalId(externalId)).willReturn(Optional.empty(), Optional.empty(), Optional.of(winner));
+		given(members.saveAndFlush(any(Member.class)))
+			.willThrow(new org.springframework.dao.DataIntegrityViolationException("uk_username"));
+
+		OidcUser principal = service.loadUser(mock(OidcUserRequest.class));
+
+		assertThat(principal.getName()).isEqualTo("minji_kim-000000");
+		verify(members, org.mockito.Mockito.times(2)).saveAndFlush(any(Member.class));
+	}
+
+	@Test
 	void tokenWithoutObjectIdIsRejected() {
 		signedIn = oidcUser(Map.of("tid", TENANT));
 

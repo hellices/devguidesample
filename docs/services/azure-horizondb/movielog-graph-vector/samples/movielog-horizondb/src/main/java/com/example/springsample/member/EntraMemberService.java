@@ -33,6 +33,8 @@ public class EntraMemberService implements OAuth2UserService<OidcUserRequest, Oi
 
 	private static final int NICKNAME_MAX = 20;
 
+	static final int USERNAME_ATTEMPTS = 5;
+
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	private final OAuth2UserService<OidcUserRequest, OidcUser> delegate;
@@ -82,21 +84,33 @@ public class EntraMemberService implements OAuth2UserService<OidcUserRequest, Oi
 		if (existing.isPresent()) {
 			return existing.get();
 		}
-		Member created;
-		try {
-			// A random password the member never learns: this account signs in only through Entra ID.
-			byte[] secret = new byte[32];
-			RANDOM.nextBytes(secret);
-			created = members.saveAndFlush(new Member(username(externalId, preferredUsername),
-					passwordEncoder.encode(HexFormat.of().formatHex(secret)), nickname(name, preferredUsername),
-					externalId));
+		// A random password the member never learns: this account signs in only through Entra ID.
+		byte[] secret = new byte[32];
+		RANDOM.nextBytes(secret);
+		String password = passwordEncoder.encode(HexFormat.of().formatHex(secret));
+		String nickname = nickname(name, preferredUsername);
+		DataIntegrityViolationException last = null;
+		for (int attempt = 0; attempt < USERNAME_ATTEMPTS; attempt++) {
+			String username = username(externalId, preferredUsername, attempt);
+			// Another Entra identity can share the short hash; move on to the next candidate.
+			if (members.existsByUsername(username)) {
+				continue;
+			}
+			try {
+				Member created = members.saveAndFlush(new Member(username, password, nickname, externalId));
+				events.publishEvent(new MemberRegistered(created.getId()));
+				return created;
+			}
+			catch (DataIntegrityViolationException ex) {
+				// A concurrent first sign-in of the same user created the member, or another identity took the name.
+				Optional<Member> concurrent = members.findByExternalId(externalId);
+				if (concurrent.isPresent()) {
+					return concurrent.get();
+				}
+				last = ex;
+			}
 		}
-		catch (DataIntegrityViolationException ex) {
-			// A concurrent first sign-in of the same user created the member.
-			return members.findByExternalId(externalId).orElseThrow(() -> ex);
-		}
-		events.publishEvent(new MemberRegistered(created.getId()));
-		return created;
+		throw new IllegalStateException("No free username for " + externalId, last);
 	}
 
 	/**
@@ -104,6 +118,11 @@ public class EntraMemberService implements OAuth2UserService<OidcUserRequest, Oi
 	 * cannot appear in form sign-up usernames ({@code [a-zA-Z0-9_]}), so the two kinds never collide.
 	 */
 	static String username(String externalId, @Nullable String preferredUsername) {
+		return username(externalId, preferredUsername, 0);
+	}
+
+	/** Later attempts hash the external id with the attempt number, giving a different stable suffix. */
+	static String username(String externalId, @Nullable String preferredUsername, int attempt) {
 		String local = (preferredUsername == null) ? "" : preferredUsername.split("[@#]", 2)[0];
 		local = local.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_");
 		if (local.isEmpty()) {
@@ -112,7 +131,7 @@ public class EntraMemberService implements OAuth2UserService<OidcUserRequest, Oi
 		if (local.length() > USERNAME_PREFIX_LENGTH) {
 			local = local.substring(0, USERNAME_PREFIX_LENGTH);
 		}
-		return local + "-" + sha256Hex(externalId).substring(0, 6);
+		return local + "-" + sha256Hex((attempt == 0) ? externalId : externalId + "#" + attempt).substring(0, 6);
 	}
 
 	static String nickname(@Nullable String name, @Nullable String preferredUsername) {
