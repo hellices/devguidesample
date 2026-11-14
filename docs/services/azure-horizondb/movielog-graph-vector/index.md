@@ -190,6 +190,10 @@ Managed Grafana에서 봅니다.
 | ③ 벡터 index | `20-vector-index.sql` | `embedding` | DiskANN index | `IF NOT EXISTS`. 모델을 바꾸면 `REINDEX` | 수 초 |
 | ④ 그래프 재생성 | `30-graph.sql` | `movies`, `catalog.*`, `embedding` | `movie_graph` 전체 | graph를 지우고 다시 생성 | 약 6초 |
 
+Wikidata와 Wikipedia에는 포스터가 없으므로 ① 다음에 `enrich_tmdb.py` → `tmdb.sql`로 TMDB 상세
+API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에만 채웁니다. 제목·요약·임베딩·그래프에는
+영향이 없으며 478편 기준 약 2분 걸렸습니다.
+
 ④는 노드를 먼저 만들고 label 테이블에 GIN index를 건 뒤 관계를 만듭니다. Cypher 문자열에
 값을 직접 넣어야 하므로 행을 Cypher map 문자열로 바꿔 200개씩 `UNWIND`합니다.
 

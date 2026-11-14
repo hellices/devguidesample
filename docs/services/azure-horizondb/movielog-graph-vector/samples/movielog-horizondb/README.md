@@ -19,6 +19,7 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | 경로 | 용도 |
 |---|---|
 | `data/build_catalog.py` | Wikidata(감독·배우·장르·TMDB id)와 Wikipedia 요약으로 영화 약 480편의 `catalog.json`·`catalog.sql`을 만듭니다. 표준 라이브러리만 씁니다. |
+| `data/enrich_tmdb.py` | `catalog.json`의 TMDB id로 TMDB 상세 API를 호출해 비어 있는 포스터·상영 시간·IMDb id만 채우는 `tmdb.sql`을 만듭니다. Wikipedia 제목과 요약은 바꾸지 않습니다. |
 | `data/embed_catalog.py` | `catalog.movie_docs.doc`을 Azure OpenAI `text-embedding-3-large`(1,536차원)로 임베딩해 저장합니다. Azure CLI의 Entra token을 씁니다. |
 | `db/00-database.sql` | `movielog` DB와 앱 role을 만듭니다. |
 | `db/10-schema.sql` | `vector`, `pg_diskann`, `age` 확장과 `catalog` schema를 만듭니다. |
@@ -33,7 +34,7 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `src/main/java/.../member/`, `config/SecurityConfig.java`, `templates/auth/login.html`, `application-entra.properties` | 아이디·비밀번호 로그인 옆에 Microsoft Entra ID(OpenID Connect) 로그인을 더하고, 첫 로그인 때 `tid`·`oid`로 회원을 만듭니다. `entra` profile에서만 켜집니다. |
 | `k8s/26-agfc.yaml` | Application Gateway for Containers(AKS add-on)로 앱을 커스텀 도메인 HTTPS로 공개하는 ApplicationLoadBalancer, HTTP·HTTPS listener Gateway, 앱 HTTPRoute, HTTP→HTTPS redirect HTTPRoute와 session affinity·health check policy입니다. |
 | `k8s/27-tls.yaml` | cert-manager가 Let's Encrypt에서 HTTP-01 challenge로 인증서를 받아 `movielog-tls` secret에 넣는 ClusterIssuer와 Certificate입니다. |
-| `loadgen/loadgen.py` | 가입·조회·리뷰와 의미 검색·그래프 조회를 반복하는 합성 사용자입니다. Deployment는 기존 sample의 `k8s/30-loadgen.yaml`을 씁니다. |
+| `loadgen/loadgen.py` | 가입·조회·리뷰와 의미 검색·그래프 조회를 반복하는 합성 사용자입니다. 작성한 합성 리뷰는 조회한 뒤 항상 삭제해 리뷰 목록에 쌓이지 않습니다. Deployment는 기존 sample의 `k8s/30-loadgen.yaml`을 씁니다. |
 | `grafana/movielog-horizondb-dashboard.json` | discover Timer, HorizonDB·Azure OpenAI dependency, discover 요청을 보는 dashboard입니다. resource ID 변수는 비어 있습니다. |
 
 ## 화면과 API
@@ -278,12 +279,17 @@ kubectl rollout status deploy/movielog -n movielog
 
 카탈로그를 적재하고 임베딩·index·그래프를 만듭니다. 영화 약 480편 기준으로
 `build_catalog.py`는 약 8–11분, `catalog.sql` 적재와 임베딩은 각각 약 3–4분,
-그래프 생성은 약 6초 걸렸습니다.
+TMDB 보강은 약 2분, 그래프 생성은 약 6초 걸렸습니다. Wikidata·Wikipedia에는 포스터가 없으므로
+`enrich_tmdb.py`가 TMDB API Read Access Token(`TMDB_API_TOKEN`)으로 포스터 경로를 채웁니다.
+토큰은 셸 history에 남지 않도록 `read -rs`로 입력합니다.
 
 ```bash
 python3 data/build_catalog.py
 export PGDATABASE=movielog
 psql -q -f data/out/catalog.sql
+read -rs TMDB_API_TOKEN && export TMDB_API_TOKEN
+python3 data/enrich_tmdb.py
+psql -q -f data/out/tmdb.sql
 AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/" python3 data/embed_catalog.py
 psql -f db/20-vector-index.sql
 psql -f db/30-graph.sql

@@ -1,9 +1,10 @@
 """Synthetic MovieLog users that exercise every movielog.* meter.
 
 Each loop signs up a user and browses movies and reviews on the web and API channels.
-It may post a review (70%), comment on it (60% of those), delete it (10%) and search (20%),
-so a single loop does not touch every meter. Half of the loops also run a semantic search and
-open the AGE graph and similar movies of a hit. Only the standard library is used.
+It may post a review (70%), comment on it (60% of those), open it and then always delete it,
+and search (20%), so a single loop does not touch every meter and synthetic reviews do not pile up.
+Half of the loops also run a semantic search and open the AGE graph and similar movies of a hit.
+Only the standard library is used.
 """
 import http.cookiejar
 import json
@@ -105,8 +106,9 @@ def user_journey():
             review_id = json.loads(raw)["id"]
             if random.random() < 0.6:
                 s.call("POST", f"/api/reviews/{review_id}/comments", body={"content": "synthetic comment"})
-            if random.random() < 0.1:
-                s.call("DELETE", f"/api/reviews/{review_id}")
+            s.call("GET", f"/reviews/{review_id}")
+            # Synthetic reviews are always removed so they do not bury real reviews in the list.
+            s.call("DELETE", f"/api/reviews/{review_id}")
 
     if random.random() < 0.2:
         s.call("GET", "/api/movies/search?q=" + urllib.parse.quote("dune"))
