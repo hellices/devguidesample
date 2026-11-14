@@ -165,7 +165,7 @@ Managed Grafana에서 봅니다.
 |---|---|---|---|---|
 | 관계형 | `public.movies`, `public.reviews`·`members`·`comments` | 원본. 앱의 리뷰·회원은 요청마다 바뀜 | `movies.tmdb_id`(UNIQUE), `reviews.movie_id → movies.id` | 앱(Hibernate·JPA), 로더(`movies` upsert) |
 | 관계형 | `catalog.people`, `catalog.movie_credits`, `catalog.movie_genres` | 원본. Wikidata 구조 | `tmdb_id`, `qid`(`person_qid → people.qid`) | 로더 |
-| 벡터 | `catalog.movie_docs.embedding vector(1536)` + DiskANN index | 원본 행에 붙은 열. 문서가 바뀌면 다시 임베딩 | `movie_docs.tmdb_id`(PK) | 로더 |
+| 벡터 | `catalog.movie_docs.embedding vector(1536)` + DiskANN index | 원본 행에 붙은 열. 문서가 바뀌면 다시 임베딩 | `movie_docs.tmdb_id`(PK) | 로더, 앱(`CatalogIndexer`: 카탈로그 적재 뒤 TMDB에서 가져온 영화) |
 | 그래프 | `movie_graph`의 label별 테이블(`"Movie"`, `"ACTED_IN"` 등) | 파생. 관계형 행과 임베딩에서 다시 생성 | vertex 속성 `tmdb_id`, `qid` | `30-graph.sql` |
 
 - **키로 잇는 이유** — `catalog.*` 테이블은 `public.movies`에 외래 키를 두지 않고 `tmdb_id`로
@@ -174,8 +174,9 @@ Managed Grafana에서 봅니다.
 - **그래프도 테이블** — 2026-11-13 실습 DB에서 AGE는 graph 이름과 같은 schema `movie_graph`에
   label마다 일반 테이블을 만들었습니다. 그래서 vertex 속성 `tmdb_id`로 Cypher 결과를 다시
   관계형 행과 맞출 수 있고, GIN·btree index와 `GRANT`도 일반 테이블처럼 적용합니다.
-- **권한 경계** — 앱 role `movielog`는 `public`에만 쓰고, `catalog`와 `movie_graph`에는
-  `SELECT`만 받습니다. 벡터와 그래프는 배치 단계에서만 바뀝니다.
+- **권한 경계** — 앱 role `movielog`는 `public`에 쓰고, `catalog`와 `movie_graph`에는
+  `SELECT`를 받습니다. `catalog`에서 쓰는 곳은 새 영화 문서를 추가하는 `catalog.movie_docs`의
+  `INSERT` 하나이며, 그래프는 배치 단계에서만 바뀝니다.
 
 ### 작성 순서: 적재 → 임베딩 → index → 그래프 { #authoring }
 
@@ -193,6 +194,15 @@ Managed Grafana에서 봅니다.
 Wikidata와 Wikipedia에는 포스터가 없으므로 ① 다음에 `enrich_tmdb.py` → `tmdb.sql`로 TMDB 상세
 API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에만 채웁니다. 제목·요약·임베딩·그래프에는
 영향이 없으며 478편 기준 약 2분 걸렸습니다.
+
+①–④는 카탈로그에 있는 영화만 다룹니다. 회원이 영화 검색으로 카탈로그 밖의 영화를 처음 열면
+앱은 TMDB 상세를 `public.movies`에만 저장하므로, 그 영화는 문서·임베딩이 없어 의미 검색에
+나오지 않습니다. 2026-11-14 실습에서 「듄: 파트 2」에 리뷰를 쓴 뒤 「듄」, 「드니 빌뇌브」로
+검색해도 나오지 않은 원인이 이것이었습니다. 앱의 `CatalogIndexer`가 30초마다 문서가 없는 영화를
+찾아 ①과 같은 형식의 문서(감독·출연은 TMDB credits)를 만들고 임베딩해 `catalog.movie_docs`에
+추가합니다. 여러 Pod 중 PostgreSQL advisory lock을 잡은 하나만 실행하며, 배포 직후 첫 실행에서
+두 편을 색인했습니다. 그래프 노드와 `SIMILAR_TO`는 ④를 다시 실행할 때 생깁니다. TMDB credits는
+`catalog.movie_credits`에 넣지 않으므로 이런 영화의 그래프에는 `SIMILAR_TO` 이웃만 보입니다.
 
 ④는 노드를 먼저 만들고 label 테이블에 GIN index를 건 뒤 관계를 만듭니다. Cypher 문자열에
 값을 직접 넣어야 하므로 행을 Cypher map 문자열로 바꿔 200개씩 `UNWIND`합니다.
@@ -219,17 +229,18 @@ CROSS JOIN LATERAL (
 Spring 데이터 접근 방식을 씁니다. 연결을 만들 때 `SET search_path = public, ag_catalog`를
 실행해 JPA는 `public`을 그대로 쓰고 AGE의 `cypher()` 함수도 찾게 합니다.
 
-![MovieLog 앱의 HorizonDB 접근 sequence. ① 의미 검색에서 브라우저가 GET /discover?q=를 보내면 MovieLog 앱의 EmbeddingClient가 workload identity 토큰으로 Azure OpenAI에 embeddings를 요청해 float[1536]을 받고, VectorSearchRepository가 JdbcClient로 movie_docs와 movies를 조인해 embedding <=> :v 순으로 정렬한 영화 12편과 코사인 유사도를 받아 HTML 결과 목록과 그래프 URL을 돌려줌. ② 관계 그래프에서 graph.js가 GET /api/discover/graph?ids=를 보내면 MovieGraphRepository가 JdbcTemplate으로 UNWIND ids MATCH (a:Movie {tmdb_id})-[r]-(b) Cypher를 실행해 vertex·edge 행을 받고 JSON nodes·edges를 돌려줘 Cytoscape.js가 그림. ③ 다른 화면에서 리뷰·회원·영화는 Spring Data JPA가 public.*에 Hibernate SQL을 보내고, 상세 화면의 비슷한 영화는 임베딩 호출 없이 저장된 영화 벡터와 <=>로 6편을 조회함](images/horizondb-app-access.svg)
+![MovieLog 앱의 HorizonDB 접근 sequence. ① 의미 검색에서 브라우저가 GET /discover?q=를 보내면 MovieLog 앱의 EmbeddingClient가 workload identity 토큰으로 Azure OpenAI에 embeddings를 요청해 float[1536]을 받고, VectorSearchRepository가 JdbcClient로 movie_docs와 movies를 조인해 embedding <=> :v 순위와 문서 머리 키워드 순위를 RRF로 합친 영화 12편과 코사인 유사도를 받아 HTML 결과 목록과 그래프 URL을 돌려줌. ② 관계 그래프에서 graph.js가 GET /api/discover/graph?ids=를 보내면 MovieGraphRepository가 JdbcTemplate으로 UNWIND ids MATCH (a:Movie {tmdb_id})-[r]-(b) Cypher를 실행해 vertex·edge 행을 받고 JSON nodes·edges를 돌려줘 Cytoscape.js가 그림. ③ 다른 화면에서 리뷰·회원·영화는 Spring Data JPA가 public.*에 Hibernate SQL을 보내고, 상세 화면의 비슷한 영화는 임베딩 호출 없이 저장된 영화 벡터와 <=>로 6편을 조회함](images/horizondb-app-access.svg)
 
 | 기능 | 앱 클래스 | HorizonDB 접근 | 대상 |
 |---|---|---|---|
 | 리뷰·댓글·회원·영화 상세 | `MovieRepository`, `ReviewRepository` 등 Spring Data JPA | Hibernate SQL | `public.*` |
-| 의미 검색 `/discover` | `EmbeddingClient` → `VectorSearchRepository`(`JdbcClient`) | 질의 벡터를 parameter로 넘긴 `<=>` 정렬 | `movie_docs` ⋈ `movies` |
+| 의미 검색 `/discover` | `EmbeddingClient` → `VectorSearchRepository`(`JdbcClient`) | 질의 벡터 `<=>` 순위와 문서 머리 키워드 순위를 RRF로 결합 | `movie_docs` ⋈ `movies` |
+| 새 영화 색인(30초 주기) | `CatalogIndexer` → `TmdbCreditsClient`, `EmbeddingClient`, `CatalogIndexRepository` | advisory lock 뒤 `INSERT ... ON CONFLICT DO NOTHING` | `movie_docs` |
 | 비슷한 영화(상세 화면) | `VectorSearchRepository.similar` | 저장된 영화 벡터끼리 `<=>`. Azure OpenAI 호출 없음 | `movie_docs` |
 | 관계 그래프 `/api/discover/graph` | `MovieGraphRepository`(`JdbcTemplate`) | `ag_catalog.cypher()` 안의 openCypher | `movie_graph` |
 
 ```java
-// VectorSearchRepository: 질의 벡터를 pgvector 문자열로 바꿔 bind parameter로 전달
+// VectorSearchRepository: 질의 벡터를 pgvector 문자열로 바꿔 bind parameter로 전달(키워드 결합 부분은 생략)
 jdbc.sql("""
     SELECT d.tmdb_id, m.title, ..., 1 - (d.embedding <=> CAST(:v AS vector)) AS score
     FROM catalog.movie_docs d JOIN public.movies m ON m.tmdb_id = d.tmdb_id
@@ -295,6 +306,30 @@ LIMIT 12;
 - **DiskANN 사용 여부** — 문서는 planner가 index 사용을 결정한다고 설명합니다. 479행
   규모에서는 실제 계획이 seq scan이었고, `SET LOCAL enable_seqscan TO OFF`로 index 경로를
   확인할 수 있습니다. Learn의 index 선택 기준도 10만 행 미만은 flat scan을 첫 선택으로 둡니다.
+
+### 키워드 보완: 벡터 순위와 키워드 순위의 RRF 결합 { #hybrid }
+
+문서 전체를 하나로 임베딩하면 줄거리 같은 서술형 질의에는 강하지만, 제목이나 인물 이름만 넣은
+짧은 질의에는 약합니다. 2026-11-14에 「듄: 파트 2」를 색인한 뒤 벡터만으로 검색하면 「듄」에서
+10위, 「드니 빌뇌브」에서 12위였습니다. 그래서 `VectorSearchRepository.search`는 벡터 상위 50편과
+키워드 상위 50편의 순위를 Reciprocal Rank Fusion(`1 / (60 + 순위)`의 합)으로 합칩니다.
+
+- **키워드 순위** — 질의 단어가 문서 머리(제목·원제·개봉·장르·감독·출연)에 몇 개 들어 있는지로
+  정하고, 같으면 벡터 거리로 정렬합니다. 줄거리는 벡터 쪽에만 맡깁니다.
+- **반영 조건** — 질의 단어의 절반 이상이 들어 있는 영화만 키워드 순위에 넣습니다. 이 조건이 없을
+  때는 「a shark terrorizes a beach town」에서 원제에 beach가 들어간 「밤의 해변에서 혼자」가
+  「죠스」보다 앞섰습니다. 영어 단어는 4자 이상만 씁니다.
+- **점수 표시** — 순서는 결합 순위를 따르고, 화면의 점수는 그대로 코사인 유사도입니다.
+
+| 질의 | 벡터만 상위 3편 | RRF 결합 상위 3편 |
+|---|---|---|
+| 듄 | 듄(2021), 듄(1984), 디워 | 듄(2021), 듄(1984), 듄: 파트 2 |
+| 드니 빌뇌브 | 블루 벨벳, 듄(2021), 다빈치 코드 | 듄(2021), 듄: 파트 2, 블레이드 러너 2049 |
+| 꿈속에서 벌어지는 하이스트 | 호프, 인터스텔라, 위플래쉬 | 같음 |
+| 아이와 함께 보는 판타지 애니메이션 | 센과 치히로의 행방불명, 위쳐: 늑대의 악몽, 신비한 동물사전 | 같음 |
+
+「드늬 뷜베브」처럼 이름의 철자가 틀리면 키워드가 일치하지 않고, 벡터도 비슷한 발음의 이름을
+같은 인물로 보지 못해 「듄」 계열이 상위에 나오지 않았습니다.
 
 ## 그래프: Apache AGE `movie_graph`와 openCypher 조회 { #graph }
 

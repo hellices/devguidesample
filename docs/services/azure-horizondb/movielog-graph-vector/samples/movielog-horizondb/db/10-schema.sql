@@ -54,6 +54,8 @@ ALTER TABLE catalog.movie_docs ADD COLUMN IF NOT EXISTS overview text;
 GRANT USAGE ON SCHEMA catalog TO movielog;
 GRANT SELECT ON ALL TABLES IN SCHEMA catalog TO movielog;
 ALTER DEFAULT PRIVILEGES IN SCHEMA catalog GRANT SELECT ON TABLES TO movielog;
+-- The app embeds movies that members import from TMDB after the catalog load (CatalogIndexer).
+GRANT INSERT ON catalog.movie_docs TO movielog;
 
 -- openCypher queries through ag_catalog.cypher().
 GRANT USAGE ON SCHEMA ag_catalog TO movielog;

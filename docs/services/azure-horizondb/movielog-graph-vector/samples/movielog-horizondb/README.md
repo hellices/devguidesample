@@ -25,7 +25,7 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 | `db/10-schema.sql` | `vector`, `pg_diskann`, `age` 확장과 `catalog` schema를 만듭니다. |
 | `db/20-vector-index.sql` | `embedding`에 DiskANN 코사인 index를 만듭니다. |
 | `db/30-graph.sql` | 관계형 카탈로그에서 AGE 그래프 `movie_graph`를 다시 만듭니다. 영화마다 임베딩 최근접 3편을 `SIMILAR_TO`로 잇습니다. |
-| `src/main/java/.../discover/` | 의미 검색(`EmbeddingClient`, `VectorSearchRepository`), 그래프 조회(`MovieGraphRepository`), `movielog.discover.*` Timer를 기록하는 `DiscoverService`, 웹·API controller입니다. |
+| `src/main/java/.../discover/` | 의미 검색(`EmbeddingClient`, 벡터·키워드 순위를 RRF로 합치는 `VectorSearchRepository`), 카탈로그 밖 영화 색인(`CatalogIndexer`, `TmdbCreditsClient`), 그래프 조회(`MovieGraphRepository`), `movielog.discover.*` Timer를 기록하는 `DiscoverService`, 웹·API controller입니다. |
 | `src/main/resources/templates/discover/`, `static/js/graph.js` | `/discover` 의미 검색 화면과 `/graph/movies/{tmdbId}` 그래프 화면입니다. Cytoscape.js와 라벨 크기까지 계산해 겹침을 피하는 fCoSE 레이아웃으로 그리고, 키보드·스크린 리더용 관계 텍스트 목록과 영화 링크를 함께 렌더링합니다. |
 | `k8s/00-namespace.yaml` | namespace와 workload identity ServiceAccount입니다. |
 | `scripts/assemble-app.sh` | 기존 MovieLog sample과 이 sample의 변경 파일을 합쳐 `out/app/`에 앱 소스를 만듭니다. |
@@ -102,6 +102,14 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
 - **임베딩 문서에는 한국어 요약과 영어 요약을 함께 넣습니다.** 한국어 Wikipedia
   도입부는 제작 정보 위주라 줄거리 질의와 잘 맞지 않았습니다. 화면에는 한국어
   요약만 보입니다.
+- **카탈로그 밖의 영화는 앱이 색인합니다.** 회원이 TMDB 검색으로 처음 연 영화는
+  `public.movies`에만 저장되므로, `aks` profile의 `CatalogIndexer`가 30초마다 문서가 없는
+  영화를 찾아 TMDB credits를 더한 문서를 임베딩해 `catalog.movie_docs`에 넣습니다. 앱 role에
+  `catalog.movie_docs` `INSERT` 권한이 필요하며(`db/10-schema.sql`), 그래프에는 `db/30-graph.sql`을
+  다시 실행해야 들어갑니다.
+- **의미 검색은 벡터 순위와 키워드 순위를 합칩니다.** 「듄」, 「드니 빌뇌브」 같은 짧은 제목·이름
+  질의는 문서 전체 임베딩만으로는 순위가 낮아, 질의 단어의 절반 이상이 문서 머리(제목·장르·감독·
+  출연)에 있는 영화의 순위를 Reciprocal Rank Fusion으로 더합니다. 서술형 질의 결과는 그대로입니다.
 - **AGE 다중 시작점 조회는 `UNWIND`로 씁니다.** `MATCH (a:Movie)-[r]-(b) WHERE
   a.tmdb_id IN [...]`는 모든 edge를 훑어 영화 8편에 약 27초가 걸렸고,
   `UNWIND [...] AS t MATCH (a:Movie {tmdb_id: t})-[r]-(b)`는 같은 결과를 약 0.1초에
@@ -254,13 +262,13 @@ rm -rf "$SECRETS"
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.2.2 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.3.2 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.2.2"
+export APP_IMAGE="$ACR_SERVER/movielog:2.3.2"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -

@@ -65,7 +65,7 @@ public class DiscoverService {
 		String input = truncate(query.strip(), MAX_QUERY_LENGTH);
 		float[] embedding = timed("movielog.discover.embedding", "query", () -> embeddings.embed(input), v -> false);
 		return timed("movielog.discover.search", "vector",
-				() -> vectors.search(embedding, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
+				() -> vectors.search(embedding, input, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
 	}
 
 	public List<MovieHit> similar(long tmdbId, int limit) {
