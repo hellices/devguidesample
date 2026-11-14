@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="amw-title amw-desc">
+  <title id="amw-title">Azure Monitor workspace의 수집 quota 자동 조정</title>
+  <desc id="amw-desc">Prometheus metrics를 받는 workspace가 관측한 사용률에 따라 ingestion quota ceiling을 늘리거나 줄이고 변경 사항을 Activity Log에 기록합니다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#4f5d75"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#eb6c36"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2e5aa8"/></marker>
+  </defs>
+  <rect width="960" height="360" fill="#f5f5f5"/>
+  <g font-family="Geist, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif" fill="#2d3142">
+    <text x="32" y="36" font-size="22" font-weight="600">Workspace 사용률 → ingestion quota 자동 조정</text>
+    <g fill="none" stroke-width="2">
+      <path d="M272 164H344" stroke="#2e5aa8" marker-end="url(#arrow-link)"/>
+      <path d="M656 164H728" stroke="#4f5d75" marker-end="url(#arrow)"/>
+    </g>
+    <rect x="32" y="112" width="240" height="104" rx="6" fill="#ececec" stroke="#4f5d75"/>
+    <text x="152" y="152" text-anchor="middle" font-size="19" font-weight="600">Prometheus metrics</text>
+    <text x="152" y="184" text-anchor="middle" font-size="17">수집 event · time series</text>
+    <rect x="344" y="80" width="312" height="168" rx="6" fill="#fff1e9" stroke="#eb6c36"/>
+    <text x="500" y="112" text-anchor="middle" font-size="19" font-weight="600">Azure Monitor workspace</text>
+    <text x="500" y="146" text-anchor="middle" font-size="17">사용률 상한 접근 → quota 증가</text>
+    <text x="500" y="178" text-anchor="middle" font-size="17">낮은 사용률 지속 → quota 감소</text>
+    <text x="500" y="218" text-anchor="middle" font-size="17">Workspace별 opt-in</text>
+    <rect x="728" y="112" width="200" height="104" rx="6" fill="#fff" stroke="#2d3142"/>
+    <text x="828" y="152" text-anchor="middle" font-size="19" font-weight="600">Activity Log</text>
+    <text x="828" y="184" text-anchor="middle" font-size="17">한도 변경 이력</text>
+    <path d="M32 280H928" stroke="#bfc0c0"/>
+    <text x="32" y="314" font-size="17" fill="#4f5d75">Quota ceiling만 조정 · 실제 수집량 기준 과금 유지 · Pod/node 확장과 별개</text>
+  </g>
+</svg>
