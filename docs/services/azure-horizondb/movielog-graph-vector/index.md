@@ -391,10 +391,11 @@ topic에서 이어 받았습니다.
   HTTPS로 301 redirect합니다. 실측에서 인증서 발급은 약 45초 걸렸고, AGFC가 넘기는
   `x-forwarded-proto` 덕분에 앱의 로그인 redirect는 `https://` 주소로, `JSESSIONID`는 `Secure`로
   나왔습니다. listener에 hostname을 지정해 AGFC 기본 FQDN으로 들어온 요청은 404가 됩니다.
-- **공개 범위** — 회원 가입과 Azure OpenAI를 호출하는 의미 검색이 인증 없이 열립니다. 외부
-  요청이 유료 임베딩 호출과 quota를 소모하지 않도록 앱이 Azure OpenAI 호출 전에 Pod마다
-  클라이언트 주소당 분당 30건, 전체 분당 300건으로 제한하고 넘으면 429를 돌려줍니다. 그래도
-  공개 시간을 줄이도록 실습이 끝나면 NSG 규칙, DNS 레코드와 resource group을 지웁니다.
+- **공개 범위** — AKS 배포(`aks` profile)는 `app.security.require-login=true`로 로그인·회원가입 화면을
+  뺀 모든 화면과 API에 로그인을 요구합니다. 로그인하지 않은 요청은 화면이면 `/login`으로, API면 401을
+  받습니다. 다만 회원 가입이 열려 있어 누구나 계정을 만들 수 있으므로, 유료 임베딩 호출과 quota를
+  지키도록 앱이 Azure OpenAI 호출 전에 Pod마다 클라이언트 주소당 분당 30건, 전체 분당 300건으로
+  제한하고 넘으면 429를 돌려줍니다. 실습이 끝나면 NSG 규칙, DNS 레코드와 resource group을 지웁니다.
 - **클러스터 자동 중지** — 실습 구독에서는 조직 자동화가 자정 무렵 AKS 클러스터를 중지했습니다.
   다음 날 다시 볼 때는 `az aks start`로 시작합니다. 인증서와 Gateway 구성은 재시작 뒤에도
   유지됐습니다.

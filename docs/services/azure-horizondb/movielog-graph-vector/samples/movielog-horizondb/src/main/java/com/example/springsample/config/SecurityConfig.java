@@ -5,6 +5,7 @@ import java.util.List;
 import com.example.springsample.member.EntraMemberService;
 import com.example.springsample.metrics.MetricsProperties;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.security.autoconfigure.web.servlet.PathRequest;
 import org.springframework.context.annotation.Bean;
@@ -56,7 +57,8 @@ class SecurityConfig {
 	@Order(2)
 	SecurityFilterChain defaultFilterChain(HttpSecurity http, MetricsProperties metrics,
 			ObjectProvider<ClientRegistrationRepository> clientRegistrations,
-			ObjectProvider<EntraMemberService> entraMembers) throws Exception {
+			ObjectProvider<EntraMemberService> entraMembers,
+			@Value("${app.security.require-login:false}") boolean requireLogin) throws Exception {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
@@ -66,12 +68,7 @@ class SecurityConfig {
 				.requestMatchers("/login", "/signup").permitAll()
 				// Only reachable when springdoc is enabled (dev profile).
 				.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
-				.requestMatchers(HttpMethod.GET, "/", "/reviews", "/reviews/{id}", "/movies", "/movies/{tmdbId}",
-						"/discover", "/graph/movies/{tmdbId}").permitAll()
-				.requestMatchers(HttpMethod.GET, "/api/discover/**").permitAll()
-				.requestMatchers(HttpMethod.GET, "/api/reviews", "/api/reviews/{id}", "/api/reviews/{id}/comments",
-						"/api/movies/search", "/api/movies/popular", "/api/movies/{tmdbId}", "/api/movies/{tmdbId}/reviews")
-					.permitAll()
+				.requestMatchers(HttpMethod.GET, publicReads(requireLogin)).permitAll()
 				.anyRequest().authenticated())
 			.formLogin(form -> form
 				.loginPage("/login")
@@ -95,6 +92,20 @@ class SecurityConfig {
 				.userInfoEndpoint(userInfo -> userInfo.oidcUserService(entraMembers.getObject())));
 		}
 		return http.build();
+	}
+
+	/**
+	 * Pages and APIs readable without signing in. With {@code app.security.require-login=true} (the AKS deployment,
+	 * public on the internet, whose searches call Azure OpenAI and TMDB) every page needs a signed-in member.
+	 */
+	private static String[] publicReads(boolean requireLogin) {
+		if (requireLogin) {
+			return new String[0];
+		}
+		return new String[] { "/", "/reviews", "/reviews/{id}", "/movies", "/movies/{tmdbId}", "/discover",
+				"/graph/movies/{tmdbId}", "/api/discover/**", "/api/reviews", "/api/reviews/{id}",
+				"/api/reviews/{id}/comments", "/api/movies/search", "/api/movies/popular", "/api/movies/{tmdbId}",
+				"/api/movies/{tmdbId}/reviews" };
 	}
 
 	private static AuthorizationManager<RequestAuthorizationContext> scrapeAccess(MetricsProperties metrics) {

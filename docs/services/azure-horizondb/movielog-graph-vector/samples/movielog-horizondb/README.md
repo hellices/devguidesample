@@ -63,8 +63,12 @@ Gradle Wrapper, `Dockerfile`, `agent-init/`, `k8s/10-instrumentation.yaml`,
   `privatelink.vaultcore.azure.net` private DNS zone을 둡니다. 운영자는 Key Vault data plane 대신 ARM
   `Microsoft.KeyVault/vaults/secrets`로 값을 넣습니다.
 
-- **익명 의미 검색에 요청률 한도를 둡니다.** `/discover`와 `/api/discover/search`는 로그인 없이
-  Azure OpenAI를 호출하므로, 앱이 Azure OpenAI를 부르기 전에 Pod마다 클라이언트 주소당 분당
+- **AKS 배포는 모든 화면에 로그인을 요구합니다.** 기존 MovieLog sample은 목록·상세를 익명으로 읽게
+  열어 두지만, 이 sample의 `aks` profile은 `app.security.require-login=true`로 로그인·회원가입·정적
+  파일·health를 뺀 모든 화면과 API를 막습니다. 로그인하지 않으면 화면은 `/login`으로 redirect되고 API는
+  401을 받습니다. 기본값은 `false`라 로컬과 기존 sample 테스트는 그대로입니다.
+- **의미 검색에 요청률 한도를 둡니다.** 회원 가입이 열려 있어 누구나 계정을 만들어 `/discover`와
+  `/api/discover/search`로 Azure OpenAI를 호출할 수 있으므로, 앱이 Azure OpenAI를 부르기 전에 Pod마다 클라이언트 주소당 분당
   30건(`DISCOVER_RATE_LIMIT_PER_CLIENT`)과 전체 분당 300건(`DISCOVER_RATE_LIMIT_TOTAL`)으로
   제한합니다. 넘으면 API는 429, 화면은 안내 문구를 돌려줍니다. 클라이언트 주소는 AGFC가 넘기는
   `x-forwarded-for`에서 Tomcat이 얻습니다. 카운터는 분마다 비우고 한 분에 주소 1만 개까지만
@@ -249,13 +253,13 @@ rm -rf "$SECRETS"
 BASE=../../../../azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app
 ACR_SERVER="$(az acr show -n "$ACR" --query loginServer -o tsv)"
 scripts/assemble-app.sh
-az acr build -r "$ACR" -t movielog:2.2.0 --platform linux/amd64 out/app
+az acr build -r "$ACR" -t movielog:2.2.1 --platform linux/amd64 out/app
 az acr build -r "$ACR" -t observability/applicationinsights-agent:3.7.10 --platform linux/amd64 out/app/agent-init
 az aks get-credentials -g $RG -n aks-movielog-hz
 
 export MI_CLIENT_ID="$(az identity show -g $RG -n id-movielog-app --query clientId -o tsv)"
 export AZURE_OPENAI_ENDPOINT="https://$AOAI.openai.azure.com/"
-export APP_IMAGE="$ACR_SERVER/movielog:2.2.0"
+export APP_IMAGE="$ACR_SERVER/movielog:2.2.1"
 export APPLICATIONINSIGHTS_CONNECTION_STRING="$(az monitor app-insights component show \
   -g $RG -a appi-movielog-hz --query connectionString -o tsv)"
 envsubst < k8s/00-namespace.yaml | kubectl apply -f -
