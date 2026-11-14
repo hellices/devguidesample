@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" role="img" aria-labelledby="horizondb-arch-title horizondb-arch-desc">
+  <title id="horizondb-arch-title">MovieLog on Azure HorizonDB architecture</title>
+  <desc id="horizondb-arch-desc">Browser traffic enters Application Gateway for Containers over HTTPS with a cert-manager issued Let's Encrypt certificate and reaches the MovieLog app on AKS, which embeds query text with Azure OpenAI and runs vector search and Apache AGE openCypher queries in Azure HorizonDB; a catalog loader fills HorizonDB from Wikidata and Wikipedia, and telemetry flows to Application Insights and Managed Grafana.</desc>
+  <defs>
+    <marker id="hz-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+    </marker>
+    <marker id="hz-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+    </marker>
+    <marker id="hz-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/>
+    </marker>
+    <style>
+      .name { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; }
+      .label { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 12px; font-weight: 500; fill: #4f5d75; }
+      .chip { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; fill: #2d3142; }
+      .mono { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 10px; fill: #4f5d75; }
+      .tag { font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace; font-size: 8px; letter-spacing: 0.08em; }
+      .zone { font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Segoe UI', sans-serif; font-size: 12px; font-weight: 500; fill: #7a8399; }
+    </style>
+  </defs>
+
+  <rect width="1120" height="620" fill="#f5f5f5"/>
+
+  <!-- Zone: AKS-managed virtual network (AGFC association subnet and cluster nodes) -->
+  <rect x="184" y="164" width="480" height="152" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.18)" stroke-width="1" stroke-dasharray="4,4"/>
+  <rect x="196" y="156" width="112" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="252" y="168" class="zone" text-anchor="middle">AKS 관리형 VNet</text>
+
+  <!-- Connectors (drawn before nodes) -->
+  <!-- Browser to AGFC -->
+  <line x1="152" y1="252" x2="202" y2="252" stroke="#2e5aa8" stroke-width="1.4" marker-end="url(#hz-arrow-link)"/>
+  <rect x="156" y="222" width="42" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="177" y="234" class="mono" text-anchor="middle">HTTPS</text>
+  <!-- AGFC to MovieLog -->
+  <line x1="404" y1="252" x2="438" y2="252" stroke="#4f5d75" stroke-width="1.4" marker-end="url(#hz-arrow)"/>
+  <!-- MovieLog to HorizonDB (focal path) -->
+  <line x1="640" y1="252" x2="738" y2="252" stroke="#eb6c36" stroke-width="2" marker-end="url(#hz-arrow-accent)"/>
+  <rect x="650" y="220" width="80" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="690" y="232" class="mono" text-anchor="middle">SQL · Cypher</text>
+  <!-- MovieLog to Azure OpenAI (query embedding) -->
+  <line x1="540" y1="212" x2="540" y2="114" stroke="#2e5aa8" stroke-width="1.4" marker-end="url(#hz-arrow-link)"/>
+  <rect x="550" y="128" width="72" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="586" y="140" class="label" text-anchor="middle">질의 임베딩</text>
+  <!-- Loader to Azure OpenAI (document embedding) -->
+  <path d="M1040,476 H1084 Q1092,476 1092,468 V84 Q1092,76 1084,76 H642" fill="none" stroke="#2e5aa8" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#hz-arrow-link)"/>
+  <rect x="828" y="52" width="72" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="864" y="64" class="label" text-anchor="middle">문서 임베딩</text>
+  <!-- Loader to HorizonDB (load + graph build) -->
+  <line x1="910" y1="440" x2="910" y2="358" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#hz-arrow)"/>
+  <rect x="920" y="390" width="112" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="976" y="402" class="label" text-anchor="middle">적재 · 그래프 생성</text>
+  <!-- MovieLog to Application Insights (telemetry) -->
+  <line x1="540" y1="292" x2="540" y2="438" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#hz-arrow)"/>
+  <rect x="550" y="348" width="64" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="582" y="360" class="label" text-anchor="middle">텔레메트리</text>
+  <!-- Application Insights to Managed Grafana -->
+  <line x1="440" y1="476" x2="386" y2="476" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#hz-arrow)"/>
+  <rect x="390" y="446" width="44" height="16" rx="2" fill="#f5f5f5"/>
+  <text x="412" y="458" class="mono" text-anchor="middle">KQL</text>
+
+  <!-- Node: Browser -->
+  <rect x="32" y="212" width="120" height="80" rx="6" fill="#f5f5f5"/>
+  <rect x="32" y="212" width="120" height="80" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+  <text x="44" y="228" class="tag" fill="#7a8399">USER</text>
+  <text x="92" y="256" class="name" text-anchor="middle">브라우저</text>
+  <text x="92" y="274" class="mono" text-anchor="middle">/discover</text>
+
+  <!-- Node: Application Gateway for Containers -->
+  <rect x="204" y="212" width="200" height="80" rx="6" fill="#f5f5f5"/>
+  <rect x="204" y="212" width="200" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="216" y="228" class="tag" fill="#4f5d75">INGRESS</text>
+  <text x="304" y="256" class="name" text-anchor="middle">App Gateway for Containers</text>
+  <text x="304" y="274" class="mono" text-anchor="middle">TLS · cert-manager</text>
+
+  <!-- Node: MovieLog on AKS -->
+  <rect x="440" y="212" width="200" height="80" rx="6" fill="#f5f5f5"/>
+  <rect x="440" y="212" width="200" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <text x="452" y="228" class="tag" fill="#4f5d75">AKS POD ×2</text>
+  <text x="540" y="256" class="name" text-anchor="middle">MovieLog 앱</text>
+  <text x="540" y="274" class="mono" text-anchor="middle">Spring Boot 4.1 · Java 25</text>
+
+  <!-- Node: Azure OpenAI -->
+  <rect x="440" y="40" width="200" height="72" rx="6" fill="#f5f5f5"/>
+  <rect x="440" y="40" width="200" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+  <text x="452" y="56" class="tag" fill="#7a8399">AI</text>
+  <text x="540" y="80" class="name" text-anchor="middle">Azure OpenAI</text>
+  <text x="540" y="98" class="mono" text-anchor="middle">text-embedding-3-large</text>
+
+  <!-- Node: Azure HorizonDB (focal) -->
+  <rect x="740" y="148" width="340" height="208" rx="8" fill="#f5f5f5"/>
+  <rect x="740" y="148" width="340" height="208" rx="8" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.4"/>
+  <text x="756" y="166" class="tag" fill="#eb6c36">DB · PREVIEW</text>
+  <text x="756" y="188" class="name">Azure HorizonDB</text>
+  <text x="1064" y="188" class="mono" text-anchor="end">PostgreSQL 17</text>
+  <!-- chips inside HorizonDB -->
+  <rect x="756" y="204" width="308" height="40" rx="4" fill="#ffffff" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
+  <text x="768" y="229" class="chip">관계형 테이블</text>
+  <text x="1052" y="229" class="mono" text-anchor="end">movies · reviews · catalog.*</text>
+  <rect x="756" y="252" width="308" height="40" rx="4" fill="#ffffff" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
+  <text x="768" y="277" class="chip">pgvector + DiskANN</text>
+  <text x="1052" y="277" class="mono" text-anchor="end">vector(1536) · &lt;=&gt;</text>
+  <rect x="756" y="300" width="308" height="40" rx="4" fill="#ffffff" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
+  <text x="768" y="325" class="chip">Apache AGE</text>
+  <text x="1052" y="325" class="mono" text-anchor="end">movie_graph · openCypher</text>
+
+  <!-- Node: Catalog loader -->
+  <rect x="780" y="440" width="260" height="72" rx="6" fill="#f5f5f5"/>
+  <rect x="780" y="440" width="260" height="72" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.30)" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="792" y="456" class="tag" fill="#7a8399">BATCH</text>
+  <text x="910" y="480" class="name" text-anchor="middle">카탈로그 로더</text>
+  <text x="910" y="498" class="mono" text-anchor="middle">Wikidata · Wikipedia → SQL</text>
+
+  <!-- Node: Application Insights -->
+  <rect x="440" y="440" width="200" height="72" rx="6" fill="#f5f5f5"/>
+  <rect x="440" y="440" width="200" height="72" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+  <text x="452" y="456" class="tag" fill="#4f5d75">OBSERVE</text>
+  <text x="540" y="480" class="name" text-anchor="middle">Application Insights</text>
+  <text x="540" y="498" class="mono" text-anchor="middle">Java agent 3.7.10</text>
+
+  <!-- Node: Managed Grafana -->
+  <rect x="184" y="440" width="200" height="72" rx="6" fill="#f5f5f5"/>
+  <rect x="184" y="440" width="200" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+  <text x="196" y="456" class="tag" fill="#7a8399">DASHBOARD</text>
+  <text x="284" y="480" class="name" text-anchor="middle">Managed Grafana</text>
+  <text x="284" y="498" class="mono" text-anchor="middle">movielog-horizondb-discover</text>
+
+  <!-- Legend -->
+  <line x1="32" y1="552" x2="1088" y2="552" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+  <text x="32" y="584" class="tag" fill="#4f5d75">LEGEND</text>
+  <line x1="104" y1="580" x2="140" y2="580" stroke="#eb6c36" stroke-width="2" marker-end="url(#hz-arrow-accent)"/>
+  <text x="148" y="584" class="label">앱 → DB 조회</text>
+  <line x1="256" y1="580" x2="292" y2="580" stroke="#2e5aa8" stroke-width="1.4" marker-end="url(#hz-arrow-link)"/>
+  <text x="300" y="584" class="label">HTTP·HTTPS 호출</text>
+  <line x1="424" y1="580" x2="460" y2="580" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#hz-arrow)"/>
+  <text x="468" y="584" class="label">내부 흐름</text>
+  <line x1="552" y1="580" x2="588" y2="580" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4"/>
+  <text x="596" y="584" class="label">일회성 적재(배치)</text>
+  <rect x="728" y="572" width="20" height="14" rx="3" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+  <text x="756" y="584" class="label">이 실습의 핵심 서비스</text>
+</svg>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('의미 검색')}"></head>
+<body class="light">
+<header th:replace="~{fragments/layout :: header}"></header>
+
+<main class="responsive">
+	<form th:action="@{/discover}" method="get" role="search">
+		<div class="field large prefix round fill">
+			<i>auto_awesome</i>
+			<input type="search" name="q" th:value="${q}" maxlength="200" autofocus
+				placeholder="보고 싶은 영화를 설명해 보세요 (예: 꿈속에서 벌어지는 하이스트, 가족이 함께 보는 애니메이션)"
+				aria-label="의미 검색어">
+		</div>
+	</form>
+
+	<p class="secondary-text" th:if="${#strings.isEmpty(q)}">
+		질의는 앱이 Azure OpenAI <code>text-embedding-3-large</code>로 임베딩하고, HorizonDB가 pgvector
+		코사인 거리(<code>&lt;=&gt;</code>)로 영화 문서 임베딩과 비교합니다. DiskANN 인덱스가 있지만 영화 수가 적어
+		planner가 전체 비교를 고를 수 있습니다. 결과 영화들 사이의 공통 감독·배우·장르는 Apache AGE 그래프로 함께
+		보여 줍니다.
+	</p>
+
+	<article class="round error-container" th:if="${searchFailed}">
+		<p>카탈로그 검색을 사용할 수 없습니다. 임베딩과 그래프가 적재됐는지 확인해 주세요.</p>
+	</article>
+	<article class="round error-container" th:if="${searchLimited}">
+		<p>의미 검색 요청이 많아 잠시 제한했습니다. 1분 뒤에 다시 시도해 주세요.</p>
+	</article>
+
+	<th:block th:if="${hits != null}">
+		<section th:unless="${hits.isEmpty()}">
+			<h6>결과 영화 사이의 관계 <span class="small-text secondary-text">(AGE openCypher)</span></h6>
+			<div id="graph" class="graph-canvas round border" role="img"
+				aria-label="결과 영화와 공통 인물·장르·비슷한 영화의 관계 그래프. 같은 내용은 아래 관계 목록에 있습니다."
+				th:attr="data-api-url=@{/api/discover/graph(ids=${#strings.listJoin(hitIds, ',')})},data-movie-url=@{/movies/}"></div>
+			<nav class="wrap small-space graph-legend">
+				<span class="chip"><span class="dot dot-movie"></span>영화</span>
+				<span class="chip"><span class="dot dot-person"></span>인물</span>
+				<span class="chip"><span class="dot dot-genre"></span>장르</span>
+				<span class="chip"><span class="line line-similar"></span>SIMILAR_TO</span>
+			</nav>
+			<details class="graph-relations">
+				<summary>관계 목록 (텍스트)</summary>
+				<div id="graph-relations" aria-live="polite"></div>
+			</details>
+		</section>
+
+		<p class="secondary-text" th:if="${correction != null}">
+			<i class="small">spellcheck</i>
+			<span th:text="|'${correction.from}'을(를) '${correction.to}'(으)로 고쳐 검색했습니다.|">'드늬 뷜베브'을(를) '드니 빌뇌브'(으)로 고쳐 검색했습니다.</span>
+		</p>
+		<p class="secondary-text">
+			<b th:text="|'${correction != null ? correction.query : q}'|">'검색어'</b>와 가까운 영화 <span th:text="${hits.size()}">0</span>편
+		</p>
+		<ul class="list border discover-list">
+			<li th:each="hit, stat : ${hits}">
+				<div class="max">
+					<a class="link" th:href="@{/movies/{id}(id=${hit.tmdbId})}">
+						<b th:text="${hit.title}">제목</b>
+						<span class="secondary-text" th:if="${hit.releaseYear != null}" th:text="|(${hit.releaseYear})|">(2010)</span>
+					</a>
+					<div class="small-text secondary-text">
+						<span th:text="${#strings.listJoin(hit.genres, ', ')}">장르</span>
+					</div>
+					<p class="small-text hit-overview" th:if="${hit.overview != null}" th:text="${hit.overview}">줄거리</p>
+					<p class="small-text secondary-text" th:if="${hit.overview != null and hit.sourceUrl != null}">
+						줄거리 출처: <a class="link" th:href="${hit.sourceUrl}" target="_blank" rel="noopener">Wikipedia</a>,
+						<a class="link" href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+					</p>
+				</div>
+				<div class="right-align">
+					<span class="chip" title="코사인 유사도">
+						<i>insights</i><span th:text="${#numbers.formatDecimal(hit.score, 1, 3)}">0.812</span>
+					</span>
+					<a class="button transparent circle" th:href="@{/graph/movies/{id}(id=${hit.tmdbId})}" aria-label="관계 그래프">
+						<i>hub</i>
+					</a>
+				</div>
+			</li>
+		</ul>
+		<p class="center-align secondary-text large-padding" th:if="${hits.isEmpty()}">검색 결과가 없습니다.</p>
+	</th:block>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<script th:replace="~{discover/graph :: scripts}"></script>
+</body>
+</html>

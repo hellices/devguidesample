@@ -41,6 +41,7 @@ services:
   azure-functions: Azure Functions
   azure-front-door: Azure Front Door
   azure-hdinsight: Azure HDInsight
+  azure-horizondb: Azure HorizonDB
   azure-kubernetes-service: Azure Kubernetes Service
   azure-load-testing: Azure Load Testing
   azure-managed-grafana: Azure Managed Grafana
@@ -74,6 +75,7 @@ technologies:
   mysql: MySQL
   nodejs: Node.js
   open-telemetry: OpenTelemetry
+  postgresql: PostgreSQL
   powershell: PowerShell
   prometheus: Prometheus
   python: Python
