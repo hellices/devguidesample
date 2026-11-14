@@ -57,6 +57,14 @@ def embed(endpoint: str, bearer: str, texts: list[str]) -> list[list[float]]:
     raise RuntimeError("unreachable")
 
 
+def sql_text(text: str) -> str:
+    # Dollar quoting avoids escaping; the tag is chosen to not occur in the text.
+    tag = "$doc$"
+    while tag in text:
+        tag = tag[:-1] + "x$"
+    return tag + text + tag
+
+
 def main() -> int:
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
     if not endpoint:
@@ -79,8 +87,9 @@ def main() -> int:
                 vectors = embed(endpoint, bearer, [row["doc"] for row in batch])
                 for row, vector in zip(batch, vectors):
                     literal = "[" + ",".join(f"{v:.7g}" for v in vector) + "]"
+                    # Matching the embedded text too leaves a row reloaded meanwhile NULL for the next run.
                     out.write(f"UPDATE catalog.movie_docs SET embedding = '{literal}'::vector, embedded_at = now()"
-                              f" WHERE tmdb_id = {int(row['id'])};\n")
+                              f" WHERE tmdb_id = {int(row['id'])} AND doc = {sql_text(row['doc'])};\n")
                 print(f"  embedded {min(start + BATCH, len(rows))}/{len(rows)}", file=sys.stderr)
             out.write("COMMIT;\n")
         psql("-q", "-f", path)

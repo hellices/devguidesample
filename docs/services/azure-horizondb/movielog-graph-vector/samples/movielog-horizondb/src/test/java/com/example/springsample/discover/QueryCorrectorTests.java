@@ -33,6 +33,8 @@ class QueryCorrectorTests {
 		// "아이와" is 아이 + the particle 와, found in the documents, so it is not turned into 아이유.
 		assertThat(QueryCorrector.correct("아이와 함께 보는 판타지 애니메이션", SNAPSHOT)).isEmpty();
 		assertThat(QueryCorrector.correct("하이스트", SNAPSHOT)).isEmpty();
+		// An exact title keeps the word next to it instead of absorbing it into a fuzzy match.
+		assertThat(QueryCorrector.correct("인셉션 4DX", SNAPSHOT)).isEmpty();
 	}
 
 	@Test

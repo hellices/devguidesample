@@ -189,7 +189,7 @@ Managed Grafana에서 봅니다.
 |---|---|---|---|---|---|
 | ⓪ 앱 기동 | Hibernate `ddl-auto=update` | JPA entity | `public.*` 테이블 | 없는 테이블·열만 추가 | 앱 시작 시 |
 | ① 카탈로그 적재 | `build_catalog.py` → `catalog.sql` | Wikidata SPARQL, Wikipedia 요약 API | `public.movies`, `catalog.*`, `movie_docs.doc` | `ON CONFLICT` upsert. `doc`이 바뀐 행만 `embedding`을 `NULL`로 비움 | 생성 8–11분, 적재 약 3.5분 |
-| ② 문서 임베딩 | `embed_catalog.py` | `embedding IS NULL`인 `doc` | `movie_docs.embedding` | 비어 있는 행만 처리. `--all`은 전체 재임베딩 | 479건 약 3.5분 |
+| ② 문서 임베딩 | `embed_catalog.py` | `embedding IS NULL`인 `doc` | `movie_docs.embedding` | 비어 있는 행만 처리. `--all`은 전체 재임베딩. 임베딩한 `doc`이 그사이 바뀐 행은 비워 둠 | 479건 약 3.5분 |
 | ③ 벡터 index | `20-vector-index.sql` | `embedding` | DiskANN index | `IF NOT EXISTS`. 모델을 바꾸면 `REINDEX` | 수 초 |
 | ④ 그래프 재생성 | `30-graph.sql` | `movies`, `catalog.*`, `embedding` | `movie_graph` 전체 | graph를 지우고 다시 생성. 최초 1회 | 약 6–8초 |
 | ⑤ 그래프 동기화 설치 | `40-graph-sync.sql` | — | 변경 queue, trigger, 동기화 함수 | `CREATE OR REPLACE`. 이후 그래프는 변경분만 반영 | 수 초 |
@@ -394,6 +394,7 @@ LIMIT 12;
   바뀌었습니다.
 - **채택 기준** — 유사도 0.75 이상이고 2위보다 0.1 이상 높을 때만 바꿉니다. 1–3단어 구간이 유사도로
   경쟁하고 같으면 긴 구간을 고르므로, 「인셉숀 2」는 「인셉숀」만 고쳐 「인셉션 2」로 검색합니다.
+  이미 이름·제목과 정확히 같은 단어는 교정 구간에 넣지 않아, 「인셉션 4DX」는 그대로 검색합니다.
   고친 질의로 임베딩과 키워드 순위를 모두 계산하고, 화면에는 「'드늬 뷜베브'을(를) '드니 빌뇌브'(으)로
   고쳐 검색했습니다」를 보여 줍니다. 교정 횟수는 `movielog.discover.corrected` counter로 남깁니다.
 

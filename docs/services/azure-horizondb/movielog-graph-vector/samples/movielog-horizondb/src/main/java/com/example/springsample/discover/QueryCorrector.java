@@ -28,7 +28,8 @@ import org.springframework.stereotype.Component;
  * trailing particle such as 와·을) are corrected, and the best candidate must reach {@link #MIN_SIMILARITY} and beat
  * the second by {@link #MIN_MARGIN}. Windows of one to three words compete on similarity, so a full name replaces
  * both of its words ("드늬 뷜베브") while a modifier next to a title stays ("인셉숀 2" → "인셉션 2"); on a tie the
- * longer window wins.
+ * longer window wins. Words that already spell a name or title exactly are never part of a corrected window, so
+ * "인셉션 4DX" is searched as typed.
  */
 @Component
 class QueryCorrector {
@@ -101,11 +102,12 @@ class QueryCorrector {
 
 	static Optional<QueryCorrection> correct(String query, Snapshot snapshot) {
 		String[] words = query.strip().split("\\s+");
+		boolean[] exact = snapshot.exactSpans(words);
 		Candidate chosen = null;
 		for (int size = Math.min(MAX_WINDOW, words.length); size >= 1; size--) {
 			for (int start = 0; start + size <= words.length; start++) {
 				String[] window = Arrays.copyOfRange(words, start, start + size);
-				if (Arrays.stream(window).allMatch(snapshot::isKnown)) {
+				if (Arrays.stream(window).allMatch(snapshot::isKnown) || overlaps(exact, start, size)) {
 					continue;
 				}
 				Candidate candidate = snapshot.closest(String.join(" ", window), start, size);
@@ -121,6 +123,15 @@ class QueryCorrector {
 		rewritten.add(chosen.name());
 		rewritten.addAll(Arrays.asList(words).subList(chosen.start() + chosen.size(), words.length));
 		return Optional.of(new QueryCorrection(String.join(" ", rewritten), chosen.from(), chosen.name()));
+	}
+
+	private static boolean overlaps(boolean[] exact, int start, int size) {
+		for (int i = start; i < start + size; i++) {
+			if (exact[i]) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	static String jamo(String text) {
@@ -168,6 +179,20 @@ class QueryCorrector {
 				}
 			}
 			return new Snapshot(byJamo, corpus, loadedAt);
+		}
+
+		/** Words that form, alone or with neighbors, a name or title exactly; no correction may replace them. */
+		boolean[] exactSpans(String[] words) {
+			boolean[] exact = new boolean[words.length];
+			for (int size = 1; size <= Math.min(MAX_WINDOW, words.length); size++) {
+				for (int start = 0; start + size <= words.length; start++) {
+					String window = String.join(" ", Arrays.copyOfRange(words, start, start + size));
+					if (names.containsKey(jamo(window))) {
+						Arrays.fill(exact, start, start + size, true);
+					}
+				}
+			}
+			return exact;
 		}
 
 		boolean isKnown(String word) {
