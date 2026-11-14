@@ -42,8 +42,12 @@ public class DiscoverService {
 
 	private final Counter rejected;
 
+	private final QueryCorrector corrector;
+
+	private final Counter corrected;
+
 	public DiscoverService(EmbeddingClient embeddings, VectorSearchRepository vectors, MovieGraphRepository graph,
-			MeterRegistry registry, DiscoverRateLimiter rateLimiter) {
+			MeterRegistry registry, DiscoverRateLimiter rateLimiter, QueryCorrector corrector) {
 		this.embeddings = embeddings;
 		this.vectors = vectors;
 		this.graph = graph;
@@ -52,20 +56,42 @@ public class DiscoverService {
 		this.rejected = Counter.builder("movielog.discover.rejected")
 			.description("Semantic searches refused by the rate cap before calling Azure OpenAI")
 			.register(registry);
+		this.corrector = corrector;
+		this.corrected = Counter.builder("movielog.discover.corrected")
+			.description("Semantic searches whose misspelled name or title was corrected before embedding")
+			.register(registry);
 	}
 
 	/**
 	 * @param client address of the caller (after forwarded headers), used for the per-client rate cap
 	 */
 	public List<MovieHit> search(String query, int limit, String client) {
+		return searchWithCorrection(query, limit, client).hits();
+	}
+
+	/**
+	 * Like {@link #search}, and reports a corrected person name or title. The corrected query is embedded and
+	 * matched by keywords; the web page shows which words were replaced.
+	 */
+	public DiscoverSearch searchWithCorrection(String query, int limit, String client) {
 		if (!rateLimiter.tryAcquire(client)) {
 			rejected.increment();
 			throw new DiscoverRateLimitedException("Too many semantic searches; try again in a minute");
 		}
-		String input = truncate(query.strip(), MAX_QUERY_LENGTH);
+		String typed = truncate(query.strip(), MAX_QUERY_LENGTH);
+		QueryCorrection correction = corrector.correct(typed).orElse(null);
+		if (correction != null) {
+			corrected.increment();
+		}
+		String input = (correction == null) ? typed : correction.query();
 		float[] embedding = timed("movielog.discover.embedding", "query", () -> embeddings.embed(input), v -> false);
-		return timed("movielog.discover.search", "vector",
+		List<MovieHit> hits = timed("movielog.discover.search", "vector",
 				() -> vectors.search(embedding, input, Math.clamp(limit, 1, MAX_RESULTS)), List::isEmpty);
+		return new DiscoverSearch(hits, correction);
+	}
+
+	/** Search results and, when the query was corrected, the replaced words. */
+	public record DiscoverSearch(List<MovieHit> hits, @Nullable QueryCorrection correction) {
 	}
 
 	public List<MovieHit> similar(long tmdbId, int limit) {

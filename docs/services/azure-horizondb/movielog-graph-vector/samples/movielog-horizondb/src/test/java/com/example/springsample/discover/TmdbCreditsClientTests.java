@@ -39,16 +39,37 @@ class TmdbCreditsClientTests {
 			.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer header.payload.signature"))
 			.andRespond(withSuccess("""
 					{"cast": [
-					  {"name": "일곱", "order": 6}, {"name": "둘", "order": 1}, {"name": "하나", "order": 0},
-					  {"name": "셋", "order": 2}, {"name": "넷", "order": 3}, {"name": "다섯", "order": 4},
-					  {"name": "여섯", "order": 5}],
-					 "crew": [{"name": "드니 빌뇌브", "job": "Director"}, {"name": "작가", "job": "Screenplay"},
-					  {"name": "드니 빌뇌브", "job": "Director"}]}""", MediaType.APPLICATION_JSON));
+					  {"id": 7, "name": "일곱", "order": 6}, {"id": 2, "name": "둘", "order": 1},
+					  {"id": 1, "name": "하나", "order": 0}, {"id": 3, "name": "셋", "order": 2},
+					  {"id": 4, "name": "넷", "order": 3}, {"id": 5, "name": "다섯", "order": 4},
+					  {"id": 6, "name": "여섯", "order": 5}],
+					 "crew": [{"id": 137427, "name": "드니 빌뇌브", "job": "Director"},
+					  {"id": 9, "name": "작가", "job": "Screenplay"},
+					  {"id": 137427, "name": "드니 빌뇌브", "job": "Director"}]}""", MediaType.APPLICATION_JSON));
 
 		TmdbCreditsClient.Credits credits = client.credits(693134);
 
-		assertThat(credits.directors()).containsExactly("드니 빌뇌브");
-		assertThat(credits.actors()).containsExactly("하나", "둘", "셋", "넷", "다섯", "여섯");
+		assertThat(credits.directors()).containsExactly(new TmdbCreditsClient.Credit(137427, "드니 빌뇌브"));
+		assertThat(credits.actors()).extracting(TmdbCreditsClient.Credit::name)
+			.containsExactly("하나", "둘", "셋", "넷", "다섯", "여섯");
+		assertThat(credits.actors()).extracting(TmdbCreditsClient.Credit::id).containsExactly(1L, 2L, 3L, 4L, 5L, 6L);
+	}
+
+	@Test
+	void readsTheWikidataIdOfAPersonAndIgnoresMissingOrMalformedIds() {
+		TmdbCreditsClient client = client();
+		server.expect(requestTo("https://tmdb.test/3/person/16851/external_ids"))
+			.andRespond(withSuccess("{\"id\": 16851, \"wikidata_id\": \"Q41396\"}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo("https://tmdb.test/3/person/1/external_ids"))
+			.andRespond(withSuccess("{\"id\": 1, \"wikidata_id\": null}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo("https://tmdb.test/3/person/2/external_ids"))
+			.andRespond(withSuccess("{\"id\": 2, \"wikidata_id\": \"Q1 OR 1=1\"}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo("https://tmdb.test/3/person/3/external_ids")).andRespond(withResourceNotFound());
+
+		assertThat(client.wikidataId(16851)).contains("Q41396");
+		assertThat(client.wikidataId(1)).isEmpty();
+		assertThat(client.wikidataId(2)).isEmpty();
+		assertThat(client.wikidataId(3)).isEmpty();
 	}
 
 	@Test

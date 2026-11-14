@@ -29,8 +29,11 @@ class DiscoverWebController {
 		model.addAttribute("q", query);
 		if (StringUtils.hasText(query)) {
 			try {
-				List<MovieHit> hits = discoverService.search(query, PAGE_RESULTS, request.getRemoteAddr());
+				DiscoverService.DiscoverSearch search = discoverService.searchWithCorrection(query, PAGE_RESULTS,
+						request.getRemoteAddr());
+				List<MovieHit> hits = search.hits();
 				model.addAttribute("hits", hits);
+				model.addAttribute("correction", search.correction());
 				model.addAttribute("hitIds", hits.stream().map(hit -> String.valueOf(hit.tmdbId())).toList());
 			}
 			catch (DiscoverUnavailableException ex) {

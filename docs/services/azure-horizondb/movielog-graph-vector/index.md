@@ -164,9 +164,9 @@ Managed Grafana에서 봅니다.
 | 모델 | 저장 위치 | 성격 | 연결 키 | 쓰는 주체 |
 |---|---|---|---|---|
 | 관계형 | `public.movies`, `public.reviews`·`members`·`comments` | 원본. 앱의 리뷰·회원은 요청마다 바뀜 | `movies.tmdb_id`(UNIQUE), `reviews.movie_id → movies.id` | 앱(Hibernate·JPA), 로더(`movies` upsert) |
-| 관계형 | `catalog.people`, `catalog.movie_credits`, `catalog.movie_genres` | 원본. Wikidata 구조 | `tmdb_id`, `qid`(`person_qid → people.qid`) | 로더 |
+| 관계형 | `catalog.people`, `catalog.movie_credits`, `catalog.movie_genres` | 원본. Wikidata 구조 | `tmdb_id`, `qid`(`person_qid → people.qid`) | 로더, 앱(`CatalogIndexer`: TMDB credits·장르) |
 | 벡터 | `catalog.movie_docs.embedding vector(1536)` + DiskANN index | 원본 행에 붙은 열. 문서가 바뀌면 다시 임베딩 | `movie_docs.tmdb_id`(PK) | 로더, 앱(`CatalogIndexer`: 카탈로그 적재 뒤 TMDB에서 가져온 영화) |
-| 그래프 | `movie_graph`의 label별 테이블(`"Movie"`, `"ACTED_IN"` 등) | 파생. 관계형 행과 임베딩에서 다시 생성 | vertex 속성 `tmdb_id`, `qid` | `30-graph.sql` |
+| 그래프 | `movie_graph`의 label별 테이블(`"Movie"`, `"ACTED_IN"` 등) | 파생. 관계형 행과 임베딩에서 다시 생성 | vertex 속성 `tmdb_id`, `qid` | `30-graph.sql`(전체), `catalog.sync_movie_graph`(영화 한 편) |
 
 - **키로 잇는 이유** — `catalog.*` 테이블은 `public.movies`에 외래 키를 두지 않고 `tmdb_id`로
   조인합니다. 앱이 Hibernate로 `public.*`를 만드는 시점과 로더가 `catalog.*`를 채우는 시점이
@@ -175,8 +175,9 @@ Managed Grafana에서 봅니다.
   label마다 일반 테이블을 만들었습니다. 그래서 vertex 속성 `tmdb_id`로 Cypher 결과를 다시
   관계형 행과 맞출 수 있고, GIN·btree index와 `GRANT`도 일반 테이블처럼 적용합니다.
 - **권한 경계** — 앱 role `movielog`는 `public`에 쓰고, `catalog`와 `movie_graph`에는
-  `SELECT`를 받습니다. `catalog`에서 쓰는 곳은 새 영화 문서를 추가하는 `catalog.movie_docs`의
-  `INSERT` 하나이며, 그래프는 배치 단계에서만 바뀝니다.
+  `SELECT`를 받습니다. 새 영화를 위해 `catalog`의 `movie_docs`·`people`·`movie_credits`·
+  `movie_genres`에 `INSERT`만 더 받고, 그래프 테이블에는 직접 쓰지 못합니다. 그래프는 관리자가
+  소유한 `SECURITY DEFINER` 함수 `catalog.sync_movie_graph`를 통해서만 영화 한 편씩 바꿉니다.
 
 ### 작성 순서: 적재 → 임베딩 → index → 그래프 { #authoring }
 
@@ -199,10 +200,20 @@ API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에
 앱은 TMDB 상세를 `public.movies`에만 저장하므로, 그 영화는 문서·임베딩이 없어 의미 검색에
 나오지 않습니다. 2026-11-14 실습에서 「듄: 파트 2」에 리뷰를 쓴 뒤 「듄」, 「드니 빌뇌브」로
 검색해도 나오지 않은 원인이 이것이었습니다. 앱의 `CatalogIndexer`가 30초마다 문서가 없는 영화를
-찾아 ①과 같은 형식의 문서(감독·출연은 TMDB credits)를 만들고 임베딩해 `catalog.movie_docs`에
-추가합니다. 여러 Pod 중 PostgreSQL advisory lock을 잡은 하나만 실행하며, 배포 직후 첫 실행에서
-두 편을 색인했습니다. 그래프 노드와 `SIMILAR_TO`는 ④를 다시 실행할 때 생깁니다. TMDB credits는
-`catalog.movie_credits`에 넣지 않으므로 이런 영화의 그래프에는 `SIMILAR_TO` 이웃만 보입니다.
+찾아 영화 한 편을 한 transaction으로 처리합니다.
+
+1. TMDB credits에서 감독과 출연 6명을 받고, 인물마다 TMDB `external_ids`의 Wikidata id를 받습니다.
+2. ①과 같은 형식의 문서를 만들어 임베딩하고 `catalog.movie_docs`에 넣습니다.
+3. 인물·출연·장르를 `catalog.people`·`movie_credits`·`movie_genres`에 넣습니다. 인물 키는
+   Wikidata id라서 표기가 달라도(TMDB 「조쉬 브롤린」, Wikidata 「조시 브롤린」) 카탈로그의 같은
+   인물로 이어집니다. Wikidata id가 없으면 `tmdb:<person id>`를 씁니다.
+4. `db/40-graph-sync.sql`의 `catalog.sync_movie_graph(tmdb_id)`가 그 영화의 `Movie` 노드를 지우고
+   ④와 같은 규칙으로 `Person`·`Genre` 관계와 임베딩 최근접 3편 `SIMILAR_TO`를 다시 만듭니다.
+
+여러 Pod 중 PostgreSQL advisory lock을 잡은 하나만 실행합니다. 2026-11-14 실습에서 「웡카」를 처음 연 뒤
+14초 만에 색인과 그래프 반영이 끝났고, 「티모시 샬라메」·「휴 그랜트」 노드와 「찰리와 초콜릿 공장」
+`SIMILAR_TO`로 연결됐습니다. 그래프 함수 한 번은 약 30 ms였습니다. 새 영화를 이웃으로 삼는
+기존 영화 쪽 `SIMILAR_TO`는 다음 ④에서 다시 계산됩니다.
 
 ④는 노드를 먼저 만들고 label 테이블에 GIN index를 건 뒤 관계를 만듭니다. Cypher 문자열에
 값을 직접 넣어야 하므로 행을 Cypher map 문자열로 바꿔 200개씩 `UNWIND`합니다.
@@ -234,8 +245,8 @@ Spring 데이터 접근 방식을 씁니다. 연결을 만들 때 `SET search_pa
 | 기능 | 앱 클래스 | HorizonDB 접근 | 대상 |
 |---|---|---|---|
 | 리뷰·댓글·회원·영화 상세 | `MovieRepository`, `ReviewRepository` 등 Spring Data JPA | Hibernate SQL | `public.*` |
-| 의미 검색 `/discover` | `EmbeddingClient` → `VectorSearchRepository`(`JdbcClient`) | 질의 벡터 `<=>` 순위와 문서 머리 키워드 순위를 RRF로 결합 | `movie_docs` ⋈ `movies` |
-| 새 영화 색인(30초 주기) | `CatalogIndexer` → `TmdbCreditsClient`, `EmbeddingClient`, `CatalogIndexRepository` | advisory lock 뒤 `INSERT ... ON CONFLICT DO NOTHING` | `movie_docs` |
+| 의미 검색 `/discover` | `QueryCorrector` → `EmbeddingClient` → `VectorSearchRepository`(`JdbcClient`) | 철자 교정 뒤 질의 벡터 `<=>` 순위와 문서 머리 키워드 순위를 RRF로 결합 | `movie_docs` ⋈ `movies` |
+| 새 영화 색인(30초 주기) | `CatalogIndexer` → `TmdbCreditsClient`, `EmbeddingClient`, `CatalogIndexRepository` | advisory lock 뒤 `INSERT ... ON CONFLICT DO NOTHING`, 그래프는 `SELECT catalog.sync_movie_graph(:id)` | `movie_docs`, `people`·`movie_credits`·`movie_genres`, `movie_graph` |
 | 비슷한 영화(상세 화면) | `VectorSearchRepository.similar` | 저장된 영화 벡터끼리 `<=>`. Azure OpenAI 호출 없음 | `movie_docs` |
 | 관계 그래프 `/api/discover/graph` | `MovieGraphRepository`(`JdbcTemplate`) | `ag_catalog.cypher()` 안의 openCypher | `movie_graph` |
 
@@ -328,8 +339,37 @@ LIMIT 12;
 | 꿈속에서 벌어지는 하이스트 | 호프, 인터스텔라, 위플래쉬 | 같음 |
 | 아이와 함께 보는 판타지 애니메이션 | 센과 치히로의 행방불명, 위쳐: 늑대의 악몽, 신비한 동물사전 | 같음 |
 
-「드늬 뷜베브」처럼 이름의 철자가 틀리면 키워드가 일치하지 않고, 벡터도 비슷한 발음의 이름을
-같은 인물로 보지 못해 「듄」 계열이 상위에 나오지 않았습니다.
+- **전체 일치 가중치** — 질의 단어가 모두 문서 머리에 있는 영화는 키워드 쪽 점수를 두 배로 셉니다.
+  가중치가 없을 때 「티모시 샬라메」는 키워드 2위인 「듄」(1/62)이 벡터 1위인 「아멜리에」(1/61)보다
+  뒤였습니다. 가중치를 둔 뒤 상위 3편이 「콜 미 바이 유어 네임」, 「듄: 파트 2」, 「듄」이 됐고, 위 표의
+  서술형 질의를 포함한 8개 질의(「SF 모험」 포함)의 상위 5편은 달라지지 않았습니다.
+
+### 철자 교정: 자모 편집 거리와 인물·제목 사전 { #spelling }
+
+「드늬 뷜베브」처럼 이름 철자가 틀리면 키워드가 일치하지 않고, 임베딩도 같은 인물로 보지 못해
+「듄」 계열이 상위에 나오지 않았습니다. `QueryCorrector`는 질의를 임베딩하기 전에 인물 이름
+(`catalog.people`의 한국어·영어 이름)과 영화 제목 사전에서 가장 가까운 항목으로 고칩니다.
+
+- **자모 비교** — 한글을 NFD로 자모까지 분해해 편집 거리를 재고, 모음끼리 바뀐 경우는 0.5로
+  셉니다. 외국 이름의 한글 표기는 주로 모음이 달라서, 이 가중치로 「드늬 뷜베브」와 「드니 빌뇌브」의
+  유사도가 0.64에서 0.77이 됐습니다.
+- **교정 대상** — 어떤 영화 문서에도 없는 단어(뒤의 조사 와·을 등을 떼고도 없는 단어)가 들어 있는
+  1–3단어 구간만 고칩니다. 이 조건이 없으면 「아이와」가 「아이유」로, 「하이스트」가 「아티스트」로
+  바뀌었습니다.
+- **채택 기준** — 유사도 0.75 이상이고 2위보다 0.1 이상 높을 때만 바꾸며, 긴 구간을 먼저 봅니다.
+  고친 질의로 임베딩과 키워드 순위를 모두 계산하고, 화면에는 「'드늬 뷜베브'을(를) '드니 빌뇌브'(으)로
+  고쳐 검색했습니다」를 보여 줍니다. 교정 횟수는 `movielog.discover.corrected` counter로 남깁니다.
+
+| 입력 | 교정 결과 | 상위 결과 |
+|---|---|---|
+| 드늬 뷜베브 | 드니 빌뇌브 | 듄(2021), 듄: 파트 2, 블레이드 러너 2049 |
+| 봉준오 | 봉준호 | 살인의 추억, 괴물, 옥자 |
+| 크리스토퍼 놀랜 | 크리스토퍼 놀런 | 오펜하이머, 인터스텔라, 다크 나이트 |
+| 티모시 살라메 | 티모시 샬라메 | 콜 미 바이 유어 네임, 웡카, 듄: 파트 2 |
+
+기준을 정할 때 서술형 질의 16개와 정확한 이름·제목 질의 5개를 함께 넣어 보았고, 어느 것도 바뀌지
+않았습니다. 영어 이름 오타(「christopher nolen」)는 이 기준에서 교정되지 않았습니다.
+사전은 10분마다, 그리고 새 영화를 색인한 직후 다시 읽습니다.
 
 ## 그래프: Apache AGE `movie_graph`와 openCypher 조회 { #graph }
 

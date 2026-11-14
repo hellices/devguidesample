@@ -46,8 +46,12 @@
 			</details>
 		</section>
 
+		<p class="secondary-text" th:if="${correction != null}">
+			<i class="small">spellcheck</i>
+			<span th:text="|'${correction.from}'을(를) '${correction.to}'(으)로 고쳐 검색했습니다.|">'드늬 뷜베브'을(를) '드니 빌뇌브'(으)로 고쳐 검색했습니다.</span>
+		</p>
 		<p class="secondary-text">
-			<b th:text="|'${q}'|">'검색어'</b>와 가까운 영화 <span th:text="${hits.size()}">0</span>편
+			<b th:text="|'${correction != null ? correction.query : q}'|">'검색어'</b>와 가까운 영화 <span th:text="${hits.size()}">0</span>편
 		</p>
 		<ul class="list border discover-list">
 			<li th:each="hit, stat : ${hits}">

@@ -21,8 +21,9 @@ import org.springframework.stereotype.Repository;
  * fuses the vector ranking with a keyword ranking over the document header (title, original title, year, genres,
  * directors, cast; the summary is left to the vector side) by Reciprocal Rank Fusion. A movie enters the keyword
  * ranking only when its header contains at least half of the query words, so a descriptive query ("a shark
- * terrorizes a beach town") is not pulled toward titles that share one word. The returned score stays the cosine
- * similarity.
+ * terrorizes a beach town") is not pulled toward titles that share one word. A header with every query word counts
+ * twice, so a name query ("티모시 샬라메") ranks that person's movies above loose vector neighbors. The returned
+ * score stays the cosine similarity.
  */
 @Repository
 class VectorSearchRepository {
@@ -60,7 +61,8 @@ class VectorSearchRepository {
 					ORDER BY d.embedding <=> q.v
 					LIMIT :pool),
 				lex AS (
-					SELECT tmdb_id, row_number() OVER (ORDER BY hits DESC, dist) AS r
+					SELECT tmdb_id, row_number() OVER (ORDER BY hits DESC, dist) AS r,
+					       CASE WHEN hits = :keywordCount THEN 2 ELSE 1 END AS w
 					FROM (
 						SELECT d.tmdb_id, d.embedding <=> q.v AS dist,
 						       (SELECT count(*) FROM unnest(string_to_array(:terms, chr(31))) AS t(term)
@@ -71,8 +73,8 @@ class VectorSearchRepository {
 					ORDER BY hits DESC, dist
 					LIMIT :pool),
 				fused AS (
-					SELECT tmdb_id, sum(1.0 / (:k + r)) AS rrf
-					FROM (SELECT tmdb_id, r FROM vec UNION ALL SELECT tmdb_id, r FROM lex) ranked
+					SELECT tmdb_id, sum(w * 1.0 / (:k + r)) AS rrf
+					FROM (SELECT tmdb_id, r, 1 AS w FROM vec UNION ALL SELECT tmdb_id, r, w FROM lex) ranked
 					GROUP BY tmdb_id)
 				SELECT %s, 1 - (d.embedding <=> q.v) AS score
 				FROM fused f
