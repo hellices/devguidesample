@@ -567,3 +567,60 @@ def test_resource_logs_go_to_their_own_hub_only_when_enabled():
     assert "eventHubName: telemetryLogsHub.name" in logs_ds and "scope: premiumNamespace" in logs_ds
     assert re.findall(r"category: '(\w+)'", logs_ds) == ["ApplicationMetricsLogs", "RuntimeAuditLogs"]
     assert "telemetryLogsHub" not in _resource_block(text, "premiumMetricsToTelemetryHub")
+
+
+GRAFANA = LAB_ROOT / "infra" / "modules" / "grafana.bicep"
+GRAFANA_READER = LAB_ROOT / "infra" / "modules" / "grafana-reader.bicep"
+
+
+def test_managed_grafana_identity_reads_only_the_charted_resources():
+    # The Azure Monitor data source runs as the workspace identity; Bicep (unlike portal creation)
+    # grants nothing at subscription scope, so the lab assigns Monitoring Reader per resource.
+    assert sorted(_role_assignments(GRAFANA_READER.read_text())) == sorted([
+        ("namespace", "monitoringReaderRoleDefinitionId", "grafanaPrincipalId"),
+        ("cluster", "monitoringReaderRoleDefinitionId", "grafanaPrincipalId"),
+    ])
+    # Declarations are read from code only, so a commented-out copy cannot stand in for the real value.
+    reader = _code(GRAFANA_READER.read_text())
+    assert re.findall(r"^var monitoringReaderRoleDefinitionId = '([0-9a-f-]+)'$", reader, re.MULTILINE) == [
+        "43d0d8ad-25c7-4714-9337-8ba259a9fe05"]
+    assert re.findall(r"^output principalId string = (.+)$", _code(GRAFANA.read_text()), re.MULTILINE) == [
+        "grafana.identity.principalId"]
+    main = _code(MAIN.read_text())
+    block = main[main.index("module grafanaReader"):]
+    block = block[:block.index("\n}\n")]
+    assert "if (managedGrafana == 'Enabled')" in block
+    assert "grafanaPrincipalId: grafana.?outputs.principalId" in block
+    assert "namespaceName: messaging.outputs.premiumNamespaceName" in block
+    # The cluster role must land on the cluster the dashboard charts: the one this lab created.
+    assert ("clusterName: empty(messaging.outputs.dedicatedClusterId) ? '' : "
+            "last(split(messaging.outputs.dedicatedClusterId, '/'))") in block
+    # Data flow: the workspace principal leaves grafana.bicep only through this one reference, which feeds
+    # grafanaReader; grafana-reader.bicep exposes no outputs and declares no modules, so the principal
+    # cannot travel on under another parameter name. Its only role assignments are the two above.
+    # Every reference to the grafana module, in any access form (., .?, ['x'], aliases built from it),
+    # is located; principalId may appear once and only inside the grafanaReader module, and every
+    # other reference must be one of the top-level outputs.
+    reader_block = main[main.index("module grafanaReader"):]
+    reader_block = reader_block[:reader_block.index("\n}\n")]
+    # The module declaration (`module grafana '...'`), its file path and 'grafana-*' names are not references.
+    references = list(re.finditer(r"(?<!modules/)\bgrafana\b(?!\s*'|-)", main))
+    accesses = list(re.finditer(
+        r"\bgrafana\s*(?:\.\?|\.)\s*outputs\s*(?:\.\s*(\w+)|\[\s*'(\w+)'\s*\])", main))
+    assert len(references) == len(accesses), "grafana is referenced other than through a named output"
+    principal = [a for a in accesses if (a.group(1) or a.group(2)) == "principalId"]
+    assert len(principal) == 1 and principal[0].group(0) in reader_block
+    for access in accesses:
+        if access in principal:
+            continue
+        line = main[main.rfind("\n", 0, access.start()) + 1:main.find("\n", access.start())]
+        assert re.match(r"^output MANAGED_GRAFANA_(NAME|ENDPOINT) string = ", line), line
+    assert not re.search(r"\bgrafanaReader\s*(?:\.\?|\.)\s*outputs", main)
+    assert not re.search(r"(?m)^\s*(output|module)\s", reader)
+    assert not re.search(r"(?m)^\s*module\s", _code(GRAFANA.read_text()))
+    assert "Microsoft.Authorization/roleAssignments" not in _code(GRAFANA.read_text())
+    for path in (LAB_ROOT / "infra").rglob("*.bicep"):
+        if path == GRAFANA_READER:
+            continue
+        principals = [principal for _, _, principal in _role_assignments(path.read_text())]
+        assert not any("grafana" in principal.lower() for principal in principals), path.name

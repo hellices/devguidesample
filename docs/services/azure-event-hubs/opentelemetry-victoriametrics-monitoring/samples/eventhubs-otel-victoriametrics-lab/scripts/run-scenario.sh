@@ -36,13 +36,33 @@ LAG_SERIES='eventhubs_consumer_lag_messages{source_path="lag_exporter",delivery_
 PARTITION_SERIES='eventhubs_checkpoint_present{source_path="lag_exporter",delivery_path="remote_write"}'
 FRESH_LAG="($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 120)"
 FRESH_PARTITIONS="($PARTITION_SERIES and (time() - timestamp($PARTITION_SERIES)) < 120)"
+# PLATFORM_METRICS=AzureMonitor has no lag exporter; lag is the ApplicationMetricsLogs ConsumerLag
+# that azureeventhubreceiver turns into a gauge. Learn says a caught-up AMQP receiver writes no
+# record, so an absent record can mean zero lag, but it can also mean that the Collector or the log
+# delivery stopped. An absent fresh record therefore reads as 0 only while other resource log records
+# still arrived in the last 3 minutes; otherwise it is unknown (-1). Recovery additionally requires the
+# consumer to have processed more events than at load end. Records reach the Collector about 100 s
+# late, hence the wider freshness window.
+LOG_LAG=false
+SETTLE_SECONDS=20
+if [[ "$(env_value PLATFORM_METRICS)" == "AzureMonitor" ]]; then
+  LOG_LAG=true
+  SETTLE_SECONDS=180
+  LAG_SERIES='eventhubs_log_consumer_lag{source_path="diagnostic_logs",delivery_path="remote_write"}'
+  FRESH_LAG="($LAG_SERIES and (time() - timestamp($LAG_SERIES)) < 180)"
+  LOG_RECORDS='eventhubs_log_records_total{source_path="diagnostic_logs",delivery_path="remote_write"}'
+fi
 vm_scalar() {
   "$LAB_ROOT/scripts/vm-query.sh" start || return 1
   curl -fsS --max-time "$1" "http://127.0.0.1:$PORT/api/v1/query" --data-urlencode "query=$2" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin)["data"]["result"]; print(int(float(r[0]["value"][1])) if r else -1)'
 }
 max_lag() {
-  vm_scalar "${1:-30}" "max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"
+  if [[ "$LOG_LAG" == "true" ]]; then
+    vm_scalar "${1:-30}" "max($FRESH_LAG) or (vector(0) and on() (sum(increase($LOG_RECORDS[3m])) > 0))"
+  else
+    vm_scalar "${1:-30}" "max($FRESH_LAG) and on() (count($FRESH_LAG) == count($FRESH_PARTITIONS))"
+  fi
 }
 # The largest lag stored since the producer was scaled up (it may send before its rollout is
 # reported complete); lag keeps rising until the producer stops.
@@ -90,14 +110,21 @@ CONSUMER_PROCESSED_AT_LOAD_END="$(last_log_value eventhubs-slow-consumer process
 
 stop_producer
 PRODUCER_STOP="$(now)"
-# Read the peak after the producer is gone and the exporter has stored its last rising sample.
-sleep 20
+# Read the peak after the producer is gone and the last rising sample is stored.
+sleep "$SETTLE_SECONDS"
 PEAK_LAG="$(peak_lag)"
 log "producer stopped; peak max lag=$PEAK_LAG"
 # max_lag prints -1 when no series exists; both readings must be real before comparing.
 [[ "$LAG_AT_LOAD_START" -ge 0 && "$PEAK_LAG" -gt 0 && "$PEAK_LAG" -gt "$LAG_AT_LOAD_START" ]] \
   || die "lag did not increase (start=$LAG_AT_LOAD_START peak=$PEAK_LAG)"
 
+# A low log lag counts as recovery only if the consumer kept processing after the load ended.
+consumer_progressed() {
+  [[ "$LOG_LAG" != "true" ]] && return 0
+  local processed
+  processed="$(last_log_value eventhubs-slow-consumer processed_total)"
+  [[ -n "$processed" && -n "$CONSUMER_PROCESSED_AT_LOAD_END" && "$processed" -gt "$CONSUMER_PROCESSED_AT_LOAD_END" ]]
+}
 TARGET=$((PEAK_LAG / 5))
 RECOVERED_AT=""
 deadline=$(( $(date +%s) + RECOVERY_TIMEOUT_MINUTES * 60 ))
@@ -105,7 +132,7 @@ while [[ $(date +%s) -lt $deadline ]]; do
   # Bound each query by the time left, and count a recovery only if it was observed in time.
   remaining=$(( deadline - $(date +%s) ))
   current="$(max_lag "$(( remaining < 30 ? (remaining > 1 ? remaining : 1) : 30 ))")"
-  if [[ $(date +%s) -le $deadline && "$current" -ge 0 && "$current" -le "$TARGET" ]]; then
+  if [[ $(date +%s) -le $deadline && "$current" -ge 0 && "$current" -le "$TARGET" ]] && consumer_progressed; then
     RECOVERED_AT="$(now)"
     break
   fi

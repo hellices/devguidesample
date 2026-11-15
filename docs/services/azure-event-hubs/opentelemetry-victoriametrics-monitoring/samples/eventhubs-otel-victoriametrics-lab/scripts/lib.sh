@@ -110,3 +110,34 @@ gateway_run() {
   [[ $# -gt 0 ]] && args+=(--parameters "$@")
   az vm run-command invoke "${args[@]}"
 }
+
+# Collector (default): the Collector pulls the Metrics API and the lag exporter into VictoriaMetrics.
+# AzureMonitor: Grafana reads platform metrics from Azure Monitor directly. The Collector keeps only
+# azureeventhubreceiver, which turns the Event Hubs resource logs (ConsumerLag, RuntimeAuditLogs) into
+# metrics; the Metrics API receiver and the lag exporter do not run.
+resolve_platform_metrics() {
+  PLATFORM_METRICS="$(env_value PLATFORM_METRICS)"
+  PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"
+  [[ "$PLATFORM_METRICS" == "Collector" || "$PLATFORM_METRICS" == "AzureMonitor" ]] \
+    || die "PLATFORM_METRICS must be Collector or AzureMonitor, got $PLATFORM_METRICS"
+  if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then
+    [[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]] \
+      || die "PLATFORM_METRICS=AzureMonitor reads lag from resource logs; set EVENTHUBS_LOGS=Enabled and rerun azd provision"
+    # The fallback exporter is another platform metrics copy; this mode promises logs and self metrics only.
+    [[ "${ENABLE_FALLBACK_EXPORTER:-false}" != "true" ]] \
+      || die "PLATFORM_METRICS=AzureMonitor does not collect platform metrics; unset ENABLE_FALLBACK_EXPORTER"
+    COLLECTOR_API_RECEIVER=false
+    ENABLE_LAG_RECEIVER=false
+    LAG_EXPORTER_SCALE=0
+    # A metrics Diagnostic Settings hub (EVENTHUBS_DIAGNOSTIC_METRICS=Enabled) stays deployed, but the
+    # Collector does not read it in this mode.
+    METRICS_HUB=""
+  else
+    # ENABLE_API_RECEIVER stays the caller's input (false switches to the fallback exporter); the result
+    # goes to its own variable so every call computes complete settings, whatever the previous call set.
+    COLLECTOR_API_RECEIVER="${ENABLE_API_RECEIVER:-true}"
+    ENABLE_LAG_RECEIVER=true
+    LAG_EXPORTER_SCALE=1
+    METRICS_HUB="$(env_value TELEMETRY_EVENTHUB_NAME)"
+  fi
+}

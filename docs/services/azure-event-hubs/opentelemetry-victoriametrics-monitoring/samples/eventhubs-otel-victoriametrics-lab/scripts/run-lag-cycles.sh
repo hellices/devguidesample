@@ -33,12 +33,16 @@ stop_producer() {
 }
 # Whatever ends the loop (completion, an error, Ctrl-C), the producer must not keep sending.
 on_exit() {
+  local status=$?
   if stop_producer; then
     record "stopped (producer 0)"
   else
+    if (( status == 0 )); then status=1; fi
     record "stop failed (producer state unknown)"
     log "WARNING: could not stop the producer; scale deploy/eventhubs-producer to 0"
   fi
+  trap - EXIT
+  exit "$status"
 }
 trap on_exit EXIT
 

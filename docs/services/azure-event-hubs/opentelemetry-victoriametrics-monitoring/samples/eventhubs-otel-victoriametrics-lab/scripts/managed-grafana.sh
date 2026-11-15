@@ -97,4 +97,18 @@ for attempt in $(seq 1 18); do
   [[ "$attempt" -lt 18 ]] || die "could not create the VictoriaMetrics data source in $MANAGED_GRAFANA_NAME"
   sleep 20
 done
+log "Managed Grafana: Azure Monitor data source"
+# New workspaces include it (uid azure-monitor-oob, managed identity); recreate it only if it was removed.
+# The workspace identity reads metrics through the Monitoring Reader that grafana-reader.bicep assigns.
+AZURE_MONITOR_SOURCE="$(python3 -c 'import json,sys; print(json.dumps({"name": "Azure Monitor", "type": "grafana-azure-monitor-datasource", "uid": "azure-monitor-oob", "access": "proxy", "jsonData": {"azureAuthType": "msi", "subscriptionId": sys.argv[1]}}))' "$AZURE_SUBSCRIPTION_ID")"
+# Right after Grafana Admin is granted a read can still fail, so a failed show is retried rather than
+# treated as "missing" (creating over the built-in source returns 409 Conflict).
+for attempt in $(seq 1 6); do
+  az grafana data-source show --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" -n "$MANAGED_GRAFANA_NAME" \
+    --data-source azure-monitor-oob -o none 2>/dev/null && break
+  az grafana data-source create --subscription "$AZURE_SUBSCRIPTION_ID" -g "$AZURE_RESOURCE_GROUP" -n "$MANAGED_GRAFANA_NAME" \
+    --definition "$AZURE_MONITOR_SOURCE" -o none 2>/dev/null && break
+  [[ "$attempt" -lt 6 ]] || die "could not find or create the Azure Monitor data source in $MANAGED_GRAFANA_NAME"
+  sleep 20
+done
 log "Managed Grafana ready: $(env_value MANAGED_GRAFANA_ENDPOINT) (data source http://$VMSINGLE_DOMAIN:8428)"

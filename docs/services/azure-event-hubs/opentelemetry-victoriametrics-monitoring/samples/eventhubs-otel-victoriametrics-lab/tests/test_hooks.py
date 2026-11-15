@@ -1137,11 +1137,16 @@ def test_lag_cycles_alternate_load_and_drain_and_always_stop_the_producer(fake_b
     cycles = [e for e in events if e.startswith("cycle ")]
     # Every cycle is load_start -> producer_stop (-> drain_end), in order, and a load phase never
     # starts unless it fits before the deadline.
-    assert cycles[:3] == ["cycle 1 load_start", "cycle 1 producer_stop", "cycle 1 drain_end"]
-    assert 2 <= sum(e.endswith("load_start") for e in cycles) <= 3
+    cycle_count = sum(e.endswith("load_start") for e in cycles)
+    assert 2 <= cycle_count <= 3
+    expected = [
+        f"cycle {number} {boundary}"
+        for number in range(1, cycle_count + 1)
+        for boundary in ("load_start", "producer_stop", "drain_end")
+    ]
+    assert cycles == expected or cycles == expected[:-1]
     scales = [c for c in log.read_text().splitlines() if "deploy/eventhubs-producer --replicas" in c]
-    assert scales[-1].endswith("deploy/eventhubs-producer --replicas 0")
-    assert sum(c.endswith("--replicas 1") for c in scales) == sum(e.endswith("load_start") for e in cycles)
+    assert [c.rsplit(" ", 1)[1] for c in scales] == ["0", *(["1", "0"] * cycle_count), "0"]
     assert all("--kubeconfig" in c for c in log.read_text().splitlines() if c.startswith("kubectl"))
 
 
@@ -1172,6 +1177,25 @@ def test_lag_cycles_never_record_a_stop_that_failed(fake_bin, tmp_path):
     assert result.returncode != 0
     assert "stopped (producer 0)" not in events
     assert events.rstrip().endswith("stop failed (producer state unknown)")
+    assert "could not stop the producer" in result.stderr
+
+
+@pytest.mark.parametrize("original_status", [0, 23])
+def test_lag_cycles_propagate_exit_cleanup_failure(fake_bin, tmp_path, original_status):
+    bin_dir, log, write = fake_bin
+    write("kubectl", f'if [[ "$*" == *"set env"* ]]; then exit {original_status}; fi; '
+                     'if [[ "$*" == *eventhubs-producer*"--replicas 0"* ]]; then '
+                     'if [[ -f "$HOME/stopped" ]]; then exit 1; fi; '
+                     f'if [[ {original_status} != 0 ]]; then exit 1; fi; '
+                     'touch "$HOME/stopped"; fi; exit 0')
+
+    result = _run_lag_cycles(bin_dir, tmp_path, DURATION_SECONDS=1, LOAD_SECONDS=2, DRAIN_SECONDS=1)
+
+    assert result.returncode == (original_status or 1), result.stderr
+    events = (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
+    assert ("done after 0 cycles" in events) == (original_status == 0)
+    assert events.rstrip().endswith("stop failed (producer state unknown)")
+    assert "stopped (producer 0)" not in events
     assert "could not stop the producer" in result.stderr
 
 
@@ -1230,3 +1254,106 @@ def test_lag_cycles_fail_when_a_producer_pod_remains(fake_bin, tmp_path):
 
     assert result.returncode != 0 and "still running after the load phase" in result.stderr
     assert "producer_stop" not in (tmp_path / "evidence" / "unit" / "lag-cycles.log").read_text()
+
+
+def test_platform_metrics_azure_monitor_keeps_only_the_event_hub_receiver():
+    post = (SCRIPTS / "azd-postprovision.sh").read_text()
+    collect = (SCRIPTS / "collect-evidence.sh").read_text()
+    managed = (SCRIPTS / "managed-grafana.sh").read_text()
+    compose = (LAB_ROOT / "gateway" / "compose.yaml").read_text()
+
+    lib = (SCRIPTS / "lib.sh").read_text()
+    assert 'PLATFORM_METRICS="${PLATFORM_METRICS:-Collector}"' in lib
+    assert 'die "PLATFORM_METRICS must be Collector or AzureMonitor' in lib
+    mode = lib[lib.index('  if [[ "$PLATFORM_METRICS" == "AzureMonitor" ]]; then'):]
+    mode = mode[:mode.index("\n  fi\n")]
+    # postprovision takes the Collector inputs only from resolve_platform_metrics and never reassigns them.
+    assert re.findall(r"(?m)^resolve_platform_metrics$", post) == ["resolve_platform_metrics"]
+    # Heredoc bodies are file contents written to the bundle, not shell assignments.
+    shell = re.sub(r"(?ms)<<ENV\n.*?^ENV$", "<<ENV", post)
+    assert "ENABLE_API_RECEIVER=$COLLECTOR_API_RECEIVER" in post and "<<ENV" in shell
+    assert not re.search(
+        r"(?m)^\s*(COLLECTOR_API_RECEIVER|ENABLE_API_RECEIVER|ENABLE_LAG_RECEIVER|LAG_EXPORTER_SCALE|METRICS_HUB)=", shell)
+    assert post.index("resolve_platform_metrics") < post.index("collector.env")
+    # Lag comes from the ConsumerLag resource log, so the logs hub is mandatory in this mode.
+    assert '[[ -n "$(env_value TELEMETRY_LOGS_EVENTHUB_NAME)" ]]' in mode
+    assert "COLLECTOR_API_RECEIVER=false" in mode and "ENABLE_LAG_RECEIVER=false" in mode
+    assert "LAG_EXPORTER_SCALE=0" in mode
+    assert "ENABLE_LAG_RECEIVER=$ENABLE_LAG_RECEIVER" in post and "LAG_EXPORTER_SCALE=$LAG_EXPORTER_SCALE" in post
+    assert "scale: ${LAG_EXPORTER_SCALE:-1}" in compose
+    # Nothing outside the Collector reads the exporter any more.
+    assert "lag-scrape" not in post and not (LAB_ROOT / "k8s" / "lag-scrape.yaml").exists()
+    # No other platform metrics copy may run in this mode.
+    assert 'die "PLATFORM_METRICS=AzureMonitor does not collect platform metrics; unset ENABLE_FALLBACK_EXPORTER"' in mode
+    assert 'METRICS_HUB=""' in mode and "TELEMETRY_EVENTHUB_NAME=$METRICS_HUB" in post
+    # A managed report from an earlier run is not compared unless this run produced it.
+    assert '[[ -n "$MANAGED_ENDPOINT" ]] && reports+=(panel-verification-managed)' in collect
+    assert '--cluster-resource-group "$CLUSTER_RG"' in collect
+    assert "GF_AZURE_MANAGED_IDENTITY_CLIENT_ID: ${GATEWAY_CLIENT_ID" in compose
+    assert "build_direct_dashboard.py" in collect and "compare_grafana_azure_monitor.py" in collect
+    assert '"/d/$DASHBOARD_UID"' in collect
+    assert "--data-source azure-monitor-oob" in managed and '"azureAuthType": "msi"' in managed
+
+
+def test_scenario_reads_consumer_lag_logs_in_azure_monitor_mode():
+    text = (SCRIPTS / "run-scenario.sh").read_text()
+    branch = text[text.index('if [[ "$(env_value PLATFORM_METRICS)" == "AzureMonitor" ]]; then'):]
+    branch = branch[:branch.index("\nfi\n")]
+    assert 'eventhubs_log_consumer_lag{source_path="diagnostic_logs",delivery_path="remote_write"}' in branch
+    assert "SETTLE_SECONDS=180" in branch and "LOG_LAG=true" in branch
+    # An absent record reads as 0 only while other resource logs still arrive; otherwise it is unknown.
+    assert 'vm_scalar "${1:-30}" "max($FRESH_LAG) or (vector(0) and on() (sum(increase($LOG_RECORDS[3m])) > 0))"' in text
+    assert "&& consumer_progressed; then" in text
+    # An unknown (-1) baseline fails the lag check instead of being replaced with 0.
+    assert not re.search(r"(?m)^\s*LAG_AT_LOAD_START=0\b", text)
+    assert '[[ "$LAG_AT_LOAD_START" -ge 0 &&' in text
+    assert '"$processed" -gt "$CONSUMER_PROCESSED_AT_LOAD_END"' in text
+    assert 'sleep "$SETTLE_SECONDS"' in text
+
+
+
+PRINT_MODE = 'echo "API=$COLLECTOR_API_RECEIVER LAG=$ENABLE_LAG_RECEIVER SCALE=$LAG_EXPORTER_SCALE HUB=$METRICS_HUB"'
+
+
+def _run_platform_mode(fake_bin, tmp_path, script="resolve_platform_metrics; " + PRINT_MODE, **env):
+    bin_dir, _, write = fake_bin
+    write("azd", "exit 1")  # no azd env value: only the process environment counts
+    # The same function postprovision calls, not a copy of its text.
+    harness = f'source "{SCRIPTS / "lib.sh"}"; {script}'
+    return subprocess.run(["bash", "-c", harness], capture_output=True, text=True, timeout=60,
+                          env={"PATH": f"{bin_dir}:/usr/bin:/bin", "AZURE_ENV_NAME": "unit", **env})
+
+
+def test_azure_monitor_mode_fails_without_logs_hub_or_with_fallback(fake_bin, tmp_path):
+    missing = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor")
+    assert missing.returncode != 0 and "set EVENTHUBS_LOGS=Enabled" in missing.stderr
+    fallback = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor",
+                                  TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs", ENABLE_FALLBACK_EXPORTER="true")
+    assert fallback.returncode != 0 and "unset ENABLE_FALLBACK_EXPORTER" in fallback.stderr
+    invalid = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="Direct")
+    assert invalid.returncode != 0 and "must be Collector or AzureMonitor" in invalid.stderr
+
+
+def test_platform_mode_sets_collector_inputs(fake_bin, tmp_path):
+    direct = _run_platform_mode(fake_bin, tmp_path, PLATFORM_METRICS="AzureMonitor",
+                                TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs", TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert direct.returncode == 0, direct.stderr
+    assert direct.stdout.strip() == "API=false LAG=false SCALE=0 HUB="
+    collector = _run_platform_mode(fake_bin, tmp_path, TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert collector.returncode == 0, collector.stderr
+    assert collector.stdout.strip() == "API=true LAG=true SCALE=1 HUB=platform-metrics"
+    # The fallback switch (ENABLE_API_RECEIVER=false) still reaches the Collector in its own mode.
+    fallback = _run_platform_mode(fake_bin, tmp_path, ENABLE_API_RECEIVER="false")
+    assert fallback.returncode == 0, fallback.stderr
+    assert fallback.stdout.strip().startswith("API=false LAG=true SCALE=1")
+
+
+def test_platform_mode_is_complete_on_every_call(fake_bin, tmp_path):
+    # Resolving AzureMonitor and then Collector in one shell must not leak the first call's settings.
+    script = ("PLATFORM_METRICS=AzureMonitor resolve_platform_metrics; " + PRINT_MODE +
+              "; PLATFORM_METRICS=Collector resolve_platform_metrics; " + PRINT_MODE)
+    result = _run_platform_mode(fake_bin, tmp_path, script=script, TELEMETRY_LOGS_EVENTHUB_NAME="runtime-logs",
+                                TELEMETRY_EVENTHUB_NAME="platform-metrics")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["API=false LAG=false SCALE=0 HUB=",
+                                          "API=true LAG=true SCALE=1 HUB=platform-metrics"]

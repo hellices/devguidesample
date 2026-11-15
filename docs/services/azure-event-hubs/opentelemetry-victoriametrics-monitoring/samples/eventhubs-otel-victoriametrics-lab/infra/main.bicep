@@ -142,6 +142,17 @@ module grafana 'modules/grafana.bicep' = if (managedGrafana == 'Enabled') {
   }
 }
 
+// The Azure Monitor data source of Managed Grafana reads platform metrics with the workspace identity.
+module grafanaReader 'modules/grafana-reader.bicep' = if (managedGrafana == 'Enabled') {
+  name: 'grafana-reader'
+  scope: rg
+  params: {
+    grafanaPrincipalId: grafana.?outputs.principalId ?? ''
+    namespaceName: messaging.outputs.premiumNamespaceName
+    clusterName: empty(messaging.outputs.dedicatedClusterId) ? '' : last(split(messaging.outputs.dedicatedClusterId, '/'))
+  }
+}
+
 // A Premium lab can also observe an existing cluster; the gateway needs Monitoring Reader on it.
 // The placeholder ID keeps every index valid when no cluster is given.
 var observeExistingCluster = eventHubsSku != 'Dedicated' && !empty(existingDedicatedClusterResourceId)
