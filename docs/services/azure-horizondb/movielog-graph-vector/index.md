@@ -191,9 +191,16 @@ Managed Grafana에서 봅니다.
 | ⓪ 앱 기동 | Hibernate `ddl-auto=update` | JPA entity | `public.*` 테이블 | 없는 테이블·열만 추가 | 앱 시작 시 |
 | ① 카탈로그 적재 | `build_catalog.py` → `catalog.sql` | Wikidata SPARQL, Wikipedia 요약 API | `public.movies`, `catalog.*`, `movie_docs.doc` | `ON CONFLICT` upsert. `doc`이 바뀐 행만 `embedding`을 `NULL`로 비움 | 생성 8–11분, 적재 약 3.5분 |
 | ② 문서 임베딩 | `embed_catalog.py` | `embedding IS NULL`인 `doc` | `movie_docs.embedding` | 비어 있는 행만 처리. `--all`은 전체 재임베딩. 임베딩한 `doc`이 그사이 바뀐 행은 비워 둠 | 479건 약 3.5분 |
-| ③ 벡터 index | `20-vector-index.sql` | `embedding` | DiskANN index | `IF NOT EXISTS`. 모델을 바꾸면 `REINDEX` | 수 초 |
+| ③ 벡터 index | `20-vector-index.sql` | `embedding` | DiskANN index | `IF NOT EXISTS`. 모델을 바꾸면 아래 순서를 따름 | 수 초 |
 | ④ 그래프 재생성 | `30-graph.sql` | `movies`, `catalog.*`, `embedding` | `movie_graph` 전체 | graph를 지우고 다시 생성. 최초 1회 | 약 6–8초 |
 | ⑤ 그래프 동기화 설치 | `40-graph-sync.sql` | — | 변경 queue, trigger, 동기화 함수 | `CREATE OR REPLACE`. 이후 그래프는 변경분만 반영 | 수 초 |
+
+임베딩 모델을 바꿀 때는 `REINDEX`만으로 저장된 벡터가 바뀌지 않습니다. 비교한 `text-embedding-3-small`과
+`text-embedding-3-large`는 모두 1,536차원으로 실행할 수 있어, 문서와 질의를 서로 다른 모델로 임베딩해도 SQL
+오류 없이 엉뚱한 결과가 나옵니다. 그래서 ②를 `--all`로 실행해 전체 문서를 새 모델로 다시 임베딩하고, 앱의 질의 모델
+(`AZURE_OPENAI_EMBEDDING_DEPLOYMENT`)과 차원(`app.discover.embedding.dimensions`)을 같은 값으로 맞춘 뒤
+`REINDEX`합니다. 임베딩 최근접으로 만든 `SIMILAR_TO` 관계는 1시간마다 도는
+[정합성 점검](#graph-sync)이 새 임베딩 기준으로 다시 맞춥니다.
 
 Wikidata와 Wikipedia에는 포스터가 없으므로 ① 다음에 `enrich_tmdb.py` → `tmdb.sql`로 TMDB 상세
 API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에만 채웁니다. 제목·요약·임베딩·그래프에는
