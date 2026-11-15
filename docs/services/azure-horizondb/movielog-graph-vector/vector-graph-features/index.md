@@ -47,7 +47,7 @@ label 테이블과 openCypher로 다룹니다. 둘 다 같은 데이터베이스
 이 문서는 2026-11-13 Microsoft Learn의 HorizonDB 문서를 기준으로 두 기능을 정리하고,
 [MovieLog 의미 검색 실습](../index.md) cluster에서 확인한 실행 계획과 문서와 다른 동작을
 덧붙입니다. 실습의 데이터 모델과 앱 접근 경로는 entry의
-[HorizonDB 데이터 모델](../index.md#data-model)에 있습니다.
+[HorizonDB 데이터 모델](../movielog-lab/index.md#data-model)에 있습니다.
 
 | 구분 | 벡터 | 그래프 |
 |---|---|---|
@@ -250,7 +250,7 @@ AGE는 openCypher의 일부만 구현합니다. Learn은 다음 제약을 듭니
 | 제약 | 내용 | 대응 |
 |---|---|---|
 | Cypher 부분 지원 | `MERGE ... ON CREATE SET`, `EXISTS` subquery, `datetime()`을 쓸 수 없습니다. | 중복 검사를 둔 `CREATE`나 PL/pgSQL로 감쌉니다. |
-| 수동 유지 | 원본 데이터가 바뀌어도 graph를 자동으로 따라가는 CDC가 없습니다. | 원본 테이블 trigger나 주기적 재생성을 씁니다. MovieLog는 처음 한 번만 `30-graph.sql`로 graph를 만들고, 이후에는 원본 테이블 trigger가 바뀐 영화를 queue에 넣어 앱이 30초마다 그 영화만 반영합니다([그래프 동기화](../index.md#graph-sync)). |
+| 수동 유지 | 원본 데이터가 바뀌어도 graph를 자동으로 따라가는 CDC가 없습니다. | 원본 테이블 trigger나 주기적 재생성을 씁니다. MovieLog는 처음 한 번만 `30-graph.sql`로 graph를 만들고, 이후에는 원본 테이블 trigger가 바뀐 영화를 queue에 넣어 앱이 30초마다 그 영화만 반영합니다([그래프 동기화](../movielog-lab/index.md#graph-sync)). |
 | 가변 길이 경로 | `[*1..N]`이 3–4 hop을 넘으면 경로가 지수적으로 늘어납니다. | hop을 제한하고 중간 node 속성으로 일찍 거릅니다. |
 | 데이터베이스 경계 | 다른 데이터베이스의 graph는 조회할 수 없습니다. | graph와 벡터를 같은 데이터베이스에 둡니다. |
 | major version 업그레이드 | AGE는 in-place major version 업그레이드에서 모든 버전을 지원하지 않습니다. | 업그레이드 전 지원 여부를 확인합니다. |

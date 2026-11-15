@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" role="img" aria-labelledby="horizondb-arch-title horizondb-arch-desc">
   <title id="horizondb-arch-title">MovieLog on Azure HorizonDB architecture</title>
-  <desc id="horizondb-arch-desc">Browser traffic enters Application Gateway for Containers over HTTPS with a cert-manager issued Let's Encrypt certificate and reaches the MovieLog app on AKS, which embeds query text with Azure OpenAI and runs vector search and Apache AGE openCypher queries in Azure HorizonDB; a catalog loader fills HorizonDB from Wikidata and Wikipedia, and telemetry flows to Application Insights and Managed Grafana.</desc>
+  <desc id="horizondb-arch-desc">Browser traffic enters Application Gateway for Containers over HTTPS with a cert-manager issued Let's Encrypt certificate and reaches the MovieLog app on AKS, which embeds query text with the bge-m3-ko model served by vLLM on a GPU spot node (or Azure OpenAI for comparison) and runs vector search and Apache AGE openCypher queries in Azure HorizonDB; a catalog loader fills HorizonDB from Wikidata and Wikipedia, and telemetry flows to Application Insights and Managed Grafana.</desc>
   <defs>
     <marker id="hz-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
@@ -81,12 +81,12 @@
   <text x="540" y="256" class="name" text-anchor="middle">MovieLog 앱</text>
   <text x="540" y="274" class="mono" text-anchor="middle">Spring Boot 4.1 · Java 25</text>
 
-  <!-- Node: Azure OpenAI -->
+  <!-- Node: embedding models -->
   <rect x="440" y="40" width="200" height="72" rx="6" fill="#f5f5f5"/>
   <rect x="440" y="40" width="200" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
-  <text x="452" y="56" class="tag" fill="#7a8399">AI</text>
-  <text x="540" y="80" class="name" text-anchor="middle">Azure OpenAI</text>
-  <text x="540" y="98" class="mono" text-anchor="middle">text-embedding-3-large</text>
+  <text x="452" y="56" class="tag" fill="#7a8399">EMBEDDING</text>
+  <text x="540" y="80" class="name" text-anchor="middle">bge-m3-ko · Azure OpenAI</text>
+  <text x="540" y="98" class="mono" text-anchor="middle">vLLM(T4 spot) · 3-large</text>
 
   <!-- Node: Azure HorizonDB (focal) -->
   <rect x="740" y="148" width="340" height="208" rx="8" fill="#f5f5f5"/>
@@ -100,7 +100,7 @@
   <text x="1052" y="229" class="mono" text-anchor="end">movies · reviews · catalog.*</text>
   <rect x="756" y="252" width="308" height="40" rx="4" fill="#ffffff" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
   <text x="768" y="277" class="chip">pgvector + DiskANN</text>
-  <text x="1052" y="277" class="mono" text-anchor="end">vector(1536) · &lt;=&gt;</text>
+  <text x="1052" y="277" class="mono" text-anchor="end">vector(1024·1536) · &lt;=&gt;</text>
   <rect x="756" y="300" width="308" height="40" rx="4" fill="#ffffff" stroke="rgba(235,108,54,0.45)" stroke-width="0.8"/>
   <text x="768" y="325" class="chip">Apache AGE</text>
   <text x="1052" y="325" class="mono" text-anchor="end">movie_graph · openCypher</text>
