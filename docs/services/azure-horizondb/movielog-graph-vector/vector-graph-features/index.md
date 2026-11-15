@@ -226,7 +226,7 @@ Append                                    -- edge label 테이블 전체
 
 - **속성 map 조건** — `{tmdb_id: t}`는 `properties @>` 포함 조건이 되어 GIN index를 씁니다.
   같은 조건을 `WHERE a.tmdb_id IN [...]`으로 쓴 질의는 26.7초가 걸렸습니다
-  ([entry 측정](../index.md#graph)).
+  ([entry 측정](../index.md#graph-movielog)).
 - **label 없는 관계** — `-[r]-`는 `_ag_label_edge`를 상속한 edge 테이블을 모두 `Append`로
   읽고, 테이블마다 `start_id`·`end_id` index를 `BitmapOr`로 씁니다.
 - **매개변수** — Cypher의 `$name` 값은 셋째 인자에 agtype map으로 넘기며, 이 인자는 SQL

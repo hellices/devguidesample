@@ -573,7 +573,10 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
     [
         ({"refs/tags/v2.6.4": "t" * 40, "refs/tags/v2.6.4^{}": "c" * 40}, []),
         ({"refs/tags/v2.6.4": "c" * 40}, []),
-        ({"refs/tags/v2.6.4": "t" * 40, "refs/tags/v2.6.4^{}": "d" * 40}, ["release tag points at " + "d" * 40]),
+        (
+            {"refs/tags/v2.6.4": "t" * 40, "refs/tags/v2.6.4^{}": "d" * 40},
+            ["release tag points at " + "d" * 40, "release tag points at " + "d" * 40],
+        ),
         ({}, ["release tag does not exist"]),
         ({"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4": "e" * 40}, ["a branch has the same name"]),
         (None, ["cannot query the repository"]),
@@ -604,6 +607,32 @@ def test_link_gate_checks_the_release_tag_of_external_samples(
     assert calls == [("https://github.com/example-org/movielog", "v2.6.4")]
     assert len(errors) == len(expected)
     assert all(message in error for message, error in zip(expected, errors))
+
+
+def test_link_gate_checks_every_commit_pinned_to_a_shared_release_tag(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    for slug, commit in (("network-diagnosis", "c" * 40), ("second-topic", "d" * 40)):
+        topic = root / "docs/services/aks" / slug
+        (topic / "samples/app").mkdir(parents=True)
+        (topic / "samples/app/sample.yml").write_text(
+            "title: App\ndescription: Code repository\nkind: external\n"
+            f"repository: https://github.com/example-org/movielog\nref: v2.6.4\ncommit: {commit}\nused_by: [index]\n"
+        )
+        if not (topic / "index.md").exists():
+            (topic / "index.md").write_text(VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", ""))
+    calls: list[tuple[str, str]] = []
+
+    def remote_refs(repository: str, ref: str) -> dict[str, str] | None:
+        calls.append((repository, ref))
+        return {"refs/tags/v2.6.4": "c" * 40}
+
+    errors = validate_links.validate_repository(root, remote_refs=remote_refs).errors
+
+    assert calls == [("https://github.com/example-org/movielog", "v2.6.4")]
+    assert errors == [
+        "services/aks/second-topic/samples/app: https://github.com/example-org/movielog v2.6.4: "
+        f"release tag points at {'c' * 40} but sample.yml commit is {'d' * 40}"
+    ]
 
 
 def test_each_topic_keeps_its_own_pin_of_a_shared_code_repository(tmp_path: Path) -> None:

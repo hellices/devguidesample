@@ -99,25 +99,29 @@ def _release_errors(samples: Iterable, remote_refs: RemoteRefs) -> list[str]:
     """The pinned release tag of each external sample resolves to its pinned commit, and no branch shares the tag
     name: GitHub /blob/<name>/ links cannot tell a tag from a branch of the same name."""
     errors: list[str] = []
-    seen: set[tuple[str, str]] = set()
+    # One remote lookup per repository and tag reports the tag-level problems once; every manifest's commit is still
+    # compared with the resolved tag because manifests sharing a tag may pin different commits.
+    lookups: dict[tuple[str, str], dict[str, str] | None] = {}
     for sample in samples:
         if sample.kind != "external" or not sample.repository or not sample.ref:
             continue
         key = (sample.repository.lower(), sample.ref)
-        if key in seen:
-            continue
-        seen.add(key)
         label = f"{sample.relative_path.as_posix()}: {sample.repository} {sample.ref}"
-        refs = remote_refs(sample.repository, sample.ref)
+        first = key not in lookups
+        if first:
+            lookups[key] = remote_refs(sample.repository, sample.ref)
+        refs = lookups[key]
         if refs is None:
-            errors.append(f"{label}: cannot query the repository to verify the release tag")
+            if first:
+                errors.append(f"{label}: cannot query the repository to verify the release tag")
             continue
         tagged = refs.get(f"refs/tags/{sample.ref}^{{}}") or refs.get(f"refs/tags/{sample.ref}")
         if tagged is None:
-            errors.append(f"{label}: release tag does not exist")
+            if first:
+                errors.append(f"{label}: release tag does not exist")
         elif tagged != sample.commit:
             errors.append(f"{label}: release tag points at {tagged} but sample.yml commit is {sample.commit}")
-        if f"refs/heads/{sample.ref}" in refs:
+        if first and f"refs/heads/{sample.ref}" in refs:
             errors.append(f"{label}: a branch has the same name as the release tag; delete it so links stay pinned")
     return errors
 

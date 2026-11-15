@@ -1257,16 +1257,50 @@ def test_external_sample_is_a_pinned_pointer_without_readme(tmp_path: Path, taxo
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ref", "v1.2.3"),
+        ("ref", "v1.2.3-rc.1"),
+        ("ref", "v1.2.3-alpha.0"),
+        ("ref", "v1.2.3-0a"),
+        ("image", "ghcr.io/owner/repo:1.2.3@sha256:" + "a" * 64),
+        ("image", "ghcr.io/owner/repo/sub:1.2.3@sha256:" + "a" * 64),
+    ],
+)
+def test_external_sample_accepts_semver_tags_and_nested_images(
+    tmp_path: Path, taxonomy: dict, field: str, value: str
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_sample(
+        docs_dir, "services/azure-monitor/agent-topic/samples/app", {**EXTERNAL_MANIFEST, field: value}, readme=False
+    )
+
+    sample = build_topic_catalog(docs_dir, taxonomy).samples_by_document[
+        PurePosixPath("services/azure-monitor/agent-topic/index.md")
+    ][0]
+    assert getattr(sample, field) == value
+
+
+@pytest.mark.parametrize(
     ("field", "value", "expected"),
     [
         ("ref", "main", "ref must be a SemVer release tag"),
         ("ref", "v2.6", "ref must be a SemVer release tag"),
         ("ref", "c" * 40, "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3-01", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3-alpha..1", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3-a.", "ref must be a SemVer release tag"),
+        ("ref", "v01.2.3", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3+build.1", "ref must be a SemVer release tag"),
         ("commit", "abc123", "commit must be the full 40-character commit SHA"),
         ("repository", "https://gitlab.com/example-org/movielog", "repository must be a https://github.com"),
         ("repository", "https://github.com/example-org/movielog/tree/v2.6.4", "repository must be a https://github.com"),
         ("repository", "https://github.com/example-org/movielog.git", "repository must be a https://github.com"),
         ("image", "ghcr.io/example-org/movielog:2.6.4", "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org//movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog//api:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog/:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
         ("publish", [{"source": "a.svg", "target": "images/a.svg"}], "external sample must not publish files"),
     ],
 )
@@ -1356,6 +1390,27 @@ def test_external_sample_source_is_a_submodule_pinned_to_the_commit(
     else:
         with pytest.raises(DocumentFormatError, match=re.escape(expected)):
             build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_external_sample_source_directory_must_be_a_gitlink(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    sample_dir = write_sample(
+        docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False
+    )
+    (sample_dir / "source").mkdir()
+    (sample_dir / "source" / "README.md").write_text("# copied code, not a submodule\n", encoding="utf-8")
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "add", "-A")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape(
+            "services/azure-monitor/agent-topic/samples/app: source must be a git submodule of "
+            "https://github.com/example-org/movielog"
+        ),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
 
 
 def test_submodules_elsewhere_under_services_are_rejected(tmp_path: Path, taxonomy: dict) -> None:

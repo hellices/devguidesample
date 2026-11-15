@@ -21,9 +21,19 @@ SAMPLE_KINDS = frozenset(("runnable", "artifact", "external"))
 # referenced code could change under the document.
 # The repository URL is compared with the .gitmodules URL without its ".git" suffix, so the manifest must not carry one.
 EXTERNAL_REPOSITORY = re.compile(r"https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]+(?<!\.git)")
-EXTERNAL_REF = re.compile(r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?")
+# SemVer 2.0.0 with a leading "v": prerelease identifiers are non-empty and numeric ones have no leading zeros.
+# Build metadata is not allowed.
+_SEMVER_NUMBER = r"(?:0|[1-9][0-9]*)"
+_SEMVER_PRERELEASE = rf"(?:{_SEMVER_NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+EXTERNAL_REF = re.compile(
+    rf"v{_SEMVER_NUMBER}\.{_SEMVER_NUMBER}\.{_SEMVER_NUMBER}(?:-{_SEMVER_PRERELEASE}(?:\.{_SEMVER_PRERELEASE})*)?"
+)
 EXTERNAL_COMMIT = re.compile(r"[0-9a-f]{40}")
-EXTERNAL_IMAGE = re.compile(r"ghcr\.io/[a-z0-9-]+/[a-z0-9._/-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
+# Each "/"-separated repository path component follows the OCI distribution grammar, so empty components are rejected.
+_IMAGE_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+EXTERNAL_IMAGE = re.compile(
+    rf"ghcr\.io/[a-z0-9-]+/{_IMAGE_COMPONENT}(?:/{_IMAGE_COMPONENT})*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{{64}}"
+)
 EXTERNAL_FIELDS = ("repository", "ref", "commit", "image")
 EXTERNAL_SOURCE = "source"
 

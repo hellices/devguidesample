@@ -254,7 +254,8 @@ used_by:
 
 - `README.md`, 코드와 `publish`는 두지 않습니다. 페이지에 게시할 파일은 별도 `artifact`
   sample에 둡니다.
-- `source` submodule은 `.gitmodules` URL이 `repository`이고 gitlink가 `commit`과 같아야 합니다.
+- `source` submodule은 `.gitmodules` URL이 `repository`와 같고(끝의 `.git`은 붙여도 됩니다) gitlink가 `commit`과
+  같아야 합니다.
   `docs/services` 아래의 다른 위치에는 submodule을 두지 않습니다.
 - 사이트와 문서 CI는 submodule을 checkout하지 않습니다. 로컬에서 코드를 함께 보려면
   `git submodule update --init <sample>/source`를 실행합니다.
@@ -317,7 +318,7 @@ ACR에 복사합니다. external sample의 이미지는 ACR에서 다시 빌드�
 
 | 대상 | 기준 | 사용하지 않는 방식 |
 |---|---|---|
-| Azure 리소스와 앱 배포 | `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`으로 만들고 `azd down`으로 정리합니다. | README에 나열한 단독 `az` 생성 명령 |
+| Azure 리소스와 앱 배포 | `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`으로 만들고 `azd down`으로 정리합니다. external sample은 이 파일과 hook을 문서 레포가 아니라 코드 레포 루트에 둡니다. | README에 나열한 단독 `az` 생성 명령 |
 | azd 밖의 단계 | Kubernetes manifest 적용, 데이터 적재, 미리 보기 API 호출은 `azure.yaml` hook(`preprovision`, `postprovision`, `postdeploy` 등) 스크립트로 실행합니다. | 수동으로 이어 붙이는 명령 순서 |
 | runnable 컨테이너 이미지 | azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는 `az acr build --platform linux/amd64`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드 |
 | external 컨테이너 이미지 | hook에서 `az acr import`로 GHCR 릴리스 이미지를 digest로 지정해 ACR에 복사합니다. | 같은 코드를 ACR이나 로컬에서 다시 빌드한 이미지 |

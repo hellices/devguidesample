@@ -71,7 +71,8 @@
   따른다. 새로 추가하거나 배포 방식을 바꾸는 sample에 적용한다.
 - Azure 리소스 생성과 앱 배포는 Azure Developer CLI(`azd`)로 재현한다.
   sample에 `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`·`azd down`으로
-  생성하고 정리한다. azd가 다루지 않는 단계는 `azure.yaml` hook 스크립트로
+  생성하고 정리한다. external sample은 `azure.yaml`·`infra/`·hook을 문서 레포
+  package가 아니라 코드 레포 루트에 둔다. azd가 다루지 않는 단계는 `azure.yaml` hook 스크립트로
   실행하며 README의 단독 `az` 명령 나열로 대신하지 않는다.
 - external sample의 릴리스 이미지는 코드 레포 release workflow가 GHCR에 게시하고,
   배포할 때 azd hook에서 `az acr import`로 digest를 지정해 ACR에 복사한다.

@@ -90,8 +90,19 @@ INSERT INTO v SELECT g, g % 50,
 FROM generate_series(1, 200000) g;
 CREATE INDEX v_diskann ON v USING diskann (e vector_cosine_ops);
 
--- pgbench scripts: k-NN, and k-NN with a 2% filter (btree index on cat)
+CREATE INDEX v_cat ON v (cat);
+```
+
+두 pgbench 스크립트를 각각 `pgbench -n -c 8 -f <script> bench` 형식으로 8 연결에서 실행했습니다.
+
+```text
+-- knn.sql: k-NN
+\set id random(1, 200000)
 SELECT id FROM v ORDER BY e <=> (SELECT e FROM v WHERE id = :id) LIMIT 10;
+
+-- knn-filter.sql: k-NN with a 2% filter
+\set id random(1, 200000)
+\set c random(0, 49)
 SELECT id FROM v WHERE cat = :c ORDER BY e <=> (SELECT e FROM v WHERE id = :id) LIMIT 10;
 ```
 
