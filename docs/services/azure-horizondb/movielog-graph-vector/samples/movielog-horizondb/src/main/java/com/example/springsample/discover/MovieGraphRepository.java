@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
@@ -27,6 +28,9 @@ import org.springframework.stereotype.Repository;
 class MovieGraphRepository {
 
 	static final String GRAPH = "movie_graph";
+
+	/** Person keys in the catalog: Wikidata ids, or TMDB person ids for people Wikidata does not know. */
+	static final Pattern PERSON_QID = Pattern.compile("Q[1-9][0-9]*|tmdb:[0-9]+");
 
 	private static final String ROW_COLUMNS = """
 			a_id ag_catalog.agtype, a_label ag_catalog.agtype, a_props ag_catalog.agtype,
@@ -74,6 +78,21 @@ class MovieGraphRepository {
 				MATCH (a:Movie {tmdb_id: t})-[r]-(b)
 				%s""".formatted(list, RETURN_ROW));
 		return assemble(rows, Set.copyOf(tmdbIds), true);
+	}
+
+	/**
+	 * A person and the movies they directed or acted in, for expanding a Person node on the page. The qid is
+	 * checked against {@link #PERSON_QID} because it is written into the Cypher text.
+	 */
+	GraphView person(String qid, int limit) {
+		if (!PERSON_QID.matcher(qid).matches()) {
+			throw new IllegalArgumentException("Not a person id: " + qid);
+		}
+		List<EdgeRow> rows = cypher("""
+				MATCH (a:Person {qid: '%s'})-[r]->(b:Movie)
+				%s
+				LIMIT %d""".formatted(qid, RETURN_ROW, limit));
+		return assemble(rows, Set.of(), false);
 	}
 
 	private List<EdgeRow> cypher(String query) {
@@ -150,7 +169,8 @@ class MovieGraphRepository {
 				name = props.text("name");
 			}
 			return new GraphView.Node(id, label, (name == null) ? id : name, tmdbId,
-					(year == null) ? null : year.intValue(), tmdbId != null && focusIds.contains(tmdbId));
+					(year == null) ? null : year.intValue(), tmdbId != null && focusIds.contains(tmdbId),
+					props.text("qid"), null);
 		}
 
 	}

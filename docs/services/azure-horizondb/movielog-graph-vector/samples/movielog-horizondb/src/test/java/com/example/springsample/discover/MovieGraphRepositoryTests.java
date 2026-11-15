@@ -3,6 +3,7 @@ package com.example.springsample.discover;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.example.springsample.discover.MovieGraphRepository.EdgeRow;
@@ -60,6 +61,19 @@ class MovieGraphRepositoryTests {
 
 	private static EdgeRow edge(Vertex a, Vertex b, String id, String type) {
 		return new EdgeRow(a, b, id, type, a.id(), b.id(), null);
+	}
+
+
+	@Test
+	void personNodesCarryTheirQidAndPostersAreAddedByTmdbId() {
+		Vertex villeneuve = new Vertex("p3", "Person", Props.parse("{\"qid\": \"Q548823\", \"name\": \"드니 빌뇌브\"}"));
+		GraphView view = MovieGraphRepository.assemble(List.of(edge(villeneuve, INCEPTION, "e9", "DIRECTED")), Set.of(), false)
+			.withPosters(Map.of(27205L, "https://img.test/w92/inception.jpg"));
+
+		assertThat(view.nodes()).filteredOn(node -> node.kind().equals("Person")).extracting(GraphView.Node::qid)
+			.containsExactly("Q548823");
+		assertThat(view.nodes()).filteredOn(node -> node.kind().equals("Movie")).extracting(GraphView.Node::posterUrl)
+			.containsExactly("https://img.test/w92/inception.jpg");
 	}
 
 }

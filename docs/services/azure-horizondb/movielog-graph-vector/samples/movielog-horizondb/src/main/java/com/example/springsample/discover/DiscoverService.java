@@ -1,9 +1,13 @@
 package com.example.springsample.discover;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.example.springsample.movie.MovieService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -30,6 +34,10 @@ public class DiscoverService {
 
 	private static final int GRAPH_CO_CREDITS = 60;
 
+	private static final int GRAPH_PERSON_MOVIES = 30;
+
+	private static final String GRAPH_POSTER_SIZE = "w92";
+
 	private final EmbeddingClient embeddings;
 
 	private final VectorSearchRepository vectors;
@@ -44,10 +52,12 @@ public class DiscoverService {
 
 	private final QueryCorrector corrector;
 
+	private final MovieService movies;
+
 	private final Counter corrected;
 
 	public DiscoverService(EmbeddingClient embeddings, VectorSearchRepository vectors, MovieGraphRepository graph,
-			MeterRegistry registry, DiscoverRateLimiter rateLimiter, QueryCorrector corrector) {
+			MeterRegistry registry, DiscoverRateLimiter rateLimiter, QueryCorrector corrector, MovieService movies) {
 		this.embeddings = embeddings;
 		this.vectors = vectors;
 		this.graph = graph;
@@ -57,6 +67,7 @@ public class DiscoverService {
 			.description("Semantic searches refused by the rate cap before calling Azure OpenAI")
 			.register(registry);
 		this.corrector = corrector;
+		this.movies = movies;
 		this.corrected = Counter.builder("movielog.discover.corrected")
 			.description("Semantic searches whose misspelled name or title was corrected before embedding")
 			.register(registry);
@@ -111,13 +122,39 @@ public class DiscoverService {
 	}
 
 	public GraphView movieGraph(long tmdbId) {
-		return timed("movielog.discover.graph", "movie", () -> graph.neighborhood(tmdbId, GRAPH_CO_CREDITS),
-				view -> view.nodes().isEmpty());
+		return withPosters(timed("movielog.discover.graph", "movie",
+				() -> graph.neighborhood(tmdbId, GRAPH_CO_CREDITS), view -> view.nodes().isEmpty()));
 	}
 
 	public GraphView graphAmong(List<Long> tmdbIds) {
 		List<Long> ids = tmdbIds.stream().distinct().limit(MAX_RESULTS).toList();
-		return timed("movielog.discover.graph", "results", () -> graph.among(ids), view -> view.nodes().isEmpty());
+		return withPosters(timed("movielog.discover.graph", "results", () -> graph.among(ids),
+				view -> view.nodes().isEmpty()));
+	}
+
+	/** A person and their movies in the graph, for expanding a Person node. */
+	public GraphView personGraph(String qid) {
+		return withPosters(timed("movielog.discover.graph", "person", () -> graph.person(qid, GRAPH_PERSON_MOVIES),
+				view -> view.nodes().isEmpty()));
+	}
+
+	/** Posters are a nicety: a failed lookup leaves the colored placeholder nodes. */
+	private GraphView withPosters(GraphView view) {
+		List<Long> ids = view.nodes().stream().map(GraphView.Node::tmdbId).filter(Objects::nonNull).distinct().toList();
+		try {
+			Map<Long, String> urls = new HashMap<>();
+			vectors.posterPaths(ids).forEach((id, path) -> {
+				String url = movies.posterUrl(path, GRAPH_POSTER_SIZE);
+				if (url != null) {
+					urls.put(id, url);
+				}
+			});
+			return view.withPosters(urls);
+		}
+		catch (DataAccessException ex) {
+			logger.warn("graph poster lookup failed: {}", ex.getMostSpecificCause().getMessage());
+			return view;
+		}
 	}
 
 	/** Cuts at a code point boundary so a surrogate pair is never split. */

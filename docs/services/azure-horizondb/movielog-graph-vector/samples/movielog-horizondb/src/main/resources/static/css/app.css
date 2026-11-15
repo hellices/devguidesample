@@ -355,6 +355,26 @@ main.responsive {
 .dot-person { background: #e8a33d; }
 .dot-genre { background: #2e7d6b; transform: rotate(45deg); border-radius: 0; }
 
+.graph-filter[aria-pressed="false"] {
+	opacity: 0.45;
+	text-decoration: line-through;
+}
+
+.graph-detail {
+	padding: 0.75rem;
+	margin-block: 0.5rem;
+}
+
+/* BeerCSS gives article a display value that would override the hidden attribute. */
+.graph-detail[hidden] {
+	display: none;
+}
+
+.graph-detail-poster {
+	width: 4.5rem;
+	border-radius: 0.25rem;
+}
+
 .graph-relations {
 	margin-block: 0.5rem 1rem;
 }

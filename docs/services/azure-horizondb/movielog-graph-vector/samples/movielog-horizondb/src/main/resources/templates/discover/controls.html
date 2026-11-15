@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!-- Relation filters (also the legend), the detail panel of the tapped node and the text list. -->
+<th:block th:fragment="controls">
+	<nav class="wrap small-space graph-legend" aria-label="관계 종류 필터">
+		<span class="chip"><span class="dot dot-movie"></span>영화</span>
+		<button type="button" class="chip graph-filter" data-filter="people" aria-pressed="true">
+			<span class="dot dot-person"></span>감독·출연</button>
+		<button type="button" class="chip graph-filter" data-filter="genres" aria-pressed="true">
+			<span class="dot dot-genre"></span>장르</button>
+		<button type="button" class="chip graph-filter" data-filter="similar" aria-pressed="true">
+			<span class="line line-similar"></span>비슷한 영화 (SIMILAR_TO)</button>
+	</nav>
+	<article id="graph-detail" class="graph-detail round border" aria-live="polite" hidden></article>
+	<details class="graph-relations">
+		<summary>관계 목록 (텍스트)</summary>
+		<div id="graph-relations" aria-live="polite"></div>
+	</details>
+</th:block>
+</body>
+</html>

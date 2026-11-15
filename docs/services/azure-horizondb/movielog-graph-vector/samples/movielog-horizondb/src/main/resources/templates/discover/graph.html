@@ -11,22 +11,14 @@
 	</h5>
 	<p class="secondary-text small-text">
 		감독·배우·장르, 임베딩 기반 <code>SIMILAR_TO</code> 이웃, 같은 인물이 참여한 다른 영화입니다.
-		노드를 누르면 연결된 노드만 강조하고, 영화 노드를 두 번 누르면 그 영화의 그래프로 이동합니다.
-		같은 관계와 영화 링크는 그래프 아래 관계 목록에서도 볼 수 있습니다.
+		노드를 누르면 연결된 노드만 강조하고 아래에 정보와 링크를 보여 줍니다. 인물은 다른 작품으로 펼칠 수 있습니다.
+		같은 관계는 그래프 아래 관계 목록에서도 볼 수 있습니다.
 	</p>
 	<div id="graph" class="graph-canvas graph-canvas-tall round border" role="img"
 		th:aria-label="|${movie.title}의 감독·배우·장르·비슷한 영화 관계 그래프. 같은 내용은 아래 관계 목록에 있습니다.|"
-		th:attr="data-api-url=@{/api/discover/graph/movies/{id}(id=${movie.tmdbId})},data-movie-url=@{/movies/},data-graph-url=@{/graph/movies/}"></div>
-	<nav class="wrap small-space graph-legend">
-		<span class="chip"><span class="dot dot-movie"></span>영화</span>
-		<span class="chip"><span class="dot dot-person"></span>인물</span>
-		<span class="chip"><span class="dot dot-genre"></span>장르</span>
-		<span class="chip"><span class="line line-similar"></span>SIMILAR_TO</span>
-	</nav>
-	<details class="graph-relations">
-		<summary>관계 목록 (텍스트)</summary>
-		<div id="graph-relations" aria-live="polite"></div>
-	</details>
+		th:attr="data-api-url=@{/api/discover/graph/movies/{id}(id=${movie.tmdbId})},data-movie-url=@{/movies/},data-graph-url=@{/graph/movies/},data-person-api-url=@{/api/discover/graph/people/}"
+		data-layout="focus"></div>
+	<th:block th:replace="~{discover/controls :: controls}"></th:block>
 </main>
 
 <footer th:replace="~{fragments/layout :: footer}"></footer>

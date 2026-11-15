@@ -33,17 +33,9 @@
 			<h6>결과 영화 사이의 관계 <span class="small-text secondary-text">(AGE openCypher)</span></h6>
 			<div id="graph" class="graph-canvas round border" role="img"
 				aria-label="결과 영화와 공통 인물·장르·비슷한 영화의 관계 그래프. 같은 내용은 아래 관계 목록에 있습니다."
-				th:attr="data-api-url=@{/api/discover/graph(ids=${#strings.listJoin(hitIds, ',')})},data-movie-url=@{/movies/}"></div>
-			<nav class="wrap small-space graph-legend">
-				<span class="chip"><span class="dot dot-movie"></span>영화</span>
-				<span class="chip"><span class="dot dot-person"></span>인물</span>
-				<span class="chip"><span class="dot dot-genre"></span>장르</span>
-				<span class="chip"><span class="line line-similar"></span>SIMILAR_TO</span>
-			</nav>
-			<details class="graph-relations">
-				<summary>관계 목록 (텍스트)</summary>
-				<div id="graph-relations" aria-live="polite"></div>
-			</details>
+				th:attr="data-api-url=@{/api/discover/graph(ids=${#strings.listJoin(hitIds, ',')})},data-movie-url=@{/movies/},data-graph-url=@{/graph/movies/},data-person-api-url=@{/api/discover/graph/people/}"
+				data-hide="genres"></div>
+			<th:block th:replace="~{discover/controls :: controls}"></th:block>
 		</section>
 
 		<p class="secondary-text" th:if="${correction != null}">

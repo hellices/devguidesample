@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +47,13 @@ class DiscoverApiController {
 	@GetMapping("/graph/movies/{tmdbId}")
 	GraphView movieGraph(@PathVariable long tmdbId) {
 		return discoverService.movieGraph(tmdbId);
+	}
+
+	@Operation(summary = "인물 그래프", description = "인물과 그 인물이 감독하거나 출연한 영화(최대 30편)를 반환합니다. 그래프 화면의 인물 펼치기에 씁니다.")
+	@GetMapping("/graph/people/{qid}")
+	GraphView personGraph(@Parameter(description = "Wikidata id(Q…) 또는 tmdb:<인물 id>") @PathVariable
+			@Pattern(regexp = "Q[1-9][0-9]*|tmdb:[0-9]+") String qid) {
+		return discoverService.personGraph(qid);
 	}
 
 	@Operation(summary = "영화 사이 연결 그래프", description = "주어진 영화들 사이의 공통 인물·장르와 SIMILAR_TO 관계를 반환합니다.")

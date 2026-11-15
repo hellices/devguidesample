@@ -4,9 +4,12 @@ import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
@@ -135,6 +138,20 @@ class VectorSearchRepository {
 			.query((rs, row) -> new CatalogOverview(rs.getString("overview"), rs.getString("source_url")))
 			.optional()
 			.orElse(null);
+	}
+
+	/** TMDB poster paths of the given movies, for graph nodes; movies without a poster are left out. */
+	Map<Long, String> posterPaths(Collection<Long> tmdbIds) {
+		if (tmdbIds.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, String> paths = new HashMap<>();
+		jdbc.sql("SELECT tmdb_id, poster_path FROM public.movies WHERE tmdb_id IN (:ids) AND poster_path IS NOT NULL")
+			.param("ids", List.copyOf(tmdbIds))
+			.query((ResultSet rs) -> {
+				paths.put(rs.getLong("tmdb_id"), rs.getString("poster_path"));
+			});
+		return paths;
 	}
 
 	/** pgvector text form: [0.1,0.2,...]. */
