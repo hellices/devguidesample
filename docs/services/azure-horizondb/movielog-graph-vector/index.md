@@ -228,7 +228,7 @@ API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에
 그래프는 관계형 행에서 만든 파생 데이터라서, 원본이 바뀔 때마다 ④로 전체를 다시 만들면 그래프를
 지운 6–8초 동안 앱이 빈 그래프를 읽고, 관리자 비밀번호를 가진 작업이 cluster 안에 있어야 합니다.
 그래서 HorizonDB trigger가 바뀐 영화를 queue에 기록하고, 앱이 그 영화만 반영하는 방식으로 바꿨습니다.
-[`db/40-graph-sync.sql`](https://github.com/hellices/sample-movielog-horizondb/blob/v2.6.4/db/40-graph-sync.sql)이 queue, trigger, 함수를 만듭니다.
+[`db/40-graph-sync.sql`](https://github.com/hellices/sample-movielog-horizondb/blob/v2.6.5/db/40-graph-sync.sql)이 queue, trigger, 함수를 만듭니다.
 
 | 단계 | 구성 요소 | 동작 |
 |---|---|---|
@@ -520,14 +520,15 @@ AGE cypher, 일반 SQL) 시간을 나눠 볼 수 있습니다.
 ## MovieLog HorizonDB 실습 sample { #lab }
 
 앱 전체 소스, 배포 명령, DB 스크립트, 데이터셋 빌더, Kubernetes manifest, Grafana dashboard JSON은
-샘플 코드 레포 [`hellices/sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb)에 있고, 이 문서는 `v2.6.4` 릴리스를
+샘플 코드 레포 [`hellices/sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb)에 있고, 이 문서는 `v2.6.5` 릴리스를
 기준으로 합니다. 앱 이미지는 release workflow가
-`ghcr.io/hellices/sample-movielog-horizondb:2.6.4`로 게시하며, 배포 절차는 이 이미지를 digest로 지정해
+`ghcr.io/hellices/sample-movielog-horizondb:2.6.5`로 게시하며, 배포 절차는 이 이미지를 digest로 지정해
 `az acr import`로 실습 Azure Container Registry에 복사합니다. HorizonDB·AKS·Azure OpenAI·Managed Grafana를
 만들고 카탈로그를 적재하기까지 약 90분이 걸리며 유료 자원을 쓰므로, 끝나면 resource group을 삭제합니다.
 
-- [sample-movielog-horizondb README와 배포 절차 (v2.6.4)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.6.4/README.md)
-- [Grafana dashboard JSON 내려받기 (v2.6.4)](https://raw.githubusercontent.com/hellices/sample-movielog-horizondb/v2.6.4/grafana/movielog-horizondb-dashboard.json)
+- [sample-movielog-horizondb README (v2.6.5)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.6.5/README.md)
+- [Azure 배포 절차 (v2.6.5)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.6.5/docs/deploy.md)
+- [Grafana dashboard JSON 내려받기 (v2.6.5)](https://raw.githubusercontent.com/hellices/sample-movielog-horizondb/v2.6.5/grafana/movielog-horizondb-dashboard.json)
 
 배포 절차는 이 저장소의 `azd` 기준 이전에 만든 명령 나열 방식이며 `azd` 전환은 남아 있습니다.
 기존 MovieLog 앱과 AKS 자동 계측 구성은
