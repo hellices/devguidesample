@@ -72,8 +72,8 @@ Azure HorizonDB 하나에 관계형 데이터, 벡터, 그래프를 함께 두�
    479편, 인물 1,786명, 장르 124개를 HorizonDB의 `public`·`catalog` 테이블에 넣습니다.
 2. **임베딩과 DiskANN** — 영화마다 제목·인물·장르·요약을 한 문서로 묶어 Azure OpenAI
    `text-embedding-3-large`(1,536차원)로 임베딩하고 `pg_diskann` 코사인 index를 만듭니다.
-3. **AGE 그래프** — 같은 테이블에서 Apache AGE 그래프 `movie_graph`를 만들고, 임베딩이
-   가장 가까운 3편을 `SIMILAR_TO` 관계로 잇습니다.
+3. **AGE 그래프** — 같은 테이블에서 Apache AGE 그래프 `movie_graph`를 만들고, 영화마다 임베딩이
+   가장 가까운 3편을 골라 `SIMILAR_TO` 관계로 잇습니다. 서로를 고른 두 영화는 관계 하나로 합칩니다.
 4. **의미 검색과 관계 그래프** — 앱은 질의를 임베딩해 가까운 영화를 찾고, 찾은 영화들
    사이의 감독·배우·장르·유사 관계를 openCypher로 조회해 함께 그립니다.
 
@@ -269,12 +269,15 @@ SELECT pg_temp.unwind(
 FROM catalog.movie_credits c JOIN public.movies USING (tmdb_id)
 WHERE c.role = 'actor';
 
--- 임베딩 → SIMILAR_TO: 영화마다 코사인 거리가 가장 가까운 3편
-SELECT a.tmdb_id, b.tmdb_id, 1 - (a.embedding <=> b.embedding) AS score
-FROM catalog.movie_docs a
-CROSS JOIN LATERAL (
-  SELECT tmdb_id, embedding FROM catalog.movie_docs b
-  WHERE b.tmdb_id <> a.tmdb_id ORDER BY b.embedding <=> a.embedding LIMIT 3) b;
+-- 임베딩 → SIMILAR_TO: 영화마다 코사인 거리가 가장 가까운 3편, 서로를 고른 쌍은 하나로 합침
+WITH knn AS (
+  SELECT a.tmdb_id AS a, b.tmdb_id AS b, 1 - (a.embedding <=> b.embedding) AS score
+  FROM catalog.movie_docs a
+  CROSS JOIN LATERAL (
+    SELECT tmdb_id, embedding FROM catalog.movie_docs b
+    WHERE b.tmdb_id <> a.tmdb_id ORDER BY b.embedding <=> a.embedding LIMIT 3) b)
+SELECT DISTINCT ON (least(a, b), greatest(a, b)) least(a, b) AS a, greatest(a, b) AS b, score
+FROM knn ORDER BY least(a, b), greatest(a, b), score DESC;
 ```
 
 ### 앱 접근 경로: JPA · JdbcClient · JdbcTemplate { #app-access }
@@ -424,14 +427,15 @@ label 테이블로 저장하는 방식, `cypher()` 매개변수, openCypher 제�
 graph-augmented RAG 패턴은
 [HorizonDB 벡터·그래프 기능](vector-graph-features/index.md#age-storage)에 정리했습니다. 생성 스크립트는
 6초 안팎에 노드 2,389개와 관계 5,976개를 만듭니다. `Movie`에는 카탈로그 479편과 앱의 기존 seed 영화 1편이
-들어 있고, `Person`은 출연·감독 기록이 있는 인물만 넣습니다.
+들어 있고, `Person`은 출연·감독 기록이 있는 인물만 넣습니다. `SIMILAR_TO`는 임베딩이 있는 479편이 3편씩 고른
+후보 1,437개 가운데 서로를 고른 399쌍을 하나로 합친 1,038개입니다.
 
 | 노드 | 수 | 관계 | 수 |
 |---|---|---|---|
 | `Movie` | 480 | `ACTED_IN` | 2,771 |
 | `Person` | 1,785 | `DIRECTED` | 520 |
 | `Genre` | 124 | `IN_GENRE` | 1,647 |
-| | | `SIMILAR_TO`(임베딩 최근접 3편) | 1,038 |
+| | | `SIMILAR_TO`(임베딩 최근접 3편, 쌍 단위) | 1,038 |
 
 앱은 결과 영화들을 `UNWIND`로 시작점 삼아 이웃을 조회합니다.
 
@@ -554,8 +558,8 @@ topic에서 이어 받았습니다.
 - **공개 범위** — AKS 배포(`aks` profile)는 `app.security.require-login=true`로 로그인·회원가입 화면을
   뺀 모든 화면과 API에 로그인을 요구합니다. 로그인하지 않은 요청은 화면이면 `/login`으로, API면 401을
   받습니다. 다만 회원 가입이 열려 있어 누구나 계정을 만들 수 있으므로, 유료 임베딩 호출과 quota를
-  지키도록 앱이 Azure OpenAI 호출 전에 Pod마다 클라이언트 주소당 분당 30건, 전체 분당 300건으로
-  제한하고 넘으면 429를 돌려줍니다. 실습이 끝나면 NSG 규칙, DNS 레코드와 resource group을 지웁니다.
+  지키도록 앱이 Azure OpenAI 호출 전에 클라이언트 주소당 분당 30건, 전체 분당 300건으로 제한하고 넘으면
+  429를 돌려줍니다. 한도는 Pod마다 따로 세므로 Pod 2개에서는 배포 전체가 분당 최대 600건까지 허용합니다. 실습이 끝나면 NSG 규칙, DNS 레코드와 resource group을 지웁니다.
 - **클러스터 자동 중지** — 실습 구독에서는 조직 자동화가 자정 무렵 AKS 클러스터를 중지했습니다.
   다음 날 다시 볼 때는 `az aks start`로 시작합니다. 인증서와 Gateway 구성은 재시작 뒤에도
   유지됐습니다.

@@ -80,8 +80,9 @@ label 테이블과 openCypher로 다룹니다. 둘 다 같은 데이터베이스
 ## 벡터 index 선택: Flat · IVFFlat · HNSW · DiskANN { #vector-index }
 
 Learn은 HorizonDB의 production AI 워크로드 기본값으로 DiskANN을 권하지만, 10만 행 미만이고
-지연이 중요하지 않으면 index 없는 flat scan을 첫 선택으로 둡니다. 네 방식 모두 같은 SQL과
-연산자를 쓰므로 `CREATE INDEX`만 바꿔 옮길 수 있습니다.
+지연이 중요하지 않으면 index 없는 flat scan을 첫 선택으로 둡니다. 네 방식 모두 같은 질의 SQL과
+연산자를 쓰므로 질의는 그대로 둡니다. index 방식 사이를 옮길 때는 기존 vector index를 `DROP INDEX`로
+지우고 새 index를 만들며, Flat으로 돌아갈 때는 vector index만 지웁니다.
 
 | 항목 | Flat | IVFFlat | HNSW | DiskANN |
 |---|---|---|---|---|
@@ -146,8 +147,9 @@ ORDER BY embedding <=> :query_embedding
 LIMIT 10;
 ```
 
-- **문법** — 별도 문법은 없으며 DiskANN index가 있으면 planner가 자동으로 씁니다. 자주
-  거르는 열에는 btree index를 함께 둡니다.
+- **문법** — 별도 문법은 없습니다. planner가 비용과 필터 선택도로 DiskANN 사용 여부를 정하므로,
+  작은 테이블이나 선택도가 높은 필터에서는 index가 있어도 쓰지 않을 수 있습니다. 실제 계획은
+  `EXPLAIN`으로 확인합니다. 자주 거르는 열에는 btree index를 함께 둡니다.
 - **세션 조정** — `diskann.enable_filter_hook`, `diskann.selectivity_min`,
   `diskann.selectivity_threshold`, `diskann.filtering_beta`, `diskann.l_value_is`로 필터 적용
   강도와 recall을 조정합니다. 주로 benchmark와 recall 조정용입니다.
