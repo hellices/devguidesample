@@ -203,6 +203,10 @@ submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `sou
 - 릴리스 이미지는 GitHub 호스팅 runner의 release workflow가 빌드해
   `ghcr.io/<owner>/<app>:<version>`으로 게시하고 build provenance를 남깁니다. workflow 요약에
   문서가 고정할 `ref`, `commit`, `image` 값이 출력됩니다.
+- 처음 게시한 GHCR 패키지는 레포가 공개여도 private입니다. 첫 릴리스 뒤 패키지 설정에서
+  Public으로 바꾸고 로그인하지 않은 상태에서 pull 토큰을 받을 수 있는지 확인합니다. Public
+  패키지는 익명으로 pull할 수 있고, 한 번 Public으로 바꾸면 private으로 되돌릴 수 없습니다. 근거:
+  [Configuring a package's access control and visibility](https://docs.github.com/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
 - 공개 안전성 기준은 코드 레포에도 같습니다. 이 레포의 공개 안전성 검사는 submodule 안을
   보지 않으므로 코드 레포에서 GitHub secret scanning과 push protection을 켭니다.
 
@@ -270,7 +274,8 @@ import는 Docker 없이 레지스트리 사이에서 이미지를 복사하며, 
 `Container Registry Data Importer and Data Reader` 역할이 필요합니다. private endpoint나 방화벽
 규칙이 있는 레지스트리는 신뢰할 수 있는 서비스 접근을 허용해야 합니다. 근거:
 [Import container images to a container registry](https://learn.microsoft.com/azure/container-registry/container-registry-import-images).
-템플릿의 `hooks/import-image.sh`가 이 단계를 수행합니다.
+템플릿의 `hooks/import-image.sh`가 이 단계를 수행하며 자격 증명을 넘기지 않으므로 GHCR 패키지가
+Public이어야 합니다.
 
 ### sample 빌드·배포 도구 { #sample-tooling }
 

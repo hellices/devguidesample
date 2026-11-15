@@ -545,10 +545,46 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
 
     errors = validate_links.validate_repository(root).errors
 
+    pinned = f"link must use a pinned ref (v2.6.4, {'c' * 40}) of example-org/movielog"
     assert errors == [
-        "docs/services/aks/network-diagnosis/index.md: link must use the pinned ref v2.6.4 of example-org/movielog: "
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
         "https://github.com/example-org/movielog/blob/main/src/App.java",
-        "docs/services/aks/network-diagnosis/index.md: link must use the pinned ref v2.6.4 of example-org/movielog: "
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
         "https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png",
+    ]
+
+
+def test_each_topic_keeps_its_own_pin_of_a_shared_code_repository(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    pages = {}
+    for slug, version, commit in (("case-topic", "v1.0.0", "a" * 40), ("guide-topic", "v2.0.0", "b" * 40)):
+        topic = root / "docs/services/aks" / slug
+        (topic / "samples/app").mkdir(parents=True)
+        (topic / "samples/app/sample.yml").write_text(
+            f"title: App\ndescription: Code\nkind: external\nrepository: https://github.com/example-org/movielog\n"
+            f"ref: {version}\ncommit: {commit}\nused_by: [index]\n"
+        )
+        pages[slug] = topic / "index.md"
+    pages["case-topic"].write_text(
+        VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", "")
+        + "\n[v1](https://github.com/example-org/movielog/blob/v1.0.0/App.java)"
+        + "\n[v2](https://github.com/example-org/movielog/blob/v2.0.0/App.java)\n"
+    )
+    pages["guide-topic"].write_text(
+        VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", "")
+        + "\n[v2](https://github.com/example-org/movielog/blob/v2.0.0/App.java)\n"
+    )
+    # A topic without its own sample of the repository may link any version that some topic pins.
+    (root / "docs/services/aks/network-diagnosis/index.md").write_text(
+        VALID_GUIDE
+        + "\n[v1](https://github.com/example-org/movielog/blob/v1.0.0/App.java)"
+        + "\n[branch](https://github.com/example-org/movielog/blob/main/App.java)\n"
+    )
+
+    errors = validate_links.validate_repository(root).errors
+
+    assert [error.split(": ")[0] + ": " + error.rsplit(" ", 1)[-1] for error in errors] == [
+        "docs/services/aks/case-topic/index.md: https://github.com/example-org/movielog/blob/v2.0.0/App.java",
+        "docs/services/aks/network-diagnosis/index.md: https://github.com/example-org/movielog/blob/main/App.java",
     ]
 

@@ -33,17 +33,30 @@ _GITHUB_REF_LINK = re.compile(
 )
 
 
-def _external_ref_errors(relative: str, target: str, pinned: dict[str, tuple[str, str]]) -> list[str]:
-    """A link into an external sample repository must use the release tag or commit its sample.yml pins."""
+def _pins(samples) -> dict[str, list[str]]:
+    """Repository (owner/name, lower case) -> pinned release tags and commits of the given external samples."""
+    pins: dict[str, list[str]] = {}
+    for sample in samples:
+        if sample.repository and sample.ref:
+            refs = pins.setdefault(sample.repository.removeprefix("https://github.com/").lower(), [])
+            refs.extend(ref for ref in (sample.ref, sample.commit) if ref and ref not in refs)
+    return pins
+
+
+def _external_ref_errors(
+    relative: str, target: str, topic_pins: dict[str, list[str]], all_pins: dict[str, list[str]]
+) -> list[str]:
+    """A link into an external sample repository must use a release tag or commit that a sample.yml pins. The
+    document's own topic decides when it has a sample of that repository, so each topic keeps its own version."""
     match = _GITHUB_REF_LINK.match(target.removeprefix("<").removesuffix(">"))
     if match is None:
         return []
     repository = (match.group("repo") or match.group("raw_repo")).lower()
     ref = match.group("ref") or match.group("raw_ref")
-    expected = pinned.get(repository)
+    expected = topic_pins.get(repository) or all_pins.get(repository)
     if expected is None or ref in expected:
         return []
-    return [f"{relative}: link must use the pinned ref {expected[0]} of {repository}: {target}"]
+    return [f"{relative}: link must use a pinned ref ({', '.join(expected)}) of {repository}: {target}"]
 
 
 @dataclass(frozen=True)
@@ -112,12 +125,7 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
         count = sum(1 for _ in iter_public_document_paths(docs_dir, taxonomy))
         return ValidationResult(count, [str(error)])
     published_targets = {(docs_dir / target).resolve() for target in catalog.published_assets}
-    pinned_refs = {
-        sample.repository.removeprefix("https://github.com/").lower(): (sample.ref, sample.commit or sample.ref)
-        for topic in catalog.topics.values()
-        for sample in topic.samples
-        if sample.repository and sample.ref
-    }
+    all_pins = _pins(sample for topic in catalog.topics.values() for sample in topic.samples)
     for document in catalog.documents:
         count += 1
         page = document.path
@@ -129,7 +137,9 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
         for link in parser.links:
             if link.alt_text is not None and not link.alt_text:
                 errors.append(f"{relative}: image alt text is required")
-            errors.extend(_external_ref_errors(relative, link.target, pinned_refs))
+            topic = catalog.by_document.get(document.relative_path)
+            topic_pins = _pins(topic.samples) if topic is not None else {}
+            errors.extend(_external_ref_errors(relative, link.target, topic_pins, all_pins))
             target = _resolve_target(page, docs_dir, link.target)
             if target is not None and not target.exists():
                 asset_target = _resolve_target(

@@ -28,6 +28,9 @@ azd down --purge
 
 1. 변경을 `main`에 merge합니다.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`로 태그를 올립니다.
-3. release workflow 요약의 `ref`, `commit`, `image` 값을 문서 레포 `sample.yml`에 옮기고 submodule을 같은 commit으로 맞춥니다.
+3. 첫 릴리스라면 GHCR 패키지를 Public으로 바꿉니다. 처음 게시한 패키지는 레포가 공개여도 private이며,
+   한 번 Public으로 바꾸면 private으로 되돌릴 수 없습니다. 바꾼 뒤 로그인하지 않은 상태에서
+   `curl -fsS "https://ghcr.io/token?scope=repository:<owner>/<app>:pull"`이 토큰을 돌려주는지 확인합니다.
+4. release workflow 요약의 `ref`, `commit`, `image` 값을 문서 레포 `sample.yml`에 옮기고 submodule을 같은 commit으로 맞춥니다.
 
 공개 저장소입니다. 실제 구독·테넌트 ID, 비밀, 내부 호스트명을 커밋하지 않으며 GitHub secret scanning과 push protection을 켭니다.
