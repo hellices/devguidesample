@@ -1287,13 +1287,18 @@ def test_external_sample_must_not_carry_code(tmp_path: Path, taxonomy: dict) -> 
     sample_dir = write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST)
     (sample_dir / "src").mkdir()
     (sample_dir / "src" / "App.java").write_text("class App {}\n", encoding="utf-8")
+    (sample_dir / "deploy").mkdir()
+    (sample_dir / "deploy" / "sample.yml").write_text("kind: Deployment\n", encoding="utf-8")
 
     (sample_dir / "source").mkdir()
     (sample_dir / "source" / "README.md").write_text("# checked-out submodule\n", encoding="utf-8")
 
     with pytest.raises(
         DocumentFormatError,
-        match=re.escape("external sample must contain only sample.yml and the source submodule: README.md, src/App.java"),
+        match=re.escape(
+            "external sample must contain only sample.yml and the source submodule: "
+            "README.md, deploy/sample.yml, src/App.java"
+        ),
     ):
         build_topic_catalog(docs_dir, taxonomy)
 

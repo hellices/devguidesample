@@ -153,7 +153,7 @@ def _sample_directory_errors(
                     path.relative_to(sample_dir).as_posix()
                     for path in sample_dir.rglob("*")
                     if path.is_file()
-                    and path.name != "sample.yml"
+                    and path.relative_to(sample_dir) != Path("sample.yml")
                     and path.relative_to(sample_dir).parts[0] != EXTERNAL_SOURCE
                 )
                 if extra:
