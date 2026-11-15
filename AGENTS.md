@@ -42,8 +42,18 @@
 - 실행 가능한 프로젝트, 배포 매니페스트와 대용량 결과물은
   `docs/services/<service>/<topic>/samples/<sample>/`에 둔다.
 - 각 sample에는 `sample.yml`과 `README.md`가 필요하다. manifest의
-  `kind`는 `runnable` 또는 `artifact`이며, `used_by`는 `index` 또는 직접
-  자식 slug를 중복 없이 지정한다.
+  `kind`는 `runnable`, `artifact`, `external` 중 하나이며, `used_by`는 `index`
+  또는 직접 자식 slug를 중복 없이 지정한다.
+- 컨테이너 이미지로 빌드해 배포하는 애플리케이션 코드는 `kind: external`로 앱별 공개
+  코드 레포에 둔다. 문서 레포의 sample package에는 `sample.yml`(`repository`, SemVer
+  `ref`, 40자리 `commit`, 선택 `image`)과 그 commit에 고정한 git submodule `source`만
+  두며 `README.md`와 코드를 두지 않는다. 코드 레포는
+  `.github/templates/external-sample-repo/`를 복사해 만들고, release workflow가 GHCR에
+  이미지를 게시한다. 상세 기준은
+  [외부 코드 레포 sample](docs/contributing/index.md#external-sample)을 따른다.
+- 문서 본문의 코드 레포 링크(`blob`, `tree`, `raw`, `commit`)는 `sample.yml`의 `ref`
+  또는 `commit`으로 고정하고 branch 링크를 쓰지 않는다. 버전을 올릴 때는 submodule,
+  `sample.yml`, 본문 permalink를 한 PR에서 함께 바꾼다.
 - 최상위 `samples/`에는 공개 콘텐츠를 추가하지 않는다.
 - 페이지에서 렌더링할 이미지만 같은 bundle의 `images/`에 두며 의미 있는
   대체 텍스트를 작성한다.
@@ -60,6 +70,8 @@
   sample에 `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`·`azd down`으로
   생성하고 정리한다. azd가 다루지 않는 단계는 `azure.yaml` hook 스크립트로
   실행하며 README의 단독 `az` 명령 나열로 대신하지 않는다.
+- external sample의 릴리스 이미지는 코드 레포 release workflow가 GHCR에 게시하고,
+  배포할 때 azd hook에서 `az acr import`로 digest를 지정해 ACR에 복사한다.
 - 컨테이너 이미지는 로컬 `docker build` 대신 Azure Container Registry 서버
   빌드로 만든다. azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는
   `az acr build --platform linux/amd64`를 사용한다. `remoteBuild`는 ACR 빌드가

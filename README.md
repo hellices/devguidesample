@@ -25,7 +25,9 @@ Azure 기반 시스템의 설계·구현·운영 기록을 공유합니다. 실�
 공개 기술 문서의 canonical 원본은
 `docs/services/<service>/<topic>[/<child>]/index.md` topic package입니다.
 실행 코드와 결과물은 해당 topic의 `samples/<sample>/`에 두며, 최상위
-collection 폴더나 `samples/`에는 새 공개 콘텐츠를 추가하지 않습니다.
+collection 폴더나 `samples/`에는 새 공개 콘텐츠를 추가하지 않습니다. 컨테이너 이미지로 빌드하는
+애플리케이션은 별도 코드 레포에 두고 `samples/<sample>/source` git submodule과
+`sample.yml`로 릴리스 버전을 가리킵니다.
 자동 생성되는 `Azure Daily Update`는 예외적으로
 `docs/azure-daily-update/YYYY-MM-DD/index.md`에 날짜별로 보관합니다.
 

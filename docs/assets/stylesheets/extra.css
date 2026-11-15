@@ -1363,6 +1363,19 @@ body {
   margin-top: auto;
 }
 
+/* External sample project links sit above the card-wide title link so each stays clickable. */
+.md-typeset .dg-sample-card .dg-sample-links {
+  position: relative;
+  z-index: 1;
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+}
+
+.md-typeset .dg-sample-card .dg-sample-links code {
+  font-size: 0.65rem;
+  word-break: break-all;
+}
+
 .md-typeset :is(.dg-topic-list, .dg-topic-context, .dg-topic-nav, .dg-sample-card) a:focus-visible {
   outline: 2px solid var(--dg-accent);
   outline-offset: 3px;

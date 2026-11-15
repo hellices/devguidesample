@@ -1,4 +1,4 @@
-"""Validate rendered local links, image targets, and image alt text."""
+"""Validate rendered local links, image targets, image alt text and pinned external sample links."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 import sys
 from urllib.parse import unquote, urlparse
 
@@ -23,6 +24,26 @@ from scripts.docs.content import (
     load_taxonomy,
 )
 from scripts.docs.topics import build_topic_catalog
+
+
+# github.com/<owner>/<repo>/(blob|tree|raw|commit)/<ref>/... and raw.githubusercontent.com/<owner>/<repo>/<ref>/...
+_GITHUB_REF_LINK = re.compile(
+    r"https://github\.com/(?P<repo>[^/]+/[^/]+)/(?:blob|tree|raw|commit)/(?P<ref>[^/?#]+)"
+    r"|https://raw\.githubusercontent\.com/(?P<raw_repo>[^/]+/[^/]+)/(?P<raw_ref>[^/?#]+)"
+)
+
+
+def _external_ref_errors(relative: str, target: str, pinned: dict[str, tuple[str, str]]) -> list[str]:
+    """A link into an external sample repository must use the release tag or commit its sample.yml pins."""
+    match = _GITHUB_REF_LINK.match(target.removeprefix("<").removesuffix(">"))
+    if match is None:
+        return []
+    repository = (match.group("repo") or match.group("raw_repo")).lower()
+    ref = match.group("ref") or match.group("raw_ref")
+    expected = pinned.get(repository)
+    if expected is None or ref in expected:
+        return []
+    return [f"{relative}: link must use the pinned ref {expected[0]} of {repository}: {target}"]
 
 
 @dataclass(frozen=True)
@@ -91,6 +112,12 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
         count = sum(1 for _ in iter_public_document_paths(docs_dir, taxonomy))
         return ValidationResult(count, [str(error)])
     published_targets = {(docs_dir / target).resolve() for target in catalog.published_assets}
+    pinned_refs = {
+        sample.repository.removeprefix("https://github.com/").lower(): (sample.ref, sample.commit or sample.ref)
+        for topic in catalog.topics.values()
+        for sample in topic.samples
+        if sample.repository and sample.ref
+    }
     for document in catalog.documents:
         count += 1
         page = document.path
@@ -102,6 +129,7 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
         for link in parser.links:
             if link.alt_text is not None and not link.alt_text:
                 errors.append(f"{relative}: image alt text is required")
+            errors.extend(_external_ref_errors(relative, link.target, pinned_refs))
             target = _resolve_target(page, docs_dir, link.target)
             if target is not None and not target.exists():
                 asset_target = _resolve_target(

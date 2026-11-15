@@ -451,6 +451,45 @@ def test_topic_pages_render_context_outline_and_related_samples(
     assert 'class="dg-sample-card"' not in standalone_rendered
 
 
+
+def test_external_sample_card_links_the_pinned_project(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir, _ = build_topic_fixture(tmp_path, taxonomy)
+    sample_dir = docs_dir / "services" / "azure-monitor" / "standalone-topic" / "samples" / "app"
+    sample_dir.mkdir(parents=True)
+    (sample_dir / "sample.yml").write_text(
+        yaml.safe_dump(
+            {
+                "title": "MovieLog app",
+                "description": "Application code in its own repository.",
+                "kind": "external",
+                "repository": "https://github.com/example-org/movielog",
+                "ref": "v2.6.4",
+                "commit": "c" * 40,
+                "image": "ghcr.io/example-org/movielog:2.6.4@sha256:" + "a" * 64,
+                "used_by": ["index"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    standalone = next(
+        document
+        for document in build_topic_catalog(docs_dir, taxonomy).documents
+        if document.relative_path == PurePosixPath("services/azure-monitor/standalone-topic/index.md")
+    )
+
+    rendered = on_page_markdown(
+        "# Standalone topic\n\n본문입니다.\n",
+        page_namespace(standalone),
+        {"docs_dir": str(docs_dir), "repo_url": "https://github.com/example/devguidesample"},
+        None,
+    )
+
+    assert '<h3><a href="https://github.com/example-org/movielog/tree/v2.6.4">MovieLog app</a></h3>' in rendered
+    assert "external · v2.6.4" in rendered
+    assert '<a href="https://github.com/example-org/movielog/releases/tag/v2.6.4">릴리스</a>' in rendered
+    assert "<code>ghcr.io/example-org/movielog:2.6.4</code>" in rendered
+    assert "devguidesample/tree/main" not in rendered
+
 class ReaderPage(HTMLParser):
     def __init__(self, path: Path) -> None:
         super().__init__()

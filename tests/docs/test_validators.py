@@ -520,3 +520,35 @@ def test_metadata_gate_keeps_topic_validation_when_another_document_has_invalid_
         in error
         for error in result.errors
     )
+
+
+def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs/services/aks/network-diagnosis"
+    sample = topic / "samples/app"
+    sample.mkdir(parents=True)
+    (sample / "sample.yml").write_text(
+        "title: App\ndescription: Code repository\nkind: external\n"
+        "repository: https://github.com/Example-Org/movielog\nref: v2.6.4\n"
+        f"commit: {'c' * 40}\nused_by: [index]\n"
+    )
+    (topic / "index.md").write_text(
+        VALID_GUIDE
+        + "\n[pinned](https://github.com/example-org/movielog/blob/v2.6.4/src/App.java#L10-L20)"
+        + "\n[release](https://github.com/example-org/movielog/releases/tag/v2.6.4)"
+        + f"\n[commit](https://github.com/example-org/movielog/blob/{'c' * 40}/build.gradle.kts)"
+        + "\n[repository](https://github.com/example-org/movielog)"
+        + "\n[other repository](https://github.com/example-org/other/blob/main/README.md)"
+        + "\n[branch](https://github.com/example-org/movielog/blob/main/src/App.java)"
+        + "\n![old](https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png)\n"
+    )
+
+    errors = validate_links.validate_repository(root).errors
+
+    assert errors == [
+        "docs/services/aks/network-diagnosis/index.md: link must use the pinned ref v2.6.4 of example-org/movielog: "
+        "https://github.com/example-org/movielog/blob/main/src/App.java",
+        "docs/services/aks/network-diagnosis/index.md: link must use the pinned ref v2.6.4 of example-org/movielog: "
+        "https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png",
+    ]
+

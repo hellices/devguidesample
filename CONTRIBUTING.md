@@ -33,7 +33,9 @@ taxonomy의 `legacy_tag_redirects`에서 관리합니다.
 
 실행 코드, 배포 매니페스트와 결과물은
 `docs/services/<service>/<topic>/samples/<sample>/`에 `sample.yml`과
-`README.md`를 포함해 둡니다. 최상위 collection 폴더와 `samples/`에는 새
+`README.md`를 포함해 둡니다. 컨테이너 이미지로 빌드하는 애플리케이션 코드는
+앱별 공개 코드 레포에 두고, 문서 레포에는 `kind: external` `sample.yml`과 릴리스
+commit에 고정한 git submodule `source`만 둡니다. 최상위 collection 폴더와 `samples/`에는 새
 공개 콘텐츠를 추가하지 않습니다.
 
 문서 유형, topic/child 순서, redirect, sample manifest, 메타데이터, 이미지,
