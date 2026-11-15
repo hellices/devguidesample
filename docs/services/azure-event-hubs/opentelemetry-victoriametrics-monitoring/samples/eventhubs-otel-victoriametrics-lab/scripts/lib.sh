@@ -67,8 +67,8 @@ vm_local_port() {
 
 evidence_dir() {
   # Per environment, so one environment's scenario window is never reused for another.
-  local dir="$LAB_ROOT/evidence/$(env_value AZURE_ENV_NAME)"
-  mkdir -p "$dir"
+  local dir="${LAB_EVIDENCE_ROOT:-$LAB_ROOT/evidence}/$(env_value AZURE_ENV_NAME)"
+  mkdir -p "$dir" || return 1
   printf '%s' "$dir"
 }
 
