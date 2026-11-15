@@ -1,8 +1,9 @@
 title: MovieLog on Azure HorizonDB with vector search and an Apache AGE graph
 description: Spring Boot 4.1 MovieLog app backed by Azure HorizonDB, a Wikidata and Wikipedia movie catalog loader, Azure OpenAI embeddings stored in pgvector with a DiskANN index, an Apache AGE movie graph with a Cytoscape.js view, AKS autoinstrumentation manifests, a load generator, and a Grafana dashboard for the discover metrics and HorizonDB dependencies.
-kind: runnable
+kind: external
+repository: https://github.com/hellices/sample-movielog-horizondb
+ref: v2.6.4
+commit: b6e8f00c85b98ab1277a80fee8e47b3f9ef5168d
+image: ghcr.io/hellices/sample-movielog-horizondb:2.6.4@sha256:29f286bcb3d6bbbe1a5245cad552947f32dc61dba5c9ff2833ca863199198dab
 used_by:
   - index
-publish:
-  - source: grafana/movielog-horizondb-dashboard.json
-    target: downloads/movielog-horizondb-dashboard.json

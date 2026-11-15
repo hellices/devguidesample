@@ -1,0 +1,3 @@
+[submodule "docs/services/azure-horizondb/movielog-graph-vector/samples/movielog-horizondb/source"]
+	path = docs/services/azure-horizondb/movielog-graph-vector/samples/movielog-horizondb/source
+	url = https://github.com/hellices/sample-movielog-horizondb.git
