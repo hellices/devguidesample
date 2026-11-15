@@ -282,6 +282,11 @@ git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
 보며, `refs/heads/<branch>`는 태그와 이름이 같아도 branch로 보고 거부합니다. 같은 코드 레포를 여러 topic이 서로 다른 버전으로 쓰면 각 문서는 자기 topic의 버전을
 따릅니다. 레포 첫 화면이나 릴리스 페이지(`/releases/tag/<ref>`) 링크는 그대로 둘 수 있습니다.
 
+`validate_links.py`는 `git ls-remote`로 코드 레포를 조회해 `ref` 태그가 `commit`을 가리키는지, 태그와 같은
+이름의 branch가 없는지도 확인합니다. GitHub의 `/blob/<name>/` 링크는 같은 이름의 태그와 branch를 구분하지
+않기 때문입니다. 이 검사에는 GitHub 접속이 필요하며, 코드 레포에는 `refs/heads/v*` branch 생성을 막는
+ruleset을 함께 겁니다.
+
 새 버전을 문서에 반영할 때는 다음을 한 PR에서 함께 바꿉니다.
 
 1. 코드 레포에서 `vX.Y.Z` 태그를 올리고 release workflow 요약의 값을 확인합니다.
@@ -303,9 +308,10 @@ Public이어야 합니다.
 
 ### sample 빌드·배포 도구 { #sample-tooling }
 
-runnable sample과 external sample의 코드 레포는 Azure 배포를 `azd`, 컨테이너 이미지를 Azure
-Container Registry 서버 빌드, Java 빌드를 Gradle Kotlin DSL로 통일합니다. external sample의 릴리스
-이미지는 코드 레포의 release workflow가 GHCR에 게시하고, 배포 때 `az acr import`로 ACR에 복사합니다. 새로 추가하거나
+runnable sample과 external sample의 코드 레포는 Azure 배포를 `azd`, Java 빌드를 Gradle Kotlin DSL로
+통일합니다. 컨테이너 이미지는 runnable sample이면 Azure Container Registry 서버 빌드로 만들고, external
+sample이면 코드 레포의 release workflow가 GHCR에 게시한 이미지를 배포 때 `az acr import`로 digest를 지정해
+ACR에 복사합니다. external sample의 이미지는 ACR에서 다시 빌드하지 않습니다. 새로 추가하거나
 배포 방식을 바꾸는 sample에 적용하며, 기존 sample은 해당 sample을 고칠 때
 맞춥니다.
 
@@ -313,7 +319,8 @@ Container Registry 서버 빌드, Java 빌드를 Gradle Kotlin DSL로 통일합�
 |---|---|---|
 | Azure 리소스와 앱 배포 | `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`으로 만들고 `azd down`으로 정리합니다. | README에 나열한 단독 `az` 생성 명령 |
 | azd 밖의 단계 | Kubernetes manifest 적용, 데이터 적재, 미리 보기 API 호출은 `azure.yaml` hook(`preprovision`, `postprovision`, `postdeploy` 등) 스크립트로 실행합니다. | 수동으로 이어 붙이는 명령 순서 |
-| 컨테이너 이미지 | azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는 `az acr build --platform linux/amd64`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드 |
+| runnable 컨테이너 이미지 | azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는 `az acr build --platform linux/amd64`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드 |
+| external 컨테이너 이미지 | hook에서 `az acr import`로 GHCR 릴리스 이미지를 digest로 지정해 ACR에 복사합니다. | 같은 코드를 ACR이나 로컬에서 다시 빌드한 이미지 |
 | Java 프로젝트 | `build.gradle.kts`, `settings.gradle.kts`와 Gradle Wrapper(`gradlew`)를 커밋합니다. | Maven `pom.xml`, Groovy `build.gradle` |
 
 - `docker.remoteBuild: true`는 ACR 원격 빌드가 실패하면 로컬 Docker나 Podman으로

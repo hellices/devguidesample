@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+import os
 from html.parser import HTMLParser
 from pathlib import Path
+import subprocess
 import sys
 from urllib.parse import unquote, urlparse
 
@@ -76,6 +79,49 @@ def _external_ref_errors(
     return [f"{relative}: link must use a pinned ref ({', '.join(expected)}) of {repository}: {target}"]
 
 
+RemoteRefs = Callable[[str, str], "dict[str, str] | None"]
+
+
+def _ls_remote(repository: str, ref: str) -> dict[str, str] | None:
+    """Ref name -> commit for the release tag (and its peeled commit) and a branch of the same name, or None
+    when the remote cannot be queried."""
+    command = ["git", "ls-remote", f"{repository}.git", f"refs/tags/{ref}", f"refs/tags/{ref}^{{}}", f"refs/heads/{ref}"]
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, check=True, timeout=60, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return {name: sha for sha, _, name in (line.partition("\t") for line in result.stdout.splitlines() if line)}
+
+
+def _release_errors(samples: Iterable, remote_refs: RemoteRefs) -> list[str]:
+    """The pinned release tag of each external sample resolves to its pinned commit, and no branch shares the tag
+    name: GitHub /blob/<name>/ links cannot tell a tag from a branch of the same name."""
+    errors: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for sample in samples:
+        if sample.kind != "external" or not sample.repository or not sample.ref:
+            continue
+        key = (sample.repository.lower(), sample.ref)
+        if key in seen:
+            continue
+        seen.add(key)
+        label = f"{sample.relative_path.as_posix()}: {sample.repository} {sample.ref}"
+        refs = remote_refs(sample.repository, sample.ref)
+        if refs is None:
+            errors.append(f"{label}: cannot query the repository to verify the release tag")
+            continue
+        tagged = refs.get(f"refs/tags/{sample.ref}^{{}}") or refs.get(f"refs/tags/{sample.ref}")
+        if tagged is None:
+            errors.append(f"{label}: release tag does not exist")
+        elif tagged != sample.commit:
+            errors.append(f"{label}: release tag points at {tagged} but sample.yml commit is {sample.commit}")
+        if f"refs/heads/{sample.ref}" in refs:
+            errors.append(f"{label}: a branch has the same name as the release tag; delete it so links stay pinned")
+    return errors
+
+
 @dataclass(frozen=True)
 class _RenderedLink:
     target: str
@@ -126,7 +172,8 @@ def _resolve_target(
     return resolved
 
 
-def validate_repository(repo_root: Path | str) -> ValidationResult:
+def validate_repository(repo_root: Path | str, *, remote_refs: RemoteRefs | None = None) -> ValidationResult:
+    """remote_refs, when given, also checks each external sample's release tag against its repository."""
     root = Path(repo_root)
     docs_dir = root / "docs"
     taxonomy = load_taxonomy(root / "docs-taxonomy.yml")
@@ -143,6 +190,8 @@ def validate_repository(repo_root: Path | str) -> ValidationResult:
         return ValidationResult(count, [str(error)])
     published_targets = {(docs_dir / target).resolve() for target in catalog.published_assets}
     all_pins = _pins(sample for topic in catalog.topics.values() for sample in topic.samples)
+    if remote_refs is not None:
+        errors.extend(_release_errors((s for topic in catalog.topics.values() for s in topic.samples), remote_refs))
     for document in catalog.documents:
         count += 1
         page = document.path
@@ -171,7 +220,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     args = parser.parse_args()
-    result = validate_repository(args.repo_root)
+    result = validate_repository(args.repo_root, remote_refs=_ls_remote)
     if result.errors:
         print("\n".join(result.errors))
         return 1

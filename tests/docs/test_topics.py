@@ -15,6 +15,7 @@ from scripts.docs.content import (
     load_taxonomy,
     validate_document,
 )
+from scripts.docs import topics
 from scripts.docs.topics import build_topic_catalog
 
 
@@ -1264,6 +1265,7 @@ def test_external_sample_is_a_pinned_pointer_without_readme(tmp_path: Path, taxo
         ("commit", "abc123", "commit must be the full 40-character commit SHA"),
         ("repository", "https://gitlab.com/example-org/movielog", "repository must be a https://github.com"),
         ("repository", "https://github.com/example-org/movielog/tree/v2.6.4", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example-org/movielog.git", "repository must be a https://github.com"),
         ("image", "ghcr.io/example-org/movielog:2.6.4", "image must be a ghcr.io"),
         ("publish", [{"source": "a.svg", "target": "images/a.svg"}], "external sample must not publish files"),
     ],
@@ -1303,16 +1305,18 @@ def test_external_sample_must_not_carry_code(tmp_path: Path, taxonomy: dict) -> 
         build_topic_catalog(docs_dir, taxonomy)
 
 
-def test_only_external_samples_declare_repository_fields(tmp_path: Path, taxonomy: dict) -> None:
+@pytest.mark.parametrize("field", ["repository", "ref", "commit", "image"])
+def test_only_external_samples_declare_repository_fields(tmp_path: Path, taxonomy: dict, field: str) -> None:
     docs_dir = tmp_path / "docs"
     write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    runnable = {"title": "Lab", "description": "Runnable lab.", "kind": "runnable", "used_by": ["index"]}
     write_sample(
         docs_dir,
         "services/azure-monitor/agent-topic/samples/lab",
-        {**EXTERNAL_MANIFEST, "kind": "runnable"},
+        {**runnable, field: EXTERNAL_MANIFEST[field]},
     )
 
-    with pytest.raises(DocumentFormatError, match=re.escape("repository is only allowed for kind external")):
+    with pytest.raises(DocumentFormatError, match=re.escape(f"{field} is only allowed for kind external")):
         build_topic_catalog(docs_dir, taxonomy)
 
 
@@ -1364,3 +1368,14 @@ def test_submodules_elsewhere_under_services_are_rejected(tmp_path: Path, taxono
     ):
         build_topic_catalog(docs_dir, taxonomy)
 
+
+def test_git_failure_inside_a_checkout_fails_the_submodule_check(
+    tmp_path: Path, taxonomy: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs_dir = submodule_repository(tmp_path, commit="c" * 40, url="https://github.com/example-org/movielog.git", path=SOURCE)
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
+    monkeypatch.setattr(topics, "_git", lambda *args: None)
+
+    with pytest.raises(DocumentFormatError, match=re.escape("cannot verify sample submodules")):
+        build_topic_catalog(docs_dir, taxonomy)

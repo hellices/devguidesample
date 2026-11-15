@@ -17,6 +17,8 @@ official_sources:
     url: https://learn.microsoft.com/azure/horizondb/ai/vector-index-diskann
   - title: Optimize performance when using pgvector for Azure HorizonDB (Preview)
     url: https://learn.microsoft.com/azure/horizondb/ai/optimize-pgvector-performance
+  - title: pgvector README — Iterative Index Scans (v0.8.0)
+    url: https://github.com/pgvector/pgvector/blob/v0.8.0/README.md#iterative-index-scans
   - title: Graph database capabilities with Apache AGE extension for Azure HorizonDB (Preview)
     url: https://learn.microsoft.com/azure/horizondb/graph/age-overview
   - title: Considerations for using extensions and modules in Azure HorizonDB (Preview)
@@ -136,8 +138,12 @@ SSD에 둔 채 높은 recall과 낮은 지연을 유지하도록 설계됐고, �
 ## 필터 결합 검색: DiskANN advanced filtering { #advanced-filtering }
 
 DiskANN의 advanced filtering(미리 보기)은 `WHERE` 조건을 index 탐색 안에서 평가해, 조건을
-통과한 행으로 `LIMIT`을 채울 때까지 그래프를 계속 탐색합니다. IVFFlat·HNSW는 상위 K개를 먼저
-찾은 뒤 거르므로 조건이 선택적일수록 결과가 모자라고 recall이 떨어집니다.
+통과한 행으로 `LIMIT`을 채울 때까지 그래프를 계속 탐색합니다. IVFFlat·HNSW는 기본값으로 상위 K개를 먼저
+찾은 뒤 거르므로 조건이 선택적일수록 결과가 모자라고 recall이 떨어집니다. pgvector 0.8.0부터는
+`hnsw.iterative_scan`(`strict_order`·`relaxed_order`)과 `ivfflat.iterative_scan`(`relaxed_order`)을 켜면
+결과가 찰 때까지 index를 더 읽습니다. 끝나는 기준은 `hnsw.max_scan_tuples`와 `ivfflat.max_probes`이며,
+`relaxed_order`는 거리 순서가 조금 어긋날 수 있습니다. 실습 cluster(`vector` 0.8.7)에서는 두 설정이 있었고
+기본값은 `off`였습니다.
 
 ```sql
 SELECT id, category, price

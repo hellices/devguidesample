@@ -19,7 +19,8 @@ SAMPLE_KINDS = frozenset(("runnable", "artifact", "external"))
 # An external sample points at a public GitHub repository: a SemVer release tag for readers and links, and the full
 # commit SHA that the package's git submodule ("source") is pinned to. Branch names are rejected because the
 # referenced code could change under the document.
-EXTERNAL_REPOSITORY = re.compile(r"https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]+")
+# The repository URL is compared with the .gitmodules URL without its ".git" suffix, so the manifest must not carry one.
+EXTERNAL_REPOSITORY = re.compile(r"https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]+(?<!\.git)")
 EXTERNAL_REF = re.compile(r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?")
 EXTERNAL_COMMIT = re.compile(r"[0-9a-f]{40}")
 EXTERNAL_IMAGE = re.compile(r"ghcr\.io/[a-z0-9-]+/[a-z0-9._/-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}")
@@ -412,7 +413,8 @@ def _git(docs_root: Path, *args: str) -> str | None:
 
 def _submodule_errors(docs_root: Path, samples: Iterable[SampleAsset]) -> list[str]:
     """Each external sample's "source" is a submodule of its repository pinned to its commit, and no other
-    submodule exists under docs/services. Skipped outside a git checkout (for example a source archive)."""
+    submodule exists under docs/services. Skipped outside a git checkout (for example a source archive); inside a
+    checkout a git failure is an error."""
     samples = [sample for sample in samples if sample.kind == "external"]
     checkout = next((path for path in (docs_root.resolve(), *docs_root.resolve().parents) if (path / ".git").exists()), None)
     # Without external samples or a .gitmodules file there is nothing to check; skip the git calls.
@@ -421,7 +423,8 @@ def _submodule_errors(docs_root: Path, samples: Iterable[SampleAsset]) -> list[s
     top = _git(docs_root, "rev-parse", "--show-toplevel")
     listing = _git(docs_root, "ls-files", "-s", "-z", "--full-name", "--", "services")
     if top is None or listing is None:
-        return []
+        # Inside a checkout a failing git call must not pass the submodule pins unchecked.
+        return [f"{checkout}: cannot verify sample submodules because git rev-parse or git ls-files failed"]
     top_path = Path(top.strip())
     docs_prefix = PurePosixPath(docs_root.resolve().relative_to(top_path.resolve()).as_posix())
     gitlinks: dict[PurePosixPath, str] = {}

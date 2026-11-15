@@ -167,7 +167,8 @@ def _sample_cards(document_path: PurePosixPath, catalog: TopicCatalog, config: M
                 f'<a href="{escape(sample.release_url, quote=True)}">릴리스</a>',
             ]
             if sample.image:
-                links.append(f'<code>{escape(sample.image.split("@")[0])}</code>')
+                # The full reference keeps the digest, so a copied value pulls exactly the pinned image.
+                links.append(f"<code>{escape(sample.image)}</code>")
             cards.append(f'<p class="dg-sample-links">{" · ".join(links)}</p>')
         cards.append("</article>")
         cards.append("")
