@@ -180,13 +180,20 @@ submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `sou
 
 #### 코드 레포 구성
 
-코드 레포는 문서 레포와 같은 owner의 공개 레포이며 이름은 앱 이름을 소문자 kebab-case로
-씁니다. 저장소 루트의
+코드 레포는 문서 레포와 같은 owner의 공개 레포입니다. 레포 목록과 검색 결과에서 문서용 예제
+코드임이 바로 드러나도록 다음을 지킵니다.
+
+- 이름은 `sample-<app>`이며 `<app>`은 앱과 변형을 소문자 kebab-case로 씁니다. 예:
+  [`sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb).
+- 레포 설명은 `[Sample]`로 시작하고 운영용이 아니라는 점을 적으며, website에 문서 주소를 넣습니다.
+- `sample` topic을 붙이고 README 첫머리에 샘플 레포라는 안내와 문서 링크를 둡니다.
+
+저장소 루트의
 [`.github/templates/external-sample-repo/`](https://github.com/hellices/devguidesample/tree/main/.github/templates/external-sample-repo)를
 복사해 시작합니다.
 
 ```text
-<owner>/<app>/
+<owner>/sample-<app>/
 ├── README.md                     # 목적, 문서 링크, azd up·down, 릴리스 절차
 ├── src/, build.gradle.kts, settings.gradle.kts, gradlew
 ├── Dockerfile
@@ -201,12 +208,21 @@ submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `sou
 - [sample 빌드·배포 도구](#sample-tooling) 기준(azd, Gradle Kotlin DSL)은 코드 레포에도 그대로
   적용합니다.
 - 릴리스 이미지는 GitHub 호스팅 runner의 release workflow가 빌드해
-  `ghcr.io/<owner>/<app>:<version>`으로 게시하고 build provenance를 남깁니다. workflow 요약에
+  `ghcr.io/<owner>/sample-<app>:<version>`으로 게시하고 build provenance를 남깁니다. workflow 요약에
   문서가 고정할 `ref`, `commit`, `image` 값이 출력됩니다.
-- 처음 게시한 GHCR 패키지는 레포가 공개여도 private입니다. 첫 릴리스 뒤 패키지 설정에서
-  Public으로 바꾸고 로그인하지 않은 상태에서 pull 토큰을 받을 수 있는지 확인합니다. Public
-  패키지는 익명으로 pull할 수 있고, 한 번 Public으로 바꾸면 private으로 되돌릴 수 없습니다. 근거:
+- GitHub 문서는 처음 게시한 패키지의 기본 공개 범위를 private으로 설명합니다. 2026-11-15
+  `sample-movielog-horizondb`의 첫 릴리스에서는 공개 레포의 release workflow가 게시한 패키지를
+  게시 직후 로그인 없이 pull할 수 있었습니다. 그러므로 첫 릴리스 뒤 로그인하지 않은 상태에서
+  manifest를 받아 보고, 실패하면 패키지 설정에서 Public으로 바꿉니다. Public 패키지는 익명으로
+  pull할 수 있습니다. 근거:
   [Configuring a package's access control and visibility](https://docs.github.com/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+
+  ```bash
+  REPO=<owner>/sample-<app>
+  TOKEN="$(curl -fsS "https://ghcr.io/token?scope=repository:$REPO:pull" | jq -r .token)"
+  curl -fsS -o /dev/null -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.oci.image.index.v1+json" "https://ghcr.io/v2/$REPO/manifests/<version>"
+  ```
 - 공개 안전성 기준은 코드 레포에도 같습니다. 이 레포의 공개 안전성 검사는 submodule 안을
   보지 않으므로 코드 레포에서 GitHub secret scanning과 push protection을 켭니다.
 
@@ -222,10 +238,10 @@ docs/services/<service>/<topic>/samples/<sample>/
 title: MovieLog app
 description: Spring Boot app for the topic, released as a container image.
 kind: external
-repository: https://github.com/<owner>/<app>
+repository: https://github.com/<owner>/sample-<app>
 ref: v2.6.4                                   # SemVer 릴리스 태그
 commit: <40자리 commit SHA>                    # 태그가 가리키는 commit, submodule 위치
-image: ghcr.io/<owner>/<app>:2.6.4@sha256:<digest>   # 선택
+image: ghcr.io/<owner>/sample-<app>:2.6.4@sha256:<digest>   # 선택
 used_by:
   - index
 ```
@@ -240,7 +256,7 @@ used_by:
 처음 연결할 때:
 
 ```bash
-git submodule add https://github.com/<owner>/<app>.git \
+git submodule add https://github.com/<owner>/sample-<app>.git \
   docs/services/<service>/<topic>/samples/<sample>/source
 git -C docs/services/<service>/<topic>/samples/<sample>/source checkout v2.6.4
 git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
@@ -251,10 +267,10 @@ git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
 문서 본문은 핵심 코드를 짧게 발췌하고, 원문은 고정한 버전의 permalink로 연결합니다.
 
 ```markdown
-[`VectorSearchRepository.search`](https://github.com/<owner>/<app>/blob/v2.6.4/src/main/java/.../VectorSearchRepository.java#L40-L72)
+[`VectorSearchRepository.search`](https://github.com/<owner>/sample-<app>/blob/v2.6.4/src/main/java/.../VectorSearchRepository.java#L40-L72)
 ```
 
-`github.com/<owner>/<app>/(blob|tree|raw|commit)/<ref>`와 `raw.githubusercontent.com` 링크는
+`github.com/<owner>/sample-<app>/(blob|tree|raw|commit)/<ref>`와 `raw.githubusercontent.com` 링크는
 `sample.yml`의 `ref` 또는 `commit`만 쓸 수 있으며 `main` 같은 branch 링크는 링크 검사에서
 거부됩니다. `refs/tags/<tag>` 형식, `http`·프로토콜 상대 주소와 호스트 대소문자는 같은 링크로
 보며, `refs/heads/<branch>`는 태그와 이름이 같아도 branch로 보고 거부합니다. 같은 코드 레포를 여러 topic이 서로 다른 버전으로 쓰면 각 문서는 자기 topic의 버전을

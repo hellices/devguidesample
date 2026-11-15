@@ -49,7 +49,8 @@
   `ref`, 40자리 `commit`, 선택 `image`)과 그 commit에 고정한 git submodule `source`만
   두며 `README.md`와 코드를 두지 않는다. 코드 레포는
   `.github/templates/external-sample-repo/`를 복사해 만들고, release workflow가 GHCR에
-  이미지를 게시한다. 상세 기준은
+  이미지를 게시한다. 코드 레포 이름은 `sample-<app>`이며 설명은 `[Sample]`로 시작하고
+  `sample` topic과 README 첫머리의 샘플 레포 안내로 예제 코드임을 드러낸다. 상세 기준은
   [외부 코드 레포 sample](docs/contributing/index.md#external-sample)을 따른다.
 - 문서 본문의 코드 레포 링크(`blob`, `tree`, `raw`, `commit`)는 `sample.yml`의 `ref`
   또는 `commit`으로 고정하고 branch 링크를 쓰지 않는다. 버전을 올릴 때는 submodule,
