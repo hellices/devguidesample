@@ -31,7 +31,7 @@ _GITHUB_REF_KINDS = frozenset(("blob", "tree", "raw", "commit"))
 def _github_ref(target: str) -> tuple[str, str] | None:
     """(owner/repo in lower case, ref) of a GitHub link that names a ref, or None. Accepts http, https and
     protocol-relative URLs with any host case, github.com/<owner>/<repo>/(blob|tree|raw|commit)/<ref> and
-    raw.githubusercontent.com/<owner>/<repo>/<ref>, where <ref> may be spelled refs/tags/<tag> or refs/heads/<branch>."""
+    raw.githubusercontent.com/<owner>/<repo>/<ref>, where a tag may be spelled refs/tags/<tag>."""
     parsed = urlparse(target.removeprefix("<").removesuffix(">"))
     if parsed.scheme not in {"", "http", "https"} or not parsed.netloc:
         return None
@@ -43,8 +43,11 @@ def _github_ref(target: str) -> tuple[str, str] | None:
         repository, rest = parts[:2], parts[2:]
     else:
         return None
-    if len(rest) >= 3 and rest[0] == "refs" and rest[1] in {"tags", "heads"}:
-        rest = rest[2:]
+    if len(rest) >= 3 and rest[0] == "refs" and rest[1] == "tags":
+        return "/".join(repository).lower(), rest[2]
+    if len(rest) >= 3 and rest[0] == "refs":
+        # refs/heads/<name> is a branch even when it is named like the pinned tag, so it never matches a pin.
+        return "/".join(repository).lower(), "/".join(rest[:3])
     return "/".join(repository).lower(), rest[0]
 
 
