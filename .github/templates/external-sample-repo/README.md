@@ -31,7 +31,7 @@ azd down --purge
 
 ## 릴리스
 
-1. 변경을 `main`에 merge합니다.
+1. 변경을 PR로 `main`에 merge합니다. 기본 브랜치 ruleset이 PR마다 CI와 Copilot 코드 리뷰를 요구합니다.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`로 태그를 올립니다.
 3. 첫 릴리스라면 로그인하지 않은 상태에서 이미지 manifest를 받을 수 있는지 확인하고, 실패하면 GHCR 패키지
    설정에서 Public으로 바꿉니다. 확인 명령은 문서 레포 기여 가이드의 외부 코드 레포 sample 절에 있습니다.

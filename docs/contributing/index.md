@@ -207,6 +207,12 @@ submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `sou
 
 - [sample 빌드·배포 도구](#sample-tooling) 기준(azd, Gradle Kotlin DSL)은 코드 레포에도 그대로
   적용합니다.
+- 코드 레포의 모든 코드는 PR로 들어가며 Copilot 코드 리뷰를 거칩니다. 레포를 만들면 README만 둔 첫 커밋
+  뒤에 기본 브랜치 ruleset을 먼저 겁니다: PR 필수, CI `test` 통과, **Automatically request Copilot code
+  review**(`Review new pushes` 포함), 강제 push·삭제 금지. 그다음 앱 코드를 PR로 올려 전체 리뷰를 받습니다.
+  근거: [Configuring automatic code review by GitHub Copilot](https://docs.github.com/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review).
+  이미 리뷰 없이 들어간 코드는 빈 커밋 base 브랜치를 향한 리뷰 전용 PR로 전체 diff를 리뷰받고, 지적은 별도 PR로
+  반영한 뒤 리뷰 전용 PR은 닫습니다.
 - 릴리스 이미지는 GitHub 호스팅 runner의 release workflow가 빌드해
   `ghcr.io/<owner>/sample-<app>:<version>`으로 게시하고 build provenance를 남깁니다. workflow 요약에
   문서가 고정할 `ref`, `commit`, `image` 값이 출력됩니다.
