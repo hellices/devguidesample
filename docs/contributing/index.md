@@ -256,7 +256,9 @@ git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
 
 `github.com/<owner>/<app>/(blob|tree|raw|commit)/<ref>`와 `raw.githubusercontent.com` 링크는
 `sample.yml`의 `ref` 또는 `commit`만 쓸 수 있으며 `main` 같은 branch 링크는 링크 검사에서
-거부됩니다. 레포 첫 화면이나 릴리스 페이지(`/releases/tag/<ref>`) 링크는 그대로 둘 수 있습니다.
+거부됩니다. `refs/tags/<tag>` 형식, `http`·프로토콜 상대 주소와 호스트 대소문자는 같은 링크로
+봅니다. 같은 코드 레포를 여러 topic이 서로 다른 버전으로 쓰면 각 문서는 자기 topic의 버전을
+따릅니다. 레포 첫 화면이나 릴리스 페이지(`/releases/tag/<ref>`) 링크는 그대로 둘 수 있습니다.
 
 새 버전을 문서에 반영할 때는 다음을 한 PR에서 함께 바꿉니다.
 

@@ -6,7 +6,6 @@ import argparse
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-import re
 import sys
 from urllib.parse import unquote, urlparse
 
@@ -26,11 +25,27 @@ from scripts.docs.content import (
 from scripts.docs.topics import build_topic_catalog
 
 
-# github.com/<owner>/<repo>/(blob|tree|raw|commit)/<ref>/... and raw.githubusercontent.com/<owner>/<repo>/<ref>/...
-_GITHUB_REF_LINK = re.compile(
-    r"https://github\.com/(?P<repo>[^/]+/[^/]+)/(?:blob|tree|raw|commit)/(?P<ref>[^/?#]+)"
-    r"|https://raw\.githubusercontent\.com/(?P<raw_repo>[^/]+/[^/]+)/(?P<raw_ref>[^/?#]+)"
-)
+_GITHUB_REF_KINDS = frozenset(("blob", "tree", "raw", "commit"))
+
+
+def _github_ref(target: str) -> tuple[str, str] | None:
+    """(owner/repo in lower case, ref) of a GitHub link that names a ref, or None. Accepts http, https and
+    protocol-relative URLs with any host case, github.com/<owner>/<repo>/(blob|tree|raw|commit)/<ref> and
+    raw.githubusercontent.com/<owner>/<repo>/<ref>, where <ref> may be spelled refs/tags/<tag> or refs/heads/<branch>."""
+    parsed = urlparse(target.removeprefix("<").removesuffix(">"))
+    if parsed.scheme not in {"", "http", "https"} or not parsed.netloc:
+        return None
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    parts = [unquote(part) for part in parsed.path.split("/") if part]
+    if host == "github.com" and len(parts) >= 4 and parts[2] in _GITHUB_REF_KINDS:
+        repository, rest = parts[:2], parts[3:]
+    elif host == "raw.githubusercontent.com" and len(parts) >= 3:
+        repository, rest = parts[:2], parts[2:]
+    else:
+        return None
+    if len(rest) >= 3 and rest[0] == "refs" and rest[1] in {"tags", "heads"}:
+        rest = rest[2:]
+    return "/".join(repository).lower(), rest[0]
 
 
 def _pins(samples) -> dict[str, list[str]]:
@@ -48,11 +63,10 @@ def _external_ref_errors(
 ) -> list[str]:
     """A link into an external sample repository must use a release tag or commit that a sample.yml pins. The
     document's own topic decides when it has a sample of that repository, so each topic keeps its own version."""
-    match = _GITHUB_REF_LINK.match(target.removeprefix("<").removesuffix(">"))
-    if match is None:
+    link = _github_ref(target)
+    if link is None:
         return []
-    repository = (match.group("repo") or match.group("raw_repo")).lower()
-    ref = match.group("ref") or match.group("raw_ref")
+    repository, ref = link
     expected = topic_pins.get(repository) or all_pins.get(repository)
     if expected is None or ref in expected:
         return []

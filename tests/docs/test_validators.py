@@ -540,7 +540,13 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         + "\n[repository](https://github.com/example-org/movielog)"
         + "\n[other repository](https://github.com/example-org/other/blob/main/README.md)"
         + "\n[branch](https://github.com/example-org/movielog/blob/main/src/App.java)"
-        + "\n![old](https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png)\n"
+        + "\n![old](https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png)"
+        + "\n![tag ref](https://raw.githubusercontent.com/example-org/movielog/refs/tags/v2.6.4/docs/diagram.png)"
+        + "\n[raw tag ref](https://github.com/example-org/movielog/raw/refs/tags/v2.6.4/docs/diagram.png)"
+        + "\n[relative scheme](//github.com/example-org/movielog/blob/main/a.java)"
+        + "\n[host case](https://GitHub.com/Example-Org/movielog/blob/main/b.java)"
+        + "\n[http](http://www.github.com/example-org/movielog/tree/main)"
+        + "\n[head ref](https://raw.githubusercontent.com/example-org/movielog/refs/heads/main/c.txt)\n"
     )
 
     errors = validate_links.validate_repository(root).errors
@@ -551,6 +557,11 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         "https://github.com/example-org/movielog/blob/main/src/App.java",
         f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
         "https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: //github.com/example-org/movielog/blob/main/a.java",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: https://GitHub.com/Example-Org/movielog/blob/main/b.java",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: http://www.github.com/example-org/movielog/tree/main",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://raw.githubusercontent.com/example-org/movielog/refs/heads/main/c.txt",
     ]
 
 
