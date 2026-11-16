@@ -60,7 +60,8 @@ jobs:
           {
             echo '```yaml'
             echo "ref: ${GITHUB_REF_NAME}"
-            echo "commit: ${GITHUB_SHA}"
+            # The checked-out HEAD is the commit the tag points at, also for an annotated tag.
+            echo "commit: $(git rev-parse HEAD)"
             echo "image: ghcr.io/${GITHUB_REPOSITORY}:${VERSION}@${DIGEST}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

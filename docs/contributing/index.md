@@ -287,8 +287,10 @@ git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
 
 `validate_links.py`는 `git ls-remote`로 코드 레포를 조회해 `ref` 태그가 `commit`을 가리키는지, 태그와 같은
 이름의 branch가 없는지도 확인합니다. GitHub의 `/blob/<name>/` 링크는 같은 이름의 태그와 branch를 구분하지
-않기 때문입니다. 이 검사에는 GitHub 접속이 필요하며, 코드 레포에는 `refs/heads/v*` branch 생성을 막는
-ruleset을 함께 겁니다. 검사를 통과한 `commit`으로 sample 카드의 코드 링크(`/tree/<commit>`)를 만들고, 릴리스
+않기 때문입니다. 이 검사에는 GitHub 접속이 필요하며, 코드 레포에는 `refs/heads/v*` branch 생성과 `refs/tags/v*`
+태그의 갱신·삭제를 막는 ruleset을 함께 겁니다. 그래도 태그가 다른 commit으로 옮겨지면 이 검사가 `sample.yml`의
+`commit`과 달라진 것을 오류로 알리므로, 태그 permalink는 문서 PR에서 고정한 commit과 같은 코드를 가리킵니다. 검사를
+통과한 `commit`으로 sample 카드의 코드 링크(`/tree/<commit>`)를 만들고, 릴리스
 링크는 `ref`를 씁니다.
 
 새 버전을 문서에 반영할 때는 다음을 한 PR에서 함께 바꿉니다.

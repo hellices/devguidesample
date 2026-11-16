@@ -554,7 +554,8 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         + "\n[backslash dot segment](https://github.com/example-org/movielog/blob/v2.6.4/..\\main/g.md)"
         + "\n[trailing-dot host](https://github.com./example-org/movielog/blob/main/h.md)"
         + "\n[trailing-dot www host](https://www.github.com./example-org/movielog/blob/main/i.md)"
-        + "\n[backslash after host](https://github.com\\example-org/movielog/blob/main/j.md)\n"
+        + "\n[backslash after host](https://github.com\\example-org/movielog/blob/main/j.md)"
+        + '\n<a href="https://[github.com/example-org/movielog/blob/main/k.md">unclosed bracket</a>\n'
     )
 
     errors = validate_links.validate_repository(root).errors
@@ -583,6 +584,8 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         "https://www.github.com./example-org/movielog/blob/main/i.md",
         f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
         "https://github.com\\example-org/movielog/blob/main/j.md",
+        "docs/services/aks/network-diagnosis/index.md: link target is not a valid URL: "
+        "https://[github.com/example-org/movielog/blob/main/k.md",
     ]
 
 

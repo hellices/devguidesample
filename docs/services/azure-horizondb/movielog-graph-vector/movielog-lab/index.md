@@ -255,7 +255,7 @@ FROM knn ORDER BY least(a, b), greatest(a, b), score DESC;
 Spring 데이터 접근 방식을 씁니다. 연결을 만들 때 `SET search_path = public, ag_catalog`를
 실행해 JPA는 `public`을 그대로 쓰고 AGE의 `cypher()` 함수도 찾게 합니다.
 
-![MovieLog 앱의 HorizonDB 접근 sequence. ① 의미 검색에서 브라우저가 GET /discover?q=를 보내면 MovieLog 앱의 BgeEmbeddingClient가 클러스터 내부의 vLLM에 POST /v1/embeddings(bge-m3-ko)를 요청해 float[1024]를 받고, VectorSearchRepository가 JdbcClient로 movie_docs와 movies를 조인해 <=> 순위와 문서 머리 키워드 순위를 RRF로 합친 영화 12편과 코사인 유사도를 받아 HTML 결과 목록과 그래프 URL을 돌려줌. ② 관계 그래프에서 graph.js가 GET /api/discover/graph?ids=를 보내면 MovieGraphRepository가 JdbcTemplate으로 UNWIND ids MATCH (a:Movie {tmdb_id})-[r]-(b) Cypher를 실행해 vertex·edge 행을 받고 JSON nodes·edges를 돌려줘 Cytoscape.js가 그림. ③ 다른 화면에서 리뷰·회원·영화는 Spring Data JPA가 public.*에 Hibernate SQL을 보내고, 상세 화면의 비슷한 영화는 임베딩 호출 없이 embedding_bge와 <=>로 6편을 조회함](../images/horizondb-app-access.svg)
+![MovieLog 앱의 HorizonDB 접근 sequence. ① 의미 검색에서 브라우저가 GET /discover?q=를 보내면 MovieLog 앱의 BgeEmbeddingClient가 클러스터 내부의 vLLM에 POST /v1/embeddings(bge-m3-ko)를 요청해 float[1024]를 받고, VectorSearchRepository가 JdbcClient로 movie_docs와 movies를 조인해 <=> 순위와 문서 머리 키워드 순위를 RRF로 합친 영화 12편과 코사인 유사도를 받아 HTML 결과 목록과 그래프 URL을 돌려줌. ② 관계 그래프에서 graph.js가 GET /api/discover/graph?ids=를 보내면 MovieGraphRepository가 JdbcTemplate으로 UNWIND [ids] AS t MATCH (a:Movie {tmdb_id: t})-[r]-(b) Cypher를 실행해 vertex·edge 행을 받고 JSON nodes·edges를 돌려줘 Cytoscape.js가 그림. ③ 다른 화면에서 리뷰·회원·영화는 Spring Data JPA가 public.*에 Hibernate SQL을 보내고, 상세 화면의 비슷한 영화는 임베딩 호출 없이 embedding_bge와 <=>로 6편을 조회함](../images/horizondb-app-access.svg)
 
 | 기능 | 앱 클래스 | HorizonDB 접근 | 대상 |
 |---|---|---|---|

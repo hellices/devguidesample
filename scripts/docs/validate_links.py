@@ -165,6 +165,15 @@ class _LinkParser(HTMLParser):
             self.links.append(_RenderedLink(target, alt_text))
 
 
+def _parsable(target: str) -> bool:
+    """False when urllib cannot parse the target, for example an unclosed "[" in the authority."""
+    try:
+        urlparse(target.removeprefix("<").removesuffix(">").replace("\\", "/")).hostname
+    except ValueError:
+        return False
+    return True
+
+
 def _resolve_target(
     page: Path, docs_dir: Path, raw_target: str, *, directory_shorthand: bool = True
 ) -> Path | None:
@@ -221,6 +230,9 @@ def validate_repository(repo_root: Path | str, *, remote_refs: RemoteRefs | None
         for link in parser.links:
             if link.alt_text is not None and not link.alt_text:
                 errors.append(f"{relative}: image alt text is required")
+            if not _parsable(link.target):
+                errors.append(f"{relative}: link target is not a valid URL: {link.target}")
+                continue
             topic = catalog.by_document.get(document.relative_path)
             topic_pins = _pins(topic.samples) if topic is not None else {}
             errors.extend(_external_ref_errors(relative, link.target, topic_pins, all_pins))

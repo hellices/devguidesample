@@ -1456,7 +1456,12 @@ def test_external_sample_source_is_a_submodule_pinned_to_the_commit(
     write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
 
     if expected is None:
-        assert build_topic_catalog(docs_dir, taxonomy).topics
+        sample = build_topic_catalog(docs_dir, taxonomy).samples_by_document[
+            PurePosixPath("services/azure-monitor/agent-topic/index.md")
+        ]
+        assert [(s.kind, s.repository, s.commit) for s in sample] == [
+            ("external", EXTERNAL_MANIFEST["repository"], EXTERNAL_MANIFEST["commit"])
+        ]
     else:
         with pytest.raises(DocumentFormatError, match=re.escape(expected)):
             build_topic_catalog(docs_dir, taxonomy)
