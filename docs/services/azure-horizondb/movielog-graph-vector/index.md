@@ -275,7 +275,8 @@ MovieLog는 그래프를 관계형 테이블에서 다시 만들 수 있는 파�
 GPU 노드 풀은 NVIDIA driver와 device plugin을 설치·관리합니다.
 
 MovieLog는 두 모델의 열을 함께 채우고 API의 `model=openai|bge` 매개변수로 요청마다 고르게 했습니다. 두 경로 모두 같은
-DiskANN 검색과 RRF 결합 흐름에서 동작하므로, 어느 쪽이든 HorizonDB 쪽 구성은 같습니다. 어느 모델을 쓸지는 아래 운영
+벡터 거리 질의와 RRF 결합 흐름을 쓰고 모델별 DiskANN index도 같은 방식으로 두었으므로, 어느 쪽이든 HorizonDB 쪽 구성은
+같습니다(지금 484행에서는 planner가 기본적으로 seq scan을 고릅니다, [벡터 검색](#vector-movielog)). 어느 모델을 쓸지는 아래 운영
 조건을 보고, 서비스 데이터로 별도 검색 품질 평가를 거쳐 정합니다.
 
 | 항목 | Azure OpenAI `text-embedding-3-large` | `dragonkue/BGE-m3-ko` |

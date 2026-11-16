@@ -179,9 +179,11 @@ class _LinkParser(HTMLParser):
 
 
 def _parsable(target: str) -> bool:
-    """False when urllib cannot parse the target, for example an unclosed "[" in the authority."""
+    """False when urllib cannot parse the target, for example an unclosed "[" in the authority or a non-numeric
+    port."""
     try:
-        urlparse(target.removeprefix("<").removesuffix(">").replace("\\", "/")).hostname
+        parsed = urlparse(target.removeprefix("<").removesuffix(">").replace("\\", "/"))
+        parsed.hostname, parsed.port
     except ValueError:
         return False
     return True
