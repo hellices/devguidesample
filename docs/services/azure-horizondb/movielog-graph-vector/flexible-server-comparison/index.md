@@ -27,12 +27,13 @@ topic_order: 3
 
 # Azure HorizonDB와 PostgreSQL Flexible Server 성능 비교: pgbench 쓰기·읽기와 DiskANN 벡터 검색
 
-## 비교 결과: 쓰기 처리량은 HorizonDB 우위, 벡터 검색은 판단 보류 { #summary }
+## 비교 결과: 쓰기·적재는 HorizonDB, 필터 결합 벡터 검색은 Flexible Server 우위 { #summary }
 
-2026-11-15 Korea Central에서 같은 4 vCore 크기의 두 서비스를 같은 클라이언트로 측정했습니다. 쓰기 위주
-TPC-B에서는 HorizonDB의 처리량이 16–24% 높게 관찰됐고 동시 연결이 많을수록 차이가 커졌습니다. 읽기 전용 부하는
-같았습니다. 1,024차원 벡터 20만 건의 DiskANN 검색은 연결당 10개 질의만 실행한 짧은 표본이라 두 서비스의 우열을
-판단하지 않습니다.
+Korea Central에서 같은 4 vCore 크기의 두 서비스를 측정했습니다. pgbench TPC-B·읽기 전용·초기 적재는 2026-11-15에,
+벡터 적재와 검색은 2026-11-16에 두 서비스를 같은 구성으로 새로 만들어 쟀습니다. 쓰기 위주 TPC-B에서는 HorizonDB의
+처리량이 16–24% 높게 관찰됐고 동시 연결이 많을수록 차이가 커졌습니다. 읽기 전용 부하는 같았습니다. 1,024차원 벡터
+20만 건에서 k-NN 검색 지연은 4% 차이로 거의 같았고, 선택도 2% 필터를 붙인 검색은 Flexible Server의 지연이 41%
+짧았습니다.
 
 | 부하 | HorizonDB | Flexible Server | 차이 |
 |---|---|---|---|
@@ -40,16 +41,17 @@ TPC-B에서는 HorizonDB의 처리량이 16–24% 높게 관찰됐고 동시 연
 | TPC-B 쓰기, 64 연결 | 5,115 tps · 12.5 ms | 4,108 tps · 15.6 ms | HorizonDB 처리량 +24% |
 | 읽기 전용(`-S`), 32 연결 | 36,757 tps · 0.87 ms | 36,187 tps · 0.88 ms | 같음 |
 | `pgbench -i -s 100` 초기 적재(1,000만 행) | 9.6초 | 28.3초 | HorizonDB 약 3배 빠름 |
-| 벡터 20만 건 `INSERT ... SELECT` | 19.7초 | 22.3초 | HorizonDB 12% 빠름 |
-| DiskANN index 생성(1.6 GB) | 213초 | 225초 | HorizonDB 5% 빠름 |
-| k-NN 10건, 8 연결(질의 80개) | 349 qps · 23.0 ms | 416 qps · 19.2 ms | 짧은 표본, 판단 보류 |
-| 필터(선택도 2%) + k-NN 10건, 8 연결(질의 80개) | 29 qps · 272 ms | 54 qps · 149 ms | 짧은 표본, 판단 보류 |
+| 벡터 20만 건 `INSERT ... SELECT` | 17.5초 | 23.7초 | HorizonDB 26% 빠름 |
+| DiskANN index 생성(1.6 GB) | 188초 | 248초 | HorizonDB 24% 빠름 |
+| k-NN 10건, 8 연결(120초 × 3회 평균) | 382 qps · 21.0 ms | 398 qps · 20.1 ms | Flexible Server 지연 4% 짧음 |
+| 필터(선택도 2%) + k-NN 10건, 8 연결(120초 × 3회 평균) | 30 qps · 262 ms | 51 qps · 156 ms | Flexible Server 지연 41% 짧음 |
 
-TPC-B 16 연결은 두 번, 나머지는 한 번씩 실행한 결과이며 HorizonDB는 미리 보기입니다. 벡터 검색 두 행은 실행 시간이
-0.2–2.8초에 그쳐 시작 효과가 결과를 좌우할 수 있습니다. 이 크기와 조건에서의 관찰이므로 일반적인 성능 비율로
-해석하지 않습니다.
+TPC-B 16 연결은 두 번, 벡터 검색은 세 번, 나머지는 한 번씩 실행한 결과이며 HorizonDB는 미리 보기입니다. 벡터 검색의
+회차 간 평균 지연 차이는 3% 이내였습니다. 이 크기와 조건에서의 관찰이므로 일반적인 성능 비율로 해석하지 않습니다.
 
-## 측정 환경: 같은 vCore·메모리, 같은 클라이언트 { #environment }
+## 측정 환경: 같은 vCore·메모리, 같은 지역 클라이언트 { #environment }
+
+두 측정일 모두 아래 구성으로 서버를 만들었고, 2026-11-16에 새로 만든 서버의 버전과 메모리 설정도 같았습니다.
 
 | 항목 | Azure HorizonDB | Azure Database for PostgreSQL flexible server |
 |---|---|---|
@@ -57,11 +59,15 @@ TPC-B 16 연결은 두 번, 나머지는 한 번씩 실행한 결과이며 Horiz
 | compute | pool 1개, Intel 1세대 4 vCore, node 1개, HA 없음 | Memory Optimized `Standard_E4ds_v5`(4 vCore, 32 GiB), HA 없음 |
 | 메모리 | vCore당 8 GB(32 GB), `shared_buffers` 19,297 MB | 32 GiB, `shared_buffers` 8 GB |
 | 저장소 | WAL 전용 서비스와 data 저장 fleet, 크기·IOPS 설정 없음 | Premium SSD 512 GiB(프로비저닝 2,300 IOPS, burst 3,500) |
-| 벡터 확장 | `vector` 0.8.7, `pg_diskann` 0.7.6 | `vector`, `pg_diskann` 0.6.6 |
+| 벡터 확장 | `vector` 0.8.7, `pg_diskann` 0.7.6 | `vector` 0.8.7, `pg_diskann` 0.6.6 |
 | 접속 | public endpoint, TLS | public access, TLS |
 
-클라이언트는 같은 지역 AKS의 `postgres:17` Pod(1 vCPU 요청) 하나이며, `pgbench` 17.12로 두 서버에 차례로 부하를
-보냈습니다. 측정하는 동안 MovieLog의 부하 생성기는 멈췄고, 두 서버 모두 연결 풀러 없이 직접 접속했습니다.
+클라이언트는 모두 `pgbench` 17.12이며 두 서버 모두 연결 풀러 없이 직접 접속했습니다.
+
+- **pgbench TPC-B·읽기 전용(2026-11-15)** — 같은 지역 AKS의 `postgres:17` Pod(1 vCPU 요청) 하나에서 두 서버에
+  차례로 부하를 보냈고, 측정하는 동안 MovieLog의 부하 생성기는 멈췄습니다.
+- **벡터 적재·검색(2026-11-16)** — 같은 지역 `Standard_D4s_v5` VM의 `postgres:17` 컨테이너에서 두 서버에
+  번갈아 부하를 보냈습니다. 이 서버들에는 측정 외 부하가 없었습니다.
 
 ## 쓰기 처리량: WAL만 쓰는 저장 구조 { #write }
 
@@ -83,22 +89,28 @@ Flexible Server는 Linux VM 안의 container에서 엔진이 돌고, data 파일
 ## 벡터 적재와 검색: 1,024차원 20만 건과 DiskANN { #vector }
 
 임의 값으로 만든 1,024차원 벡터 20만 건과 범주 열(`cat`, 50개 값)을 같은 SQL로 넣고 DiskANN 코사인 index를
-만들었습니다. 질의 벡터는 테이블의 임의 행을 씁니다.
+만들었습니다. 두 서버에서 같은 seed를 써 같은 데이터가 들어갔고(앞 100행의 md5 일치), 질의 벡터는 테이블의 임의 행을
+씁니다.
 
 ```sql
 CREATE TABLE v (id bigint PRIMARY KEY, cat int, e vector(1024));
+SELECT setseed(0.42);
 INSERT INTO v SELECT g, g % 50,
   (SELECT array_agg(random()::real - 0.5) FROM generate_series(1, 1024) WHERE g > 0)::vector
 FROM generate_series(1, 200000) g;
 CREATE INDEX v_diskann ON v USING diskann (e vector_cosine_ops);
 
 CREATE INDEX v_cat ON v (cat);
+ANALYZE v;
 ```
 
-두 pgbench 스크립트를 각각 `pgbench -n -c 8 -f <script> bench` 형식으로 8 연결에서 실행했습니다. 이 명령은 `-T`나
-`-t`를 지정하지 않아 pgbench 기본값인 연결당 10 transaction, 모두 80개 질의만 실행합니다. 측정 환경을 정리해 다시 재지
-못했으므로, 재현할 때는 워밍업 실행 뒤 `pgbench -n -c 8 -j 4 -T 120 -f <script> bench`처럼 시간을 정해 여러 번
-실행합니다.
+두 pgbench 스크립트를 8 연결에서 시간을 정해 실행했습니다. 스크립트마다 30초 워밍업 뒤 120초 측정을 세 번 했고,
+회차마다 HorizonDB와 Flexible Server를 번갈아 실행했습니다.
+
+```bash
+pgbench -n -c 8 -j 4 -T 30 -f <script> bench    # warm-up
+pgbench -n -c 8 -j 4 -T 120 -f <script> bench   # 3 runs per server, alternating servers
+```
 
 ```text
 -- knn.sql: k-NN
@@ -111,15 +123,26 @@ SELECT id FROM v ORDER BY e <=> (SELECT e FROM v WHERE id = :id) LIMIT 10;
 SELECT id FROM v WHERE cat = :c ORDER BY e <=> (SELECT e FROM v WHERE id = :id) LIMIT 10;
 ```
 
-- **적재와 index 생성** — 두 서비스가 비슷했고 HorizonDB가 5–12% 빨랐습니다. index 크기는 둘 다 1,606 MB였습니다.
-- **k-NN 검색** — 두 서비스 모두 `Index Scan using v_diskann`을 썼습니다. 80개 질의의 평균 지연은 Flexible Server
-  19.2 ms, HorizonDB 23.0 ms였지만, 표본이 짧아 차이를 서비스 특성으로 해석하지 않습니다.
+| 부하(120초 × 3회) | HorizonDB 평균 지연(회차 범위) | Flexible Server 평균 지연(회차 범위) |
+|---|---|---|
+| k-NN | 21.0 ms(20.7–21.3), 382 qps | 20.1 ms(20.1–20.1), 398 qps |
+| 필터 + k-NN | 262 ms(262–263), 30 qps | 156 ms(155–157), 51 qps |
+| 필터 + k-NN, `diskann.enable_filter_hook=off` | 259 ms(256–261), 31 qps | 해당 없음 |
+
+- **적재와 index 생성** — 각 1회 측정에서 HorizonDB가 INSERT는 26%, index 생성은 24% 빨랐습니다. index 크기는 둘 다
+  1,606 MB였습니다. Flexible Server의 `pg_diskann` 0.6.6은 build 중 "index graph no longer fits into
+  maintenance_work_mem" 알림을 냈고, HorizonDB 0.7.6은 내지 않았습니다. 2026-11-15 첫 측정에서는 INSERT 19.7초·22.3초,
+  index 생성 213초·225초로 차이가 더 작았으므로, 1회 측정의 적재 차이는 크기보다 방향만 참고합니다.
+- **k-NN 검색** — 두 서비스 모두 `Index Scan using v_diskann`을 썼고, 평균 지연은 Flexible Server가 4% 짧아 거의 같았습니다.
+  데이터와 index가 메모리에 들어가는 크기라 저장 구조 차이가 드러나는 조건이 아니었습니다.
 - **필터 결합 검색** — 두 서비스의 실행 계획이 달랐습니다.
   - HorizonDB의 `pg_diskann` 0.7.6은 advanced filtering 경로 `DiskANNFilteredScan`(전략 `Filter(BitmapHeapScan) -> Vector`)을
-    골라, 조건에 맞는 행을 먼저 모은 뒤 거리를 계산했습니다.
-  - Flexible Server의 0.6.6은 DiskANN index를 탐색하면서 조건을 거르는 후필터 계획을 썼습니다.
-  - HorizonDB에서 `diskann.enable_filter_hook`을 끄면 후필터 계획으로 바뀌었고, 단건 실행 시간은 53.7 ms였습니다.
-    선택도 2%에서 어느 계획이 유리한지는 시간을 정한 반복 측정으로 확인해야 합니다.
+    골라, 조건에 맞는 행을 먼저 모은 뒤(TID 4,000개) 거리를 계산했습니다. 부하 없는 단건 실행은 149 ms였습니다.
+  - Flexible Server의 0.6.6은 DiskANN index를 탐색하면서 조건을 거르는 후필터 계획을 썼습니다. 단건 실행은 67 ms였습니다.
+  - HorizonDB에서 `diskann.enable_filter_hook`을 끄면 후필터 계획으로 바뀌었지만 단건 147 ms, 8 연결 평균 259 ms로
+    advanced filtering과 비슷했습니다. 따라서 이번 차이는 필터 경로 선택만으로 설명되지 않으며, 확장 버전과 compute
+    차이가 함께 작용했을 수 있습니다. 2026-11-15 첫 측정에서 이 설정의 단건 실행이 53.7 ms였던 결과는 재현되지
+    않았습니다.
 
 Learn의 HorizonDB index 선택 기준은 DiskANN이 데이터 대부분을 SSD에 두어 메모리를 적게 쓰고, 연속 INSERT, 1천만 행을
 넘는 규모, 필터 결합 검색에 맞는다고 설명합니다. 이번 20만 건은 메모리에 들어가는 크기라 그 장점이 드러나는 조건이
@@ -132,7 +155,7 @@ Learn의 HorizonDB index 선택 기준은 DiskANN이 데이터 대부분을 SSD�
 | 쓰기가 많고 동시 연결이 많은 OLTP | HorizonDB. 쓰기 처리량이 16–24% 높았고, 저장 계층이 checkpoint·백업 I/O를 맡습니다. |
 | 대량 적재(COPY, 초기 이관) | HorizonDB. 1,000만 행 초기 적재가 약 3배 빨랐습니다. |
 | 읽기 위주, 데이터가 메모리에 들어감 | 차이 없음. 비용과 지원 기능(GA 여부, HA, 백업 보존 기간)으로 고릅니다. |
-| 메모리에 들어가는 규모의 벡터 검색 | 판단 보류. 이번 표본은 짧았고, 필터 결합 검색은 선택도에 따라 계획이 달라지므로 `EXPLAIN`과 시간을 정한 부하로 확인합니다. |
+| 메모리에 들어가는 규모의 벡터 검색 | k-NN은 비슷함. 선택도 2% 필터 결합은 이번 버전(0.7.6과 0.6.6)에서 Flexible Server의 지연이 41% 짧았습니다. 선택도와 버전에 따라 계획이 달라지므로 `EXPLAIN`과 시간을 정한 부하로 확인합니다. |
 | 읽기 확장, 빠른 failover | HorizonDB 문서는 replica가 같은 저장소를 공유해 복제 없이 빠르게 추가되고 failover도 빠르다고 설명합니다. 이번에는 측정하지 않았습니다. |
 
 HorizonDB는 미리 보기라 다음 제약이 있습니다. 운영 요구 사항이 여기에 걸리면 성능과 상관없이 Flexible Server가 맞습니다.
@@ -142,8 +165,9 @@ HorizonDB는 미리 보기라 다음 제약이 있습니다. 운영 요구 사�
 
 ## 측정 한계: 실행 횟수 · 데이터 분포 · compute 세대 { #limitations }
 
-- 실행 횟수가 적고(대부분 1회) 분산을 재지 않았습니다.
-- 벡터 검색은 `-T` 없이 연결당 10개 질의만 실행해, qps와 지연이 서비스 차이보다 시작 효과를 반영했을 수 있습니다.
+- TPC-B·읽기 전용·초기 적재와 벡터 적재·index 생성은 실행 횟수가 적고(대부분 1회) 분산을 재지 않았습니다. 벡터 검색만
+  120초 × 3회로 반복했습니다.
+- pgbench TPC-B와 벡터 측정은 날짜, 서버 인스턴스, 클라이언트(AKS Pod와 VM)가 달라 두 결과 사이를 직접 비교하지 않습니다.
 - 벡터는 임의 값이라 실제 임베딩의 분포와 다르고, recall은 측정하지 않았습니다.
 - HorizonDB의 compute 세대(Intel 1세대)와 Flexible Server `E4ds_v5`의 CPU가 달라, CPU 위주 부하의 차이에는 compute
   차이가 섞여 있습니다.

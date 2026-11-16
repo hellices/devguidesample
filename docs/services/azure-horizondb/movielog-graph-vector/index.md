@@ -170,8 +170,8 @@ LIMIT 12;
 - **484행 실행 계획** — planner는 seq scan을 골랐고, `SET LOCAL enable_seqscan TO OFF`일 때만 DiskANN index를
   썼습니다.
 - **20만 건 필터 결합** — 1,024차원 20만 건에 선택도 2% 조건을 붙인 k-NN은 HorizonDB의 `DiskANNFilteredScan`
-  계획이 272–297 ms였고, 같은 세션에서 `diskann.enable_filter_hook = off`로 끈 단건 실행은 53.7 ms였습니다.
-  필터 결합은 데이터 분포에 따라 계획을 확인하고 세션 매개변수를 조정해야 했습니다
+  계획이 8 연결 평균 262 ms였고, `diskann.enable_filter_hook = off`로 후필터 계획으로 바꿔도 259 ms로 비슷했습니다
+  (2026-11-16, 120초 × 3회). 필터 결합은 데이터 분포에 따라 계획을 확인하고 시간을 정한 부하로 비교해야 했습니다
   ([벡터 적재와 검색](flexible-server-comparison/index.md#vector)).
 - **키워드 결합** — 벡터 순위에 제목·인물 이름 일치로 만든 키워드 순위를 Reciprocal Rank Fusion으로 합쳐, 「듄」처럼
   짧은 제목 질의도 놓치지 않게 했습니다([의미 검색 구현](movielog-lab/index.md#search)).
@@ -322,16 +322,17 @@ MovieLog 대응은 [벡터와 그래프 결합](vector-graph-features/index.md#g
 Learn에는 HorizonDB와 Azure Database for PostgreSQL flexible server의 성능 비교 문서가 없어, 이 절의 값은 모두 MovieLog
 환경에서 직접 잰 결과입니다. 같은 4 vCore 크기에서 쓰기 처리량과 대량 적재는 HorizonDB에서 더 높게 관찰됐습니다
 (2026-11-15, 단일 실행 위주). 이 측정은 저장 구조만 바꿔 비교한 실험이 아니므로 차이의 원인을 특정하지 않습니다.
-벡터 검색은 연결당 10개 질의만 실행한 짧은 표본이라 우열을 판단하지 않았습니다.
+벡터 검색은 2026-11-16에 두 서비스를 새로 만들어 120초 × 3회로 쟀고, k-NN은 거의 같았으며 필터 결합 검색은
+Flexible Server의 지연이 짧았습니다.
 
 | 부하 | HorizonDB | Flexible Server(E4ds_v5, Premium SSD 512 GiB) |
 |---|---|---|
 | TPC-B 쓰기, 64 연결 | 5,115 tps | 4,108 tps |
 | `pgbench -i -s 100` 초기 적재 | 9.6초 | 28.3초 |
 | 읽기 전용, 32 연결 | 36,757 tps | 36,187 tps |
-| 1,024차원 20만 건 DiskANN index 생성 | 213초 | 225초 |
-| k-NN 10건, 8 연결(질의 80개, 참고값) | 23.0 ms | 19.2 ms |
-| 필터(선택도 2%) + k-NN 10건, 8 연결(질의 80개, 참고값) | 272 ms | 149 ms |
+| 1,024차원 20만 건 DiskANN index 생성(1회) | 188초 | 248초 |
+| k-NN 10건, 8 연결(120초 × 3회 평균) | 21.0 ms | 20.1 ms |
+| 필터(선택도 2%) + k-NN 10건, 8 연결(120초 × 3회 평균) | 262 ms | 156 ms |
 
 벡터 검색은 두 서비스 모두 `pg_diskann`을 쓰지만 버전(0.7.6과 0.6.6)과 필터 결합 검색의 실행 계획이 달랐습니다. 측정
 환경과 해석, 한계는 [Flexible Server 성능 비교](flexible-server-comparison/index.md)에 있습니다.
