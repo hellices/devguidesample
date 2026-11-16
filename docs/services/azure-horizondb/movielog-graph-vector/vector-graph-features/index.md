@@ -25,6 +25,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/horizondb/extensions/concepts-extensions-considerations
   - title: Graph-augmented RAG patterns in Azure HorizonDB (Preview)
     url: https://learn.microsoft.com/azure/horizondb/ai/graph-rag
+  - title: AI functions in the azure_ai extension in Azure HorizonDB (Preview)
+    url: https://learn.microsoft.com/azure/horizondb/ai/ai-functions
+  - title: AI Model Management in Azure HorizonDB (Preview)
+    url: https://learn.microsoft.com/azure/horizondb/ai/ai-model-management
   - title: What is Azure HorizonDB (Preview)?
     url: https://learn.microsoft.com/azure/horizondb/overview
   - title: Apache AGE Prepared Statements
@@ -293,6 +297,23 @@ Learn은 graph를 만드는 방법으로 LLM 추출(`azure_ai.extract()`), 관�
 schema-driven 방식, Microsoft GraphRAG 라이브러리를 듭니다. MovieLog는 schema-driven 방식을
 선택하고 최근접 결과를 `SIMILAR_TO` 관계로 저장했습니다. 데이터 흐름과 동기화는
 [실습 문서](../movielog-lab/index.md#data-flow)에서 설명합니다.
+
+## DB 안 AI 함수 관측: BYOM과 `azure_ai` 2.5.6 { #in-database-ai-observations }
+
+MovieLog 구독에서 2026-11-15에 관리형 모델과 BYOM을 별도로 시험했습니다. 다음은 당시
+cluster와 확장 버전에서 확인한 관측이며, 현재 지원 계약으로 일반화하지 않습니다.
+
+| 항목 | 관측 결과 |
+|---|---|
+| 관리형 모델 | 기능 flag `Microsoft.HorizonDB/enableAiModelManagement`가 `Pending`이라 활성화하지 못했습니다. |
+| BYOM 인증 | Learn은 `subscription-key`와 `managed-identity`를 설명하지만 당시 BYOM 등록에서 `managed-identity`는 거부되고 `subscription-key`만 동작했습니다. |
+| API Management 경유 | Azure OpenAI key 인증이 꺼진 환경에서 API Management가 managed identity로 Azure OpenAI를 호출하고, HorizonDB에는 API Management subscription key를 등록해 `text-embedding-3-small`과 `text-embedding-3-large`를 호출했습니다. |
+| `ai.embed` | `azure_ai` 2.5.6의 `ai.embed(text, model, ...)`가 즉시 `real[]`을 반환했고 `azure_openai.create_embeddings`는 `ai.embed` 사용을 안내했습니다. Learn의 AI pipeline 문서는 다른 확장 버전을 기준으로 단계 정의를 설명하므로 사용 전 `\df ai.embed`로 signature를 확인합니다. |
+| 지원 목록 밖 모델 | API Management에 OpenAI 형식의 mock endpoint를 두고 `bge-m3-ko` 이름으로 등록했을 때 `ai.embed`가 응답을 받아들였습니다. 실제 bge-m3-ko 서버 연결은 확인하지 않았으며, 이 모델은 Learn의 DB 안 임베딩 지원 모델 목록에 없습니다. |
+
+최종 앱은 bge-m3-ko endpoint가 AKS 내부에 있고 HorizonDB에서 직접 접근할 수 없어서 DB 안 함수 대신
+앱 계층에서 두 임베딩 모델을 호출합니다. 이 절은 지원 모델 목록, BYOM endpoint 등록 경로와 당시
+실제 동작을 구분하기 위한 기록입니다.
 
 ## Learn 문서와 실습 cluster의 차이 { #observed-differences }
 

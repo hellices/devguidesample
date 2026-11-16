@@ -169,9 +169,9 @@ Azure OpenAI `text-embedding-3-large`와 AKS vLLM의 `dragonkue/BGE-m3-ko`를 �
 
 DB 안 임베딩도 시험했지만 최종 앱은 임베딩을 앱 계층에서 수행합니다. 당시 관리형 model 기능은 승인
 대기였고, 클러스터 내부 bge-m3-ko endpoint를 HorizonDB가 직접 호출할 수 없었기 때문입니다. 날짜별
-시험 결과와 지원 범위는 기존 관측을 보존한
-[기술 가이드](vector-graph-features/index.md#observed-differences)와
-[실습 아키텍처](movielog-lab/index.md#architecture)에서 구분해 설명합니다.
+시험 결과, `azure_ai` 버전 차이와 BYOM 인증 관측은
+[기술 가이드의 DB 안 AI 함수 관측](vector-graph-features/index.md#in-database-ai-observations)에 보존하고,
+최종 앱의 호출 경로는 [실습 아키텍처](movielog-lab/index.md#architecture)에서 설명합니다.
 
 ## 실습과 샘플 코드: 해설과 실행 절차의 분리 { #lab }
 
