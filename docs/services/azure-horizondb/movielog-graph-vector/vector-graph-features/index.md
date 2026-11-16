@@ -1,6 +1,6 @@
 ---
-title: "Azure HorizonDB 벡터·그래프 기능: pgvector·DiskANN과 Apache AGE"
-description: Azure HorizonDB(미리 보기)가 PostgreSQL 확장으로 제공하는 벡터 검색(vector·pg_diskann)과 그래프(Apache AGE)의 데이터 표현, 거리 연산자, index 선택 기준, DiskANN 매개변수와 advanced filtering, AGE의 schema·label 테이블 구조, cypher() 함수와 매개변수, graph-augmented RAG 패턴을 Microsoft Learn 기준으로 정리하고 MovieLog 실습 cluster에서 확인한 실행 계획과 문서와 다른 동작을 함께 기록합니다.
+title: "Azure HorizonDB 벡터·그래프 기술: pgvector·DiskANN과 Apache AGE"
+description: Azure HorizonDB(미리 보기)의 벡터 검색(vector·pg_diskann)과 그래프(Apache AGE)를 설계할 때 필요한 거리 연산자, index 선택, DiskANN 매개변수와 filtering, AGE 저장 구조, cypher() 함수와 graph-augmented RAG 패턴을 설명하고 실습 cluster에서 확인한 차이를 기록합니다.
 document_type: guide
 services: [azure-horizondb]
 technologies: [postgresql]
@@ -25,6 +25,10 @@ official_sources:
     url: https://learn.microsoft.com/azure/horizondb/extensions/concepts-extensions-considerations
   - title: Graph-augmented RAG patterns in Azure HorizonDB (Preview)
     url: https://learn.microsoft.com/azure/horizondb/ai/graph-rag
+  - title: AI functions in the azure_ai extension in Azure HorizonDB (Preview)
+    url: https://learn.microsoft.com/azure/horizondb/ai/ai-functions
+  - title: AI Model Management in Azure HorizonDB (Preview)
+    url: https://learn.microsoft.com/azure/horizondb/ai/ai-model-management
   - title: What is Azure HorizonDB (Preview)?
     url: https://learn.microsoft.com/azure/horizondb/overview
   - title: Apache AGE Prepared Statements
@@ -37,17 +41,17 @@ applies_to: [Azure HorizonDB 미리 보기, PostgreSQL 17, vector 0.8.7, pg_disk
 topic_order: 1
 ---
 
-# Azure HorizonDB 벡터·그래프 기능: pgvector·DiskANN과 Apache AGE
+# Azure HorizonDB 벡터·그래프 기술: pgvector·DiskANN과 Apache AGE
 
 Azure HorizonDB는 벡터와 그래프를 별도 데이터베이스가 아니라 PostgreSQL 확장으로
 제공합니다. 벡터는 `vector`(pgvector) 타입과 `pg_diskann` index로, 그래프는 Apache AGE의
 label 테이블과 openCypher로 다룹니다. 둘 다 같은 데이터베이스 안의 일반 테이블에 저장되므로
 관계형 테이블과 SQL로 join하고 같은 트랜잭션·권한·백업을 공유합니다.
 
-이 문서는 2026-11-13 Microsoft Learn의 HorizonDB 문서를 기준으로 두 기능을 정리하고,
-[MovieLog 의미 검색 실습](../index.md) cluster에서 확인한 실행 계획과 문서와 다른 동작을
-덧붙입니다. 실습의 데이터 모델과 앱 접근 경로는 entry의
-[HorizonDB 데이터 모델](../movielog-lab/index.md#data-model)에 있습니다.
+이 문서는 [HorizonDB 소개](../index.md) 다음에 읽는 기술 가이드입니다. 2026-11-13 Microsoft Learn을
+기준으로 기능의 동작과 선택 기준을 설명하고, MovieLog cluster 관측은 문서와 실제 동작을 구분하는
+근거로만 사용합니다. 데이터 준비, 앱 연결과 배포는 [MovieLog 실습](../movielog-lab/index.md), 실행 명령은
+[sample README](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.1/README.md)가 소유합니다.
 
 | 구분 | 벡터 | 그래프 |
 |---|---|---|
@@ -55,7 +59,6 @@ label 테이블과 openCypher로 다룹니다. 둘 다 같은 데이터베이스
 | 저장 형태 | 테이블의 `vector(n)` 열 | graph마다 schema 1개, label마다 테이블 1개 |
 | 질의 | `ORDER BY embedding <=> :q LIMIT k` | `SELECT * FROM cypher('graph', $$ MATCH ... $$) AS (...)` |
 | index | Flat·IVFFlat·HNSW·DiskANN | `properties` GIN, edge `start_id`·`end_id` btree |
-| MovieLog 적용 | `catalog.movie_docs.embedding vector(1536)`, DiskANN 코사인 | `movie_graph`: Movie·Person·Genre, 관계 4종 |
 
 ## 벡터 저장과 거리 연산: `vector` 타입과 pgvector 연산자 { #vector-type }
 
@@ -250,7 +253,7 @@ AGE는 openCypher의 일부만 구현합니다. Learn은 다음 제약을 듭니
 | 제약 | 내용 | 대응 |
 |---|---|---|
 | Cypher 부분 지원 | `MERGE ... ON CREATE SET`, `EXISTS` subquery, `datetime()`을 쓸 수 없습니다. | 중복 검사를 둔 `CREATE`나 PL/pgSQL로 감쌉니다. |
-| 수동 유지 | 원본 데이터가 바뀌어도 graph를 자동으로 따라가는 CDC가 없습니다. | 원본 테이블 trigger나 주기적 재생성을 씁니다. MovieLog는 처음 한 번만 `30-graph.sql`로 graph를 만들고, 이후에는 원본 테이블 trigger가 바뀐 영화를 queue에 넣어 앱이 30초마다 그 영화만 반영합니다([그래프 동기화](../movielog-lab/index.md#graph-sync)). |
+| 수동 유지 | 원본 데이터가 바뀌어도 graph를 자동으로 따라가는 CDC가 없습니다. | 원본 테이블 trigger나 주기적 재생성을 씁니다. MovieLog의 구현은 [그래프 동기화 실습](../movielog-lab/index.md#graph-sync)에서 설명합니다. |
 | 가변 길이 경로 | `[*1..N]`이 3–4 hop을 넘으면 경로가 지수적으로 늘어납니다. | hop을 제한하고 중간 node 속성으로 일찍 거릅니다. |
 | 데이터베이스 경계 | 다른 데이터베이스의 graph는 조회할 수 없습니다. | graph와 벡터를 같은 데이터베이스에 둡니다. |
 | major version 업그레이드 | AGE는 in-place major version 업그레이드에서 모든 버전을 지원하지 않습니다. | 업그레이드 전 지원 여부를 확인합니다. |
@@ -283,18 +286,34 @@ Learn은 벡터 검색만으로 부족한 질의에 graph 탐색을 더하는 gr
 4. 두 순위를 Reciprocal Rank Fusion(RRF)으로 합칩니다.
 5. 합친 상위 결과를 LLM에 문맥으로 넘깁니다.
 
-| 패턴 | 그래프의 역할 | MovieLog에 대응하는 예 |
+| 패턴 | 그래프의 역할 | MovieLog 확인 위치 |
 |---|---|---|
-| Authority boosting | 인용·연결 수 같은 구조적 중요도로 벡터 결과를 다시 매김 | 출연·감독 관계가 많은 영화에 가산점(미구현) |
-| Context expansion | 질의 엔터티의 이웃을 탐색해 벡터가 놓친 문서를 추가 | 결과 영화의 인물·장르·`SIMILAR_TO` 이웃. 현재는 화면에 그리기만 하고 순위에는 섞지 않음 |
-| Graph filtering | 관계를 경계(권한·소유·분류)로 써서 후보를 제한 | 특정 감독 작품 안에서 의미 검색(미구현) |
-| Path-based retrieval | 경로 자체가 답인 질의 | 두 배우를 잇는 출연작 경로(미구현) |
+| Authority boosting | 인용·연결 수 같은 구조적 중요도로 벡터 결과를 다시 매김 | 미적용 |
+| Context expansion | 질의 엔터티의 이웃을 탐색해 벡터가 놓친 문서를 추가 | 미적용. 이웃은 [화면에만 표시](../movielog-lab/index.md#app-verification)하고 검색 후보·순위·LLM 문맥에는 넣지 않음 |
+| Graph filtering | 관계를 경계(권한·소유·분류)로 써서 후보를 제한 | 미적용 |
+| Path-based retrieval | 경로 자체가 답인 질의 | 미적용 |
 
 Learn은 graph를 만드는 방법으로 LLM 추출(`azure_ai.extract()`), 관계형 테이블에서 만드는
-schema-driven 방식, Microsoft GraphRAG 라이브러리를 듭니다. MovieLog는 schema-driven
-방식입니다. 카탈로그 테이블에서 Movie·Person·Genre와 출연·감독·장르 관계를 만들고, 벡터
-최근접 3편으로 `SIMILAR_TO`를 더해 벡터 결과를 graph 관계로 저장했습니다. Learn의 도메인
-예 가운데 content recommendation이 이 구조에 해당합니다.
+schema-driven 방식, Microsoft GraphRAG 라이브러리를 듭니다. MovieLog는 schema-driven 방식을
+선택하고 최근접 결과를 `SIMILAR_TO` 관계로 저장했습니다. 데이터 흐름과 동기화는
+[실습 문서](../movielog-lab/index.md#data-flow)에서 설명합니다.
+
+## DB 안 AI 함수 관측: BYOM과 `azure_ai` 2.5.6 { #in-database-ai-observations }
+
+MovieLog 구독에서 2026-11-15에 관리형 모델과 BYOM을 별도로 시험했습니다. 다음은 당시
+cluster와 확장 버전에서 확인한 관측이며, 현재 지원 계약으로 일반화하지 않습니다.
+
+| 항목 | 관측 결과 |
+|---|---|
+| 관리형 모델 | 기능 flag `Microsoft.HorizonDB/enableAiModelManagement`가 `Pending`이라 활성화하지 못했습니다. |
+| BYOM 인증 | Learn은 `subscription-key`와 `managed-identity`를 설명하지만 당시 BYOM 등록에서 `managed-identity`는 거부되고 `subscription-key`만 동작했습니다. |
+| API Management 경유 | Azure OpenAI key 인증이 꺼진 환경에서 API Management가 managed identity로 Azure OpenAI를 호출하고, HorizonDB에는 API Management subscription key를 등록해 `text-embedding-3-small`과 `text-embedding-3-large`를 호출했습니다. |
+| `ai.embed` | `azure_ai` 2.5.6의 `ai.embed(text, model, ...)`가 즉시 `real[]`을 반환했고 `azure_openai.create_embeddings`는 `ai.embed` 사용을 안내했습니다. Learn의 AI pipeline 문서는 다른 확장 버전을 기준으로 단계 정의를 설명하므로 사용 전 `\df ai.embed`로 signature를 확인합니다. |
+| 지원 목록 밖 모델 | API Management에 OpenAI 형식의 mock endpoint를 두고 `bge-m3-ko` 이름으로 등록했을 때 `ai.embed`가 응답을 받아들였습니다. 실제 bge-m3-ko 서버 연결은 확인하지 않았으며, 이 모델은 Learn의 DB 안 임베딩 지원 모델 목록에 없습니다. |
+
+최종 앱은 bge-m3-ko endpoint가 AKS 내부에 있고 HorizonDB에서 직접 접근할 수 없어서 DB 안 함수 대신
+앱 계층에서 두 임베딩 모델을 호출합니다. 이 절은 지원 모델 목록, BYOM endpoint 등록 경로와 당시
+실제 동작을 구분하기 위한 기록입니다.
 
 ## Learn 문서와 실습 cluster의 차이 { #observed-differences }
 
