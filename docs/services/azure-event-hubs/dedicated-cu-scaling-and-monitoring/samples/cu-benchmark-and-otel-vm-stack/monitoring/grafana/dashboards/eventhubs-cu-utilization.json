@@ -1,0 +1,177 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "① 컴퓨팅 포화도 (%) — Dedicated CPU / Premium NamespaceCpuUsage (스케일 아웃 임계치 70%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (resource_name, role) (azure_eventhub_clusters_cpu_maximum or azure_eventhub_namespaces_namespace_cpu_usage_maximum)",
+          "legendFormat": "CPU Max ({{resource_name}} {{role}})"
+        },
+        {
+          "refId": "B",
+          "expr": "max by (resource_name, role) ((100 - azure_eventhub_clusters_available_memory_maximum) or azure_eventhub_namespaces_namespace_memory_usage_maximum)",
+          "legendFormat": "Memory Used Max ({{resource_name}} {{role}})"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "② 할당 CU/PU 대역폭 대비 실효 사용률 (%) — 1 CU = 100 MB/s 보수 기준선 대비",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 120
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (resource_name) (rate(azure_eventhub_namespaces_incoming_bytes_total[1m])) / ($allocated_cu * 100 * 1024 * 1024)) * 100",
+          "legendFormat": "할당 CU 하한(100 MB/s/CU) 대비 사용률 (%)"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum by (resource_name) (rate(azure_eventhub_namespaces_incoming_bytes_total[1m])) / ($allocated_cu * 200 * 1024 * 1024)) * 100",
+          "legendFormat": "할당 CU 상한(200 MB/s/CU) 대비 사용률 (%)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "③ 파티션 상한(1.5 MB/s/partition) 대비 사용률 (%) 및 Consumer Group Lag",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 120
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "unit", "value": "short" },
+              { "id": "min", "value": 0 },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.axisLabel", "value": "Consumer Lag (messages)" }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (entity_name) (rate(azure_eventhub_namespaces_incoming_bytes_total[1m])) / ($partition_count * 1.5 * 1024 * 1024)) * 100",
+          "legendFormat": "파티션 상한 대비 사용률 ({{entity_name}})"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (group, topic) (kafka_consumer_group_lag)",
+          "legendFormat": "Consumer Lag ({{group}} / {{topic}})"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "④ OTel Collector 인메모리 큐 점유율 (%) 및 메트릭 Drop 감시",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_VICTORIAMETRICS}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "unit", "value": "short" },
+              { "id": "min", "value": 0 },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.axisLabel", "value": "Dropped Points / min" }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(otelcol_exporter_queue_size / otelcol_exporter_queue_capacity) * 100",
+          "legendFormat": "Exporter Queue Fill % ({{exporter}})"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(otelcol_exporter_enqueue_failed_metric_points_total[1m]) * 60",
+          "legendFormat": "Dropped Metric Points / min ({{exporter}})"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["azure-event-hubs", "opentelemetry", "victoriametrics", "capacity-utilization"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_VICTORIAMETRICS",
+        "type": "datasource",
+        "query": "prometheus"
+      },
+      {
+        "name": "allocated_cu",
+        "label": "Allocated CUs",
+        "type": "custom",
+        "current": { "text": "4", "value": "4" },
+        "query": "1,2,4,8,10"
+      },
+      {
+        "name": "partition_count",
+        "label": "Event Hub Partitions",
+        "type": "custom",
+        "current": { "text": "64", "value": "64" },
+        "query": "4,8,16,32,64,128,256"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Azure Event Hubs CU/PU Effective Capacity Utilization & OTel Queue Health",
+  "uid": "eh-cu-effective-util-v1",
+  "version": 1
+}

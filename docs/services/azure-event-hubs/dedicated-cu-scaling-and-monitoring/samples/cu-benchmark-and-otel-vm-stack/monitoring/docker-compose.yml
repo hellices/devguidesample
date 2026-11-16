@@ -1,0 +1,53 @@
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.106.1
+    container_name: eh-victoriametrics
+    command:
+      - "-storageDataPath=/storage"
+      - "-retentionPeriod=30d"
+      - "-httpListenAddr=:8428"
+      - "-search.maxUniqueTimeseries=500000"
+    ports:
+      - "8428:8428"
+    volumes:
+      - vmdata:/storage
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    container_name: eh-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      AZURE_SUBSCRIPTION_ID: "${AZURE_SUBSCRIPTION_ID:-00000000-0000-0000-0000-000000000000}"
+      AZURE_RESOURCE_GROUP: "${AZURE_RESOURCE_GROUP:-rg-eh-cu-bench-kr}"
+      EVENTHUB_NAMESPACE: "${EVENTHUB_NAMESPACE:-eh-example-ns}"
+      EVENTHUB_CONNECTION_STRING: "${EVENTHUB_CONNECTION_STRING:-Endpoint=sb://eh-example-ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=EXAMPLE_KEY_PLACEHOLDER}"
+      EH_TIER: "${EH_TIER:-Dedicated}"
+      EH_ALLOCATED_UNITS: "${EH_ALLOCATED_UNITS:-4}"
+      EH_PARTITION_COUNT: "${EH_PARTITION_COUNT:-32}"
+      VMINSERT_ENDPOINT: "http://victoriametrics:8428/api/v1/write"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "8888:8888"
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: eh-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin}"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/eventhubs-cu-utilization.json"
+    volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+
+volumes:
+  vmdata:

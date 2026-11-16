@@ -1,0 +1,14 @@
+title: Event Hubs CU/PU/TU scaling benchmark and OTel + VictoriaMetrics monitoring stack
+description: Reproduces pipe-delimited T-Log load generation across Event Hubs tiers and deploys an OpenTelemetry Collector Contrib, VictoriaMetrics, and Grafana effective capacity utilization stack.
+kind: runnable
+used_by:
+  - index
+publish:
+  - source: results/charts/01_unit_scaling_curve.png
+    target: images/01_unit_scaling_curve.png
+  - source: results/charts/02_partition_bottleneck.png
+    target: images/02_partition_bottleneck.png
+  - source: results/charts/03_gzip_vs_plain_throughput.png
+    target: images/03_gzip_vs_plain_throughput.png
+  - source: results/charts/04_effective_capacity_utilization.png
+    target: images/04_effective_capacity_utilization.png
