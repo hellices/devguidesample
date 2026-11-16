@@ -144,8 +144,9 @@ Learn은 10만 행 미만이고 지연이 중요하지 않으면 flat scan을 �
   키우지 않고 버틸 수 있습니다.
 - **필터 결합** — 메타데이터 조건을 붙인 검색을 index 탐색 안에서 거르는 방식(advanced filtering)은
   DiskANN만 제공합니다. planner가 비용과 필터 선택도로 사용 여부를 정하므로 `EXPLAIN`으로 계획을 확인합니다.
-- **차원 여유** — spherical quantization을 켜면 3,072차원 같은 고차원 임베딩도 index할 수 있어, 모델을
-  바꿔도 index 방식을 바꾸지 않습니다.
+- **차원 여유** — spherical quantization(SQ, 미리 보기)을 index 옵션 `spherical_quantized = true`로 켜면 3,072차원 같은
+  고차원 임베딩도 index할 수 있습니다. 최대 차원은 `sq_bits`가 4면 4,000, 1이면 16,000이며, 모델을 바꿔도 index
+  방식을 바꾸지 않습니다.
 
 ## 그래프 기능: `age` 확장(Apache AGE)과 openCypher { #graph }
 

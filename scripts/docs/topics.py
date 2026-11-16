@@ -31,10 +31,12 @@ EXTERNAL_REF = re.compile(
 EXTERNAL_COMMIT = re.compile(r"[0-9a-f]{40}")
 # Each "/"-separated repository path component follows the OCI distribution grammar, so empty components are rejected.
 _IMAGE_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+# The GHCR namespace is a GitHub owner: alphanumerics with inner hyphens only.
+_IMAGE_OWNER = r"[a-z0-9]+(?:-+[a-z0-9]+)*"
 # An OCI tag starts with a word character and has at most 128 characters.
 _IMAGE_TAG = r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}"
 EXTERNAL_IMAGE = re.compile(
-    rf"ghcr\.io/[a-z0-9-]+/{_IMAGE_COMPONENT}(?:/{_IMAGE_COMPONENT})*:{_IMAGE_TAG}@sha256:[0-9a-f]{{64}}"
+    rf"ghcr\.io/{_IMAGE_OWNER}/{_IMAGE_COMPONENT}(?:/{_IMAGE_COMPONENT})*:{_IMAGE_TAG}@sha256:[0-9a-f]{{64}}"
 )
 EXTERNAL_FIELDS = ("repository", "ref", "commit", "image")
 EXTERNAL_SOURCE = "source"

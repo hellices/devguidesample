@@ -86,7 +86,7 @@ azd up
 카탈로그와 그래프는 배치 로더가 한 번 만들고, 텔레메트리는 Application Insights를 거쳐
 Managed Grafana에서 봅니다.
 
-![MovieLog on Azure HorizonDB 아키텍처. 브라우저가 HTTPS로 App Gateway for Containers에 들어오고(cert-manager가 발급한 Let's Encrypt 인증서), AKS 관리형 VNet 안의 MovieLog 앱이 임베딩 모델(vLLM으로 서빙하는 bge-m3-ko 또는 Azure OpenAI text-embedding-3-large, 요청마다 선택)에 질의 임베딩을 요청한 뒤 Azure HorizonDB에 SQL과 Cypher를 보냄. HorizonDB 안에는 관계형 테이블, pgvector와 DiskANN(1024·1536차원), Apache AGE movie_graph가 있음. 카탈로그 로더는 Wikidata와 Wikipedia 데이터를 HorizonDB에 적재하고 문서를 임베딩함. MovieLog의 텔레메트리는 Application Insights로, Application Insights는 KQL로 Managed Grafana에 연결됨](../images/architecture.svg)
+![MovieLog on Azure HorizonDB 아키텍처. 브라우저가 HTTPS로 App Gateway for Containers에 들어오고(cert-manager가 발급한 Let's Encrypt 인증서), AKS 관리형 VNet 안의 MovieLog 앱이 요청마다 같은 VNet의 GPU spot 노드에서 vLLM이 서빙하는 bge-m3-ko(model=bge) 또는 클러스터 밖 Azure OpenAI text-embedding-3-large(model=openai)에 질의 임베딩을 요청한 뒤 Azure HorizonDB에 SQL과 Cypher를 보냄. HorizonDB 안에는 관계형 테이블, pgvector와 DiskANN(1024·1536차원), Apache AGE movie_graph가 있음. 카탈로그 로더는 Wikidata와 Wikipedia 데이터를 HorizonDB에 적재하고, 문서를 Azure OpenAI로 직접, bge-m3-ko는 port-forward로 vLLM에 보내 임베딩함. MovieLog의 텔레메트리는 Application Insights로, Application Insights는 KQL로 Managed Grafana에 연결됨](../images/architecture.svg)
 
 | 구성 요소 | 역할 | 구성 |
 |---|---|---|
@@ -235,7 +235,9 @@ WITH knn AS (
   FROM catalog.movie_docs a
   CROSS JOIN LATERAL (
     SELECT tmdb_id, embedding_bge FROM catalog.movie_docs b
-    WHERE b.tmdb_id <> a.tmdb_id ORDER BY b.embedding_bge <=> a.embedding_bge LIMIT 3) b)
+    WHERE b.tmdb_id <> a.tmdb_id AND b.embedding_bge IS NOT NULL
+    ORDER BY b.embedding_bge <=> a.embedding_bge LIMIT 3) b
+  WHERE a.embedding_bge IS NOT NULL)
 SELECT DISTINCT ON (least(a, b), greatest(a, b)) least(a, b) AS a, greatest(a, b) AS b, score
 FROM knn ORDER BY least(a, b), greatest(a, b), score DESC;
 ```
