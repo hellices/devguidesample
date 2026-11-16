@@ -568,6 +568,10 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
     ]
 
 
+def _pin_error(slug: str, message: str) -> str:
+    return f"services/aks/{slug}/samples/app: https://github.com/example-org/movielog v2.6.4: {message}"
+
+
 @pytest.mark.parametrize(
     ("refs", "expected"),
     [
@@ -575,15 +579,21 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         ({"refs/tags/v2.6.4": "c" * 40}, []),
         (
             {"refs/tags/v2.6.4": "t" * 40, "refs/tags/v2.6.4^{}": "d" * 40},
-            ["release tag points at " + "d" * 40, "release tag points at " + "d" * 40],
+            [
+                ("network-diagnosis", f"release tag points at {'d' * 40} but sample.yml commit is {'c' * 40}"),
+                ("second-topic", f"release tag points at {'d' * 40} but sample.yml commit is {'c' * 40}"),
+            ],
         ),
-        ({}, ["release tag does not exist"]),
-        ({"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4": "e" * 40}, ["a branch has the same name"]),
-        (None, ["cannot query the repository"]),
+        ({}, [("network-diagnosis", "release tag does not exist")]),
+        (
+            {"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4": "e" * 40},
+            [("network-diagnosis", "a branch has the same name as the release tag; delete it so links stay pinned")],
+        ),
+        (None, [("network-diagnosis", "cannot query the repository to verify the release tag")]),
     ],
 )
 def test_link_gate_checks_the_release_tag_of_external_samples(
-    tmp_path: Path, refs: dict[str, str] | None, expected: list[str]
+    tmp_path: Path, refs: dict[str, str] | None, expected: list[tuple[str, str]]
 ) -> None:
     root = make_repository(tmp_path)
     for slug in ("network-diagnosis", "second-topic"):
@@ -605,8 +615,7 @@ def test_link_gate_checks_the_release_tag_of_external_samples(
     errors = validate_links.validate_repository(root, remote_refs=remote_refs).errors
 
     assert calls == [("https://github.com/example-org/movielog", "v2.6.4")]
-    assert len(errors) == len(expected)
-    assert all(message in error for message, error in zip(expected, errors))
+    assert errors == [_pin_error(slug, message) for slug, message in expected]
 
 
 def test_link_gate_checks_every_commit_pinned_to_a_shared_release_tag(tmp_path: Path) -> None:
