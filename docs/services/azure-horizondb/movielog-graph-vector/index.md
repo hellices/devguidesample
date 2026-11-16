@@ -345,12 +345,12 @@ $$) AS (p agtype, r agtype, m agtype);
 
 앱 소스, Bicep과 azd hook, DB 스크립트, 데이터셋 빌더, Kubernetes manifest, Grafana dashboard는 샘플 코드 레포
 [`hellices/sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb)에 있으며 이 문서는
-`v2.7.0` 릴리스를 기준으로 합니다. 앱 이미지는 release workflow가 `ghcr.io/hellices/sample-movielog-horizondb:2.7.0`으로
+`v2.7.1` 릴리스를 기준으로 합니다. 앱 이미지는 release workflow가 `ghcr.io/hellices/sample-movielog-horizondb:2.7.1`으로
 게시하고, `azd up`의 hook이 digest로 지정해 실습 Azure Container Registry로 가져옵니다.
 
 - [MovieLog 실습](movielog-lab/index.md) — 아키텍처, 데이터 모델, 작성 순서, 앱 구현, 관측, 공개 구성
-- [sample-movielog-horizondb README (v2.7.0)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/README.md)
-- [Azure 배포 절차 (v2.7.0)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/docs/deploy.md)
+- [sample-movielog-horizondb README (v2.7.1)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.1/README.md)
+- [Azure 배포 절차 (v2.7.1)](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.1/docs/deploy.md)
 
 ## 미리 보기 제약: 서비스 · 확장 · AI 기능 { #constraints }
 

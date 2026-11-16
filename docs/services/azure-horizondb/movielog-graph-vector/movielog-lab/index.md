@@ -54,13 +54,13 @@ topic_order: 2
 ## 실습 범위: `azd up` 한 번으로 재현하는 MovieLog { #scope }
 
 [topic 개요](../index.md)의 결과를 직접 재현하는 실습입니다. 샘플 코드 레포
-[`hellices/sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb)의 `v2.7.0` 릴리스를 받아 `azd up`을 실행하면 Bicep이 Azure 리소스를 만들고,
+[`hellices/sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb)의 `v2.7.1` 릴리스를 받아 `azd up`을 실행하면 Bicep이 Azure 리소스를 만들고,
 hook이 Bicep 형식이 없는 HorizonDB(미리 보기)와 DB·Kubernetes 구성·카탈로그를 준비합니다. 2026-11-15 Korea Central의
 새 구독 환경에서 약 1시간이 걸렸고(HorizonDB cluster·pool 약 25분, 카탈로그 적재와 두 모델 임베딩 약 20분), GPU를
 포함한 유료 자원을 쓰므로 끝나면 `azd down --purge`로 지웁니다.
 
 ```bash
-git clone --branch v2.7.0 https://github.com/hellices/sample-movielog-horizondb.git && cd sample-movielog-horizondb
+git clone --branch v2.7.1 https://github.com/hellices/sample-movielog-horizondb.git && cd sample-movielog-horizondb
 azd auth login && az login
 azd env new movielog --location koreacentral
 azd env set APP_HOST movielog.example.com   # optional: public HTTPS and Microsoft Entra ID sign-in
@@ -79,7 +79,7 @@ azd up
 | `postdeploy` hook | GHCR 릴리스 이미지 `az acr import`, vLLM(bge-m3-ko)과 앱 배포, 카탈로그 적재·두 모델 임베딩·DiskANN index·AGE 그래프, Grafana dashboard, HTTPS |
 
 환경 값, 단계별 동작, 실습 중 고친 문제는 코드 레포의
-[배포 절차](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/docs/deploy.md)에 있습니다.
+[배포 절차](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.1/docs/deploy.md)에 있습니다.
 
 ## 아키텍처: AGFC → AKS MovieLog → HorizonDB { #architecture }
 
@@ -191,7 +191,7 @@ API의 포스터 경로·상영 시간·IMDb id를 `public.movies`의 빈 열에
 그래프는 관계형 행에서 만든 파생 데이터라서, 원본이 바뀔 때마다 ④로 전체를 다시 만들면 그래프를
 지운 6–8초 동안 앱이 빈 그래프를 읽고, 관리자 비밀번호를 가진 작업이 cluster 안에 있어야 합니다.
 그래서 HorizonDB trigger가 바뀐 영화를 queue에 기록하고, 앱이 그 영화만 반영하는 방식으로 바꿨습니다.
-[`db/40-graph-sync.sql`](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/db/40-graph-sync.sql)이 queue, trigger, 함수를 만듭니다.
+[`db/40-graph-sync.sql`](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.1/db/40-graph-sync.sql)이 queue, trigger, 함수를 만듭니다.
 
 | 단계 | 구성 요소 | 동작 |
 |---|---|---|
