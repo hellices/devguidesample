@@ -610,6 +610,16 @@ def _pin_error(slug: str, message: str) -> str:
             {"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4": "e" * 40},
             [("network-diagnosis", "a branch has the same name as the release tag; delete it so links stay pinned")],
         ),
+        (
+            {"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4/docs": "e" * 40, "refs/tags/v2.6.4/x": "f" * 40},
+            [
+                (
+                    "network-diagnosis",
+                    "refs nested under the release tag name make links ambiguous; delete them: "
+                    "refs/heads/v2.6.4/docs, refs/tags/v2.6.4/x",
+                )
+            ],
+        ),
         (None, [("network-diagnosis", "cannot query the repository to verify the release tag")]),
     ],
 )

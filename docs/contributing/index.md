@@ -216,6 +216,9 @@ submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `sou
 - 릴리스 이미지는 GitHub 호스팅 runner의 release workflow가 빌드해
   `ghcr.io/<owner>/sample-<app>:<version>`으로 게시하고 build provenance를 남깁니다. workflow 요약에
   문서가 고정할 `ref`, `commit`, `image` 값이 출력됩니다.
+- workflow의 action은 태그 대신 full commit SHA로 고정하고 주석에 릴리스 이름을 남깁니다. release workflow는
+  `packages: write` 권한을 쓰므로, 태그가 옮겨져도 검증하지 않은 action 코드가 실행되지 않게 합니다. 근거:
+  [Secure use reference](https://docs.github.com/actions/reference/security/secure-use#using-third-party-actions).
 - GitHub 문서는 처음 게시한 패키지의 기본 공개 범위를 private으로 설명합니다. 2026-11-15
   `sample-movielog-horizondb`의 첫 릴리스에서는 공개 레포의 release workflow가 게시한 패키지를
   게시 직후 로그인 없이 pull할 수 있었습니다. 그러므로 첫 릴리스 뒤 로그인하지 않은 상태에서

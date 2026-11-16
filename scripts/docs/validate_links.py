@@ -97,9 +97,12 @@ RemoteRefs = Callable[[str, str], "dict[str, str] | None"]
 
 
 def _ls_remote(repository: str, ref: str) -> dict[str, str] | None:
-    """Ref name -> commit for the release tag (and its peeled commit) and a branch of the same name, or None
-    when the remote cannot be queried."""
-    command = ["git", "ls-remote", f"{repository}.git", f"refs/tags/{ref}", f"refs/tags/{ref}^{{}}", f"refs/heads/{ref}"]
+    """Ref name -> commit for the release tag (and its peeled commit), a branch of the same name and any branch or tag
+    nested below it (for example refs/heads/<ref>/docs), or None when the remote cannot be queried."""
+    command = [
+        "git", "ls-remote", f"{repository}.git", f"refs/tags/{ref}", f"refs/tags/{ref}^{{}}", f"refs/heads/{ref}",
+        f"refs/heads/{ref}/*", f"refs/tags/{ref}/*",
+    ]
     try:
         result = subprocess.run(
             command, capture_output=True, text=True, check=True, timeout=60, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}
@@ -137,6 +140,16 @@ def _release_errors(samples: Iterable, remote_refs: RemoteRefs) -> list[str]:
             errors.append(f"{label}: release tag points at {tagged} but sample.yml commit is {sample.commit}")
         if first and f"refs/heads/{sample.ref}" in refs:
             errors.append(f"{label}: a branch has the same name as the release tag; delete it so links stay pinned")
+        # GitHub /blob/<ref>/<path> links do not mark where the ref ends, so a branch or tag named <ref>/<segment>
+        # could take over a link that looks pinned.
+        nested = sorted(
+            name for name in refs
+            if name.startswith((f"refs/heads/{sample.ref}/", f"refs/tags/{sample.ref}/")) and not name.endswith("^{}")
+        )
+        if first and nested:
+            errors.append(
+                f"{label}: refs nested under the release tag name make links ambiguous; delete them: " + ", ".join(nested)
+            )
     return errors
 
 

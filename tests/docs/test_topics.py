@@ -1366,6 +1366,16 @@ def test_external_sample_requires_its_pin_fields(tmp_path: Path, taxonomy: dict,
         build_topic_catalog(docs_dir, taxonomy)
 
 
+def test_sample_manifest_that_is_not_utf8_is_a_format_error(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    # The kind cannot be read, so the package is treated as one that keeps its README and reaches manifest parsing.
+    sample_dir = write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST)
+    (sample_dir / "sample.yml").write_bytes(b"title: \xff\xfe broken\nkind: external\n")
+
+    with pytest.raises(DocumentFormatError, match=re.escape("samples/app: sample.yml must be UTF-8")):
+        build_topic_catalog(docs_dir, taxonomy)
+
 def test_external_sample_must_not_carry_code(tmp_path: Path, taxonomy: dict) -> None:
     docs_dir = tmp_path / "docs"
     write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")

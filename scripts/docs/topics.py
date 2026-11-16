@@ -188,7 +188,7 @@ def _sample_directory_errors(
 def _declared_kind(manifest_path: Path) -> str | None:
     try:
         manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
+    except (OSError, UnicodeError, yaml.YAMLError):
         return None
     kind = manifest.get("kind") if isinstance(manifest, Mapping) else None
     return kind.strip() if isinstance(kind, str) else None
@@ -325,6 +325,8 @@ def _build_sample_asset(
 
     try:
         manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except UnicodeError as error:
+        return None, [f"{relative.as_posix()}: sample.yml must be UTF-8: {error}"]
     except yaml.YAMLError as error:
         return None, [f"{relative.as_posix()}: invalid sample.yml: {error}"]
     if not isinstance(manifest, Mapping):
