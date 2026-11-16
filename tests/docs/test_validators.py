@@ -550,7 +550,10 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         + "\n[branch named like the tag](https://github.com/example-org/movielog/blob/refs/heads/v2.6.4/d.java)"
         + "\n[dot segment](https://github.com/example-org/movielog/blob/v2.6.4/../main/README.md)"
         + "\n[encoded dot segment](https://github.com/example-org/movielog/blob/v2.6.4/%2e%2e/main/e.md)"
-        + "\n[dot segment to the pin](https://github.com/example-org/movielog/blob/main/./../v2.6.4/f.md)\n"
+        + "\n[dot segment to the pin](https://github.com/example-org/movielog/blob/main/./../v2.6.4/f.md)"
+        + "\n[backslash dot segment](https://github.com/example-org/movielog/blob/v2.6.4/..\\main/g.md)"
+        + "\n[trailing-dot host](https://github.com./example-org/movielog/blob/main/h.md)"
+        + "\n[trailing-dot www host](https://www.github.com./example-org/movielog/blob/main/i.md)\n"
     )
 
     errors = validate_links.validate_repository(root).errors
@@ -572,6 +575,11 @@ def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_
         "https://github.com/example-org/movielog/blob/v2.6.4/../main/README.md",
         f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
         "https://github.com/example-org/movielog/blob/v2.6.4/%2e%2e/main/e.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com/example-org/movielog/blob/v2.6.4/..\\main/g.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: https://github.com./example-org/movielog/blob/main/h.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://www.github.com./example-org/movielog/blob/main/i.md",
     ]
 
 
@@ -675,13 +683,18 @@ def test_each_topic_keeps_its_own_pin_of_a_shared_code_repository(tmp_path: Path
     (root / "docs/services/aks/network-diagnosis/index.md").write_text(
         VALID_GUIDE
         + "\n[v1](https://github.com/example-org/movielog/blob/v1.0.0/App.java)"
+        + "\n[v2](https://github.com/example-org/movielog/blob/v2.0.0/App.java)"
         + "\n[branch](https://github.com/example-org/movielog/blob/main/App.java)\n"
     )
 
     errors = validate_links.validate_repository(root).errors
 
-    assert [error.split(": ")[0] + ": " + error.rsplit(" ", 1)[-1] for error in errors] == [
-        "docs/services/aks/case-topic/index.md: https://github.com/example-org/movielog/blob/v2.0.0/App.java",
-        "docs/services/aks/network-diagnosis/index.md: https://github.com/example-org/movielog/blob/main/App.java",
+    case_pins = f"v1.0.0, {'a' * 40}"
+    all_pins = f"v1.0.0, {'a' * 40}, v2.0.0, {'b' * 40}"
+    assert errors == [
+        f"docs/services/aks/case-topic/index.md: link must use a pinned ref ({case_pins}) of example-org/movielog: "
+        "https://github.com/example-org/movielog/blob/v2.0.0/App.java",
+        f"docs/services/aks/network-diagnosis/index.md: link must use a pinned ref ({all_pins}) of example-org/movielog: "
+        "https://github.com/example-org/movielog/blob/main/App.java",
     ]
 

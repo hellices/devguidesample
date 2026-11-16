@@ -254,7 +254,9 @@ used_by:
 
 - `README.md`, 코드와 `publish`는 두지 않습니다. 페이지에 게시할 파일은 별도 `artifact`
   sample에 둡니다.
-- `source` submodule은 `.gitmodules` URL이 `repository`와 같고(끝의 `.git`은 붙여도 됩니다) gitlink가 `commit`과
+- `repository`는 끝에 `.git`을 붙이지 않습니다. `image`를 적으면 GHCR namespace가 `repository` owner의 소문자와
+  같아야 합니다.
+- `source` submodule은 `.gitmodules` URL이 `repository`와 같고(끝의 `.git`은 대소문자와 상관없이 붙여도 됩니다) gitlink가 `commit`과
   같아야 합니다.
   `docs/services` 아래의 다른 위치에는 submodule을 두지 않습니다.
 - 사이트와 문서 CI는 submodule을 checkout하지 않습니다. 로컬에서 코드를 함께 보려면

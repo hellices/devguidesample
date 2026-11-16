@@ -22,7 +22,7 @@ SAMPLE_KINDS = frozenset(("runnable", "artifact", "external"))
 # The repository URL is compared with the .gitmodules URL without its ".git" suffix, so the manifest must not carry one.
 # A GitHub owner has 1-39 alphanumerics or single hyphens and neither starts nor ends with a hyphen.
 _GITHUB_OWNER = r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}"
-EXTERNAL_REPOSITORY = re.compile(rf"https://github\.com/{_GITHUB_OWNER}/[A-Za-z0-9._-]+(?<!\.git)")
+EXTERNAL_REPOSITORY = re.compile(rf"https://github\.com/{_GITHUB_OWNER}/[A-Za-z0-9._-]+(?<!\.[Gg][Ii][Tt])")
 # SemVer 2.0.0 with a leading "v": prerelease identifiers are non-empty and numeric ones have no leading zeros.
 # Build metadata is not allowed.
 _SEMVER_NUMBER = r"(?:0|[1-9][0-9]*)"
@@ -414,6 +414,11 @@ def _external_fields(
             errors.append(f"{path}: {field} must be {message}")
             continue
         values[field] = raw.strip()
+    if "repository" in values and "image" in values:
+        owner = values["repository"].removeprefix("https://github.com/").split("/", 1)[0].lower()
+        namespace = values["image"].removeprefix("ghcr.io/").split("/", 1)[0]
+        if namespace != owner:
+            errors.append(f"{path}: image must be published under the repository owner ghcr.io/{owner}/")
     if manifest.get("publish"):
         errors.append(f"{path}: external sample must not publish files; keep page assets in an artifact sample")
     return values, errors
@@ -474,7 +479,7 @@ def _submodule_errors(docs_root: Path, samples: Iterable[SampleAsset]) -> list[s
             errors.append(
                 f"{label}: {EXTERNAL_SOURCE} submodule is at {gitlinks[source]} but sample.yml commit is {sample.commit}"
             )
-        url = urls.get(source, "").removesuffix(".git").rstrip("/").lower()
+        url = urls.get(source, "").rstrip("/").lower().removesuffix(".git")
         if url != (sample.repository or "").lower():
             errors.append(f"{label}: .gitmodules url of {EXTERNAL_SOURCE} must be {sample.repository}.git")
     for path in sorted(set(gitlinks) - expected):

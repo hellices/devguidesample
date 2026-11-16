@@ -1277,9 +1277,13 @@ def test_external_sample_accepts_semver_tags_and_nested_images(
 ) -> None:
     docs_dir = tmp_path / "docs"
     write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
-    write_sample(
-        docs_dir, "services/azure-monitor/agent-topic/samples/app", {**EXTERNAL_MANIFEST, field: value}, readme=False
-    )
+    manifest = {**EXTERNAL_MANIFEST, field: value}
+    # The image namespace must be the lower-case repository owner, so keep the paired field consistent.
+    if field == "image":
+        manifest["repository"] = f"https://github.com/{value.split('/')[1]}/movielog"
+    elif field == "repository":
+        manifest["image"] = f"ghcr.io/{value.split('/')[3].lower()}/movielog:2.6.4@sha256:" + "a" * 64
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", manifest, readme=False)
 
     sample = build_topic_catalog(docs_dir, taxonomy).samples_by_document[
         PurePosixPath("services/azure-monitor/agent-topic/index.md")
@@ -1307,6 +1311,8 @@ def test_external_sample_accepts_semver_tags_and_nested_images(
         ("repository", "https://gitlab.com/example-org/movielog", "repository must be a https://github.com"),
         ("repository", "https://github.com/example-org/movielog/tree/v2.6.4", "repository must be a https://github.com"),
         ("repository", "https://github.com/example-org/movielog.git", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example-org/movielog.GIT", "repository must be a https://github.com"),
+        ("image", "ghcr.io/other-org/movielog:2.6.4@sha256:" + "a" * 64, "image must be published under the repository owner"),
         ("repository", "https://github.com/-example-org/movielog", "repository must be a https://github.com"),
         ("repository", "https://github.com/example-org-/movielog", "repository must be a https://github.com"),
         ("repository", "https://github.com/example--org/movielog", "repository must be a https://github.com"),
@@ -1336,6 +1342,25 @@ def test_external_sample_rejects_unpinned_or_malformed_fields(
     write_sample(
         docs_dir, "services/azure-monitor/agent-topic/samples/app", {**EXTERNAL_MANIFEST, field: value}, readme=False
     )
+
+    with pytest.raises(DocumentFormatError, match=re.escape(f"samples/app: {expected}")):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        ("repository", "repository must be a https://github.com"),
+        ("ref", "ref must be a SemVer release tag"),
+        ("commit", "commit must be the full 40-character commit SHA"),
+    ],
+)
+def test_external_sample_requires_its_pin_fields(tmp_path: Path, taxonomy: dict, field: str, expected: str) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    manifest = dict(EXTERNAL_MANIFEST)
+    del manifest[field]
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", manifest, readme=False)
 
     with pytest.raises(DocumentFormatError, match=re.escape(f"samples/app: {expected}")):
         build_topic_catalog(docs_dir, taxonomy)
@@ -1417,6 +1442,7 @@ SOURCE = "docs/services/azure-monitor/agent-topic/samples/app/source"
     ("commit", "url", "path", "expected"),
     [
         ("c" * 40, "https://github.com/example-org/movielog.git", SOURCE, None),
+        ("c" * 40, "https://github.com/example-org/movielog.GIT", SOURCE, None),
         ("d" * 40, "https://github.com/example-org/movielog.git", SOURCE, "source submodule is at " + "d" * 40),
         ("c" * 40, "https://github.com/example-org/other.git", SOURCE, ".gitmodules url of source must be"),
         ("c" * 40, "https://github.com/example-org/movielog.git", "vendor/movielog", "source must be a git submodule"),

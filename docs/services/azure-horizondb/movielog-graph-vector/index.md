@@ -181,9 +181,12 @@ SELECT azure_openai.create_embeddings('<model-alias>', 'Alternatives to LEGO');
 
 - **지원 모델** — DB 안 임베딩 함수의 지원 모델은 `text-embedding-3-small`, `text-embedding-3-large`,
   `text-embedding-ada-002`입니다. 그 밖의 모델은 앱이나 별도 서비스에서 임베딩해 벡터를 SQL parameter로 넘깁니다.
-- **두 가지 호출 방식** — `azure_ai.*`·`azure_openai.*` 함수는 호출한 문장 안에서 바로 실행되고, `ai.*`
-  AI pipeline(미리 보기)은 source 테이블·chunk·embed·extract·rank 단계·sink·`on_change` trigger를 SQL로 선언해
-  `pg_durable` 위에서 재시도와 checkpoint를 갖춘 채 나중에 실행합니다. 대량 적재와 새 행 자동 임베딩에 맞습니다.
+- **두 가지 호출 방식** — `azure_ai.*`·`azure_openai.*` 함수는 호출한 문장 안에서 바로 실행됩니다. AI pipeline(미리
+  보기)은 `ai.create_pipeline()`에 source 테이블·chunk·embed·extract·rank 단계·sink·`on_change` trigger를 SQL로 선언해
+  `pg_durable` 위에서 재시도와 checkpoint를 갖춘 채 나중에 실행하며, 대량 적재와 새 행 자동 임베딩에 맞습니다. Learn은
+  pipeline 단계 함수(`ai.embed()` 등)를 모델을 부르지 않는 단계 정의로 설명하지만, `azure_ai` 2.5.6에서는
+  `ai.embed()`가 모델을 바로 불러 벡터를 돌려주었으므로 사용 전 `\df ai.embed`로 시그니처를 확인합니다
+  ([BYOM 시험](#in-database-ai-movielog)).
 - **접근 제어** — 등록한 모델은 기본적으로 모든 DB 사용자가 쓸 수 있으며, `model_user_add`·`model_user_set`으로
   사용자를 제한합니다.
 

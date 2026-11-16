@@ -38,11 +38,12 @@ def _github_ref(target: str) -> tuple[str, str] | None:
     parsed = urlparse(target.removeprefix("<").removesuffix(">"))
     if parsed.scheme not in {"", "http", "https"} or not parsed.netloc:
         return None
-    host = (parsed.hostname or "").lower().removeprefix("www.")
+    # A browser drops one trailing dot of an absolute DNS name and, for http(s), treats "\" as a path separator.
+    host = (parsed.hostname or "").lower().removesuffix(".").removeprefix("www.")
     parts: list[str] = []
     # Browsers remove "." and ".." segments (also when percent-encoded) before requesting the URL, so resolve them
     # the same way; otherwise ".../blob/<pin>/../main/..." would look pinned while opening a branch.
-    for part in (unquote(part) for part in parsed.path.split("/") if part):
+    for part in (unquote(part) for part in parsed.path.replace("\\", "/").split("/") if part):
         if part == "..":
             if parts:
                 parts.pop()

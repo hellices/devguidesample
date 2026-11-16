@@ -119,8 +119,9 @@ Managed Grafana에서 봅니다.
 ### HorizonDB 데이터 모델: 관계형 원본 → 벡터 → 그래프 { #data-model }
 
 관계형 테이블이 원본이고, 벡터와 그래프는 같은 데이터베이스 `movielog` 안에서 그 원본에
-붙거나 원본에서 다시 만드는 데이터입니다. 세 모델은 별도 저장소나 동기화 없이 `tmdb_id`(영화)와
-`qid`(인물) 두 키로 이어집니다.
+붙거나 원본에서 다시 만드는 데이터입니다. 세 모델은 별도 저장소 없이 `tmdb_id`(영화)와
+`qid`(인물) 두 키로 이어집니다. 벡터 열은 문서가 바뀌면 다시 임베딩하고, 그래프는 trigger와 queue를 거쳐
+반영합니다([그래프 동기화](#graph-sync)).
 
 ![HorizonDB 데이터 모델과 작성 순서. 왼쪽에 ⓪ 앱 기동, ① 카탈로그 적재(build_catalog.py → catalog.sql), ② 문서 임베딩(embed_catalog.py, bge-m3-ko 1024·OpenAI 1536차원), ③ DiskANN index(20-vector-index.sql), ④ 그래프 재생성(30-graph.sql) 단계가 있고 각각 관계형·벡터·그래프 영역으로 화살표가 이어짐. 관계형 영역에는 public.movies, public.reviews·members, catalog.people, catalog.movie_credits, catalog.movie_genres와 조인 키 설명이 있음. 벡터 영역에는 catalog.movie_docs의 embedding_bge vector(1024)·embedding vector(1536) 열, 두 열 각각의 DiskANN index, 코사인 거리 쿼리가 있음. 그래프 영역에는 Movie·Person·Genre vertex와 DIRECTED·ACTED_IN·IN_GENRE·SIMILAR_TO edge가 개수와 함께 있고, bge 임베딩 최근접 3편 → SIMILAR_TO 파생 화살표가 그래프로 이어짐](../images/horizondb-data-model.svg)
 
