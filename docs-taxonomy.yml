@@ -35,7 +35,6 @@ services:
   azure-automation: Azure Automation
   azure-container-apps: Azure Container Apps
   azure-cosmos-db: Azure Cosmos DB
-  azure-database-for-postgresql: Azure Database for PostgreSQL
   azure-database-for-mysql: Azure Database for MySQL
   azure-documentdb: Azure DocumentDB
   azure-event-hubs: Azure Event Hubs
@@ -146,7 +145,6 @@ official_source_hosts:
   - generativeui.github.io
   - blog.google
   - openjdk.org
-  - www.postgresql.org
   - docs.micrometer.io
   - code.visualstudio.com
   - docs.github.com

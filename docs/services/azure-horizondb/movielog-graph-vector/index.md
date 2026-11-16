@@ -1,8 +1,8 @@
 ---
 title: "Azure HorizonDB 벡터 검색과 그래프: MovieLog로 본 임베딩·DiskANN·Apache AGE 활용"
-description: Azure HorizonDB(미리 보기)의 벡터 검색(pgvector·DiskANN)과 그래프(Apache AGE)를 영화 리뷰 앱 MovieLog의 의미 검색과 관계 그래프로 보여 줍니다. 벡터 index 선택지와 DiskANN을 고른 이유, Azure OpenAI와 bge-m3-ko 임베딩 병행 구성, 관리형 모델·BYOM으로 DB 안에서 임베딩하는 방법, 활용 패턴, PostgreSQL Flexible Server 대비 성능, VS Code 확장 사용법을 실측값과 함께 정리합니다.
+description: Azure HorizonDB(미리 보기)의 벡터 검색(pgvector·DiskANN)과 그래프(Apache AGE)를 영화 리뷰 앱 MovieLog의 의미 검색과 관계 그래프로 보여 줍니다. 벡터 index 선택지와 DiskANN을 고른 이유, Azure OpenAI와 bge-m3-ko 임베딩 병행 구성, 관리형 모델·BYOM으로 DB 안에서 임베딩하는 방법, 활용 패턴, VS Code 확장 사용법을 실측값과 함께 정리합니다.
 document_type: guide
-services: [azure-horizondb, azure-openai, azure-kubernetes-service, azure-api-management, azure-database-for-postgresql]
+services: [azure-horizondb, azure-openai, azure-kubernetes-service, azure-api-management]
 technologies: [postgresql, kubernetes]
 tags: [design, evaluate]
 status: current
@@ -35,8 +35,6 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/aks-managed-gpu-nodes
   - title: Increase spot vCPU family quotas
     url: https://learn.microsoft.com/azure/quotas/spot-quota
-  - title: What is Azure Database for PostgreSQL?
-    url: https://learn.microsoft.com/azure/postgresql/overview
   - title: Apache AGE
     url: https://github.com/apache/age
 last_verified: 2026-11-16
@@ -83,7 +81,6 @@ Azure HorizonDB는 PostgreSQL 확장으로 벡터와 그래프를 함께 제공�
 |---|---|---|
 | [HorizonDB 벡터·그래프 기능](vector-graph-features/index.md) | 기능 가이드 | 거리 연산자, index 매개변수, advanced filtering, AGE 저장 구조와 `cypher()` 함수의 세부 동작 |
 | [MovieLog 실습](movielog-lab/index.md) | 샘플 실습 | `azd up` 한 번으로 재현하는 배포, 데이터 모델, 그래프 동기화, 앱 구현, 관측 |
-| [Flexible Server 성능 비교](flexible-server-comparison/index.md) | 샘플 측정 | 같은 4 vCore 조건의 pgbench와 1,024차원 20만 건 벡터 측정 |
 
 ## Azure HorizonDB 개요: PostgreSQL 호환 AI-ready 관리형 데이터베이스 { #horizondb }
 
@@ -169,10 +166,6 @@ LIMIT 12;
 
 - **484행 실행 계획** — planner는 seq scan을 골랐고, `SET LOCAL enable_seqscan TO OFF`일 때만 DiskANN index를
   썼습니다.
-- **20만 건 필터 결합** — 1,024차원 20만 건에 선택도 2% 조건을 붙인 k-NN은 HorizonDB의 `DiskANNFilteredScan`
-  계획이 8 연결 평균 262 ms였고, `diskann.enable_filter_hook = off`로 후필터 계획으로 바꿔도 259 ms로 비슷했습니다
-  (2026-11-16, 120초 × 3회). 필터 결합은 데이터 분포에 따라 계획을 확인하고 시간을 정한 부하로 비교해야 했습니다
-  ([벡터 적재와 검색](flexible-server-comparison/index.md#vector)).
 - **키워드 결합** — 벡터 순위에 제목·인물 이름 일치로 만든 키워드 순위를 Reciprocal Rank Fusion으로 합쳐, 「듄」처럼
   짧은 제목 질의도 놓치지 않게 했습니다([의미 검색 구현](movielog-lab/index.md#search)).
 
@@ -317,26 +310,6 @@ $cy$) AS (a_id agtype, a_label agtype, a_props agtype,
 graph-augmented RAG의 Learn 패턴(authority boosting, context expansion, graph filtering, path-based retrieval)과
 MovieLog 대응은 [벡터와 그래프 결합](vector-graph-features/index.md#graph-rag)에 있습니다.
 
-## 성능: MovieLog 환경의 PostgreSQL Flexible Server 비교 측정 { #performance }
-
-Learn에는 HorizonDB와 Azure Database for PostgreSQL flexible server의 성능 비교 문서가 없어, 이 절의 값은 모두 MovieLog
-환경에서 직접 잰 결과입니다. 같은 4 vCore 크기에서 쓰기 처리량과 대량 적재는 HorizonDB에서 더 높게 관찰됐습니다
-(2026-11-15, 단일 실행 위주). 이 측정은 저장 구조만 바꿔 비교한 실험이 아니므로 차이의 원인을 특정하지 않습니다.
-벡터 검색은 2026-11-16에 두 서비스를 새로 만들어 120초 × 3회로 쟀고, k-NN은 거의 같았으며 필터 결합 검색은
-Flexible Server의 지연이 짧았습니다.
-
-| 부하 | HorizonDB | Flexible Server(E4ds_v5, Premium SSD 512 GiB) |
-|---|---|---|
-| TPC-B 쓰기, 64 연결 | 5,115 tps | 4,108 tps |
-| `pgbench -i -s 100` 초기 적재 | 9.6초 | 28.3초 |
-| 읽기 전용, 32 연결 | 36,757 tps | 36,187 tps |
-| 1,024차원 20만 건 DiskANN index 생성(1회) | 188초 | 248초 |
-| k-NN 10건, 8 연결(120초 × 3회 평균) | 21.0 ms | 20.1 ms |
-| 필터(선택도 2%) + k-NN 10건, 8 연결(120초 × 3회 평균) | 262 ms | 156 ms |
-
-벡터 검색은 두 서비스 모두 `pg_diskann`을 쓰지만 버전(0.7.6과 0.6.6)과 필터 결합 검색의 실행 계획이 달랐습니다. 측정
-환경과 해석, 한계는 [Flexible Server 성능 비교](flexible-server-comparison/index.md)에 있습니다.
-
 ## VS Code PostgreSQL 확장: 연결 · AGE 그래프 시각화 · pipeline 보기 { #vscode }
 
 Microsoft의 PostgreSQL extension for Visual Studio Code(`ms-ossdata.vscode-pgsql`, 미리 보기)는 HorizonDB를
@@ -403,5 +376,4 @@ $$) AS (p agtype, r agtype, m agtype);
 - [What is the PostgreSQL extension for Visual Studio Code? (Preview)](https://learn.microsoft.com/azure/horizondb/development/vs-code-extension/vs-code-overview)
 - [Create a fully managed GPU node pool on Azure Kubernetes Service (AKS)](https://learn.microsoft.com/azure/aks/aks-managed-gpu-nodes)
 - [Increase spot vCPU family quotas](https://learn.microsoft.com/azure/quotas/spot-quota)
-- [What is Azure Database for PostgreSQL?](https://learn.microsoft.com/azure/postgresql/overview)
 - [Apache AGE](https://github.com/apache/age)
