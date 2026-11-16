@@ -35,15 +35,19 @@ def _github_ref(target: str) -> tuple[str, str] | None:
     """(owner/repo in lower case, ref) of a GitHub link that names a ref, or None. Accepts http, https and
     protocol-relative URLs with any host case, github.com/<owner>/<repo>/(blob|tree|raw|commit)/<ref> and
     raw.githubusercontent.com/<owner>/<repo>/<ref>, where a tag may be spelled refs/tags/<tag>."""
-    parsed = urlparse(target.removeprefix("<").removesuffix(">"))
+    target = target.removeprefix("<").removesuffix(">")
+    # For http(s) and protocol-relative URLs a browser treats "\" as "/", including right after the host, so normalize
+    # before parsing the authority; it also drops one trailing dot of an absolute DNS name.
+    if target.lower().startswith(("http:", "https:")) or target[:2].replace("\\", "/") == "//":
+        target = target.replace("\\", "/")
+    parsed = urlparse(target)
     if parsed.scheme not in {"", "http", "https"} or not parsed.netloc:
         return None
-    # A browser drops one trailing dot of an absolute DNS name and, for http(s), treats "\" as a path separator.
     host = (parsed.hostname or "").lower().removesuffix(".").removeprefix("www.")
     parts: list[str] = []
     # Browsers remove "." and ".." segments (also when percent-encoded) before requesting the URL, so resolve them
     # the same way; otherwise ".../blob/<pin>/../main/..." would look pinned while opening a branch.
-    for part in (unquote(part) for part in parsed.path.replace("\\", "/").split("/") if part):
+    for part in (unquote(part) for part in parsed.path.split("/") if part):
         if part == "..":
             if parts:
                 parts.pop()

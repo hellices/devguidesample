@@ -63,14 +63,18 @@ hook이 Bicep 형식이 없는 HorizonDB(미리 보기)와 DB·Kubernetes 구성
 git clone --branch v2.7.1 https://github.com/hellices/sample-movielog-horizondb.git && cd sample-movielog-horizondb
 azd auth login && az login
 azd env new movielog --location koreacentral
-azd env set APP_HOST movielog.example.com   # optional: public HTTPS and Microsoft Entra ID sign-in
 azd up
 ```
 
 `APP_HOST`를 넣지 않으면 공개 진입점을 만들지 않습니다. 앱 Service는 클러스터 내부용(ClusterIP)이라
-`kubectl port-forward`로만 접속합니다. `APP_HOST`를 넣으면 Application Gateway for Containers에 HTTPS listener를
-열고, HTTP listener는 앱으로 전달하지 않고 HTTPS로 301 redirect만 합니다
-([공개 구성](#public-access)).
+`kubectl port-forward`로만 접속합니다. 공개 HTTPS와 Microsoft Entra ID 로그인이 필요하면 `azd up` 전에 직접 관리하는
+도메인의 호스트명을 넣습니다. Let's Encrypt HTTP-01 검증이 통과하려면 그 호스트명의 CNAME이 Gateway 주소를 가리켜야
+합니다. 이 경우 Application Gateway for Containers에 HTTPS listener를 열고, HTTP listener는 앱으로 전달하지 않고
+HTTPS로 301 redirect만 합니다([공개 구성](#public-access)).
+
+```bash
+azd env set APP_HOST <your-host-name>   # a host name in a DNS zone you manage
+```
 
 | 단계 | 만드는 것 |
 |---|---|
