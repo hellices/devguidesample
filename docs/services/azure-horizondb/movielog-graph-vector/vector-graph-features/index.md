@@ -289,7 +289,7 @@ Learn은 벡터 검색만으로 부족한 질의에 graph 탐색을 더하는 gr
 | 패턴 | 그래프의 역할 | MovieLog 확인 위치 |
 |---|---|---|
 | Authority boosting | 인용·연결 수 같은 구조적 중요도로 벡터 결과를 다시 매김 | 미적용 |
-| Context expansion | 질의 엔터티의 이웃을 탐색해 벡터가 놓친 문서를 추가 | 결과 영화의 인물·장르·`SIMILAR_TO` 이웃을 [화면에 표시](../movielog-lab/index.md#app-verification) |
+| Context expansion | 질의 엔터티의 이웃을 탐색해 벡터가 놓친 문서를 추가 | 미적용. 이웃은 [화면에만 표시](../movielog-lab/index.md#app-verification)하고 검색 후보·순위·LLM 문맥에는 넣지 않음 |
 | Graph filtering | 관계를 경계(권한·소유·분류)로 써서 후보를 제한 | 미적용 |
 | Path-based retrieval | 경로 자체가 답인 질의 | 미적용 |
 
