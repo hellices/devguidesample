@@ -205,7 +205,7 @@ MovieLog 구독에서 두 방식을 시험했고, 최종 앱은 DB 안 임베딩
 | BYOM 인증 | Learn은 `subscription-key`와 `managed-identity`를 적지만, `managed-identity`는 BYOM에서 거부돼 `subscription-key`만 동작했습니다. |
 | API Management 경유 | 구독 정책으로 Azure OpenAI key 인증이 꺼져 있어, API Management가 자기 managed identity로 Azure OpenAI를 부르고(`authentication-managed-identity` 정책) HorizonDB에는 API Management subscription key를 등록했습니다. `text-embedding-3-small`과 `-large` 모두 동작했고 첫 호출은 192–253 ms였습니다. |
 | `ai.embed` | `azure_ai` 2.5.6에서 `ai.embed(text, model, ...)`가 바로 `real[]`을 돌려주었고, `azure_openai.create_embeddings`는 `ai.embed`를 쓰라는 deprecation 경고를 냈습니다. Learn의 AI pipeline 문서(`azure_ai` 2.3.2 기준)는 `ai.embed()`를 모델을 부르지 않는 pipeline 단계 정의로 설명하므로, 사용 전 `\df ai.embed`로 시그니처를 확인합니다. |
-| 오픈 모델 등록 | OpenAI 형식(`/openai/deployments/{d}/embeddings`) 응답을 흉내 내는 mock을 API Management에 만들고 모델 이름을 `bge-m3-ko`로 등록하자 `ai.embed`가 응답을 받아들였습니다. 지원 범위 밖의 관찰입니다. |
+| 오픈 모델 등록 | BYOM의 API Management endpoint 등록 경로를 그대로 쓰되, API Management에 OpenAI 형식(`/openai/deployments/{d}/embeddings`)으로 응답하는 mock을 두고 모델 이름을 `bge-m3-ko`로 등록하자 `ai.embed`가 응답을 받아들였습니다. 등록 경로는 BYOM이고, `bge-m3-ko`가 Learn의 임베딩 지원 모델 목록에 없다는 점만 다릅니다. mock으로 확인했으며 실제 bge-m3-ko 서버를 연결해 보지는 않았습니다. |
 
 ```sql
 SELECT array_length(ai.embed('마피아 가문의 권력 승계', 'byom-embed-small'), 1);  -- 1536
@@ -246,9 +246,11 @@ DiskANN 검색과 RRF 결합 흐름에서 동작하므로, 어느 쪽이든 Hori
 - **모델 추가** — bge-m3-ko는 기존 카탈로그 484편을 1분 26초(배치 32)에 임베딩했습니다. 새 열을 추가해 채운 뒤
   index를 만들고 기본 모델을 바꾸므로, 기존 열은 그대로라 되돌리기 쉽습니다.
 
-## 그래프: Apache AGE와 openCypher { #graph }
+## 그래프 기능: `age` 확장(Apache AGE)과 openCypher { #graph }
 
-Apache AGE는 PostgreSQL 안에 property graph를 두는 확장입니다. graph 하나는 schema 하나, vertex·edge label은
+HorizonDB는 그래프 기능을 Apache AGE 기반 `age` 확장(미리 보기)으로 제공합니다. parameter group에서
+`azure.extensions`와 `shared_preload_libraries`에 AGE를 켜고 `CREATE EXTENSION age`로 설치합니다.
+Apache AGE는 PostgreSQL 안에 property graph를 두는 오픈 소스 확장입니다. graph 하나는 schema 하나, vertex·edge label은
 각각 테이블이 되고, openCypher 질의는 `cypher()` 함수로 SQL 안에서 실행해 `agtype` 결과를 받습니다. 그래서
 그래프를 관계형 테이블·벡터와 같은 트랜잭션·같은 데이터베이스에서 다룰 수 있습니다.
 
@@ -359,7 +361,8 @@ $$) AS (p agtype, r agtype, m agtype);
   [Learn 문서와 실습 cluster의 차이](vector-graph-features/index.md#observed-differences)와
   [실습 문서](movielog-lab/index.md)에 있습니다.
 - **AI 함수 버전** — MovieLog cluster의 `azure_ai` 버전(2.5.6)이 Learn 기준(2.2.1–2.3.2)보다 높아 함수 시그니처가 달랐습니다.
-- **임베딩 모델 지원** — DB 안 임베딩의 공식 지원 모델은 OpenAI 세 모델입니다.
+- **임베딩 모델 지원** — DB 안 임베딩 함수의 지원 모델 목록은 OpenAI 세 모델입니다. BYOM과 API Management endpoint
+  등록은 지원 경로이지만, 그 뒤에 둔 모델이 이 목록 밖이면 문서에 지원 모델로 적힌 구성은 아닙니다.
 
 ## 공식 참고 자료
 
