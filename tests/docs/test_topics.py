@@ -1253,7 +1253,7 @@ def test_external_sample_is_a_pinned_pointer_without_readme(tmp_path: Path, taxo
 
     sample = catalog.samples_by_document[PurePosixPath("services/azure-monitor/agent-topic/index.md")][0]
     assert (sample.kind, sample.ref, sample.image) == ("external", "v2.6.4", EXTERNAL_MANIFEST["image"])
-    assert sample.source_url == "https://github.com/example-org/movielog/tree/v2.6.4"
+    assert sample.source_url == "https://github.com/example-org/movielog/tree/" + "c" * 40
 
 
 @pytest.mark.parametrize(
@@ -1265,6 +1265,7 @@ def test_external_sample_is_a_pinned_pointer_without_readme(tmp_path: Path, taxo
         ("ref", "v1.2.3-0a"),
         ("image", "ghcr.io/owner/repo:1.2.3@sha256:" + "a" * 64),
         ("image", "ghcr.io/owner/repo/sub:1.2.3@sha256:" + "a" * 64),
+        ("image", "ghcr.io/owner/repo:_" + "a" * 127 + "@sha256:" + "a" * 64),
     ],
 )
 def test_external_sample_accepts_semver_tags_and_nested_images(
@@ -1301,6 +1302,9 @@ def test_external_sample_accepts_semver_tags_and_nested_images(
         ("image", "ghcr.io/example-org//movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
         ("image", "ghcr.io/example-org/movielog//api:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
         ("image", "ghcr.io/example-org/movielog/:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:-bad@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:.bad@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:" + "a" * 129 + "@sha256:" + "a" * 64, "image must be a ghcr.io"),
         ("publish", [{"source": "a.svg", "target": "images/a.svg"}], "external sample must not publish files"),
     ],
 )
@@ -1335,6 +1339,25 @@ def test_external_sample_must_not_carry_code(tmp_path: Path, taxonomy: dict) -> 
             "external sample must contain only sample.yml and the source submodule: "
             "README.md, deploy/sample.yml, src/App.java"
         ),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_external_sample_rejects_symlinks_outside_source(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    sample_dir = write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        (sample_dir / "linked-dir").symlink_to(outside, target_is_directory=True)
+        (sample_dir / "broken").symlink_to(tmp_path / "missing")
+    except OSError as error:
+        pytest.skip(f"symlinks are unavailable: {error}")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape("external sample must contain only sample.yml and the source submodule: broken, linked-dir"),
     ):
         build_topic_catalog(docs_dir, taxonomy)
 

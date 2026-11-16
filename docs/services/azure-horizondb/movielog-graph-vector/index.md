@@ -1,6 +1,6 @@
 ---
 title: "Azure HorizonDB 벡터 검색과 그래프: MovieLog로 본 임베딩·DiskANN·Apache AGE 활용"
-description: Azure HorizonDB(미리 보기)의 벡터 검색(pgvector·DiskANN)과 그래프(Apache AGE)를 영화 리뷰 앱 MovieLog의 의미 검색과 관계 그래프로 보여 줍니다. 벡터 index 선택지와 DiskANN을 고른 이유, Azure OpenAI와 bge-m3-ko 임베딩 비교, 관리형 모델·BYOM으로 DB 안에서 임베딩하는 방법, 활용 패턴, PostgreSQL Flexible Server 대비 성능, VS Code 확장 사용법을 실측값과 함께 정리합니다.
+description: Azure HorizonDB(미리 보기)의 벡터 검색(pgvector·DiskANN)과 그래프(Apache AGE)를 영화 리뷰 앱 MovieLog의 의미 검색과 관계 그래프로 보여 줍니다. 벡터 index 선택지와 DiskANN을 고른 이유, Azure OpenAI와 bge-m3-ko 임베딩 병행 구성, 관리형 모델·BYOM으로 DB 안에서 임베딩하는 방법, 활용 패턴, PostgreSQL Flexible Server 대비 성능, VS Code 확장 사용법을 실측값과 함께 정리합니다.
 document_type: guide
 services: [azure-horizondb, azure-openai, azure-kubernetes-service, azure-api-management, azure-database-for-postgresql]
 technologies: [postgresql, kubernetes]
@@ -227,42 +227,26 @@ SELECT array_length(ai.embed('마피아 가문의 권력 승계', 'byom-embed-sm
 세 모델만 지원하므로, 한국어 특화 오픈 모델 같은 다른 모델은 직접 서빙합니다. AKS에서는 관리형 GPU 노드 풀이
 NVIDIA driver와 device plugin을 설치·관리하며, spot VM은 VM 계열과 상관없이 지역의 spot vCPU 할당량을 씁니다.
 
-### MovieLog 확인: Azure OpenAI와 bge-m3-ko 비교 { #embedding-comparison }
+### MovieLog 확인: Azure OpenAI와 bge-m3-ko 병행 구성 { #embedding-comparison }
 
-MovieLog는 두 모델의 열을 함께 채우고 API의 `model=openai|bge` 매개변수로 고르게 해, 같은 질의의 결과를 나란히
-비교했습니다.
+MovieLog는 두 모델의 열을 함께 채우고 API의 `model=openai|bge` 매개변수로 요청마다 고르게 했습니다. 두 경로 모두 같은
+DiskANN 검색과 RRF 결합 흐름에서 동작하므로, 어느 쪽이든 HorizonDB 쪽 구성은 같습니다. 어느 모델을 쓸지는 아래 운영
+조건을 보고, 서비스 데이터로 별도 검색 품질 평가를 거쳐 정합니다.
 
 | 항목 | Azure OpenAI `text-embedding-3-large` | `dragonkue/BGE-m3-ko` |
 |---|---|---|
 | 차원 | 3,072를 `dimensions`로 1,536으로 줄임 | 1,024 |
 | 서빙 | 관리형 Azure OpenAI, Entra ID 인증 | AKS의 vLLM 0.32(OpenAI 호환 `/v1/embeddings`), `Standard_NC4as_T4_v3` spot 노드 1대 |
 | 질의 임베딩 평균 | 109.3 ms | 22.0 ms |
+| 질의 텍스트 경로 | Azure OpenAI endpoint로 전송 | 클러스터 안에서 처리 |
 | 라이선스·비용 | 토큰 과금 | Apache-2.0, GPU VM(spot) 시간 과금 |
 
-2026-11-16에 같은 질의 12개를 두 모델로 검색한 상위 3편입니다(앱의 RRF 결합 결과). 판정은 질의 의도에 맞는
-영화가 더 위에 있는 쪽입니다.
-
-| 질의 | Azure OpenAI 상위 3편 | bge-m3-ko 상위 3편 | 더 나은 쪽 |
-|---|---|---|---|
-| 마피아 가문의 권력 승계 | 대부 3, 대부, 스카페이스 | 대부 3, 대부, 대부 2 | bge-m3-ko(대부 3부작) |
-| 인공지능 로봇이 사람이 되고 싶어 하는 이야기 | 아이, A.I., 싸이보그지만 괜찮아 | 아이, A.I., 이미테이션 게임 | 비슷함 |
-| 좀비가 나오는 기차 | 부산행, 설국열차, 파묘 | 부산행, 설국열차, 닥터 스트레인지: 대혼돈의 멀티버스 | 비슷함 |
-| 호빗이나 오크같은게 나오는 영화 | 호빗: 뜻밖의 여정, 호빗: 스마우그의 폐허, 호빗: 다섯 군대 전투 | 호빗: 다섯 군대 전투, 호빗: 뜻밖의 여정, 호빗: 스마우그의 폐허 | 비슷함 |
-| 드니 빌뇌브 | 듄, 듄: 파트 2, 블레이드 러너 2049 | 듄, 블레이드 러너 2049, 듄: 파트 2 | 비슷함 |
-| 시간을 되돌려 과거를 바꾸는 이야기 | 벤자민 버튼의 시간은 거꾸로 간다, 시간, 백 투 더 퓨처 | 벤자민 버튼의 시간은 거꾸로 간다, 백 투 더 퓨처, 백 투 더 퓨처 2 | bge-m3-ko(백 투 더 퓨처 1·2) |
-| 가난한 가족이 부잣집에 숨어드는 이야기 | 빈 집, 기생충, 7번방의 선물 | 웡카, 슬럼독 밀리어네어, 나 홀로 집에 | Azure OpenAI(기생충) |
-| a shark terrorizes a beach town | 죠스, 괴물, 에이리언 | 죠스, 캐리비안의 해적: 세상의 끝에서, 쉬리 | Azure OpenAI |
-| 15년 동안 갇혀 있던 남자의 복수 | 복수는 나의 것, 올드보이, 악마를 보았다 | 친절한 금자씨, 복수는 나의 것, 올드보이 | Azure OpenAI(올드보이 2위) |
-| 우주에서 가족을 찾아 떠나는 여정 | 인터스텔라, 2001: 스페이스 오디세이, 승리호 | 스타 트렉: 더 비기닝, 인터스텔라, 프로메테우스 | Azure OpenAI(인터스텔라 1위) |
-| 꿈속에서 벌어지는 하이스트 | 호프, 패스트 라이브즈, 인터스텔라 | 패스트 라이브즈, 호프, 웡카 | 둘 다 「인셉션」을 찾지 못함 |
-| 아이와 함께 보는 판타지 애니메이션 | 센과 치히로의 행방불명, 위쳐: 늑대의 악몽, 신비한 동물사전 | 센과 치히로의 행방불명, 아이, 피터 팬 | 비슷함 |
-
-- **품질** — 12개 중 6개는 비슷했고, bge-m3-ko가 2개, Azure OpenAI가 4개에서 나았습니다. bge-m3-ko는 같은
-  시리즈를 묶어 찾는 데 강했고, 줄거리를 추상적으로 말한 질의와 영어 질의에서는 Azure OpenAI가 의도에 더 가까웠습니다.
-  코사인 점수는 모델마다 분포가 달라 두 모델 사이에서 비교하지 않습니다.
-- **선택** — 품질이 비슷한 범위에서 질의 임베딩이 5배 빠르고, 질의 텍스트가 클러스터 밖으로 나가지 않으며, 비용이
-  호출량이 아니라 GPU 노드 시간으로 정해지는 점을 보고 bge-m3-ko를 앱 기본 모델로 두었습니다. 줄거리 중심 검색이
-  많다면 Azure OpenAI가 낫고, 요청마다 `model`로 바꿀 수 있게 남겼습니다.
+- **검색 품질** — 2026-11-16에 질의 12개로 두 모델의 상위 3편을 나란히 확인했고, 두 모델 모두 대부분의 질의에서
+  의도에 맞는 영화를 찾았으며 둘 다 놓친 질의도 있었습니다. 정답 집합 없이 눈으로 본 소규모 점검이라 모델 간 품질
+  우열의 근거로 쓰지 않습니다. 모델을 고르려면 실제 질의와 관련 영화 정답 집합으로 recall@k·nDCG 같은 지표를 재는
+  평가가 필요합니다. 코사인 점수는 모델마다 분포가 달라 두 모델 사이에서 비교하지 않습니다.
+- **앱 기본값** — MovieLog 앱의 기본값은 bge-m3-ko이지만 품질 평가에 따른 선택이 아니라 샘플 구성이며, 요청마다
+  `model`로 바꿀 수 있습니다.
 - **spot GPU** — MovieLog 구독의 Korea Central에서는 GPU VM으로 T4와 H100 계열만 조회됐고 GPU 계열 할당량은 0이었지만,
   spot vCPU 할당량으로 T4 노드를 만들 수 있었습니다. spot VM이 회수되면 새 노드가 뜰 때까지 `model=bge` 검색은
   503을 돌려주고 `model=openai`는 계속 동작합니다.
@@ -336,8 +320,9 @@ MovieLog 대응은 [벡터와 그래프 결합](vector-graph-features/index.md#g
 ## 성능: MovieLog 환경의 PostgreSQL Flexible Server 비교 측정 { #performance }
 
 Learn에는 HorizonDB와 Azure Database for PostgreSQL flexible server의 성능 비교 문서가 없어, 이 절의 값은 모두 MovieLog
-환경에서 직접 잰 결과입니다. 같은 4 vCore 크기에서 HorizonDB는 WAL만 저장 계층에 쓰는 구조 덕분에 쓰기 처리량과 대량
-적재에서 앞섰고, 벡터 검색 지연은 조금 뒤졌습니다(2026-11-15, 단일 실행 위주).
+환경에서 직접 잰 결과입니다. 같은 4 vCore 크기에서 쓰기 처리량과 대량 적재는 HorizonDB에서 더 높게 관찰됐습니다
+(2026-11-15, 단일 실행 위주). 이 측정은 저장 구조만 바꿔 비교한 실험이 아니므로 차이의 원인을 특정하지 않습니다.
+벡터 검색은 연결당 10개 질의만 실행한 짧은 표본이라 우열을 판단하지 않았습니다.
 
 | 부하 | HorizonDB | Flexible Server(E4ds_v5, Premium SSD 512 GiB) |
 |---|---|---|
@@ -345,12 +330,11 @@ Learn에는 HorizonDB와 Azure Database for PostgreSQL flexible server의 성능
 | `pgbench -i -s 100` 초기 적재 | 9.6초 | 28.3초 |
 | 읽기 전용, 32 연결 | 36,757 tps | 36,187 tps |
 | 1,024차원 20만 건 DiskANN index 생성 | 213초 | 225초 |
-| k-NN 10건, 8 연결 | 23.0 ms | 19.2 ms |
-| 필터(선택도 2%) + k-NN 10건, 8 연결 | 272 ms | 149 ms |
+| k-NN 10건, 8 연결(질의 80개, 참고값) | 23.0 ms | 19.2 ms |
+| 필터(선택도 2%) + k-NN 10건, 8 연결(질의 80개, 참고값) | 272 ms | 149 ms |
 
-쓰기가 많은 데이터와 대량 재임베딩에는 HorizonDB의 구조가 유리했고, 벡터 검색은 두 서비스 모두 `pg_diskann`을 쓰되
-버전(0.7.6과 0.6.6)과 필터 계획이 달라 결과가 갈렸습니다. 측정 환경과 해석, 한계는
-[Flexible Server 성능 비교](flexible-server-comparison/index.md)에 있습니다.
+벡터 검색은 두 서비스 모두 `pg_diskann`을 쓰지만 버전(0.7.6과 0.6.6)과 필터 결합 검색의 실행 계획이 달랐습니다. 측정
+환경과 해석, 한계는 [Flexible Server 성능 비교](flexible-server-comparison/index.md)에 있습니다.
 
 ## VS Code PostgreSQL 확장: 연결 · AGE 그래프 시각화 · pipeline 보기 { #vscode }
 

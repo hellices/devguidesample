@@ -484,7 +484,7 @@ def test_external_sample_card_links_the_pinned_project(tmp_path: Path, taxonomy:
         None,
     )
 
-    assert '<h3><a href="https://github.com/example-org/movielog/tree/v2.6.4">MovieLog app</a></h3>' in rendered
+    assert '<h3><a href="https://github.com/example-org/movielog/tree/' + "c" * 40 + '">MovieLog app</a></h3>' in rendered
     assert "external · v2.6.4" in rendered
     assert '<a href="https://github.com/example-org/movielog/releases/tag/v2.6.4">릴리스</a>' in rendered
     assert "<code>ghcr.io/example-org/movielog:2.6.4@sha256:" + "a" * 64 + "</code>" in rendered

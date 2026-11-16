@@ -77,9 +77,10 @@
 - external sample의 릴리스 이미지는 코드 레포 release workflow가 GHCR에 게시하고,
   배포할 때 azd hook에서 `az acr import`로 digest를 지정해 ACR에 복사한다.
 - runnable sample의 컨테이너 이미지는 로컬 `docker build` 대신 Azure Container Registry 서버
-  빌드로 만든다. external sample은 ACR에서 다시 빌드하지 않고 GHCR 릴리스 이미지를 digest로 import한다. azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는
-  `az acr build --platform linux/amd64`를 사용한다. `remoteBuild`는 ACR 빌드가
-  실패하면 로컬 Docker로 다시 빌드하므로, 그렇게 만든 이미지로 배포를 마치지 않는다.
+  빌드로 만든다. external sample은 ACR에서 다시 빌드하지 않고 GHCR 릴리스 이미지를 digest로 import한다. 이미지
+  하나는 azd 서비스의 `docker.remoteBuild: true`와 hook 스크립트의 `az acr build --platform linux/amd64` 중 한
+  경로로만 빌드한다. `remoteBuild`는 ACR 빌드가 실패하면 로컬 Docker로 다시 빌드하므로, 그렇게 만든 이미지로 배포를
+  마치지 않으며 fallback을 막아야 하는 이미지는 hook 경로를 쓴다.
 - Java 프로젝트는 Gradle Kotlin DSL(`build.gradle.kts`, `settings.gradle.kts`)과
   Gradle Wrapper를 사용한다. Maven `pom.xml`이나 Groovy `build.gradle`을
   새로 추가하지 않는다.

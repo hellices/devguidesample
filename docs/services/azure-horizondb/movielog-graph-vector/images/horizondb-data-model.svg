@@ -168,8 +168,9 @@
 
   <rect x="728" y="408" width="304" height="80" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
   <text x="740" y="428" class="tag">INDEX</text>
-  <text x="740" y="450" class="name">DiskANN</text>
-  <text x="740" y="472" class="mono">diskann (embedding_bge vector_cosine_ops)</text>
+  <text x="740" y="446" class="name">DiskANN × 2</text>
+  <text x="740" y="464" class="mono">diskann (embedding_bge vector_cosine_ops)</text>
+  <text x="740" y="480" class="mono">diskann (embedding vector_cosine_ops)</text>
 
   <rect x="728" y="504" width="304" height="88" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
   <text x="740" y="524" class="tag">QUERY</text>

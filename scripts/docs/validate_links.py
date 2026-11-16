@@ -47,6 +47,7 @@ def _github_ref(target: str) -> tuple[str, str] | None:
     else:
         return None
     if len(rest) >= 3 and rest[0] == "refs" and rest[1] == "tags":
+        # Pinned release tags are SemVer names without "/", so the tag is the single path segment after refs/tags.
         return "/".join(repository).lower(), rest[2]
     if len(rest) >= 3 and rest[0] == "refs":
         # refs/heads/<name> is a branch even when it is named like the pinned tag, so it never matches a pin.

@@ -32,7 +32,13 @@ azd down --purge
 ## 릴리스
 
 1. 변경을 PR로 `main`에 merge합니다. 기본 브랜치 ruleset이 PR마다 CI와 Copilot 코드 리뷰를 요구합니다.
-2. `git tag vX.Y.Z && git push origin vX.Y.Z`로 태그를 올립니다.
+2. merge된 원격 `main`에 태그를 붙여 올립니다. 로컬 작업 브랜치의 `HEAD`가 아니라 `origin/main`을 대상으로 지정합니다.
+
+   ```bash
+   git fetch origin
+   git tag vX.Y.Z origin/main
+   git push origin vX.Y.Z
+   ```
 3. 첫 릴리스라면 로그인하지 않은 상태에서 이미지 manifest를 받을 수 있는지 확인하고, 실패하면 GHCR 패키지
    설정에서 Public으로 바꿉니다. 확인 명령은 문서 레포 기여 가이드의 외부 코드 레포 sample 절에 있습니다.
 4. release workflow 요약의 `ref`, `commit`, `image` 값을 문서 레포 `sample.yml`에 옮기고 submodule을 같은 commit으로 맞춥니다.

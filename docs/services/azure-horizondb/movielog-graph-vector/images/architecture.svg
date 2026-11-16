@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" role="img" aria-labelledby="horizondb-arch-title horizondb-arch-desc">
   <title id="horizondb-arch-title">MovieLog on Azure HorizonDB architecture</title>
-  <desc id="horizondb-arch-desc">Browser traffic enters Application Gateway for Containers over HTTPS with a cert-manager issued Let's Encrypt certificate and reaches the MovieLog app on AKS, which embeds query text with the bge-m3-ko model served by vLLM on a GPU spot node (or Azure OpenAI for comparison) and runs vector search and Apache AGE openCypher queries in Azure HorizonDB; a catalog loader fills HorizonDB from Wikidata and Wikipedia, and telemetry flows to Application Insights and Managed Grafana.</desc>
+  <desc id="horizondb-arch-desc">Browser traffic enters Application Gateway for Containers over HTTPS with a cert-manager issued Let's Encrypt certificate and reaches the MovieLog app on AKS, which embeds query text with the bge-m3-ko model served by vLLM on a GPU spot node (or Azure OpenAI text-embedding-3-large, selected per request) and runs vector search and Apache AGE openCypher queries in Azure HorizonDB; a catalog loader fills HorizonDB from Wikidata and Wikipedia, and telemetry flows to Application Insights and Managed Grafana.</desc>
   <defs>
     <marker id="hz-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>

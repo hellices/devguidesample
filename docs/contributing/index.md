@@ -286,11 +286,13 @@ git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
 `validate_links.py`는 `git ls-remote`로 코드 레포를 조회해 `ref` 태그가 `commit`을 가리키는지, 태그와 같은
 이름의 branch가 없는지도 확인합니다. GitHub의 `/blob/<name>/` 링크는 같은 이름의 태그와 branch를 구분하지
 않기 때문입니다. 이 검사에는 GitHub 접속이 필요하며, 코드 레포에는 `refs/heads/v*` branch 생성을 막는
-ruleset을 함께 겁니다.
+ruleset을 함께 겁니다. 검사를 통과한 `commit`으로 sample 카드의 코드 링크(`/tree/<commit>`)를 만들고, 릴리스
+링크는 `ref`를 씁니다.
 
 새 버전을 문서에 반영할 때는 다음을 한 PR에서 함께 바꿉니다.
 
-1. 코드 레포에서 `vX.Y.Z` 태그를 올리고 release workflow 요약의 값을 확인합니다.
+1. 코드 레포에서 `origin/main`에 `vX.Y.Z` 태그를 올리고 release workflow 요약의 값을 확인합니다. release
+   workflow는 Docker 태그로 쓸 수 없는 build metadata(`+...`)가 붙은 태그를 게시 전에 거부합니다.
 2. `git -C <sample>/source fetch --tags && git -C <sample>/source checkout vX.Y.Z` 뒤
    `git add <sample>/source`로 submodule을 옮깁니다.
 3. `sample.yml`의 `ref`, `commit`, `image`와 본문 permalink의 버전을 바꿉니다.
@@ -320,15 +322,15 @@ ACR에 복사합니다. external sample의 이미지는 ACR에서 다시 빌드�
 |---|---|---|
 | Azure 리소스와 앱 배포 | `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`으로 만들고 `azd down`으로 정리합니다. external sample은 이 파일과 hook을 문서 레포가 아니라 코드 레포 루트에 둡니다. | README에 나열한 단독 `az` 생성 명령 |
 | azd 밖의 단계 | Kubernetes manifest 적용, 데이터 적재, 미리 보기 API 호출은 `azure.yaml` hook(`preprovision`, `postprovision`, `postdeploy` 등) 스크립트로 실행합니다. | 수동으로 이어 붙이는 명령 순서 |
-| runnable 컨테이너 이미지 | azd 서비스는 `docker.remoteBuild: true`, hook 스크립트는 `az acr build --platform linux/amd64`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드 |
+| runnable 이미지: azd 서비스 빌드 | `azure.yaml`의 서비스로 배포하는 이미지는 `docker.remoteBuild: true`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드, 같은 이미지를 hook에서 다시 빌드 |
+| runnable 이미지: hook 빌드 | fallback 없이 ACR 빌드만 허용할 이미지는 hook 스크립트에서 `az acr build --platform linux/amd64`로 빌드하고, 배포 단계(Kubernetes manifest 등)가 그 이미지를 참조하게 합니다. | 같은 이미지를 `docker.remoteBuild` 서비스로도 빌드 |
 | external 컨테이너 이미지 | hook에서 `az acr import`로 GHCR 릴리스 이미지를 digest로 지정해 ACR에 복사합니다. | 같은 코드를 ACR이나 로컬에서 다시 빌드한 이미지 |
 | Java 프로젝트 | `build.gradle.kts`, `settings.gradle.kts`와 Gradle Wrapper(`gradlew`)를 커밋합니다. | Maven `pom.xml`, Groovy `build.gradle` |
 
-- `docker.remoteBuild: true`는 ACR 원격 빌드가 실패하면 로컬 Docker나 Podman으로
-  다시 빌드합니다. 이 fallback으로 만든 이미지는 기준에 맞지 않으므로, 배포 출력에서
+- 이미지 하나는 두 경로 중 하나로만 빌드합니다. `docker.remoteBuild: true`는 ACR 원격 빌드가 실패하면 로컬 Docker나
+  Podman으로 다시 빌드합니다. 이 fallback으로 만든 이미지는 기준에 맞지 않으므로, 배포 출력에서
   이미지가 ACR에서 빌드됐는지 확인하고 원격 빌드 실패를 고친 뒤 다시 배포합니다.
-  fallback 없이 ACR 빌드만 허용하려면 hook에서 `az acr build`로 이미지를 만들고,
-  배포 단계(Kubernetes manifest 등)가 그 이미지를 참조하게 합니다.
+  fallback 자체를 막아야 하면 그 이미지를 azd 서비스에서 빼고 hook 빌드 경로를 사용합니다.
   근거: [Azure Developer CLI schema reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema)의
   `docker` 속성.
 - `azd up`은 `preprovision` hook보다 먼저 Bicep 필수 입력을 검사합니다. hook이

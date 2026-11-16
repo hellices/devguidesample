@@ -86,7 +86,7 @@ azd up
 카탈로그와 그래프는 배치 로더가 한 번 만들고, 텔레메트리는 Application Insights를 거쳐
 Managed Grafana에서 봅니다.
 
-![MovieLog on Azure HorizonDB 아키텍처. 브라우저가 HTTPS로 App Gateway for Containers에 들어오고(cert-manager가 발급한 Let's Encrypt 인증서), AKS 관리형 VNet 안의 MovieLog 앱이 임베딩 모델(vLLM으로 서빙하는 bge-m3-ko, 비교용 Azure OpenAI text-embedding-3-large)에 질의 임베딩을 요청한 뒤 Azure HorizonDB에 SQL과 Cypher를 보냄. HorizonDB 안에는 관계형 테이블, pgvector와 DiskANN(1024·1536차원), Apache AGE movie_graph가 있음. 카탈로그 로더는 Wikidata와 Wikipedia 데이터를 HorizonDB에 적재하고 문서를 임베딩함. MovieLog의 텔레메트리는 Application Insights로, Application Insights는 KQL로 Managed Grafana에 연결됨](../images/architecture.svg)
+![MovieLog on Azure HorizonDB 아키텍처. 브라우저가 HTTPS로 App Gateway for Containers에 들어오고(cert-manager가 발급한 Let's Encrypt 인증서), AKS 관리형 VNet 안의 MovieLog 앱이 임베딩 모델(vLLM으로 서빙하는 bge-m3-ko 또는 Azure OpenAI text-embedding-3-large, 요청마다 선택)에 질의 임베딩을 요청한 뒤 Azure HorizonDB에 SQL과 Cypher를 보냄. HorizonDB 안에는 관계형 테이블, pgvector와 DiskANN(1024·1536차원), Apache AGE movie_graph가 있음. 카탈로그 로더는 Wikidata와 Wikipedia 데이터를 HorizonDB에 적재하고 문서를 임베딩함. MovieLog의 텔레메트리는 Application Insights로, Application Insights는 KQL로 Managed Grafana에 연결됨](../images/architecture.svg)
 
 | 구성 요소 | 역할 | 구성 |
 |---|---|---|
@@ -94,10 +94,10 @@ Managed Grafana에서 봅니다.
 | cert-manager | 인증서 발급·갱신 | Let's Encrypt `ClusterIssuer`, Gateway API HTTP-01 challenge, `Certificate`가 만든 TLS secret을 HTTPS listener가 참조 |
 | Microsoft Entra ID | 로그인 | 아이디·비밀번호 로그인 옆의 OpenID Connect 로그인(single-tenant 앱 등록). 첫 로그인 때 ID token의 `tid`·`oid`로 회원을 만듦 |
 | Azure Key Vault | 앱 비밀값 | TMDB·OMDb 키와 Entra ID client secret. AKS Secrets Store CSI driver가 앱 workload identity로 private endpoint를 거쳐 읽음 |
-| MovieLog 앱 | 의미 검색·그래프 API와 화면 | Spring Boot 4.1, Pod 2개. 기본 모델은 클러스터 내부 vLLM을 호출하고, 비교용 Azure OpenAI는 workload identity로 호출 |
+| MovieLog 앱 | 의미 검색·그래프 API와 화면 | Spring Boot 4.1, Pod 2개. 요청의 `model`에 따라 클러스터 내부 vLLM(기본값) 또는 Azure OpenAI(workload identity)를 호출 |
 | Azure HorizonDB | 관계형·벡터·그래프 저장과 조회 | 아래 [리소스 구조](#resource-model), 확장은 [topic 개요](../index.md#extensions) |
-| vLLM · GPU spot 노드 | 기본 임베딩 모델 서빙 | `dragonkue/BGE-m3-ko`(1,024차원, commit 고정), vLLM 0.32 OpenAI 호환 `/v1/embeddings`, `Standard_NC4as_T4_v3` spot 1대 |
-| Azure OpenAI | 비교용 임베딩 | `text-embedding-3-large`, `dimensions=1536`, key 인증 없이 Entra token |
+| vLLM · GPU spot 노드 | 임베딩 모델 서빙(`model=bge`, 앱 기본값) | `dragonkue/BGE-m3-ko`(1,024차원, commit 고정), vLLM 0.32 OpenAI 호환 `/v1/embeddings`, `Standard_NC4as_T4_v3` spot 1대 |
+| Azure OpenAI | 임베딩 모델(`model=openai`) | `text-embedding-3-large`, `dimensions=1536`, key 인증 없이 Entra token |
 | 카탈로그 로더 | 데이터셋 생성과 적재 | 표준 라이브러리 Python 스크립트, `psql` |
 | Application Insights · Managed Grafana | 관측 | AKS 자동 계측(Java agent 3.7.10), 모델별 `movielog.discover.*` Timer, HorizonDB·임베딩 dependency |
 
@@ -120,13 +120,13 @@ Managed Grafana에서 봅니다.
 붙거나 원본에서 다시 만드는 데이터입니다. 세 모델은 별도 저장소나 동기화 없이 `tmdb_id`(영화)와
 `qid`(인물) 두 키로 이어집니다.
 
-![HorizonDB 데이터 모델과 작성 순서. 왼쪽에 ⓪ 앱 기동, ① 카탈로그 적재(build_catalog.py → catalog.sql), ② 문서 임베딩(embed_catalog.py, bge-m3-ko 1024·OpenAI 1536차원), ③ DiskANN index(20-vector-index.sql), ④ 그래프 재생성(30-graph.sql) 단계가 있고 각각 관계형·벡터·그래프 영역으로 화살표가 이어짐. 관계형 영역에는 public.movies, public.reviews·members, catalog.people, catalog.movie_credits, catalog.movie_genres와 조인 키 설명이 있음. 벡터 영역에는 catalog.movie_docs의 embedding_bge vector(1024) 열, embedding_bge DiskANN index, 코사인 거리 쿼리가 있음. 그래프 영역에는 Movie·Person·Genre vertex와 DIRECTED·ACTED_IN·IN_GENRE·SIMILAR_TO edge가 개수와 함께 있고, bge 임베딩 최근접 3편 → SIMILAR_TO 파생 화살표가 그래프로 이어짐](../images/horizondb-data-model.svg)
+![HorizonDB 데이터 모델과 작성 순서. 왼쪽에 ⓪ 앱 기동, ① 카탈로그 적재(build_catalog.py → catalog.sql), ② 문서 임베딩(embed_catalog.py, bge-m3-ko 1024·OpenAI 1536차원), ③ DiskANN index(20-vector-index.sql), ④ 그래프 재생성(30-graph.sql) 단계가 있고 각각 관계형·벡터·그래프 영역으로 화살표가 이어짐. 관계형 영역에는 public.movies, public.reviews·members, catalog.people, catalog.movie_credits, catalog.movie_genres와 조인 키 설명이 있음. 벡터 영역에는 catalog.movie_docs의 embedding_bge vector(1024)·embedding vector(1536) 열, 두 열 각각의 DiskANN index, 코사인 거리 쿼리가 있음. 그래프 영역에는 Movie·Person·Genre vertex와 DIRECTED·ACTED_IN·IN_GENRE·SIMILAR_TO edge가 개수와 함께 있고, bge 임베딩 최근접 3편 → SIMILAR_TO 파생 화살표가 그래프로 이어짐](../images/horizondb-data-model.svg)
 
 | 모델 | 저장 위치 | 성격 | 연결 키 | 쓰는 주체 |
 |---|---|---|---|---|
 | 관계형 | `public.movies`, `public.reviews`·`members`·`comments` | 원본. 앱의 리뷰·회원은 요청마다 바뀜 | `movies.tmdb_id`(UNIQUE), `reviews.movie_id → movies.id` | 앱(Hibernate·JPA), 로더(`movies` upsert) |
 | 관계형 | `catalog.people`, `catalog.movie_credits`, `catalog.movie_genres` | 원본. Wikidata 구조 | `tmdb_id`, `qid`(`person_qid → people.qid`) | 로더, 앱(`CatalogIndexer`: TMDB credits·장르) |
-| 벡터 | `catalog.movie_docs.embedding_bge vector(1024)`(기본), `embedding vector(1536)`(비교용) + 열마다 DiskANN index | 원본 행에 붙은 열. 문서가 바뀌면 두 열을 비우고 다시 임베딩 | `movie_docs.tmdb_id`(PK) | 로더, 앱(`CatalogIndexer`: 카탈로그 적재 뒤 TMDB에서 가져온 영화) |
+| 벡터 | `catalog.movie_docs.embedding_bge vector(1024)`(`model=bge`), `embedding vector(1536)`(`model=openai`) + 열마다 DiskANN index | 원본 행에 붙은 열. 문서가 바뀌면 두 열을 비우고 다시 임베딩 | `movie_docs.tmdb_id`(PK) | 로더, 앱(`CatalogIndexer`: 카탈로그 적재 뒤 TMDB에서 가져온 영화) |
 | 그래프 | `movie_graph`의 label별 테이블(`"Movie"`, `"ACTED_IN"` 등) | 파생. 관계형 행과 임베딩에서 다시 생성 | vertex 속성 `tmdb_id`, `qid` | `30-graph.sql`(최초 생성), `catalog.process_graph_queue`(변경분) |
 
 - **키로 잇는 이유** — `catalog.*` 테이블은 `public.movies`에 외래 키를 두지 않고 `tmdb_id`로
@@ -285,7 +285,7 @@ jdbc.query("""
 
 ## 의미 검색 구현: 키워드 결합과 철자 교정 { #search }
 
-의미 검색은 질의 철자를 고친 뒤 벡터 순위와 키워드 순위를 합칩니다. 두 임베딩 모델의 비교 결과와 선택 이유는
+의미 검색은 질의 철자를 고친 뒤 벡터 순위와 키워드 순위를 합칩니다. 두 임베딩 모델의 병행 구성과 선택 기준은
 [topic 개요](../index.md#embedding-comparison)에 있습니다.
 
 ### 키워드 보완: 벡터 순위와 키워드 순위의 RRF 결합 { #hybrid }

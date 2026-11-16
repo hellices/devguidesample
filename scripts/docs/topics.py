@@ -31,8 +31,10 @@ EXTERNAL_REF = re.compile(
 EXTERNAL_COMMIT = re.compile(r"[0-9a-f]{40}")
 # Each "/"-separated repository path component follows the OCI distribution grammar, so empty components are rejected.
 _IMAGE_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+# An OCI tag starts with a word character and has at most 128 characters.
+_IMAGE_TAG = r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}"
 EXTERNAL_IMAGE = re.compile(
-    rf"ghcr\.io/[a-z0-9-]+/{_IMAGE_COMPONENT}(?:/{_IMAGE_COMPONENT})*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{{64}}"
+    rf"ghcr\.io/[a-z0-9-]+/{_IMAGE_COMPONENT}(?:/{_IMAGE_COMPONENT})*:{_IMAGE_TAG}@sha256:[0-9a-f]{{64}}"
 )
 EXTERNAL_FIELDS = ("repository", "ref", "commit", "image")
 EXTERNAL_SOURCE = "source"
@@ -62,10 +64,11 @@ class SampleAsset:
 
     @property
     def source_url(self) -> str | None:
-        """Pinned tree URL of an external sample; None for samples stored in this repository."""
-        if self.repository is None or self.ref is None:
+        """Immutable tree URL of an external sample at its pinned commit; None for samples stored in this repository.
+        validate_links checks that the release tag resolves to this commit."""
+        if self.repository is None or self.commit is None:
             return None
-        return f"{self.repository}/tree/{self.ref}"
+        return f"{self.repository}/tree/{self.commit}"
 
     @property
     def release_url(self) -> str | None:
@@ -159,11 +162,12 @@ def _sample_directory_errors(
                 continue
             if _declared_kind(sample_dir / "sample.yml") == "external":
                 # The code repository owns the README and the code; this package holds the manifest and the
-                # "source" submodule, whose checked-out files belong to the other repository.
+                # "source" submodule, whose checked-out files belong to the other repository. Symlinks count as
+                # entries even when they point at a directory or nowhere.
                 extra = sorted(
                     path.relative_to(sample_dir).as_posix()
                     for path in sample_dir.rglob("*")
-                    if path.is_file()
+                    if (path.is_file() or path.is_symlink())
                     and path.relative_to(sample_dir) != Path("sample.yml")
                     and path.relative_to(sample_dir).parts[0] != EXTERNAL_SOURCE
                 )
