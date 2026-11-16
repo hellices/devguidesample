@@ -122,6 +122,9 @@ HorizonDB의 차별점은 별도 벡터 검색 엔진과 그래프 데이터베�
 
 ## 기능 지도: 벡터 검색 · 그래프 · AI 함수 { #capability-map }
 
+<span id="vector"></span><span id="index-options"></span><span id="why-diskann"></span>
+<span id="graph"></span><span id="in-database-ai"></span><span id="patterns"></span><span id="vscode"></span>
+
 | 기능 | HorizonDB에서 맡는 일 | 상세 문서 |
 |---|---|---|
 | 벡터 검색 | `vector(n)` 열을 거리로 정렬하고 Flat·IVFFlat·HNSW·DiskANN 중 workload에 맞는 경로 선택 | [벡터 저장과 index 선택](vector-graph-features/index.md#vector-type) |
@@ -158,9 +161,12 @@ DiskANN이 존재한다는 사실을 곧바로 성능 이점으로 해석하지 
 2026-11-16 기준 `movie_graph`에는 영화 484개, 인물 1,812개, 장르 125개와 `ACTED_IN` 2,801개,
 `DIRECTED` 525개, `IN_GENRE` 1,659개, `SIMILAR_TO` 1,081개가 있었습니다. 검색 결과 영화의
 이웃 조회는 AGE 속성 조건과 index를 쓰도록 질의를 바꾼 뒤 26.7초에서 0.12초로 줄었습니다.
-질의 구조와 graph 동기화 방식은 [MovieLog 실습](movielog-lab/index.md#graph-sync)에서 설명합니다.
+[개선한 Cypher 질의 구조](vector-graph-features/index.md#cypher)는 기술 가이드에, 원본 변경을 반영하는
+[graph 동기화 방식](movielog-lab/index.md#graph-sync)은 실습 문서에 있습니다.
 
 ### 임베딩 구성: 관리형 모델과 AKS 서빙 병행 { #embedding-comparison }
+
+<span id="in-database-ai-movielog"></span><span id="patterns-movielog"></span><span id="vscode-movielog"></span>
 
 문서와 질의는 같은 임베딩 모델을 사용해야 하므로 MovieLog는 모델별 벡터 열과 index를 분리했습니다.
 Azure OpenAI `text-embedding-3-large`와 AKS vLLM의 `dragonkue/BGE-m3-ko`를 요청마다 선택할 수 있지만,

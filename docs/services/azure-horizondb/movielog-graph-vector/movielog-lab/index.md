@@ -144,6 +144,8 @@ sample은 모델마다 열과 index를 분리합니다.
 
 ## 의미 검색 검증: 모델별 벡터와 키워드 RRF { #search }
 
+<span id="hybrid"></span><span id="spelling"></span>
+
 의미 검색은 질의를 선택한 모델로 임베딩하고, 같은 모델의 열에서 코사인 거리 순위를 구합니다. 짧은
 영화 제목과 인물 이름이 전체 문서 임베딩에서 밀리지 않도록 제목·인물 키워드 순위를 RRF로 합칩니다.
 
@@ -180,6 +182,8 @@ RRF로 결합해 관련 작품을 보완했습니다. 「드늬 뷜베브」 같
 [`db/40-graph-sync.sql`](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.1/db/40-graph-sync.sql)에서 확인합니다.
 
 ## 앱 검증: 검색 결과에서 관계 탐색까지 { #app-verification }
+
+<span id="app-access"></span>
 
 브라우저의 한 화면은 서버 검색과 graph API 두 경로를 조합합니다. 서버가 질의를 임베딩해 결과 영화
 목록을 만들고, 브라우저는 그 영화 ID로 graph JSON을 받아 Cytoscape.js에 그립니다.
