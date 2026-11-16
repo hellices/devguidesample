@@ -41,9 +41,22 @@
 
 - 실행 가능한 프로젝트, 배포 매니페스트와 대용량 결과물은
   `docs/services/<service>/<topic>/samples/<sample>/`에 둔다.
-- 각 sample에는 `sample.yml`과 `README.md`가 필요하다. manifest의
-  `kind`는 `runnable` 또는 `artifact`이며, `used_by`는 `index` 또는 직접
-  자식 slug를 중복 없이 지정한다.
+- 각 sample에는 `sample.yml`이 필요하고, `runnable`·`artifact` sample에는 `README.md`도 둔다. manifest의
+  `kind`는 `runnable`, `artifact`, `external` 중 하나이며, `used_by`는 `index`
+  또는 직접 자식 slug를 중복 없이 지정한다.
+- 컨테이너 이미지로 빌드해 배포하는 애플리케이션 코드는 `kind: external`로 앱별 공개
+  코드 레포에 둔다. 문서 레포의 sample package에는 `sample.yml`(`repository`, SemVer
+  `ref`, 40자리 `commit`, 선택 `image`)과 그 commit에 고정한 git submodule `source`만
+  두며 `README.md`와 코드를 두지 않는다. 코드 레포는
+  `.github/templates/external-sample-repo/`를 복사해 만들고, release workflow가 GHCR에
+  이미지를 게시한다. 코드 레포 이름은 `sample-<app>`이며 설명은 `[Sample]`로 시작하고
+  `sample` topic과 README 첫머리의 샘플 레포 안내로 예제 코드임을 드러낸다. 코드 레포
+  기본 브랜치에는 PR 필수·CI·Copilot 코드 리뷰 자동 요청 ruleset을 걸고 앱 코드는 PR로만 넣는다. 상세 기준은
+  [외부 코드 레포 sample](docs/contributing/index.md#external-sample)을 따른다.
+- 문서 본문의 코드 레포 링크(`blob`, `tree`, `raw`, `commit`)는 `sample.yml`의 `ref`
+  또는 `commit`으로 고정하고 branch 링크를 쓰지 않는다. `validate_links.py`는 `git ls-remote`로
+  `ref` 태그가 `commit`을 가리키는지와 같은 이름의 branch가 없는지 확인한다. 버전을 올릴 때는 submodule,
+  `sample.yml`, 본문 permalink를 한 PR에서 함께 바꾼다.
 - 최상위 `samples/`에는 공개 콘텐츠를 추가하지 않는다.
 - 페이지에서 렌더링할 이미지만 같은 bundle의 `images/`에 두며 의미 있는
   대체 텍스트를 작성한다.
@@ -51,6 +64,26 @@
   경로에 원본 Markdown을 다시 만들지 않는다. 보존 대상은
   `tests/docs/test_legacy_urls.py` 목록이며 URL을 의도적으로 폐기할 때만
   목록에서 제거한다.
+
+## Sample build and deployment tooling
+
+- 상세 기준은 [sample 빌드·배포 도구](docs/contributing/index.md#sample-tooling)를
+  따른다. 새로 추가하거나 배포 방식을 바꾸는 sample에 적용한다.
+- Azure 리소스 생성과 앱 배포는 Azure Developer CLI(`azd`)로 재현한다.
+  sample에 `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`·`azd down`으로
+  생성하고 정리한다. external sample은 `azure.yaml`·`infra/`·hook을 문서 레포
+  package가 아니라 코드 레포 루트에 둔다. azd가 다루지 않는 단계는 `azure.yaml` hook 스크립트로
+  실행하며 README의 단독 `az` 명령 나열로 대신하지 않는다.
+- external sample의 릴리스 이미지는 코드 레포 release workflow가 GHCR에 게시하고,
+  배포할 때 azd hook에서 `az acr import`로 digest를 지정해 ACR에 복사한다.
+- runnable sample의 컨테이너 이미지는 로컬 `docker build` 대신 Azure Container Registry 서버
+  빌드로 만든다. external sample은 ACR에서 다시 빌드하지 않고 GHCR 릴리스 이미지를 digest로 import한다. 이미지
+  하나는 azd 서비스의 `docker.remoteBuild: true`와 hook 스크립트의 `az acr build --platform linux/amd64` 중 한
+  경로로만 빌드한다. `remoteBuild`는 ACR 빌드가 실패하면 로컬 Docker로 다시 빌드하므로, 그렇게 만든 이미지로 배포를
+  마치지 않으며 fallback을 막아야 하는 이미지는 hook 경로를 쓴다.
+- Java 프로젝트는 Gradle Kotlin DSL(`build.gradle.kts`, `settings.gradle.kts`)과
+  Gradle Wrapper를 사용한다. Maven `pom.xml`이나 Groovy `build.gradle`을
+  새로 추가하지 않는다.
 
 ## Publishing automation
 

@@ -148,7 +148,8 @@ def _sample_cards(document_path: PurePosixPath, catalog: TopicCatalog, config: M
     cards.append('<p class="dg-eyebrow">RELATED SAMPLES</p>')
     cards.append('<div class="dg-sample-grid">')
     for sample in samples:
-        href = (
+        # External samples live in their own repository at the pinned release; others under this repository.
+        href = sample.source_url or (
             f"{repo_url}/tree/main/"
             f"{(docs_prefix + '/' if docs_prefix else '')}{sample.relative_path.as_posix()}"
         )
@@ -157,7 +158,18 @@ def _sample_cards(document_path: PurePosixPath, catalog: TopicCatalog, config: M
             f'<h3><a href="{escape(href, quote=True)}">{escape(sample.title)}</a></h3>'
         )
         cards.append(f'<p class="dg-doc-summary">{escape(sample.description)}</p>')
-        cards.append(f'<p class="dg-card-count">{escape(sample.kind)}</p>')
+        label = f"{sample.kind} · {sample.ref}" if sample.ref else sample.kind
+        cards.append(f'<p class="dg-card-count">{escape(label)}</p>')
+        if sample.release_url:
+            # An external sample is a sub project: its own repository, release notes and container image.
+            links = [
+                f'<a href="{escape(sample.source_url, quote=True)}">코드</a>',
+                f'<a href="{escape(sample.release_url, quote=True)}">릴리스</a>',
+            ]
+            if sample.image:
+                # The full reference keeps the digest, so a copied value pulls exactly the pinned image.
+                links.append(f"<code>{escape(sample.image)}</code>")
+            cards.append(f'<p class="dg-sample-links">{" · ".join(links)}</p>')
         cards.append("</article>")
         cards.append("")
     cards.append("</div>")

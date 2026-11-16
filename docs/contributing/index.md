@@ -125,10 +125,12 @@ publish:
 ```
 
 - `title`, `description`, `kind`는 비어 있지 않은 문자열입니다.
-- `kind`는 `runnable` 또는 `artifact`입니다.
+- `kind`는 `runnable`, `artifact`, `external` 중 하나입니다. `external`의 추가 필드와
+  구성은 [외부 코드 레포 sample](#external-sample)을 따릅니다.
 - `used_by`는 sample을 표시할 문서 slug의 중복 없는 목록입니다.
 - topic entry는 `index`, 자식 문서는 폴더 slug로 지정합니다.
-- 각 sample에는 사용·검증·정리 방법을 설명하는 `README.md`가 필요합니다.
+- `external`을 제외한 각 sample에는 사용·검증·정리 방법을 설명하는 `README.md`가
+  필요합니다.
 - sample이 있는 topic에는 entry `index.md`가 반드시 있어야 합니다.
   자식 문서 아래에 `samples/`를 두거나 topic의 `samples/` 바로 아래에
   파일을 두지 않습니다. sample package 내부의 하위 `samples/` 폴더는
@@ -159,6 +161,189 @@ publish:
   target 파일은 다른 target이나 canonical 출력 파일의 상위·하위 경로와도
   충돌할 수 없습니다. 기존 파일을 target의 상위 디렉터리처럼 사용할 수 없으며,
   기존 디렉터리 아래에 새 파일을 게시하는 것은 허용합니다.
+
+### 외부 코드 레포 sample { #external-sample }
+
+컨테이너 이미지로 빌드해 배포하는 애플리케이션 코드는 문서 레포가 아니라 앱별 공개 코드
+레포에 둡니다. 문서 레포에는 코드 레포를 가리키는 `sample.yml`과, 같은 버전에 고정한 git
+submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `source @ <commit>` 링크로 보이고,
+사이트의 sample card는 코드·릴리스 링크와 이미지 이름을 함께 보여 줍니다.
+
+| sample 종류 | 문서 레포에 두는 것 | 용도 |
+|---|---|---|
+| `external` | `sample.yml`, `source` submodule | 애플리케이션 소스, Dockerfile, azd 구성처럼 빌드·릴리스하는 코드 |
+| `runnable` | 실행 파일 전체 | 짧은 스크립트, manifest, azd 구성만으로 재현하는 실습 |
+| `artifact` | 결과물 원본 | 대시보드 JSON, 다이어그램 원본처럼 페이지에 게시하는 파일 |
+
+새로 만드는 애플리케이션은 `external`로 시작합니다. 기존 `runnable` 애플리케이션은 그 앱을
+크게 바꿀 때 옮깁니다.
+
+#### 코드 레포 구성
+
+코드 레포는 문서 레포와 같은 owner의 공개 레포입니다. 레포 목록과 검색 결과에서 문서용 예제
+코드임이 바로 드러나도록 다음을 지킵니다.
+
+- 이름은 `sample-<app>`이며 `<app>`은 앱과 변형을 소문자 kebab-case로 씁니다. 예:
+  [`sample-movielog-horizondb`](https://github.com/hellices/sample-movielog-horizondb).
+- 레포 설명은 `[Sample]`로 시작하고 운영용이 아니라는 점을 적으며, website에 문서 주소를 넣습니다.
+- `sample` topic을 붙이고 README 첫머리에 샘플 레포라는 안내와 문서 링크를 둡니다.
+
+저장소 루트의
+[`.github/templates/external-sample-repo/`](https://github.com/hellices/devguidesample/tree/main/.github/templates/external-sample-repo)를
+복사해 시작합니다.
+
+```text
+<owner>/sample-<app>/
+├── README.md                     # 목적, 문서 링크, azd up·down, 릴리스 절차
+├── src/, build.gradle.kts, settings.gradle.kts, gradlew
+├── Dockerfile
+├── azure.yaml, infra/            # azd + Bicep
+├── hooks/                        # azd hook (manifest 적용, 데이터 적재, 이미지 import)
+├── deploy/                       # hook이 쓰는 Kubernetes manifest, DB 스크립트
+└── .github/workflows/
+    ├── ci.yml                    # PR·main: 테스트, 이미지 빌드 확인(push 없음)
+    └── release.yml               # vX.Y.Z 태그: 테스트 → GHCR push → build provenance
+```
+
+- [sample 빌드·배포 도구](#sample-tooling) 기준(azd, Gradle Kotlin DSL)은 코드 레포에도 그대로
+  적용합니다.
+- 코드 레포의 모든 코드는 PR로 들어가며 Copilot 코드 리뷰를 거칩니다. 레포를 만들면 README만 둔 첫 커밋
+  뒤에 기본 브랜치 ruleset을 먼저 겁니다: PR 필수, CI `test` 통과, **Automatically request Copilot code
+  review**(`Review new pushes` 포함), 강제 push·삭제 금지. 그다음 앱 코드를 PR로 올려 전체 리뷰를 받습니다.
+  근거: [Configuring automatic code review by GitHub Copilot](https://docs.github.com/copilot/how-tos/use-copilot-agents/request-a-code-review/configure-automatic-review).
+  이미 리뷰 없이 들어간 코드는 빈 커밋 base 브랜치를 향한 리뷰 전용 PR로 전체 diff를 리뷰받고, 지적은 별도 PR로
+  반영한 뒤 리뷰 전용 PR은 닫습니다.
+- 릴리스 이미지는 GitHub 호스팅 runner의 release workflow가 빌드해
+  `ghcr.io/<owner>/sample-<app>:<version>`으로 게시하고 build provenance를 남깁니다. workflow 요약에
+  문서가 고정할 `ref`, `commit`, `image` 값이 출력됩니다.
+- workflow의 action은 태그 대신 full commit SHA로 고정하고 주석에 릴리스 이름을 남깁니다. release workflow는
+  `packages: write` 권한을 쓰므로, 태그가 옮겨져도 검증하지 않은 action 코드가 실행되지 않게 합니다. 근거:
+  [Secure use reference](https://docs.github.com/actions/reference/security/secure-use#using-third-party-actions).
+- GitHub 문서는 처음 게시한 패키지의 기본 공개 범위를 private으로 설명합니다. 2026-11-15
+  `sample-movielog-horizondb`의 첫 릴리스에서는 공개 레포의 release workflow가 게시한 패키지를
+  게시 직후 로그인 없이 pull할 수 있었습니다. 그러므로 첫 릴리스 뒤 로그인하지 않은 상태에서
+  manifest를 받아 보고, 실패하면 패키지 설정에서 Public으로 바꿉니다. Public 패키지는 익명으로
+  pull할 수 있습니다. 근거:
+  [Configuring a package's access control and visibility](https://docs.github.com/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+
+  ```bash
+  REPO=<owner>/sample-<app>
+  TOKEN="$(curl -fsS "https://ghcr.io/token?scope=repository:$REPO:pull" | jq -r .token)"
+  curl -fsS -o /dev/null -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.oci.image.index.v1+json" "https://ghcr.io/v2/$REPO/manifests/<version>"
+  ```
+- 공개 안전성 기준은 코드 레포에도 같습니다. 이 레포의 공개 안전성 검사는 submodule 안을
+  보지 않으므로 코드 레포에서 GitHub secret scanning과 push protection을 켭니다.
+
+#### 문서 레포 sample package
+
+```text
+docs/services/<service>/<topic>/samples/<sample>/
+├── sample.yml
+└── source/            # git submodule → <repository> @ <commit>
+```
+
+```yaml
+title: MovieLog app
+description: Spring Boot app for the topic, released as a container image.
+kind: external
+repository: https://github.com/<owner>/sample-<app>
+ref: v2.6.4                                   # SemVer 릴리스 태그
+commit: <40자리 commit SHA>                    # 태그가 가리키는 commit, submodule 위치
+image: ghcr.io/<owner>/sample-<app>:2.6.4@sha256:<digest>   # 선택
+used_by:
+  - index
+```
+
+- `README.md`, 코드와 `publish`는 두지 않습니다. 페이지에 게시할 파일은 별도 `artifact`
+  sample에 둡니다.
+- `repository`는 끝에 `.git`을 붙이지 않습니다. `image`를 적으면 GHCR namespace가 `repository` owner의 소문자와
+  같아야 합니다.
+- `source` submodule은 `.gitmodules` URL이 `repository`와 같고(끝의 `.git`은 대소문자와 상관없이 붙여도 됩니다) gitlink가 `commit`과
+  같아야 합니다.
+  `docs/services` 아래의 다른 위치에는 submodule을 두지 않습니다.
+- 사이트와 문서 CI는 submodule을 checkout하지 않습니다. 로컬에서 코드를 함께 보려면
+  `git submodule update --init <sample>/source`를 실행합니다.
+
+처음 연결할 때:
+
+```bash
+git submodule add https://github.com/<owner>/sample-<app>.git \
+  docs/services/<service>/<topic>/samples/<sample>/source
+git -C docs/services/<service>/<topic>/samples/<sample>/source checkout v2.6.4
+git add .gitmodules docs/services/<service>/<topic>/samples/<sample>
+```
+
+#### 코드 참조와 버전 갱신
+
+문서 본문은 핵심 코드를 짧게 발췌하고, 원문은 고정한 버전의 permalink로 연결합니다.
+
+```markdown
+[`VectorSearchRepository.search`](https://github.com/<owner>/sample-<app>/blob/v2.6.4/src/main/java/.../VectorSearchRepository.java#L40-L72)
+```
+
+`github.com/<owner>/sample-<app>/(blob|tree|raw|commit)/<ref>`와 `raw.githubusercontent.com` 링크는
+`sample.yml`의 `ref` 또는 `commit`만 쓸 수 있으며 `main` 같은 branch 링크는 링크 검사에서
+거부됩니다. `refs/tags/<tag>` 형식, `http`·프로토콜 상대 주소와 호스트 대소문자는 같은 링크로
+보며, `refs/heads/<branch>`는 태그와 이름이 같아도 branch로 보고 거부합니다. 같은 코드 레포를 여러 topic이 서로 다른 버전으로 쓰면 각 문서는 자기 topic의 버전을
+따릅니다. 레포 첫 화면이나 릴리스 페이지(`/releases/tag/<ref>`) 링크는 그대로 둘 수 있습니다.
+
+`validate_links.py`는 `git ls-remote`로 코드 레포를 조회해 `ref` 태그가 `commit`을 가리키는지, 태그와 같은
+이름의 branch가 없는지도 확인합니다. GitHub의 `/blob/<name>/` 링크는 같은 이름의 태그와 branch를 구분하지
+않기 때문입니다. 이 검사에는 GitHub 접속이 필요하며, 코드 레포에는 `refs/heads/v*` branch 생성과 `refs/tags/v*`
+태그의 갱신·삭제를 막는 ruleset을 함께 겁니다. 그래도 태그가 다른 commit으로 옮겨지면 이 검사가 `sample.yml`의
+`commit`과 달라진 것을 오류로 알리므로, 태그 permalink는 문서 PR에서 고정한 commit과 같은 코드를 가리킵니다. 검사를
+통과한 `commit`으로 sample 카드의 코드 링크(`/tree/<commit>`)를 만들고, 릴리스
+링크는 `ref`를 씁니다.
+
+새 버전을 문서에 반영할 때는 다음을 한 PR에서 함께 바꿉니다.
+
+1. 코드 레포에서 `origin/main`에 `vX.Y.Z` 태그를 올리고 release workflow 요약의 값을 확인합니다. release
+   workflow는 Docker 태그로 쓸 수 없는 build metadata(`+...`)가 붙은 태그를 게시 전에 거부합니다.
+2. `git -C <sample>/source fetch --tags && git -C <sample>/source checkout vX.Y.Z` 뒤
+   `git add <sample>/source`로 submodule을 옮깁니다.
+3. `sample.yml`의 `ref`, `commit`, `image`와 본문 permalink의 버전을 바꿉니다.
+4. 측정값이나 캡처가 바뀌었으면 문서 본문도 함께 고칩니다.
+
+#### 이미지 배포
+
+문서의 재현 절차는 코드 레포의 azd 구성을 씁니다. 릴리스 이미지를 그대로 배포할 때는 azd hook에서
+`az acr import`로 GHCR 이미지를 digest로 지정해 실습 Azure Container Registry로 복사합니다.
+import는 Docker 없이 레지스트리 사이에서 이미지를 복사하며, 대상 레지스트리에
+`Container Registry Data Importer and Data Reader` 역할이 필요합니다. private endpoint나 방화벽
+규칙이 있는 레지스트리는 신뢰할 수 있는 서비스 접근을 허용해야 합니다. 근거:
+[Import container images to a container registry](https://learn.microsoft.com/azure/container-registry/container-registry-import-images).
+템플릿의 `hooks/import-image.sh`가 이 단계를 수행하며 자격 증명을 넘기지 않으므로 GHCR 패키지가
+Public이어야 합니다.
+
+### sample 빌드·배포 도구 { #sample-tooling }
+
+runnable sample과 external sample의 코드 레포는 Azure 배포를 `azd`, Java 빌드를 Gradle Kotlin DSL로
+통일합니다. 컨테이너 이미지는 runnable sample이면 Azure Container Registry 서버 빌드로 만들고, external
+sample이면 코드 레포의 release workflow가 GHCR에 게시한 이미지를 배포 때 `az acr import`로 digest를 지정해
+ACR에 복사합니다. external sample의 이미지는 ACR에서 다시 빌드하지 않습니다. 새로 추가하거나
+배포 방식을 바꾸는 sample에 적용하며, 기존 sample은 해당 sample을 고칠 때
+맞춥니다.
+
+| 대상 | 기준 | 사용하지 않는 방식 |
+|---|---|---|
+| Azure 리소스와 앱 배포 | `azure.yaml`과 `infra/`(Bicep)를 두고 `azd up`으로 만들고 `azd down`으로 정리합니다. external sample은 이 파일과 hook을 문서 레포가 아니라 코드 레포 루트에 둡니다. | README에 나열한 단독 `az` 생성 명령 |
+| azd 밖의 단계 | Kubernetes manifest 적용, 데이터 적재, 미리 보기 API 호출은 `azure.yaml` hook(`preprovision`, `postprovision`, `postdeploy` 등) 스크립트로 실행합니다. | 수동으로 이어 붙이는 명령 순서 |
+| runnable 이미지: azd 서비스 빌드 | `azure.yaml`의 서비스로 배포하는 이미지는 `docker.remoteBuild: true`로 ACR에서 빌드합니다. | 로컬 `docker build`·`docker push`, ACR 빌드 실패 뒤 azd가 대신 수행한 로컬 빌드, 같은 이미지를 hook에서 다시 빌드 |
+| runnable 이미지: hook 빌드 | fallback 없이 ACR 빌드만 허용할 이미지는 hook 스크립트에서 `az acr build --platform linux/amd64`로 빌드하고, 배포 단계(Kubernetes manifest 등)가 그 이미지를 참조하게 합니다. | 같은 이미지를 `docker.remoteBuild` 서비스로도 빌드 |
+| external 컨테이너 이미지 | hook에서 `az acr import`로 GHCR 릴리스 이미지를 digest로 지정해 ACR에 복사합니다. | 같은 코드를 ACR이나 로컬에서 다시 빌드한 이미지 |
+| Java 프로젝트 | `build.gradle.kts`, `settings.gradle.kts`와 Gradle Wrapper(`gradlew`)를 커밋합니다. | Maven `pom.xml`, Groovy `build.gradle` |
+
+- 이미지 하나는 두 경로 중 하나로만 빌드합니다. `docker.remoteBuild: true`는 ACR 원격 빌드가 실패하면 로컬 Docker나
+  Podman으로 다시 빌드합니다. 이 fallback으로 만든 이미지는 기준에 맞지 않으므로, 배포 출력에서
+  이미지가 ACR에서 빌드됐는지 확인하고 원격 빌드 실패를 고친 뒤 다시 배포합니다.
+  fallback 자체를 막아야 하면 그 이미지를 azd 서비스에서 빼고 hook 빌드 경로를 사용합니다.
+  근거: [Azure Developer CLI schema reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema)의
+  `docker` 속성.
+- `azd up`은 `preprovision` hook보다 먼저 Bicep 필수 입력을 검사합니다. hook이
+  채우는 매개변수에는 `''` 같은 기본값을 둡니다.
+- 위 기준을 따를 수 없는 단계(Bicep 형식이 없는 미리 보기 리소스 등)는 hook
+  스크립트로 감싸고 README에 이유를 적습니다.
 
 최상위 `samples/`에는 공개 콘텐츠를 추가하지 않습니다.
 

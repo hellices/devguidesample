@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
+import re
+import subprocess
 from typing import Any, Iterable, Mapping
 
 import yaml
@@ -12,6 +14,34 @@ from scripts.docs.content import Document, DocumentFormatError, KEBAB_CASE, load
 
 
 LEGACY_COLLECTIONS = frozenset(("cases", "guides", "labs", "research"))
+
+SAMPLE_KINDS = frozenset(("runnable", "artifact", "external"))
+# An external sample points at a public GitHub repository: a SemVer release tag for readers and links, and the full
+# commit SHA that the package's git submodule ("source") is pinned to. Branch names are rejected because the
+# referenced code could change under the document.
+# The repository URL is compared with the .gitmodules URL without its ".git" suffix, so the manifest must not carry one.
+# A GitHub owner has 1-39 alphanumerics or single hyphens and neither starts nor ends with a hyphen.
+_GITHUB_OWNER = r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}"
+EXTERNAL_REPOSITORY = re.compile(rf"https://github\.com/{_GITHUB_OWNER}/[A-Za-z0-9._-]+(?<!\.[Gg][Ii][Tt])")
+# SemVer 2.0.0 with a leading "v": prerelease identifiers are non-empty and numeric ones have no leading zeros.
+# Build metadata is not allowed.
+_SEMVER_NUMBER = r"(?:0|[1-9][0-9]*)"
+_SEMVER_PRERELEASE = rf"(?:{_SEMVER_NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+EXTERNAL_REF = re.compile(
+    rf"v{_SEMVER_NUMBER}\.{_SEMVER_NUMBER}\.{_SEMVER_NUMBER}(?:-{_SEMVER_PRERELEASE}(?:\.{_SEMVER_PRERELEASE})*)?"
+)
+EXTERNAL_COMMIT = re.compile(r"[0-9a-f]{40}")
+# Each "/"-separated repository path component follows the OCI distribution grammar, so empty components are rejected.
+_IMAGE_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+# The GHCR namespace is the lower-case GitHub owner.
+_IMAGE_OWNER = _GITHUB_OWNER.replace("A-Za-z0-9", "a-z0-9")
+# An OCI tag starts with a word character and has at most 128 characters.
+_IMAGE_TAG = r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}"
+EXTERNAL_IMAGE = re.compile(
+    rf"ghcr\.io/{_IMAGE_OWNER}/{_IMAGE_COMPONENT}(?:/{_IMAGE_COMPONENT})*:{_IMAGE_TAG}@sha256:[0-9a-f]{{64}}"
+)
+EXTERNAL_FIELDS = ("repository", "ref", "commit", "image")
+EXTERNAL_SOURCE = "source"
 
 
 @dataclass(frozen=True)
@@ -31,6 +61,24 @@ class SampleAsset:
     relative_path: PurePosixPath
     used_by: tuple[PurePosixPath, ...]
     publish: tuple[PublishedAsset, ...] = ()
+    repository: str | None = None
+    ref: str | None = None
+    commit: str | None = None
+    image: str | None = None
+
+    @property
+    def source_url(self) -> str | None:
+        """Immutable tree URL of an external sample at its pinned commit; None for samples stored in this repository.
+        validate_links checks that the release tag resolves to this commit."""
+        if self.repository is None or self.commit is None:
+            return None
+        return f"{self.repository}/tree/{self.commit}"
+
+    @property
+    def release_url(self) -> str | None:
+        if self.repository is None or self.ref is None:
+            return None
+        return f"{self.repository}/releases/tag/{self.ref}"
 
 
 @dataclass(frozen=True)
@@ -115,9 +163,35 @@ def _sample_directory_errors(
                 continue
             if not (sample_dir / "sample.yml").is_file():
                 errors.append(f"{sample_path.as_posix()}: sample.yml is required")
-            if not (sample_dir / "README.md").is_file():
+                continue
+            if _declared_kind(sample_dir / "sample.yml") == "external":
+                # The code repository owns the README and the code; this package holds the manifest and the
+                # "source" submodule, whose checked-out files belong to the other repository. Symlinks count as
+                # entries even when they point at a directory or nowhere.
+                extra = sorted(
+                    path.relative_to(sample_dir).as_posix()
+                    for path in sample_dir.rglob("*")
+                    if (path.is_file() or path.is_symlink())
+                    and path.relative_to(sample_dir) != Path("sample.yml")
+                    and path.relative_to(sample_dir).parts[0] != EXTERNAL_SOURCE
+                )
+                if extra:
+                    errors.append(
+                        f"{sample_path.as_posix()}: external sample must contain only sample.yml and the "
+                        f"{EXTERNAL_SOURCE} submodule: " + ", ".join(extra)
+                    )
+            elif not (sample_dir / "README.md").is_file():
                 errors.append(f"{sample_path.as_posix()}: README.md is required")
     return errors
+
+
+def _declared_kind(manifest_path: Path) -> str | None:
+    try:
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return None
+    kind = manifest.get("kind") if isinstance(manifest, Mapping) else None
+    return kind.strip() if isinstance(kind, str) else None
 
 
 def _normalize_redirects(document: Document) -> tuple[list[PurePosixPath], list[str]]:
@@ -244,11 +318,15 @@ def _build_sample_asset(
 ) -> tuple[SampleAsset | None, list[str]]:
     relative = PurePosixPath(sample_dir.relative_to(docs_root).as_posix())
     manifest_path = sample_dir / "sample.yml"
-    if not manifest_path.is_file() or not (sample_dir / "README.md").is_file():
+    if not manifest_path.is_file():
+        return None, []
+    if _declared_kind(manifest_path) != "external" and not (sample_dir / "README.md").is_file():
         return None, []
 
     try:
         manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except UnicodeError as error:
+        return None, [f"{relative.as_posix()}: sample.yml must be UTF-8: {error}"]
     except yaml.YAMLError as error:
         return None, [f"{relative.as_posix()}: invalid sample.yml: {error}"]
     if not isinstance(manifest, Mapping):
@@ -264,8 +342,10 @@ def _build_sample_asset(
             values[field] = value.strip()
 
     kind = values.get("kind")
-    if kind is not None and kind not in {"runnable", "artifact"}:
-        errors.append(f"{relative.as_posix()}: kind must be runnable or artifact")
+    if kind is not None and kind not in SAMPLE_KINDS:
+        errors.append(f"{relative.as_posix()}: kind must be runnable, artifact or external")
+    external, external_errors = _external_fields(manifest, relative, kind)
+    errors.extend(external_errors)
 
     used_by = manifest.get("used_by")
     if (
@@ -303,9 +383,111 @@ def _build_sample_asset(
             relative_path=relative,
             used_by=tuple(linked_documents),
             publish=publish,
+            repository=external.get("repository"),
+            ref=external.get("ref"),
+            commit=external.get("commit"),
+            image=external.get("image"),
         ),
         [],
     )
+
+
+def _external_fields(
+    manifest: Mapping[str, Any], relative: PurePosixPath, kind: str | None
+) -> tuple[dict[str, str], list[str]]:
+    """repository, ref and optional image of an external sample; other kinds must not declare them."""
+    path = relative.as_posix()
+    if kind != "external":
+        declared = [field for field in EXTERNAL_FIELDS if field in manifest]
+        return {}, [f"{path}: {field} is only allowed for kind external" for field in declared]
+
+    errors: list[str] = []
+    values: dict[str, str] = {}
+    for field, pattern, required, message in (
+        ("repository", EXTERNAL_REPOSITORY, True, "a https://github.com/<owner>/<repo> URL"),
+        ("ref", EXTERNAL_REF, True, "a SemVer release tag (vX.Y.Z)"),
+        ("commit", EXTERNAL_COMMIT, True, "the full 40-character commit SHA of the release"),
+        ("image", EXTERNAL_IMAGE, False, "a ghcr.io/<owner>/<name>:<tag>@sha256:<digest> reference"),
+    ):
+        raw = manifest.get(field)
+        if raw is None and not required:
+            continue
+        if not isinstance(raw, str) or not pattern.fullmatch(raw.strip()):
+            errors.append(f"{path}: {field} must be {message}")
+            continue
+        values[field] = raw.strip()
+    if "repository" in values and "image" in values:
+        owner = values["repository"].removeprefix("https://github.com/").split("/", 1)[0].lower()
+        namespace = values["image"].removeprefix("ghcr.io/").split("/", 1)[0]
+        if namespace != owner:
+            errors.append(f"{path}: image must be published under the repository owner ghcr.io/{owner}/")
+    if manifest.get("publish"):
+        errors.append(f"{path}: external sample must not publish files; keep page assets in an artifact sample")
+    return values, errors
+
+
+def _git(docs_root: Path, *args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(docs_root), *args], capture_output=True, text=True, check=True
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout
+
+
+def _submodule_errors(docs_root: Path, samples: Iterable[SampleAsset]) -> list[str]:
+    """Each external sample's "source" is a submodule of its repository pinned to its commit, and no other
+    submodule exists under docs/services. Skipped outside a git checkout (for example a source archive); inside a
+    checkout a git failure is an error."""
+    samples = [sample for sample in samples if sample.kind == "external"]
+    checkout = next((path for path in (docs_root.resolve(), *docs_root.resolve().parents) if (path / ".git").exists()), None)
+    # Without external samples or a .gitmodules file there is nothing to check; skip the git calls.
+    if checkout is None or (not samples and not (checkout / ".gitmodules").is_file()):
+        return []
+    top = _git(docs_root, "rev-parse", "--show-toplevel")
+    listing = _git(docs_root, "ls-files", "-s", "-z", "--full-name", "--", "services")
+    if top is None or listing is None:
+        # Inside a checkout a failing git call must not pass the submodule pins unchecked.
+        return [f"{checkout}: cannot verify sample submodules because git rev-parse or git ls-files failed"]
+    top_path = Path(top.strip())
+    docs_prefix = PurePosixPath(docs_root.resolve().relative_to(top_path.resolve()).as_posix())
+    gitlinks: dict[PurePosixPath, str] = {}
+    for entry in filter(None, listing.split("\0")):
+        meta, _, name = entry.partition("\t")
+        mode, sha, _stage = meta.split()
+        if mode == "160000":
+            gitlinks[PurePosixPath(name)] = sha
+    urls: dict[PurePosixPath, str] = {}
+    config = _git(docs_root, "config", "-f", str(top_path / ".gitmodules"), "--get-regexp", r"^submodule\..*\.(path|url)$")
+    if config:
+        by_name: dict[str, dict[str, str]] = {}
+        for line in config.splitlines():
+            key, _, value = line.partition(" ")
+            name, _, field = key.removeprefix("submodule.").rpartition(".")
+            by_name.setdefault(name, {})[field] = value.strip()
+        urls = {PurePosixPath(item["path"]): item["url"] for item in by_name.values() if "path" in item and "url" in item}
+
+    errors: list[str] = []
+    expected: set[PurePosixPath] = set()
+    for sample in samples:
+        source = docs_prefix / sample.relative_path / EXTERNAL_SOURCE
+        expected.add(source)
+        label = sample.relative_path.as_posix()
+        if source not in gitlinks:
+            errors.append(f"{label}: {EXTERNAL_SOURCE} must be a git submodule of {sample.repository}")
+            continue
+        if gitlinks[source] != sample.commit:
+            errors.append(
+                f"{label}: {EXTERNAL_SOURCE} submodule is at {gitlinks[source]} but sample.yml commit is {sample.commit}"
+            )
+        url = urls.get(source, "").rstrip("/").lower().removesuffix(".git")
+        if url != (sample.repository or "").lower():
+            errors.append(f"{label}: .gitmodules url of {EXTERNAL_SOURCE} must be {sample.repository}.git")
+    for path in sorted(set(gitlinks) - expected):
+        label = path.relative_to(docs_prefix) if path.is_relative_to(docs_prefix) else path
+        errors.append(f"{label.as_posix()}: submodules are only allowed as the {EXTERNAL_SOURCE} of an external sample")
+    return errors
 
 
 def build_topic_catalog(
@@ -466,6 +648,8 @@ def build_topic_catalog(
                 )
                 continue
             redirects[redirect_path] = document.relative_path
+
+    errors.extend(_submodule_errors(root, (sample for topic in topics.values() for sample in topic.samples)))
 
     if errors:
         raise DocumentFormatError("invalid topic catalog:\n" + "\n".join(errors))

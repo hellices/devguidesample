@@ -1,0 +1,69 @@
+# Release tag vX.Y.Z: test, build the image on a GitHub-hosted runner, push it to GHCR and attest its provenance.
+# The step summary prints the ref, commit and image values that the documentation's sample.yml pins.
+# GHCR repository names must be lowercase, so keep the GitHub owner and repository names lowercase.
+# Third-party actions are pinned to full commit SHAs (the comment names the release) so a moved tag cannot run new code
+# with this workflow's token; update the SHA and the comment together, for example with Dependabot.
+name: release
+on:
+  push:
+    tags: ["v*.*.*"]
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      # Docker tags cannot carry SemVer build metadata ("+..."), and the documentation's sample.yml rejects it, so
+      # stop before publishing anything for such a tag.
+      - name: Reject build metadata in the release tag
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            *+*) echo "::error::Release tags must not contain SemVer build metadata: ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      - run: ./gradlew test
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: type=semver,pattern={{version}}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Values for the documentation sample.yml
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          {
+            echo '```yaml'
+            echo "ref: ${GITHUB_REF_NAME}"
+            # The checked-out HEAD is the commit the tag points at, also for an annotated tag.
+            echo "commit: $(git rev-parse HEAD)"
+            echo "image: ghcr.io/${GITHUB_REPOSITORY}:${VERSION}@${DIGEST}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

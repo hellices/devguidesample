@@ -520,3 +520,200 @@ def test_metadata_gate_keeps_topic_validation_when_another_document_has_invalid_
         in error
         for error in result.errors
     )
+
+
+def test_link_gate_requires_the_pinned_ref_for_external_sample_repositories(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    topic = root / "docs/services/aks/network-diagnosis"
+    sample = topic / "samples/app"
+    sample.mkdir(parents=True)
+    (sample / "sample.yml").write_text(
+        "title: App\ndescription: Code repository\nkind: external\n"
+        "repository: https://github.com/Example-Org/movielog\nref: v2.6.4\n"
+        f"commit: {'c' * 40}\nused_by: [index]\n"
+    )
+    (topic / "index.md").write_text(
+        VALID_GUIDE
+        + "\n[pinned](https://github.com/example-org/movielog/blob/v2.6.4/src/App.java#L10-L20)"
+        + "\n[release](https://github.com/example-org/movielog/releases/tag/v2.6.4)"
+        + f"\n[commit](https://github.com/example-org/movielog/blob/{'c' * 40}/build.gradle.kts)"
+        + "\n[repository](https://github.com/example-org/movielog)"
+        + "\n[other repository](https://github.com/example-org/other/blob/main/README.md)"
+        + "\n[branch](https://github.com/example-org/movielog/blob/main/src/App.java)"
+        + "\n![old](https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png)"
+        + "\n![tag ref](https://raw.githubusercontent.com/example-org/movielog/refs/tags/v2.6.4/docs/diagram.png)"
+        + "\n[raw tag ref](https://github.com/example-org/movielog/raw/refs/tags/v2.6.4/docs/diagram.png)"
+        + "\n[relative scheme](//github.com/example-org/movielog/blob/main/a.java)"
+        + "\n[host case](https://GitHub.com/Example-Org/movielog/blob/main/b.java)"
+        + "\n[http](http://www.github.com/example-org/movielog/tree/main)"
+        + "\n[head ref](https://raw.githubusercontent.com/example-org/movielog/refs/heads/main/c.txt)"
+        + "\n[branch named like the tag](https://github.com/example-org/movielog/blob/refs/heads/v2.6.4/d.java)"
+        + "\n[dot segment](https://github.com/example-org/movielog/blob/v2.6.4/../main/README.md)"
+        + "\n[encoded dot segment](https://github.com/example-org/movielog/blob/v2.6.4/%2e%2e/main/e.md)"
+        + "\n[dot segment to the pin](https://github.com/example-org/movielog/blob/main/./../v2.6.4/f.md)"
+        + "\n[backslash dot segment](https://github.com/example-org/movielog/blob/v2.6.4/..\\main/g.md)"
+        + "\n[trailing-dot host](https://github.com./example-org/movielog/blob/main/h.md)"
+        + "\n[trailing-dot www host](https://www.github.com./example-org/movielog/blob/main/i.md)"
+        + "\n[backslash after host](https://github.com\\example-org/movielog/blob/main/j.md)"
+        + '\n<a href="https://[github.com/example-org/movielog/blob/main/k.md">unclosed bracket</a>'
+        + "\n[bad port](https://github.com:notaport/example-org/movielog/blob/v2.6.4/l.md)\n"
+    )
+
+    errors = validate_links.validate_repository(root).errors
+
+    pinned = f"link must use a pinned ref (v2.6.4, {'c' * 40}) of example-org/movielog"
+    assert errors == [
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com/example-org/movielog/blob/main/src/App.java",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://raw.githubusercontent.com/example-org/movielog/v2.5.0/docs/diagram.png",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: //github.com/example-org/movielog/blob/main/a.java",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: https://GitHub.com/Example-Org/movielog/blob/main/b.java",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: http://www.github.com/example-org/movielog/tree/main",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://raw.githubusercontent.com/example-org/movielog/refs/heads/main/c.txt",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com/example-org/movielog/blob/refs/heads/v2.6.4/d.java",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com/example-org/movielog/blob/v2.6.4/../main/README.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com/example-org/movielog/blob/v2.6.4/%2e%2e/main/e.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com/example-org/movielog/blob/v2.6.4/..\\main/g.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: https://github.com./example-org/movielog/blob/main/h.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://www.github.com./example-org/movielog/blob/main/i.md",
+        f"docs/services/aks/network-diagnosis/index.md: {pinned}: "
+        "https://github.com\\example-org/movielog/blob/main/j.md",
+        "docs/services/aks/network-diagnosis/index.md: link target is not a valid URL: "
+        "https://[github.com/example-org/movielog/blob/main/k.md",
+        "docs/services/aks/network-diagnosis/index.md: link target is not a valid URL: "
+        "https://github.com:notaport/example-org/movielog/blob/v2.6.4/l.md",
+    ]
+
+
+def _pin_error(slug: str, message: str) -> str:
+    return f"services/aks/{slug}/samples/app: https://github.com/example-org/movielog v2.6.4: {message}"
+
+
+@pytest.mark.parametrize(
+    ("refs", "expected"),
+    [
+        ({"refs/tags/v2.6.4": "t" * 40, "refs/tags/v2.6.4^{}": "c" * 40}, []),
+        ({"refs/tags/v2.6.4": "c" * 40}, []),
+        (
+            {"refs/tags/v2.6.4": "t" * 40, "refs/tags/v2.6.4^{}": "d" * 40},
+            [
+                ("network-diagnosis", f"release tag points at {'d' * 40} but sample.yml commit is {'c' * 40}"),
+                ("second-topic", f"release tag points at {'d' * 40} but sample.yml commit is {'c' * 40}"),
+            ],
+        ),
+        ({}, [("network-diagnosis", "release tag does not exist")]),
+        (
+            {"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4": "e" * 40},
+            [("network-diagnosis", "a branch has the same name as the release tag; delete it so links stay pinned")],
+        ),
+        (
+            {"refs/tags/v2.6.4": "c" * 40, "refs/heads/v2.6.4/docs": "e" * 40, "refs/tags/v2.6.4/x": "f" * 40},
+            [
+                (
+                    "network-diagnosis",
+                    "refs nested under the release tag name make links ambiguous; delete them: "
+                    "refs/heads/v2.6.4/docs, refs/tags/v2.6.4/x",
+                )
+            ],
+        ),
+        (None, [("network-diagnosis", "cannot query the repository to verify the release tag")]),
+    ],
+)
+def test_link_gate_checks_the_release_tag_of_external_samples(
+    tmp_path: Path, refs: dict[str, str] | None, expected: list[tuple[str, str]]
+) -> None:
+    root = make_repository(tmp_path)
+    for slug in ("network-diagnosis", "second-topic"):
+        topic = root / "docs/services/aks" / slug
+        (topic / "samples/app").mkdir(parents=True)
+        (topic / "samples/app/sample.yml").write_text(
+            "title: App\ndescription: Code repository\nkind: external\n"
+            "repository: https://github.com/example-org/movielog\nref: v2.6.4\n"
+            f"commit: {'c' * 40}\nused_by: [index]\n"
+        )
+        if not (topic / "index.md").exists():
+            (topic / "index.md").write_text(VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", ""))
+    calls: list[tuple[str, str]] = []
+
+    def remote_refs(repository: str, ref: str) -> dict[str, str] | None:
+        calls.append((repository, ref))
+        return refs
+
+    errors = validate_links.validate_repository(root, remote_refs=remote_refs).errors
+
+    assert calls == [("https://github.com/example-org/movielog", "v2.6.4")]
+    assert errors == [_pin_error(slug, message) for slug, message in expected]
+
+
+def test_link_gate_checks_every_commit_pinned_to_a_shared_release_tag(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    for slug, commit in (("network-diagnosis", "c" * 40), ("second-topic", "d" * 40)):
+        topic = root / "docs/services/aks" / slug
+        (topic / "samples/app").mkdir(parents=True)
+        (topic / "samples/app/sample.yml").write_text(
+            "title: App\ndescription: Code repository\nkind: external\n"
+            f"repository: https://github.com/example-org/movielog\nref: v2.6.4\ncommit: {commit}\nused_by: [index]\n"
+        )
+        if not (topic / "index.md").exists():
+            (topic / "index.md").write_text(VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", ""))
+    calls: list[tuple[str, str]] = []
+
+    def remote_refs(repository: str, ref: str) -> dict[str, str] | None:
+        calls.append((repository, ref))
+        return {"refs/tags/v2.6.4": "c" * 40}
+
+    errors = validate_links.validate_repository(root, remote_refs=remote_refs).errors
+
+    assert calls == [("https://github.com/example-org/movielog", "v2.6.4")]
+    assert errors == [
+        "services/aks/second-topic/samples/app: https://github.com/example-org/movielog v2.6.4: "
+        f"release tag points at {'c' * 40} but sample.yml commit is {'d' * 40}"
+    ]
+
+
+def test_each_topic_keeps_its_own_pin_of_a_shared_code_repository(tmp_path: Path) -> None:
+    root = make_repository(tmp_path)
+    pages = {}
+    for slug, version, commit in (("case-topic", "v1.0.0", "a" * 40), ("guide-topic", "v2.0.0", "b" * 40)):
+        topic = root / "docs/services/aks" / slug
+        (topic / "samples/app").mkdir(parents=True)
+        (topic / "samples/app/sample.yml").write_text(
+            f"title: App\ndescription: Code\nkind: external\nrepository: https://github.com/example-org/movielog\n"
+            f"ref: {version}\ncommit: {commit}\nused_by: [index]\n"
+        )
+        pages[slug] = topic / "index.md"
+    pages["case-topic"].write_text(
+        VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", "")
+        + "\n[v1](https://github.com/example-org/movielog/blob/v1.0.0/App.java)"
+        + "\n[v2](https://github.com/example-org/movielog/blob/v2.0.0/App.java)\n"
+    )
+    pages["guide-topic"].write_text(
+        VALID_GUIDE.replace("![네트워크 흐름](images/network.png)", "")
+        + "\n[v2](https://github.com/example-org/movielog/blob/v2.0.0/App.java)\n"
+    )
+    # A topic without its own sample of the repository may link any version that some topic pins.
+    (root / "docs/services/aks/network-diagnosis/index.md").write_text(
+        VALID_GUIDE
+        + "\n[v1](https://github.com/example-org/movielog/blob/v1.0.0/App.java)"
+        + "\n[v2](https://github.com/example-org/movielog/blob/v2.0.0/App.java)"
+        + "\n[branch](https://github.com/example-org/movielog/blob/main/App.java)\n"
+    )
+
+    errors = validate_links.validate_repository(root).errors
+
+    case_pins = f"v1.0.0, {'a' * 40}"
+    all_pins = f"v1.0.0, {'a' * 40}, v2.0.0, {'b' * 40}"
+    assert errors == [
+        f"docs/services/aks/case-topic/index.md: link must use a pinned ref ({case_pins}) of example-org/movielog: "
+        "https://github.com/example-org/movielog/blob/v2.0.0/App.java",
+        f"docs/services/aks/network-diagnosis/index.md: link must use a pinned ref ({all_pins}) of example-org/movielog: "
+        "https://github.com/example-org/movielog/blob/main/App.java",
+    ]
+

@@ -15,6 +15,7 @@ from scripts.docs.content import (
     load_taxonomy,
     validate_document,
 )
+from scripts.docs import topics
 from scripts.docs.topics import build_topic_catalog
 
 
@@ -642,7 +643,7 @@ def test_build_topic_catalog_allows_samples_directories_inside_sample_payload(
     [
         ("sample.yml", None, "sample.yml is required"),
         ("README.md", None, "README.md is required"),
-        ("kind", "unsupported", "kind must be runnable or artifact"),
+        ("kind", "unsupported", "kind must be runnable, artifact or external"),
         ("used_by", ["missing"], "unknown document slug: missing"),
         ("used_by", [], "used_by must be a non-empty list"),
         ("used_by", ["index", "index"], "used_by values must be unique"),
@@ -734,7 +735,7 @@ def test_reserved_child_cannot_redirect_entry_sample_ownership(
         ("nested grandchild", "child documents must be directly below the topic"),
         ("sample missing manifest", "sample.yml is required"),
         ("sample missing readme", "README.md is required"),
-        ("invalid sample kind", "kind must be runnable or artifact"),
+        ("invalid sample kind", "kind must be runnable, artifact or external"),
         ("empty used_by", "used_by must be a non-empty list"),
         ("unknown used_by", "unknown document slug"),
         ("duplicate redirect", "redirect_from path is already used"),
@@ -1229,3 +1230,292 @@ def test_mobile_upload_commands_use_the_canonical_sample_path() -> None:
     assert f"cd {sample_path}/scripts\n" in guide
     assert "cd azureblob/spring-resumable-upload" not in guide
     assert "cd spring-resumable-upload/scripts" not in guide
+
+
+EXTERNAL_MANIFEST = {
+    "title": "MovieLog app",
+    "description": "Application code in its own repository.",
+    "kind": "external",
+    "repository": "https://github.com/example-org/movielog",
+    "ref": "v2.6.4",
+    "commit": "c" * 40,
+    "image": "ghcr.io/example-org/movielog:2.6.4@sha256:" + "a" * 64,
+    "used_by": ["index"],
+}
+
+
+def test_external_sample_is_a_pinned_pointer_without_readme(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
+
+    catalog = build_topic_catalog(docs_dir, taxonomy)
+
+    sample = catalog.samples_by_document[PurePosixPath("services/azure-monitor/agent-topic/index.md")][0]
+    assert (sample.kind, sample.ref, sample.image) == ("external", "v2.6.4", EXTERNAL_MANIFEST["image"])
+    assert sample.source_url == "https://github.com/example-org/movielog/tree/" + "c" * 40
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ref", "v1.2.3"),
+        ("ref", "v1.2.3-rc.1"),
+        ("ref", "v1.2.3-alpha.0"),
+        ("ref", "v1.2.3-0a"),
+        ("image", "ghcr.io/owner/repo:1.2.3@sha256:" + "a" * 64),
+        ("image", "ghcr.io/owner/repo/sub:1.2.3@sha256:" + "a" * 64),
+        ("image", "ghcr.io/owner/repo:_" + "a" * 127 + "@sha256:" + "a" * 64),
+        ("image", "ghcr.io/" + "a" * 39 + "/repo:1.2.3@sha256:" + "a" * 64),
+        ("image", "ghcr.io/my-org-2/repo:1.2.3@sha256:" + "a" * 64),
+        ("repository", "https://github.com/" + "A" * 39 + "/movielog"),
+        ("repository", "https://github.com/My-Org-2/movielog"),
+    ],
+)
+def test_external_sample_accepts_semver_tags_and_nested_images(
+    tmp_path: Path, taxonomy: dict, field: str, value: str
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    manifest = {**EXTERNAL_MANIFEST, field: value}
+    # The image namespace must be the lower-case repository owner, so keep the paired field consistent.
+    if field == "image":
+        manifest["repository"] = f"https://github.com/{value.split('/')[1]}/movielog"
+    elif field == "repository":
+        manifest["image"] = f"ghcr.io/{value.split('/')[3].lower()}/movielog:2.6.4@sha256:" + "a" * 64
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", manifest, readme=False)
+
+    sample = build_topic_catalog(docs_dir, taxonomy).samples_by_document[
+        PurePosixPath("services/azure-monitor/agent-topic/index.md")
+    ][0]
+    assert getattr(sample, field) == value
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected"),
+    [
+        ("ref", "main", "ref must be a SemVer release tag"),
+        ("ref", "v2.6", "ref must be a SemVer release tag"),
+        ("ref", "c" * 40, "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3-01", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3-alpha..1", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3-a.", "ref must be a SemVer release tag"),
+        ("ref", "v01.2.3", "ref must be a SemVer release tag"),
+        ("ref", "v1.02.3", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.03", "ref must be a SemVer release tag"),
+        ("ref", "v1.2.3+build.1", "ref must be a SemVer release tag"),
+        ("commit", "abc123", "commit must be the full 40-character commit SHA"),
+        ("commit", "g" * 40, "commit must be the full 40-character commit SHA"),
+        ("commit", "c" * 39, "commit must be the full 40-character commit SHA"),
+        ("commit", "c" * 41, "commit must be the full 40-character commit SHA"),
+        ("repository", "https://gitlab.com/example-org/movielog", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example-org/movielog/tree/v2.6.4", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example-org/movielog.git", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example-org/movielog.GIT", "repository must be a https://github.com"),
+        ("image", "ghcr.io/other-org/movielog:2.6.4@sha256:" + "a" * 64, "image must be published under the repository owner"),
+        ("repository", "https://github.com/-example-org/movielog", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example-org-/movielog", "repository must be a https://github.com"),
+        ("repository", "https://github.com/example--org/movielog", "repository must be a https://github.com"),
+        ("repository", "https://github.com/" + "a" * 40 + "/movielog", "repository must be a https://github.com"),
+        ("image", "ghcr.io/example-org/movielog:2.6.4", "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org//movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog//api:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog/:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:-bad@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:.bad@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:" + "a" * 129 + "@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/-example-org/movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org-/movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example--org/movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/" + "a" * 40 + "/movielog:2.6.4@sha256:" + "a" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:2.6.4@sha256:" + "g" * 64, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:2.6.4@sha256:" + "a" * 63, "image must be a ghcr.io"),
+        ("image", "ghcr.io/example-org/movielog:2.6.4@sha256:" + "a" * 65, "image must be a ghcr.io"),
+        ("publish", [{"source": "a.svg", "target": "images/a.svg"}], "external sample must not publish files"),
+    ],
+)
+def test_external_sample_rejects_unpinned_or_malformed_fields(
+    tmp_path: Path, taxonomy: dict, field: str, value: object, expected: str
+) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_sample(
+        docs_dir, "services/azure-monitor/agent-topic/samples/app", {**EXTERNAL_MANIFEST, field: value}, readme=False
+    )
+
+    with pytest.raises(DocumentFormatError, match=re.escape(f"samples/app: {expected}")):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        ("repository", "repository must be a https://github.com"),
+        ("ref", "ref must be a SemVer release tag"),
+        ("commit", "commit must be the full 40-character commit SHA"),
+    ],
+)
+def test_external_sample_requires_its_pin_fields(tmp_path: Path, taxonomy: dict, field: str, expected: str) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    manifest = dict(EXTERNAL_MANIFEST)
+    del manifest[field]
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", manifest, readme=False)
+
+    with pytest.raises(DocumentFormatError, match=re.escape(f"samples/app: {expected}")):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_sample_manifest_that_is_not_utf8_is_a_format_error(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    # The kind cannot be read, so the package is treated as one that keeps its README and reaches manifest parsing.
+    sample_dir = write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST)
+    (sample_dir / "sample.yml").write_bytes(b"title: \xff\xfe broken\nkind: external\n")
+
+    with pytest.raises(DocumentFormatError, match=re.escape("samples/app: sample.yml must be UTF-8")):
+        build_topic_catalog(docs_dir, taxonomy)
+
+def test_external_sample_must_not_carry_code(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    sample_dir = write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST)
+    (sample_dir / "src").mkdir()
+    (sample_dir / "src" / "App.java").write_text("class App {}\n", encoding="utf-8")
+    (sample_dir / "deploy").mkdir()
+    (sample_dir / "deploy" / "sample.yml").write_text("kind: Deployment\n", encoding="utf-8")
+
+    (sample_dir / "source").mkdir()
+    (sample_dir / "source" / "README.md").write_text("# checked-out submodule\n", encoding="utf-8")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape(
+            "external sample must contain only sample.yml and the source submodule: "
+            "README.md, deploy/sample.yml, src/App.java"
+        ),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_external_sample_rejects_symlinks_outside_source(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    sample_dir = write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        (sample_dir / "linked-dir").symlink_to(outside, target_is_directory=True)
+        (sample_dir / "broken").symlink_to(tmp_path / "missing")
+    except OSError as error:
+        pytest.skip(f"symlinks are unavailable: {error}")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape("external sample must contain only sample.yml and the source submodule: broken, linked-dir"),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+@pytest.mark.parametrize("kind", ["runnable", "artifact"])
+@pytest.mark.parametrize("field", ["repository", "ref", "commit", "image"])
+def test_only_external_samples_declare_repository_fields(tmp_path: Path, taxonomy: dict, kind: str, field: str) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    manifest = {"title": "Lab", "description": "Sample package.", "kind": kind, "used_by": ["index"]}
+    write_sample(
+        docs_dir,
+        "services/azure-monitor/agent-topic/samples/lab",
+        {**manifest, field: EXTERNAL_MANIFEST[field]},
+    )
+
+    with pytest.raises(DocumentFormatError, match=re.escape(f"{field} is only allowed for kind external")):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def git(cwd: Path, *args: str) -> str:
+    return subprocess.check_output(["git", "-C", str(cwd), *args], text=True)
+
+
+def submodule_repository(tmp_path: Path, *, commit: str, url: str, path: str) -> Path:
+    """A git repository whose index records a gitlink, without cloning anything."""
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "update-index", "--add", "--cacheinfo", f"160000,{commit},{path}")
+    (tmp_path / ".gitmodules").write_text(f'[submodule "{path}"]\n\tpath = {path}\n\turl = {url}\n', encoding="utf-8")
+    return tmp_path / "docs"
+
+
+SOURCE = "docs/services/azure-monitor/agent-topic/samples/app/source"
+
+
+@pytest.mark.parametrize(
+    ("commit", "url", "path", "expected"),
+    [
+        ("c" * 40, "https://github.com/example-org/movielog.git", SOURCE, None),
+        ("c" * 40, "https://github.com/example-org/movielog.GIT", SOURCE, None),
+        ("d" * 40, "https://github.com/example-org/movielog.git", SOURCE, "source submodule is at " + "d" * 40),
+        ("c" * 40, "https://github.com/example-org/other.git", SOURCE, ".gitmodules url of source must be"),
+        ("c" * 40, "https://github.com/example-org/movielog.git", "vendor/movielog", "source must be a git submodule"),
+    ],
+)
+def test_external_sample_source_is_a_submodule_pinned_to_the_commit(
+    tmp_path: Path, taxonomy: dict, commit: str, url: str, path: str, expected: str | None
+) -> None:
+    docs_dir = submodule_repository(tmp_path, commit=commit, url=url, path=path)
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
+
+    if expected is None:
+        sample = build_topic_catalog(docs_dir, taxonomy).samples_by_document[
+            PurePosixPath("services/azure-monitor/agent-topic/index.md")
+        ]
+        assert [(s.kind, s.repository, s.commit) for s in sample] == [
+            ("external", EXTERNAL_MANIFEST["repository"], EXTERNAL_MANIFEST["commit"])
+        ]
+    else:
+        with pytest.raises(DocumentFormatError, match=re.escape(expected)):
+            build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_external_sample_source_directory_must_be_a_gitlink(tmp_path: Path, taxonomy: dict) -> None:
+    docs_dir = tmp_path / "docs"
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    sample_dir = write_sample(
+        docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False
+    )
+    (sample_dir / "source").mkdir()
+    (sample_dir / "source" / "README.md").write_text("# copied code, not a submodule\n", encoding="utf-8")
+    git(tmp_path, "init", "-q")
+    git(tmp_path, "add", "-A")
+
+    with pytest.raises(
+        DocumentFormatError,
+        match=re.escape(
+            "services/azure-monitor/agent-topic/samples/app: source must be a git submodule of "
+            "https://github.com/example-org/movielog"
+        ),
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_submodules_elsewhere_under_services_are_rejected(tmp_path: Path, taxonomy: dict) -> None:
+    stray = "docs/services/azure-monitor/agent-topic/vendor"
+    docs_dir = submodule_repository(tmp_path, commit="c" * 40, url="https://github.com/example-org/x.git", path=stray)
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+
+    with pytest.raises(
+        DocumentFormatError, match=re.escape("services/azure-monitor/agent-topic/vendor: submodules are only allowed")
+    ):
+        build_topic_catalog(docs_dir, taxonomy)
+
+
+def test_git_failure_inside_a_checkout_fails_the_submodule_check(
+    tmp_path: Path, taxonomy: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docs_dir = submodule_repository(tmp_path, commit="c" * 40, url="https://github.com/example-org/movielog.git", path=SOURCE)
+    write_document(docs_dir, "services/azure-monitor/agent-topic/index.md", "Agent topic")
+    write_sample(docs_dir, "services/azure-monitor/agent-topic/samples/app", EXTERNAL_MANIFEST, readme=False)
+    monkeypatch.setattr(topics, "_git", lambda *args: None)
+
+    with pytest.raises(DocumentFormatError, match=re.escape("cannot verify sample submodules")):
+        build_topic_catalog(docs_dir, taxonomy)
