@@ -15,8 +15,6 @@ official_sources:
     url: https://learn.microsoft.com/azure/aks/aks-managed-gpu-nodes
   - title: Use GPUs for compute-intensive workloads on Azure Kubernetes Service (AKS)
     url: https://learn.microsoft.com/azure/aks/use-nvidia-gpu
-  - title: Increase spot vCPU family quotas
-    url: https://learn.microsoft.com/azure/quotas/spot-quota
   - title: Allow extensions in Azure HorizonDB
     url: https://learn.microsoft.com/azure/horizondb/extensions/how-to-allow-extensions
   - title: Load libraries in Azure HorizonDB
@@ -81,10 +79,7 @@ azd up
 | `postdeploy` hook | GHCR 릴리스 이미지 `az acr import`, vLLM(bge-m3-ko)과 앱 배포, 카탈로그 적재·두 모델 임베딩·DiskANN index·AGE 그래프, Grafana dashboard, HTTPS |
 
 환경 값, 단계별 동작, 실습 중 고친 문제는 코드 레포의
-[배포 절차](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/docs/deploy.md)에 있습니다. spot VM에는 표준
-VM의 계열별 할당량 대신 모든 VM 계열에 함께 적용되는 지역 spot vCPU 할당량이 적용됩니다. 그래서 표준 GPU 계열
-(`NCASv3_T4`) 할당량이 0인 구독에서도 spot vCPU 할당량 안에서 GPU spot 노드를 만들 수 있었습니다. 배포 전에
-`az vm list-usage`로 지역의 spot vCPU 할당량이 4 vCPU 이상 남았는지 확인합니다.
+[배포 절차](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/docs/deploy.md)에 있습니다.
 
 ## 아키텍처: AGFC → AKS MovieLog → HorizonDB { #architecture }
 
