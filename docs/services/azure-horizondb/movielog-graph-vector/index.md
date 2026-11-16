@@ -107,9 +107,10 @@ Azure HorizonDB는 PostgreSQL 위에 만든 cloud native 완전 관리형 데이
 
 ## 벡터 검색: `vector` 열 · 거리 연산자 · index 선택 { #vector }
 
-벡터는 `vector(n)` 타입의 일반 열이고, 검색은 질의 벡터와의 거리(`<=>` 코사인, `<->` L2, `<#>` 내적)로
-정렬하는 SQL 한 문장입니다. 일반 열이므로 관계형 테이블과 join하거나 `WHERE` 조건과 함께 쓸 수 있고,
-임베딩 모델마다 열과 index를 따로 둘 수 있습니다.
+벡터는 `vector(n)` 타입의 일반 열이고, 검색은 질의 벡터와의 거리(`<=>` 코사인 거리, `<->` L2 거리, `<#>` 음의 내적)로
+오름차순 정렬하는 SQL 한 문장입니다. `<#>`는 index 탐색을 위해 내적의 부호를 뒤집은 값이므로, 내적 점수가
+필요하면 `-(embedding <#> :query_vector)`로 바꿔 표시합니다. 일반 열이므로 관계형 테이블과 join하거나 `WHERE`
+조건과 함께 쓸 수 있고, 임베딩 모델마다 열과 index를 따로 둘 수 있습니다.
 
 ```sql
 ALTER TABLE documents ADD COLUMN embedding vector(1024);
@@ -198,7 +199,7 @@ SELECT azure_openai.create_embeddings('<model-alias>', 'Alternatives to LEGO');
 | 관계 확장(context expansion) | 벡터 결과를 시작점으로 AGE 이웃 탐색 |
 | 벡터 관계 저장 | 최근접 결과를 그래프 관계로 저장 |
 | 필터 결합 검색 | DiskANN advanced filtering |
-| 재순위 | `azure_ai.rank()` cross-encoder로 벡터 후보 재정렬 |
+| 재순위 | `azure_ai.rank()`로 벡터 후보 재정렬. 관리형 `default-reranker` 또는 BYOM으로 등록한 `Cohere-rerank-v4.0-pro`·`-fast`, GPT 모델 |
 | graph-augmented RAG | 벡터 후보 + 그래프 탐색 + RRF 결과를 `azure_ai.generate()`에 문맥으로 전달 |
 | 임베딩 자동화 | AI pipeline `on_change` trigger로 새 행 임베딩 |
 
@@ -270,8 +271,8 @@ MovieLog는 그래프를 관계형 테이블에서 다시 만들 수 있는 파�
 
 임베딩은 문서와 질의를 같은 모델로 만들어야 하므로 모델마다 벡터 열과 index를 따로 둡니다. DB 안 임베딩 함수의 지원
 모델은 OpenAI 세 모델이므로, 한국어 특화 오픈 모델 `dragonkue/BGE-m3-ko`는 AKS에서 직접 서빙했습니다. AKS의 관리형
-GPU 노드 풀은 NVIDIA driver와 device plugin을 설치·관리하며, spot VM은 VM 계열과 상관없이 지역의 spot vCPU 할당량을
-씁니다.
+GPU 노드 풀은 NVIDIA driver와 device plugin을 설치·관리합니다. spot VM에는 표준 VM의 계열별 할당량 대신, 모든 VM
+계열에 함께 적용되는 지역 spot vCPU 할당량이 적용됩니다.
 
 MovieLog는 두 모델의 열을 함께 채우고 API의 `model=openai|bge` 매개변수로 요청마다 고르게 했습니다. 두 경로 모두 같은
 DiskANN 검색과 RRF 결합 흐름에서 동작하므로, 어느 쪽이든 HorizonDB 쪽 구성은 같습니다. 어느 모델을 쓸지는 아래 운영
@@ -291,9 +292,9 @@ DiskANN 검색과 RRF 결합 흐름에서 동작하므로, 어느 쪽이든 Hori
   평가가 필요합니다. 코사인 점수는 모델마다 분포가 달라 두 모델 사이에서 비교하지 않습니다.
 - **앱 기본값** — MovieLog 앱의 기본값은 bge-m3-ko이지만 품질 평가에 따른 선택이 아니라 샘플 구성이며, 요청마다
   `model`로 바꿀 수 있습니다.
-- **spot GPU** — MovieLog 구독의 Korea Central에서는 GPU VM으로 T4와 H100 계열만 조회됐고 GPU 계열 할당량은 0이었지만,
-  spot vCPU 할당량으로 T4 노드를 만들 수 있었습니다. spot VM이 회수되면 새 노드가 뜰 때까지 `model=bge` 검색은
-  503을 돌려주고 `model=openai`는 계속 동작합니다.
+- **spot GPU** — MovieLog 구독의 Korea Central에서는 GPU VM으로 T4와 H100 계열만 조회됐고, 표준(pay-as-you-go)
+  VM의 GPU 계열 할당량(`NCASv3_T4`)은 0이었지만 spot vCPU 할당량 안에서 T4 spot 노드를 만들 수 있었습니다. spot VM이
+  회수되면 새 노드가 뜰 때까지 `model=bge` 검색은 503을 돌려주고 `model=openai`는 계속 동작합니다.
 - **모델 추가** — bge-m3-ko는 기존 카탈로그 484편을 1분 26초(배치 32)에 임베딩했습니다. 새 열을 추가해 채운 뒤
   index를 만들고 기본 모델을 바꾸므로, 기존 열은 그대로라 되돌리기 쉽습니다.
 
@@ -324,7 +325,7 @@ SELECT array_length(ai.embed('마피아 가문의 권력 승계', 'byom-embed-sm
 | 관계 확장(context expansion) | 적용(결과 영화 사이의 인물·장르·유사 관계 그래프) |
 | 벡터 관계 저장 | 적용(`SIMILAR_TO`) |
 | 필터 결합 검색 | 미적용(장르 열을 `movie_docs`에 두면 가능) |
-| 재순위 | 미적용(관리형 `default-reranker` 필요) |
+| 재순위 | 미적용(관리형 `default-reranker`는 승인 대기였고, BYOM으로 지원 rerank·GPT 모델을 등록하면 적용 가능) |
 | graph-augmented RAG | 미적용 |
 | 임베딩 자동화 | 미적용(앱이 색인 시 임베딩) |
 

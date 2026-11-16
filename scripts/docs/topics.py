@@ -20,7 +20,9 @@ SAMPLE_KINDS = frozenset(("runnable", "artifact", "external"))
 # commit SHA that the package's git submodule ("source") is pinned to. Branch names are rejected because the
 # referenced code could change under the document.
 # The repository URL is compared with the .gitmodules URL without its ".git" suffix, so the manifest must not carry one.
-EXTERNAL_REPOSITORY = re.compile(r"https://github\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]+(?<!\.git)")
+# A GitHub owner has 1-39 alphanumerics or single hyphens and neither starts nor ends with a hyphen.
+_GITHUB_OWNER = r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}"
+EXTERNAL_REPOSITORY = re.compile(rf"https://github\.com/{_GITHUB_OWNER}/[A-Za-z0-9._-]+(?<!\.git)")
 # SemVer 2.0.0 with a leading "v": prerelease identifiers are non-empty and numeric ones have no leading zeros.
 # Build metadata is not allowed.
 _SEMVER_NUMBER = r"(?:0|[1-9][0-9]*)"
@@ -31,8 +33,8 @@ EXTERNAL_REF = re.compile(
 EXTERNAL_COMMIT = re.compile(r"[0-9a-f]{40}")
 # Each "/"-separated repository path component follows the OCI distribution grammar, so empty components are rejected.
 _IMAGE_COMPONENT = r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
-# The GHCR namespace is a GitHub owner: alphanumerics with inner hyphens only.
-_IMAGE_OWNER = r"[a-z0-9]+(?:-+[a-z0-9]+)*"
+# The GHCR namespace is the lower-case GitHub owner.
+_IMAGE_OWNER = _GITHUB_OWNER.replace("A-Za-z0-9", "a-z0-9")
 # An OCI tag starts with a word character and has at most 128 characters.
 _IMAGE_TAG = r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}"
 EXTERNAL_IMAGE = re.compile(

@@ -39,7 +39,15 @@ def _github_ref(target: str) -> tuple[str, str] | None:
     if parsed.scheme not in {"", "http", "https"} or not parsed.netloc:
         return None
     host = (parsed.hostname or "").lower().removeprefix("www.")
-    parts = [unquote(part) for part in parsed.path.split("/") if part]
+    parts: list[str] = []
+    # Browsers remove "." and ".." segments (also when percent-encoded) before requesting the URL, so resolve them
+    # the same way; otherwise ".../blob/<pin>/../main/..." would look pinned while opening a branch.
+    for part in (unquote(part) for part in parsed.path.split("/") if part):
+        if part == "..":
+            if parts:
+                parts.pop()
+        elif part != ".":
+            parts.append(part)
     if host == "github.com" and len(parts) >= 4 and parts[2] in _GITHUB_REF_KINDS:
         repository, rest = parts[:2], parts[3:]
     elif host == "raw.githubusercontent.com" and len(parts) >= 3:

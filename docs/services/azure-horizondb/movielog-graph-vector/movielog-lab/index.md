@@ -7,7 +7,7 @@ technologies: [postgresql, java, spring-boot, kubernetes, bicep]
 tags: [build, deploy]
 status: verified
 verification_status: needs-review
-sources_checked_at: 2026-11-15
+sources_checked_at: 2026-11-16
 official_sources:
   - title: Customize your Azure Developer CLI workflows using command and event hooks
     url: https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-extensibility
@@ -65,9 +65,14 @@ hook이 Bicep 형식이 없는 HorizonDB(미리 보기)와 DB·Kubernetes 구성
 git clone --branch v2.7.0 https://github.com/hellices/sample-movielog-horizondb.git && cd sample-movielog-horizondb
 azd auth login && az login
 azd env new movielog --location koreacentral
-azd env set APP_HOST movielog.example.com   # optional: HTTPS and Microsoft Entra ID sign-in
+azd env set APP_HOST movielog.example.com   # optional: public HTTPS and Microsoft Entra ID sign-in
 azd up
 ```
+
+`APP_HOST`를 넣지 않으면 공개 진입점을 만들지 않습니다. 앱 Service는 클러스터 내부용(ClusterIP)이라
+`kubectl port-forward`로만 접속합니다. `APP_HOST`를 넣으면 Application Gateway for Containers에 HTTPS listener를
+열고, HTTP listener는 앱으로 전달하지 않고 HTTPS로 301 redirect만 합니다
+([공개 구성](#public-access)).
 
 | 단계 | 만드는 것 |
 |---|---|
@@ -76,8 +81,10 @@ azd up
 | `postdeploy` hook | GHCR 릴리스 이미지 `az acr import`, vLLM(bge-m3-ko)과 앱 배포, 카탈로그 적재·두 모델 임베딩·DiskANN index·AGE 그래프, Grafana dashboard, HTTPS |
 
 환경 값, 단계별 동작, 실습 중 고친 문제는 코드 레포의
-[배포 절차](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/docs/deploy.md)에 있습니다. spot VM은 VM 계열과 상관없이 지역의 spot vCPU 할당량을
-쓰므로 GPU 계열(`NCASv3_T4`) 할당량이 0인 구독에서도 GPU 노드를 만들 수 있었습니다.
+[배포 절차](https://github.com/hellices/sample-movielog-horizondb/blob/v2.7.0/docs/deploy.md)에 있습니다. spot VM에는 표준
+VM의 계열별 할당량 대신 모든 VM 계열에 함께 적용되는 지역 spot vCPU 할당량이 적용됩니다. 그래서 표준 GPU 계열
+(`NCASv3_T4`) 할당량이 0인 구독에서도 spot vCPU 할당량 안에서 GPU spot 노드를 만들 수 있었습니다. 배포 전에
+`az vm list-usage`로 지역의 spot vCPU 할당량이 4 vCPU 이상 남았는지 확인합니다.
 
 ## 아키텍처: AGFC → AKS MovieLog → HorizonDB { #architecture }
 
