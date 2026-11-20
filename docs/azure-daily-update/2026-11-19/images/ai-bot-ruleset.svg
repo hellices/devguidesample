@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" role="img" aria-labelledby="ai-bot-title ai-bot-desc">
+  <title id="ai-bot-title">AI bot 요청의 검증·목적별 분류와 action 적용</title>
+  <desc id="ai-bot-desc">앞선 WAF 평가를 통과한 AI bot 요청을 검증해 학습·검색·실시간 에이전트와 검증할 수 없는 에이전트로 구분합니다. 모든 규칙의 기본 action은 Log이며 차단 정책은 별도로 설정합니다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0 8 3 0 6Z" fill="#4f5d75"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0 8 3 0 6Z" fill="#eb6c36"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0 8 3 0 6Z" fill="#2e5aa8"/></marker>
+  </defs>
+  <rect width="960" height="440" fill="#f5f5f5"/>
+  <g font-family="'Geist','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif" fill="#2d3142">
+    <text x="40" y="44" font-size="28">Front Door Premium WAF: AI bot 목적별 정책</text>
+    <text x="40" y="80" font-size="14" fill="#4f5d75">앞선 규칙에서 Allow·Block으로 종료되지 않은 요청</text>
+    <g fill="none" stroke="#4f5d75" stroke-width="2" marker-end="url(#arrow)">
+      <path d="M200 212 H240"/>
+      <path d="M416 196 H440 Q448 196 448 188 V168 Q448 160 456 160 H480"/>
+      <path d="M416 228 H456 Q464 228 464 236 V264 Q464 272 472 272 H480"/>
+      <path d="M720 160 H744 Q752 160 752 168 V180 Q752 188 760 188 H784"/>
+      <path d="M720 272 H760 Q768 272 768 264 V244 Q768 236 776 236 H784"/>
+    </g>
+    <rect x="40" y="172" width="160" height="80" rx="6" fill="#ececec" stroke="#4f5d75"/>
+    <text x="120" y="208" text-anchor="middle" font-size="14" font-weight="600">AI bot 요청</text>
+    <text x="120" y="232" text-anchor="middle" font-size="12">Web 크롤링·페이지 조회</text>
+    <rect x="240" y="164" width="176" height="96" rx="6" fill="#fff3ed" stroke="#eb6c36"/>
+    <text x="328" y="204" text-anchor="middle" font-size="14" font-weight="600">신원 검증·목적 분류</text>
+    <text x="328" y="232" text-anchor="middle" font-size="12">Microsoft 관리 signature</text>
+    <rect x="480" y="112" width="240" height="96" rx="6" fill="#fff" stroke="#2d3142"/>
+    <text x="600" y="140" text-anchor="middle" font-size="14" font-weight="600">검증된 봇의 세 가지 목적</text>
+    <text x="600" y="164" text-anchor="middle" font-size="12">AI training · AI search</text>
+    <text x="600" y="188" text-anchor="middle" font-size="12">AI interactive agents</text>
+    <rect x="480" y="232" width="240" height="80" rx="6" fill="#fff" stroke="#2d3142"/>
+    <text x="600" y="264" text-anchor="middle" font-size="14" font-weight="600">Miscellaneous AI agents</text>
+    <text x="600" y="288" text-anchor="middle" font-size="12">검증 정보 부재 또는 사칭 등</text>
+    <rect x="784" y="164" width="136" height="96" rx="6" fill="#fff" stroke="#2d3142"/>
+    <text x="852" y="200" text-anchor="middle" font-size="14" font-weight="600">범주별 action</text>
+    <text x="852" y="224" text-anchor="middle" font-size="12">기본값: Log</text>
+    <text x="852" y="244" text-anchor="middle" font-size="12">허용·차단 등 설정</text>
+    <path d="M40 348 H920" stroke="#bfc0c0"/>
+    <text x="40" y="380" font-size="14">Log는 평가를 계속합니다. 800104를 차단·challenge하면 허용할 검증 범주는 Allow로 설정합니다.</text>
+    <text x="40" y="408" font-size="12" fill="#4f5d75">검증된 봇도 Log 뒤에 800104와 다시 매칭될 수 있습니다. Detection mode에서는 기록만 합니다.</text>
+  </g>
+</svg>
