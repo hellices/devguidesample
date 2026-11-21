@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="gallery-title gallery-desc">
+  <title id="gallery-title">Compute Gallery 이미지 삭제 후 배포·복구 가능 구간</title>
+  <desc id="gallery-desc">API 2026-03-03에서 soft delete된 이미지 버전은 retention 동안 배포와 복구가 가능하고, grace 동안에는 복구만 가능하며, 이후 영구 삭제된다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#64748b"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0 0L8 3L0 6Z" fill="#2563eb"/></marker>
+    <style>text{font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;fill:#172554;font-size:20px}.name{font-size:23px;font-weight:600}.note{font-size:18px;fill:#475569}.edge{fill:none;stroke:#64748b;stroke-width:2;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="960" height="360" fill="#fff"/>
+  <text x="40" y="48" class="name">삭제 뒤에도 이어지는 배포와 복구 — API 2026-03-03</text>
+  <path d="M240 176H280" class="edge"/><path d="M480 176H520" class="edge"/><path d="M720 176H760" class="edge"/>
+  <rect x="244" y="132" width="32" height="28" fill="#fff"/><text x="260" y="152" text-anchor="middle" class="note">삭제</text>
+  <rect x="484" y="132" width="32" height="28" fill="#fff"/><text x="500" y="152" text-anchor="middle" class="note">만료</text>
+  <rect x="724" y="132" width="32" height="28" fill="#fff"/><text x="740" y="152" text-anchor="middle" class="note">만료</text>
+  <rect x="40" y="112" width="200" height="128" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="140" y="154" text-anchor="middle" class="name">Active</text>
+  <text x="140" y="190" text-anchor="middle">정상 배포</text>
+  <rect x="280" y="112" width="200" height="128" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="380" y="150" text-anchor="middle" class="name">Retention</text>
+  <text x="380" y="185" text-anchor="middle">7–365일</text>
+  <text x="380" y="218" text-anchor="middle">배포·복구 가능</text>
+  <rect x="520" y="112" width="200" height="128" rx="8" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="620" y="150" text-anchor="middle" class="name">Grace</text>
+  <text x="620" y="185" text-anchor="middle">7–90일</text>
+  <text x="620" y="218" text-anchor="middle">배포 불가·복구 가능</text>
+  <rect x="760" y="112" width="160" height="128" rx="8" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="840" y="166" text-anchor="middle" class="name">영구 삭제</text>
+  <text x="840" y="202" text-anchor="middle">복구 불가</text>
+  <path d="M40 280H920" stroke="#cbd5e1"/>
+  <text x="40" y="312" class="note">Soft delete 정책 활성화 기준 · Retention과 grace의 기본값은 각각 7일</text>
+  <text x="40" y="342" class="note">Hard delete는 이 대기 구간을 건너뛸 수 있음 · 보존 중 replica 저장 비용 지속</text>
+</svg>
