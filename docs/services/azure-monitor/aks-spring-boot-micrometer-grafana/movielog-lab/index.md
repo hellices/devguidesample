@@ -291,10 +291,10 @@ kubectl scale deploy/movielog -n movielog --replicas=2
 각 단계의 query와 통과 기준입니다. 단계별 목적은
 [주제 소개의 Copilot 절](../index.md#agent)에 있습니다.
 
-[`samples/movielog-app`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app)에는 [`grafana-metrics-dashboard`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard) skill이 들어
+[`samples/movielog-app`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app)에는 [`grafana-metrics-dashboard`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard) skill이 들어
 있습니다. 이 폴더를 VS Code workspace로 열거나 skill 폴더를 자기 저장소의
 `.github/skills/`에 복사한 뒤, Copilot chat에서 다음처럼 요청합니다. skill 지침 전문은
-[SKILL.md](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard/SKILL.md)입니다.
+[SKILL.md](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/.github/skills/grafana-metrics-dashboard/SKILL.md)입니다.
 
 ```text
 Use the /grafana-metrics-dashboard skill. Application Insights rg-movielog-lab/appi-movielog-lab의
@@ -601,7 +601,7 @@ Managed Grafana MCP를 쓰면 Copilot이 `amgmcp_dashboard_update`로 전체 JSO
 
 ### JSON 추출과 Grafana import { #publish-import }
 
-1. **가져갈 JSON을 준비합니다.** 저장소의 [`grafana/movielog-dashboard.json`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/grafana/movielog-dashboard.json)은
+1. **가져갈 JSON을 준비합니다.** 저장소의 [`grafana/movielog-dashboard.json`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/aks-spring-boot-micrometer-grafana/samples/movielog-app/grafana/movielog-dashboard.json)은
    변수 값이 빈 범용 JSON입니다. 이미 검증한 dashboard를 가져가려면 Grafana의 공유 메뉴에서
    **Export > Save to file**을 쓰거나 CLI로 내보냅니다.
 

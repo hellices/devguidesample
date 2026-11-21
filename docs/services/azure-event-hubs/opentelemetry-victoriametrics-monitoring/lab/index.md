@@ -108,7 +108,7 @@ topic_order: 1
 # Event Hubs OpenTelemetry·VictoriaMetrics 관측 실습
 
 이 실습은 [Event Hubs 지표 수집 방식 비교 topic](../index.md)의 구성을
-[`eventhubs-otel-victoriametrics-lab`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab)
+[`eventhubs-otel-victoriametrics-lab`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab)
 sample로 재현합니다. 아래 결과와 화면은 실제 구독에서 실행한 기록이며, 구독 ID·resource
 이름의 고유 suffix·IP는 가상 값으로 바꿨습니다.
 
@@ -207,7 +207,7 @@ AKS internal load balancer에 대해 Learn은 VNet 범위 Network Contributor �
 읽고, `./scripts/...` 경로도 이 디렉터리를 기준으로 합니다.
 
 ```bash
-git clone https://github.com/hellices/devguidesample.git
+git clone https://github.com/caldova-kr/devguidesample.git
 cd devguidesample/docs/services/azure-event-hubs/opentelemetry-victoriametrics-monitoring/samples/eventhubs-otel-victoriametrics-lab
 ```
 

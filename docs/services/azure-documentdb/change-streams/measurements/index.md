@@ -31,7 +31,7 @@ official_sources:
 
 [상위 문서](../index.md)의 결론을 뒷받침하는 측정값입니다. 시험 환경도 상위 문서에
 있습니다. 각 시나리오의 생성기 매개변수와 실행 방법은 sample
-[README](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)의
+[README](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)의
 Measured scenarios에 있습니다.
 
 검증은 `verify_lake.py`가 Parquet 파일 전체를 생성기가 만든 이벤트와 대조했습니다.

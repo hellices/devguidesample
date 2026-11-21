@@ -64,7 +64,7 @@ Azure SRE Agent는 이 실습이 만들지 않습니다. 미리 만들어 둔 Ag
 이 실습은 **본인 fork에서** 진행합니다. Agent에 저장소를 연결하면 조사 결과 이슈가 그 저장소에 생성되므로, 원본을 연결하면 참가자 전원의 이슈가 한곳에 쌓이고 쓰기 권한도 없습니다.
 
 1. 이 저장소를 본인 계정으로 fork합니다.
-2. fork에서 **Code > Codespaces > Create codespace**를 엽니다. 저장소 기본 dev container가 `az`, `azd`, `gh`, Python, `uv`, `jq`를 갖춰 줍니다. 도구 목록과 로컬 설치 방법은 [.devcontainer/README.md](https://github.com/hellices/devguidesample/blob/main/.devcontainer/README.md)에 있습니다.
+2. fork에서 **Code > Codespaces > Create codespace**를 엽니다. 저장소 기본 dev container가 `az`, `azd`, `gh`, Python, `uv`, `jq`를 갖춰 줍니다. 도구 목록과 로컬 설치 방법은 [.devcontainer/README.md](https://github.com/caldova-kr/devguidesample/blob/main/.devcontainer/README.md)에 있습니다.
 3. 터미널에서 로그인한 뒤 환경을 한 번 읽습니다.
 
 ```bash
@@ -80,7 +80,7 @@ source ./docs/services/azure-monitor/azure-sre-agent/samples/event-lab/scripts/l
 
 ## 사전 조건
 
-- `az`, `azd`, `jq`, `curl`, `python3`, `uv` — 설치 명령은 [.devcontainer/README.md](https://github.com/hellices/devguidesample/blob/main/.devcontainer/README.md)가 관리합니다. `uv`는 `app/.venv`를 만드는 `scripts/setup-venv.sh`가 쓰는 유일한 도구이며, 사내 프록시로 구성된 인덱스 설정을 그대로 씁니다(공개 PyPI `pip` 폴백 없음).
+- `az`, `azd`, `jq`, `curl`, `python3`, `uv` — 설치 명령은 [.devcontainer/README.md](https://github.com/caldova-kr/devguidesample/blob/main/.devcontainer/README.md)가 관리합니다. `uv`는 `app/.venv`를 만드는 `scripts/setup-venv.sh`가 쓰는 유일한 도구이며, 사내 프록시로 구성된 인덱스 설정을 그대로 씁니다(공개 PyPI `pip` 폴백 없음).
 - `az extension add --name log-analytics` (`az monitor log-analytics query` 제공)
 - `az login`과 `azd auth login` — 두 CLI는 자격 증명을 따로 관리합니다.
 - 구독 Contributor, 역할 할당을 위한 Owner 또는 User Access Administrator

@@ -216,14 +216,14 @@ SRE Agent)은 저장된 시계열을 필요할 때 PromQL로 읽습니다.
 | Azure Managed Grafana 대시보드 | 패널별 PromQL 조회 (pull) | 대시보드가 열려 있는 동안 30초 | 기본 시간 범위 최근 1시간 |
 
 exporter 바인딩, 서비스 계정, 권한, 관리 ID 범위에 대한 설계 결정은
-[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#지표-파이프라인)에 정리했습니다.
+[구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#지표-파이프라인)에 정리했습니다.
 
 ## 같은 deploy.sh가 지표 파이프라인과 대시보드까지 구성
 
 [SRE Agent 실습](../sql-server-vm-health-check/index.md)의 `deploy.sh`가 Azure Monitor
 workspace, Azure Managed Grafana, VM의 지표용 관리 ID를 만들고, VM에 exporter와 Prometheus
 에이전트를 설치한 뒤 대시보드를 가져옵니다. 설치 단계와 remote write 확인 방법은
-[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#지표-파이프라인-배포)를 참고합니다.
+[구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#지표-파이프라인-배포)를 참고합니다.
 
 ## 대시보드 패널과 확인할 신호
 
@@ -251,7 +251,7 @@ workspace에 여러 SQL Server VM을 보내면 대시보드 상단 변수로 전
 
 `scripts/verify_dashboard_queries.py`가 대시보드의 모든 패널 쿼리를 workspace에 실행하고,
 Grafana HTTP API로도 같은 데이터 원본을 조회했습니다. 측정값과 실행 방법은
-[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#대시보드-검증)에 있습니다.
+[구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#대시보드-검증)에 있습니다.
 
 ## remote write·패널 데이터·Grafana 경로·최소 권한이 모두 확인되면 통과
 
@@ -291,7 +291,7 @@ Azure Monitor workspace와 Grafana도 같은 리소스 그룹에 있으므로 �
 ## 구성 중 만난 오류는 구성 상세에 정리
 
 windows_exporter 수집기 이름, sql_exporter 예약 레이블, 로그인 감사 이벤트 읽기, Prometheus
-바이너리 교체 같은 문제와 대응은 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#문제-해결)에 모았습니다.
+바이너리 교체 같은 문제와 대응은 [구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#문제-해결)에 모았습니다.
 
 ## 공식 참고 자료
 

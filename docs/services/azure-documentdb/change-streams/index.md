@@ -39,7 +39,7 @@ Airflow DAG가 주기적으로 읽어 Parquet 파일로 내리는 방식이 실�
 - 운영에 올리기 전에 무엇을 더 확인해야 하는가
 
 시험 환경은 이 질문에 답하려고 만든 것입니다. 배포와 실행 절차는 sample
-[README](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)에,
+[README](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-documentdb/change-streams/samples/python-aks/README.md)에,
 시나리오별 수치는 [측정 상세](measurements/index.md)에 있습니다.
 
 ## change stream 소개

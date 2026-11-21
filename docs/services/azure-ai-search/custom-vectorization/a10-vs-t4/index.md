@@ -69,7 +69,7 @@ redirect_from:
 - NVadsA10v5 시리즈 중 **full-GPU 프로필(NV36ads, A10-24Q 24GB 단독 점유)** 사용. NV6/12/18ads는 GPU fractional 파티션(1/6~1/2) — 본 결과 적용 불가
 - T4는 TEI **Turing 전용 이미지(`turing-1.8`) 필수**. Turing은 TEI [experimental 지원](https://github.com/huggingface/text-embeddings-inference#docker-images), Flash Attention 기본 비활성화
 - NVIDIA 드라이버는 Azure VM extension `NvidiaGpuDriverLinux`(Microsoft.HpcCompute)로 설치 — GRID/CUDA 자동 판별. A10은 GRID 드라이버 필수 (수동 CUDA 드라이버 설치 시 vGPU 라이선스 실패)
-- 실행 스크립트: [bench/](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/bench)
+- 실행 스크립트: [bench/](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/bench)
 
 > ⚠️ **vCPU 격차(4 vs 36)의 결과 왜곡 여부 교차검증 완료.** T4 VM을 NC16as_T4_v3(16 vCPU)로 리사이즈 후 동일 벤치마크 5라운드 재실행:
 > - 500자 최대 처리량 61.0 texts/s (4 vCPU: 61.3) / 1,000자 22.6 (4 vCPU: 23.4) / 단건 5.86ms (4 vCPU: 5.59ms) — **vCPU 4배 증가에도 측정 오차(±3%) 이내**
@@ -247,7 +247,7 @@ Indexer 미사용 구성의 임베딩 호출 경로 2종:
 
 ### 쿼리 트래픽 증가 시 증설 기준 — QPS 스윕 실측
 
-T4 1대(NC4as_T4_v3, TEI turing-1.8, BGE-m3-ko)에 오픈루프 고정 도착률로 단건 쿼리(~40자)를 주입하며 포화 지점을 실측 (30s/단계, 3라운드 스윕 — [bench_qps_sweep.py](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/bench/bench_qps_sweep.py)):
+T4 1대(NC4as_T4_v3, TEI turing-1.8, BGE-m3-ko)에 오픈루프 고정 도착률로 단건 쿼리(~40자)를 주입하며 포화 지점을 실측 (30s/단계, 3라운드 스윕 — [bench_qps_sweep.py](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/bench/bench_qps_sweep.py)):
 
 | 도착률 (QPS) | p50 | p95 | p99 | GPU util | 판정 |
 |-------------|-----|-----|-----|----------|------|

@@ -140,9 +140,9 @@ redirect_from:
 
 ![S1 SRE Agent investigation](images/s1-investigation.gif)
 
-- [결론 frame](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/07-conclusion.png)
-- [실제 event timeline](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/timeline.md)
-- [Mermaid sequence source](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/timeline.mmd)
+- [결론 frame](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/07-conclusion.png)
+- [실제 event timeline](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/timeline.md)
+- [Mermaid sequence source](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s1/timeline.mmd)
 - 원본 evidence: `monitor/sre-agent-event-lab/evidence/s1-20260812T080606Z/` (Git 제외)
 - Agent thread: `<agent-thread-id-s1>`
 
@@ -182,9 +182,9 @@ redirect_from:
 
 ![S2 SRE Agent investigation](images/s2-investigation.gif)
 
-- [결론 frame](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/07-conclusion.png)
-- [실제 event timeline](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/timeline.md)
-- [Mermaid sequence source](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/timeline.mmd)
+- [결론 frame](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/07-conclusion.png)
+- [실제 event timeline](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/timeline.md)
+- [Mermaid sequence source](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s2/timeline.mmd)
 - 원본 evidence: `monitor/sre-agent-event-lab/evidence/s2-20260812T081539Z/` (Git 제외)
 - Agent thread: `<agent-thread-id-s2>`
 
@@ -224,9 +224,9 @@ Container App workload identity의 테스트 Blob container data-plane read 역�
 
 ![S3 SRE Agent investigation](images/s3-investigation.gif)
 
-- [결론 frame](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/07-conclusion.png)
-- [실제 event timeline](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/timeline.md)
-- [Mermaid sequence source](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/timeline.mmd)
+- [결론 frame](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/07-conclusion.png)
+- [실제 event timeline](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/timeline.md)
+- [Mermaid sequence source](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/captures/s3/timeline.mmd)
 - 원본 evidence: `monitor/sre-agent-event-lab/evidence/s3-20260812T084004Z/` (Git 제외)
 - Agent thread: `<agent-thread-id-s3>`
 

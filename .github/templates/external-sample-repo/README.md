@@ -1,13 +1,13 @@
 # sample-{app}
 
 > [!NOTE]
-> **샘플 레포입니다.** [devguidesample](https://hellices.github.io/devguidesample/) 문서
-> [{topic-title}](https://hellices.github.io/devguidesample/services/{service}/{topic}/)이 참조하는 예제 코드이며,
+> **샘플 레포입니다.** [devguidesample](https://caldova-kr.github.io/devguidesample/) 문서
+> [{topic-title}](https://caldova-kr.github.io/devguidesample/services/{service}/{topic}/)이 참조하는 예제 코드이며,
 > 운영 환경에서 쓰도록 만든 코드가 아닙니다.
 
 {한두 문장: 이 코드가 재현하는 것}. 설명과 측정 결과는 문서에 있습니다.
 
-- 문서: [{topic-title}](https://hellices.github.io/devguidesample/services/{service}/{topic}/)
+- 문서: [{topic-title}](https://caldova-kr.github.io/devguidesample/services/{service}/{topic}/)
 - 문서가 참조하는 버전: 문서 레포 `docs/services/{service}/{topic}/samples/{sample}/sample.yml`의 `ref`
 
 ## 구성

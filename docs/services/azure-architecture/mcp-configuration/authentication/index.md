@@ -75,7 +75,7 @@ related_cases:
 
 # Azure MCP 인증 상세 참고 — Entra 앱, scope와 OBO
 
-APIM 또는 직접 호스팅한 MCP API의 **Entra 앱 등록·scope·client 제한·OBO**를 구성할 때 사용하는 참고 자료입니다. 솔루션 선택은 [대표 가이드](../index.md), 실행 명령은 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)를 사용합니다.
+APIM 또는 직접 호스팅한 MCP API의 **Entra 앱 등록·scope·client 제한·OBO**를 구성할 때 사용하는 참고 자료입니다. 솔루션 선택은 [대표 가이드](../index.md), 실행 명령은 [sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)를 사용합니다.
 
 | 할 일 | 읽을 부분 | 완료 기준 |
 |---|---|---|
@@ -101,7 +101,7 @@ Python MCP와 공식 Azure MCP는 internal Container Apps 환경에서 실행합
 
 ## 1. azd 배포와 권한 준비
 
-[샘플 소스](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab)의 `azure.yaml`은 `mcp`를 Container Apps service로 선언합니다. `project: .`의 Python 앱을 `python-app` module로 배포하며, `infra/main.bicep`에서 공통 Azure 리소스를 구성합니다. `docker.remoteBuild: true`로 ACR에 container image build를 요청합니다.
+[샘플 소스](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab)의 `azure.yaml`은 `mcp`를 Container Apps service로 선언합니다. `project: .`의 Python 앱을 `python-app` module로 배포하며, `infra/main.bicep`에서 공통 Azure 리소스를 구성합니다. `docker.remoteBuild: true`로 ACR에 container image build를 요청합니다.
 
 배포 전 다음을 준비합니다.
 
@@ -111,7 +111,7 @@ Python MCP와 공식 Azure MCP는 internal Container Apps 환경에서 실행합
 - 사용할 로컬 클라이언트의 client ID, redirect URI, 접속할 tenant와 API client ID.
 - 개발 PC에서 Azure VNet으로 연결할 VPN/ExpressRoute와 DNS 구성, 또는 실습에서 안내하는 개발용 접속 방법.
 
-로그인·Entra 앱 준비·preview·`azd up`의 실행 순서는 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에 있습니다. Sample의 `postprovision` hook은 서버 앱의 FIC가 생성된 managed identity를 신뢰하도록 구성합니다. 설정 형식은 [azure.yaml reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema), build 방식은 [ACR remote build](https://learn.microsoft.com/azure/developer/azure-developer-cli/remote-builds)를 참고할 수 있습니다.
+로그인·Entra 앱 준비·preview·`azd up`의 실행 순서는 [sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에 있습니다. Sample의 `postprovision` hook은 서버 앱의 FIC가 생성된 managed identity를 신뢰하도록 구성합니다. 설정 형식은 [azure.yaml reference](https://learn.microsoft.com/azure/developer/azure-developer-cli/azd-schema), build 방식은 [ACR remote build](https://learn.microsoft.com/azure/developer/azure-developer-cli/remote-builds)를 참고할 수 있습니다.
 
 ## 2. 로컬 PC에서 private endpoint와 내부 MCP에 접속하기
 
@@ -154,7 +154,7 @@ Azure MCP의 `--read-only`는 제공할 도구를 제한하는 옵션입니다. 
 
 대화형 MCP 클라이언트는 사전에 등록한 public client와 authorization code + PKCE를 사용합니다. 등록한 redirect URI와 클라이언트 설정이 일치해야 합니다. public client에는 client secret을 저장하지 않습니다.
 
-Entra ID의 dynamic client registration(DCR)을 전제로 설정하는 대신, 사용할 IDE나 MCP 클라이언트의 client ID를 준비합니다. 특정 클라이언트를 사전 승인할 때는 API 앱의 `preAuthorizedApplications`에 client의 `appId`와 승인할 `delegatedPermissionIds`를 지정합니다. 구체적인 설정은 [sample의 identity 구성](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/scripts/identity.py)에 있습니다.
+Entra ID의 dynamic client registration(DCR)을 전제로 설정하는 대신, 사용할 IDE나 MCP 클라이언트의 client ID를 준비합니다. 특정 클라이언트를 사전 승인할 때는 API 앱의 `preAuthorizedApplications`에 client의 `appId`와 승인할 `delegatedPermissionIds`를 지정합니다. 구체적인 설정은 [sample의 identity 구성](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/scripts/identity.py)에 있습니다.
 
 `delegatedPermissionIds`는 scope 이름이 아니라 **해당 scope의 GUID**입니다. 이 사전 승인은 지정한 API permission에만 적용되며, ARM OBO에 필요한 permission과 consent는 별도로 구성합니다. 필드 정의는 [Microsoft Graph의 preAuthorizedApplication](https://learn.microsoft.com/graph/api/resources/preauthorizedapplication?view=graph-rest-1.0)를 따릅니다.
 
@@ -183,7 +183,7 @@ Toolbox가 backend MCP에 연결할 때는 그 connection에 구성한 OAuth·cr
 
 Toolbox에서 관리하는 사용자 token을 뒤의 gateway가 서비스 token으로 덮어쓰지 않도록 credential 소유 위치를 정합니다. [인증 방식별 동작](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication)에 맞춰 사용자·서비스 권한을 선택합니다.
 
-Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결은 [공식 network 구성](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation)을 적용합니다. Toolset과 client 연결은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)을 사용합니다.
+Private Toolbox는 Foundry project의 network isolation을 따릅니다. Consumer의 project private endpoint 접속과 delegated subnet에서 backend까지의 연결은 [공식 network 구성](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox-network-isolation)을 적용합니다. Toolset과 client 연결은 [Toolbox sample](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)을 사용합니다.
 
 ## 4. access token으로 MCP 호출
 
@@ -202,7 +202,7 @@ MCP API는 도구 실행이나 OBO 교환 전에 access token을 검사합니다
 
 App-only token에도 서비스 주체의 `oid`가 들어갈 수 있습니다. `oid`가 있다는 이유만으로 사용자 token으로 처리하지 않고 delegated scope와 사용자 권한을 확인합니다. JWT 내용을 decode하는 것만으로는 서명 검사가 수행되지 않습니다.
 
-APIM에서는 `validate-azure-ad-token`의 `audiences`, `client-application-ids`, `required-claims`로 대상 API, 허용 client, scope를 검사할 수 있습니다. 배포에 사용하는 실제 정책은 [sample의 APIM 구성](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/infra/apim.bicep)에 있습니다.
+APIM에서는 `validate-azure-ad-token`의 `audiences`, `client-application-ids`, `required-claims`로 대상 API, 허용 client, scope를 검사할 수 있습니다. 배포에 사용하는 실제 정책은 [sample의 APIM 구성](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/infra/apim.bicep)에 있습니다.
 
 | 정책 확인 | 기준 |
 |---|---|
@@ -266,7 +266,7 @@ GitHub MCP를 추가하는 경우에도 GitHub OAuth 또는 PAT가 필요합니�
 | 사용자 위임 | 사용자 connection 또는 OBO와 downstream 권한 | 원본 서비스의 사용자 권한 범위로 실행 |
 | 도구 결과 | HTTP 응답과 MCP error·`isError`·업무 결과 | 목록 조회뿐 아니라 실제 도구 결과까지 확인 |
 
-단계별 명령과 관측값은 [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)와 [실행 사례](../validation/index.md#oauth)에 있습니다.
+단계별 명령과 관측값은 [인증 확인 절차](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)와 [실행 사례](../validation/index.md#oauth)에 있습니다.
 
 ## IDE에서 OAuth 로그인이 이어지지 않을 때
 
@@ -291,4 +291,4 @@ Client ID와 redirect URI는 **client 앱 등록**에 맞추고, 요청할 scope
 | 도구 목록은 나오지만 호출 실패 | REST operation 연결, backend 연결·인증, 요청 인자 |
 | HTTP 200이고 `isError=true` | MCP 응답에 담긴 도구 실행 오류 |
 
-실제 HTTP status는 APIM 정책과 앱 설정에 따라 달라질 수 있습니다. 오류 응답의 내용도 함께 확인합니다. 실행과 정리는 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md), 버전별 동작과 응답 차이는 [사례 기록](../validation/index.md)을 참고하세요.
+실제 HTTP status는 APIM 정책과 앱 설정에 따라 달라질 수 있습니다. 오류 응답의 내용도 함께 확인합니다. 실행과 정리는 [sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md), 버전별 동작과 응답 차이는 [사례 기록](../validation/index.md)을 참고하세요.

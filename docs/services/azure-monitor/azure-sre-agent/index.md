@@ -766,7 +766,7 @@ Azure SRE Agent는 다음 순서로 인시던트를 조사합니다.
 
 ![Azure SRE Agent의 인시던트 대응 흐름](images/sre-agent-process.png)
 
-[편집 가능한 SVG 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/sre-agent-process.svg)
+[편집 가능한 SVG 보기](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/sre-agent-process.svg)
 
 이번 실증에서는 대응 계획을 공개 API로 자동 구성하는 데 제약이 있어 Azure SRE Agent의 HTTP Trigger를 사용했습니다.
 
@@ -810,7 +810,7 @@ Azure Monitor 경고
 
 ![주문 API HTTP 500 실증 요약](images/s1-three-panel.png)
 
-[편집 가능한 SVG 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/s1-three-panel.svg)
+[편집 가능한 SVG 보기](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/briefing/s1-three-panel.svg)
 
 #### 검토 모드에서 주문 API 요청 120건 실패 { #_16 }
 
@@ -849,8 +849,8 @@ Azure SRE Agent가 정리한 근본 원인과 조치 방안을 작업 항목으�
 
 ![실제 GitHub Issue #43](images/github-issue.png)
 
-- [GitHub Issue #43 열기](https://github.com/hellices/devguidesample/issues/43)
-- [Issue 본문 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-github-issue.md)
+- [GitHub Issue #43 열기](https://github.com/caldova-kr/devguidesample/issues/43)
+- [Issue 본문 보기](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-github-issue.md)
 
 Issue에는 다음 내용을 포함했습니다.
 
@@ -870,8 +870,8 @@ Issue에는 다음 내용을 포함했습니다.
 
 ![Outlook 메일 초안](images/s1-email-preview.png)
 
-- [HTML 메일 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-incident-summary.html)
-- [RFC 5322 메일 파일 보기](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-incident-summary.eml)
+- [HTML 메일 보기](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-incident-summary.html)
+- [RFC 5322 메일 파일 보기](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/event-lab/assets/notifications/s1-incident-summary.eml)
 
 실제 운영에서는 Outlook 커넥터의 메일 보내기 작업을 사용할 수 있습니다.
 

@@ -43,5 +43,5 @@ Resolved. A succeeding revision uses `FAILURE_MODE=none`, receives traffic, and 
 ## Tracking
 
 - Agent thread ID: `<agent-thread-id-s1>`
-- Detailed validation appendix: [Azure SRE Agent validation results](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/validation-results/index.md)
+- Detailed validation appendix: [Azure SRE Agent validation results](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/validation-results/index.md)
 - Generated from actual Azure SRE Agent evidence; no resource change was executed by the Agent.

@@ -43,18 +43,18 @@ redirect_from:
 
 | 파일 | 내용 |
 |------|------|
-| [images/01-memory-taxonomy.svg](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/01-memory-taxonomy.svg) | 6패밀리 30기법 전체 지도 |
-| [images/02-architecture-patterns.svg](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/02-architecture-patterns.svg) | 5가지 아키텍처 패턴 비교 |
-| [images/03-memory-pipeline.svg](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/03-memory-pipeline.svg) | 쓰기 경로 / 읽기 경로 분리 |
-| [images/04-production-tiers.svg](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/04-production-tiers.svg) | 프로덕션 계층 저장 + 가드레일 |
-| [images/05-commerce-blueprint.svg](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/05-commerce-blueprint.svg) | B2C 커머스 메모리 블루프린트 |
+| [images/01-memory-taxonomy.svg](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/01-memory-taxonomy.svg) | 6패밀리 30기법 전체 지도 |
+| [images/02-architecture-patterns.svg](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/02-architecture-patterns.svg) | 5가지 아키텍처 패턴 비교 |
+| [images/03-memory-pipeline.svg](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/03-memory-pipeline.svg) | 쓰기 경로 / 읽기 경로 분리 |
+| [images/04-production-tiers.svg](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/04-production-tiers.svg) | 프로덕션 계층 저장 + 가드레일 |
+| [images/05-commerce-blueprint.svg](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/images/05-commerce-blueprint.svg) | B2C 커머스 메모리 블루프린트 |
 
 ---
 
 ## 목적별 빠른 경로
 
 이관 전 문서별 상세 읽기 목표와 대상 독자는
-[원문 독자 지도](https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md#historical-reader-map-pre-pages)에
+[원문 독자 지도](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/agent-memory/samples/research-artifacts/README.md#historical-reader-map-pre-pages)에
 역사적 기록으로 보존한다.
 
 **시간이 없다면** → [06. 커머스 적용 설계](commerce/index.md) 만 읽는다. 나머지 문서의 결론이 여기 수렴한다.

@@ -35,7 +35,7 @@ redirect_from:
 > 이 문서는 그 위에서 **HDInsight 환경(원격 JMX 9999, Private Link 등)에 맞춰 실전 구성한 요약본**.
 > 아래 Grafana 대시보드도 커뮤니티 대시보드(7589) 외에는 **본 환경 지표에 맞춰 개별 구성**한 것 → 참고용, 환경별 조정 필요.
 
-참조 설정·대시보드 파일: [`assets/prometheus-grafana/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana)
+참조 설정·대시보드 파일: [`assets/prometheus-grafana/`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana)
 
 ```
 assets/prometheus-grafana/
@@ -124,9 +124,9 @@ for i in 0 1 2; do
 done
 ```
 
-- 변환 룰: [`jmx/kafka-rules.yml`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/jmx/kafka-rules.yml)
+- 변환 룰: [`jmx/kafka-rules.yml`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/jmx/kafka-rules.yml)
   (처리량 BytesIn/Out·MessagesIn, ReplicaManager URP/ISR, Controller, RequestMetrics 지연, JVM Heap/GC/Thread 등 16개)
-- `hostPort`만 브로커별 상이, 룰 내용 동일. 예시: [`jmx/b0.yml.example`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/jmx/b0.yml.example)
+- `hostPort`만 브로커별 상이, 룰 내용 동일. 예시: [`jmx/b0.yml.example`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/jmx/b0.yml.example)
 
 ### 3.2 Kafka Exporter (Consumer Lag)
 
@@ -147,7 +147,7 @@ kafka-exporter:
 
 ### 3.3 일괄 기동 (docker-compose)
 
-두 Exporter + Prometheus + Grafana 일괄 기동: [`docker-compose.yml`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/docker-compose.yml).
+두 Exporter + Prometheus + Grafana 일괄 기동: [`docker-compose.yml`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/docker-compose.yml).
 `<BROKER*_IP>`, `<GRAFANA_ADMIN_PASSWORD>` 실제 값 치환 후:
 
 ```bash
@@ -158,7 +158,7 @@ docker compose ps        # kafka-exporter, jmx-b0/b1/b2, prometheus, grafana = U
 
 ### 3.4 Prometheus 스크래핑
 
-[`prometheus.yml`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/prometheus.yml): `kafka-exporter:9308` +
+[`prometheus.yml`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/prometheus.yml): `kafka-exporter:9308` +
 `jmx-b0/b1/b2:9404` 스크래핑. JMX 잡에 `broker` 라벨 부여 → 브로커 구분.
 **기존 Prometheus 존재 시** 이 `scrape_configs` 두 블록만 추가 후 reload.
 
@@ -170,8 +170,8 @@ docker compose ps        # kafka-exporter, jmx-b0/b1/b2, prometheus, grafana = U
 
 docker-compose가 Grafana에 자동 주입:
 
-- 데이터소스: [`grafana/provisioning/datasources/prometheus.yml`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/provisioning/datasources/prometheus.yml) (uid `prometheus`)
-- 대시보드 폴더: [`grafana/provisioning/dashboards/provider.yml`](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/provisioning/dashboards/provider.yml) → `Kafka` 폴더
+- 데이터소스: [`grafana/provisioning/datasources/prometheus.yml`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/provisioning/datasources/prometheus.yml) (uid `prometheus`)
+- 대시보드 폴더: [`grafana/provisioning/dashboards/provider.yml`](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/provisioning/dashboards/provider.yml) → `Kafka` 폴더
 - `grafana/dashboards/*.json` 자동 로드
 
 **기존 Grafana 존재 시** 아래 대시보드 Dashboards → Import + 데이터소스 지정.
@@ -181,8 +181,8 @@ docker-compose가 Grafana에 자동 주입:
 | 대시보드 | 출처 | 지표 |
 |----------|------|---------|
 | **Kafka Exporter Overview** | Grafana.com **7589** (공식 커뮤니티) | 메시지 생산율, Consumer Group Lag, 토픽 파티션 수 |
-| **HDInsight Kafka - Exporter 상세** | 커스텀 ([kafka-exporter-adv.json](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/dashboards/kafka-exporter-adv.json)) | 컨슈머 그룹 **멤버 수(0=컨슈머 다운)**, Lag 상위 파티션, 언더리플리케이션·ISR·브로커별 리더 분포, 토픽별 보관 메시지 수 |
-| **HDInsight Kafka - Broker (JMX Exporter)** | 커스텀 ([kafka-jmx-broker.json](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/dashboards/kafka-jmx-broker.json)) | 브로커별 처리량(BytesIn/Out·MessagesIn), URP, ActiveController, 요청 지연, JVM Heap·스레드 |
+| **HDInsight Kafka - Exporter 상세** | 커스텀 ([kafka-exporter-adv.json](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/dashboards/kafka-exporter-adv.json)) | 컨슈머 그룹 **멤버 수(0=컨슈머 다운)**, Lag 상위 파티션, 언더리플리케이션·ISR·브로커별 리더 분포, 토픽별 보관 메시지 수 |
+| **HDInsight Kafka - Broker (JMX Exporter)** | 커스텀 ([kafka-jmx-broker.json](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/prometheus-grafana/grafana/dashboards/kafka-jmx-broker.json)) | 브로커별 처리량(BytesIn/Out·MessagesIn), URP, ActiveController, 요청 지연, JVM Heap·스레드 |
 
 **Kafka Exporter Overview(7589)** = 커뮤니티 대시보드 → 파일 아닌 ID로 import.
 Grafana UI → Dashboards → **Import** → ID `7589` → 데이터소스 `Prometheus`.
@@ -206,7 +206,7 @@ Prometheus(`:9090`) 쿼리로 확인.
 
 ## 6. 대시보드 화면
 
-> 렌더링 이미지는 이 문서 번들의 `images/` 디렉터리에 아래 파일명으로 두면 자동 표시됩니다. 원본 자료는 [`samples/monitoring-assets/images/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/images)에서 확인할 수 있습니다.
+> 렌더링 이미지는 이 문서 번들의 `images/` 디렉터리에 아래 파일명으로 두면 자동 표시됩니다. 원본 자료는 [`samples/monitoring-assets/images/`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/hdinsight-kafka-monitoring/samples/monitoring-assets/images)에서 확인할 수 있습니다.
 
 ### 6.1 Kafka Exporter Overview (7589)
 

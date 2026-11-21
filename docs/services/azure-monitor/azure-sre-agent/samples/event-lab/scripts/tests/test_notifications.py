@@ -74,7 +74,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
         timeline=timeline(),
         output_dir=tmp_path,
         report_url="monitor/sre-agent-event-lab/validation-results.md",
-        issue_url="https://github.com/hellices/devguidesample/issues/123",
+        issue_url="https://github.com/caldova-kr/devguidesample/issues/123",
     )
 
     issue = (tmp_path / "s1-github-issue.md").read_text()
@@ -101,7 +101,7 @@ def test_generate_notifications_creates_ticket_and_email(tmp_path):
     )
     assert message["Subject"] == "[Resolved][SRE-LAB] Order API HTTP 500 incident"
     assert message["To"] == "oncall@example.invalid"
-    assert "https://github.com/hellices/devguidesample/issues/123" in message.get_body(
+    assert "https://github.com/caldova-kr/devguidesample/issues/123" in message.get_body(
         preferencelist=("html",)
     ).get_content()
     assert "monitor/sre-agent-event-lab/validation-results.md" in message.get_body(

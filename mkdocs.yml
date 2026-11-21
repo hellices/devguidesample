@@ -1,8 +1,8 @@
 site_name: Azure Engineering Notes
 site_description: Azure 기반 시스템의 설계·구현·운영 기록
-site_url: https://hellices.github.io/devguidesample/
-repo_url: https://github.com/hellices/devguidesample
-repo_name: hellices/devguidesample
+site_url: https://caldova-kr.github.io/devguidesample/
+repo_url: https://github.com/caldova-kr/devguidesample
+repo_name: caldova-kr/devguidesample
 edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site

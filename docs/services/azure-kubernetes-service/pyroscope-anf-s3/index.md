@@ -405,8 +405,8 @@ kubectl port-forward -n observability svc/pyroscope 4040:4040
 아래는 동작을 바로 확인할 수 있는 **데모**입니다. Azure AI Foundry를 호출하는 FastAPI 앱에
 Pyroscope Python SDK를 붙여 콜스택을 수집합니다.
 
-> 예제 코드: [pyroscope-chat-profiling/](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling)
-> ([app.py](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/app.py) · [deployment.yaml](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/deployment.yaml) · [deploy.sh](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/deploy.sh) · [test.py](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/test.py))
+> 예제 코드: [pyroscope-chat-profiling/](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling)
+> ([app.py](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/app.py) · [deployment.yaml](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/deployment.yaml) · [deploy.sh](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/deploy.sh) · [test.py](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-kubernetes-service/pyroscope-anf-s3/samples/pyroscope-chat-profiling/test.py))
 
 <details>
 <summary><b>5.1 핵심 동작</b> (펼치기)</summary>
