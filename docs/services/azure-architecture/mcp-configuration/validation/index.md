@@ -45,7 +45,7 @@ related_guides:
 
 ## 구성
 
-운영 전략은 [Azure MCP 운영 아키텍처](../index.md), 구체적인 배포·호출은 [sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)를 사용합니다. 이 문서는 2026-09-13의 Container Apps·APIM 실행 이력과 관측값을 보관하며, Foundry hosted agent + Toolbox 통합 구성의 실행 결과는 포함하지 않습니다.
+운영 전략은 [Azure MCP 운영 아키텍처](../index.md), 구체적인 배포·호출은 [sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)를 사용합니다. 이 문서는 2026-09-13의 Container Apps·APIM 실행 이력과 관측값을 보관하며, Foundry hosted agent + Toolbox 통합 구성의 실행 결과는 포함하지 않습니다.
 
 | 항목 | 구성 |
 |---|---|
@@ -78,7 +78,7 @@ azd up
 
 ![azd up으로 새 환경의 provisioning과 service deployment가 완료된 실제 CLI 출력 발췌](images/azd-deployment.png)
 
-아래 캡처는 실행한 CLI와 MCP 응답에서 필요한 부분을 발췌해 표시한 것입니다. Credential, tenant·subscription ID, 환경 hostname과 resource ID는 제외했습니다. [공개용 요청·응답 발췌 JSON](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/assets/captures/2026-09-13-responses.json)에도 같은 내용을 보관했습니다. 원본 실행 로그와 로컬 상태는 공개 자료에 포함하지 않습니다.
+아래 캡처는 실행한 CLI와 MCP 응답에서 필요한 부분을 발췌해 표시한 것입니다. Credential, tenant·subscription ID, 환경 hostname과 resource ID는 제외했습니다. [공개용 요청·응답 발췌 JSON](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/assets/captures/2026-09-13-responses.json)에도 같은 내용을 보관했습니다. 원본 실행 로그와 로컬 상태는 공개 자료에 포함하지 않습니다.
 
 ## 로컬 MCP 연결
 
@@ -192,7 +192,7 @@ CONNECT proxy를 사용할 때 curl의 header 파일에는 proxy의 `200 Connect
 | 앱의 현재 identifier URI와 canonical URL 대상 CLI 발급 결과 | `resource`·scope를 함께 사용하는 브라우저 PKCE 교환 전체 |
 | 기존 APIM·Container Apps·Entra 환경 | 배포 대상이 없었던 Toolbox consumer 인증, token refresh 수명주기 |
 
-실행 명령은 [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md), 공개용 결과는 [auth-stages JSON](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/assets/captures/2026-09-13-auth-stages.json)에 있습니다. Raw metadata·응답·오류는 `.private/`에만 저장했습니다.
+실행 명령은 [인증 확인 절차](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md), 공개용 결과는 [auth-stages JSON](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/assets/captures/2026-09-13-auth-stages.json)에 있습니다. Raw metadata·응답·오류는 `.private/`에만 저장했습니다.
 
 ## 구성 과정에서 확인한 사항
 
@@ -229,7 +229,7 @@ Inspector 예제에서는 `mcpServers` 아래에 `type: streamable-http`를 사�
 
 ## 관련 자료
 
-시나리오 확인 후 개발용 port-forward는 종료했습니다. 새 Azure 환경은 후속 실습을 위해 유지하며, 사용이 끝나면 [sample의 정리 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)로 ARM 리소스와 Entra 앱을 각각 제거합니다.
+시나리오 확인 후 개발용 port-forward는 종료했습니다. 새 Azure 환경은 후속 실습을 위해 유지하며, 사용이 끝나면 [sample의 정리 절차](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)로 ARM 리소스와 Entra 앱을 각각 제거합니다.
 
 - [MCP 관리·연결·인증 설계](../index.md)
 - [Entra 인증과 OBO 가이드](../authentication/index.md)

@@ -10,7 +10,7 @@ SAMPLE_ROOT = "docs/services/azure-monitor/azure-sre-agent/samples/event-lab"
 def test_root_readme_routes_readers_to_the_searchable_pages_site():
     text = ROOT_README.read_text(encoding="utf-8")
 
-    assert "https://hellices.github.io/devguidesample/" in text
+    assert "https://caldova-kr.github.io/devguidesample/" in text
     assert "모든 주제 목록은 파일로 중복 관리하지 않습니다" in text
     assert "글 찾기" in text
 

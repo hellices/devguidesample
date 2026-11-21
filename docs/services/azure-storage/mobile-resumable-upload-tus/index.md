@@ -51,9 +51,9 @@ redirect_from:
 
 ![Architecture — Mobile (tus 1.0.0) ▸ AKS Pods ▸ Azure Blob](images/architecture.png)
 
-편집 원본: [spring-application/architecture.excalidraw](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application/architecture.excalidraw)
+편집 원본: [spring-application/architecture.excalidraw](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application/architecture.excalidraw)
 
-샘플 코드 위치: [spring-application/](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application)
+샘플 코드 위치: [spring-application/](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-storage/mobile-resumable-upload-tus/samples/spring-application)
 
 ## 왜 tus 인가
 

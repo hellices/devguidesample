@@ -66,7 +66,7 @@ Entra 앱의 사전 승인과 caller 제한도 구분합니다. 사전 승인은
 ### 1-1. 소스와 로그인
 
 ```bash
-git clone https://github.com/hellices/devguidesample.git
+git clone https://github.com/caldova-kr/devguidesample.git
 cd devguidesample/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab
 
 set -euo pipefail
@@ -201,10 +201,10 @@ gh auth token | jq -Rs '{
 
 npx --no-install mcp-inspector --cli --config "$PRIVATE/github.json" \
   --server github --method tools/call --tool-name search_repositories \
-  --tool-arg 'query=repo:hellices/devguidesample'
+  --tool-arg 'query=repo:caldova-kr/devguidesample'
 ```
 
-공개 repository 검색 결과를 확인합니다. 이 credential 파일은 Git에 추가하지 않으며 실습 후 삭제합니다. VS Code 연결은 [MCP 설정 예제](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/mcp.example.json)를 로컬 설정에 병합해 사용할 수 있습니다.
+공개 repository 검색 결과를 확인합니다. 이 credential 파일은 Git에 추가하지 않으며 실습 후 삭제합니다. VS Code 연결은 [MCP 설정 예제](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/mcp.example.json)를 로컬 설정에 병합해 사용할 수 있습니다.
 
 ## 3. 로컬 PC에서 private MCP endpoint에 접속
 

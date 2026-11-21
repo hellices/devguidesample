@@ -353,7 +353,7 @@ Azure Monitor에서 다음 지표를 확인합니다. Evicted Keys, Expired Keys
 
 ## 그림 원본
 
-이 문서의 직접 작성한 그림은 Excalidraw 원본으로 [`samples/diagrams/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/eviction-policy-and-ttl/samples/diagrams)에 있습니다. 수정 방법은 해당 폴더의 README를 참고합니다.
+이 문서의 직접 작성한 그림은 Excalidraw 원본으로 [`samples/diagrams/`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-managed-redis/eviction-policy-and-ttl/samples/diagrams)에 있습니다. 수정 방법은 해당 폴더의 README를 참고합니다.
 
 ## 관련 문서
 

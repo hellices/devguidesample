@@ -189,7 +189,7 @@ submodule만 남깁니다. GitHub에서 topic 폴더를 열면 submodule이 `sou
 - `sample` topic을 붙이고 README 첫머리에 샘플 레포라는 안내와 문서 링크를 둡니다.
 
 저장소 루트의
-[`.github/templates/external-sample-repo/`](https://github.com/hellices/devguidesample/tree/main/.github/templates/external-sample-repo)를
+[`.github/templates/external-sample-repo/`](https://github.com/caldova-kr/devguidesample/tree/main/.github/templates/external-sample-repo)를
 복사해 시작합니다.
 
 ```text

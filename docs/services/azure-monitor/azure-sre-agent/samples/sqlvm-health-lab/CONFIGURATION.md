@@ -104,7 +104,7 @@ SQL Server 2022의 세분화된 권한(`VIEW SERVER PERFORMANCE STATE`,
 ## 배포 단계
 
 
-sample은 [samples/sqlvm-health-lab](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
+sample은 [samples/sqlvm-health-lab](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
 
 ```bash
 cd docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab
@@ -179,7 +179,7 @@ SQL Server가 보는 도구 연결 정보를 `overview` 결과에 포함했습�
 ## 지표 파이프라인 배포
 
 
-sample은 [samples/sqlvm-health-lab](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
+sample은 [samples/sqlvm-health-lab](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
 
 ```bash
 cd docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab

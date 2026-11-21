@@ -292,12 +292,12 @@ $$
 
 ## 파일 구성
 
-- 아키텍처 다이어그램(원본): [ptu_architecture.excalidraw](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/ptu_architecture.excalidraw)
-- 아키텍처 다이어그램(이미지): [ptu_architecture.png](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/ptu_architecture.png)
-- 다이어그램 렌더러(유틸): [render_excalidraw.py](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/render_excalidraw.py)
-- **Runbook(기본, Python): [runbooks/adaptive_tpm_quota_controller.py](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/adaptive_tpm_quota_controller.py)**
-- Runbook 의존성: [runbooks/requirements.txt](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/requirements.txt)
-- Runbook(선택, PowerShell 동등 이식본): [runbooks/optional_adaptive_tpm_quota_controller.ps1](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/optional_adaptive_tpm_quota_controller.ps1)
+- 아키텍처 다이어그램(원본): [ptu_architecture.excalidraw](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/ptu_architecture.excalidraw)
+- 아키텍처 다이어그램(이미지): [ptu_architecture.png](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/ptu_architecture.png)
+- 다이어그램 렌더러(유틸): [render_excalidraw.py](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/render_excalidraw.py)
+- **Runbook(기본, Python): [runbooks/adaptive_tpm_quota_controller.py](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/adaptive_tpm_quota_controller.py)**
+- Runbook 의존성: [runbooks/requirements.txt](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/requirements.txt)
+- Runbook(선택, PowerShell 동등 이식본): [runbooks/optional_adaptive_tpm_quota_controller.ps1](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-openai/adaptive-ptu-load-balancing/samples/runbooks/runbooks/optional_adaptive_tpm_quota_controller.ps1)
 
 > 기본 구현은 Python 런북이다. PowerShell 버전은 동일한 Reserved 총량 공유 재분배 로직(감축→증설, 실제 actuation·쿨다운 포함)을 Az 모듈(Az.Accounts / Az.CognitiveServices / AzTable)로 이식한 **선택적 대체 구현**으로, PowerShell 선호 환경을 위한 참조본이다. Storage가 Private Endpoint 구성이면 이 런북도 프라이빗 경로가 닿는 워커(예: Windows Hybrid Worker)에서 실행해야 한다.
 

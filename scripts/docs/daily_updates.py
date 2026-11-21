@@ -246,9 +246,14 @@ def build_daily_update_feed(
     docs_dir: Path | str,
     *,
     site_url: str,
+    guid_base_url: str | None = None,
 ) -> str:
     base_url = site_url.rstrip("/") + "/"
     archive_url = urljoin(base_url, "azure-daily-update/")
+    # Feed readers dedupe by GUID, so GUIDs stay on the first published site URL even after the site moves.
+    guid_archive_url = (
+        urljoin(guid_base_url.rstrip("/") + "/", "azure-daily-update/") if guid_base_url else None
+    )
     root = ET.Element("rss", {"version": "2.0"})
     channel = ET.SubElement(root, "channel")
     ET.SubElement(channel, "title").text = "Azure Daily Update"
@@ -268,7 +273,11 @@ def build_daily_update_feed(
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = report.title
         ET.SubElement(item, "link").text = report_url
-        ET.SubElement(item, "guid", {"isPermaLink": "true"}).text = report_url
+        if guid_archive_url:
+            guid = urljoin(guid_archive_url, f"{report.report_date.isoformat()}/")
+            ET.SubElement(item, "guid", {"isPermaLink": "false"}).text = guid
+        else:
+            ET.SubElement(item, "guid", {"isPermaLink": "true"}).text = report_url
         ET.SubElement(item, "pubDate").text = format_datetime(
             report.generated_at.astimezone(timezone.utc),
             usegmt=True,

@@ -122,5 +122,5 @@ Microsoft Learn의 [패치 과정](https://learn.microsoft.com/azure/redis/failo
 
 이 topic의 Node.js 샘플은 이전 연결 설정을 비교하기 위한 실험 자료입니다. 현재 권장 설정의 배포 템플릿이나 이 장애를 결정적으로 재현하는 자동 테스트가 아닙니다.
 
-- [샘플 사용·검증·정리 방법](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/nodejs-cluster)
-- [설명 모델의 편집 가능한 그림 원본](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/diagrams)
+- [샘플 사용·검증·정리 방법](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/nodejs-cluster)
+- [설명 모델의 편집 가능한 그림 원본](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-managed-redis/cluster-failover-recovery/samples/diagrams)

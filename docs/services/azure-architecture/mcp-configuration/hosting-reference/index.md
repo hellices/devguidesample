@@ -84,7 +84,7 @@ official_sources:
 | 예제 서버의 실행·인증 방식 | 서버별 인증 차이와 고정 버전 조건 |
 | 자체 MCP 코드의 실행 환경 | Azure 호스팅 옵션과 구성 패턴 |
 | Private APIM의 SKU | APIM SKU 선택 |
-| 실제 배포·호출 | [Sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md) |
+| 실제 배포·호출 | [Sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md) |
 
 ## MCP protocol과 패키지 버전
 
@@ -151,7 +151,7 @@ Container Apps dynamic sessions는 별도 선택지입니다. Platform이 제공
 
 ### 여러 도구를 묶어 제공할 때
 
-Toolbox는 MCP·OpenAPI·IQ 도구를 하나의 endpoint에 구성하고 connection 인증·version을 관리합니다. 기능과 선택 기준은 [대표 가이드의 Toolbox 장](../index.md#3-toolbox-iq-mcp-endpoint), 구성 명령은 [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)에 정리합니다.
+Toolbox는 MCP·OpenAPI·IQ 도구를 하나의 endpoint에 구성하고 connection 인증·version을 관리합니다. 기능과 선택 기준은 [대표 가이드의 Toolbox 장](../index.md#3-toolbox-iq-mcp-endpoint), 구성 명령은 [Toolbox sample](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)에 정리합니다.
 
 ### APIM 없이 REST API를 변환하는 옵션
 
@@ -182,7 +182,7 @@ Internal Container Apps 환경의 앱 ingress `external: true`는 VNet에서 앱
 
 APIM이 관리하는 REST API operation을 선택하면 MCP tool로 노출할 수 있습니다. 별도 MCP 서버 프로세스 없이 APIM이 MCP 요청을 REST 호출로 연결합니다.
 
-샘플은 가상 inventory REST API를 사용합니다. [Sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에서는 inventory를 REST로 조회하고, MCP 도구 목록을 확인한 뒤 같은 항목을 tool로 조회합니다. Tool 리소스의 **`operationId`가 실제 REST operation의 리소스 ID를 가리켜야** 이 호출이 연결됩니다.
+샘플은 가상 inventory REST API를 사용합니다. [Sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에서는 inventory를 REST로 조회하고, MCP 도구 목록을 확인한 뒤 같은 항목을 tool로 조회합니다. Tool 리소스의 **`operationId`가 실제 REST operation의 리소스 ID를 가리켜야** 이 호출이 연결됩니다.
 
 이 기능 자체가 REST backend의 인증을 OBO로 바꾸지는 않습니다. 업무 API를 연결할 때는 그 API의 access token, managed identity 또는 다른 인증 방식을 별도로 구성합니다. Python MCP의 resource group OBO 조회는 이 REST inventory 경로와 별개의 MCP 도구입니다.
 
@@ -214,7 +214,7 @@ Flex Consumption은 private endpoint와 VNet integration을 지원하지만 lega
 
 ## azd 기반 실습 구성
 
-[Sample walkthrough](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에서 Entra 준비 → `azd` preview·배포 → 내부망 연결 → 도구·OBO 호출 → 정리를 순서대로 실행합니다. Sample은 Container Apps와 APIM Developer를 사용하며 ACR remote build로 image를 만듭니다. 도구 버전·비용·정리 명령은 해당 sample에서 확인합니다.
+[Sample walkthrough](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md)에서 Entra 준비 → `azd` preview·배포 → 내부망 연결 → 도구·OBO 호출 → 정리를 순서대로 실행합니다. Sample은 Container Apps와 APIM Developer를 사용하며 ACR remote build로 image를 만듭니다. 도구 버전·비용·정리 명령은 해당 sample에서 확인합니다.
 
 ## APIM SKU 선택
 

@@ -212,7 +212,7 @@ Microsoft Learn의 [Toolbox 개요](https://learn.microsoft.com/azure/foundry/ag
 영상의 **상품 catalog 조회 시연에서는 input tokens가 약 90% 감소**했습니다. 결과는 model·도구·질문·cache 조건에 따라 달라집니다.
 
 - 같은 model·도구·질문 조건에서 업무 완료까지의 input/output tokens, cache, 검색 횟수, latency·재시도를 비교합니다.
-- 설정: [Tool search 공식 문서](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) · [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)
+- 설정: [Tool search 공식 문서](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-search) · [Toolbox sample](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox)
 
 ## 4. 접근과 사용자 권한을 통제하는 이유
 
@@ -224,7 +224,7 @@ MCP 도구는 실제 업무 데이터와 API를 사용합니다. **누가 MCP에
 | **Toolbox의 connection** | 여러 client가 도구별 인증을 반복 구현하지 않고 재사용 | 사용자 OAuth, 서비스 identity, credential·token lifecycle 관리 |
 | **데이터 API 접근** | 사용자가 원래 가진 데이터 권한을 도구 호출에도 적용 | 사용자 위임이 필요한 중간 MCP API의 Entra OBO 또는 지원되는 사용자 connection |
 
-**OAuth + PKCE는 client와 Entra**, **PRM·token 검증은 APIM/MCP Server**에 적용합니다. 앱 등록·claim·정책·완료 기준은 [인증 상세](authentication/index.md), 실제 명령과 결과는 [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)와 [실행 사례](validation/index.md#oauth)에서 설명합니다.
+**OAuth + PKCE는 client와 Entra**, **PRM·token 검증은 APIM/MCP Server**에 적용합니다. 앱 등록·claim·정책·완료 기준은 [인증 상세](authentication/index.md), 실제 명령과 결과는 [인증 확인 절차](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md)와 [실행 사례](validation/index.md#oauth)에서 설명합니다.
 
 ## 5. MCP 서버를 준비하는 방법
 
@@ -266,11 +266,11 @@ MCP 도구는 실제 업무 데이터와 API를 사용합니다. **누가 MCP에
 
 | 할 일 | 실행 자료 | 결과를 볼 곳 |
 |---|---|---|
-| `azd` 배포와 내부망 접속 | [Walkthrough 1–3](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md#1-azd로-환경-배포) | [배포·연결 기록](validation/index.md) |
-| APIM REST wrapping·MCP proxy·OBO·인가 확인 | [Walkthrough 4–8](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md#4-entra-access-token-준비) | [도구 호출과 인증 응답](validation/index.md#apim-rest-to-mcp) |
-| PRM·앱 등록·token 오류 진단 | [인증 확인 절차](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md) | [단계별 관측](validation/index.md#oauth) |
-| Toolbox 구성·Tool search·version 관리 | [Toolbox sample](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox) | Sample의 확인 방법과 앞의 공식 데모 |
-| 실습 종료 | [Walkthrough 9](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md#9-환경-정리) | ARM 리소스와 Entra 앱 정리 |
+| `azd` 배포와 내부망 접속 | [Walkthrough 1–3](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md#1-azd로-환경-배포) | [배포·연결 기록](validation/index.md) |
+| APIM REST wrapping·MCP proxy·OBO·인가 확인 | [Walkthrough 4–8](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md#4-entra-access-token-준비) | [도구 호출과 인증 응답](validation/index.md#apim-rest-to-mcp) |
+| PRM·앱 등록·token 오류 진단 | [인증 확인 절차](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/authentication-checks.md) | [단계별 관측](validation/index.md#oauth) |
+| Toolbox 구성·Tool search·version 관리 | [Toolbox sample](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-architecture/mcp-configuration/samples/toolbox) | Sample의 확인 방법과 앞의 공식 데모 |
+| 실습 종료 | [Walkthrough 9](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-architecture/mcp-configuration/samples/apim-entra-lab/walkthrough.md#9-환경-정리) | ARM 리소스와 Entra 앱 정리 |
 
 ## Appendix. “MCP 2.0”과 실제 protocol 변경
 

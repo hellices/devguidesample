@@ -1,8 +1,8 @@
 site_name: Azure Engineering Notes
 site_description: Azure 기반 시스템의 설계·구현·운영 기록
-site_url: https://hellices.github.io/devguidesample/
-repo_url: https://github.com/hellices/devguidesample
-repo_name: hellices/devguidesample
+site_url: https://caldova-kr.github.io/devguidesample/
+repo_url: https://github.com/caldova-kr/devguidesample
+repo_name: caldova-kr/devguidesample
 edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
@@ -87,3 +87,6 @@ extra_javascript:
   - assets/javascripts/search-input.js
 
 copyright: Copyright &copy; Azure Engineering Notes contributors
+extra:
+  # 저장소 이전 전 site_url. RSS 구독자가 이미 읽은 항목을 새 글로 보지 않도록 GUID를 이 주소 기준으로 고정한다.
+  feed_guid_base_url: https://hellices.github.io/devguidesample/

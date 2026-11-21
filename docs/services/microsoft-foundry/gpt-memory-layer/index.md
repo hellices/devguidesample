@@ -524,7 +524,7 @@ Australia East, Brazil South, Canada East, East US 2, France Central, Italy Nort
 
 ![하이브리드 메모리 아키텍처](images/hybrid-architecture.png)
 
-<!-- editable source: https://github.com/hellices/devguidesample/blob/main/docs/services/microsoft-foundry/gpt-memory-layer/samples/architecture/hybrid-architecture.excalidraw (https://excalidraw.com 에서 열어 편집) -->
+<!-- editable source: https://github.com/caldova-kr/devguidesample/blob/main/docs/services/microsoft-foundry/gpt-memory-layer/samples/architecture/hybrid-architecture.excalidraw (https://excalidraw.com 에서 열어 편집) -->
 
 ### 전환/마이그레이션 체크리스트
 

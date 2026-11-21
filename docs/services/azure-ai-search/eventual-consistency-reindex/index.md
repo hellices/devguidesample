@@ -173,7 +173,7 @@ Step 3가 완전히 결정적이 되고 replica lag의 영향을 받지 않습�
 
 ## 직접 재현해 보기
 
-자급식 재현 스크립트: [repro.py](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-ai-search/eventual-consistency-reindex/samples/reproduction/repro.py). Azure AI Search 서비스가 미리 준비되어 있어야 합니다.
+자급식 재현 스크립트: [repro.py](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-ai-search/eventual-consistency-reindex/samples/reproduction/repro.py). Azure AI Search 서비스가 미리 준비되어 있어야 합니다.
 
 ```bash
 # 1. Azure AI Search 서비스 생성 (35k 문서면 Basic 도 충분.

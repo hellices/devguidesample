@@ -191,7 +191,7 @@ exporter 쪽 수집 주기와 항목은 [Grafana 실습](../sql-server-vm-grafan
 (`NT SERVICE\SqlExporterSvc`)으로 접속합니다.
 
 네트워크·권한·패키지 설치에 대한 설계 결정과 근거는 sample의
-[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md)에 정리했습니다.
+[구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md)에 정리했습니다.
 
 ## SRE Agent 등록 구독과 서브넷 조인 권한 준비
 
@@ -222,18 +222,18 @@ exporter 쪽 수집 주기와 항목은 [Grafana 실습](../sql-server-vm-grafan
 서브넷 세 개가 있습니다. SQL 서브넷의 NSG는 1433 포트를 에이전트 서브넷에서 오는 연결만
 허용하고, 같은 VNet의 다른 서브넷도 막습니다. VM과 서브넷에는 공용 IP가 없고 아웃바운드는
 NAT Gateway로만 나갑니다. 주소 범위, NSG 규칙, 에이전트 Bicep 설정은
-[구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#네트워크)를 참고합니다.
+[구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#네트워크)를 참고합니다.
 
 ## 에이전트와 SQL 로그인은 읽기 권한만 가진다
 
 에이전트 관리 ID는 리소스 그룹 읽기, Key Vault 비밀 읽기, Azure Monitor workspace 조회
 권한만 가지며 VM에서 명령을 실행할 권한이 없습니다. SQL 로그인 `sre_monitor`는 서버 상태와
 메타데이터, `msdb`의 백업·작업 이력만 읽을 수 있고, 사용자 테이블을 SELECT하면 권한 오류(229)가
-납니다. 권한별 필요 이유는 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#권한)에 있습니다.
+납니다. 권한별 필요 이유는 [구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#권한)에 있습니다.
 
 ## deploy.sh 한 번으로 인프라·SQL 준비·도구 등록까지 끝난다
 
-sample은 [samples/sqlvm-health-lab](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
+sample은 [samples/sqlvm-health-lab](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab)에 있습니다.
 
 ```bash
 cd docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab
@@ -243,7 +243,7 @@ cd docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab
 스크립트가 Bicep으로 인프라를 만들고, SQL Server에 점검용 로그인·데모 DB·로그인 감사 세션·
 데모 작업을 준비한 뒤, 에이전트에 Python 도구 3개와 스킬을 등록합니다. 같은 배포가
 [Grafana 실습](../sql-server-vm-grafana/index.md)의 지표 파이프라인과 대시보드도 구성합니다.
-단계별 동작과 데이터 평면 API는 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#배포-단계)를 참고합니다.
+단계별 동작과 데이터 평면 API는 [구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#배포-단계)를 참고합니다.
 
 ## CPU·잠금·장시간 쿼리·로그인 실패·행 증가 부하 주입
 
@@ -407,7 +407,7 @@ soft-delete 상태의 Key Vault를 영구 삭제한 뒤 로컬 `.lab-state.json`
 ## 배포·실행 중 만난 오류는 구성 상세에 정리
 
 `pymssql` 설치, TLS 협상, 로그인 감사 이벤트 누락, Run Command 오류처럼 실습 중 만난 문제와
-대응은 [구성 상세](https://github.com/hellices/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#문제-해결)에 모았습니다.
+대응은 [구성 상세](https://github.com/caldova-kr/devguidesample/blob/main/docs/services/azure-monitor/azure-sre-agent/samples/sqlvm-health-lab/CONFIGURATION.md#문제-해결)에 모았습니다.
 
 ## 공식 참고 자료
 

@@ -38,7 +38,7 @@ AKS에 배포된 서비스를 대상으로, **코드를 이미지로 빌드/배�
 - [Use Telepresence to develop and test microservices locally — MS Learn](https://learn.microsoft.com/en-us/azure/aks/use-telepresence-aks)
 - [Local Development on AKS with mirrord — AKS Engineering Blog](https://blog.aks.azure.com/2024/12/04/mirrord-on-aks)
 
-예제 파일: [`local-development-loop/`](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop)
+예제 파일: [`local-development-loop/`](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-kubernetes-service/remote-cluster-local-development/samples/local-development-loop)
 
 ```
 local-development-loop/

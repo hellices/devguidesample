@@ -295,7 +295,7 @@ TEI / vLLM (추론 서버)
                                               (어댑터 필요: 쿼리 시점)
 ```
 
-> 어댑터 구현 예시: [tei-adapter](https://github.com/hellices/devguidesample/tree/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/tei-adapter) 디렉토리 참고
+> 어댑터 구현 예시: [tei-adapter](https://github.com/caldova-kr/devguidesample/tree/main/docs/services/azure-ai-search/custom-vectorization/samples/implementation/tei-adapter) 디렉토리 참고
 
 ---
 

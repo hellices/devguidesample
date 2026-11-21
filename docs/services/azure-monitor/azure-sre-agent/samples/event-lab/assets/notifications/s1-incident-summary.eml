@@ -23,7 +23,7 @@ Container App revision 0000010 had FAILURE_MODE=3Dhttp500.
 Current status:
 Resolved by a healthy revision with FAILURE_MODE=3Dnone.
 
-Ticket: https://github.com/hellices/devguidesample/issues/43
+Ticket: https://github.com/caldova-kr/devguidesample/issues/43
 Detailed validation appendix: monitor/sre-agent-event-lab/validation-results.=
 md
 
@@ -85,8 +85,8 @@ a healthy revision with FAILURE_MODE=3Dnone restored service</p>
 rvice. The Agent remained in Review mode and did not modify Azure resources.<=
 /p>
       <h2>Ticket</h2>
-      <p><a href=3D"https://github.com/hellices/devguidesample/issues/43">htt=
-ps://github.com/hellices/devguidesample/issues/43</a></p>
+      <p><a href=3D"https://github.com/caldova-kr/devguidesample/issues/43">htt=
+ps://github.com/caldova-kr/devguidesample/issues/43</a></p>
       <h2>Follow-up</h2>
       <ol>
         <li>Reject lab-only fault settings in non-lab deployments.</li>
