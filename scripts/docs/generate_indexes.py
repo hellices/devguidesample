@@ -830,6 +830,7 @@ def write_generated_pages(repo_root: Path | None = None) -> None:
             build_daily_update_feed(
                 root / "docs",
                 site_url=str(mkdocs_gen_files.config.get("site_url", "")),
+                guid_base_url=(mkdocs_gen_files.config.get("extra") or {}).get("feed_guid_base_url"),
             )
         )
 

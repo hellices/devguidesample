@@ -87,3 +87,6 @@ extra_javascript:
   - assets/javascripts/search-input.js
 
 copyright: Copyright &copy; Azure Engineering Notes contributors
+extra:
+  # 저장소 이전 전 site_url. RSS 구독자가 이미 읽은 항목을 새 글로 보지 않도록 GUID를 이 주소 기준으로 고정한다.
+  feed_guid_base_url: https://hellices.github.io/devguidesample/

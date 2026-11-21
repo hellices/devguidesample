@@ -502,6 +502,31 @@ def test_daily_update_feed_contains_reports_newest_first_with_absolute_links(
     assert items[0].findtext("pubDate") == "Sat, 10 Oct 2026 01:30:00 GMT"
 
 
+def test_daily_update_feed_keeps_guids_on_previous_site_url_after_move(
+    tmp_path: Path,
+) -> None:
+    docs = tmp_path / "docs"
+    write_report(docs, "2026-10-08", generated_at="2026-10-09T21:52:00+09:00")
+
+    root = ET.fromstring(
+        build_daily_update_feed(
+            docs,
+            site_url="https://new.example.test/devguidesample/",
+            guid_base_url="https://old.example.test/devguidesample",
+        )
+    )
+
+    item = root.find("./channel/item")
+    assert item is not None
+    assert item.findtext("link") == (
+        "https://new.example.test/devguidesample/azure-daily-update/2026-10-08/"
+    )
+    guid = item.find("guid")
+    assert guid is not None
+    assert guid.text == "https://old.example.test/devguidesample/azure-daily-update/2026-10-08/"
+    assert guid.get("isPermaLink") == "false"
+
+
 def test_daily_update_feed_normalizes_subminute_offsets_to_rfc822_gmt(
     tmp_path: Path,
 ) -> None:
