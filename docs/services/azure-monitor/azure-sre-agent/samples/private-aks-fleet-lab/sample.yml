@@ -1,0 +1,12 @@
+title: Multi-Hub Private AKS upgrade preflight and diagnostics with Azure SRE Agent
+description: Connects a VNet-integrated Azure SRE Agent across Multi-Hub Firewall UDR routes to multiple Private AKS clusters, and runs fast 30-60s version upgrade preflight scoring and pod failure diagnostics.
+kind: runnable
+used_by:
+- private-aks-multihub-preflight
+publish:
+- source: assets/multihub-aks-architecture.svg
+  target: private-aks-multihub-preflight/images/multihub-aks-architecture.svg
+- source: assets/controlplane-vs-dataplane-flow.svg
+  target: private-aks-multihub-preflight/images/controlplane-vs-dataplane-flow.svg
+- source: assets/upgrade-preflight-pipeline.svg
+  target: private-aks-multihub-preflight/images/upgrade-preflight-pipeline.svg
